@@ -6810,9 +6810,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   refusal echoes it and nothing else. The query's ID when omitted.
      * @throws Error if the user does not have permission to run the query
      */
+    private static isMagicLinkRestrictedArtifactQuery(query: MJQueryEntityExtended, user: UserInfo | undefined): boolean {
+        if (!user || (!user.IsMagicLinkAnonymous && !user.MagicLinkScope)) {
+            return false;
+        }
+        const normalized = (query.Name ?? '').trim().toLowerCase();
+        return (
+            normalized === 'getartifactversionsbyid' ||
+            normalized === 'getconversationcomplete' ||
+            normalized === 'getconversationartifactsmap' ||
+            normalized === 'getconversationartifactsforagent'
+        );
+    }
+
     protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo, requestedLabel: string = query.ID): void {
         const user = contextUser || this.CurrentUser;
         if (user) {
+            if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+                this.logQueryRunRefusal(query, user, { deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] });
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
+            }
             const result = query.UserCanRun(user);
             if (!result.canRun) {
                 // This gate, not the rendered-SQL one, is where a role-list denial lands: it
@@ -7033,6 +7050,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         logRefusal = true,
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string; needsColumnFiltering?: boolean } {
+        if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+            const refusal = { canRun: false, deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] };
+            if (logRefusal) {
+                this.logQueryRunRefusal(query, user, refusal);
+            }
+            return refusal;
+        }
         const base = query.UserCanRun(user);
         if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
             // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has

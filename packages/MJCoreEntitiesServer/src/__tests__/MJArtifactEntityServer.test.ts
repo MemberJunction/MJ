@@ -14,8 +14,11 @@ import {
     BuildSqlArtifactVersionIdReadablePredicate,
     BuildSqlCollectionReadablePredicate,
     QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
     ResolveTargetEntityNameAsync
 } from '../custom/ArtifactSecurityHookHelpers';
+import { ArtifactGuestShareLinkPreRunViewHook } from '../custom/MJArtifactGuestShareLinkEntityServer.server';
+import { CollectionArtifactPreRunViewHook } from '../custom/MJCollectionArtifactEntityServer.server';
 import { ArtifactVersionPostRunViewHook, ArtifactVersionPreRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
 import { EntityInfo } from '@memberjunction/core';
 
@@ -762,7 +765,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                     Name: 'Compact',
                     DisplayName: 'Compact',
                     ViewName: 'vwArtifactsCompact',
-                    SchemaName: null,
+                    SchemaName: 'alt_schema',
                     CachePolicy: 'Default',
                     Status: 'Active',
                     Sequence: 10
@@ -802,13 +805,14 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             RunView: vi.fn(async () => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: 'unmocked' }))
         };
 
-        // R1: SQL collection predicate includes 17 levels (c0..c16)
+        // R1 / L1: SQL collection predicate includes 16 levels (c0..c15) matching ArtifactPermissionEngine
         const colSql = BuildSqlCollectionReadablePredicate(
             '[custom_mj].[vwCollections].[ID]',
             customProvider as unknown as IMetadataProvider,
             sharedEditorUser
         );
-        expect(colSql).toContain('[_sc16]');
+        expect(colSql).toContain('[_sc15]');
+        expect(colSql).not.toContain('[_sc16]');
         expect(colSql).toContain('[custom_mj].[vwCollections]');
         expect(colSql).toContain('[custom_mj].[vwCollectionPermissions]');
 
@@ -877,7 +881,55 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             ArtifactPermissionEngine.Instance.UnregisterDelegate('MJ: Projects');
         }
 
-        // S-f: QualifyOuterEntityColumn honors DataSource:'Materialized', AlternateBaseView, and custom MJCoreSchemaName
+        // B5: Guest Share Links (requireShareOrDelete) and Collection Artifacts precompute collections to avoid >260 tables
+        const colArtEntityId = '66666666-6666-4666-8666-666666666666';
+        const guestLinkEntityId = '77777777-7777-4777-8777-777777777777';
+        const colArtEntityInfo = new EntityInfo({
+            ID: colArtEntityId,
+            Name: 'MJ: Collection Artifacts',
+            BaseView: 'vwCollectionArtifacts',
+            SchemaName: 'custom_mj'
+        });
+        const guestLinkEntityInfo = new EntityInfo({
+            ID: guestLinkEntityId,
+            Name: 'MJ: Artifact Guest Share Links',
+            BaseView: 'vwArtifactGuestShareLinks',
+            SchemaName: 'custom_mj'
+        });
+        const b5Entities = [...entities, colArtEntityInfo, guestLinkEntityInfo];
+        const b5Provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            ConfigData: { MJCoreSchemaName: 'custom_mj' },
+            Entities: b5Entities,
+            EntityByName: (name: string) =>
+                b5Entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+            EntityByID: (id: string) => b5Entities.find((e) => e.ID === id),
+            RunView: vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }))
+        };
+        const tryColSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet')
+            .mockResolvedValue(new Set(['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']));
+
+        const guestHooked = await ArtifactGuestShareLinkPreRunViewHook(
+            { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+            sharedEditorUser,
+            b5Provider as unknown as IMetadataProvider
+        );
+        expect(tryColSpy).toHaveBeenCalledWith(expect.anything(), sharedEditorUser, { requireShareOrDelete: true });
+        expect(String(guestHooked.ExtraFilter)).not.toContain('vwCollections');
+
+        tryColSpy.mockClear();
+        const colArtHooked = await CollectionArtifactPreRunViewHook(
+            { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
+            sharedEditorUser,
+            b5Provider as unknown as IMetadataProvider
+        );
+        expect(tryColSpy).toHaveBeenCalledTimes(1);
+        expect(String(colArtHooked.ExtraFilter)).not.toContain('vwCollections');
+        tryColSpy.mockRestore();
+
+        // S-f & N4: QualifyOuterEntityColumn & QualifyOuterEntityColumnAsync honor EffectiveSchemaName, custom ViewName, and inactive fallback
         expect(
             QualifyOuterEntityColumn(
                 artEntityInfo,
@@ -895,7 +947,38 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                 customProvider as unknown as IMetadataProvider,
                 { EntityName: 'MJ: Artifacts', AlternateBaseView: 'Compact' }
             )
-        ).toBe('[custom_mj].[vwArtifactsCompact].[ID]');
+        ).toBe('[alt_schema].[vwArtifactsCompact].[ID]');
+        expect(
+            await QualifyOuterEntityColumnAsync(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                customProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', DataSource: 'Materialized' },
+                sharedEditorUser
+            )
+        ).toBe('[custom_mj].[vwArtifacts].[ID]');
+        const activeMatProvider = {
+            ...b5Provider,
+            RunView: vi.fn(async () => ({
+                Success: true,
+                Results: [{ Status: 'Active', ViewName: 'mv_custom_artifacts' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            }))
+        };
+        expect(
+            await QualifyOuterEntityColumnAsync(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                activeMatProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', DataSource: 'Materialized' },
+                sharedEditorUser
+            )
+        ).toBe('[custom_mj].[mv_custom_artifacts].[ID]');
 
         // S-j: AppendSqlAndFilter rejects unbalanced parentheses and unclosed single quotes before wrapping
         expect(() => AppendSqlAndFilter("Name = 'ok') OR (1=1", '[ID] IS NOT NULL')).toThrow(/unbalanced/i);
@@ -903,5 +986,108 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         expect(AppendSqlAndFilter("Name = 'O''Reilly (dev)'", '[ID] IS NOT NULL')).toBe(
             "(Name = 'O''Reilly (dev)') AND ([ID] IS NOT NULL)"
         );
+    });
+
+    it('bypasses server SQL scoping and PostRunView filtering on ProviderType=Network even with contextUser, while Database filtered RunView returns readable rows', async () => {
+        const networkProvider = {
+            ProviderType: 'Network',
+            Entities: [
+                {
+                    Name: 'MJ: Artifact Versions',
+                    SchemaName: '__mj',
+                    BaseView: 'vwArtifactVersions',
+                    Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'ArtifactID' }, { Name: 'Content' }]
+                }
+            ],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifact versions'
+                    ? networkProvider.Entities[0]
+                    : undefined
+        } as unknown as IMetadataProvider;
+
+        const clientParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: "Content LIKE '%probe%'",
+            Fields: ['ID', 'Content'],
+            ResultType: 'simple'
+        };
+        const afterNetworkPre = await ArtifactVersionPreRunViewHook(
+            clientParams,
+            sharedEditorUser,
+            networkProvider
+        );
+        // Must NOT inject SQL EXISTS(... FROM vwArtifacts) or add ArtifactID onto a Network/GraphQL client request
+        expect(afterNetworkPre).toBe(clientParams);
+        expect(afterNetworkPre.ExtraFilter).toBe("Content LIKE '%probe%'");
+        expect(afterNetworkPre.Fields).toEqual(['ID', 'Content']);
+
+        const networkPost = await ArtifactVersionPostRunViewHook(
+            afterNetworkPre,
+            {
+                Success: true,
+                Results: [{ ID: 'ver-1', Content: 'Server-vetted content' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            sharedEditorUser,
+            networkProvider
+        );
+        expect(networkPost.Success).toBe(true);
+        expect(networkPost.Results).toEqual([{ ID: 'ver-1', Content: 'Server-vetted content' }]);
+
+        // Plain non-system user running a filtered Database RunView on MJ: Artifact Versions gets readable rows back
+        const readableArtId = '99999999-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: readableArtId,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Shared'
+        });
+        const dbProvider = {
+            ProviderType: 'Database',
+            Entities: networkProvider.Entities,
+            EntityByName: networkProvider.EntityByName,
+            RunView: vi.fn(async () => ({
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            }))
+        } as unknown as IMetadataProvider;
+
+        const filteredDbParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID = '${readableArtId}' AND Content LIKE '%readable%'`,
+            Fields: ['ID', 'Content'],
+            ResultType: 'simple'
+        };
+        const hookedDbParams = await ArtifactVersionPreRunViewHook(
+            filteredDbParams,
+            sharedEditorUser,
+            dbProvider
+        );
+        expect(String(hookedDbParams.ExtraFilter)).toContain(`ArtifactID = '${readableArtId}'`);
+        const postDbRes = await ArtifactVersionPostRunViewHook(
+            hookedDbParams,
+            {
+                Success: true,
+                Results: [{ ID: 'ver-readable', ArtifactID: readableArtId, Content: 'Shared readable doc' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            sharedEditorUser,
+            dbProvider
+        );
+        expect(postDbRes.Success).toBe(true);
+        expect(postDbRes.Results).toEqual([{ ID: 'ver-readable', Content: 'Shared readable doc' }]);
     });
 });

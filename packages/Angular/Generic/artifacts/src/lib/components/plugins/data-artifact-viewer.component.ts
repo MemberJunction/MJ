@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, Type } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, RunView, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
 import type { MJArtifactVersionEntity, MJQueryEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
@@ -790,8 +790,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     const currentUser = md.CurrentUser;
     let latestVersionNumber = this.CurrentVersionNumber;
     let baseName = this.artifactVersion.Name;
-    let baseContentMode = this.artifactVersion.ContentMode || 'Text';
-    let baseMimeType = this.artifactVersion.MimeType;
     let baseConfiguration = this.artifactVersion.Configuration;
 
     if (this.artifactVersion.ArtifactID) {
@@ -799,14 +797,12 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const latestRes = await rv.RunView<{
         VersionNumber?: number;
         Name?: string | null;
-        ContentMode?: 'Text' | 'File' | null;
-        MimeType?: string | null;
         Configuration?: string | null;
       }>(
         {
           EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${this.artifactVersion.ArtifactID.replace(/'/g, "''")}'`,
-          Fields: ['VersionNumber', 'Name', 'ContentMode', 'MimeType', 'Configuration'],
+          ExtraFilter: `ArtifactID='${EscapeSQLString(this.artifactVersion.ArtifactID)}'`,
+          Fields: ['VersionNumber', 'Name', 'Configuration'],
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
           SkipTotalRowCount: true,
@@ -820,8 +816,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           latestVersionNumber = latestRow.VersionNumber;
         }
         if (latestRow.Name) baseName = latestRow.Name;
-        if (latestRow.ContentMode) baseContentMode = latestRow.ContentMode;
-        if (latestRow.MimeType) baseMimeType = latestRow.MimeType;
         if (latestRow.Configuration !== undefined) baseConfiguration = latestRow.Configuration;
       }
     }
@@ -842,10 +836,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (currentUser?.ID) {
       nextVersion.UserID = currentUser.ID;
     }
-    nextVersion.ContentMode = baseContentMode;
-    if (baseMimeType) {
-      nextVersion.MimeType = baseMimeType;
-    }
+    // Persisted Content is always JSON text here, so never copy File ContentMode without a FileID (`N9`).
+    nextVersion.ContentMode = 'Text';
+    nextVersion.MimeType = 'application/json';
     if (baseConfiguration !== undefined && baseConfiguration !== null) {
       nextVersion.Configuration = baseConfiguration;
     }

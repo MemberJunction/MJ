@@ -2889,7 +2889,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
           Fields: ['ArtifactVersionID'],
-          MaxRows: 500,
+          IgnoreMaxRows: true,
           SkipTotalRowCount: true,
           ResultType: 'simple',
         },
@@ -2905,30 +2905,38 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       if (versionIds.length === 0) {
         return { success: true, artifacts: [] };
       }
-      const verInList = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-      const verLookup = await rv.RunView<{ ArtifactID?: string | null }>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ID IN (${verInList})`,
-          Fields: ['ArtifactID'],
-          MaxRows: 500,
-          SkipTotalRowCount: true,
-          ResultType: 'simple',
-        },
-        params.contextUser,
-      );
-      const colArtifactIds = Array.from(
-        new Set(
-          (verLookup.Success && verLookup.Results ? verLookup.Results : [])
-            .map((r) => (r.ArtifactID ?? '').trim())
-            .filter((id) => IsValidUUID(id)),
-        ),
-      );
+      const colArtifactIdSet = new Set<string>();
+      const colArtifactIds: string[] = [];
+      for (let i = 0; i < versionIds.length; i += ID_IN_CHUNK_SIZE) {
+        const verSlice = versionIds.slice(i, i + ID_IN_CHUNK_SIZE);
+        const verInList = verSlice.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        const verLookup = await rv.RunView<{ ArtifactID?: string | null }>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${verInList})`,
+            Fields: ['ArtifactID'],
+            IgnoreMaxRows: true,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          params.contextUser,
+        );
+        for (const row of verLookup.Success && verLookup.Results ? verLookup.Results : []) {
+          const aid = (row.ArtifactID ?? '').trim();
+          if (IsValidUUID(aid)) {
+            const norm = NormalizeUUID(aid);
+            if (!colArtifactIdSet.has(norm)) {
+              colArtifactIdSet.add(norm);
+              colArtifactIds.push(aid);
+            }
+          }
+        }
+      }
       if (colArtifactIds.length === 0) {
         return { success: true, artifacts: [] };
       }
       if (!appendChunkedIdInFilter(colArtifactIds)) {
-        readableIdsInMemoryFilter = new Set(colArtifactIds.map((id) => NormalizeUUID(id)));
+        readableIdsInMemoryFilter = colArtifactIdSet;
       }
     } else {
       const readableIds = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
@@ -2973,37 +2981,73 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       }
     }
 
+    type ArtifactListRow = {
+      ID: string;
+      Name?: string | null;
+      Description?: string | null;
+      Type?: string | null;
+      TypeID?: string | null;
+      UserID?: string | null;
+      __mj_UpdatedAt?: Date | string | null;
+    };
     const fetchLimit = Math.min(Math.max((offset + maxResults) * 2, maxResults), 500);
-    const artRes = await rv.RunView<{
-      ID: string;
-      Name?: string | null;
-      Description?: string | null;
-      Type?: string | null;
-      TypeID?: string | null;
-      UserID?: string | null;
-    }>(
-      {
-        EntityName: 'MJ: Artifacts',
-        ExtraFilter: sqlFilters.join(' AND '),
-        OrderBy: '__mj_UpdatedAt DESC',
-        Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID'],
-        MaxRows: fetchLimit,
-        SkipTotalRowCount: true,
-        ResultType: 'simple',
-      },
-      params.contextUser,
-    );
+    const allArtResults: ArtifactListRow[] = [];
 
-    const candidateArts: Array<{
-      ID: string;
-      Name?: string | null;
-      Description?: string | null;
-      Type?: string | null;
-      TypeID?: string | null;
-      UserID?: string | null;
-    }> = [];
+    if (collectionId && readableIdsInMemoryFilter && readableIdsInMemoryFilter.size > MAX_DIRECT_IN_IDS) {
+      // Collection exceeds single-query 2,500-ID cap (`N8`): query by 2,500-ID batches so items aren't silently truncated.
+      const colIds = Array.from(readableIdsInMemoryFilter);
+      const baseFilter = sqlFilters.length > 0 ? sqlFilters.join(' AND ') : '';
+      for (let i = 0; i < colIds.length; i += MAX_DIRECT_IN_IDS) {
+        const batch = colIds.slice(i, i + MAX_DIRECT_IN_IDS);
+        const batchOrChunks: string[] = [];
+        for (let j = 0; j < batch.length; j += ID_IN_CHUNK_SIZE) {
+          const slice = batch.slice(j, j + ID_IN_CHUNK_SIZE);
+          batchOrChunks.push(`ID IN (${slice.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+        }
+        const batchIdClause = batchOrChunks.length === 1 ? batchOrChunks[0] : `(${batchOrChunks.join(' OR ')})`;
+        const batchFilter = baseFilter ? `(${baseFilter}) AND ${batchIdClause}` : batchIdClause;
+        const batchRes = await rv.RunView<ArtifactListRow>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: batchFilter,
+            OrderBy: '__mj_UpdatedAt DESC',
+            Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID', '__mj_UpdatedAt'],
+            IgnoreMaxRows: true,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          params.contextUser,
+        );
+        if (batchRes.Success && batchRes.Results) {
+          allArtResults.push(...batchRes.Results);
+        }
+      }
+      allArtResults.sort((a, b) => {
+        const ta = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+        const tb = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+        return tb - ta;
+      });
+    } else {
+      const artRes = await rv.RunView<ArtifactListRow>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: sqlFilters.join(' AND '),
+          OrderBy: '__mj_UpdatedAt DESC',
+          Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID'],
+          MaxRows: fetchLimit,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        params.contextUser,
+      );
+      if (artRes.Success && artRes.Results) {
+        allArtResults.push(...artRes.Results);
+      }
+    }
+
+    const candidateArts: ArtifactListRow[] = [];
     const seen = new Set<string>();
-    for (const row of artRes.Success && artRes.Results ? artRes.Results : []) {
+    for (const row of allArtResults) {
       const id = (row.ID ?? '').trim();
       const norm = NormalizeUUID(id);
       if (readableIdsInMemoryFilter && !readableIdsInMemoryFilter.has(norm)) {

@@ -1664,51 +1664,118 @@ export class DocumentCollaborationResolver extends ResolverBase {
             );
         }
 
-        // R5: Validate restored content & configuration against any locks/protected ranges in the
-        // latest persisted version so a non-owner cannot restore a pre-lock version to strip locks.
-        const latestForLockRes = await rv.RunView<{
-            VersionNumber: number;
-            Content?: string | null;
-            Configuration?: string | null;
-        }>(
-            {
-                EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
-                Fields: ['VersionNumber', 'Content', 'Configuration'],
-                OrderBy: 'VersionNumber DESC',
-                MaxRows: 1,
-                SkipTotalRowCount: true,
-                ResultType: 'simple'
-            },
-            user
-        );
-        const latestForLock = latestForLockRes.Success ? latestForLockRes.Results?.[0] : undefined;
-        if (latestForLock) {
-            const lockCheck = ValidateArtifactContentMutationAgainstLocks(
-                latestForLock.Content ?? '',
-                sourceVersion.Content ?? '',
-                user.ID,
-                isArtifactOwner,
-                {
-                    currentConfiguration: latestForLock.Configuration ?? null,
-                    nextConfiguration: enrichedRestoredConfig ?? sourceVersion.Configuration ?? null
-                }
+        const nextRestoredContent = sourceVersion.Content ?? '';
+        const nextRestoredConfig = enrichedRestoredConfig ?? sourceVersion.Configuration ?? null;
+
+        // B2 / R5: Verify restored content & configuration against latest persisted version, persisted
+        // working state, and any active collaboration room before saving (and on every conflict retry).
+        const verifyRestoreLocks = async (): Promise<string | null> => {
+            if (isArtifactOwner) {
+                return null;
+            }
+            const [latestForLockRes, wsForLockRes] = await Promise.all([
+                rv.RunView<{
+                    VersionNumber: number;
+                    Content?: string | null;
+                    Configuration?: string | null;
+                }>(
+                    {
+                        EntityName: 'MJ: Artifact Versions',
+                        ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
+                        Fields: ['VersionNumber', 'Content', 'Configuration'],
+                        OrderBy: 'VersionNumber DESC',
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    user
+                ),
+                rv.RunView<{ Content?: string | null }>(
+                    {
+                        EntityName: 'MJ: Artifact Working States',
+                        ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
+                        Fields: ['Content'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    user
+                )
+            ]);
+            if (!latestForLockRes.Success) {
+                return (
+                    latestForLockRes.ErrorMessage ||
+                    'Permission denied: unable to verify latest artifact version locks before restore.'
+                );
+            }
+            if (!wsForLockRes.Success) {
+                return (
+                    wsForLockRes.ErrorMessage ||
+                    'Permission denied: unable to verify active artifact working-state locks before restore.'
+                );
+            }
+
+            const baselines: Array<{ content: string; configuration: string | null }> = [];
+            const activeRoomBaseline = ArtifactCollaborationServer.Instance.GetActiveRoomLockBaseline(
+                normalizedArtifactId,
+                provider,
+                user
             );
-            if (!lockCheck.Allowed) {
-                return {
-                    Success: false,
-                    ErrorMessage:
+            if (activeRoomBaseline) {
+                baselines.push({
+                    content: activeRoomBaseline.Content,
+                    configuration: activeRoomBaseline.Configuration
+                });
+            }
+            const latestForLock = latestForLockRes.Results?.[0];
+            if (latestForLock) {
+                baselines.push({
+                    content: latestForLock.Content ?? '',
+                    configuration: latestForLock.Configuration ?? null
+                });
+            }
+            const wsRow = wsForLockRes.Results?.[0];
+            if (typeof wsRow?.Content === 'string' && wsRow.Content.length > 0) {
+                baselines.push({
+                    content: wsRow.Content,
+                    configuration: latestForLock?.Configuration ?? null
+                });
+            }
+
+            for (const baseline of baselines) {
+                const lockCheck = ValidateArtifactContentMutationAgainstLocks(
+                    baseline.content,
+                    nextRestoredContent,
+                    user.ID,
+                    false,
+                    {
+                        currentConfiguration: baseline.configuration,
+                        nextConfiguration: nextRestoredConfig
+                    }
+                );
+                if (!lockCheck.Allowed) {
+                    return (
                         lockCheck.Reason ||
                         'Permission denied: restoring this version would modify or remove locked content owned by another user.'
-                };
+                    );
+                }
             }
-        }
+            return null;
+        };
 
         let restoredVer: MJArtifactVersionEntity | null = null;
         let nextVersionNumber = 0;
         let lastErrorMessage = 'Failed to save restored artifact version.';
 
         for (let attempt = 0; attempt < MAX_RESTORE_VERSION_CONFLICT_RETRIES; attempt++) {
+            const lockDenialReason = await verifyRestoreLocks();
+            if (lockDenialReason) {
+                return {
+                    Success: false,
+                    ErrorMessage: lockDenialReason
+                };
+            }
+
             const rvRes = await rv.RunView<{ VersionNumber: number }>(
                 {
                     EntityName: 'MJ: Artifact Versions',
@@ -1775,7 +1842,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ID: restoredVer.ID,
                     VersionNumber: nextVersionNumber,
                     Content: restoredVer.Content,
-                    Configuration: restoredVer.Configuration
+                    Configuration: restoredVer.Configuration,
+                    UserID: user.ID
                 },
                 user,
                 provider

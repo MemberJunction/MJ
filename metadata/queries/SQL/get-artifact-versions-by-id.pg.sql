@@ -20,7 +20,7 @@ WITH RECURSIVE "ReadableCollections" AS (
     SELECT child."ID", rc."Depth" + 1 AS "Depth"
     FROM __mj."vwCollections" child
     INNER JOIN "ReadableCollections" rc ON child."ParentID" = rc."ID"
-    WHERE rc."Depth" < 16
+    WHERE rc."Depth" < 15
 ),
 "ReadableArtifacts" AS (
     SELECT a_root."ID", 0 AS "Depth"

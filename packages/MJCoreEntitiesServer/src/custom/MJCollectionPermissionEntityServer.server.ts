@@ -22,7 +22,7 @@ import {
     RegisterClass
 } from '@memberjunction/global';
 import {
-    BuildSqlCollectionReadablePredicate,
+    BuildSqlCollectionReadablePredicateAsync,
     ChunkUuidList,
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
@@ -32,7 +32,7 @@ import {
     GetGlobalWeakSet,
     IsServerSystemUser,
     PrepareScopedPreRunView,
-    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
     ResolveMetadataProvider,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
@@ -113,11 +113,12 @@ export const CollectionPermissionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo, runViewParams) =>
-                BuildSqlCollectionReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionPermissions', 'CollectionID', prov, runViewParams),
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
+                BuildSqlCollectionReadablePredicateAsync(
+                    await QualifyOuterEntityColumnAsync(entityInfo, 'vwCollectionPermissions', 'CollectionID', prov, runViewParams, user),
                     prov,
-                    user
+                    user,
+                    { precomputedCollectionCache: collectionCache }
                 )
         },
         contextUser,

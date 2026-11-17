@@ -1097,6 +1097,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return false;
     }
 
+    /**
+     * Returns the serialized content and base configuration of a currently active in-memory room
+     * for lock validation (e.g. before persisting a version restore, `B2`), or `null` if no room
+     * is active (or room resolution is ambiguous across tenants).
+     */
+    public GetActiveRoomLockBaseline(
+        artifactId: string,
+        provider?: IMetadataProvider | null,
+        user?: UserInfo | null
+    ): { Content: string; Configuration: string | null } | null {
+        const room = this.findRoomForArtifact(artifactId, provider, user);
+        if (!room) {
+            return null;
+        }
+        return {
+            Content: this.extractRoomSerializedContent(room.Doc),
+            Configuration: room.BaseConfiguration ?? null
+        };
+    }
+
     /** Returns the count of currently loaded in-memory collaboration rooms. */
     public get ActiveRoomCount(): number {
         return this._rooms.size;
@@ -1535,7 +1555,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         for (const room of matchingRooms) {
-            const provider = room.Provider ?? this.activeProvider();
+            const provider = this._providerOverride ?? room.Provider ?? this.activeProvider();
             const nowMs = Date.now();
             for (const conn of Array.from(room.Connections)) {
                 if (targetUserId && !UUIDsEqual(conn.User.ID, targetUserId)) {
@@ -1658,7 +1678,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (this._rooms.get(key) !== room) {
                 return false;
             }
-            const provider = room.Provider ?? this.activeProvider();
+            const provider = this._providerOverride ?? room.Provider ?? this.activeProvider();
             const actor = contextUser ?? room.LastModifiedByUser;
             const persistenceUser = UserCache.Instance.GetSystemUser() ?? actor;
             if (!provider || !actor || !persistenceUser) {
@@ -1946,7 +1966,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedStateVectorB64: tracked?.SavedStateVectorB64,
                     savedSnapshotB64: tracked?.SavedSnapshotB64,
                     savedContentHash: latestHash,
-                    actorUserId: latest.UserID ?? contextUser.ID
+                    actorUserId: latest.UserID ?? undefined
                 });
             }
 
@@ -3339,7 +3359,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         savedStateVectorB64?: string,
         savedSnapshotB64?: string
     ): Promise<boolean> {
-        const provider = this.activeProvider();
+        const provider = this._providerOverride ?? room.Provider ?? this.activeProvider();
         const queryUser = UserCache.Instance.GetSystemUser() ?? room.LastModifiedByUser;
         if (!provider || !queryUser) {
             return false;
@@ -4655,6 +4675,46 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         };
 
         if (isRestore) {
+            // B2: Enforce lock validation against live room/working-state content BEFORE either
+            // `alreadyContainsCompactedOps` or full-restore replaces `room.Doc`.
+            const restoreActorId = options?.actorUserId ?? version.UserID ?? null;
+            const isRestoreOwner = Boolean(
+                restoreActorId &&
+                room.ArtifactOwnerUserID &&
+                UUIDsEqual(restoreActorId, room.ArtifactOwnerUserID)
+            );
+            if (!isRestoreOwner && (liveText !== targetText || (room.BaseConfiguration ?? null) !== (version.Configuration ?? null))) {
+                const restoreLockCheck = ValidateArtifactContentMutationAgainstLocks(
+                    liveText,
+                    targetText,
+                    restoreActorId,
+                    false,
+                    {
+                        currentConfiguration: room.BaseConfiguration ?? null,
+                        nextConfiguration: version.Configuration ?? null
+                    }
+                );
+                if (!restoreLockCheck.Allowed) {
+                    room.BaseVersionID = version.ID;
+                    room.BaseVersionNumber = version.VersionNumber;
+                    room.BaseVersionText = targetText;
+                    room.BaseConfiguration = version.Configuration ?? null;
+                    room.DirtyVersion = true;
+                    room.LastCompactedStateVector = null;
+                    room.DirtyWorkingState = true;
+                    this.recordServerWatermark(room);
+                    this.scheduleWorkingStateFlush(room);
+                    this.broadcastMergeConflictFrame(room, {
+                        action: 'merge-conflict',
+                        versionId: version.ID,
+                        rejectedHunkCount: 1,
+                        roomEpoch: room.RoomEpoch,
+                        actorUserId: restoreActorId ?? undefined
+                    });
+                    return;
+                }
+            }
+
             if (alreadyContainsCompactedOps) {
                 room.Doc.transact(() => {
                     setBaseMeta(effectiveVectorB64, effectiveSnapshotB64);
@@ -4889,7 +4949,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         // B3 / R5: Ensure out-of-band version reconciliation (including restores) never silently
         // overwrites live room locks created/held inside the active room when authored by a non-owner.
         let oobLockConflict = false;
-        if (this.computeContentHasActiveLocks(liveText)) {
+        if (this.computeContentHasActiveLocks(liveText) || Boolean(room.BaseConfiguration && room.BaseConfiguration.trim())) {
             const candidateText = this.extractRoomSerializedContent(room.Doc);
             if (candidateText !== liveText) {
                 const oobActorId = options?.actorUserId ?? version.UserID ?? null;
@@ -4971,7 +5031,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             actorUserId?: string;
         }
     ): Promise<void> {
-        const provider = this.activeProvider();
+        const provider = this._providerOverride ?? room.Provider ?? this.activeProvider();
         if (!provider) {
             return;
         }
@@ -5016,7 +5076,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const relayMatchesLatest = Boolean(
                     options?.relayVersionId && UUIDsEqual(latest.ID, options.relayVersionId)
                 );
-                const resolvedActorUserId = options?.actorUserId ?? latest.UserID ?? undefined;
+                // N2: Only trust the relay's actorUserId when the relay frame actually matches `latest.ID`;
+                // otherwise attribute to `latest.UserID` so a concurrent save isn't misattributed.
+                const resolvedActorUserId = relayMatchesLatest
+                    ? (options?.actorUserId ?? latest.UserID ?? undefined)
+                    : (latest.UserID ?? undefined);
                 const reconcileOptions = relayMatchesLatest
                     ? {
                           originServerId: options?.originServerId,
@@ -5656,7 +5720,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room: CollaborationRoom,
         contextUser: UserInfo
     ): Promise<{ overwriteStaleWorkingState: boolean }> {
-        const provider = room.Provider ?? this.activeProvider();
+        const provider = this._providerOverride ?? room.Provider ?? this.activeProvider();
         if (!provider || !contextUser) {
             return { overwriteStaleWorkingState: false };
         }
@@ -6356,8 +6420,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             // S9b / R3 O(update) fast path: ONLY when an unlocked plain-text/Markdown document
             // receives an in-order update targeting `yText('content')` with NO delete-set entries
             // (`ds.clients.size === 0`) and NO `mj-lock` / HTML / JSON structural markers.
-            // Any update containing deletes (`ds.clients.size > 0`) MUST go through the slow path
-            // so lock/metadata/clock-bound checks always run (`R3`).
+            // Any update containing deletes (`ds.clients.size > 0`) MUST go through the slow path (`R3`).
+            // Note (`L2`): Yjs omits `item.parent` on normal delta items that specify an `origin`, so
+            // `readStructParent(struct) !== 'content'` conservatively routes those to the slow path as well.
             if (decodedUpdate.ds.clients.size === 0 && !room.HasActiveLocks && !currentContent.trimStart().startsWith('{')) {
                 const expectedNextClockByClient = new Map<number, number>(serverStateVector);
                 let safeFastPath = true;

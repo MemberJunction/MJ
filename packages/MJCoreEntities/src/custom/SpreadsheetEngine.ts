@@ -2392,8 +2392,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (cached) {
             return cached;
         }
+        const keys = Object.keys(sheet.Cells);
+        if (this.activeEvalBudget && keys.length > 0) {
+            this.consumeEvalBudget(keys.length);
+        }
         const byCol = new Map<number, Array<{ row: number; addr: string }>>();
-        for (const addr of Object.keys(sheet.Cells)) {
+        for (const addr of keys) {
             const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
             if (!pos) continue;
             let entries = byCol.get(pos.col);
@@ -2410,6 +2414,79 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         this.activeEvalBudget?.sheetColIndex.set(sheet, byCol);
         return byCol;
+    }
+
+    private upsertCellInEvalColIndex(sheet: WorksheetSpec, row: number, col: number, addr: string): void {
+        const byCol = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (!byCol) {
+            return;
+        }
+        let entries = byCol.get(col);
+        if (!entries) {
+            entries = [{ row, addr }];
+            byCol.set(col, entries);
+            return;
+        }
+        let lo = 0;
+        let hi = entries.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (entries[mid].row < row) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < entries.length && entries[lo].row === row) {
+            entries[lo] = { row, addr };
+        } else {
+            entries.splice(lo, 0, { row, addr });
+        }
+    }
+
+    private removeCellFromEvalColIndex(sheet: WorksheetSpec, row: number, col: number): void {
+        const byCol = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (!byCol) {
+            return;
+        }
+        const entries = byCol.get(col);
+        if (!entries || entries.length === 0) {
+            return;
+        }
+        let lo = 0;
+        let hi = entries.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (entries[mid].row < row) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < entries.length && entries[lo].row === row) {
+            entries.splice(lo, 1);
+            if (entries.length === 0) {
+                byCol.delete(col);
+            }
+        }
+    }
+
+    private getPopulatedCellBounds(sheet: WorksheetSpec): { maxRow: number; maxCol: number } {
+        const byCol = this.getOrBuildSheetColIndex(sheet);
+        let maxRow = 1;
+        let maxCol = 1;
+        for (const [col, entries] of byCol.entries()) {
+            if (col > maxCol) {
+                maxCol = col;
+            }
+            if (entries.length > 0) {
+                const lastRow = entries[entries.length - 1].row;
+                if (lastRow > maxRow) {
+                    maxRow = lastRow;
+                }
+            }
+        }
+        return { maxRow, maxCol };
     }
 
     private consumeEvalBudget(cost = 1): void {
@@ -4993,10 +5070,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             anchor.SpillRange = undefined;
         }
         const cleared: string[] = [];
+        const cellKeys = Object.keys(sheet.Cells);
 
-        if (area > 256 || area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
-            // Sparse cleanup (`R6`): never iterate billions of empty coordinates on crafted SpillRange values.
-            for (const key of Object.keys(sheet.Cells)) {
+        if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS || area > cellKeys.length) {
+            // Sparse cleanup (`R6`, `N3`): use only when area exceeds populated cell count or dynamic cap.
+            for (const key of cellKeys) {
                 if (key === canonicalAnchorAddr) continue;
                 const pos = parseCellCoordsFast(key);
                 if (
@@ -5013,12 +5091,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     this.removeCellFromVirtualAxisIndex(sheet, child);
                     this.unimplementedResultCells.delete(child);
                     delete sheet.Cells[key];
+                    this.removeCellFromEvalColIndex(sheet, pos.row, pos.col);
                     addClearedSpillAddr(sheet, key);
                     cleared.push(key);
                 }
-            }
-            if (cleared.length > 0) {
-                this.activeEvalBudget?.sheetColIndex.delete(sheet);
             }
             return cleared;
         }
@@ -5033,6 +5109,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         this.removeCellFromVirtualAxisIndex(sheet, child);
                         this.unimplementedResultCells.delete(child);
                         delete sheet.Cells[childAddr];
+                        this.removeCellFromEvalColIndex(sheet, r, c);
                         addClearedSpillAddr(sheet, childAddr);
                         cleared.push(childAddr);
                     }
@@ -5043,9 +5120,6 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        if (cleared.length > 0) {
-            this.activeEvalBudget?.sheetColIndex.delete(sheet);
-        }
         return cleared;
     }
 
@@ -6306,11 +6380,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     Note: existing?.Note ?? null,
                     SpilledFrom: anchorAddr
                 };
+                this.upsertCellInEvalColIndex(sheet, targetR, targetC, targetAddr);
                 writtenAddrs.push(targetAddr);
             }
-        }
-        if (writtenAddrs.length > 0) {
-            this.activeEvalBudget?.sheetColIndex.delete(sheet);
         }
         return { anchorValue: matrix[0]?.[0] ?? null, writtenAddrs };
     }
@@ -6564,24 +6636,48 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             let endRow = desc.endRow;
             let endCol = desc.endCol;
             const rawArea = (endRow - desc.startRow + 1) * (endCol - desc.startCol + 1);
-            if (rawArea > MAX_DYNAMIC_ARRAY_CELLS) {
-                const dims = getEffectiveSheetDimensions(desc.targetSheet);
+            if (rawArea > MAX_DYNAMIC_ARRAY_CELLS || rawArea > 1024) {
+                const dims = this.getPopulatedCellBounds(desc.targetSheet);
                 endRow = Math.min(endRow, Math.max(desc.startRow, dims.maxRow));
                 endCol = Math.min(endCol, Math.max(desc.startCol, dims.maxCol));
             }
-            const clampedArea = (endRow - desc.startRow + 1) * (endCol - desc.startCol + 1);
+            const rowCount = endRow - desc.startRow + 1;
+            const colCount = endCol - desc.startCol + 1;
+            const clampedArea = rowCount * colCount;
             if (clampedArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(clampedArea)) {
                 return [['#NUM!']];
             }
-            this.consumeEvalBudget(clampedArea);
-            const matrix: SpreadsheetCellValue[][] = [];
-            for (let r = desc.startRow; r <= endRow; r++) {
-                const rowVals: SpreadsheetCellValue[] = [];
-                for (let c = desc.startCol; c <= endCol; c++) {
-                    rowVals.push(getCellVal(desc.targetSheet, FormatCellAddress(r, c)));
+            const byCol = this.getOrBuildSheetColIndex(desc.targetSheet);
+            const matrix: SpreadsheetCellValue[][] = Array.from({ length: rowCount }, () =>
+                new Array<SpreadsheetCellValue>(colCount).fill(null)
+            );
+            let populatedHits = 0;
+            for (let c = desc.startCol; c <= endCol; c++) {
+                const colEntries = byCol.get(c);
+                if (!colEntries || colEntries.length === 0) {
+                    continue;
                 }
-                matrix.push(rowVals);
+                let lo = 0;
+                let hi = colEntries.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >>> 1;
+                    if (colEntries[mid].row < desc.startRow) {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                const cOffset = c - desc.startCol;
+                for (let idx = lo; idx < colEntries.length; idx++) {
+                    const entry = colEntries[idx];
+                    if (entry.row > endRow) {
+                        break;
+                    }
+                    matrix[entry.row - desc.startRow][cOffset] = getCellVal(desc.targetSheet, entry.addr);
+                    populatedHits++;
+                }
             }
+            this.consumeEvalBudget(Math.max(1, populatedHits + Math.ceil(clampedArea / 1024)));
             return matrix;
         }
         if (argNode.kind === 'ArrayLiteral' || this.nodeContainsArray(argNode, workbook, lexicalScope)) {
@@ -15301,11 +15397,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const width = parseFloat(this.extractXmlAttr(attrs, 'width') || '0');
             const hiddenAttr = this.extractXmlAttr(attrs, 'hidden');
             const isHidden = hiddenAttr === '1' || hiddenAttr?.toLowerCase() === 'true';
-            if (min > 0 && max >= min && (width > 0 || isHidden)) {
-                if (max > preMaxCol) preMaxCol = max;
+            if (min > 0 && min <= EXCEL_MAX_COLS && max >= min && (width > 0 || isHidden)) {
+                const cappedMax = Math.min(max, EXCEL_MAX_COLS);
+                const allocColMax = Math.min(cappedMax, MAX_DENSE_COLS);
+                if (allocColMax > preMaxCol) preMaxCol = allocColMax;
                 parsedCols.push({
                     min,
-                    max,
+                    max: cappedMax,
                     width: width > 0 ? width : undefined,
                     hidden: isHidden
                 });
@@ -15346,6 +15444,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.ensureSheetCapacity(ws, preMaxRow, preMaxCol);
 
         for (const cw of parsedCols) {
+            if (cw.min < 1 || cw.min > ws.Columns.length) {
+                continue;
+            }
             const maxDenseCol = Math.min(cw.max, ws.Columns.length);
             const roundedWidth = cw.width !== undefined ? Number(cw.width.toFixed(2)) : undefined;
             for (let c = cw.min; c <= maxDenseCol; c++) {
@@ -15477,14 +15578,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw
                     );
                     formula = `=${cleanBody}`;
-                    if (fType === 'array' && !cmAttr) {
-                        spillRange = (fRef || canonicalAddr).toUpperCase();
-                        if (spillRange.includes(':')) {
-                            arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: spillRange });
+                    if (fType === 'array') {
+                        const rawArrayRef = ((fRef || (!cmAttr ? canonicalAddr : '')) || '').toUpperCase();
+                        if (rawArrayRef.includes(':')) {
+                            const refBounds = ParseRangeAddress(rawArrayRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                            const refArea = refBounds
+                                ? (refBounds.endRow - refBounds.startRow + 1) * (refBounds.endCol - refBounds.startCol + 1)
+                                : 0;
+                            if (refArea > 0 && refArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                                spillRange = rawArrayRef;
+                                arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: rawArrayRef });
+                            }
+                        } else if (!cmAttr && rawArrayRef) {
+                            spillRange = rawArrayRef;
                         }
-                    } else if (fType === 'array' && fRef && fRef.includes(':')) {
-                        spillRange = fRef.toUpperCase();
-                        arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: spillRange });
                     }
                 }
 
@@ -15520,17 +15627,42 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Mark non-formula child cells inside multi-cell array/spill ranges as owned children of their anchor (R8-8)
+        // Mark non-formula child cells inside multi-cell array/spill ranges as owned children of their anchor (R8-8, B4)
+        const importedCellKeys = arrayAnchorRanges.length > 0 ? Object.keys(ws.Cells) : [];
         for (const anchorEntry of arrayAnchorRanges) {
             const bounds = ParseRangeAddress(anchorEntry.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
             if (!bounds) continue;
-            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
-                for (let c = bounds.startCol; c <= bounds.endCol; c++) {
-                    const childAddr = FormatCellAddress(r, c);
-                    if (childAddr === anchorEntry.anchorAddr) continue;
-                    const childCell = ws.Cells[childAddr];
+            const area = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+            if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
+                continue;
+            }
+            if (area > 256 || area > importedCellKeys.length) {
+                for (const key of importedCellKeys) {
+                    if (key === anchorEntry.anchorAddr) continue;
+                    const pos = parseCellCoordsFast(key);
+                    if (
+                        !pos ||
+                        pos.row < bounds.startRow ||
+                        pos.row > bounds.endRow ||
+                        pos.col < bounds.startCol ||
+                        pos.col > bounds.endCol
+                    ) {
+                        continue;
+                    }
+                    const childCell = ws.Cells[key];
                     if (childCell && !childCell.Formula) {
                         childCell.ArrayMaster = anchorEntry.anchorAddr;
+                    }
+                }
+            } else {
+                for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                    for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                        const childAddr = FormatCellAddress(r, c);
+                        if (childAddr === anchorEntry.anchorAddr) continue;
+                        const childCell = ws.Cells[childAddr];
+                        if (childCell && !childCell.Formula) {
+                            childCell.ArrayMaster = anchorEntry.anchorAddr;
+                        }
                     }
                 }
             }

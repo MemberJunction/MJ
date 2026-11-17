@@ -23,8 +23,13 @@ import {
 import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
- * Pluggable LLM completion callback used by {@link ArtifactEvaluateAiFormulaServerOperation}
- * (overridable in unit tests without live AI provider credentials).
+ * Gated LLM formula evaluator operation for spreadsheets (`=MJ.AI(...)`).
+ *
+ * Security & abuse controls (`S2`, `S-d`, `N5`):
+ * - Requires authenticated non-magic-link user with `artifact:edit` API-key scope and `CanEdit` ACL on `ArtifactID`.
+ * - Enforces prompt-model allowlisting against `AIEngine` `PromptModels` for `Spreadsheet MJ.AI Formula Evaluator`.
+ * - Bounds payload sizes (`MAX_AI_FORMULA_BATCH_CELLS` = 25, prompt <= 16 KiB, context <= 64 KiB, batch <= 256 KiB)
+ *   and enforces a process-scoped per-user sliding-window rate quota (30 req/min, 200 cells/min per instance).
  */
 export type AiFormulaCompletionFn = (
     prompt: string,

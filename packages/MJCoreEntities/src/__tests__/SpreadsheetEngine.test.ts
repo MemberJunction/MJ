@@ -4015,5 +4015,48 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.EvaluateWorkbook(wideWb);
         expect(wideWs.Cells['AA100']?.ComputedValue).toBe(4000);
         expect(wideWs.Cells['AA101']?.ComputedValue).toBe(20000);
+
+        // 8. N3: Matrix formulas (FILTER / SUMPRODUCT) over A1:Z10000 on sparse sheet with 10k rows succeed without #NUM!
+        const sparseMatrixWb = engine.CreateEmptyWorkbook('Sparse Matrix', ['M'], 10000, 26);
+        const sparseMatrixWs = sparseMatrixWb.Worksheets[0];
+        sparseMatrixWs.Cells['A1'] = { Address: 'A1', RowID: 'sm-r1', ColumnID: 'sm-c1', RawValue: 10 };
+        sparseMatrixWs.Cells['A2'] = { Address: 'A2', RowID: 'sm-r2', ColumnID: 'sm-c1', RawValue: 20 };
+        sparseMatrixWs.Cells['B1'] = { Address: 'B1', RowID: 'sm-r1', ColumnID: 'sm-c2', RawValue: 2 };
+        sparseMatrixWs.Cells['B2'] = { Address: 'B2', RowID: 'sm-r2', ColumnID: 'sm-c2', RawValue: 3 };
+        sparseMatrixWs.Cells['AB1'] = { Address: 'AB1', RowID: 'sm-r1', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUMPRODUCT(A1:Z10000, A1:Z10000)' };
+        sparseMatrixWs.Cells['AB2'] = { Address: 'AB2', RowID: 'sm-r2', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUM(FILTER(A1:Z10000, A1:A10000>10))' };
+        engine.EvaluateWorkbook(sparseMatrixWb);
+        expect(sparseMatrixWs.Cells['AB1']?.ComputedValue).toBe(513);
+        expect(sparseMatrixWs.Cells['AB2']?.ComputedValue).toBe(23);
+
+        // 9. B4: XLSX ImportXlsx + PatchXlsxBytes with crafted <f t="array" ref="A1:XFD1048576"> and <col min="1" max="10000000"> stays bounded
+        const enc = new TextEncoder();
+        const craftedSheetXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<cols><col min="1" max="10000000" width="12"/></cols>',
+            '<sheetData>',
+            '<row r="1"><c r="A1"><f t="array" ref="A1:XFD1048576">1</f><v>1</v></c></row>',
+            '<row r="2"><c r="B2"><v>99</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const buildZipFn = Reflect.get(engine, 'buildZipArchive') as (
+            entries: Array<{ Name: string; Data: Uint8Array }>
+        ) => Uint8Array;
+        const craftedXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(craftedSheetXml) },
+        ]);
+        const b4Start = performance.now();
+        const b4Imported = XlsxOpenXmlAdapter.Instance.ImportXlsx(craftedXlsx);
+        expect(b4Imported.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
+        expect(b4Imported.Worksheets[0].Cells['B2']?.ArrayMaster).toBeUndefined();
+        engine.SetCell(b4Imported, b4Imported.Worksheets[0].SheetID, 'B2', { Value: 123 }, true);
+        const b4Patched = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(craftedXlsx, b4Imported);
+        expect(b4Patched.byteLength).toBeGreaterThan(0);
+        expect(performance.now() - b4Start).toBeLessThan(1000);
     });
 });

@@ -1598,4 +1598,41 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
       }).Allowed,
     ).toBe(true);
   });
+
+  it('B1: ValidateArtifactContentMutationAgainstLocks rejects non-owner locked Markdown tampering even when paired with fake Slides or Workbook Configuration', () => {
+    const lockedDoc = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Legal Notice',
+      'Original confidential terms.',
+    ].join('\n');
+    const tamperedDoc = lockedDoc.replace('Original confidential terms.', 'Bypassed terms.');
+
+    const resFakeSlidesConfig = ValidateArtifactContentMutationAgainstLocks(lockedDoc, tamperedDoc, otherUser.ID, false, {
+      currentConfiguration: null,
+      nextConfiguration: JSON.stringify({ Slides: [] }),
+    });
+    expect(resFakeSlidesConfig.Allowed).toBe(false);
+
+    const resFakeWorkbookConfig = ValidateArtifactContentMutationAgainstLocks(lockedDoc, tamperedDoc, otherUser.ID, false, {
+      currentConfiguration: null,
+      nextConfiguration: JSON.stringify({ Worksheets: [] }),
+    });
+    expect(resFakeWorkbookConfig.Allowed).toBe(false);
+
+    const resFakeSlidesContent = ValidateArtifactContentMutationAgainstLocks(
+      lockedDoc,
+      JSON.stringify({ Slides: [] }),
+      otherUser.ID,
+      false,
+    );
+    expect(resFakeSlidesContent.Allowed).toBe(false);
+
+    const resFakeWorkbookContent = ValidateArtifactContentMutationAgainstLocks(
+      lockedDoc,
+      JSON.stringify({ Worksheets: [] }),
+      otherUser.ID,
+      false,
+    );
+    expect(resFakeWorkbookContent.Allowed).toBe(false);
+  });
 });

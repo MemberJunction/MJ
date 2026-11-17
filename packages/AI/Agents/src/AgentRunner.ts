@@ -3859,8 +3859,16 @@ export class AgentRunner {
                                         const refreshedIds = new Set(refreshedRows.map((r) => NormalizeUUID(r.VersionID)));
                                         const missingRefreshedIds = newerVersionIds.filter((id) => !refreshedIds.has(NormalizeUUID(id)));
                                         if (missingRefreshedIds.length > 0) {
-                                            const fallbackLatestRows = await hydrateArtifactVersionsViaRunView(missingRefreshedIds);
-                                            refreshedRows.push(...fallbackLatestRows);
+                                            try {
+                                                const fallbackLatestRows = await hydrateArtifactVersionsViaRunView(missingRefreshedIds);
+                                                refreshedRows.push(...fallbackLatestRows);
+                                            } catch (fallbackLatestErr) {
+                                                LogError(
+                                                    `[AgentRunner] Fallback latest artifact version hydration failed: ${
+                                                        fallbackLatestErr instanceof Error ? fallbackLatestErr.message : String(fallbackLatestErr)
+                                                    }`,
+                                                );
+                                            }
                                         }
                                         for (const freshRow of refreshedRows) {
                                             const freshArtId = (freshRow.ArtifactID ?? '').trim();

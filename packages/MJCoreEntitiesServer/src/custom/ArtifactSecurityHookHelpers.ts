@@ -444,6 +444,8 @@ export function BuildUuidInScopeClause(columnName: string, ids: ReadonlySet<stri
     return `(${chunks.map((c) => `${columnName} IN (${c.join(',')})`).join(' OR ')})`;
 }
 
+export type CollectionIdSetCache = Map<'readable' | 'shareOrDelete', Promise<Set<string> | null>>;
+
 export interface ScopedPreRunViewPredicate {
     IdColumnName: string;
     ResolveReadableIds?: (
@@ -460,7 +462,8 @@ export interface ScopedPreRunViewPredicate {
         provider: IMetadataProvider,
         contextUser: UserInfo,
         targetEntityInfo: EntityInfo | null,
-        runViewParams?: RunViewParams
+        runViewParams?: RunViewParams,
+        collectionCache?: CollectionIdSetCache
     ) => Promise<{ clause: string; isExact: boolean }>;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
@@ -490,7 +493,8 @@ export interface ScopedPreRunViewConfig {
         provider: IMetadataProvider,
         contextUser: UserInfo,
         targetEntityInfo: EntityInfo | null,
-        runViewParams?: RunViewParams
+        runViewParams?: RunViewParams,
+        collectionCache?: CollectionIdSetCache
     ) => Promise<{ clause: string; isExact: boolean }>;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
@@ -500,8 +504,9 @@ export interface ScopedPreRunViewConfig {
     ExtraPredicates?: readonly ScopedPreRunViewPredicate[];
 }
 
-const MAX_SQL_COLLECTION_ANCESTRY_HOPS = 16;
+const MAX_SQL_COLLECTION_ANCESTRY_HOPS = 15;
 const MAX_SQL_ARTIFACT_DELEGATE_HOPS = 8;
+const MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS = 500;
 
 function resolveCoreSchemaName(provider: IMetadataProvider | null | undefined): string {
     const configSchema =
@@ -546,9 +551,9 @@ function resolveCachedUserViewEntity(params: RunViewParams | undefined): MJUserV
 }
 
 /**
- * Qualifies an outer-query column with its entity schema & effective view (honoring `AlternateBaseView`,
- * saved view pins, `DataSource: 'Materialized'`, and custom `MJCoreSchemaName` — `S-f`) so correlated
- * `EXISTS` subqueries can never accidentally bind to an inner table's identically named column (e.g. `ID`).
+ * Qualifies an outer-query column with its entity schema & effective view (honoring `AlternateBaseView`
+ * including `effectiveSchemaName`, saved view pins, `DataSource: 'Materialized'`, and custom
+ * `MJCoreSchemaName` — `S-f`, `N4`) so correlated `EXISTS` subqueries never bind to inner columns.
  */
 export function QualifyOuterEntityColumn(
     entityInfo: EntityInfo | null | undefined,
@@ -558,7 +563,7 @@ export function QualifyOuterEntityColumn(
     params?: RunViewParams
 ): string {
     const { coreSchema, q } = sqlPlatformHelpers(provider);
-    const schema = (entityInfo?.SchemaName ?? '').trim() || coreSchema;
+    let schema = (entityInfo?.SchemaName ?? '').trim() || coreSchema;
     let effectiveBaseView = (entityInfo?.BaseView ?? '').trim() || defaultBaseView;
 
     if (entityInfo && params) {
@@ -570,12 +575,14 @@ export function QualifyOuterEntityColumn(
                     `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
                 );
             }
-            effectiveBaseView = ResolveAlternateBaseView({
+            const resolution = ResolveAlternateBaseView({
                 entity: entityInfo,
                 alternateBaseViewName: effectiveAbvName,
                 suppressDeprecationWarning: true,
                 callerName: 'QualifyOuterEntityColumn'
-            }).effectiveViewName;
+            });
+            schema = resolution.effectiveSchemaName || schema;
+            effectiveBaseView = resolution.effectiveViewName;
         } else if (
             IsMaterializedDataSource(params.DataSource) &&
             !entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')
@@ -588,9 +595,115 @@ export function QualifyOuterEntityColumn(
 }
 
 /**
+ * Async variant of {@link QualifyOuterEntityColumn} that mirrors `GenericDatabaseProvider.resolveEffectiveBaseViewTarget`
+ * (`N4`): loads `ViewEntity` when not cached in `UserViewEngine` and queries `MJ: Materialized Results`
+ * so inactive/custom materialized views resolve to the exact SQL view name (`BaseView` vs `ViewName`).
+ */
+export async function QualifyOuterEntityColumnAsync(
+    entityInfo: EntityInfo | null | undefined,
+    defaultBaseView: string,
+    columnName: string,
+    provider: IMetadataProvider | null | undefined,
+    params?: RunViewParams,
+    contextUser?: UserInfo
+): Promise<string> {
+    const { coreSchema, q } = sqlPlatformHelpers(provider);
+    let schema = (entityInfo?.SchemaName ?? '').trim() || coreSchema;
+    let effectiveBaseView = (entityInfo?.BaseView ?? '').trim() || defaultBaseView;
+
+    if (entityInfo && params) {
+        let viewEntity = resolveCachedUserViewEntity(params);
+        if (
+            !viewEntity &&
+            typeof params.AlternateBaseView !== 'string' &&
+            (params.ViewID || params.ViewName) &&
+            provider &&
+            typeof (provider as { RunView?: unknown }).RunView === 'function'
+        ) {
+            try {
+                const systemActor = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
+                const viewFilter = params.ViewID
+                    ? `ID='${EscapeSQLString(params.ViewID)}'`
+                    : `Name='${EscapeSQLString(params.ViewName!)}'`;
+                const viewLookupParams: RunViewParams = {
+                    EntityName: 'MJ: User Views',
+                    ExtraFilter: viewFilter,
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'entity_object'
+                };
+                GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_HELPER_PARAMS).add(viewLookupParams);
+                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(viewLookupParams);
+                const viewRes = await RunView.FromMetadataProvider(provider).RunView<MJUserViewEntity>(
+                    viewLookupParams,
+                    systemActor
+                );
+                if (viewRes.Success && viewRes.Results?.length) {
+                    viewEntity = viewRes.Results[0];
+                }
+            } catch {
+                // Fall back cleanly to base entity schema/view
+            }
+        }
+        const effectiveAbvName = GetEffectiveAlternateBaseViewName(params, viewEntity);
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            const resolution = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                contextUser,
+                suppressDeprecationWarning: true,
+                callerName: 'QualifyOuterEntityColumnAsync'
+            });
+            schema = resolution.effectiveSchemaName || schema;
+            effectiveBaseView = resolution.effectiveViewName;
+        } else if (
+            IsMaterializedDataSource(params.DataSource) &&
+            !entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')
+        ) {
+            if (provider && typeof (provider as { RunView?: unknown }).RunView === 'function' && entityInfo.ID && IsValidUUID(entityInfo.ID)) {
+                try {
+                    const systemActor = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
+                    const matParams: RunViewParams = {
+                        EntityName: 'MJ: Materialized Results',
+                        ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${EscapeSQLString(entityInfo.ID)}'`,
+                        Fields: ['Status', 'ViewName'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    };
+                    GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_HELPER_PARAMS).add(matParams);
+                    ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(matParams);
+                    const matRes = await RunView.FromMetadataProvider(provider).RunView<{
+                        Status?: string;
+                        ViewName?: string | null;
+                    }>(matParams, systemActor);
+                    const row = matRes.Success && matRes.Results?.length ? matRes.Results[0] : null;
+                    if (row?.Status === 'Active') {
+                        effectiveBaseView = row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
+                    } else {
+                        effectiveBaseView = entityInfo.BaseView || defaultBaseView;
+                    }
+                } catch {
+                    effectiveBaseView = entityInfo.BaseView || defaultBaseView;
+                }
+            } else {
+                effectiveBaseView = `materialized_vw${entityInfo.CodeName}`;
+            }
+        }
+    }
+
+    return `${q(schema)}.${q(effectiveBaseView)}.${q(columnName)}`;
+}
+
+/**
  * Builds a dialect-aware SQL `EXISTS` predicate verifying that `collectionIdExpr` is readable
  * (or share/delete-capable when `requireShareOrDelete` is true) by `user` via collection ownership
- * or `MJ: Collection Permissions` across up to 17 levels (`0..16`, `B2`/`R1`). Never returns `null`.
+ * or `MJ: Collection Permissions` across up to 16 levels (`0..15`, `B2`/`R1`/`L1`). Never returns `null`.
  */
 export function BuildSqlCollectionReadablePredicate(
     collectionIdExpr: string,
@@ -607,7 +720,6 @@ export function BuildSqlCollectionReadablePredicate(
     }
     if (
         options?.precomputedCollectionIds &&
-        !options.requireShareOrDelete &&
         options.precomputedCollectionIds.size <= MAX_SQL_SCOPED_IN_IDS
     ) {
         return BuildUuidInScopeClause(collectionIdExpr, options.precomputedCollectionIds) ?? '1 = 0';
@@ -724,7 +836,6 @@ function buildSqlArtifactReadablePredicateWithExactness(
 
     const useEmptyPrecomputedCollections = Boolean(
         options?.precomputedCollectionIds &&
-        !options.requireShareOrDelete &&
         options.precomputedCollectionIds.size === 0
     );
 
@@ -787,18 +898,74 @@ function buildSqlArtifactReadablePredicateWithExactness(
     const clause = buildHopPredicate(0, `${rootArtAlias}.${q('ID')} = ${artifactIdExpr}`);
     return {
         clause,
-        // Exact whenever all non-'MJ: Artifacts' delegates are registered (currently none) OR precomputed collections fit;
-        // Wait: even when `artifactsEntityId` is absent from mock provider metadata, treat as inexact unless resolved cleanly.
+        // Treat missing `MJ: Artifacts` entity metadata as inexact so mock providers fail safely (`R1`).
         isExact: isExact && Boolean(safeArtifactsEntityId)
+    };
+}
+
+function getOrFetchCollectionIds(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    requireShareOrDelete: boolean,
+    collectionCache?: CollectionIdSetCache
+): Promise<Set<string> | null> {
+    const cacheKey: 'readable' | 'shareOrDelete' = requireShareOrDelete ? 'shareOrDelete' : 'readable';
+    const existing = collectionCache?.get(cacheKey);
+    if (existing) {
+        return existing;
+    }
+    const promise = ArtifactPermissionEngine.Instance.TryBuildReadableCollectionIdSet(provider, user, {
+        requireShareOrDelete
+    });
+    collectionCache?.set(cacheKey, promise);
+    return promise;
+}
+
+/**
+ * Async variant of {@link BuildSqlCollectionReadablePredicate} that precomputes readable (or
+ * share/delete-capable, `B5`) collection IDs once per hook call.
+ */
+export async function BuildSqlCollectionReadablePredicateAsync(
+    collectionIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: {
+        requireShareOrDelete?: boolean;
+        aliasPrefix?: string;
+        precomputedCollectionCache?: CollectionIdSetCache;
+    }
+): Promise<{ clause: string; isExact: boolean }> {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return { clause: '1 = 0', isExact: true };
+    }
+    let precomputedCollectionIds: Set<string> | null = null;
+    if (provider) {
+        const resolvedCols = await getOrFetchCollectionIds(
+            provider,
+            user,
+            options?.requireShareOrDelete === true,
+            options?.precomputedCollectionCache
+        );
+        if (resolvedCols && resolvedCols.size <= MAX_SQL_SCOPED_IN_IDS) {
+            precomputedCollectionIds = resolvedCols;
+        }
+    }
+    return {
+        clause: BuildSqlCollectionReadablePredicate(collectionIdExpr, provider, user, {
+            requireShareOrDelete: options?.requireShareOrDelete,
+            aliasPrefix: options?.aliasPrefix,
+            precomputedCollectionIds
+        }),
+        isExact: true
     };
 }
 
 /**
  * Builds a dialect-aware SQL `EXISTS` predicate verifying that `artifactIdExpr` is readable (or
  * share/delete-capable when `requireShareOrDelete` is true) by `user` via ownership,
- * `MJ: Artifact Permissions`, `MJ: Collection Artifacts` + 17-level collection ancestry, or
+ * `MJ: Artifact Permissions`, `MJ: Collection Artifacts` + 16-level collection ancestry (`0..15`), or
  * `ParentArtifactPermissionDelegate` (`MJ: Artifacts` parent chain up to depth 8, overriding ownership).
- * Unregistered custom delegates fail closed (`1 = 0`). Never returns `null` (`B2`, `R1`).
+ * Unregistered custom delegates fail closed (`1 = 0`). Never returns `null` (`B2`, `R1`, `L1`).
  */
 export function BuildSqlArtifactReadablePredicate(
     artifactIdExpr: string,
@@ -814,24 +981,51 @@ export function BuildSqlArtifactReadablePredicate(
 }
 
 /**
- * Async variant of {@link BuildSqlArtifactReadablePredicate} that precomputes readable collection IDs
- * once per `RunView` call (`<= 5,000`) to avoid SQL Server's 256-table view-expansion limit across
- * 8-hop delegated artifact hierarchies (`R1`), and reports `isExact` for safe `SqlScopedParams` tracking.
+ * Async variant of {@link BuildSqlArtifactReadablePredicate} that precomputes readable (or share/delete-capable,
+ * `B5`) collection IDs once per `RunView` call (`<= 500` in multi-hop SQL to avoid SQL Server 260-table & 8623
+ * expression limits, `R1`/`N6`, falling back to a single `BuildReadableArtifactIdSet` `IN (...)` when `> 500`),
+ * and reports `isExact` for safe `SqlScopedParams` tracking.
  */
 export async function BuildSqlArtifactReadablePredicateAsync(
     artifactIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+    options?: {
+        requireShareOrDelete?: boolean;
+        aliasPrefix?: string;
+        precomputedCollectionCache?: CollectionIdSetCache;
+    }
 ): Promise<{ clause: string; isExact: boolean }> {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
         return { clause: '1 = 0', isExact: true };
     }
     let precomputedCollectionIds: Set<string> | null = null;
-    if (provider && !options?.requireShareOrDelete) {
-        const resolvedCols = await ArtifactPermissionEngine.Instance.TryBuildReadableCollectionIdSet(provider, user);
-        if (resolvedCols && resolvedCols.size <= MAX_SQL_SCOPED_IN_IDS) {
-            precomputedCollectionIds = resolvedCols;
+    if (provider) {
+        const requireShareOrDelete = options?.requireShareOrDelete === true;
+        const resolvedCols = await getOrFetchCollectionIds(
+            provider,
+            user,
+            requireShareOrDelete,
+            options?.precomputedCollectionCache
+        );
+        if (resolvedCols) {
+            if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
+                precomputedCollectionIds = resolvedCols;
+            } else {
+                // Avoid emitting 9x >500 literal lists (~45k literals, SQL Server 8623) or 260+ tables (`B5`, `N6`)
+                const { isExact } = resolveRegisteredDelegateSqlScope(provider);
+                const readableArtifacts = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+                    provider,
+                    user,
+                    requireShareOrDelete ? (p) => p.CanShare || p.CanDelete : undefined
+                );
+                if (readableArtifacts.size <= MAX_SQL_SCOPED_IN_IDS) {
+                    return {
+                        clause: BuildUuidInScopeClause(artifactIdExpr, readableArtifacts) ?? '1 = 0',
+                        isExact
+                    };
+                }
+            }
         }
     }
     return buildSqlArtifactReadablePredicateWithExactness(artifactIdExpr, provider, user, {
@@ -870,7 +1064,7 @@ export async function BuildSqlArtifactVersionIdReadablePredicateAsync(
     artifactVersionIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { aliasPrefix?: string }
+    options?: { aliasPrefix?: string; precomputedCollectionCache?: CollectionIdSetCache }
 ): Promise<{ clause: string; isExact: boolean }> {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
         return { clause: '1 = 0', isExact: true };
@@ -879,7 +1073,8 @@ export async function BuildSqlArtifactVersionIdReadablePredicateAsync(
     const prefix = options?.aliasPrefix ?? '_sv';
     const verAlias = q(`${prefix}_ver`);
     const innerArt = await BuildSqlArtifactReadablePredicateAsync(`${verAlias}.${q('ArtifactID')}`, provider, user, {
-        aliasPrefix: `${prefix}_a`
+        aliasPrefix: `${prefix}_a`,
+        precomputedCollectionCache: options?.precomputedCollectionCache
     });
     if (innerArt.clause === '1 = 0') {
         return { clause: '1 = 0', isExact: innerArt.isExact };
@@ -909,7 +1104,7 @@ export async function PrepareScopedPreRunView(
         config.InternalParams.has(params) ||
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         IsServerSystemUser(contextUser) ||
-        (!contextUser && resolvedProvider !== null && resolvedProvider.ProviderType !== 'Database')
+        ShouldBypassForNonDatabaseClientProvider(resolvedProvider, contextUser)
     ) {
         return params;
     }
@@ -961,6 +1156,7 @@ export async function PrepareScopedPreRunView(
         const clauses: string[] = [];
         let allClausesBuilt = true;
         let preResolvedEntry: Map<string, boolean> | undefined;
+        const collectionCache: CollectionIdSetCache = new Map();
 
         for (const pred of predicates) {
             const singleId = pred.CheckSingleIdReadable
@@ -984,7 +1180,8 @@ export async function PrepareScopedPreRunView(
                     resolvedProvider,
                     contextUser,
                     targetEntityInfo,
-                    updatedParams
+                    updatedParams,
+                    collectionCache
                 );
                 clauses.push(asyncPred.clause || '1 = 0');
                 if (!asyncPred.isExact) {
@@ -1291,6 +1488,24 @@ export function ChunkUuidList(values: readonly string[], size: number): string[]
     return out;
 }
 
+/**
+ * Returns `true` when `provider` is a client/network provider (`ProviderType === 'Network'`,
+ * or non-`Database` when `contextUser` is unset). Client providers run in processes that also
+ * load server packages (e.g. integration tests or SSR); server SQL-scoping and `PostRunView`
+ * hooks must NOT run on them because the actual enforcement executes on the server's `Database`
+ * provider and injecting `EXISTS (... FROM vwArtifacts ...)` client-side would fail
+ * `ClientClauseScreen` at the GraphQL boundary.
+ */
+export function ShouldBypassForNonDatabaseClientProvider(
+    provider: IMetadataProvider | null | undefined,
+    contextUser: UserInfo | undefined
+): boolean {
+    if (provider === null || provider === undefined) {
+        return false;
+    }
+    return provider.ProviderType === 'Network' || (!contextUser && provider.ProviderType !== 'Database');
+}
+
 export function PrepareRequiredFieldsPreRunView(
     params: RunViewParams,
     targetEntityName: string,
@@ -1307,7 +1522,7 @@ export function PrepareRequiredFieldsPreRunView(
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         !EntityNamesMatch(ResolveTargetEntityName(params, resolvedProvider), targetEntityName, resolvedProvider) ||
         IsServerSystemUser(contextUser) ||
-        (!contextUser && resolvedProvider !== null && resolvedProvider.ProviderType !== 'Database')
+        ShouldBypassForNonDatabaseClientProvider(resolvedProvider, contextUser)
     ) {
         return params;
     }
@@ -1347,7 +1562,7 @@ export function ShouldBypassPostRunView(
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         !EntityNamesMatch(ResolveTargetEntityName(params, provider), targetEntityName, provider) ||
         IsServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
+        ShouldBypassForNonDatabaseClientProvider(provider, contextUser)
     ) {
         return { bypass: true, originalFields };
     }
@@ -1371,7 +1586,7 @@ export async function ShouldBypassPostRunViewAsync(
         internalParams.has(params) ||
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         IsServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
+        ShouldBypassForNonDatabaseClientProvider(provider, contextUser)
     ) {
         return { bypass: true, originalFields };
     }

@@ -48,7 +48,7 @@ import {
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     PrepareScopedPreRunView,
-    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
 } from './ArtifactSecurityHookHelpers';
@@ -326,11 +326,12 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = async (
             InternalParams: getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS),
             OriginalFieldsMap: getOriginalVersionFieldsMap(),
             SqlScopedParams: getGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_VERSION_PARAMS),
-            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
                 BuildSqlArtifactReadablePredicateAsync(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersions', 'ArtifactID', prov, runViewParams),
+                    await QualifyOuterEntityColumnAsync(entityInfo, 'vwArtifactVersions', 'ArtifactID', prov, runViewParams, user),
                     prov,
-                    user
+                    user,
+                    { precomputedCollectionCache: collectionCache }
                 ),
             CheckSingleIdReadable: async (prov, artifactId, user) => {
                 const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(prov, artifactId, user);
@@ -735,7 +736,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 if (this.hasInitializedFields()) {
                                     this.VersionNumber = priorVer + 1;
                                 }
-                                if (!isTrustedRestore && !isTrustedCompaction) {
+                                if (!isTrustedCompaction) {
                                     const priorContent = typeof priorRow.Content === 'string' ? priorRow.Content : '';
                                     const priorConfig = typeof priorRow.Configuration === 'string' ? priorRow.Configuration : null;
                                     const lockCheck = ValidateArtifactContentMutationAgainstLocks(
@@ -779,7 +780,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             }
                         }
 
-                        if (!isTrustedRestore && !isTrustedCompaction) {
+                        if (!isTrustedCompaction) {
                             const wsParams: RunViewParams = {
                                 EntityName: 'MJ: Artifact Working States',
                                 ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
@@ -793,6 +794,12 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 ID?: string;
                                 Content?: string | null;
                             }>(wsParams, systemActor);
+                            if (!wsRes.Success && provider.ProviderType === 'Database' && !isArtifactOwner) {
+                                return this.recordPermissionFailure(
+                                    saveType,
+                                    'Permission denied: unable to verify active artifact working state locks before saving version.'
+                                );
+                            }
                             const wsContent =
                                 wsRes.Success && typeof wsRes.Results?.[0]?.Content === 'string'
                                     ? wsRes.Results[0].Content

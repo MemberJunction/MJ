@@ -27,12 +27,13 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     BuildSqlArtifactVersionIdReadablePredicateAsync,
-    BuildSqlCollectionReadablePredicate,
+    BuildSqlCollectionReadablePredicateAsync,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
-    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
+    ShouldBypassForNonDatabaseClientProvider,
     ShouldBypassPostRunViewAsync
 } from './ArtifactSecurityHookHelpers';
 
@@ -359,20 +360,36 @@ export const CollectionArtifactPreRunViewHook: PreRunViewHook = async (
             InternalParams: getInternalCollectionArtifactQueryParamsSet(),
             OriginalFieldsMap: getOriginalCollectionArtifactFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS),
-            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
                 BuildSqlArtifactVersionIdReadablePredicateAsync(
-                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionArtifacts', 'ArtifactVersionID', prov, runViewParams),
+                    await QualifyOuterEntityColumnAsync(
+                        entityInfo,
+                        'vwCollectionArtifacts',
+                        'ArtifactVersionID',
+                        prov,
+                        runViewParams,
+                        user
+                    ),
                     prov,
-                    user
+                    user,
+                    { precomputedCollectionCache: collectionCache }
                 ),
             ExtraPredicates: [
                 {
                     IdColumnName: 'CollectionID',
-                    BuildSqlPredicate: (prov, user, entityInfo, runViewParams) =>
-                        BuildSqlCollectionReadablePredicate(
-                            QualifyOuterEntityColumn(entityInfo, 'vwCollectionArtifacts', 'CollectionID', prov, runViewParams),
+                    BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
+                        BuildSqlCollectionReadablePredicateAsync(
+                            await QualifyOuterEntityColumnAsync(
+                                entityInfo,
+                                'vwCollectionArtifacts',
+                                'CollectionID',
+                                prov,
+                                runViewParams,
+                                user
+                            ),
                             prov,
-                            user
+                            user,
+                            { precomputedCollectionCache: collectionCache }
                         )
                 }
             ]
@@ -410,7 +427,7 @@ export const CollectionArtifactPostRunViewHook: PostRunViewHook = async (
         sqlScopedSet.delete(params);
         return results;
     }
-    if (!contextUser && provider !== null && provider.ProviderType !== 'Database') {
+    if (ShouldBypassForNonDatabaseClientProvider(provider, contextUser)) {
         sqlScopedSet.delete(params);
         return results;
     }

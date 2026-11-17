@@ -151,6 +151,7 @@ import {
     YJS_MESSAGE_SYNC,
 } from '../collaboration/ArtifactCollaborationServer.js';
 import { DocumentCollaborationResolver } from '../resolvers/DocumentCollaborationResolver.js';
+import { InMemoryYjsRelayBus, InMemoryYjsRoomRelay, type YjsRelayMessage } from '../collaboration/YjsRoomRelay.js';
 import { RegisterArtifactPostRunViewProtectedEntities } from '../generic/RegisterArtifactProtectedEntities.js';
 import type { AppContext } from '../types.js';
 
@@ -2359,4 +2360,289 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(allowedRestore.Success).toBe(true);
         expect(savedRestores).toHaveLength(1);
     });
+
+    it('B2: blocks non-owner RestoreArtifactVersion over working-state or live-room locks, fails closed on RunView errors, and enforces locks across peer relay restore', async () => {
+        const artId = '45454545-4545-4454-8454-454545454545';
+        const v1Id = '46464646-4646-4464-8464-464646464641';
+        const v2Id = '46464646-4646-4464-8464-464646464642';
+        const unlockedContent = '# Spec\n\nUnlocked baseline.\n';
+        const lockedOnlyInWsOrRoom = `# Spec\n\n<!-- mj-lock: owner-only user=${ownerUser.ID} -->\n## Locked Live\nOwner secret\n`;
+
+        let workingStateRow: { Content: string } | null = { Content: lockedOnlyInWsOrRoom };
+        let versionQuerySuccess = true;
+        let savedCount = 0;
+
+        const b2Provider = {
+            Entities: [],
+            EntityByName: () => null,
+            GetEntityObject: async (_name: string, actor?: UserInfo) => {
+                if (_name === 'MJ: Artifact Versions') {
+                    let loadedId = '';
+                    return {
+                        ID: v1Id,
+                        ArtifactID: artId,
+                        VersionNumber: 1,
+                        Name: 'Draft',
+                        Content: unlockedContent,
+                        Configuration: null,
+                        ContentMode: 'Text',
+                        FileID: null,
+                        MimeType: 'text/markdown',
+                        FileName: null,
+                        ContentSizeBytes: unlockedContent.length,
+                        ContentHash: 'h-v1',
+                        IsSaved: true,
+                        UserID: actor?.ID ?? ownerUser.ID,
+                        NewRecord: () => undefined,
+                        Load: async (id: string) => {
+                            loadedId = id;
+                            return id === v1Id;
+                        },
+                        Save: async () => {
+                            savedCount += loadedId === '' ? 1 : 0;
+                            return true;
+                        },
+                        LatestResult: null,
+                    } as unknown as MJArtifactVersionEntity;
+                }
+                return {} as MJArtifactVersionEntity;
+            },
+            RunView: async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: artId, TypeID: 'type-md', UserID: ownerUser.ID, DelegateEntityID: null, DelegateRecordID: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    if (!versionQuerySuccess) {
+                        return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'Simulated DB error' };
+                    }
+                    return {
+                        Success: true,
+                        Results: [{ VersionNumber: 1, Content: unlockedContent, Configuration: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Artifact Working States') {
+                    return {
+                        Success: true,
+                        Results: workingStateRow ? [workingStateRow] : [],
+                        RowCount: workingStateRow ? 1 : 0,
+                        TotalRowCount: workingStateRow ? 1 : 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+            },
+        } as unknown as IMetadataProvider;
+
+        const resolver = new DocumentCollaborationResolver();
+        vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: artId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor',
+        });
+
+        const editorCtx: AppContext = {
+            userPayload: { email: editorUser.Email, userRecord: editorUser, sessionId: 'sess-b2-editor' },
+            providers: [{ type: 'Read-Write', provider: b2Provider }],
+        };
+
+        // 1. Lock present only in persisted working state blocks non-owner restore
+        const wsBlocked = await resolver.RestoreArtifactVersion(artId, v1Id, editorCtx);
+        expect(wsBlocked.Success).toBe(false);
+        expect(wsBlocked.ErrorMessage).toMatch(/lock/i);
+        expect(savedCount).toBe(0);
+
+        // 2. Lock present only in active in-memory room blocks non-owner restore even when working state is clear
+        workingStateRow = null;
+        const roomBaselineSpy = vi
+            .spyOn(ArtifactCollaborationServer.Instance, 'GetActiveRoomLockBaseline')
+            .mockReturnValue({ Content: lockedOnlyInWsOrRoom, Configuration: null });
+        const roomBlocked = await resolver.RestoreArtifactVersion(artId, v1Id, editorCtx);
+        expect(roomBlocked.Success).toBe(false);
+        expect(roomBlocked.ErrorMessage).toMatch(/lock/i);
+        expect(savedCount).toBe(0);
+        roomBaselineSpy.mockRestore();
+
+        // 3. RunView failure during lock check fails closed
+        versionQuerySuccess = false;
+        const dbErrBlocked = await resolver.RestoreArtifactVersion(artId, v1Id, editorCtx);
+        expect(dbErrBlocked.Success).toBe(false);
+        expect(dbErrBlocked.ErrorMessage).toMatch(/Simulated DB error|unable to verify/i);
+        expect(savedCount).toBe(0);
+        versionQuerySuccess = true;
+
+        // 4. Peer relay restore over YjsRoomRelay propagates unlocked restore AND preserves live locks on non-owner restore
+        class TestRelayNodeA extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class TestRelayNodeB extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'node-b');
+        const nodeA = new TestRelayNodeA();
+        const nodeB = new TestRelayNodeB();
+        try {
+            const peerDoc = new Y.Doc();
+            peerDoc.getText('content').insert(0, 'Old peer text');
+            let currentDbLatest = {
+                ID: v2Id,
+                VersionNumber: 2,
+                Content: unlockedContent,
+                Configuration: null,
+                UserID: ownerUser.ID,
+            };
+            const peerProvider = {
+                Entities: [],
+                EntityByName: () => null,
+                RunView: async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: artId, TypeID: 'type-md', UserID: ownerUser.ID, DelegateEntityID: null, DelegateRecordID: null }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [currentDbLatest],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+                },
+            } as unknown as IMetadataProvider;
+            const peerRoom: CollaborationRoom = {
+                ArtifactID: artId,
+                RoomKey: artId,
+                ProviderKey: 'default',
+                Provider: peerProvider,
+                ArtifactOwnerUserID: ownerUser.ID,
+                DriverClass: 'MarkdownArtifactViewerPlugin',
+                DelegateEntityID: null,
+                DelegateRecordID: null,
+                Doc: peerDoc,
+                Awareness: new awarenessProtocol.Awareness(peerDoc),
+                Connections: new Set(),
+                BaseVersionID: v1Id,
+                BaseVersionNumber: 1,
+                BaseVersionText: 'Old peer text',
+                BaseConfiguration: null,
+                DirtyVersion: false,
+                DirtyWorkingState: false,
+                CompactionRetryCount: 0,
+                LastModifiedByUser: ownerUser,
+                LastAppliedRestoreVersionID: null,
+                LastAppliedRestoreVersionNumber: 0,
+                LastReconciledOobVersionID: null,
+                LastReconciledOobContent: null,
+                LastReconciledOobMergeResult: null,
+                RoomEpoch: 'epoch-b2-peer',
+                FlushQueue: Promise.resolve(true),
+                CompactionQueue: Promise.resolve({ Saved: false }),
+                WorkingStateTimer: null,
+                IdleDisposeTimer: null,
+                UnsubscribeRelay: null,
+                DocUpdateListener: () => undefined,
+                AwarenessUpdateListener: () => undefined,
+                HasActiveLocks: false,
+                ProtectedAgentClientIDs: new Set<number>(),
+                AgentPresenceEntries: new Map(),
+                RelayedAgentPresenceTimers: new Map(),
+            };
+
+            const roomsB = Reflect.get(nodeB, '_rooms') as Map<string, CollaborationRoom>;
+            roomsB.set(artId, peerRoom);
+
+            nodeA.SetRoomRelay(relayA);
+            nodeB.SetRoomRelay(relayB);
+            const onRelayB = Reflect.get(nodeB, 'onRelayMessage') as (
+                r: CollaborationRoom,
+                m: YjsRelayMessage,
+            ) => Promise<void>;
+            await relayB.SubscribeRoom(artId, (msg) => {
+                void onRelayB.call(nodeB, peerRoom, msg);
+            });
+
+            // Publish restore frame from nodeA -> nodeB receives and reconciles unlocked target
+            const restoreHash = createHash('sha256').update(unlockedContent, 'utf8').digest('hex');
+            await relayA.PublishToRoom({
+                ArtifactID: artId,
+                ProviderKey: 'default',
+                MessageType: 'version-saved',
+                PayloadBase64: JSON.stringify({ isRestore: true, savedContentHash: restoreHash }),
+                TargetUserID: ownerUser.ID,
+                VersionID: v2Id,
+                VersionNumber: 2,
+            });
+            await vi.waitFor(
+                () => {
+                    expect(peerRoom.Doc.getText('content').toString()).toBe(unlockedContent);
+                },
+                { timeout: 4_000, interval: 25 },
+            );
+
+            // Now add owner lock directly in peerRoom, then receive non-owner restore -> peerRoom retains lock!
+            peerRoom.Doc.transact(() => {
+                const yt = peerRoom.Doc.getText('content');
+                yt.delete(0, yt.length);
+                yt.insert(0, lockedOnlyInWsOrRoom);
+            });
+            peerRoom.HasActiveLocks = true;
+            const v3Id = '46464646-4646-4464-8464-464646464643';
+            currentDbLatest = {
+                ID: v3Id,
+                VersionNumber: 3,
+                Content: unlockedContent,
+                Configuration: null,
+                UserID: editorUser.ID,
+            };
+            await relayA.PublishToRoom({
+                ArtifactID: artId,
+                ProviderKey: 'default',
+                MessageType: 'version-saved',
+                PayloadBase64: JSON.stringify({ isRestore: true, savedContentHash: restoreHash }),
+                TargetUserID: editorUser.ID,
+                VersionID: v3Id,
+                VersionNumber: 3,
+            });
+            await new Promise((r) => setTimeout(r, 1_750));
+            expect(peerRoom.Doc.getText('content').toString()).toBe(lockedOnlyInWsOrRoom);
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+            delete nodeA.GetGlobalObjectStore()[nodeA.GlobalKey];
+            delete nodeB.GetGlobalObjectStore()[nodeB.GlobalKey];
+            await relayA.Shutdown();
+            await relayB.Shutdown();
+        }
+    }, 15_000);
 });

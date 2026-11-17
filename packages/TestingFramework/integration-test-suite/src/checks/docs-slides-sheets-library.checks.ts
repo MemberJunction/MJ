@@ -3749,6 +3749,18 @@ async function checkDslc13GuestShareDisabledRefusal(_ctx: IntegrationCheckContex
             `Unauthenticated POST ${baseUrl}/magic-link/redeem must be blocked by auth middleware (HTTP 401, not public route); got HTTP ${unauthRedeemResp.status}`,
         );
 
+        // Verify /magic-link/redeem is unmounted (not serving GET 405 Method Not Allowed or POST redeem JSON)
+        const authedGetRedeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
+            method: 'GET',
+            headers: {
+                'x-mj-api-key': apiKey,
+            },
+        });
+        Assert(
+            authedGetRedeemResp.status === 404 || authedGetRedeemResp.status === 400,
+            `Authenticated GET ${baseUrl}/magic-link/redeem?format=json must remain unmounted (HTTP 404 or 400, not 405/200); got HTTP ${authedGetRedeemResp.status}`,
+        );
+
         const authedRedeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
             method: 'POST',
             headers: {
@@ -3757,10 +3769,15 @@ async function checkDslc13GuestShareDisabledRefusal(_ctx: IntegrationCheckContex
             },
             body: JSON.stringify({ token: 'mlt_disabled_check' }),
         });
-        AssertEqual(
-            authedRedeemResp.status,
-            404,
-            `Authenticated POST ${baseUrl}/magic-link/redeem must remain unmounted (HTTP 404) when both magicLink.enabled and artifactGuestSharing.enabled are false; got HTTP ${authedRedeemResp.status}`,
+        // Express falls through to Apollo GraphQL on POST when /magic-link is unmounted (HTTP 400 or 404), never HTTP 200 or redeem JSON
+        Assert(
+            authedRedeemResp.status === 404 || authedRedeemResp.status === 400,
+            `Authenticated POST ${baseUrl}/magic-link/redeem must remain unmounted (HTTP 404 or Apollo fallback 400); got HTTP ${authedRedeemResp.status}`,
+        );
+        const authedBodyText = await authedRedeemResp.text();
+        Assert(
+            !authedBodyText.includes('"success"') && !authedBodyText.includes('MAGIC_LINK'),
+            `Authenticated POST ${baseUrl}/magic-link/redeem must not reach magic-link handler; got body: ${authedBodyText.slice(0, 200)}`,
         );
     } finally {
         if (child.exitCode === null && child.signalCode === null) {
@@ -3801,7 +3818,7 @@ async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: Integrat
     );
     Assert(typeRes.Success && typeRes.Results.length === 1, 'Markdown Document artifact type required for DSLC14');
     const docTypeId = typeRes.Results[0].ID;
-    const secretToken = `DSLC14_SECRET_CHILD_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const probeMarker = `DSLC14_CHILD_PROBE_${randomUUID()}`;
 
     let childArtId: string | undefined;
     let childVerId: string | undefined;
@@ -3824,7 +3841,7 @@ async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: Integrat
         childVer.Name = childArt.Name;
         childVer.UserID = ctx.User.ID;
         childVer.ContentMode = 'Text';
-        childVer.Content = `# Child Secret\n\nConfidential payload ${secretToken}`;
+        childVer.Content = `# Child Secret\n\nConfidential payload ${probeMarker}`;
         Assert(await childVer.Save(), `Failed saving child delegated version: ${childVer.LatestResult?.CompleteMessage ?? ''}`);
         childVerId = childVer.ID;
 
@@ -3832,7 +3849,7 @@ async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: Integrat
         const granteeCountRes = await RunView.FromMetadataProvider(granteeProvider).RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `Content LIKE '%${secretToken}%'`,
+                ExtraFilter: `Content LIKE '%${probeMarker}%'`,
                 ResultType: 'count_only',
             },
             granteeProvider.CurrentUser,
@@ -3848,11 +3865,26 @@ async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: Integrat
         );
         AssertEqual(granteeCountRes.RowCount, 0, 'Grantee count_only RowCount must be 0');
 
+        // Also confirm a plain non-system user runs a filtered simple RunView on MJ: Artifact Versions and receives readable shared rows
+        const granteeSharedRes = await RunView.FromMetadataProvider(granteeProvider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID = '${fx.ParentDocID!}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            granteeProvider.CurrentUser,
+        );
+        Assert(
+            granteeSharedRes.Success && granteeSharedRes.Results.length >= 1,
+            `Plain user filtered RunView on shared MJ: Artifact Versions must return readable rows: ${granteeSharedRes.ErrorMessage}`,
+        );
+
         // 2. Owner still observes exact count 1 for the child delegated artifact version
         const ownerCountRes = await typesRv.RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `Content LIKE '%${secretToken}%'`,
+                ExtraFilter: `Content LIKE '%${probeMarker}%'`,
                 ResultType: 'count_only',
             },
             ctx.User,
@@ -3893,6 +3925,93 @@ async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: Integrat
             ctx.User,
         );
         Assert(convMapRes.Success, `GetConversationArtifactsMap failed: ${convMapRes.ErrorMessage}`);
+
+        // 4. B5: Non-system RunViews of MJ: Artifact Guest Share Links & MJ: Collection Artifacts stay below SQL Server's 260-table limit
+        const guestLinkViewRes = await typesRv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Artifact Guest Share Links',
+                Fields: ['ID'],
+                MaxRows: 5,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(
+            guestLinkViewRes.Success,
+            `Non-system RunView on MJ: Artifact Guest Share Links must succeed without 260-table overflow (B5): ${guestLinkViewRes.ErrorMessage}`,
+        );
+        const colArtViewRes = await typesRv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Collection Artifacts',
+                Fields: ['ID'],
+                MaxRows: 5,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(
+            colArtViewRes.Success,
+            `Non-system RunView on MJ: Collection Artifacts must succeed without 260-table overflow (B5): ${colArtViewRes.ErrorMessage}`,
+        );
+
+        // 5. B3: Grantee calling GetConversationComplete or GetConversationArtifactsForAgent on a conversation
+        // anchored to a record they cannot read receives 0 rows
+        const convEntity = ownerProvider.EntityByName('MJ: Conversations');
+        const userEntity = ownerProvider.EntityByName('MJ: Users');
+        if (convEntity && userEntity) {
+            const anchoredConv = await ownerProvider.GetEntityObject<MJConversationEntity>(
+                'MJ: Conversations',
+                ctx.User,
+            );
+            anchoredConv.NewRecord();
+            anchoredConv.UserID = ctx.User.ID;
+            anchoredConv.Name = `__IT171_AnchoredAclCheck_${Date.now()} (mj-integration-test — safe to delete)`;
+            anchoredConv.AnchorType = 'Record';
+            anchoredConv.LinkedEntityID = userEntity.ID;
+            anchoredConv.LinkedRecordID = ctx.User.ID;
+            if (await anchoredConv.Save()) {
+                try {
+                    const granteeRq = new RunQuery(granteeProvider);
+                    const b3CompleteRes = await granteeRq.RunQuery(
+                        {
+                            QueryName: 'GetConversationComplete',
+                            CategoryPath: 'MJ/Conversations',
+                            Parameters: { ConversationID: anchoredConv.ID },
+                        },
+                        granteeProvider.CurrentUser,
+                    );
+                    Assert(
+                        b3CompleteRes.Success,
+                        `Grantee GetConversationComplete failed unexpectedly: ${b3CompleteRes.ErrorMessage}`,
+                    );
+                    AssertEqual(
+                        b3CompleteRes.Results.length,
+                        0,
+                        'Grantee calling GetConversationComplete on an unreadable non-artifact anchored conversation must return 0 rows (B3)',
+                    );
+
+                    const b3ForAgentRes = await granteeRq.RunQuery(
+                        {
+                            QueryName: 'GetConversationArtifactsForAgent',
+                            CategoryPath: 'MJ/Conversations',
+                            Parameters: { ConversationID: anchoredConv.ID },
+                        },
+                        granteeProvider.CurrentUser,
+                    );
+                    Assert(
+                        b3ForAgentRes.Success,
+                        `Grantee GetConversationArtifactsForAgent failed unexpectedly: ${b3ForAgentRes.ErrorMessage}`,
+                    );
+                    AssertEqual(
+                        b3ForAgentRes.Results.length,
+                        0,
+                        'Grantee calling GetConversationArtifactsForAgent on an unreadable non-artifact anchored conversation must return 0 rows (N1/B3)',
+                    );
+                } finally {
+                    await anchoredConv.Delete();
+                }
+            }
+        }
     } finally {
         if (childVerId) {
             const v = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);

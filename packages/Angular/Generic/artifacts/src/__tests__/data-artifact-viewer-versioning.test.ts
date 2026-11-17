@@ -52,8 +52,6 @@ describe('DataArtifactViewerComponent versioning (N4)', () => {
                     {
                         VersionNumber: latestDbVersion,
                         Name: 'Query Results',
-                        ContentMode: 'Text',
-                        MimeType: 'application/json',
                         Configuration: '{"viewMode":"grid"}',
                     },
                 ],
@@ -106,6 +104,8 @@ describe('DataArtifactViewerComponent versioning (N4)', () => {
         expect(createdSaveCalls[0]?.VersionNumber).toBe(2);
         expect(createdSaveCalls[0]?.Content).toContain('"savedQueryId":"q-101"');
         expect(createdVersions[0]?.Configuration).toBe('{"viewMode":"grid"}');
+        expect(createdVersions[0]?.ContentMode).toBe('Text');
+        expect(createdVersions[0]?.MimeType).toBe('application/json');
         expect(viewer.CurrentVersionNumber).toBe(2);
 
         // S-h: If DB has advanced past viewer.CurrentVersionNumber (e.g. concurrent v4), uses max(latestDB, local) + 1

@@ -32,7 +32,7 @@ import {
     GetGlobalWeakSet,
     IsServerSystemUser,
     PrepareScopedPreRunView,
-    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
     ResolveMetadataProvider,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
@@ -113,11 +113,12 @@ export const ArtifactPermissionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
                 BuildSqlArtifactReadablePredicateAsync(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactPermissions', 'ArtifactID', prov, runViewParams),
+                    await QualifyOuterEntityColumnAsync(entityInfo, 'vwArtifactPermissions', 'ArtifactID', prov, runViewParams, user),
                     prov,
-                    user
+                    user,
+                    { precomputedCollectionCache: collectionCache }
                 )
         },
         contextUser,

@@ -563,13 +563,15 @@ export function ValidateArtifactContentMutationAgainstLocks(
     const trimmedCurrent = currentContent.trim();
 
     if (!trimmedCurrent && !(currentConfig ?? '').trim()) {
-        const emptyStructCheck = validateNewLocksOnEmptyContent(
-            inspectStructuredJsonKind(nextConfig) ? nextConfig! : nextContent,
-            actorUserId,
-            isOwner
-        );
-        if (emptyStructCheck !== null) {
-            return emptyStructCheck;
+        if (nextConfig && inspectStructuredJsonKind(nextConfig)) {
+            const emptyConfigCheck = validateNewLocksOnEmptyContent(nextConfig, actorUserId, isOwner);
+            if (emptyConfigCheck !== null && !emptyConfigCheck.Allowed) {
+                return emptyConfigCheck;
+            }
+        }
+        const emptyContentCheck = validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+        if (emptyContentCheck !== null && !emptyContentCheck.Allowed) {
+            return emptyContentCheck;
         }
     }
 
@@ -577,18 +579,18 @@ export function ValidateArtifactContentMutationAgainstLocks(
     const nextContentKind = inspectStructuredJsonKind(nextContent);
     const currentConfigKind = inspectStructuredJsonKind(currentConfig);
     const nextConfigKind = inspectStructuredJsonKind(nextConfig);
-    const isWorkbookInvolved =
-        currentContentKind === 'workbook' ||
-        nextContentKind === 'workbook' ||
-        currentConfigKind === 'workbook' ||
-        nextConfigKind === 'workbook' ||
-        isXlsxBinaryTextPayload(currentContent) ||
-        isXlsxBinaryTextPayload(nextContent);
+    const hasCurrentSlides = currentContentKind === 'slides' || currentConfigKind === 'slides';
     const isSlidesInvolved =
-        currentContentKind === 'slides' ||
-        nextContentKind === 'slides' ||
-        currentConfigKind === 'slides' ||
-        nextConfigKind === 'slides';
+        hasCurrentSlides || nextContentKind === 'slides' || nextConfigKind === 'slides';
+    const hasCurrentWorkbook =
+        currentContentKind === 'workbook' ||
+        currentConfigKind === 'workbook' ||
+        isXlsxBinaryTextPayload(currentContent);
+    const isWorkbookInvolved =
+        hasCurrentWorkbook ||
+        nextContentKind === 'workbook' ||
+        nextConfigKind === 'workbook' ||
+        isXlsxBinaryTextPayload(nextContent);
 
     if (isSlidesInvolved) {
         try {
@@ -612,39 +614,52 @@ export function ValidateArtifactContentMutationAgainstLocks(
                 return null;
             };
 
-            // R4: SlideDeckArtifactViewerComponent renders `Content` directly (falling back to Configuration only if Content is empty).
-            // Validate the effective rendered deck first so keeping a locked deck in Configuration while overwriting Content with Markdown is rejected,
-            // AND validate Content->Content + Config->Config independently whenever either slot holds slides.
-            const prevRenderedSlide = currentContent.trim()
-                ? currentContent
-                : currentConfigKind === 'slides'
-                  ? currentConfig!
-                  : '';
-            const nextRenderedSlide = nextContent.trim()
-                ? nextContent
-                : nextConfigKind === 'slides'
-                  ? nextConfig!
-                  : '';
-            const renderedCheck = checkSlidePair(prevRenderedSlide, nextRenderedSlide);
-            if (renderedCheck) {
-                return renderedCheck;
+            if (hasCurrentSlides) {
+                // R4: SlideDeckArtifactViewerComponent renders `Content` directly (falling back to Configuration only if Content is empty).
+                const prevRenderedSlide = currentContent.trim()
+                    ? currentContent
+                    : currentConfigKind === 'slides'
+                      ? currentConfig!
+                      : '';
+                const nextRenderedSlide = nextContent.trim()
+                    ? nextContent
+                    : nextConfigKind === 'slides'
+                      ? nextConfig!
+                      : '';
+                const renderedCheck = checkSlidePair(prevRenderedSlide, nextRenderedSlide);
+                if (renderedCheck) {
+                    return renderedCheck;
+                }
+            } else {
+                // Prior state was not slides (e.g. locked Markdown); validate any newly introduced slide locks
+                // without returning Allowed early so DocumentLiveBlockEngine still inspects `Content` (`B1`).
+                if (nextContentKind === 'slides') {
+                    const newSlideContentCheck = validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+                    if (newSlideContentCheck && !newSlideContentCheck.Allowed) {
+                        return newSlideContentCheck;
+                    }
+                }
+                if (nextConfigKind === 'slides' && nextConfig) {
+                    const newSlideConfigCheck = validateNewLocksOnEmptyContent(nextConfig, actorUserId, isOwner);
+                    if (newSlideConfigCheck && !newSlideConfigCheck.Allowed) {
+                        return newSlideConfigCheck;
+                    }
+                }
             }
 
-            if (currentContentKind === 'slides' || nextContentKind === 'slides') {
+            if (currentContentKind === 'slides' || (hasCurrentSlides && nextContentKind === 'slides')) {
                 const contentCheck = checkSlidePair(currentContent, nextContent);
                 if (contentCheck) {
                     return contentCheck;
                 }
             }
 
-            if (currentConfigKind === 'slides' || nextConfigKind === 'slides') {
+            if (currentConfigKind === 'slides' || (hasCurrentSlides && nextConfigKind === 'slides')) {
                 const configCheck = checkSlidePair(currentConfig ?? '', nextConfig ?? '');
                 if (configCheck) {
                     return configCheck;
                 }
             }
-
-            return { Allowed: true };
         } catch {
             return {
                 Allowed: false,
@@ -655,15 +670,9 @@ export function ValidateArtifactContentMutationAgainstLocks(
 
     if (isWorkbookInvolved) {
         try {
-            const hasCurrentWb =
-                currentContentKind === 'workbook' ||
-                currentConfigKind === 'workbook' ||
-                isXlsxBinaryTextPayload(currentContent);
-            const prevEffectiveWb = hasCurrentWb
-                ? SpreadsheetEngine.Instance.ParseWorkbook(currentContent, currentConfig)
-                : null;
-            const nextEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, nextConfig);
-            if (prevEffectiveWb) {
+            if (hasCurrentWorkbook) {
+                const prevEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent, currentConfig);
+                const nextEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, nextConfig);
                 const effectiveRes = validateWorkbookLockTransition(
                     prevEffectiveWb,
                     nextEffectiveWb,
@@ -674,13 +683,19 @@ export function ValidateArtifactContentMutationAgainstLocks(
                     return effectiveRes;
                 }
             } else {
-                const newCheck = validateNewLocksOnEmptyContent(
-                    nextConfigKind === 'workbook' ? nextConfig! : nextContent,
-                    actorUserId,
-                    isOwner
-                );
-                if (newCheck && !newCheck.Allowed) {
-                    return newCheck;
+                // Prior state was not a workbook (e.g. locked Markdown); validate any newly introduced
+                // protected ranges without returning Allowed early so `docCheck` still runs (`B1`).
+                if (nextContentKind === 'workbook' || isXlsxBinaryTextPayload(nextContent)) {
+                    const newWbContentCheck = validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+                    if (newWbContentCheck && !newWbContentCheck.Allowed) {
+                        return newWbContentCheck;
+                    }
+                }
+                if (nextConfigKind === 'workbook' && nextConfig) {
+                    const newWbConfigCheck = validateNewLocksOnEmptyContent(nextConfig, actorUserId, isOwner);
+                    if (newWbConfigCheck && !newWbConfigCheck.Allowed) {
+                        return newWbConfigCheck;
+                    }
                 }
             }
 
@@ -712,7 +727,6 @@ export function ValidateArtifactContentMutationAgainstLocks(
                     return configRes;
                 }
             }
-            return { Allowed: true };
         } catch {
             return {
                 Allowed: false,

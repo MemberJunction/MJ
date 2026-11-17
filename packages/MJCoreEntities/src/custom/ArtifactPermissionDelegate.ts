@@ -886,6 +886,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collections',
                     ExtraFilter: `ID='${EscapeSQLString(currentId)}'`,
                     Fields: ['ID', 'OwnerID', 'ParentID'],
+                    IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 };
@@ -901,6 +902,10 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
 
                 if (row.OwnerID && UUIDsEqual(row.OwnerID, user.ID)) {
                     ownerMatchedDepth = depth;
+                    break;
+                }
+
+                if (depth + 1 >= MAX_COLLECTION_ANCESTRY_DEPTH) {
                     break;
                 }
 
@@ -943,6 +948,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collection Permissions',
                     ExtraFilter: `CollectionID IN (${buildQuotedInList(idChunk)}) AND UserID='${safeUserId}'`,
                     Fields: ['CollectionID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                    IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 };
@@ -1030,11 +1036,12 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     /**
      * Same as {@link BuildReadableCollectionIdSet}, except returns `null` when underlying metadata/database
      * queries fail (`!res.Success` or missing actor) so SQL pre-filtering can fall back cleanly rather than
-     * treating an unmocked failure as zero readable collections.
+     * treating an unmocked failure as zero readable collections. Supports `requireShareOrDelete` (`B5`).
      */
     public async TryBuildReadableCollectionIdSet(
         provider: IMetadataProvider | null | undefined,
-        user: UserInfo | null | undefined
+        user: UserInfo | null | undefined,
+        options?: { requireShareOrDelete?: boolean }
     ): Promise<Set<string> | null> {
         const readable = new Set<string>();
         if (!provider || !user?.ID || !IsValidUUID(user.ID)) {
@@ -1049,7 +1056,13 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 return null;
             }
             const rv = RunView.FromMetadataProvider(provider);
-            const collectionIds = await this.collectReadableCollectionIds(rv, queryActor, user.ID, true);
+            const collectionIds = await this.collectReadableCollectionIds(
+                rv,
+                queryActor,
+                user.ID,
+                true,
+                options?.requireShareOrDelete === true
+            );
             for (const cid of collectionIds) {
                 const norm = NormalizeUUID(cid);
                 if (norm) {
@@ -1066,7 +1079,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         rv: RunView,
         queryActor: UserInfo,
         userId: string,
-        throwOnQueryFailure = false
+        throwOnQueryFailure = false,
+        requireShareOrDelete = false
     ): Promise<string[]> {
         const safeUserId = EscapeSQLString(userId);
         const seedCollectionIds: string[] = [];
@@ -1089,7 +1103,23 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             ResultType: 'simple'
         };
         ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(ownedColsParams);
-        const ownedColsRes = await rv.RunView<CollectionRowProjection>(ownedColsParams, queryActor);
+
+        const sharedColsParams: RunViewParams = {
+            EntityName: 'MJ: Collection Permissions',
+            ExtraFilter: requireShareOrDelete
+                ? `UserID='${safeUserId}' AND (CanShare=1 OR CanDelete=1)`
+                : `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
+            Fields: ['CollectionID'],
+            IgnoreMaxRows: true,
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(sharedColsParams);
+
+        const [ownedColsRes, sharedColsRes] = await Promise.all([
+            rv.RunView<CollectionRowProjection>(ownedColsParams, queryActor),
+            rv.RunView<CollectionPermissionRowProjection>(sharedColsParams, queryActor)
+        ]);
         if (!ownedColsRes.Success && throwOnQueryFailure) {
             throw new Error(ownedColsRes.ErrorMessage || 'Failed querying owned collections.');
         }
@@ -1098,17 +1128,6 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 addCollectionSeed(row.ID);
             }
         }
-
-        const sharedColsParams: RunViewParams = {
-            EntityName: 'MJ: Collection Permissions',
-            ExtraFilter: `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
-            Fields: ['CollectionID'],
-            IgnoreMaxRows: true,
-            SkipTotalRowCount: true,
-            ResultType: 'simple'
-        };
-        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(sharedColsParams);
-        const sharedColsRes = await rv.RunView<CollectionPermissionRowProjection>(sharedColsParams, queryActor);
         if (!sharedColsRes.Success && throwOnQueryFailure) {
             throw new Error(sharedColsRes.ErrorMessage || 'Failed querying collection permissions.');
         }
@@ -1119,7 +1138,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         }
 
         let frontier = [...seedCollectionIds];
-        for (let depth = 0; depth < MAX_COLLECTION_ANCESTRY_DEPTH && frontier.length > 0; depth++) {
+        // Depth 0 is the seed collection; traverse at most MAX_COLLECTION_ANCESTRY_DEPTH - 1 child hops (16 levels 0..15, L1).
+        for (let depth = 0; depth < MAX_COLLECTION_ANCESTRY_DEPTH - 1 && frontier.length > 0; depth++) {
             const nextFrontier: string[] = [];
             for (const chunk of chunkArray(frontier, IN_CLAUSE_CHUNK_SIZE)) {
                 const childParams: RunViewParams = {
@@ -1413,6 +1433,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID='${safeArtifactId}'`,
                 Fields: ['ID'],
+                IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
@@ -1432,6 +1453,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collection Artifacts',
                     ExtraFilter: `ArtifactVersionID IN (${buildQuotedInList(verChunk)})`,
                     Fields: ['CollectionID'],
+                    IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 };
@@ -1451,7 +1473,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 return [];
             }
 
-            // Walk ParentID ancestry up to depth 16 (cycle-guarded) and include collection OwnerID grants
+            // Walk ParentID ancestry across 16 total levels (depth 0..15, cycle-guarded) and include collection OwnerID grants
             const allCollectionIds = [...directCollectionIds];
             const rows: CollectionPermissionRowProjection[] = [];
             let frontier = [...directCollectionIds];
@@ -1463,6 +1485,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         EntityName: 'MJ: Collections',
                         ExtraFilter: `ID IN (${buildQuotedInList(colChunk)})`,
                         Fields: ['ID', 'OwnerID', 'ParentID'],
+                        IgnoreMaxRows: true,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
                     };
@@ -1478,6 +1501,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                                     CanDelete: true,
                                     CanShare: true
                                 });
+                            }
+                            if (depth + 1 >= MAX_COLLECTION_ANCESTRY_DEPTH) {
+                                continue;
                             }
                             const parentId = col.ParentID?.trim();
                             if (parentId) {
@@ -1499,6 +1525,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collection Permissions',
                     ExtraFilter: `CollectionID IN (${buildQuotedInList(colChunk)}) AND UserID='${safeUserId}'`,
                     Fields: ['CollectionID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                    IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 };

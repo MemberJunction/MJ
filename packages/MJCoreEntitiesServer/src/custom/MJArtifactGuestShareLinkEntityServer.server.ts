@@ -34,7 +34,8 @@ import {
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
-    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
+    ShouldBypassForNonDatabaseClientProvider,
     ShouldBypassPostRunViewAsync
 } from './ArtifactSecurityHookHelpers';
 
@@ -174,12 +175,19 @@ export const ArtifactGuestShareLinkPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_GUEST_LINK_PARAMS),
             OriginalFieldsMap: getOriginalGuestLinkFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_GUEST_LINK_PARAMS),
-            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
                 BuildSqlArtifactReadablePredicateAsync(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactGuestShareLinks', 'ArtifactID', prov, runViewParams),
+                    await QualifyOuterEntityColumnAsync(
+                        entityInfo,
+                        'vwArtifactGuestShareLinks',
+                        'ArtifactID',
+                        prov,
+                        runViewParams,
+                        user
+                    ),
                     prov,
                     user,
-                    { requireShareOrDelete: true }
+                    { requireShareOrDelete: true, precomputedCollectionCache: collectionCache }
                 )
         },
         contextUser,
@@ -215,7 +223,7 @@ export const ArtifactGuestShareLinkPostRunViewHook: PostRunViewHook = async (
         sqlScopedSet.delete(params);
         return results;
     }
-    if (!contextUser && provider !== null && provider.ProviderType !== 'Database') {
+    if (ShouldBypassForNonDatabaseClientProvider(provider, contextUser)) {
         sqlScopedSet.delete(params);
         return results;
     }

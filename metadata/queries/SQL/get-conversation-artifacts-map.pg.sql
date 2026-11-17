@@ -19,7 +19,7 @@ WITH RECURSIVE "ReadableCollections" AS (
     SELECT child."ID", rc."Depth" + 1 AS "Depth"
     FROM __mj."vwCollections" child
     INNER JOIN "ReadableCollections" rc ON child."ParentID" = rc."ID"
-    WHERE rc."Depth" < 16
+    WHERE rc."Depth" < 15
 ),
 "ReadableArtifacts" AS (
     SELECT a_root."ID", 0 AS "Depth"
@@ -73,21 +73,19 @@ WHERE cd."ConversationID" = {{ ConversationID | sqlString }}
       OR (
           conv."AnchorType" IS NOT NULL
           AND (
-              NOT EXISTS (
+              EXISTS (
                   SELECT 1
-                  FROM __mj."vwEntities" e_acl
-                  WHERE e_acl."ID" = conv."LinkedEntityID"
-                    AND e_acl."Name" IN ('MJ: Artifacts', 'MJ: Collections')
+                  FROM __mj."vwEntities" e_art_acl
+                  INNER JOIN "ReadableArtifacts" ra_conv ON LOWER(ra_conv."ID"::text) = LOWER(conv."LinkedRecordID")
+                  WHERE e_art_acl."ID" = conv."LinkedEntityID"
+                    AND e_art_acl."Name" = 'MJ: Artifacts'
               )
               OR EXISTS (
                   SELECT 1
-                  FROM "ReadableArtifacts" ra_conv
-                  WHERE LOWER(ra_conv."ID"::text) = LOWER(conv."LinkedRecordID")
-              )
-              OR EXISTS (
-                  SELECT 1
-                  FROM "ReadableCollections" rc_conv
-                  WHERE LOWER(rc_conv."ID"::text) = LOWER(conv."LinkedRecordID")
+                  FROM __mj."vwEntities" e_col_acl
+                  INNER JOIN "ReadableCollections" rc_conv ON LOWER(rc_conv."ID"::text) = LOWER(conv."LinkedRecordID")
+                  WHERE e_col_acl."ID" = conv."LinkedEntityID"
+                    AND e_col_acl."Name" = 'MJ: Collections'
               )
           )
       )
