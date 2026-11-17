@@ -5627,6 +5627,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.3.0-edge.0
         version: link:../../../AI/BaseAIEngine
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../../AI/Vectors/Memory
       '@memberjunction/communication-types':
         specifier: 6.3.0-edge.0
         version: link:../../../Communication/base-types
@@ -7386,6 +7389,9 @@ importers:
       '@memberjunction/ai-realtime-client':
         specifier: 6.3.0-edge.0
         version: link:../../../AI/RealtimeClient
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../../AI/Vectors/Memory
       '@memberjunction/conversations-runtime':
         specifier: 6.3.0-edge.0
         version: link:../../../ConversationsRuntime
@@ -7501,6 +7507,10 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+    optionalDependencies:
+      '@huggingface/transformers':
+        specifier: ^4.3.1
+        version: 4.3.1(@types/node@24.10.11)
 
   packages/Angular/Generic/credentials:
     dependencies:
@@ -13451,6 +13461,9 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.3.0-edge.0
         version: link:../Angular/Generic/container-directives
+      '@memberjunction/ng-conversations':
+        specifier: 6.3.0-edge.0
+        version: link:../Angular/Generic/conversations
       '@memberjunction/ng-core-entity-forms':
         specifier: 6.3.0-edge.0
         version: link:../Angular/Explorer/core-entity-forms
@@ -17097,6 +17110,9 @@ importers:
       '@memberjunction/ai-vectordb':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Vectors/Database
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/Vectors/Memory
       '@memberjunction/aiengine':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Engine

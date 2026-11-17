@@ -65,6 +65,7 @@
     "@memberjunction/ng-bootstrap": "6.3.0-edge.0",
     "@memberjunction/ng-bootstrap-lite": "6.3.0-edge.0",
     "@memberjunction/ng-container-directives": "6.3.0-edge.0",
+    "@memberjunction/ng-conversations": "6.3.0-edge.0",
     "@memberjunction/ng-core-entity-forms": "6.3.0-edge.0",
     "@memberjunction/ng-dashboards": "6.3.0-edge.0",
     "@memberjunction/ng-explorer-app": "6.3.0-edge.0",

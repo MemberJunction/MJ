@@ -35,6 +35,7 @@
     "@memberjunction/ai-systemone": "6.3.0-edge.0",
     "@memberjunction/ai-vector-dupe": "6.3.0-edge.0",
     "@memberjunction/ai-vectordb": "6.3.0-edge.0",
+    "@memberjunction/ai-vectors-memory": "6.3.0-edge.0",
     "@memberjunction/aiengine": "6.3.0-edge.0",
     "@memberjunction/api-keys": "6.3.0-edge.0",
     "@memberjunction/auth-providers": "6.3.0-edge.0",

@@ -20,6 +20,7 @@ import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 
 // Lazy loading infrastructure
 import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 // Import lite class registrations manifest (excludes lazy-loaded dashboard and settings packages)
 import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
@@ -110,6 +111,10 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
       useFactory: (lazyRegistry: LazyModuleRegistry) => () => {
         lazyRegistry.RegisterBulk(LAZY_FEATURE_CONFIG);
         lazyRegistry.WireToClassFactory();
+        if (typeof Worker !== 'undefined') {
+          (GetGlobalObjectStore() as Record<string, unknown>)['___MJ_EDGE_AI_WORKER_FACTORY__'] = () =>
+            new Worker(new URL('./workers/edge-ai.worker', import.meta.url), { type: 'module' });
+        }
       },
       deps: [LazyModuleRegistry],
       multi: true

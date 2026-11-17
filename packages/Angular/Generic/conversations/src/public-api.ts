@@ -61,6 +61,10 @@ export * from './lib/services/realtime-pairing';
 export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
+// Shared lazy ONNX/WASM Edge AI worker host + Stage 6C.1 pre-discovery service
+export * from './lib/services/edge-ai/edge-ai-protocol';
+export * from './lib/services/edge-ai/edge-ai-worker-host';
+export * from './lib/services/edge-ai/edge-agent-pre-discovery.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';

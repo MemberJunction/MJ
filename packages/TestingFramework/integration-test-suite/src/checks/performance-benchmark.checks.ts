@@ -62,8 +62,19 @@ import { RedactParamsToJSON, type ActionParam } from '@memberjunction/actions-ba
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
-import { PayloadManager } from '@memberjunction/ai-agents';
-import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    BuildDecisionDiscoveryOptionSet,
+    EvaluateEdgePreDiscoveryHint,
+    PayloadManager,
+} from '@memberjunction/ai-agents';
+import {
+    CalibrateEdgeLogitToConfidence,
+    IsEdgePreDiscoveryHintConfident,
+    SanitizeEdgePreDiscoveryHint,
+    type ExecuteAgentResult,
+    type MJAIAgentEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import { SimpleVectorService, type VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterTestLLM, TestLLM, type TestLLMOutcome } from '@memberjunction/unit-testing';
 import {
@@ -171,6 +182,11 @@ export interface PrimitiveBenchmarkMetrics {
     PgAdhocPoolMax?: number;
     BgeMaxCandidatesCap?: number;
     UserByID10kLookupsMs?: number;
+    // Wave 6C (PB22) metrics:
+    EdgeHintSanitizeDiscardedCount?: number;
+    EdgeHintFastPathConfidence?: number;
+    OmnibarFloat32Index100QueriesMs?: number;
+    OmnibarFloat32PerQueryMs?: number;
 }
 
 export interface BaselineComparisonRow {
@@ -3186,6 +3202,144 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             );
         },
     },
+    {
+        Id: `${BUNDLE}.PB22`,
+        Name: 'PB22: Wave 6C — Edge pre-discovery hint permission sanitization & SimpleVectorService float32 local metadata index lookup speed',
+        Fn: async (): Promise<void> => {
+            const fx = requireFixture();
+
+            // ── Part A: Server-guard-of-truth sanitization for untrusted EdgePreDiscoveryHint ──
+            const allowedOptions = [
+                { ID: '11111111-1111-4111-8111-111111111101', Name: 'Query Builder', Description: 'SQL analytics' },
+                { ID: '11111111-1111-4111-8111-111111111102', Name: 'Marketing Agent', Description: 'Blog posts and copy' },
+                { ID: '11111111-1111-4111-8111-111111111103', Name: 'Database Designer', Description: 'Schema migrations' },
+            ];
+            const unauthorizedId = '99999999-9999-4999-8999-999999999901';
+            const unknownId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+            const forgedEval = EvaluateEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: [unauthorizedId, unknownId, allowedOptions[0].ID, allowedOptions[1].ID],
+                    SuggestedAgentId: unauthorizedId,
+                    Confidence: 0.99,
+                    TopLogit: 2.5,
+                },
+                allowedOptions
+            );
+            AssertEqual(forgedEval.DirectOutcome, null, 'PB22: unauthorized SuggestedAgentId must never trigger direct outcome');
+            AssertEqual(forgedEval.DiscardedCount, 3, 'PB22: expected 3 unauthorized/unknown IDs discarded');
+            AssertEqual(
+                forgedEval.SanitizedHint?.CandidateAgentIds.length ?? 0,
+                2,
+                'PB22: expected 2 permitted candidate IDs to survive sanitization'
+            );
+
+            // Forged Confidence paired with unconfident TopLogit must be rejected
+            const lowLogitSanitized = SanitizeEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: allowedOptions.map((o) => o.ID),
+                    SuggestedAgentId: allowedOptions[0].ID,
+                    Confidence: 0.99,
+                    TopLogit: -4.2,
+                },
+                allowedOptions
+            );
+            AssertEqual(
+                IsEdgePreDiscoveryHintConfident(lowLogitSanitized),
+                false,
+                'PB22: low TopLogit (-4.2) must reject forged high Confidence'
+            );
+
+            // Verified confident hint produces calibrated confidence >= 0.85
+            const validConfidence = CalibrateEdgeLogitToConfidence(-1.5);
+            const validEval = EvaluateEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: allowedOptions.map((o) => o.ID),
+                    SuggestedAgentId: allowedOptions[0].ID,
+                    Confidence: validConfidence,
+                    TopLogit: -1.5,
+                },
+                allowedOptions
+            );
+            Assert(validEval.DirectOutcome?.Injected === true, 'PB22: verified confident edge hint must inject <suggested_agent>');
+
+            // BuildDecisionDiscoveryOptionSet narrows >25 catalog via PreferredCandidateIDs without calling SearchEntity
+            const largeCatalog = Array.from({ length: 35 }, (_, i) => ({
+                ID: `22222222-2222-4222-8222-${String(i + 1).padStart(12, '0')}`,
+                Name: `Catalog Agent ${i + 1}`,
+                Description: `Specialist ${i + 1}`,
+                Status: 'Active' as const,
+                InvocationMode: 'Top-Level' as const,
+                ParentID: null,
+            }));
+            let searchCalls = 0;
+            const narrowed = await BuildDecisionDiscoveryOptionSet({
+                Agents: largeCatalog,
+                RunningAgentID: '33333333-3333-4333-8333-333333333333',
+                PreferredCandidateIDs: [largeCatalog[2].ID, largeCatalog[8].ID, largeCatalog[14].ID, largeCatalog[25].ID],
+                Search: async () => {
+                    searchCalls++;
+                    return [];
+                },
+            });
+            AssertEqual(searchCalls, 0, 'PB22: valid PreferredCandidateIDs must skip SearchEntity round-trip');
+            AssertEqual(narrowed.Options.length, 4, 'PB22: expected 4 narrowed options');
+
+            // ── Part B: SimpleVectorService float32 local metadata index lookup speed (1,000 x 384d) ─
+            const dims = 384;
+            const entryCount = 1000;
+            const vectorService = new SimpleVectorService<{ Kind: string; Name: string }>({ Precision: 'float32' });
+            AssertEqual(vectorService.Precision, 'float32', 'PB22: Omnibar index must use float32 precision');
+
+            const makeUnitVec = (seed: number): Float32Array => {
+                const v = new Float32Array(dims);
+                v[seed % dims] = 1.0;
+                v[(seed * 7 + 13) % dims] = 0.5;
+                v[(seed * 17 + 29) % dims] = 0.25;
+                let norm = 0;
+                for (let d = 0; d < dims; d++) {
+                    norm += v[d] * v[d];
+                }
+                norm = Math.sqrt(norm);
+                for (let d = 0; d < dims; d++) {
+                    v[d] /= norm;
+                }
+                return v;
+            };
+
+            const entries: VectorInputEntry<{ Kind: string; Name: string }>[] = Array.from({ length: entryCount }, (_, i) => ({
+                key: `meta:${i}`,
+                vector: makeUnitVec(i),
+                metadata: { Kind: i % 2 === 0 ? 'entity' : 'view', Name: `MetadataItem_${i}` },
+            }));
+            vectorService.LoadVectors(entries);
+
+            // Warmup JIT
+            const queryVec = Array.from(makeUnitVec(42));
+            const warmHit = vectorService.FindNearest(queryVec, 5, undefined, 'cosine');
+            AssertEqual(warmHit[0]?.key, 'meta:42', 'PB22: float32 FindNearest must rank exact match first');
+
+            const t0 = performance.now();
+            for (let q = 0; q < 100; q++) {
+                const qv = Array.from(makeUnitVec((q * 11) % entryCount));
+                const hits = vectorService.FindNearest(qv, 5, undefined, 'cosine');
+                Assert(hits.length === 5, 'PB22: expected 5 nearest hits');
+            }
+            const total100Ms = Math.max(0.05, Number((performance.now() - t0).toFixed(2)));
+            const perQueryMs = Number((total100Ms / 100).toFixed(4));
+            Assert(perQueryMs < 15, `PB22: float32 lookup per query (${perQueryMs}ms) must stay well under 15ms`);
+
+            fx.Primitives.EdgeHintSanitizeDiscardedCount = forgedEval.DiscardedCount;
+            fx.Primitives.EdgeHintFastPathConfidence = validConfidence;
+            fx.Primitives.OmnibarFloat32Index100QueriesMs = total100Ms;
+            fx.Primitives.OmnibarFloat32PerQueryMs = perQueryMs;
+
+            console.log(
+                `      → PB22 Wave 6C Edge AI KPIs: SanitizeDiscarded=${forgedEval.DiscardedCount} | ` +
+                    `FastPathConf=${validConfidence} | Float32(1000x384d, 100 queries)=${total100Ms}ms (${perQueryMs}ms/query)`
+            );
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -3248,6 +3402,7 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
         `| **PB19** | \`CanCountFromBaseTable\` subqueries & PG temporal + \`EXISTS\` \`count_only\` | ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (\`baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false}\`) |`,
         `| **PB20** | \`EntityInfo\` lazy \`Fields\` construction (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5-entity access | ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms (storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms, structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false}) |`,
         `| **PB21** | Wave 6A frozen \`Fields\` wire cache (5,000 rows x 20), PG pools, BGE worker cap, \`UserByID\` (10k) | ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}, BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, \`UserByID\`=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms |`,
+        `| **PB22** | Wave 6C edge hint permission sanitization & \`SimpleVectorService\` float32 lookup (1,000 x 384d, 100 queries) | Discarded=${report.Primitives.EdgeHintSanitizeDiscardedCount ?? 'n/a'}, Conf=${report.Primitives.EdgeHintFastPathConfidence ?? 'n/a'}, \`Float32\`=${report.Primitives.OmnibarFloat32Index100QueriesMs ?? 'n/a'} ms (${report.Primitives.OmnibarFloat32PerQueryMs ?? 'n/a'} ms/query) |`,
         ``,
         `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
         ``,
@@ -3335,6 +3490,7 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB19 CanCountFromBaseTable subqueries & EXISTS:     ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false})`);
     console.log(`    - PB20 Lazy EntityInfo (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5 Fields: ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms | Storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms (structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false})`);
     console.log(`    - PB21 Wave 6A Server Density (Frozen subset wire):     ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), PG(RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}), BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, UserByID=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms`);
+    console.log(`    - PB22 Wave 6C Edge AI (Sanitization + Float32):       Discarded=${report.Primitives.EdgeHintSanitizeDiscardedCount ?? 'n/a'}, FastPathConf=${report.Primitives.EdgeHintFastPathConfidence ?? 'n/a'}, Float32=${report.Primitives.OmnibarFloat32Index100QueriesMs ?? 'n/a'} ms (${report.Primitives.OmnibarFloat32PerQueryMs ?? 'n/a'} ms/query)`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {

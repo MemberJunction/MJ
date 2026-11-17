@@ -36,7 +36,8 @@
             "stylePreprocessorOptions": {
               "includePaths": ["../../node_modules", "node_modules"]
             },
-            "scripts": []
+            "scripts": [],
+            "webWorkerTsConfig": "tsconfig.worker.json"
           },
           "configurations": {
             "production": {
