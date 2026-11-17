@@ -130,6 +130,31 @@
             <i class="fa-solid fa-link"></i>
           </button>
         }
+        @if (ShowLivingReportControls) {
+          <button
+            type="button"
+            class="living-report-btn"
+            [disabled]="LivingReportRefreshing"
+            (click)="OnRefreshLivingArtifactNow()"
+            [title]="LivingReportRefreshing ? 'Refreshing live blocks & tables…' : 'Refresh Live Data Now (saves a new version if data changed)'"
+            data-testid="living-report-refresh-btn"
+          >
+            <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="LivingReportRefreshing"></i>
+          </button>
+          <button
+            type="button"
+            class="living-report-btn"
+            [class.living-report-btn--active]="ActiveLivingReportSchedule?.Enabled"
+            (click)="OpenLivingReportScheduleModal()"
+            [title]="ActiveLivingReportSchedule ? 'Living Report Schedule: ' + ActiveLivingReportSchedule.CronExpression + ' (' + ActiveLivingReportSchedule.Status + ')' : 'Schedule Recurring Living Report Refresh'"
+            data-testid="living-report-schedule-btn"
+          >
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            @if (ActiveLivingReportBadgeLabel) {
+              <span class="living-report-badge" data-testid="living-report-status-badge">{{ ActiveLivingReportBadgeLabel }}</span>
+            }
+          </button>
+        }
         <button class="analyze-btn"
                 (click)="OnAnalyze()"
                 title="Analyze this artifact with AI">
@@ -529,6 +554,148 @@
               }
             </div>
           }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (ShowLivingReportModal) {
+    <div class="guest-share-backdrop" (click)="CloseLivingReportScheduleModal()">
+      <div
+        class="guest-share-modal living-report-modal"
+        role="dialog"
+        aria-label="Schedule Living Report Refresh"
+        (click)="$event.stopPropagation()"
+        data-testid="living-report-schedule-modal"
+      >
+        <div class="guest-share-modal__header">
+          <h4><i class="fa-solid fa-clock-rotate-left"></i> Living Report Auto-Refresh Schedule</h4>
+          <button type="button" class="close-btn" (click)="CloseLivingReportScheduleModal()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="guest-share-modal__body">
+          <p class="guest-share-hint">
+            Automatically re-evaluate live views, queries, and workbook links on a schedule using your permissions and create a new version when data changes.
+          </p>
+          <div class="living-report-field">
+            <label for="living-report-name-input">Schedule Name</label>
+            <input
+              id="living-report-name-input"
+              type="text"
+              class="guest-share-input"
+              [(ngModel)]="LivingReportScheduleName"
+              placeholder="Weekly Executive Metrics Refresh"
+              data-testid="living-report-name-input"
+            />
+          </div>
+          <div class="living-report-row">
+            <div class="living-report-field">
+              <label for="living-report-preset-select">Cadence</label>
+              <select
+                id="living-report-preset-select"
+                class="guest-share-select"
+                [ngModel]="LivingReportSchedulePreset"
+                (ngModelChange)="OnLivingReportPresetChange($event)"
+                data-testid="living-report-preset-select"
+              >
+                <option value="hourly">Hourly</option>
+                <option value="daily">Daily (8:00 AM)</option>
+                <option value="weekly">Weekly (Mon 8:00 AM)</option>
+                <option value="custom">Custom Cron</option>
+              </select>
+            </div>
+            <div class="living-report-field">
+              <label for="living-report-timezone-select">Timezone</label>
+              <select
+                id="living-report-timezone-select"
+                class="guest-share-select"
+                [(ngModel)]="LivingReportTimezone"
+                data-testid="living-report-timezone-select"
+              >
+                @for (tz of LivingReportTimezoneOptions; track tz) {
+                  <option [value]="tz">{{ tz }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="living-report-field">
+            <label for="living-report-cron-input">Cron Expression (seconds precision)</label>
+            <input
+              id="living-report-cron-input"
+              type="text"
+              class="guest-share-input"
+              [(ngModel)]="LivingReportCronExpression"
+              (ngModelChange)="LivingReportSchedulePreset = 'custom'"
+              placeholder="0 0 8 * * *"
+              data-testid="living-report-cron-input"
+            />
+          </div>
+          <div class="living-report-toggles">
+            <label class="living-report-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="LivingReportEnabled"
+                data-testid="living-report-enabled-checkbox"
+              />
+              <span>Schedule Active</span>
+            </label>
+            <label class="living-report-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="LivingReportForceSave"
+                data-testid="living-report-force-save-checkbox"
+              />
+              <span>Create version checkpoint even if data is unchanged</span>
+            </label>
+          </div>
+          @if (ActiveLivingReportSchedule) {
+            <div class="living-report-stats" data-testid="living-report-stats">
+              <span>Runs: <strong>{{ ActiveLivingReportSchedule.RunCount }}</strong></span>
+              <span>Succeeded: <strong>{{ ActiveLivingReportSchedule.SuccessCount }}</strong></span>
+              @if (ActiveLivingReportSchedule.NextRunAt) {
+                <span>Next: <strong>{{ ActiveLivingReportSchedule.NextRunAt | date:'short' }}</strong></span>
+              }
+            </div>
+          }
+          @if (LivingReportError) {
+            <div class="guest-share-error" role="alert" data-testid="living-report-error">
+              <i class="fa-solid fa-triangle-exclamation"></i> {{ LivingReportError }}
+            </div>
+          }
+          <div class="living-report-actions">
+            @if (ActiveLivingReportSchedule && ActiveLivingReportSchedule.CanDelete) {
+              <button
+                type="button"
+                class="btn-icon living-report-remove-btn"
+                [disabled]="LivingReportBusy"
+                (click)="RemoveLivingReportSchedule()"
+                data-testid="living-report-remove-btn"
+              >
+                <i class="fa-solid fa-trash-can"></i> Remove Schedule
+              </button>
+            }
+            <div class="living-report-actions__right">
+              <button
+                type="button"
+                class="btn-icon btn-primary"
+                [disabled]="LivingReportBusy"
+                (click)="SaveLivingReportSchedule()"
+                data-testid="living-report-save-btn"
+              >
+                <i class="fa-solid" [ngClass]="LivingReportBusy ? 'fa-spinner fa-spin' : 'fa-check'"></i>
+                Save Schedule
+              </button>
+              <button
+                type="button"
+                class="btn-icon"
+                [disabled]="LivingReportBusy"
+                (click)="CloseLivingReportScheduleModal()"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

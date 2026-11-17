@@ -15,6 +15,7 @@ import {
   SpreadsheetEngine,
   type DocumentBlockSpec,
   type DocumentBlockKind,
+  type MJScheduledJobEntity,
   type ResolvedArtifactPermissions,
   type SlideDeckSpec,
   type SlideSpec,
@@ -196,6 +197,101 @@ const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
   }
 `;
 
+const REFRESH_LIVING_ARTIFACT_MUTATION = `
+  mutation RefreshLivingArtifact($artifactId: String!, $versionComments: String, $forceSaveIfUnchanged: Boolean) {
+    RefreshLivingArtifact(
+      artifactId: $artifactId
+      versionComments: $versionComments
+      forceSaveIfUnchanged: $forceSaveIfUnchanged
+    ) {
+      Success
+      Changed
+      SavedNewVersion
+      ArtifactVersionID
+      VersionNumber
+      DiffSummary
+      HighlightLines
+      ErrorMessage
+    }
+  }
+`;
+
+const GET_LIVING_REPORT_SCHEDULE_QUERY = `
+  query GetArtifactLivingReportSchedule($artifactId: String!) {
+    GetArtifactLivingReportSchedule(artifactId: $artifactId) {
+      Success
+      ErrorMessage
+      Schedule {
+        ScheduleID
+        Name
+        CronExpression
+        Timezone
+        Status
+        Enabled
+        ForceSaveIfUnchanged
+        LastRunAt
+        NextRunAt
+        RunCount
+        SuccessCount
+        FailureCount
+        IsCallerScheduleOwner
+        CanDelete
+      }
+    }
+  }
+`;
+
+const UPSERT_LIVING_REPORT_SCHEDULE_MUTATION = `
+  mutation UpsertArtifactLivingReportSchedule(
+    $artifactId: String!
+    $cronExpression: String!
+    $timezone: String
+    $name: String
+    $enabled: Boolean
+    $forceSaveIfUnchanged: Boolean
+    $scheduleId: String
+  ) {
+    UpsertArtifactLivingReportSchedule(
+      artifactId: $artifactId
+      cronExpression: $cronExpression
+      timezone: $timezone
+      name: $name
+      enabled: $enabled
+      forceSaveIfUnchanged: $forceSaveIfUnchanged
+      scheduleId: $scheduleId
+    ) {
+      Success
+      ErrorMessage
+      Schedule {
+        ScheduleID
+        Name
+        CronExpression
+        Timezone
+        Status
+        Enabled
+        ForceSaveIfUnchanged
+        LastRunAt
+        NextRunAt
+        RunCount
+        SuccessCount
+        FailureCount
+        IsCallerScheduleOwner
+        CanDelete
+      }
+    }
+  }
+`;
+
+const DELETE_LIVING_REPORT_SCHEDULE_MUTATION = `
+  mutation DeleteArtifactLivingReportSchedule($artifactId: String!, $scheduleId: String!) {
+    DeleteArtifactLivingReportSchedule(artifactId: $artifactId, scheduleId: $scheduleId) {
+      Success
+      Deleted
+      ErrorMessage
+    }
+  }
+`;
+
 const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000] as const;
 export const MAX_RECONNECT_ATTEMPTS = 10;
 export const COLLAB_SECRET_UNCONFIGURED_CODE = 'COLLAB_SECRET_UNCONFIGURED';
@@ -337,6 +433,89 @@ export interface ServerRestoreArtifactVersionPayload {
   VersionNumber?: number | null;
 }
 
+export interface ServerRefreshLivingArtifactPayload {
+  Success: boolean;
+  Changed: boolean;
+  SavedNewVersion: boolean;
+  ArtifactVersionID?: string | null;
+  VersionNumber?: number | null;
+  DiffSummary?: string | null;
+  HighlightLines?: string[] | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerLivingReportScheduleItemPayload {
+  ScheduleID: string;
+  Name: string;
+  CronExpression: string;
+  Timezone: string;
+  Status: MJScheduledJobEntity['Status'];
+  Enabled: boolean;
+  ForceSaveIfUnchanged: boolean;
+  LastRunAt?: string | null;
+  NextRunAt?: string | null;
+  RunCount: number;
+  SuccessCount: number;
+  FailureCount: number;
+  IsCallerScheduleOwner?: boolean | null;
+  CanDelete?: boolean | null;
+}
+
+export interface ServerLivingReportScheduleResultPayload {
+  Success: boolean;
+  Schedule?: ServerLivingReportScheduleItemPayload | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerDeleteLivingReportSchedulePayload {
+  Success: boolean;
+  Deleted: boolean;
+  ErrorMessage?: string | null;
+}
+
+export interface LivingReportScheduleSummary {
+  ScheduleID: string;
+  Name: string;
+  CronExpression: string;
+  Timezone: string;
+  Status: MJScheduledJobEntity['Status'];
+  Enabled: boolean;
+  ForceSaveIfUnchanged: boolean;
+  LastRunAt?: string;
+  NextRunAt?: string;
+  RunCount: number;
+  SuccessCount: number;
+  FailureCount: number;
+  IsCallerScheduleOwner: boolean;
+  CanDelete: boolean;
+}
+
+export interface RefreshLivingArtifactResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Changed: boolean;
+  SavedNewVersion: boolean;
+  ArtifactVersionID?: string;
+  VersionNumber?: number;
+  DiffSummary?: string;
+  HighlightLines: string[];
+  ErrorMessage?: string;
+}
+
+export interface LivingReportScheduleResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Schedule?: LivingReportScheduleSummary;
+  ErrorMessage?: string;
+}
+
+export interface DeleteLivingReportScheduleResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Deleted: boolean;
+  ErrorMessage?: string;
+}
+
 export interface CollaborationGraphQLResponseMap {
   MintArtifactCollaborationTicket?: CollaborationTicketPayload | null;
   ResolveArtifactPermissions?: ServerArtifactPermissionsPayload | null;
@@ -346,6 +525,10 @@ export interface CollaborationGraphQLResponseMap {
   CommitArtifactInlineEdit?: ServerCommitInlineEditPayload | null;
   ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
   RestoreArtifactVersion?: ServerRestoreArtifactVersionPayload | null;
+  RefreshLivingArtifact?: ServerRefreshLivingArtifactPayload | null;
+  GetArtifactLivingReportSchedule?: ServerLivingReportScheduleResultPayload | null;
+  UpsertArtifactLivingReportSchedule?: ServerLivingReportScheduleResultPayload | null;
+  DeleteArtifactLivingReportSchedule?: ServerDeleteLivingReportSchedulePayload | null;
   errors?: Array<{ message?: string }> | null;
   error?: string | null;
 }
@@ -393,6 +576,45 @@ function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | n
     return explicitProvider;
   }
   return Metadata.Provider ?? null; // global-provider-ok: fallback when Angular caller did not supply a bound provider
+}
+
+function extractGraphQLErrorMessage(gqlRes: CollaborationGraphQLResponseMap | null | undefined): string {
+  if (!gqlRes) {
+    return '';
+  }
+  if (Array.isArray(gqlRes.errors) && gqlRes.errors.length > 0) {
+    const messages = gqlRes.errors
+      .map((e) => (e?.message ?? '').trim())
+      .filter((m) => m.length > 0);
+    if (messages.length > 0) {
+      return messages.join('; ');
+    }
+  }
+  return typeof gqlRes.error === 'string' ? gqlRes.error.trim() : '';
+}
+
+function normalizeLivingReportSchedule(
+  raw: ServerLivingReportScheduleItemPayload | null | undefined,
+): LivingReportScheduleSummary | undefined {
+  if (!raw || !raw.ScheduleID) {
+    return undefined;
+  }
+  return {
+    ScheduleID: raw.ScheduleID,
+    Name: raw.Name,
+    CronExpression: raw.CronExpression,
+    Timezone: raw.Timezone,
+    Status: raw.Status,
+    Enabled: Boolean(raw.Enabled),
+    ForceSaveIfUnchanged: Boolean(raw.ForceSaveIfUnchanged),
+    LastRunAt: raw.LastRunAt ?? undefined,
+    NextRunAt: raw.NextRunAt ?? undefined,
+    RunCount: Number(raw.RunCount ?? 0),
+    SuccessCount: Number(raw.SuccessCount ?? 0),
+    FailureCount: Number(raw.FailureCount ?? 0),
+    IsCallerScheduleOwner: Boolean(raw.IsCallerScheduleOwner),
+    CanDelete: Boolean(raw.CanDelete),
+  };
 }
 
 function isUnsupportedRestoreMutationError(message: string): boolean {
@@ -3871,6 +4093,217 @@ export class DocumentCollaborationService implements OnDestroy {
       ...res,
       ReplyMessage: res.ReplyBody,
     };
+  }
+
+  /**
+   * Executes a server-side Living Report refresh (`RefreshLivingArtifact`) for an editable Document,
+   * Slide Deck, or Spreadsheet, updating live blocks/tables/formulas and persisting a new version if changed.
+   */
+  public async RefreshLivingArtifactNow(
+    artifactId: string,
+    options?: {
+      VersionComments?: string;
+      ForceSaveIfUnchanged?: boolean;
+    },
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<RefreshLivingArtifactResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return {
+        HandledByServer: false,
+        Success: false,
+        Changed: false,
+        SavedNewVersion: false,
+        HighlightLines: [],
+      };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(REFRESH_LIVING_ARTIFACT_MUTATION, {
+        artifactId,
+        versionComments: options?.VersionComments ?? null,
+        forceSaveIfUnchanged: Boolean(options?.ForceSaveIfUnchanged),
+      });
+      const payload = gqlRes?.RefreshLivingArtifact;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          Changed: false,
+          SavedNewVersion: false,
+          HighlightLines: [],
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return RefreshLivingArtifact response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Changed: Boolean(payload.Changed),
+        SavedNewVersion: Boolean(payload.SavedNewVersion),
+        ArtifactVersionID: payload.ArtifactVersionID ?? undefined,
+        VersionNumber:
+          typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        DiffSummary: payload.DiffSummary ?? undefined,
+        HighlightLines: Array.isArray(payload.HighlightLines) ? payload.HighlightLines : [],
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        Changed: false,
+        SavedNewVersion: false,
+        HighlightLines: [],
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to refresh Living Report artifact.',
+      };
+    }
+  }
+
+  /**
+   * Loads the active or paused `MJ: Scheduled Jobs` Living Report schedule bound to `artifactId`.
+   */
+  public async GetLivingReportSchedule(
+    artifactId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<LivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(GET_LIVING_REPORT_SCHEDULE_QUERY, {
+        artifactId,
+      });
+      const payload = gqlRes?.GetArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return GetArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Schedule: normalizeLivingReportSchedule(payload.Schedule),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to load Living Report schedule.',
+      };
+    }
+  }
+
+  /**
+   * Creates or updates a Living Report recurring schedule for `artifactId`.
+   */
+  public async UpsertLivingReportSchedule(
+    input: {
+      ArtifactID: string;
+      CronExpression: string;
+      Timezone?: string;
+      Name?: string;
+      Enabled?: boolean;
+      ForceSaveIfUnchanged?: boolean;
+      ScheduleID?: string;
+    },
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<LivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(UPSERT_LIVING_REPORT_SCHEDULE_MUTATION, {
+        artifactId: input.ArtifactID,
+        cronExpression: input.CronExpression,
+        timezone: input.Timezone ?? 'UTC',
+        name: input.Name ?? null,
+        enabled: input.Enabled ?? true,
+        forceSaveIfUnchanged: Boolean(input.ForceSaveIfUnchanged),
+        scheduleId: input.ScheduleID ?? null,
+      });
+      const payload = gqlRes?.UpsertArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return UpsertArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Schedule: normalizeLivingReportSchedule(payload.Schedule),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to save Living Report schedule.',
+      };
+    }
+  }
+
+  /**
+   * Deletes the Living Report schedule `scheduleId` bound to `artifactId`.
+   */
+  public async DeleteLivingReportSchedule(
+    artifactId: string,
+    scheduleId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<DeleteLivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false, Deleted: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(DELETE_LIVING_REPORT_SCHEDULE_MUTATION, {
+        artifactId,
+        scheduleId,
+      });
+      const payload = gqlRes?.DeleteArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          Deleted: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return DeleteArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Deleted: Boolean(payload.Deleted),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        Deleted: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to delete Living Report schedule.',
+      };
+    }
   }
 
   /**
