@@ -23,6 +23,8 @@ let withStreamDestination = true;
 
 class FakeAudioContext {
     public currentTime = 0;
+    public state: AudioContextState = 'running';
+    public ResumeCalls = 0;
     public destination = DESTINATION_SENTINEL;
     public Gain = new FakeNode();
     public StreamDestination = { stream: STREAM_SENTINEL };
@@ -45,6 +47,10 @@ class FakeAudioContext {
         const source = new FakeNode();
         this.Sources.push(source);
         return source;
+    }
+    public async resume(): Promise<void> {
+        this.ResumeCalls++;
+        this.state = 'running';
     }
     public async close(): Promise<void> {}
 }
@@ -78,6 +84,14 @@ describe('RealtimePcmPlayback output stream', () => {
         playback.Enqueue(new Int16Array([1000, -1000, 500]).buffer);
         expect(lastContext!.Sources).toHaveLength(1);
         expect(lastContext!.Sources[0].Targets).toEqual([lastContext!.Gain]);
+    });
+
+    it('resumes a suspended AudioContext on Enqueue', () => {
+        const playback = new RealtimePcmPlayback(24000);
+        lastContext!.state = 'suspended';
+        playback.Enqueue(new Int16Array([1000, -1000]).buffer);
+        expect(lastContext!.ResumeCalls).toBe(1);
+        expect(lastContext!.state).toBe('running');
     });
 
     it('returns null and still constructs when the context has no createMediaStreamDestination', () => {
@@ -200,5 +214,15 @@ describe('RealtimePcmPlayback.ConnectMediaElement', () => {
         expect(() => playback.ConnectMediaElement(document.createElement('video'))).not.toThrow();
         expect(warn).toHaveBeenCalledTimes(1);
         expect(String(warn.mock.calls[0][0])).toContain("Could not take the media element's audio");
+    });
+
+    it('resumes a suspended AudioContext on ConnectMediaElement', () => {
+        FakeWebAudioContext.StartState = 'suspended';
+        const playback = new RealtimePcmPlayback(24000);
+        const own = contextOf();
+        expect(own.state).toBe('suspended');
+        playback.ConnectMediaElement(document.createElement('video'));
+        expect(own.ResumeCalls).toBe(1);
+        expect(own.state).toBe('running');
     });
 });

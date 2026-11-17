@@ -5,8 +5,8 @@ import type {
     ExecuteAgentParams,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import { RunView, type IMetadataProvider, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
-import { VideoStudioEngine } from '@memberjunction/core-entities';
+import { LogError, RunView, type IMetadataProvider, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
+import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, UUIDSet } from '@memberjunction/global';
 import {
     CreateMJChartKit,
@@ -20,6 +20,7 @@ import {
     type DataSnapshotIssue,
 } from '../data/data-snapshot.js';
 import { GenerateRequestedAssets } from '../generation/generate-assets.js';
+import { FindBrandKitForSpec } from '../generation/generation-policy.js';
 import { RunNarrationPipeline } from '../narration/narration-pipeline.js';
 import type {
     FilmDurationBounds,
@@ -552,7 +553,9 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
             }
 
             const filmBounds = await this.resolveFilmBounds(workingSpec, contextUser);
+            const pronunciationNotes = await this.resolvePronunciationNotes(workingSpec, contextUser);
             const narrationResult = await RunNarrationPipeline(workingSpec, {
+                ...(pronunciationNotes ? { PronunciationNotes: pronunciationNotes } : {}),
                 ContextUser: contextUser,
                 Provider: this.ProviderToUse,
                 StorageAccountID: storageAccountId,
@@ -693,6 +696,26 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 currentStep = null;
             }
             return failRun(message);
+        }
+    }
+
+    /**
+     * Reads the brand kit voice's `PronunciationNotes` for the narration pipeline. A failure to load the
+     * kit only loses the custom rules (the built-in defaults still apply), so it is logged, not thrown.
+     */
+    private async resolvePronunciationNotes(spec: VideoGenerationSpec, contextUser: UserInfo): Promise<string | undefined> {
+        if (!spec.BrandKitID?.trim() || spec.Audio?.Narration?.Enabled === false) {
+            return undefined;
+        }
+        try {
+            await BrandKitEngine.Instance.Config(false, contextUser, this.ProviderToUse);
+            const notes = FindBrandKitForSpec(spec)?.VoiceObject?.PronunciationNotes?.trim();
+            return notes || undefined;
+        } catch (error) {
+            LogError(
+                `Video Studio Pre-Production: could not read brand kit ${spec.BrandKitID} pronunciation notes for user ${contextUser.ID}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return undefined;
         }
     }
 

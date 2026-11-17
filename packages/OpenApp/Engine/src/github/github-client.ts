@@ -15,6 +15,7 @@ import { Octokit } from '@octokit/rest';
 // install/install-orchestrator.ts. Version parsing, precedence and prerelease detection all come
 // from here rather than being hand-rolled, so the next semver edge case is the library's problem.
 import semver from 'semver';
+import { MAX_MIGRATION_DIRECTORY_DEPTH } from '../manifest/migration-layout.js';
 
 /**
  * Options for configuring the GitHub client.
@@ -676,8 +677,6 @@ export async function ListGitHubReleases(
  *                  directory is resolved relative to it (`<subpath>/<migrationsPath>`).
  * @returns Download result with file list or error details
  */
-/** Bounded so a pathological or adversarial tree cannot walk forever. Generous vs any real repo. */
-const MAX_MIGRATION_DIRECTORY_DEPTH = 6;
 
 /**
  * Every `.sql` file under `root`, with its path relative to `root` (#3858) — the same set skyway's

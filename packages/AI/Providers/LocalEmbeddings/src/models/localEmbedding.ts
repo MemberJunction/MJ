@@ -25,6 +25,17 @@ function truncateToDimensions(vector: number[], dimensions: number): number[] {
     return norm > 0 ? head.map(x => x / norm) : head;
 }
 
+/**
+ * Refuses a `dimensions` that is not a positive integer, which `slice` would otherwise turn into a
+ * silently shortened vector. None or 0 means the model's native width, as
+ * `BaseEmbeddings.DimensionsParam` reads it.
+ */
+function assertValidDimensions(dimensions: number | undefined): void {
+    if (dimensions && !(Number.isInteger(dimensions) && dimensions > 0)) {
+        throw new Error(`dimensions must be a positive integer; got ${dimensions}`);
+    }
+}
+
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
 export class LocalEmbedding extends BaseEmbeddings {
     constructor(apiKey?: string) {
@@ -51,12 +62,12 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Inference blocks the thread it runs on, so running it here would stall every request on
      * the process for the length of the batch (MJ #5510).
      */
-    private async embedVectors(modelName: string, texts: string[]): Promise<number[][]> {
+    private async embedVectors(modelName: string, texts: string[], maxInputTokens?: number): Promise<{ vectors: number[][]; tokens: number }> {
         const host = EmbeddingWorkerHost.Instance;
-        const vectors = host.IsAvailable
-            ? await host.Run({ Kind: 'embed', Model: modelName, Texts: texts, Settings: CurrentEmbeddingSettings() })
-            : await EmbedTextsWithModel(modelName, texts);
-        return vectors.map(vector => Array.from(vector));
+        const embedded = host.IsAvailable
+            ? await host.Run({ Kind: 'embed', Model: modelName, Texts: texts, MaxInputTokens: maxInputTokens, Settings: CurrentEmbeddingSettings() })
+            : await EmbedTextsWithModel(modelName, texts, maxInputTokens);
+        return { vectors: embedded.Vectors.map(vector => Array.from(vector)), tokens: embedded.Tokens };
     }
 
     private requireModel(model: string | undefined): string {
@@ -75,11 +86,9 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
-            const [rawVector] = await this.embedVectors(modelName, [params.text]);
+            assertValidDimensions(params.dimensions);
+            const { vectors: [rawVector], tokens } = await this.embedVectors(modelName, [params.text], params.maxInputTokens);
             const vector = (rawVector && params.dimensions) ? truncateToDimensions(rawVector, params.dimensions) : (rawVector ?? []);
-            
-            // Calculate approximate token count (rough estimation)
-            const tokenCount = Math.ceil(params.text.length / 4);
             
             const endTime = Date.now();
             // Only log if it took more than 1 second (indicating potential performance issues)
@@ -90,7 +99,7 @@ export class LocalEmbedding extends BaseEmbeddings {
             return {
                 object: 'object',
                 model: modelName,
-                ModelUsage: new ModelUsage(tokenCount, 0),
+                ModelUsage: new ModelUsage(tokens, 0),
                 vector
             };
         } catch (error) {
@@ -108,13 +117,6 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
-     * Embed multiple text strings
-     */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
-        return this.embedBatch(params);
-    }
-
-    /**
      * Native batch path behind {@link BaseEmbeddings.EmbedTexts}, which checks the result is 1:1
      * with the inputs.
      */
@@ -124,13 +126,11 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
-            const rawVectors = await this.embedVectors(modelName, params.texts);
+            assertValidDimensions(params.dimensions);
+            const { vectors: rawVectors, tokens } = await this.embedVectors(modelName, params.texts, params.maxInputTokens);
             const vectors = params.dimensions
                 ? rawVectors.map(v => truncateToDimensions(v, params.dimensions!))
                 : rawVectors;
-            // Estimate token count
-            const totalTokens = params.texts.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0);
-            
             const endTime = Date.now();
             // Only log if it took more than 1 second per text on average
             if (params.texts.length > 0 && (endTime - startTime) / params.texts.length > 1000) {
@@ -140,7 +140,7 @@ export class LocalEmbedding extends BaseEmbeddings {
             return {
                 object: 'list',
                 model: modelName,
-                ModelUsage: new ModelUsage(totalTokens, 0),
+                ModelUsage: new ModelUsage(tokens, 0),
                 vectors
             };
         } catch (error) {
@@ -180,15 +180,16 @@ export class LocalEmbedding extends BaseEmbeddings {
             LocalURL: typeof settings.localURL === 'string' ? settings.localURL : undefined,
         });
         
-        // Handle quantized model preference
+        // Models always load at q8 (DTYPE in embeddingRuntime); the preference is stored only so
+        // callers that read it back from the settings still see what they set.
         if (settings.useQuantized !== undefined) {
-            // Store for use when loading models
             this._additionalSettings.useQuantized = settings.useQuantized;
         }
     }
 
     /**
-     * Clear loaded pipelines to free memory
+     * Drops the loaded models and releases their ONNX sessions once their in-flight calls finish,
+     * to free memory.
      */
     public ClearCache(): void {
         LocalEmbedding.clearLoadedModels();
@@ -208,11 +209,16 @@ export class LocalEmbedding extends BaseEmbeddings {
         console.log('Cleared shared local embedding model cache');
     }
 
-    /** Drops the models loaded in this thread and, if one is running, in the embedding worker. */
+    /**
+     * Drops the models loaded in this thread and, if one is running, in the embedding worker. The
+     * release is asynchronous and this stays synchronous for its callers, so a failed release is
+     * logged here instead of thrown.
+     */
     private static clearLoadedModels(): void {
-        ClearEmbeddingPipelines();
+        ClearEmbeddingPipelines().catch(error => console.warn('[LocalEmbedding] Releasing in-process models failed:', error));
+        // Run would start a worker if none is running, only to clear its empty cache.
         const host = EmbeddingWorkerHost.Instance;
-        if (host.IsAvailable) {
+        if (host.IsRunning) {
             host.Run({ Kind: 'clear' }).catch(error => console.warn(`[LocalEmbedding] Clearing the worker's models failed: ${error}`));
         }
     }

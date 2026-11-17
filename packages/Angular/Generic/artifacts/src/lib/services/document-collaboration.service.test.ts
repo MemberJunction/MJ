@@ -1640,4 +1640,150 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     sub.unsubscribe();
     session.Destroy();
   });
+
+  it('Living Report GQL methods (Refresh, Get, Upsert, Delete) forward variables cleanly and handle server errors', async () => {
+    const gqlCalls: Array<{ query: string; variables?: Record<string, string | number | boolean | null> }> = [];
+    const mockProvider = mockGqlProvider({
+      ExecuteGQL: async (
+        query: string,
+        variables?: Record<string, string | number | boolean | null>,
+      ): Promise<Record<string, object> | null> => {
+        gqlCalls.push({ query, variables });
+        if (query.includes('RefreshLivingArtifact')) {
+          return {
+            RefreshLivingArtifact: {
+              Success: true,
+              Changed: true,
+              SavedNewVersion: true,
+              ArtifactVersionID: 'ver-next-2',
+              VersionNumber: 2,
+              DiffSummary: 'Refreshed 1 live query block',
+              HighlightLines: ['Revenue -> $120K'],
+            },
+          };
+        }
+        if (query.includes('GetArtifactLivingReportSchedule')) {
+          return {
+            GetArtifactLivingReportSchedule: {
+              Success: true,
+              Schedule: {
+                ScheduleID: 'sched-1',
+                Name: 'Daily Executive Brief',
+                CronExpression: '0 0 8 * * *',
+                Timezone: 'America/Chicago',
+                Status: 'Active',
+                Enabled: true,
+                ForceSaveIfUnchanged: false,
+                RunCount: 4,
+                SuccessCount: 4,
+                FailureCount: 0,
+              },
+            },
+          };
+        }
+        if (query.includes('UpsertArtifactLivingReportSchedule')) {
+          return {
+            UpsertArtifactLivingReportSchedule: {
+              Success: true,
+              Schedule: {
+                ScheduleID: 'sched-1',
+                Name: String(variables?.name ?? ''),
+                CronExpression: String(variables?.cronExpression ?? ''),
+                Timezone: String(variables?.timezone ?? 'UTC'),
+                Status: variables?.enabled ? 'Active' : 'Disabled',
+                Enabled: Boolean(variables?.enabled),
+                ForceSaveIfUnchanged: Boolean(variables?.forceSaveIfUnchanged),
+                RunCount: 0,
+                SuccessCount: 0,
+                FailureCount: 0,
+              },
+            },
+          };
+        }
+        if (query.includes('DeleteArtifactLivingReportSchedule')) {
+          return {
+            DeleteArtifactLivingReportSchedule: {
+              Success: true,
+              Deleted: true,
+            },
+          };
+        }
+        return {};
+      },
+    });
+
+    const refreshed = await service.RefreshLivingArtifactNow(
+      'art-1',
+      { VersionComments: 'Refresh metrics', ForceSaveIfUnchanged: true },
+      mockProvider,
+    );
+    expect(refreshed.Success).toBe(true);
+    expect(refreshed.SavedNewVersion).toBe(true);
+    expect(refreshed.VersionNumber).toBe(2);
+    expect(refreshed.HighlightLines).toEqual(['Revenue -> $120K']);
+
+    const fetched = await service.GetLivingReportSchedule('art-1', mockProvider);
+    expect(fetched.Success).toBe(true);
+    expect(fetched.Schedule?.ScheduleID).toBe('sched-1');
+    expect(fetched.Schedule?.Enabled).toBe(true);
+
+    const upserted = await service.UpsertLivingReportSchedule(
+      {
+        ArtifactID: 'art-1',
+        Name: 'Hourly Sync',
+        CronExpression: '0 0 * * * *',
+        Timezone: 'UTC',
+        Enabled: true,
+        ForceSaveIfUnchanged: true,
+        ScheduleID: 'sched-1',
+      },
+      mockProvider,
+    );
+    expect(upserted.Success).toBe(true);
+    expect(upserted.Schedule?.CronExpression).toBe('0 0 * * * *');
+
+    const deleted = await service.DeleteLivingReportSchedule('art-1', 'sched-1', mockProvider);
+    expect(deleted.Success).toBe(true);
+    expect(deleted.Deleted).toBe(true);
+    expect(gqlCalls).toHaveLength(4);
+    expect(gqlCalls[0].variables).toEqual({
+      artifactId: 'art-1',
+      versionComments: 'Refresh metrics',
+      forceSaveIfUnchanged: true,
+    });
+    expect(gqlCalls[1].variables).toEqual({ artifactId: 'art-1' });
+    expect(gqlCalls[2].variables).toEqual({
+      artifactId: 'art-1',
+      cronExpression: '0 0 * * * *',
+      timezone: 'UTC',
+      name: 'Hourly Sync',
+      enabled: true,
+      forceSaveIfUnchanged: true,
+      scheduleId: 'sched-1',
+    });
+    expect(gqlCalls[3].variables).toEqual({ artifactId: 'art-1', scheduleId: 'sched-1' });
+
+    const errorProvider = mockGqlProvider({
+      ExecuteGQL: async () => ({ errors: [{ message: 'Permission denied by server' }] }),
+    });
+    const gqlErrRes = await service.UpsertLivingReportSchedule(
+      { ArtifactID: 'art-1', CronExpression: '0 0 8 * * *' },
+      errorProvider,
+    );
+    expect(gqlErrRes).toEqual({
+      HandledByServer: true,
+      Success: false,
+      ErrorMessage: 'Permission denied by server',
+    });
+
+    const throwingProvider = mockGqlProvider({
+      ExecuteGQL: async () => {
+        throw new Error('Network unreachable');
+      },
+    });
+    const thrownRes = await service.RefreshLivingArtifactNow('art-1', {}, throwingProvider);
+    expect(thrownRes.HandledByServer).toBe(true);
+    expect(thrownRes.Success).toBe(false);
+    expect(thrownRes.ErrorMessage).toBe('Network unreachable');
+  });
 });
