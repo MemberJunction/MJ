@@ -71,6 +71,7 @@ describe('Rubric Criterion template', () => {
         expect(clarity).toContain('Guidance: Read the first sentence.');
         expect(clarity).toContain('Hints: Look for "next step" phrasing.');
         expect(clarity).toContain('Quote the subject as evidence for this criterion.');
+        expect(clarity).toContain('At least one verbatim substring from the subject is required in `evidence`');
         expect(clarity).toContain('Not applicable is not allowed: choose a level.');
         expect(clarity).not.toMatch(/&#39;|&lt;|&quot;|&amp;/);
     });
@@ -97,6 +98,7 @@ describe('Rubric Evaluator template with a judge in its slot', () => {
         expect(prompt).toContain("### Reader's clarity (`clarity`)");
         expect(prompt).toContain('### Speed (`speed`)');
         expect(prompt).toContain('{"decisions": [{"key": "<criterion key>"');
+        expect(prompt).toContain('(`clarity`, `speed`)');
         expect(prompt).not.toContain('"chosen"');
         expect(prompt).not.toMatch(/\{\{|\{%|&#39;|&lt;/);
     });

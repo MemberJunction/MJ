@@ -186,3 +186,81 @@ export type {
     ClientTabInvalidationMultiplexerOptions,
 } from './ClientTabInvalidationMultiplexer';
 
+export { SharedTabKernelClient } from './SharedTabKernelClient';
+export type {
+    SharedTabKernelMode,
+    SharedWorkerFactory,
+    SharedTabKernelCatchUpPayload,
+    SharedTabKernelClientOptions,
+    KernelRunViewSlotAcquisition,
+    KernelRunViewSlotFollowUp,
+} from './SharedTabKernelClient';
+
+export {
+    SharedTabKernelHost,
+    ComputeKernelContentDigest,
+    StartSharedTabKernelWorker,
+} from './SharedTabKernelHost';
+
+export { SharedTabKernelStorageProvider } from './SharedTabKernelStorageProvider';
+
+export {
+    WrapNativeMessagePortForKernel,
+    WrapNativeSharedWorkerForKernel,
+    WrapNativeSharedWorkerGlobalScope,
+    WrapGraphQLWsClient,
+    AttachTabPortMessageListener,
+    CloneKernelValue,
+    CanonicalizeKernelRequestKey,
+    IsLegacyTabInvalidationMessage,
+} from './SharedTabKernelProtocol';
+export type {
+    KernelPortMessageEventLike,
+    TabPortLike,
+    TabKernelWorkerLike,
+    SharedWorkerConnectEventLike,
+    SharedWorkerGlobalScopeLike,
+    KernelWsSink,
+    KernelWsSubscribePayload,
+    KernelWsClientConfig,
+    KernelWsClientLike,
+    SharedTabKernelEnvironment,
+    SharedTabKernelHostOptions,
+    SharedTabKernelStats,
+    KernelSubscriptionKind,
+    KernelStorageOperation,
+    KernelHelloMessage,
+    KernelHelloAckMessage,
+    KernelHeartbeatMessage,
+    KernelHeartbeatAckMessage,
+    KernelDisconnectMessage,
+    KernelTokenUpdateMessage,
+    KernelTokenSyncedMessage,
+    KernelRefreshTokenRequestMessage,
+    KernelRefreshTokenResponseMessage,
+    KernelCoordinateRefreshRequestMessage,
+    KernelCoordinateRefreshResultMessage,
+    KernelAuthErrorMessage,
+    KernelSubscribeMessage,
+    KernelUnsubscribeMessage,
+    KernelSubscriptionEventMessage,
+    KernelSocketStateMessage,
+    KernelForceReconnectMessage,
+    KernelInvalidationPushMessage,
+    KernelCatchUpRequestMessage,
+    KernelCatchUpDelegateMessage,
+    KernelCatchUpDelegateResultMessage,
+    KernelCatchUpResultMessage,
+    KernelWatermarkSyncMessage,
+    KernelMutationNoticeMessage,
+    KernelRunViewAcquireMessage,
+    KernelRunViewAcquireAckMessage,
+    KernelRunViewCompleteMessage,
+    KernelStorageRequestMessage,
+    KernelStorageResponseMessage,
+    KernelStatsRequestMessage,
+    KernelStatsResponseMessage,
+    KernelClientToHostMessage,
+    KernelHostToClientMessage,
+} from './SharedTabKernelProtocol';
+

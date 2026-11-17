@@ -161,12 +161,19 @@ describe('artifact-presence-locator', () => {
             'set_sheet_layout',
             'duplicate_sheet',
             'reorder_sheets',
+            'propose_suggestion',
+            'review_suggestion',
+            'merge_cells',
+            'unmerge_cells',
+            'upsert_conditional_format',
+            'upsert_validation_rule',
+            'upsert_named_range',
         ];
         for (const name of expectedMutating) {
             expect(MUTATING_ARTIFACT_TOOL_NAMES.has(name), `expected ${name} to be mutating`).toBe(true);
         }
 
-        const phantomTools = ['replace_section', 'insert_section', 'delete_section', 'set_cells', 'propose_suggestion'];
+        const phantomTools = ['replace_section', 'insert_section', 'delete_section', 'set_cells'];
         for (const name of phantomTools) {
             expect(MUTATING_ARTIFACT_TOOL_NAMES.has(name), `expected ${name} to be absent`).toBe(false);
         }

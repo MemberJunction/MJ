@@ -281,6 +281,8 @@ const METHOD_GUARDED: Record<string, Record<string, string[]>> = {
             'RestoreArtifactVersion',
         ],
     },
+    // ResolveGuestArtifactSnapshot serves Magic-Link guest share sessions; owner link listing refuses them.
+    'PublicGuestShareResolver.ts': { PublicGuestShareResolver: ['ListArtifactGuestShareLinks'] },
     'RunAIAgentResolver.ts': { RunAIAgentResolver: ['RunAIAgent', 'RespondToAgentRequest', 'ReassignAgentRequest'] },
 };
 
@@ -346,6 +348,17 @@ describe('MJServer execution resolvers refuse scope-limited principals', () => {
         );
         expect(getComponent).toBeDefined();
         expect(hasGuardDecorator(getComponent!)).toBe(false);
+    });
+
+    it('PublicGuestShareResolver.ResolveGuestArtifactSnapshot stays open for Magic-Link guest shares', () => {
+        const cls = findClass(parse('PublicGuestShareResolver.ts'), 'PublicGuestShareResolver');
+        expect(cls).toBeDefined();
+        expect(hasGuardDecorator(cls!)).toBe(false);
+        const resolveSnapshot = cls!.members.find(
+            (m): m is ts.MethodDeclaration => ts.isMethodDeclaration(m) && ts.isIdentifier(m.name) && m.name.text === 'ResolveGuestArtifactSnapshot',
+        );
+        expect(resolveSnapshot).toBeDefined();
+        expect(hasGuardDecorator(resolveSnapshot!)).toBe(false);
     });
 
     it('Serve() applies the guards after resolvers load and before the schema is built', () => {

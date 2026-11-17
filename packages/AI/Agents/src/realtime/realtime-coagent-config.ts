@@ -239,6 +239,18 @@ export interface RealtimeModeratorConfig {
      * hand-off pays ~zero added latency. A human barge-in discards the pre-staged decision.
      */
     prestageOnAgentSpeech?: boolean;
+    /**
+     * How a decision model takes part in the moderator's call (`RunDecisionUse` in
+     * `@memberjunction/ai-prompts`): `'Prompt'` runs only the moderator prompt; `'Shadow'` (default) runs
+     * the prompt and asks one Likelihood per roster agent beside it, recording the agreement for a
+     * calibration fit; `'Decision'` lets the calibrated decision pick the speakers and falls back to the
+     * prompt when the answering model has no `realtime-turn-moderator` calibration or the call fails. The
+     * shadow decision runs in parallel and never adds latency; `'Decision'` stays inside
+     * {@link RealtimeModeratorConfig.timeoutMs}.
+     */
+    decisionMode?: 'Prompt' | 'Shadow' | 'Decision';
+    /** The decision prompt the moderator's decision asks, by name. Default `'Default Decision'`. */
+    decisionPromptName?: string;
 }
 
 /** Default moderator settings, applied per-field when a {@link RealtimeModeratorConfig} omits a value. */
@@ -249,6 +261,8 @@ export const REALTIME_MODERATOR_DEFAULTS = {
     timeoutMs: 800,
     onError: 'silent' as 'silent' | 'addressed-only',
     prestageOnAgentSpeech: true,
+    decisionMode: 'Shadow' as 'Prompt' | 'Shadow' | 'Decision',
+    decisionPromptName: 'Default Decision',
 } as const;
 
 /**
@@ -1208,6 +1222,12 @@ function normalizeModerator(raw: unknown): RealtimeModeratorConfig | null {
     if (typeof raw['prestageOnAgentSpeech'] === 'boolean') {
         m.prestageOnAgentSpeech = raw['prestageOnAgentSpeech'];
     }
+    if (raw['decisionMode'] === 'Prompt' || raw['decisionMode'] === 'Shadow' || raw['decisionMode'] === 'Decision') {
+        m.decisionMode = raw['decisionMode'];
+    }
+    if (typeof raw['decisionPromptName'] === 'string' && raw['decisionPromptName'].trim().length > 0) {
+        m.decisionPromptName = raw['decisionPromptName'].trim();
+    }
 
     return Object.keys(m).length > 0 ? m : null;
 }
@@ -1238,6 +1258,8 @@ export function GetEffectiveModeratorConfig(
         timeoutMs: m.timeoutMs ?? REALTIME_MODERATOR_DEFAULTS.timeoutMs,
         onError: m.onError ?? REALTIME_MODERATOR_DEFAULTS.onError,
         prestageOnAgentSpeech: m.prestageOnAgentSpeech ?? REALTIME_MODERATOR_DEFAULTS.prestageOnAgentSpeech,
+        decisionMode: m.decisionMode ?? REALTIME_MODERATOR_DEFAULTS.decisionMode,
+        decisionPromptName: m.decisionPromptName ?? REALTIME_MODERATOR_DEFAULTS.decisionPromptName,
     };
 }
 
