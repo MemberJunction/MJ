@@ -57,7 +57,6 @@ function setup(options: { url: string; navigation?: boolean; method?: string; bo
     const state: HeadlessRenderState = {
         Page: page,
         RedirectTo: null,
-        AllowedOrigins: new Map(),
         Requests: requests as unknown as APIRequestContext,
     };
     return { route, requests, state, asRoute: route as unknown as Route };
@@ -92,14 +91,13 @@ describe("the headless renderer's route", () => {
         expect(other.route.fetch).toHaveBeenCalledWith(expect.objectContaining({ headers: { accept: '*/*' } }));
     });
 
-    it('checks an origin once per render', async () => {
+    it('re-checks every request through AssertAllowed, even on the same origin', async () => {
         const renderer = new TestRenderer();
         const one = setup({ url: `${SITE}/a.js`, first: answer(200) });
         await renderer.Route(one.asRoute, plain, one.state);
         const two = setup({ url: `${SITE}/b.js`, first: answer(200) });
-        two.state.AllowedOrigins = one.state.AllowedOrigins;
         await renderer.Route(two.asRoute, plain, two.state);
-        expect(renderer.Checked).toEqual([`${SITE}/a.js`]);
+        expect(renderer.Checked).toEqual([`${SITE}/a.js`, `${SITE}/b.js`]);
     });
 });
 
@@ -124,7 +122,7 @@ describe('a redirect of something the page loads', () => {
 
         expect(requests.fetch).toHaveBeenNthCalledWith(1, `${SITE}/moved`, expect.objectContaining({ maxRedirects: 0, headers: { accept: '*/*', Authorization: 'Bearer s' } }));
         expect(requests.fetch).toHaveBeenNthCalledWith(2, `${CDN}/img.png`, expect.objectContaining({ maxRedirects: 0, headers: { accept: '*/*' } }));
-        expect(renderer.Checked).toEqual([`${SITE}/img`, `${CDN}/img.png`]);
+        expect(renderer.Checked).toEqual([`${SITE}/img`, `${SITE}/moved`, `${CDN}/img.png`]);
         expect(route.fulfill).toHaveBeenCalledWith({ response: last });
     });
 

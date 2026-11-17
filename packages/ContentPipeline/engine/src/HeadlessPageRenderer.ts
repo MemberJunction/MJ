@@ -22,7 +22,7 @@
  * WebSockets do not go through the route at all, so the page may open none: reading a page never needs a live
  * connection.
  *
- * Not covered: the address is checked by name before each new origin is fetched, so a DNS server that answers
+ * Not covered: the address is checked by name before each request is fetched, so a DNS server that answers
  * differently between the check and the fetch could still reach a private address. Closing that needs every
  * connection made to an address checked at connect time (a proxy of our own).
  *
@@ -45,14 +45,12 @@ const IDLE_CLOSE_MS = 60_000;
 /** The most redirects one request may take (Chromium's own limit). */
 const MAX_REDIRECTS = 20;
 
-/** What one render's route knows: the page whose navigation it watches, and what it has decided. */
+/** What one render's route knows: the page whose navigation it watches, and how subsequent hops are fetched. */
 export interface HeadlessRenderState {
     /** The page being rendered; its main frame's navigations stop at a redirect (see `Render`). */
     Page: Page | null;
     /** Where the page's navigation was last redirected; `Render` checks it and navigates there. */
     RedirectTo: string | null;
-    /** Each origin's check, made once per render. */
-    AllowedOrigins: Map<string, boolean>;
     /** Fetches a redirect's later hops, with the context's cookies. */
     Requests: APIRequestContext;
 }
@@ -79,7 +77,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 throw new Error('Render aborted before navigation');
             }
             context = await browser.newContext({ serviceWorkers: 'block' });
-            const state: HeadlessRenderState = { Page: null, RedirectTo: null, AllowedOrigins: new Map(), Requests: context.request };
+            const state: HeadlessRenderState = { Page: null, RedirectTo: null, Requests: context.request };
             await context.route('**/*', (route) => this.RouteRequest(route, request, state));
             await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed when rendering a page' }));
             const page = await context.newPage();
@@ -152,7 +150,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         if (target.startsWith('data:') || target.startsWith('blob:')) {
             return route.continue();
         }
-        if (!(await this.allowed(target, state))) {
+        if (!(await this.allowed(target))) {
             return route.abort('blockedbyclient');
         }
         const pageNavigation = sent.isNavigationRequest() && state.Page !== null && this.frameOf(route) === state.Page.mainFrame();
@@ -169,7 +167,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                     state.RedirectTo = next;
                     return route.fulfill({ status: 200, contentType: 'text/html', body: '' });
                 }
-                if (++hops > MAX_REDIRECTS || !(await this.allowed(next, state))) {
+                if (++hops > MAX_REDIRECTS || !(await this.allowed(next))) {
                     return route.abort('blockedbyclient');
                 }
                 // A 303, and a 301/302 answering a POST, go on as a GET without the body (as browsers do).
@@ -190,18 +188,14 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         return route.fulfill({ response });
     }
 
-    /** Whether an address may be loaded; an origin is checked once per render. */
-    private async allowed(url: string, state: HeadlessRenderState): Promise<boolean> {
-        let origin: string;
+    /** Whether an address may be loaded; checked on every request and every hop so an origin check is never cached. */
+    private async allowed(url: string): Promise<boolean> {
         try {
-            origin = new URL(url).origin;
+            new URL(url);
         } catch {
             return false;
         }
-        if (!state.AllowedOrigins.has(origin)) {
-            state.AllowedOrigins.set(origin, await this.AssertAllowed(url).then(() => true, () => false));
-        }
-        return state.AllowedOrigins.get(origin) === true;
+        return this.AssertAllowed(url).then(() => true, () => false);
     }
 
     /** Where a redirect answer points (absolute), or null when it is not a redirect. */
