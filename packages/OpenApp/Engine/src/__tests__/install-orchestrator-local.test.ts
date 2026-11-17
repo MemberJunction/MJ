@@ -395,6 +395,27 @@ describe('InstallApp with local dependencies', () => {
         expect(RecordAppInstallation).not.toHaveBeenCalled();
     });
 
+    it('stops before any change when a later dependency has a package that is not in the workspace', async () => {
+        const reportsPackage = '@acme/reports-server';
+        const settings = writeOtherApp('settings', '1.2.0');
+        const reports = writeOtherApp('reports', '1.0.0', {
+            packages: { server: [{ name: reportsPackage, role: 'bootstrap', startupExport: 'Load' }] },
+            dependencies: { settings: { version: '^1.0.0', repository: settings } },
+        });
+        writeManifest('1.0.0', { dependencies: { reports: { version: '^1.0.0', repository: reports } } });
+        writeSql('migrations', 'V1__create_event.sql', CREATE_SQL);
+        vi.mocked(CheckWorkspacePackages).mockImplementation(async (names) => names.includes(reportsPackage)
+            ? { Success: false, Missing: [reportsPackage], ErrorMessage: `${reportsPackage} is not in the pnpm workspace. Nothing has been changed.` }
+            : { Success: true, Missing: [] });
+
+        const result = await InstallApp({ Source: LOCATOR }, buildContext());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain(reportsPackage);
+        expect(CreateAppSchema).not.toHaveBeenCalled();
+        expect(RecordAppInstallation).not.toHaveBeenCalled();
+    });
+
     it('refuses a file: dependency declared by an app installed from GitHub', async () => {
         const settings = writeOtherApp('settings', '1.2.0');
         const fromGitHub = otherManifest('crm', '1.0.0', { dependencies: { settings: { version: '^1.0.0', repository: settings } } });

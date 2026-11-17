@@ -1695,7 +1695,8 @@ interface InternalResult {
  * manifest from its repository so the complete graph is known up front — which
  * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
  * any install work begins. A `file:` dependency is refused unless the app itself comes
- * from a local folder.
+ * from a local folder. The packages of every local dependency to install are checked against
+ * the workspace here, before the first dependency installs.
  */
 async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
@@ -1732,10 +1733,11 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     Dependencies: dependencies,
   };
 
+  const localManifests = new Map<string, MJAppManifest>();
   const result = await ResolveDependencyGraph(
     root,
     installedMap,
-    BuildManifestFetcher(context),
+    BuildManifestFetcher(context, localManifests),
     (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions, context.RepoRoot),
   );
   if (!result.Success) {
@@ -1746,15 +1748,21 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     .filter((d) => !d.AlreadyInstalled)
     .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath, Version: d.ResolvedVersion }));
 
+  const depManifests = depsToInstall.flatMap((dep) => localManifests.get(dep.Repository) ?? []);
+  const workspaceCheck = await CheckWorkspacePackagesOf(depManifests, 'dependency packages', context);
+  if (!workspaceCheck.Success) {
+    return workspaceCheck;
+  }
   return { Success: true, DepsToInstall: depsToInstall };
 }
 
 /**
  * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
  * manifest from its source (at the resolved version when given). Used by the graph
- * builder to walk transitive deps.
+ * builder to walk transitive deps. Each manifest read from a local folder is kept in
+ * `localManifests`, keyed by its locator.
  */
-function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
+function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<string, MJAppManifest>): ManifestFetcher {
   return async (repoUrl: string, subpath?: string, version?: string) => {
     const fetched = await ResolveAppSource(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, RepoRoot: context.RepoRoot }).FetchManifest(version);
     if (!fetched.Success || !fetched.ManifestJSON) {
@@ -1767,6 +1775,9 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
     const localDependencyError = DescribeUntrustedLocalDependency(parsed.Manifest.name, repoUrl, parsed.Manifest.dependencies);
     if (localDependencyError) {
       return { Success: false, ErrorMessage: localDependencyError };
+    }
+    if (IsLocalAppLocator(repoUrl)) {
+      localManifests.set(repoUrl, parsed.Manifest);
     }
     return {
       Success: true,
@@ -2222,12 +2233,22 @@ async function DownloadTeardownScripts(manifest: MJAppManifest, context: Orchest
  * so a missing package stops the operation with nothing to undo. No-op for other sources.
  */
 async function CheckSourceWorkspacePackages(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource): Promise<InternalResult> {
-  if (appSource.PackageVersionStrategy !== 'workspace' || !manifest.packages) {
+  if (appSource.PackageVersionStrategy !== 'workspace') {
     return { Success: true };
   }
-  const { server = [], client = [], shared = [] } = manifest.packages;
-  const names = [...new Set([...server, ...client, ...shared].map((p) => p.name))];
-  context.Callbacks?.OnProgress?.('Packages', 'Checking that the app packages are workspace projects...');
+  return CheckWorkspacePackagesOf([manifest], 'app packages', context);
+}
+
+/** Checks with one package-manager listing that every package of the given apps is a workspace project. */
+async function CheckWorkspacePackagesOf(manifests: MJAppManifest[], label: string, context: OrchestratorContext): Promise<InternalResult> {
+  const names = [...new Set(manifests.flatMap((manifest) => {
+    const { server = [], client = [], shared = [] } = manifest.packages ?? {};
+    return [...server, ...client, ...shared].map((p) => p.name);
+  }))];
+  if (names.length === 0) {
+    return { Success: true };
+  }
+  context.Callbacks?.OnProgress?.('Packages', `Checking that the ${label} are workspace projects...`);
   const result = await CheckWorkspacePackages(names, context.RepoRoot, context.PackageManager);
   return result.Success ? { Success: true } : { Success: false, ErrorMessage: result.ErrorMessage };
 }

@@ -3,7 +3,7 @@
  * locator relative to the repository root (for example `file:openapps/analytics`).
  */
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ManifestFetchResult, MigrationDownloadResult } from '../github/github-client.js';
 import { MAX_MIGRATION_DIRECTORY_DEPTH } from '../manifest/migration-layout.js';
 import type { VersionStrategy } from '../install/package-manager.js';
@@ -32,7 +32,8 @@ export function IsLocalAppLocator(locator: string): boolean {
  * Returns the source in the form the engine stores. A folder path (`./openapps/analytics`, an
  * absolute path, a `file:` locator, or a relative path to a folder that has `mj-app.json`) becomes
  * a `file:` locator relative to the repository root. Any other source, such as a GitHub URL, is
- * returned unchanged. A folder outside the repository root is refused.
+ * returned unchanged. A folder outside the repository root is refused, also when a link in its
+ * path leads outside.
  *
  * @param source - The source the user gave
  * @param repoRoot - Absolute path of the repository root
@@ -42,14 +43,17 @@ export function NormalizeAppSource(source: string, repoRoot: string): Normalized
         return { Success: true, Source: source };
     }
     const folder = resolve(repoRoot, StripLocatorPrefix(source));
-    // The path as given, or with links resolved: `/tmp/repo/x` is inside `/private/tmp/repo` on macOS.
-    const fromRoot = [relative(repoRoot, folder), relative(RealPath(repoRoot), RealPath(folder))].find((path) => !IsOutside(path));
-    if (fromRoot === undefined) {
+    const realFromRoot = relative(RealPath(repoRoot), RealPath(folder));
+    if (IsOutside(realFromRoot)) {
         return {
             Success: false,
-            ErrorMessage: `The app folder '${source}' is outside the repository root '${repoRoot}'. A local Open App must be in the repository it is installed into.`,
+            ErrorMessage: `The app folder '${source}' is outside the repository root '${repoRoot}', or is reached through a link to a folder outside it. `
+                + `A local Open App must be in the repository it is installed into.`,
         };
     }
+    // The path as given when it is inside the root, else the real path: `/tmp/repo/x` is `/private/tmp/repo/x` on macOS.
+    const givenFromRoot = relative(repoRoot, folder);
+    const fromRoot = IsOutside(givenFromRoot) ? realFromRoot : givenFromRoot;
     return { Success: true, Source: `${LOCAL_LOCATOR_PREFIX}${ToPosixPath(fromRoot) || '.'}` };
 }
 
@@ -74,8 +78,8 @@ export class LocalAppSource implements OpenAppSource {
         this.Locator = locator;
         this.folderName = StripLocatorPrefix(locator);
         this.folder = resolve(repoRoot, this.folderName);
-        this.locatorError = IsOutside(relative(repoRoot, this.folder))
-            ? `The app folder '${this.folderName}' is outside the repository root '${repoRoot}'.`
+        this.locatorError = IsOutside(relative(repoRoot, this.folder)) || IsOutsideRealPath(repoRoot, this.folder)
+            ? `The app folder '${this.folderName}' is outside the repository root '${repoRoot}', or is reached through a link to a folder outside it.`
             : undefined;
     }
 
@@ -161,11 +165,11 @@ export class LocalAppSource implements OpenAppSource {
         return { Json: json, Version: ReadManifestVersion(json) };
     }
 
-    /** Lists the `.sql` files of an app directory, refusing a directory outside the app folder. */
+    /** Lists the `.sql` files of an app directory, refusing a directory outside the app folder, also through a link. */
     private listSqlDirectory(directory: string): SqlFileList {
         const sourceDir = resolve(this.folder, directory);
-        if (IsOutside(relative(this.folder, sourceDir))) {
-            return { ErrorMessage: `The directory '${directory}' is outside the app folder '${this.folderName}'.` };
+        if (IsOutside(relative(this.folder, sourceDir)) || IsOutsideRealPath(this.folder, sourceDir)) {
+            return { ErrorMessage: `The directory '${directory}' is outside the app folder '${this.folderName}', or is reached through a link to a folder outside it.` };
         }
         if (!existsSync(sourceDir) || !lstatSync(sourceDir).isDirectory()) {
             return { ErrorMessage: `The directory '${directory}' was not found in the app folder '${this.folderName}'.` };
@@ -187,8 +191,8 @@ export class LocalAppSource implements OpenAppSource {
 }
 
 /**
- * Every regular `.sql` file under `root`, as sorted `/`-separated relative paths. Links are
- * skipped, as the GitHub download skips them, so a link cannot pull in a file from elsewhere.
+ * Every regular `.sql` file under `root`, as sorted `/`-separated relative paths. Links under
+ * `root` are skipped, as the GitHub download skips them. The caller checks the path to `root`.
  */
 function ListSqlFiles(root: string): SqlFileList {
     const files: string[] = [];
@@ -240,9 +244,18 @@ function IsOutside(relativePath: string): boolean {
     return relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath);
 }
 
-/** The path with links resolved, or the path itself when it does not exist. */
+/** Returns true when `path` leaves `root` once the links in both are resolved. */
+function IsOutsideRealPath(root: string, path: string): boolean {
+    return IsOutside(relative(RealPath(root), RealPath(path)));
+}
+
+/** The path with links resolved. A trailing part that does not exist is kept as written. */
 function RealPath(path: string): string {
-    return existsSync(path) ? realpathSync(path) : path;
+    if (existsSync(path)) {
+        return realpathSync(path);
+    }
+    const parent = dirname(path);
+    return parent === path ? path : join(RealPath(parent), basename(path));
 }
 
 function ToPosixPath(path: string): string {

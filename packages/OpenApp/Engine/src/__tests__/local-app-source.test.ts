@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { LocalAppSource, NormalizeAppSource, IsLocalAppLocator } from '../source/local-app-source.js';
 import { ResolveAppSource } from '../source/open-app-source.js';
@@ -38,6 +38,15 @@ function newSource(locator = LOCATOR): LocalAppSource {
     return new LocalAppSource(locator, repoRoot);
 }
 
+/** Writes an app at version 1.0.0 with one migration in a folder beside the repository root, and returns that folder. */
+function writeOutsideApp(): string {
+    const outside = `${repoRoot}-outside`;
+    mkdirSync(join(outside, 'migrations'), { recursive: true });
+    writeFileSync(join(outside, 'mj-app.json'), JSON.stringify({ name: 'outside', version: '1.0.0' }));
+    writeFileSync(join(outside, 'migrations', 'V1__outside.sql'), 'DROP TABLE x;');
+    return outside;
+}
+
 beforeEach(() => {
     repoRoot = mkdtempSync(join(tmpdir(), 'local-app-repo-'));
     appDir = join(repoRoot, 'openapps', 'analytics');
@@ -47,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
     rmSync(repoRoot, { recursive: true, force: true });
+    rmSync(`${repoRoot}-outside`, { recursive: true, force: true });
     rmSync(targetDir, { recursive: true, force: true });
 });
 
@@ -101,6 +111,15 @@ describe('LocalAppSource versions and manifest', () => {
         } finally {
             rmSync(outside, { recursive: true, force: true });
         }
+    });
+
+    it('refuses an app folder that is a link to a folder outside the repository root', async () => {
+        symlinkSync(writeOutsideApp(), join(repoRoot, 'openapps', 'linked'));
+
+        const fetched = await newSource('file:openapps/linked').FetchManifest();
+
+        expect(fetched.Success).toBe(false);
+        expect(fetched.ErrorMessage).toContain('outside');
     });
 
     it('keeps its folder and the workspace package strategy for the app files of any manifest', () => {
@@ -164,6 +183,21 @@ describe('LocalAppSource.CopySqlDirectory', () => {
         expect(existsSync(join(targetDir, 'V1__other.sql'))).toBe(false);
     });
 
+    it('refuses a directory that is, or goes through, a link to a folder outside the app folder', async () => {
+        const outside = writeOutsideApp();
+        symlinkSync(join(outside, 'migrations'), join(appDir, 'migrations'));
+        symlinkSync(outside, join(appDir, 'db'));
+
+        const linked = await newSource().CopySqlDirectory('migrations', '1.0.0', targetDir);
+        const throughLink = await newSource().CopySqlDirectory('db/migrations', '1.0.0', targetDir);
+
+        expect(linked.Success).toBe(false);
+        expect(linked.ErrorMessage).toContain('outside');
+        expect(throughLink.Success).toBe(false);
+        expect(throughLink.ErrorMessage).toContain('outside');
+        expect(existsSync(join(targetDir, 'V1__outside.sql'))).toBe(false);
+    });
+
     it('refuses to copy files for a version the folder is no longer at', async () => {
         writeAppFile('migrations-teardown/V1__teardown.sql', 'DELETE 1;');
 
@@ -216,5 +250,17 @@ describe('NormalizeAppSource', () => {
         const result = NormalizeAppSource('../elsewhere/app', repoRoot);
         expect(result.Success).toBe(false);
         expect(result.Success === false && result.ErrorMessage).toContain('outside');
+    });
+
+    it('refuses a folder that is, or is reached through, a link to a folder outside the repository root', () => {
+        const outside = writeOutsideApp();
+        symlinkSync(outside, join(repoRoot, 'openapps', 'linked'));
+        symlinkSync(dirname(outside), join(repoRoot, 'parent-link'));
+
+        for (const source of ['./openapps/linked', `./parent-link/${basename(outside)}`]) {
+            const result = NormalizeAppSource(source, repoRoot);
+            expect(result.Success).toBe(false);
+            expect(result.Success === false && result.ErrorMessage).toContain('outside');
+        }
     });
 });

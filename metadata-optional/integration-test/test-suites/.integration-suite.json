@@ -197,7 +197,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT176 - Open App Install From a Local Folder",
+            "TestID": "@lookup:MJ: Tests.Name=IT178 - Open App Install From a Local Folder",
             "Sequence": 15,
             "Status": "Active"
           },
