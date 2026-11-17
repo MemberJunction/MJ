@@ -1,0 +1,15 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Hand-authored counterpart (v6.3.0-edge.1 release build)
+-- ============================================================================
+
+-- PG-EMPTY-BY-DESIGN: restores SQL Server-only MC9 clauses that PostgreSQL does not need.
+--
+-- The SQL Server migration recreates spUpdateArtifactType with [__mj_UpdatedAt] = GETUTCDATE()
+-- and wraps trgUpdateArtifactType in IF NOT UPDATE([__mj_UpdatedAt]), because V202611131724
+-- regenerated both without the V202611121645 (wave 4.3b single-write) clauses.
+--
+-- On PostgreSQL V202611121645 is itself PG-EMPTY-BY-DESIGN: the __mj_UpdatedAt trigger is a
+-- BEFORE UPDATE row trigger that sets NEW in place, so there is no second write to guard. The
+-- spUpdateArtifactType function and trigger baked into V202611131724.pg.sql by the current PG
+-- emitter already carry @Configuration and the __mj_UpdatedAt SET item.
