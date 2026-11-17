@@ -79,6 +79,7 @@ import {
   InnerScoreSelection,
   GateRecords,
   GateRules,
+  JsonParse,
   type BaselineResult,
   type BaselineSpec,
   type GateDecision,
@@ -121,6 +122,7 @@ import { ComputePricing } from './compute-cost';
 import { ModelVersionSaveError, ModelVersions } from '../registry/model-versions';
 import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
 import { TrainerIncumbents, type TrainerIncumbent } from './trainer-incumbent';
+import { TrainingClaims } from './training-claims';
 import type {
   ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage, TrainingLeakageAudit, CalibrationHold,
 } from './types';
@@ -417,8 +419,8 @@ export class TrainingEngine {
    */
   private async requireBoundProtocol(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<LoadedProtocol> {
     const store = deps.protocols || new RunViewEvaluationProtocolStore(this.requireProvider(deps), deps.contextUser);
-    // `??`: an explicit empty candidate list counts as 0 candidates, as it is sent.
-    const requirement = await ProtocolSearchGuard.RequireProtocolForSearch(store, resolved.pipeline, input.candidates?.length ?? 1);
+    // An explicit empty candidate list counts as 0 candidates, as it is sent; only an absent list is the single default.
+    const requirement = await ProtocolSearchGuard.RequireProtocolForSearch(store, resolved.pipeline, input.candidates === undefined ? 1 : input.candidates.length);
     if (requirement.Ok === false) throw new TrainingRefusedError({ stage: 'pipeline', reason: requirement.Refusal });
     return requirement.Loaded;
   }
@@ -744,10 +746,11 @@ export class TrainingEngine {
 
   /**
    * The trainer's timeout: the protocol's compute budget, or the seconds an enclosing budget has left when that is less.
-   * `??`: 0 seconds left in an enclosing budget is a real value, and only an absent one leaves the protocol's budget.
+   * 0 seconds left in an enclosing budget is a real value; only an absent (or null) one leaves the protocol's budget.
    */
   public static TimeoutSecondsFor(protocol: Pick<EvaluationProtocolSpec, 'budgets'>, input: Pick<TrainModelInput, 'timeoutSeconds'>): number {
-    return Math.min(protocol.budgets.maxComputeSeconds, input.timeoutSeconds ?? Number.POSITIVE_INFINITY);
+    const enclosing = input.timeoutSeconds === undefined || input.timeoutSeconds === null ? Number.POSITIVE_INFINITY : input.timeoutSeconds;
+    return Math.min(protocol.budgets.maxComputeSeconds, enclosing);
   }
 
   /** The candidate the trainer chose, or null when its finalist is not one of the request's candidates (a baseline). */
@@ -874,7 +877,8 @@ export class TrainingEngine {
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(result.computeSeconds);
     model.TrainingRowCount = split.TrainingRowCount;
-    model.Status = 'Draft';
+    // Status is not written here: the new row holds the column default `Draft` (`GetEntityObject` runs `NewRecord`),
+    // the only status a create may take; every later status is written by the lifecycle gate alone (§5.7 R0).
     await TrainingEngine.saveModelRowUnderLock(model, deps);
     return model;
   }
@@ -1206,13 +1210,12 @@ export class TrainingEngine {
     // the pipeline view — NOT the sidecar driver key. Resolve the real `DriverClass`
     // (e.g. "xgboost") by id; fall back to the display name only when the loader
     // can't resolve it (e.g. in-memory test fakes that set the driver key directly).
-    const resolvedDriverKey =
-      (await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider)) ??
-      pipeline.Algorithm;
+    const loadedDriverKey = await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider);
+    const resolvedDriverKey = loadedDriverKey === null || loadedDriverKey === undefined ? pipeline.Algorithm : loadedDriverKey;
     const stepsRaw = parseJson<Record<string, unknown>>(pipeline.FeatureSteps, {});
     const hyperRaw = parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {});
-    const explicitOutcome = (stepsRaw.OutcomeConfig ?? stepsRaw.outcomeConfig ?? hyperRaw.OutcomeConfig ?? hyperRaw.outcomeConfig) as OutcomeConfig | undefined;
-    const outcomeConfig = explicitOutcome ?? resolveOutcomeConfig(pipeline);
+    const explicitOutcome = (stepsRaw.OutcomeConfig || stepsRaw.outcomeConfig || hyperRaw.OutcomeConfig || hyperRaw.outcomeConfig) as OutcomeConfig | undefined;
+    const outcomeConfig = explicitOutcome || resolveOutcomeConfig(pipeline);
 
     return {
       pipeline,
@@ -1232,7 +1235,12 @@ export class TrainingEngine {
 
   // region: training-run lifecycle ----------------------------------------------
 
-  /** Create the `MJ: ML Training Runs` row in `Running` state with `StartedAt`. */
+  /**
+   * Create the `MJ: ML Training Runs` row in `Running` state with `StartedAt`. A single-flight train
+   * (`TrainModelInput.SingleFlight`) saves it through the pipeline claim instead ({@link TrainingClaims.SaveClaimedRun}).
+   *
+   * @throws TrainingInFlightError for a single-flight train when another run of the pipeline is in flight (nothing saved)
+   */
   private async createRunRow(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<MJMLTrainingRunEntity> {
     const run = await deps.entityFactory.getEntityObject<MJMLTrainingRunEntity>('MJ: ML Training Runs', deps.contextUser);
     run.PipelineID = resolved.pipeline.ID;
@@ -1244,6 +1252,7 @@ export class TrainingEngine {
       run.EvaluationProtocolID = resolved.pipeline.EvaluationProtocolID;
     }
     run.Hyperparameters = JSON.stringify(resolved.hyperparameters);
+    if (input.SingleFlight === true) return TrainingClaims.SaveClaimedRun(resolved.pipeline.ID, run, deps);
     run.Status = 'Running';
     run.StartedAt = new Date();
     await this.saveOrThrow(run, 'create ML Training Run');
@@ -1269,7 +1278,7 @@ export class TrainingEngine {
       : 'No model was created from this run, so there is nothing to promote.';
     const base = dominance.Dominant
       ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
-        `(${((dominance.TopShare ?? 0) * 100).toFixed(1)}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
+        `(${((dominance.TopShare === undefined ? 0 : dominance.TopShare) * 100).toFixed(1)}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
         `This often means we are accidentally peeking at the answer. ${consequence}`
       : 'Training completed. No single-feature dominance detected.';
     if (!evaluation.WithheldReason) {
@@ -1316,7 +1325,7 @@ export class TrainingEngine {
       featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
       outcomeConfig: resolved.outcomeConfig,
-      sidecarVersion: input.sidecarVersion ?? null,
+      sidecarVersion: input.sidecarVersion === undefined ? null : input.sidecarVersion,
       lockedHoldoutRowCount: split.HoldoutRowCount,
       lockedHoldoutClassCounts: split.HoldoutClassCounts,
       trainingRowCount: split.TrainingRowCount,
@@ -1334,7 +1343,8 @@ export class TrainingEngine {
   private async saveOrThrow(entity: MJMLModelEntity | MJMLTrainingRunEntity, what: string): Promise<void> {
     const ok = await entity.Save();
     if (!ok) {
-      const message = entity.LatestResult?.CompleteMessage ?? 'unknown error';
+      const completeMessage = entity.LatestResult?.CompleteMessage;
+      const message = completeMessage === undefined || completeMessage === null ? 'unknown error' : completeMessage;
       throw new Error(`TrainingEngine: failed to ${what}: ${message}`);
     }
   }
@@ -1346,19 +1356,13 @@ function parseAsOf(raw: string | null | undefined): AsOfStrategy {
   return parsed?.Mode ? (parsed as AsOfStrategy) : { Mode: 'none' };
 }
 
-/** Parse a possibly-null JSON column, falling back to a default on null/empty/parse error. */
+/** Parse a possibly-null JSON column (`JsonParse`), falling back to a default on null/empty/parse error. */
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw === null || raw === undefined || raw.trim().length === 0) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  const parsed = JsonParse.ParseJsonText(raw, 'pipeline column');
+  return parsed.Ok ? (parsed.Value as T) : fallback;
 }
 
 /** Decode a base64 artifact string into raw bytes (no Buffer dependency leak in types). */
 function decodeArtifact(b64: string): Uint8Array {
-  return new Uint8Array(Buffer.from(b64 ?? '', 'base64'));
+  return new Uint8Array(Buffer.from(b64, 'base64'));
 }

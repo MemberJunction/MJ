@@ -60,6 +60,11 @@ export class RunRecords {
   public readonly EvaluationProtocolIDs = new RecordIDSet();
   /** The `MJ: AI Agent Runs` the harness started (each builder-agent run's root run). */
   public readonly AgentRunIDs = new RecordIDSet();
+  /**
+   * The `MJ: Scheduled Jobs` a check of the run created and deletes itself (a one-off job); recorded so cleanup deletes
+   * the notifications the scheduler sent about them (D4-146).
+   */
+  public readonly ScheduledJobIDs = new RecordIDSet();
   private readonly agentPipelineNames = new Set<string>();
 
   /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
@@ -80,6 +85,11 @@ export class RunRecords {
   /** Record a model the run trained (or an agent run of it built). */
   public RecordModel(id: string): void {
     this.ModelIDs.Add(id);
+  }
+
+  /** Record a scheduled job a check of the run created (the check deletes the job; cleanup deletes its notifications). */
+  public RecordScheduledJob(id: string): void {
+    this.ScheduledJobIDs.Add(id);
   }
 
   /** Record a Prediction Unit version the run saved (every version, not only the lineage root). */
@@ -130,9 +140,9 @@ export class RunRecords {
         if (t.ModelID) this.RecordModel(t.ModelID);
         return t;
       },
-      RunBuilderAgent: async (plan) => {
+      RunBuilderAgent: async (plan, options) => {
         this.RecordAgentPipelineNames(HarnessAgent.BuilderPipelineNames(plan));
-        const r = await h.RunBuilderAgent(plan);
+        const r = await h.RunBuilderAgent(plan, options);
         this.RecordAgentRun(r);
         return r;
       },

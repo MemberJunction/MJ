@@ -19,6 +19,8 @@ const NO_SUCH_MODEL_ID = '0B1C2D3E-0000-4000-8000-00000000DEAD';
 const run = '7A2B3C4D-0000-4000-8000-0000000000B1';
 const human: Actor = { kind: 'human', userId: GateWorld.User.ID };
 const agent: Actor = { kind: 'agent', agentRunId: run };
+/** The registry job's initiator: an automatic rollback comes from it (or from a user), never from an agent (§5.1). */
+const registryJob: Actor = { kind: 'scheduled-job', scheduledJobRunId: '7A2B3C4D-0000-4000-8000-0000000000B2' };
 
 const log: string[] = [];
 const storage = new MemoryStorageAccount('gate', log);
@@ -171,7 +173,7 @@ describe('Validated → Published (automatic, or an interactive user, through Pu
     const out = await gate.Publish({ ...request, modelId: uncompared.ID }, ctx);
     expect(out).toMatchObject({
       Kind: 'withheld', Transient: false,
-      Refusal: { kind: 'not-servable', reason: `the training run stored no comparison with ML Model ${incumbent.ID}, which is Published now; retrain to compare with it` },
+      Refusal: { kind: 'not-servable', reason: `the training run stored no comparison with ML Model ${incumbent.ID}, which is Published now; retrain to compare with it, or, when its artifact is missing (so training cannot use it as an incumbent), the registry check job archives it` },
     });
     expect([store.Status(uncompared.ID), store.Status(incumbent.ID)]).toEqual(['Validated', 'Published']);
     expect(store.PublishRecords(uncompared.ID)).toEqual([expect.objectContaining({ Kind: 'refusal', Reason: expect.stringContaining(incumbent.ID) })]);
@@ -373,29 +375,29 @@ describe('Archived → Published (rollback: a reason, published before)', () => 
     await gate.Publish(request, ctx);
     await gate.Archive(candidate.ID, 'retired', human, ctx);
     expect(await gate.Publish({ ...keepRequest, initiator: human }, ctx)).toMatchObject({ Kind: 'published', Replaces: null });
-    const out = await gate.Publish({ ...request, purpose: 'rollback', reason: 'the newer model degraded' }, ctx);
+    const out = await gate.Publish({ ...request, purpose: 'rollback', reason: 'the newer model degraded', initiator: registryJob }, ctx);
     expect(out).toMatchObject({ Kind: 'published', ModelID: candidate.ID, Replaces: keepModel.ID });
     expect([store.Status(candidate.ID), store.Status(keepModel.ID)]).toEqual(['Published', 'Archived']);
     expect(store.PublishRecords(candidate.ID).map((r) => `${r.Kind}/${r.Purpose}`)).toEqual(['publish/publish', 'publish/rollback']);
   });
   it('a rollback needs an earlier publish record', async () => {
     await gate.Archive(keepModel.ID, 'retired', human, ctx);
-    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: 'restore the kept baseline' }, ctx))
+    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: 'restore the kept baseline', initiator: registryJob }, ctx))
       .toMatchObject({ Kind: 'withheld', Refusal: { kind: 'illegal-transition', from: 'archived', to: 'published' } });
     expect(store.Status(keepModel.ID)).toBe('Archived');
   });
   it('a retried applied rollback is already-published, never illegal-transition', async () => {
     await gate.Publish(request, ctx);
     await gate.Archive(candidate.ID, 'retired', human, ctx);
-    const rollback: PublishRequest = { ...request, purpose: 'rollback', reason: 'restore' };
+    const rollback: PublishRequest = { ...request, purpose: 'rollback', reason: 'restore', initiator: registryJob };
     const applied = await gate.Publish(rollback, ctx);
     expect(applied).toMatchObject({ Kind: 'published' });
-    expect(await gate.Publish(rollback, ctx)).toEqual({ Kind: 'already-published', ModelID: candidate.ID, PublishRecordID: applied.Kind === 'published' ? applied.PublishRecordID : '' });
+    expect(await gate.Publish(rollback, ctx)).toEqual({ Kind: 'already-published', Purpose: 'rollback', ModelID: candidate.ID, PublishRecordID: applied.Kind === 'published' ? applied.PublishRecordID : '' });
   });
   it('a rollback without a reason is reason-required; a rollback of a never-published model is illegal-transition', async () => {
     await gate.Archive(keepModel.ID, 'retired', human, ctx);
-    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: ' ' }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'reason-required' } });
-    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: 'restore' }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'illegal-transition', from: 'archived', to: 'published' } });
+    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: ' ', initiator: registryJob }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'reason-required' } });
+    expect(await gate.Publish({ ...keepRequest, purpose: 'rollback', reason: 'restore', initiator: registryJob }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'illegal-transition', from: 'archived', to: 'published' } });
   });
 });
 

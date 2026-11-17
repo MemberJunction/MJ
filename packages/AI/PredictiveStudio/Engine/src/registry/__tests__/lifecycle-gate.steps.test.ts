@@ -30,13 +30,15 @@ class StepGate extends LifecycleGate {
   public Apply(model: MJMLModelEntity, to: MJMLModelEntity['Status'], replaces: string | null, initiator: Actor, ctx: GateContext) { return this.ApplyTransition(model, to, replaces, initiator, ctx); }
   public PublishRecord(model: MJMLModelEntity, request: PublishRequest, check: Extract<PublishCheck, { readonly Ok: true }>, ctx: GateContext) { return this.WritePublishRecord(model, request, check, ctx); }
   public RefusalRecord(subject: EvaluateSubject, initiator: Actor, request: PublishRequest | null, refusal: TransitionRefusal, transient: boolean, ctx: GateContext) {
-    return this.WriteRefusalRecord(subject, initiator, request, refusal, transient, ctx);
+    return this.WriteRefusalRecord(subject, initiator, request, refusal, transient, ctx, 'caller');
   }
   public Job(model: MJMLModelEntity, ctx: GateContext) { return this.CreateMonitoringJob(model, ctx); }
   public Bindings(model: MJMLModelEntity, semantics: OutputSemantics, ctx: GateContext) { return this.CreateOutputBindings(model, semantics, ctx); }
 }
 
 const agent: Actor = { kind: 'agent', agentRunId: '7A2B3C4D-0000-4000-8000-0000000000C1' };
+/** The registry job's initiator: an automatic rollback comes from it (or from a user), never from an agent (§5.1). */
+const registryJob: Actor = { kind: 'scheduled-job', scheduledJobRunId: '7A2B3C4D-0000-4000-8000-0000000000C2' };
 const log: string[] = [];
 const storage = new MemoryStorageAccount('gate-steps', log);
 RegisterMemoryStorage('PS Lifecycle Gate Steps Storage', storage);
@@ -469,7 +471,7 @@ describe('LifecycleGate.CheckPublishable fills missing output bindings before th
     await gate.Publish(request, ctx);
     await gate.Archive(candidate.ID, 'retired', agent, ctx);
     dropBindings(candidate.ID);
-    expect(await gate.Publish({ ...request, purpose: 'rollback', reason: 'the newer model degraded' }, ctx)).toMatchObject({ Kind: 'published', ModelID: candidate.ID });
+    expect(await gate.Publish({ ...request, purpose: 'rollback', reason: 'the newer model degraded', initiator: registryJob }, ctx)).toMatchObject({ Kind: 'published', ModelID: candidate.ID });
     expect(shapes(candidate.ID)).toEqual(defaults);
   });
   it('a restore (R1) fills the missing rows', async () => {

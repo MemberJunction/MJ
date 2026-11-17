@@ -20,34 +20,63 @@ const ENTITY = 'MJ: ML Model Publish Records';
 
 /** The row of an applied publish. */
 export interface PublishRecordWrite {
+  /** The published model. */
   readonly ModelID: string;
+  /** Its training run (the idempotency key of a `publish`), or null for a model without one. */
   readonly TrainingRunID: string | null;
+  /** The request's purpose. */
   readonly Purpose: Extract<MJMLModelPublishRecordEntity['Purpose'], 'publish' | 'rollback'>;
+  /** Who approved it (`ApproverKind` and `UserID`). */
   readonly Approver: PublishApprover;
+  /** Who started it (stored as `Initiator` JSON). */
   readonly Initiator: Actor;
+  /** The request's reason (required for a rollback). */
   readonly Reason: string | null;
   /** The decision as `PublishRules.ReverifyPublish` re-derived it (a copy for audit). */
   readonly GateDecision: GateDecision;
+  /** The evidence the publish rebuilt from stored rows. */
   readonly Evidence: EvidenceSnapshot;
+  /** `EvidenceSha256` of {@link Evidence} ({@link PublishRecords.EvidenceSha256}). */
   readonly EvidenceSha256: string;
+  /** The sign-off the publish consumed, or null. */
   readonly SignOffID: string | null;
+  /** The Published model the publish archived, or null. */
   readonly ReplacesModelID: string | null;
 }
 
 /** The row of a refused attempt: model-level (`ModelID` set), or run-level (`ModelID` null, `Purpose = 'evaluate'`). */
 export interface RefusalRecordWrite {
+  /** The refused model, or null for a run-level record. */
   readonly ModelID: string | null;
+  /** The training run the attempt was about, or null. */
   readonly TrainingRunID: string | null;
+  /** The request's purpose (`evaluate` for a run-level record). */
   readonly Purpose: MJMLModelPublishRecordEntity['Purpose'];
+  /** The approver the attempt would have had. */
   readonly Approver: PublishApprover;
+  /** Who started the attempt. */
   readonly Initiator: Actor;
+  /** Why it was refused (stored as `Refusal` JSON, its words as `Reason`). */
   readonly Refusal: TransitionRefusal;
+  /** Whether a later attempt can pass (D4-16). */
   readonly Transient: boolean;
+}
+
+/** The applied `publish` record of a training run: its ID, its model and whether it was a publish or an adoption. */
+export interface RunPublishRecord {
+  /** The record's ID. */
+  readonly ID: string;
+  /** The model it published. */
+  readonly ModelID: string | null;
+  /** `publish`, or `adopt` for a model adopted as Published (M7.2). */
+  readonly Purpose: Extract<MJMLModelPublishRecordEntity['Purpose'], 'publish' | 'adopt'>;
 }
 
 /** A run-level outcome found by its run. */
 export interface RunOutcomeRecord {
+  /** The record's ID. */
   readonly ID: string;
+  /** Its stored refusal, or null when it stores none. */
   readonly Refusal: TransitionRefusal | null;
 }
 
@@ -100,17 +129,20 @@ export class PublishRecords {
    *
    * @throws Error when the read fails
    */
-  public static async FindPublishForRun(trainingRunId: string, ctx: RegistryContext): Promise<{ readonly ID: string; readonly ModelID: string | null } | null> {
-    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'ModelID'>>(
+  public static async FindPublishForRun(trainingRunId: string, ctx: RegistryContext): Promise<RunPublishRecord | null> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'ModelID' | 'Purpose'>>(
       {
         EntityName: ENTITY,
         ExtraFilter: `TrainingRunID='${EscapeSQLString(trainingRunId)}' AND Kind='publish' AND Purpose IN ('publish','adopt')`,
-        Fields: ['ID', 'ModelID'], MaxRows: 1, ResultType: 'simple',
+        Fields: ['ID', 'ModelID', 'Purpose'], MaxRows: 1, ResultType: 'simple',
       },
       ctx,
     );
     if (!r.Success) throw new Error(`Reading the publish record of training run ${trainingRunId} failed: ${r.ErrorMessage || 'unknown error'}`);
-    return r.Results[0] || null;
+    const row = r.Results[0];
+    if (!row) return null;
+    if (row.Purpose !== 'publish' && row.Purpose !== 'adopt') throw new Error(`The publish record ${row.ID} of training run ${trainingRunId} has the purpose ${row.Purpose}, which its read excludes`);
+    return { ID: row.ID, ModelID: row.ModelID, Purpose: row.Purpose };
   }
 
   /**

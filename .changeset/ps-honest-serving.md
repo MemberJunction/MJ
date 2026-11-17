@@ -1,4 +1,6 @@
 ---
+"@memberjunction/ai-agents": minor
+"@memberjunction/ai-core-plus": minor
 "@memberjunction/codegen-lib": minor
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
@@ -13,6 +15,7 @@
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
+"@memberjunction/sql-parser": minor
 ---
 
 Predictive Studio honest serving.

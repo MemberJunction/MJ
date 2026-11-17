@@ -1,6 +1,15 @@
+/**
+ * Test doubles at the framework-class boundary (M4b.3 C7, kept by the controller's ruling). Each cast below stands a
+ * plain field bag in for a framework class the agent only reads:
+ * - `{ … } as unknown as MJMLModelEntity` (a field-bag trained-model row);
+ * - `{ payload, contextUser, data, TrustReservedRunData } as unknown as ExecuteAgentParams` (the run parameters
+ *   `executeAgentInternal` reads; the full type needs an agent entity and a live run);
+ * - `{} as AgentConfiguration` (the configuration `executeAgentInternal` takes and the builder agent never reads).
+ */
 import { describe, it, expect } from 'vitest';
-import { EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import { EntityInfo, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { DatabaseProviderStub } from '@memberjunction/unit-testing';
+import { WithAgentRunDataTrustApplied, WithoutHostOnlyAgentRunDataKeys, type ExecuteAgentParams, type AgentConfiguration, type BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   TRAINING_RUN_RESULTS_SCHEMA, GateRules, TrainingRunResultsParser, TracedNumbers, TrustVerdicts, ImportanceDisplay,
@@ -383,13 +392,13 @@ const noSignalTrust = TrustVerdicts.DeriveTrustVerdict({
   Lineage: null,
 });
 const published: BuildPredictionResult = {
-  success: true, pipelineId: 'p1', modelId: 'm1', published: true, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage: null, trust: shippedTrust,
+  success: true, pipelineId: 'p1', modelId: 'm1', published: true, readyToPublish: false, heldReason: null, errorMessage: null, trust: shippedTrust,
 };
 const held: BuildPredictionResult = {
-  success: true, pipelineId: 'p2', modelId: 'm2', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null,
+  success: true, pipelineId: 'p2', modelId: 'm2', published: false, readyToPublish: false, errorMessage: null,
   heldReason: noSignalTrust.Reason, trust: noSignalTrust,
 };
-const failed: BuildPredictionResult = { success: false, published: false, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage: 'Algorithm not found' };
+const failed: BuildPredictionResult = { success: false, published: false, readyToPublish: false, heldReason: null, errorMessage: 'Algorithm not found' };
 /** The outcome the agent projects from a build result. */
 const summarize = (r: BuildPredictionResult) => PredictiveStudioPipelineBuilderAgent.SummarizeBuildResult(r);
 /** The sentence the agent says for a build result. */
@@ -494,7 +503,7 @@ class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
     const model = trainedModel('model-unmeasured');
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null });
     return {
-      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, readyToPublish: false, leakageFlagged: false,
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, readyToPublish: false,
       heldReason: trust.Reason, errorMessage: null, leaderboard: oneRowLeaderboard(model, trust.Comparison), run: { ID: 'run-unmeasured', ValidationResults: null },
     };
   }
@@ -505,7 +514,7 @@ class ShippedBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const model = trainedModel('model-shipped');
     return {
-      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: true, readyToPublish: false, leakageFlagged: false,
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: true, readyToPublish: false,
       heldReason: null, errorMessage: null, leaderboard: oneRowLeaderboard(model, shippedTrust.Comparison), run: shippedRun,
     };
   }
@@ -515,7 +524,7 @@ class ShippedBuilder extends PredictiveStudioPipelineBuilder {
 class NoSignalSearchBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     return {
-      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null,
+      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, errorMessage: null,
       leaderboard: [{ IterationID: 'run-1', Metric: 0.41, rank: 1, algorithm: 'xgb', score: 0.41, metricName: 'log-loss', innerLower: 0.39, innerUpper: 0.43, optimistic: true, isWinner: true }],
       heldReason: 'Not published — the training run shipped no model: no signal.',
       Gate: { Outcome: 'no-signal', Reason: TrainerResultFixtures.NoSignalReason },
@@ -533,12 +542,18 @@ class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
     return this.builder;
   }
   protected override get ProviderToUse(): IMetadataProvider {
-    return {} as IMetadataProvider;
+    return new DatabaseProviderStub();
   }
-  public async Run(payload: PredictiveStudioBuilderPayload, data?: ExecuteAgentParams['data']): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
-    const params = { payload, contextUser: { ID: 'user-1' } as UserInfo, data } as unknown as ExecuteAgentParams;
+  public async Run(payload: PredictiveStudioBuilderPayload, data?: ExecuteAgentParams['data'], trustReservedRunData?: boolean): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
+    const params = { payload, contextUser: new UserInfo(null, { ID: 'user-1', Email: 'builder-agent-tests@example.com', Type: 'User' }), data, TrustReservedRunData: trustReservedRunData } as unknown as ExecuteAgentParams;
     const { finalStep } = await this.executeAgentInternal<PredictiveStudioBuilderPayload>(params, {} as AgentConfiguration);
     return finalStep;
+  }
+
+  /** {@link Run} after the run-data trust rule `BaseAgent.Execute` applies to every run (`WithAgentRunDataTrustApplied`). */
+  public async RunUnderTrustRule(payload: PredictiveStudioBuilderPayload, data: ExecuteAgentParams['data'], trustReservedRunData: boolean): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
+    const { Params } = WithAgentRunDataTrustApplied({ data, TrustReservedRunData: trustReservedRunData });
+    return this.Run(payload, Params.data, Params.TrustReservedRunData);
   }
 }
 
@@ -600,7 +615,7 @@ class NoModelBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     this.Specs.push(input.spec);
     return {
-      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null, leaderboard: [],
+      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, errorMessage: null, leaderboard: [],
       heldReason: 'Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.',
       Gate: { Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' },
     };
@@ -643,14 +658,16 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a build 
   });
 });
 
-/** A builder stub that records whether the agent asked it to publish, and keeps a model that clears the bar in Draft. */
+/** A builder stub that records whether the agent asked it to publish, and evaluates a model that clears the bar without publishing it. */
 class DraftBuilder extends PredictiveStudioPipelineBuilder {
   public AutoPublish: (boolean | undefined)[] = [];
+  public ProtocolPromotion: BuildPredictionInput['protocolPromotion'][] = [];
   public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     this.AutoPublish.push(input.autoPublish);
+    this.ProtocolPromotion.push(input.protocolPromotion);
     const model = trainedModel('model-draft');
     return {
-      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: false, readyToPublish: true, leakageFlagged: false,
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: false, readyToPublish: true,
       heldReason: PredictiveStudioPipelineBuilder.KeptInDraftReason, errorMessage: null, leaderboard: [], run: shippedRun,
     };
   }
@@ -662,6 +679,29 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
     await new TestableBuilderAgent(builder).Run({ ...plan });
     await new TestableBuilderAgent(builder).Run({ ...plan }, { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true });
     expect(builder.AutoPublish).toEqual([false, true]);
+  });
+
+  it('publishes and promotes only for a trusted caller: an untrusted run loses both reserved keys before the build', async () => {
+    const builder = new DraftBuilder();
+    const data = {
+      [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
+      [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
+    };
+    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, data, false);
+    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, data, true);
+    expect(builder.AutoPublish).toEqual([false, true]);
+    expect(builder.ProtocolPromotion).toEqual([null, { autoPublishKeepBaseline: true }]);
+  });
+
+  it('never publishes from the template parameters a parent agent\'s model writes for it', async () => {
+    const builder = new DraftBuilder();
+    const templateParameters = WithoutHostOnlyAgentRunDataKeys({
+      [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
+      [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
+    }).Data;
+    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, templateParameters, true);
+    expect(builder.AutoPublish).toEqual([false]);
+    expect(builder.ProtocolPromotion).toEqual([null]);
   });
 
   it('ignores a payload that asks to publish: only the run data turns publishing on', async () => {
@@ -676,11 +716,28 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
       .toEqual([false, false, false, false, false, true]);
   });
 
-  it('reports a Draft model that clears the bar as ready to publish, in the outcome, the message and the report', async () => {
+  it('supplies the protocol promotion setting the run data holds, and none otherwise', async () => {
+    const builder = new DraftBuilder();
+    const key = PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY;
+    await new TestableBuilderAgent(builder).Run({ ...plan });
+    await new TestableBuilderAgent(builder).Run({ ...plan }, { [key]: { autoPublishKeepBaseline: true } });
+    await new TestableBuilderAgent(builder).Run(Object.assign({ ...plan }, { [key]: { autoPublishKeepBaseline: true } }));
+    expect(builder.ProtocolPromotion).toEqual([null, { autoPublishKeepBaseline: true }, null]);
+  });
+
+  it('reads the protocol promotion setting only from an object whose autoPublishKeepBaseline is the boolean true', () => {
+    const key = PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY;
+    const data = [undefined, {}, { [key]: true }, { [key]: null }, { [key]: {} }, { [key]: { autoPublishKeepBaseline: 'true' } }, { [key]: { autoPublishKeepBaseline: false } },
+      { [key]: { autoPublishKeepBaseline: true, requiresHumanSignOff: true } }];
+    expect(data.map((d) => PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: d })))
+      .toEqual([null, null, null, null, null, null, null, { autoPublishKeepBaseline: true }]);
+  });
+
+  it('reports an evaluated model that clears the bar as ready to publish, in the outcome, the message and the report', async () => {
     const step = await new TestableBuilderAgent(new DraftBuilder()).Run({ ...plan });
     const payload = payloadOf(step);
     expect([payload.BuildResult?.published, payload.BuildResult?.readyToPublish]).toEqual([false, true]);
-    expect(payload.Markdown).toContain('(In Draft — ready to publish when you ask)');
+    expect(payload.Markdown).toContain('(Evaluated — ready to publish when you ask)');
     expect(step.reasoning).toBe('Done — I built and trained your prediction (Ships — the model beats the flat guess). It clears the bar to publish; it is published only when you ask.');
   });
 

@@ -60,11 +60,24 @@ export interface GateContext extends RegistryContext {
 }
 
 /** What `Evaluate` acts on: a model row, or a training run (whose model, when it has one, is its `ResultingModelID`). */
-export type EvaluateSubject =
+export type EvaluateSubject = (
   // case-violation-ok-legacy-back-compat: §5.2's verbatim subject shape, camelCase like the PromoteModel wire input it is built from
   | { readonly modelId: string }
   // case-violation-ok-legacy-back-compat: §5.2's verbatim subject shape, camelCase like the PromoteModel wire input it is built from
-  | { readonly trainingRunId: string };
+  | { readonly trainingRunId: string }
+) & EvaluateAttempt;
+
+/** Whether an Evaluate runs as the first step of a publish attempt (D4-143). */
+export interface EvaluateAttempt {
+  /**
+   * The purpose of the publish attempt this Evaluate is the first step of. Set only by
+   * `AutomatedPublisher.EvaluateAndPublish` (`'publish'`). When it is set, a model-level refusal (`not-servable`,
+   * `gate-no-signal` of a run with a model row, `calibration-held`, `actor-not-permitted`, the transient
+   * `publish-in-progress`) is recorded as that attempt's `refusal` record, as a withheld publish is. A bare Evaluate (the
+   * UI, the operation, a build with auto-publish off) leaves it unset, and its model-level refusal is not recorded.
+   */
+  readonly AttemptPurpose?: Extract<PublishRequest['purpose'], 'publish'>;
+}
 
 /** A model evaluated into its status, a run whose decision shipped no model row (recorded at run level), or a refusal. */
 export type EvaluateOutcome =
@@ -95,24 +108,41 @@ export interface PublishRequest {
   readonly reason: string | null;
 }
 
-/** A publish applied, an idempotent retry of an applied run, or a withheld attempt with its recorded refusal. */
+/** The purpose of an applied `publish` record a retry finds: a publish, a rollback, or an adoption (M7.2). */
+export type AppliedPublishPurpose = Extract<MJMLModelPublishRecordEntity['Purpose'], 'publish' | 'rollback' | 'adopt'>;
+
+/**
+ * A publish applied, an idempotent retry of an applied run, or a withheld attempt with its recorded refusal. `Purpose`
+ * is the request's (`published`, `withheld`) or the found record's (`already-published`); R1's restore of a model whose
+ * status was changed outside the gate is a `publish`-purpose publish.
+ */
 export type PublishOutcome =
   | {
       readonly Kind: 'published';
+      readonly Purpose: PublishRequest['purpose'];
       readonly ModelID: string;
       readonly PublishRecordID: string;
       readonly Replaces: string | null;
       readonly Approver: MJMLModelPublishRecordEntity['ApproverKind'];
     }
-  | { readonly Kind: 'already-published'; readonly ModelID: string; readonly PublishRecordID: string }
+  | { readonly Kind: 'already-published'; readonly Purpose: AppliedPublishPurpose; readonly ModelID: string; readonly PublishRecordID: string }
   | {
       readonly Kind: 'withheld';
+      readonly Purpose: PublishRequest['purpose'];
       readonly ModelID: string;
       readonly Status: MJMLModelEntity['Status'];
       readonly Refusal: TransitionRefusal;
       readonly Transient: boolean;
       readonly RefusalRecordID: string;
     };
+
+/**
+ * Who a refusal's audit (the `refusal` record and the model's `StatusReason`) is written as: the caller (`ctx.ContextUser`,
+ * who holds the permissions the writes need), or the gate's own write identity, the MJ system user on the same provider
+ * and transaction, for a caller the gate refused for lacking them (`actor-not-permitted`, D4-134), so the refusal is
+ * still recorded (§5.7 R4).
+ */
+export type RefusalWriteIdentity = 'caller' | 'gate';
 
 /** The result of an archive (and of any status change outside `Publish`). */
 export type GateApplyResult =

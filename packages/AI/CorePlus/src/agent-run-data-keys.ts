@@ -9,6 +9,10 @@ import type { ExecuteAgentParams } from './agent-types';
  *    row, the scope handed to every action (`RunActionParams.RunScope`) and what sub-agents inherit.
  *  - `__agentTypePromptParams` is the highest-precedence agent-type parameter layer (a per-run switch for the Loop
  *    type's `enableTaskGraphs`, and for decisions).
+ *  - `PredictiveStudioAutoPublish` and `PredictiveStudioProtocolPromotion` are read by Predictive Studio's Pipeline
+ *    Builder agent: the first publishes the model a build trains through the lifecycle gate's automated publisher, the
+ *    second gives the protocol the build creates a promotion setting (`{ autoPublishKeepBaseline: true }` publishes a
+ *    kept simple baseline automatically). Both decide whether a model goes live unattended.
  *
  * A run reads them only when its caller set `ExecuteAgentParams.TrustReservedRunData`, which documents who may:
  * `BaseAgent.Execute` removes them from every other run's `data` ({@link WithAgentRunDataTrustApplied}), whatever
@@ -25,6 +29,8 @@ export const RESERVED_AGENT_RUN_DATA_KEYS: readonly string[] = [
     'PrimaryScopeRecordID',
     'SecondaryScopes',
     '__agentTypePromptParams',
+    'PredictiveStudioAutoPublish',
+    'PredictiveStudioProtocolPromotion',
 ];
 
 /**
@@ -93,8 +99,8 @@ export interface AgentRunDataWithoutReservedKeys {
 }
 
 /**
- * Removes the reserved scope and agent-type keys ({@link RESERVED_AGENT_RUN_DATA_KEYS}) from run data that a
- * less-trusted source supplied. Only top-level keys are read by the agent framework, so only top-level keys are
+ * Removes the reserved scope, agent-type and automated-publishing keys ({@link RESERVED_AGENT_RUN_DATA_KEYS}) from
+ * run data that a less-trusted source supplied. Only top-level keys are read by the agent framework, so only top-level keys are
  * removed. Pure: it never mutates `data` and does not log (callers log the stripped keys, never their values).
  *
  * @param data - The data to clean.

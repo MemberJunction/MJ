@@ -3,18 +3,17 @@
  * builder**: `PredictiveStudioPipelineBuilder.build(ModelingPlanSpec)` — the code (no-LLM) step that
  * turns the agent's approved, strongly-typed modeling plan into real metadata: it creates the
  * `MJ: ML Training Pipelines` row, binds its Prediction Unit and default Evaluation Protocol, trains one search over
- * the plan's experiments via the engine, and **evaluates the model through the lifecycle gate only if the trust verdict
- * clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored gate decision the
- * business UI uses). The build never publishes (M4b routes automatic publishing through the gate's automated publisher):
- * a model that clears the bar is evaluated to Validated or KeepBaseline and is ready for a person to publish.
+ * the plan's experiments via the engine, and, with `autoPublish: true`, **hands the training run to the lifecycle gate's
+ * automated publisher** (`AutomatedPublisher.EvaluateAndPublish`, M4b.3): the gate either publishes the model or withholds
+ * it and records why. The build makes no trust or leakage decision of its own; the gate's refusal is the reason it reports.
  *
  * This is what proves "the agent can BUILD NEW THINGS" without needing the full LLM loop — we feed the
  * builder a hand-authored plan (what the Goal Analyst / Data Scout / Experiment Designer sub-agents
  * would have accumulated) and assert the pipeline + model were created and the publish GATE behaved.
  *
  * The renewal model on AssociationDemo Memberships(Status) is intentionally near-chance, so the gate's
- * SAFETY path is exercised: a weak model is trained but NOT evaluated (held with a plain reason), while
- * the evaluate-iff-trustworthy invariant is asserted either way.
+ * SAFETY path is usually exercised: a weak model is trained but withheld (with the gate's recorded reason), while the
+ * publish-or-withheld invariant is asserted either way.
  *
  * ## Why in-process (mirrors ps-inproc-operate-flow.ts)
  * Needs the real server-side training engine + the Python sidecar, so it uses `bootstrapAI()` (the real
@@ -94,11 +93,11 @@ async function main(): Promise<void> {
   try {
     algorithm = await EnsureDriverAlgorithm(provider, user, DRIVER_KEY, TAG);
 
-    banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → evaluate-gated-on-trust');
+    banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → publish through the gate');
     const t0 = Date.now();
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
-    console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason || '(n/a)'}`);
+    console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | readyToPublish=${result.readyToPublish} | held=${result.heldReason || '(n/a)'}`);
     console.log(`  Stored gate decision: ${result.Gate ? `${result.Gate.Outcome} — ${result.Gate.Reason}` : '(none)'}`);
     if (result.pipelineId) await RecordPipelineBindings(provider, user, records, [result.pipelineId]);
     if (result.modelId) records.RecordModel(result.modelId);
@@ -118,12 +117,14 @@ async function main(): Promise<void> {
     check(leaderboard.filter((r) => r.isWinner === true).length === 1, 'exactly one leaderboard row is the finalist');
     check(!JSON.stringify(leaderboard).includes('cvScore'), 'no leaderboard row carries a cvScore');
 
-    // The core invariant: a model is evaluated (ready to publish) IFF the trust verdict clears the bar AND no leakage
-    // flag; the build itself never publishes (M4b).
-    const shouldEvaluate = !!result.trust?.CanAct && !result.leakageFlagged;
-    check(result.published === false, `the build publishes nothing (published=${result.published})`);
-    check(result.readyToPublish === shouldEvaluate, `evaluate gate honored (readyToPublish=${result.readyToPublish} === canAct&&!leakage=${shouldEvaluate})`);
-    check(!!result.heldReason, 'an unpublished model carries a plain-language reason (the safety gate, or that it awaits a person\'s publish)');
+    // The publish-or-withheld invariant (M4b.3, autoPublish: true): the gate either published the model (heldReason
+    // null) or withheld it, and then heldReason is the gate's recorded refusal ("withheld: …"). Under autoPublish true
+    // nothing is left waiting for a person, so readyToPublish is false either way (it is true only for autoPublish false
+    // with a Validated or KeepBaseline model, D4-142).
+    const withheld = result.published === false && (result.heldReason || '').startsWith('withheld: ');
+    const published = result.published === true && result.heldReason === null;
+    check(published || withheld, `the gate published the model or withheld it with its reason (published=${result.published}, held=${result.heldReason || '(none)'})`);
+    check(result.readyToPublish === false, `an autoPublish build leaves nothing waiting for a person's publish (readyToPublish=${result.readyToPublish})`);
 
     // Verify the persisted pipeline + model status match the gate decision.
     if (result.pipelineId) {
@@ -136,7 +137,8 @@ async function main(): Promise<void> {
       const m = await new RunView().RunView<{ ID: string; Status: string }>(
         { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${result.modelId}'`, Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1, BypassCache: true }, user,
       );
-      const expected = result.readyToPublish ? ['Validated', 'KeepBaseline'] : ['Draft'];
+      // Published → Published; withheld at Publish → Validated or KeepBaseline; refused at Evaluate → Draft.
+      const expected = result.published ? ['Published'] : ['Draft', 'Validated', 'KeepBaseline'];
       check(expected.includes(m.Results?.[0]?.Status || ''), `the persisted model Status is one of '${expected.join("', '")}' (matches the gate; got '${m.Results?.[0]?.Status}')`);
     }
 

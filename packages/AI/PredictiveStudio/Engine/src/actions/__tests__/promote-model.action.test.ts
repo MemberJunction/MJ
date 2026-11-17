@@ -12,7 +12,8 @@ import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
  * Unit tests for the Promote ML Model action over the lifecycle gate. NO live DB: the gate is a `LifecycleGate` fake
  * injected through `CreateLifecycleGate`. Covered: param validation (`ModelID`, `Transition`, before any gate call), the
  * transition → gate method mapping with `Reason`, and every gate outcome → result code. The gate's own refusals are
- * pinned by `registry/__tests__/lifecycle-gate.test.ts`.
+ * pinned by `registry/__tests__/lifecycle-gate.test.ts`. Test doubles: the three `as` casts (`UserInfo`, `RunActionParams`)
+ * stand in for framework classes the action reads only `ID` and `Params`/`ContextUser` of.
  */
 
 const M = '6F1C2B3A-0000-4000-8000-0000000000A1';
@@ -37,8 +38,8 @@ class FakeGate extends LifecycleGate {
   public override async Publish(request: PublishRequest, _ctx: GateContext): Promise<PublishOutcome> {
     this.Calls.push(['Publish', request.modelId, request.purpose]);
     if (this.publishThrows !== null) throw new Error(this.publishThrows);
-    if (this.refusal === null) return { Kind: 'published', ModelID: request.modelId, PublishRecordID: 'R1', Replaces: null, Approver: 'user' };
-    return { Kind: 'withheld', ModelID: request.modelId, Status: 'Validated', Refusal: this.refusal, Transient: false, RefusalRecordID: 'R2' };
+    if (this.refusal === null) return { Kind: 'published', Purpose: request.purpose, ModelID: request.modelId, PublishRecordID: 'R1', Replaces: null, Approver: 'user' };
+    return { Kind: 'withheld', Purpose: request.purpose, ModelID: request.modelId, Status: 'Validated', Refusal: this.refusal, Transient: false, RefusalRecordID: 'R2' };
   }
   public override async Archive(modelId: string, reason: string, _actor: Actor, _ctx: GateContext): Promise<GateApplyResult> {
     this.Calls.push(['Archive', modelId, reason]);

@@ -11,15 +11,11 @@
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import {
-  ResourceTypeEngine,
-  type MJMLModelEntity,
-  type MJRecordProcessEntity,
-  type MJUserNotificationEntity,
-} from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJRecordProcessEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
+import { RecordNotificationLinks, type RecordResourceConfiguration } from '../registry/record-notification-links';
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 import {
@@ -40,22 +36,33 @@ export { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 
 type ActiveRecordProcessRow = Pick<MJRecordProcessEntity, 'ID' | 'Name' | 'WorkType' | 'Status'>;
 
+/** One Record Process's result in a scheduled drift sweep (the sweep's `ProcessResults` output). */
 export interface ProcessDriftSummaryItem {
+  /** The evaluated Record Process. */
   readonly RecordProcessID: string;
+  /** Its name. */
   readonly ProcessName?: string;
+  /** Its work type. */
   readonly WorkType?: MJRecordProcessEntity['WorkType'];
+  /** The worst severity across its features and metrics. */
   readonly OverallSeverity: DriftSeverity;
+  /** The largest feature PSI. */
   readonly MaxPSI: number;
+  /** Whether its report crossed an alert threshold. */
   readonly ShouldAlert: boolean;
+  /** Whether a window held too few rows to judge (or its load failed). */
   readonly InsufficientData: boolean;
   /** True when a window held more than `MaxRows` rows, so only its newest `MaxRows` were evaluated. */
   readonly Truncated: boolean;
+  /** Whether a drift alert was emitted for it. */
   readonly AlertEmitted: boolean;
+  /** The emitted alert's ID. */
   readonly AlertID?: string;
   /** This process's confidence-floor and champion-vs-challenger metrics; absent when its load failed. */
   readonly DivergenceMetrics?: ConfidenceAndDivergenceMetrics;
   /** Why this process could not be evaluated (its Feature Values failed to load); the sweep goes on. */
   readonly ErrorMessage?: string;
+  /** Its report's summary, in words. */
   readonly Summary: string;
 }
 
@@ -70,11 +77,17 @@ const SEVERITY_RANK: Record<DriftSeverity, number> = {
  * or `MJ: AI Agent Requests` record) when `report.ShouldAlert` is `true`.
  */
 export interface IDriftAlertEmitter {
+  /**
+   * Emits the alert of a report that crossed a threshold.
+   *
+   * @param contextInfo the Record Process the alert is about, when the caller knows it (else the report's)
+   * @returns whether an alert was emitted, and its ID
+   */
   EmitDriftAlert(
     report: FeatureAndPredictionDriftReport,
     params: RunActionParams,
     contextInfo?: {
-      recordProcessId?: string;
+      RecordProcessID?: string;
     },
   ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }>;
 }
@@ -85,9 +98,6 @@ interface DriftAlertSubject {
   readonly ID: string;
   readonly Label: string;
 }
-
-/** The `MJ: Resource Types` row whose notifications link to one record of an entity. */
-const RECORD_RESOURCE_TYPE_NAME = 'Records';
 
 /**
  * Production {@link IDriftAlertEmitter} that persists an `MJ: User Notifications` alert.
@@ -100,16 +110,18 @@ const RECORD_RESOURCE_TYPE_NAME = 'Records';
  * the action's input text.
  */
 export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
+  /** @param provider the provider the alert is read and saved on (else the action's, else the global one) */
   constructor(private readonly provider?: IMetadataProvider) {}
 
+  /** @inheritdoc */
   public async EmitDriftAlert(
     report: FeatureAndPredictionDriftReport,
     params: RunActionParams,
     contextInfo?: {
-      recordProcessId?: string;
+      RecordProcessID?: string;
     },
   ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }> {
-    const provider = this.provider ?? params.Provider ?? Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
+    const provider = this.provider || params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
     if (!provider) {
       return { Emitted: false };
     }
@@ -126,7 +138,7 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
       const subject = await this.loadSubject(
         provider,
         params.ContextUser,
-        contextInfo?.recordProcessId ?? report.RecordProcessID,
+        contextInfo?.RecordProcessID || report.RecordProcessID,
         report.ModelID,
       );
 
@@ -136,28 +148,29 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
       );
       notification.NewRecord();
       notification.UserID = targetUserId;
-      notification.Title = `Predictive Drift Alert (${report.OverallSeverity}): ${subject?.Label ?? 'Predictive Studio'}`;
+      notification.Title = `Predictive Drift Alert (${report.OverallSeverity}): ${subject?.Label || 'Predictive Studio'}`;
       notification.Message = subject
         ? `Drift detected for ${subject.Label}.\n\n${report.Summary}`
         : `Drift detected.\n\n${report.Summary}`;
       notification.Unread = true;
 
-      const resourceTypeId = subject ? await this.recordResourceTypeId(provider, params.ContextUser) : undefined;
+      const resourceTypeId = subject ? await RecordNotificationLinks.RecordsResourceTypeID(provider, params.ContextUser, 'DefaultDriftAlertEmitter', 'drift alert') : null;
       if (subject && resourceTypeId) {
         notification.ResourceTypeID = resourceTypeId;
         notification.ResourceRecordID = subject.ID;
-        notification.ResourceConfiguration = JSON.stringify({ EntityName: subject.EntityName, RecordID: subject.ID });
+        const link: RecordResourceConfiguration = { Entity: subject.EntityName, RecordID: subject.ID };
+        notification.ResourceConfiguration = JSON.stringify(link);
       }
 
       const saved = await notification.Save();
       if (!saved) {
         LogError(
-          `DefaultDriftAlertEmitter: failed to save drift notification: ${notification.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+          `DefaultDriftAlertEmitter: failed to save drift notification: ${notification.LatestResult?.CompleteMessage || 'unknown error'}`,
         );
         return { Emitted: false };
       }
       return { AlertID: notification.ID || undefined, Emitted: true };
-    } catch (error: unknown) {
+    } catch (error) {
       LogError(error);
       return { Emitted: false };
     }
@@ -230,24 +243,6 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
     }
     return undefined;
   }
-
-  /**
-   * The `Records` resource type's ID, resolved by name through {@link ResourceTypeEngine}; undefined when it is
-   * not seeded or cannot be loaded (the alert is still sent, without its link).
-   */
-  private async recordResourceTypeId(provider: IMetadataProvider, contextUser: UserInfo | undefined): Promise<string | undefined> {
-    try {
-      await ResourceTypeEngine.Instance.Config(false, contextUser, provider);
-      const resourceType = ResourceTypeEngine.Instance.ByName(RECORD_RESOURCE_TYPE_NAME);
-      if (!resourceType) {
-        LogError(`DefaultDriftAlertEmitter: no '${RECORD_RESOURCE_TYPE_NAME}' resource type is seeded; the drift alert has no record link.`);
-      }
-      return resourceType?.ID;
-    } catch (error: unknown) {
-      LogError(error);
-      return undefined;
-    }
-  }
 }
 
 /**
@@ -271,7 +266,9 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     try {
       const modelId = this.getStringParam(params, 'ModelID');
       const recordProcessId = this.getStringParam(params, 'RecordProcessID');
-      const maxRows = this.getNumericParam(params, 'MaxRows') ?? DEFAULT_DRIFT_MAX_ROWS;
+      const maxRowsParam = this.getNumericParam(params, 'MaxRows');
+      // An explicit 0 is kept (the loader decides what it means), so this tests for absence rather than falsiness.
+      const maxRows = maxRowsParam === undefined ? DEFAULT_DRIFT_MAX_ROWS : maxRowsParam;
 
       const numericFeatures = this.parseNumericFeatures(this.getJsonObjectParam(params, 'NumericFeatures'));
       const categoricalFeatures = this.parseCategoricalFeatures(
@@ -325,7 +322,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
           MaxRows: maxRows,
         });
       } else {
-        const explicitTargetParam = (params.Params ?? []).some((p) => {
+        const explicitTargetParam = (params.Params || []).some((p) => {
           const normalized = p.Name?.trim().toLowerCase();
           return (
             p.Type !== 'Output' &&
@@ -354,10 +351,10 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       let alertId: string | undefined;
       if (report.ShouldAlert && emitAlertOnDrift) {
         const activeEmitter =
-          EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ??
+          EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ||
           new DefaultDriftAlertEmitter(provider);
         const alertOutcome = await activeEmitter.EmitDriftAlert(report, params, {
-          recordProcessId,
+          RecordProcessID: recordProcessId,
         });
         alertEmitted = alertOutcome.Emitted;
         alertId = alertOutcome.AlertID;
@@ -378,7 +375,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       this.addOutputParam(params, 'Summary', report.Summary);
 
       return this.ok(params, report.Summary);
-    } catch (error: unknown) {
+    } catch (error) {
       LogError(error);
       const message = error instanceof Error ? error.message : String(error);
       if (message.startsWith('INVALID_PARAMETER:')) {
@@ -413,16 +410,16 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
 
     if (!processesRes.Success) {
       throw new Error(
-        `Failed to load active MJ: Record Processes for drift sweep: ${processesRes.ErrorMessage ?? 'unknown error'}`,
+        `Failed to load active MJ: Record Processes for drift sweep: ${processesRes.ErrorMessage || 'unknown error'}`,
       );
     }
 
-    const activeProcesses = processesRes.Results ?? [];
+    const activeProcesses = processesRes.Results || [];
     const baselineWindowEnd = this.getStringParam(params, 'BaselineWindowEnd');
     const evaluationWindowStart = this.getStringParam(params, 'EvaluationWindowStart');
     const emitAlertOnDrift = this.getBooleanParam(params, 'EmitAlertOnDrift', true);
     const activeEmitter =
-      EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ??
+      EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ||
       new DefaultDriftAlertEmitter(provider);
 
     let overallSeverity: DriftSeverity = 'None';
@@ -454,7 +451,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     for (const [i, proc] of activeProcesses.entries()) {
       const load = loads[i];
       if (!load?.Input) {
-        const message = load?.ErrorMessage ?? 'no load result';
+        const message = load?.ErrorMessage || 'no load result';
         LogError(`Drift sweep: record process '${proc.Name}' (${proc.ID}) was not evaluated: ${message}`);
         failedCount++;
         processResults.push({
@@ -493,13 +490,13 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       let procAlertId: string | undefined;
       if (report.ShouldAlert && emitAlertOnDrift) {
         const alertOutcome = await activeEmitter.EmitDriftAlert(report, params, {
-          recordProcessId: proc.ID,
+          RecordProcessID: proc.ID,
         });
         procAlertEmitted = alertOutcome.Emitted;
         procAlertId = alertOutcome.AlertID;
         if (procAlertEmitted) {
           alertEmitted = true;
-          firstAlertId = firstAlertId ?? procAlertId;
+          firstAlertId = firstAlertId || procAlertId;
         }
       }
 
@@ -551,8 +548,8 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       { Baseline: (number | null)[]; Evaluation: (number | null)[]; Bins?: number }
     > = {};
     for (const [key, val] of Object.entries(raw)) {
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        const rec = val as Record<string, unknown>;
+      if (EvaluateFeatureAndPredictionDriftAction.isRecord(val)) {
+        const rec = val;
         const baseline = this.toNullableNumberArray(rec['Baseline']);
         const evaluation = this.toNullableNumberArray(rec['Evaluation']);
         const bins = typeof rec['Bins'] === 'number' ? rec['Bins'] : undefined;
@@ -570,8 +567,8 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     }
     const result: Record<string, { Baseline: (string | null)[]; Evaluation: (string | null)[] }> = {};
     for (const [key, val] of Object.entries(raw)) {
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        const rec = val as Record<string, unknown>;
+      if (EvaluateFeatureAndPredictionDriftAction.isRecord(val)) {
+        const rec = val;
         const baseline = this.toNullableStringArray(rec['Baseline']);
         const evaluation = this.toNullableStringArray(rec['Evaluation']);
         result[key] = { Baseline: baseline, Evaluation: evaluation };
@@ -596,8 +593,8 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       }
     > = {};
     for (const [key, val] of Object.entries(raw)) {
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        const rec = val as Record<string, unknown>;
+      if (EvaluateFeatureAndPredictionDriftAction.isRecord(val)) {
+        const rec = val;
         const baseline = this.toNumberArray(rec['BaselineProportions']);
         const evaluation = this.toNumberArray(rec['EvaluationProportions']);
         const baseSampleCount =
@@ -624,8 +621,8 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     const pairsRaw = Array.isArray(raw['Pairs']) ? raw['Pairs'] : [];
     const pairs: ChampionChallengerPair[] = [];
     for (const item of pairsRaw) {
-      if (typeof item === 'object' && item !== null) {
-        const rec = item as Record<string, unknown>;
+      if (EvaluateFeatureAndPredictionDriftAction.isRecord(item)) {
+        const rec = item;
         pairs.push({
           RecordID: typeof rec['RecordID'] === 'string' ? rec['RecordID'] : undefined,
           ChampionScore: typeof rec['ChampionScore'] === 'number' ? rec['ChampionScore'] : undefined,
@@ -665,6 +662,14 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
         typeof raw['ScoreAgreementTolerance'] === 'number' ? raw['ScoreAgreementTolerance'] : undefined,
       MinSampleSize: typeof raw['MinSampleSize'] === 'number' ? raw['MinSampleSize'] : undefined,
     };
+  }
+
+  /**
+   * True for a JSON object (not an array or null). The action's JSON parameters are a true boundary: they arrive as
+   * `JsonObject` (`Record<string, unknown>`, `base-predictive-studio.action.ts`), so a member is narrowed here.
+   */
+  private static isRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val);
   }
 
   private toNumberArray(val: unknown): number[] {

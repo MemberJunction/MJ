@@ -112,5 +112,59 @@
         }
       ]
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Running Training Run",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Is a training run of this pipeline in flight right now, and if so which one?",
+      "Description": "Returns the newest MJ: ML Training Runs row of one training pipeline whose Status is Running and that started after the given instant, or no row. Predictive Studio auto-train reads it under the pipeline lock to claim the pipeline for one training at a time (single-flight, D4-12): a run in flight means another training owns the pipeline.",
+      "SQL": "@file:SQL/predictive-studio-running-training-run.sql",
+      "TechnicalDescription": "SELECT TOP 1 ID, StartedAt FROM MLTrainingRun WHERE PipelineID = PipelineID AND Status = 'Running' AND StartedAt > StartedAfter ORDER BY StartedAt DESC. Runs inside the caller's transaction after Predictive Studio: Lock Pipeline For Publish has locked the pipeline, so two claims of one pipeline read it in turn and the second sees the run row the first committed (TrainingClaims.ClaimPipeline). StartedAfter is an ISO 8601 UTC instant (now minus the stale threshold, 6 h by default): an older Running row is a stale claim and does not block. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "49A6D777-CCE3-4B21-940B-8CA2E19AB2A6"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row whose in-flight training run to read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "060DF1C0-F56D-4E56-97A3-2DAD6C104026"
+          }
+        },
+        {
+          "fields": {
+            "Name": "StartedAfter",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2026-11-16T06:00:00.000Z",
+            "Description": "An ISO 8601 UTC instant: only a Running run that started after it counts as in flight (the caller passes now minus the stale threshold).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B302A357-F999-4D41-9B68-DAE2A0F48DF9"
+          }
+        }
+      ]
+    }
   }
 ]

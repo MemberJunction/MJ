@@ -19,7 +19,11 @@
 // The bootstrap's user (`server.User`, the Owner `not.set@nowhere.com`) is the MJ system user: `human()` here, as in
 // the older DB lanes, initiates as the system user (accepted for those lanes; F2). Every sign-off in this file is made
 // by a real person who is not the system user — the seeded `it-rls-a@integration.test` granted `Developer`
-// (`approvingHuman`) — through the service (Case B, D) or the operation (Case C).
+// (`approvingHuman`) — through the service (Case B, D) or the operation (Case C). The permission-refusal cases (D4-134)
+// act as the seeded `it-nogrant@integration.test` holding only the `UI` role in-process (`uiOnlyUser`; no role row is
+// written): the gate records its refusal with the MJ system user, the gate's own write identity. The Evaluate refusal
+// case (D4-143) runs a calibration-held model through `AutomatedPublisher.EvaluateAndPublish` twice on the real
+// `CK_MLModelPublishRecord_RunLevel` / `UX_…` constraints: each attempt leaves one `refusal` record, `Purpose 'publish'`.
 //
 // The mutation map (D-071: the reviewer flips each, one at a time; exactly the case named goes red):
 //   1. Evidence-hash equality at publish dropped (`StoredSignOffLookup.FindApproving` compares by ID only)
@@ -41,7 +45,7 @@ import { existsSync, readdirSync, readFileSync, rmdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sql from 'mssql';
-import { RunView, UserInfo, UserRoleInfo, WellKnownUserSource, type EntityInfo, type RemoteOpServerContext } from '@memberjunction/core';
+import { EntityPermissionInfo, RunView, UserInfo, UserRoleInfo, WellKnownUserSource, type EntityInfo, type RemoteOpServerContext } from '@memberjunction/core';
 import type {
   MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLOutputBindingEntity, MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity, MJRoleEntity, MJUserEntity, MJUserRoleEntity, PredictiveStudioSignOffModelInput,
@@ -72,6 +76,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import {
   ArtifactRegistry,
+  AutomatedPublisher,
   EvaluationProtocolVersioning,
   ExperimentReports,
   GateContexts,
@@ -606,6 +611,22 @@ async function seededUser(email: string): Promise<UserInfo> {
 }
 
 /**
+ * The suite's restricted user (`it-nogrant@integration.test`) holding only the `UI` role, in-process (no `MJ: User Roles`
+ * row is written): it may read ML Models and publish records, and may neither update a model nor create a record.
+ */
+async function uiOnlyUser(): Promise<UserInfo> {
+  const seeded = await seededUser(SEEDED_NOGRANT_EMAIL);
+  const roles = await RunView.FromMetadataProvider(server.Provider).RunView<Pick<MJRoleEntity, 'ID'>>({
+    EntityName: 'MJ: Roles', ExtraFilter: `Name='UI'`, Fields: ['ID'], ResultType: 'simple',
+  }, server.User);
+  const roleId = roles.Results[0]?.ID;
+  if (!roles.Success || !roleId) throw new Error(`the UI role is not in MJ: Roles: ${roles.ErrorMessage}`);
+  return new UserInfo(server.Provider, {
+    ID: seeded.ID, Name: seeded.Name, Email: seeded.Email, Type: seeded.Type, IsActive: seeded.IsActive, UserRoles: [new UserRoleInfo({ UserID: seeded.ID, RoleID: roleId })],
+  });
+}
+
+/**
  * A person who is not the MJ system user and may sign off: the seeded `it-rls-a@integration.test` granted the
  * {@link APPROVER_ROLE} role through an `MJ: User Roles` save (recorded; teardown deletes it). The bootstrap's own user
  * is the MJ system user, which the operation refuses, so the operation's other rules need this principal.
@@ -1129,6 +1150,96 @@ describe('non-human and unauthorised sign-offs through the PredictiveStudio.Sign
     expect([attempt.ResultCode, attempt.ErrorMessage, attempt.SignOffRowsAdded, attempt.Unexpected]).toEqual(['SUCCESS', null, 1, []]);
     const row = (await recordsOf(model.ModelID)).find((r) => UUIDsEqual(r.ID, attempt.SignOffRecordID));
     expect(row && [row.Kind, row.Purpose, row.ApproverKind, UUIDsEqual(row.UserID, person.ID)]).toEqual(['sign-off', 'publish', 'user', true]);
+  });
+});
+
+describe('a caller without update permission on MJ: ML Models (D4-134: the gate records the refusal with its own write identity)', () => {
+  let ui: UserInfo;
+
+  beforeAll(async () => {
+    ui = await uiOnlyUser();
+    const models = server.Provider.EntityByName('MJ: ML Models');
+    const records = server.Provider.EntityByName('MJ: ML Model Publish Records');
+    if (!models || !records) throw new Error('MJ: ML Models or MJ: ML Model Publish Records is not in metadata');
+    // The restricted principal: it reads models and publish records, and may neither update a model nor create a record.
+    expect([models.GetUserPermisions(ui).CanRead, models.GetUserPermisions(ui).CanUpdate, records.GetUserPermisions(ui).CanCreate]).toEqual([true, false, false]);
+  });
+
+  it('permission refusal: a Publish of a Validated model as a UI-only user is withheld actor-not-permitted, recorded by the gate, StatusReason set, status unchanged', async () => {
+    const fix = await createPipeline('ui-publish');
+    const model = await validatedModel(fix, 'ui-publish');
+    const initiator: Actor = { kind: 'system', component: 'auto-train' };
+    const attempt = await quietly(() => failureOrOutcome(() => new LifecycleGate().Publish(
+      { modelId: model.ModelID, purpose: 'publish', initiator, signOffId: null, reason: null }, GateContexts.ForRequest({ ContextUser: ui, Provider: server.Provider }),
+    )));
+    expect(attempt.Result).toMatchObject({ Kind: 'withheld', Purpose: 'publish', ModelID: model.ModelID, Status: 'Validated', Refusal: { kind: 'actor-not-permitted', actor: 'system' }, Transient: false });
+    expect(attempt.Unexpected).toEqual([]);
+    const refusals = (await recordsOf(model.ModelID)).filter((r) => r.Kind === 'refusal');
+    expect(refusals.map((r) => [r.Purpose, r.ApproverKind, r.UserID, r.Refusal])).toEqual([['publish', 'automated-gate', null, JSON.stringify({ kind: 'actor-not-permitted', actor: 'system' })]]);
+    expect(await modelStatusReason(model.ModelID)).toBe('Automatic publish withheld: A system initiator is not permitted to make this transition.');
+    expect((await modelState(model.ModelID))?.Status).toBe('Validated');
+  });
+
+  it('publish permission rule (D4-135): a UI-only user granted CanUpdate on ML Models in-process, and nothing else, is withheld actor-not-permitted, recorded by the gate', async () => {
+    const fix = await createPipeline('ui-update-only');
+    const model = await validatedModel(fix, 'ui-update-only');
+    const models = server.Provider.EntityByName('MJ: ML Models');
+    const records = server.Provider.EntityByName('MJ: ML Model Publish Records');
+    if (!models || !records) throw new Error('MJ: ML Models or MJ: ML Model Publish Records is not in metadata');
+    // In-process only (no MJ: Entity Permissions or MJ: User Roles row is written): a role granting update on ML Models.
+    const roleId = randomUUID().toUpperCase();
+    const grant = new EntityPermissionInfo({ ID: randomUUID().toUpperCase(), EntityID: models.ID, RoleID: roleId, Type: 'Allow', CanCreate: false, CanRead: true, CanUpdate: true, CanDelete: false }, server.Provider);
+    const updater = new UserInfo(server.Provider, { ID: ui.ID, Name: ui.Name, Email: ui.Email, Type: ui.Type, IsActive: ui.IsActive, UserRoles: [...ui.UserRoles, new UserRoleInfo({ UserID: ui.ID, RoleID: roleId })] });
+    models.Permissions.push(grant);
+    try {
+      expect([models.GetUserPermisions(updater).CanUpdate, records.GetUserPermisions(updater).CanCreate]).toEqual([true, false]);
+      const attempt = await quietly(() => failureOrOutcome(() => new LifecycleGate().Publish(
+        { modelId: model.ModelID, purpose: 'publish', initiator: { kind: 'system', component: 'auto-train' }, signOffId: null, reason: null },
+        GateContexts.ForRequest({ ContextUser: updater, Provider: server.Provider }),
+      )));
+      expect(attempt.Result).toMatchObject({ Kind: 'withheld', ModelID: model.ModelID, Status: 'Validated', Refusal: { kind: 'actor-not-permitted', actor: 'system' }, Transient: false });
+      expect(attempt.Unexpected).toEqual([]);
+    } finally {
+      models.Permissions.splice(models.Permissions.indexOf(grant), 1);
+    }
+    const refusals = (await recordsOf(model.ModelID)).filter((r) => r.Kind === 'refusal');
+    expect(refusals.map((r) => [r.Purpose, r.ApproverKind, r.UserID, r.Refusal])).toEqual([['publish', 'automated-gate', null, JSON.stringify({ kind: 'actor-not-permitted', actor: 'system' })]]);
+    expect((await modelState(model.ModelID))?.Status).toBe('Validated');
+    expect((await recordsOf(model.ModelID)).filter((r) => r.Kind === 'publish')).toEqual([]);
+  });
+
+  it('permission refusal: an Evaluate of a Draft model as a UI-only user is refused actor-not-permitted, keeps Draft and writes no record', async () => {
+    const fix = await createPipeline('ui-evaluate');
+    const draft = await trainModel(fix, 'ui-evaluate', binaryModelWins);
+    const attempt = await quietly(() => new LifecycleGate().Evaluate({ modelId: draft.ModelID }, human(), GateContexts.ForRequest({ ContextUser: ui, Provider: server.Provider })));
+    expect(attempt.Result).toEqual({ Kind: 'refused', Refusal: { kind: 'actor-not-permitted', actor: 'human' } });
+    expect(attempt.Unexpected).toEqual([]);
+    expect((await modelState(draft.ModelID))?.Status).toBe('Draft');
+    expect(await recordsOf(draft.ModelID)).toEqual([]);
+  });
+});
+
+describe('a model-level Evaluate refusal of an automatic publish attempt is recorded on the real constraints (D4-143)', () => {
+  it('Evaluate refusal record: a calibration-held Draft model under EvaluateAndPublish leaves one refusal record (Purpose publish); a second attempt on the same run adds a second, with no constraint error', async () => {
+    const fix = await createPipeline('evaluate-refusal');
+    const draft = await trainModel(fix, 'evaluate-refusal', binaryModelWins);
+    const row = await server.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', server.User);
+    if (!(await row.Load(draft.ModelID))) throw new Error(`ML Model ${draft.ModelID} does not load`);
+    const lineage = JsonParse.ParseJsonText(row.Lineage, 'Lineage');
+    row.Lineage = JSON.stringify({ ...(lineage.Ok && JsonParse.IsJsonObject(lineage.Value) ? lineage.Value : {}), calibrationHold: { slope: 0.5 } });
+    if (!(await row.Save())) throw new Error(`Saving the Lineage of ML Model ${draft.ModelID} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
+    const publisher = new AutomatedPublisher();
+    const held = { Kind: 'refused', Refusal: { kind: 'calibration-held', slope: 0.5 } };
+    for (const attemptNo of [1, 2]) {
+      const attempt = await quietly(() => publisher.EvaluateAndPublish(draft.RunID, human(), gateCtx()));
+      expect([attemptNo, attempt.Result, attempt.Unexpected]).toEqual([attemptNo, held, []]);
+    }
+    const r = await pool.request().input('M', sql.UniqueIdentifier, draft.ModelID).query<{ Kind: string; Purpose: string; TrainingRunID: string; Transient: boolean; ApproverKind: string; Initiator: string; Refusal: string }>(
+      `SELECT Kind, Purpose, TrainingRunID, Transient, ApproverKind, Initiator, Refusal FROM ${tableOf('MJ: ML Model Publish Records')} WHERE ModelID = @M ORDER BY RecordedAt, ID`,
+    );
+    const expected = ['refusal', 'publish', true, false, 'user', JSON.stringify(human()), JSON.stringify(held.Refusal)];
+    expect(r.recordset.map((x) => [x.Kind, x.Purpose, UUIDsEqual(x.TrainingRunID, draft.RunID), x.Transient, x.ApproverKind, x.Initiator, x.Refusal])).toEqual([expected, expected]);
+    expect([(await modelState(draft.ModelID))?.Status, await modelStatusReason(draft.ModelID)]).toEqual(['Draft', expect.stringContaining('held for calibration')]);
   });
 });
 

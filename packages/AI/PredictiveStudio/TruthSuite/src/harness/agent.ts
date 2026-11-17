@@ -7,7 +7,7 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
 import { ExperimentReports, PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
-import type { AgentStepResult } from './types';
+import type { AgentStepResult, BuilderRunOptions } from './types';
 
 /** The parameters of one Pipeline Builder run. */
 export type BuilderRunParams = Parameters<GraphQLAIClient['RunAIAgent']>[0];
@@ -22,28 +22,27 @@ export class HarnessAgent {
 
   /**
    * The Pipeline Builder run of a plan. The gates measure what automation publishes, so the run turns publishing on (a
-   * conversation's build leaves its model in Draft).
+   * conversation's build leaves its model in Draft). With `options.AutoPublishKeepBaseline` the run data also supplies
+   * the protocol's promotion setting (`PROTOCOL_PROMOTION_DATA_KEY`), so the build's protocol publishes a kept simple
+   * baseline automatically.
    */
-  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec): BuilderRunParams {
-    return {
-      agent,
-      conversationMessages: [{ role: 'user', content: 'build it' }],
-      payload: plan,
-      data: { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true },
-    };
+  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec, options: BuilderRunOptions = {}): BuilderRunParams {
+    const data: Record<string, boolean | { readonly autoPublishKeepBaseline: boolean }> = { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true };
+    if (options.AutoPublishKeepBaseline === true) data[PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY] = { autoPublishKeepBaseline: true };
+    return { agent, conversationMessages: [{ role: 'user', content: 'build it' }], payload: plan, data };
   }
 
   /**
    * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
    * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
    */
-  public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec): Promise<AgentStepResult> {
+  public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec, options: BuilderRunOptions = {}): Promise<AgentStepResult> {
     const agent = await HarnessAgent.loadAgent(ctx, 'Pipeline Builder');
     if (agent.DriverClass !== 'PredictiveStudioPipelineBuilderAgent') {
       throw new Error(`'Pipeline Builder' agent has DriverClass '${agent.DriverClass || 'none'}'`);
     }
     const t0 = Date.now();
-    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan));
+    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan, options));
     const wallMs = Date.now() - t0;
     const build = result.payload?.BuildResult || null;
     const pipelineIds = await HarnessAgent.PipelineIDsNamed(ctx.Provider, ctx.User, HarnessAgent.BuilderPipelineNames(plan));

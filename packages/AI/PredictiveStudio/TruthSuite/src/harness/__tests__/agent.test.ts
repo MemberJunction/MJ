@@ -33,6 +33,8 @@ describe('HarnessAgent.BuilderPipelineNames', () => {
   });
 });
 
+// BuilderRunParams only places the agent object on the params it returns (never reads it), so these tests pass an
+// empty object cast to the agent parameter type: the one documented test-double cast in this file.
 describe('HarnessAgent.BuilderRunParams', () => {
   it('turns publishing on through run data, and passes the plan as the payload', () => {
     const p = plan('PSTruth: G0.2 run-1', ['logistic_regression']);
@@ -42,5 +44,15 @@ describe('HarnessAgent.BuilderRunParams', () => {
     expect(PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data: params.data })).toBe(true);
     expect(params.payload).toBe(p);
     expect(params.agent).toBe(agent);
+    expect(PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: params.data })).toBeNull();
+  });
+
+  it('supplies the protocol promotion setting through run data only when asked for a kept-baseline auto-publish', () => {
+    const agent = {} as Parameters<typeof HarnessAgent.BuilderRunParams>[0];
+    const p = plan('PSTruth: G0.3 run-1', ['logistic_regression']);
+    const permissive = HarnessAgent.BuilderRunParams(agent, p, { AutoPublishKeepBaseline: true });
+    expect(PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: permissive.data })).toEqual({ autoPublishKeepBaseline: true });
+    expect(PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data: permissive.data })).toBe(true);
+    expect(PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: HarnessAgent.BuilderRunParams(agent, p, { AutoPublishKeepBaseline: false }).data })).toBeNull();
   });
 });

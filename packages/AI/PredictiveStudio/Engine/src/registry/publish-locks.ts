@@ -35,12 +35,16 @@ export const SYSTEM_CLOCK: GateClock = {
   Sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 };
 
-/** The stored Query names and the category path they live under (M3.1). */
+/**
+ * The stored Query names and the category path they live under (M3.1), and the running-run read auto-train's
+ * single-flight claim makes under the pipeline lock (M4b.2, `TrainingClaims`).
+ */
 export const PUBLISH_LOCK_QUERIES = {
   CategoryPath: '/MJ/Predictive Studio/',
   LockPipeline: 'Predictive Studio: Lock Pipeline For Publish',
   LockModel: 'Predictive Studio: Lock Model For Publish',
   NextModelVersion: 'Predictive Studio: Next Model Version',
+  RunningTrainingRun: 'Predictive Studio: Running Training Run',
 } as const;
 
 /** Thrown when a registry read needs `RunQuery` and the provider cannot run saved queries. */

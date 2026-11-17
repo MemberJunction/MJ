@@ -26,6 +26,8 @@ const MODEL_COLUMNS: readonly Column[] = [
   ['TrainingRunID', 'uniqueidentifier', true], ['SnapshotHash', 'nvarchar', true], ['CodeVersion', 'nvarchar', true], ['FeatureSchemaHash', 'nvarchar', true],
   ['OutputSemantics', 'nvarchar', true], ['Delivery', 'nvarchar', true], ['StatusReason', 'nvarchar', true], ['ArtifactStatus', 'nvarchar', false],
   ['ArtifactCheckedAt', 'datetimeoffset', true], ['ServingWhileUnevaluated', 'bit', false],
+  // The view's pipeline name (`vwMLModels.Pipeline`), which the generated entity carries and the gate world's rows hold.
+  ['Pipeline', 'nvarchar', true],
 ];
 
 const RUN_COLUMNS: readonly Column[] = [
@@ -34,6 +36,8 @@ const RUN_COLUMNS: readonly Column[] = [
   ['Status', 'nvarchar', false], ['StartedAt', 'datetimeoffset', true], ['CompletedAt', 'datetimeoffset', true], ['ComputeCost', 'decimal', true],
   ['TokensUsed', 'int', true], ['Notes', 'nvarchar', true], ['TrainingSnapshotID', 'uniqueidentifier', true], ['EvaluationProtocolID', 'uniqueidentifier', true],
   ['CodeVersion', 'nvarchar', true], ['ComputeSeconds', 'decimal', true],
+  // The view's pipeline name (`vwMLTrainingRuns.Pipeline`), which the generated entity carries and the gate world's rows hold.
+  ['Pipeline', 'nvarchar', true],
 ];
 
 /** A hand-written `EntityInfo` with an `ID` key and `columns`, every API flag open. */
@@ -138,7 +142,8 @@ export class GuardTestWorld {
 
   /** A field of the stored model row. */
   public ModelCell(id: string, field: string): Cell {
-    return this.row('MJ: ML Models', id)[field] ?? null;
+    const cell = this.row('MJ: ML Models', id)[field];
+    return cell === undefined ? null : cell;
   }
 
   /** Sets a field of the stored model row (what another session committed). */

@@ -18,7 +18,7 @@
  * Action seam (`new LifecycleGate(loader, clock, scoringActions)`), so the 30 s lock wait runs without waiting. The
  * context is `GateContexts.ForRequest({ ContextUser, Provider })` for the production seams.
  */
-import { LogError } from '@memberjunction/core';
+import { LogError, WellKnownUserSource } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -48,8 +48,8 @@ import type { IArtifactLoader } from '../scoring/types';
 import { TrainerModelLineageReader } from '../training/trainer-model-lineage';
 import { ArtifactRegistry } from './artifact-registry';
 import type {
-  ArtifactCheck, EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, LockResult, PublishApprover, PublishCheck, PublishOutcome, PublishRequest,
-  ScoringActionSync,
+  AppliedPublishPurpose, ArtifactCheck, EvaluateAttempt, EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, LockResult, PublishApprover, PublishCheck, PublishOutcome, PublishRequest,
+  RefusalWriteIdentity, ScoringActionSync,
 } from './gate-context';
 import { GateRefusals } from './gate-refusals';
 import { MonitoringJobs } from './monitoring-job';
@@ -63,7 +63,9 @@ import { StoredRowReads } from './stored-row-reads';
 
 /** Thrown by `Publish` for an ID that is not a UUID or names no model: there is no model row to record a refusal against. */
 export class LifecycleModelNotFoundError extends Error {
+  /** The refusal the error stands for, naming the ID. */
   public readonly Refusal: Extract<TransitionRefusal, { readonly kind: 'model-not-found' }>;
+  /** @param ModelID the ID that is not a UUID or names no ML Model */
   constructor(public readonly ModelID: string) {
     super(`Predictive Studio lifecycle gate: no ML Model has the ID '${ModelID}'`);
     this.name = 'LifecycleModelNotFoundError';
@@ -81,7 +83,40 @@ type PublishAttempt =
       readonly Artifact: ArtifactCheck | null;
       /** The persisted status the refused attempt saw; the refusal's `StatusReason` is written only while it still holds. */
       readonly SeenStatus: MJMLModelEntity['Status'];
+      /**
+       * True when the caller was refused for a missing grant ({@link LifecycleGate.CheckContextUserMayPublish}): the
+       * refusal's audit is then written with the gate's write identity, since the caller may not write it (D4-134, F6).
+       */
+      readonly MissingGrant: boolean;
     };
+
+/** One model-level Evaluate: evaluated (committed), or refused (rolled back) with what recording the refusal needs. */
+type EvaluateAttemptResult =
+  | { readonly Kind: 'evaluated'; readonly Outcome: Extract<EvaluateOutcome, { readonly Kind: 'evaluated' }> }
+  | {
+      readonly Kind: 'refused';
+      readonly Refusal: TransitionRefusal;
+      /** True for `publish-in-progress`: a retry may succeed. */
+      readonly Transient: boolean;
+      /** True when the caller lacks a grant Evaluate writes with ({@link LifecycleGate.EVALUATE_WRITES}): the record is written with the gate's identity (D4-134). */
+      readonly MissingGrant: boolean;
+    };
+
+/** A refusal of {@link LifecycleGate.CheckInitiator}, and whether it was for a missing grant (case (a)). */
+export interface InitiatorRefusal {
+  /** The `actor-not-permitted` refusal. */
+  readonly Refusal: TransitionRefusal;
+  /** True for case (a), a grant the publish writes with is missing: the refusal is written with the gate's write identity. */
+  readonly MissingGrant: boolean;
+}
+
+/** One permission a gate path writes with as the caller: the entity, and the grant the write needs. */
+export interface GateWritePermission {
+  /** The entity the path saves a row of. */
+  readonly EntityName: 'MJ: ML Models' | 'MJ: ML Output Bindings' | 'MJ: ML Model Publish Records' | 'MJ: Scheduled Jobs';
+  /** `CanCreate` for a new row, `CanUpdate` for a saved one. */
+  readonly Need: 'CanCreate' | 'CanUpdate';
+}
 
 /** A passing publish check. */
 type PassedCheck = Extract<PublishCheck, { readonly Ok: true }>;
@@ -114,21 +149,31 @@ export class LifecycleGate {
    * Draft → Validated | KeepBaseline from the run's stored gate decision (`model` → Validated, `keep-simple-baseline`
    * → KeepBaseline with the decision's reason as `StatusReason`). A `{ trainingRunId }` subject is resolved to the run's
    * `ResultingModelID`; a run with no model row (no-signal, or a kept incumbent-heuristic rule) changes no status and gets
-   * one run-level refusal record, however often it is evaluated. A model-level refusal writes no record. A model whose
+   * one run-level refusal record, however often it is evaluated (written with the gate's write identity for a caller
+   * who may not create it, D4-134). A caller without the permissions the status change writes with (`CanUpdate` on
+   * `MJ: ML Models`, `CanCreate` on `MJ: ML Output Bindings`) is refused `actor-not-permitted` before it.
+   *
+   * **A model-level refusal is recorded only inside a publish attempt (D4-143).** When `subject.AttemptPurpose` is set
+   * (only `AutomatedPublisher.EvaluateAndPublish` sets it), a `not-servable`, `gate-no-signal`, `calibration-held`,
+   * `actor-not-permitted` or (transient) `publish-in-progress` refusal is recorded as a withheld publish is
+   * ({@link recordWithheld}: one `refusal` record with `Purpose` the attempt's purpose, the model and its run, the
+   * caller's actor as initiator, and the model's `StatusReason`; the gate's write identity only for a missing grant),
+   * after Evaluate's transaction rolled back. `illegal-transition` (a resume's or a served model's re-run signal,
+   * D4-131/D4-133) and `model-not-found` are never recorded. A bare Evaluate records no model-level refusal. A model whose
    * `OutputSemantics` does not parse (empty or malformed) is refused `not-servable` before its status is written, so it
    * stays Draft (D4-129). An applied evaluation also creates the model's missing output bindings from its semantics
    * ({@link CreateOutputBindings}), in the same transaction; a refused one creates none. A publish, rollback or restore fills them again before its
    * semantics check (D4-112), so a model past Draft with none is never refused for rows only derived truth would hold.
    */
   public async Evaluate(subject: EvaluateSubject, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
-    if ('trainingRunId' in subject) return this.evaluateRun(subject.trainingRunId, actor, ctx);
-    return this.evaluateModel(subject.modelId, actor, ctx);
+    if ('trainingRunId' in subject) return this.evaluateRun(subject.trainingRunId, actor, ctx, subject.AttemptPurpose);
+    return this.evaluateModel(subject.modelId, actor, ctx, subject.AttemptPurpose);
   }
 
   /**
    * Validated / KeepBaseline → Published (`purpose: 'publish'`) or Archived → Published (`purpose: 'rollback'`), under
-   * the pipeline and model locks in one transaction: idempotency first (a retry of an applied run is
-   * `already-published`), then the persisted status, the stored inputs, the leakage flags and the publish checks; then
+   * the pipeline and model locks in one transaction: who started it first ({@link CheckInitiator}, before the locks),
+   * then idempotency (a retry of an applied run is `already-published`), then the persisted status, the stored inputs, the leakage flags and the publish checks; then
    * the status change with the archive of the replaced model, the `publish` record and the `Pending` monitoring job. A
    * refusal rolls the transaction back, and the refusal record and the model's `StatusReason` are written in a second one.
    * After an applied publish commits, the published model's scoring Action is generated and the replaced model's disabled.
@@ -183,6 +228,70 @@ export class LifecycleGate {
         `${this.clock.Now() - started} ms (${attempt.Attempts} attempts); refusing publish-in-progress. Last error: ${attempt.LastError}`,
     );
     return { Locked: false, Refusal: { kind: 'publish-in-progress' } };
+  }
+
+  /**
+   * Who may start this publish, checked first, before the locks (so it also covers R1's restore, which runs under
+   * them): `actor-not-permitted` naming the initiator's kind when
+   * - `ctx.ContextUser` lacks any permission the applied publish writes with ({@link CheckContextUserMayPublish},
+   *   D4-135): `MissingGrant` is true, and only this refusal is recorded with the gate's write identity
+   *   ({@link GateWriteContext}, D4-134);
+   * - a `rollback` is started by an `agent` or `system` initiator (§5.1: an automatic rollback comes from monitoring or
+   *   the registry job, a `scheduled-job` initiator, or from a user);
+   * - a `human` initiator names a user other than `ctx.ContextUser` (`ReverifyPublish` treats every `human` initiator as
+   *   an interactive request, which may publish a kept baseline, so a caller cannot claim to be another person).
+   *
+   * The two other cases come from a caller who holds every grant, so their refusal is written as that caller (and the
+   * Record Change names them; `MissingGrant` false). A sign-off of another model, or a reject, is not checked here: the sign-off lookup returns null for it, so a
+   * protocol that requires a sign-off withholds the publish `no-sign-off` ({@link FindRequestSignOff}).
+   */
+  protected CheckInitiator(request: PublishRequest, ctx: GateContext): InitiatorRefusal | null {
+    const permitted = this.CheckContextUserMayPublish(request.initiator, ctx);
+    if (permitted !== null) return { Refusal: permitted, MissingGrant: true };
+    const refused: InitiatorRefusal = { Refusal: { kind: 'actor-not-permitted', actor: request.initiator.kind }, MissingGrant: false };
+    if (request.purpose === 'rollback' && (request.initiator.kind === 'agent' || request.initiator.kind === 'system')) return refused;
+    if (request.initiator.kind === 'human' && !UUIDsEqual(request.initiator.userId, ctx.ContextUser.ID)) return refused;
+    return null;
+  }
+
+  /**
+   * Case (a) of {@link CheckInitiator} (D4-135): `actor-not-permitted` naming the initiator's kind unless
+   * `ctx.ContextUser` holds every permission a publish, rollback or restore writes with as the caller —
+   * {@link PUBLISH_WRITES}, kept beside {@link applyPublish}, the code that writes.
+   */
+  protected CheckContextUserMayPublish(initiator: Actor, ctx: GateContext): TransitionRefusal | null {
+    return this.CheckContextUserMayWrite(LifecycleGate.PUBLISH_WRITES, initiator, ctx);
+  }
+
+  /**
+   * `actor-not-permitted` naming the initiator's kind unless `ctx.ContextUser` holds every permission in `writes`
+   * (`EntityInfo.GetUserPermisions` per entity; an entity the provider does not know, or permissions that cannot be
+   * read, fail closed). The lists are {@link PUBLISH_WRITES}, {@link EVALUATE_WRITES} and {@link RUN_RECORD_WRITES}.
+   */
+  protected CheckContextUserMayWrite(writes: readonly GateWritePermission[], initiator: Actor, ctx: GateContext): TransitionRefusal | null {
+    const permitted = writes.every((w) => {
+      const permissions = ctx.Provider.EntityByName(w.EntityName)?.GetUserPermisions(ctx.ContextUser);
+      return permissions ? permissions[w.Need] === true : false;
+    });
+    return permitted ? null : { kind: 'actor-not-permitted', actor: initiator.kind };
+  }
+
+  /**
+   * The context the gate writes a refusal's audit as when the caller may not write it (D4-134): the MJ system user
+   * (`WellKnownUserSource.Instance.GetSystemUser(ctx.Provider)`, the server's own account) on the SAME provider and
+   * seams. The writes run in the refusal path's own short transaction (`recordWithheld`, after the attempt's rolled
+   * back; or `writeRunOutcome`'s). The row then records the gate as its writer, not the caller; the caller stays the
+   * record's `Initiator`.
+   *
+   * @throws Error when the provider offers no system user (a process with no server-side user source): the refusal of
+   *   a caller missing a grant cannot be recorded, and the attempt fails loudly rather than unrecorded
+   */
+  protected async GateWriteContext(ctx: GateContext): Promise<GateContext> {
+    const system = await WellKnownUserSource.Instance.GetSystemUser(ctx.Provider);
+    if (system === null) {
+      throw new Error('Predictive Studio lifecycle gate: no MJ system user is available on this provider, so the refusal of a caller missing a grant the gate writes with cannot be recorded');
+    }
+    return { ContextUser: system, Provider: ctx.Provider, EvidenceBuilder: ctx.EvidenceBuilder, SemanticsCheck: ctx.SemanticsCheck, SignOffLookup: ctx.SignOffLookup };
   }
 
   /** `illegal-transition` (naming both states, D4-90) unless the §5.1 table has a row from the model's persisted status to `to`. */
@@ -319,18 +428,29 @@ export class LifecycleGate {
   /**
    * Writes a `refusal` record. A `{ trainingRunId }` subject writes the run-level row (`ModelID` null, `Purpose = 'evaluate'`;
    * one per run, `UX_MLModelPublishRecord_OneRunOutcome`); a `{ modelId }` subject writes the model's row for `request`,
-   * with the model's training run. The approver is the one the attempt would have had.
+   * with the model's training run.
+   *
+   * **Identity.** The row is saved as `ctx.ContextUser`. With `identity: 'caller'` that is the caller and the approver is
+   * the one the attempt would have had (for a `human` initiator, the caller: `CheckInitiator` (c) makes them one). With `identity: 'gate'` `ctx` is {@link GateWriteContext}'s: the row is saved as
+   * the MJ system user (the gate's write identity, D4-134): for a caller refused for a missing publish grant
+   * ({@link PUBLISH_WRITES}), or a run-level record of a caller without `CanCreate` on `MJ: ML Model Publish Records`
+   * ({@link RUN_RECORD_WRITES}). Its `ApproverKind` is `automated-gate` and its `Initiator` stays the caller's actor.
    *
    * The insert's foreign-key check reads the model row, so it waits while another session holds that row with an
    * exclusive lock (it has written the row and not yet committed). The wait is not bounded: a stored query cannot carry
    * `SET LOCK_TIMEOUT`, and `RunQueryResult` carries no error number (owner flag OF4-12).
    *
-   * @throws Error when a `{ modelId }` subject comes with no request (a model-level Evaluate refusal writes no record)
+   * @throws Error when a `{ modelId }` subject comes with no request (a model-level refusal is always the refusal of a
+   *   publish request: a publish, or the publish attempt an Evaluate runs inside, D4-143)
    */
   protected async WriteRefusalRecord(
     subject: EvaluateSubject, initiator: Actor, request: PublishRequest | null, refusal: TransitionRefusal, transient: boolean, ctx: GateContext,
+    identity: RefusalWriteIdentity,
   ): Promise<string> {
-    const approver = LifecycleGate.approverOf(initiator, null);
+    // A human initiator's approver is the caller who saves the row: equal to `initiator.userId` for every attempt that
+    // passes `CheckInitiator` (c), and the honest name for its impersonation refusal, which names another user.
+    const approver: PublishApprover = identity === 'gate' ? { Kind: 'automated-gate' }
+      : initiator.kind === 'human' ? { Kind: 'user', UserID: ctx.ContextUser.ID } : LifecycleGate.approverOf(initiator, null);
     if ('trainingRunId' in subject) {
       return PublishRecords.WriteRefusal({ ModelID: null, TrainingRunID: subject.trainingRunId, Purpose: 'evaluate', Approver: approver, Initiator: initiator, Refusal: refusal, Transient: transient }, ctx);
     }
@@ -398,26 +518,31 @@ export class LifecycleGate {
   }
 
   /**
-   * One publish attempt under both locks; refusals return before anything is written. Idempotency first (R1, D4-92 M1):
+   * One publish attempt: the initiator checked before the locks ({@link CheckInitiator}), then under both locks;
+   * refusals return before anything is written. Idempotency first under the locks (R1, D4-92 M1):
    * a model that is Published now with an applied `publish` record for its run (or, for a rollback, with its own
    * `rollback` record) is `already-published`; a model with a `publish` record for its run whose status was changed
    * outside the gate to Validated or KeepBaseline is restored ({@link restorePublish}); a model that was published and
    * later archived is not re-published by a retry (that is a rollback, so `checkPurpose` refuses it).
    */
   private async attemptPublish(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<PublishAttempt> {
+    const initiator = this.CheckInitiator(request, ctx);
+    if (initiator !== null) return LifecycleGate.refusedAttempt(initiator.Refusal, false, null, model.Status, initiator.MissingGrant);
     const lock = await this.LockPipelineAndModel(model.PipelineID, model.ID, ctx);
-    if (lock.Locked === false) return LifecycleGate.refusedAttempt(lock.Refusal, lock.Refusal.kind === 'publish-in-progress', null, model.Status);
+    if (lock.Locked === false) return LifecycleGate.refusedAttempt(lock.Refusal, lock.Refusal.kind === 'publish-in-progress', null, model.Status, false);
     const locked = await this.readModel(model.ID, ctx);
-    if (locked === null) return LifecycleGate.refusedAttempt({ kind: 'model-not-found', modelId: model.ID }, false, null, model.Status);
+    if (locked === null) return LifecycleGate.refusedAttempt({ kind: 'model-not-found', modelId: model.ID }, false, null, model.Status, false);
     const prior = await this.findAppliedPublish(locked, request, ctx);
-    if (prior !== null && locked.Status === 'Published') return { Kind: 'applied', Outcome: { Kind: 'already-published', ModelID: locked.ID, PublishRecordID: prior.ID } };
+    if (prior !== null && locked.Status === 'Published') {
+      return { Kind: 'applied', Outcome: { Kind: 'already-published', Purpose: prior.Purpose, ModelID: locked.ID, PublishRecordID: prior.ID } };
+    }
     if (prior !== null && request.purpose === 'publish' && LifecycleGate.RESTORABLE_STATUSES.some((s) => s === locked.Status)) {
       return this.restorePublish(locked, request, prior.ID, ctx);
     }
     const before = this.CheckPersistedStatus(locked, 'Published') || (await this.checkPurpose(locked, request, ctx));
-    if (before !== null) return LifecycleGate.refusedAttempt(before, false, null, locked.Status);
+    if (before !== null) return LifecycleGate.refusedAttempt(before, false, null, locked.Status, false);
     const checked = await this.checkFromStoredRows(locked, request, ctx);
-    if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, locked.Status);
+    if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, locked.Status, false);
     return { Kind: 'applied', Outcome: await this.applyPublish(locked, request, checked, ctx) };
   }
 
@@ -440,8 +565,11 @@ export class LifecycleGate {
    * The applied publish a retry of `request` would repeat: the run's `publish` (or `adopt`) record for a publish
    * (`UX_MLModelPublishRecord_OnePublishPerRun`), the model's newest `rollback` record for a rollback; null for none.
    */
-  private async findAppliedPublish(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<{ readonly ID: string } | null> {
-    if (request.purpose === 'rollback') return PublishRecords.FindLatestApplied(model.ID, 'rollback', ctx);
+  private async findAppliedPublish(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<{ readonly ID: string; readonly Purpose: AppliedPublishPurpose } | null> {
+    if (request.purpose === 'rollback') {
+      const rollback = await PublishRecords.FindLatestApplied(model.ID, 'rollback', ctx);
+      return rollback === null ? null : { ID: rollback.ID, Purpose: 'rollback' };
+    }
     return model.TrainingRunID ? PublishRecords.FindPublishForRun(model.TrainingRunID, ctx) : null;
   }
 
@@ -452,16 +580,38 @@ export class LifecycleGate {
    */
   private async restorePublish(model: MJMLModelEntity, request: PublishRequest, recordId: string, ctx: GateContext): Promise<PublishAttempt> {
     const checked = await this.checkFromStoredRows(model, request, ctx);
-    if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, model.Status);
+    if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, model.Status, false);
     model.StatusReason = null;
     model.ArtifactStatus = 'verified';
     model.ArtifactCheckedAt = new Date();
     await this.ApplyTransition(model, 'Published', checked.Replaces, request.initiator, ctx);
     if ((await MonitoringJobs.OpenJobCount(model.ID, ctx)) === 0) await this.CreateMonitoringJob(model, ctx);
-    return { Kind: 'applied', Outcome: { Kind: 'published', ModelID: model.ID, PublishRecordID: recordId, Replaces: checked.Replaces, Approver: checked.Approver.Kind } };
+    return { Kind: 'applied', Outcome: { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: checked.Replaces, Approver: checked.Approver.Kind } };
   }
 
-  /** The writes of a passing publish, in the publish transaction. */
+  /**
+   * Every permission the applied publish path (a publish, a rollback, R1's restore) writes with as the caller, which
+   * {@link CheckContextUserMayPublish} requires before the locks. A write added to this path without its row here is a
+   * save the caller may be refused, after the attempt was let through; keep the two together.
+   * - `MJ: ML Models` `CanUpdate`: {@link ApplyTransition} saves the model's status (`saveAuthorised`), and first the
+   *   archived incumbent it replaces;
+   * - `MJ: ML Output Bindings` `CanCreate`: {@link CheckPublishable} fills the missing bindings ({@link CreateOutputBindings}, D4-112);
+   * - `MJ: ML Model Publish Records` `CanCreate`: {@link WritePublishRecord} (a publish or rollback; a restore writes none);
+   * - `MJ: Scheduled Jobs` `CanCreate`: {@link CreateMonitoringJob} (the published model's `Pending` monitoring job);
+   * - `MJ: Scheduled Jobs` `CanUpdate`: `MonitoringJobs.DisableForModel`, the replaced incumbent's job ({@link ApplyTransition}).
+   *
+   * Not listed: the scoring Action sync ({@link SyncScoringAction}) runs after the commit, logs a failure and never
+   * rolls a publish back, so a caller who cannot write `MJ: Actions` still publishes (the registry job resyncs it).
+   */
+  private static readonly PUBLISH_WRITES: readonly GateWritePermission[] = [
+    { EntityName: 'MJ: ML Models', Need: 'CanUpdate' },
+    { EntityName: 'MJ: ML Output Bindings', Need: 'CanCreate' },
+    { EntityName: 'MJ: ML Model Publish Records', Need: 'CanCreate' },
+    { EntityName: 'MJ: Scheduled Jobs', Need: 'CanCreate' },
+    { EntityName: 'MJ: Scheduled Jobs', Need: 'CanUpdate' },
+  ];
+
+  /** The writes of a passing publish, in the publish transaction (their permissions: {@link PUBLISH_WRITES}). */
   private async applyPublish(model: MJMLModelEntity, request: PublishRequest, check: PassedCheck, ctx: GateContext): Promise<Extract<PublishOutcome, { readonly Kind: 'published' }>> {
     model.StatusReason = null;
     model.ArtifactStatus = 'verified';
@@ -469,7 +619,7 @@ export class LifecycleGate {
     await this.ApplyTransition(model, 'Published', check.Replaces, request.initiator, ctx);
     const recordId = await this.WritePublishRecord(model, request, check, ctx);
     await this.CreateMonitoringJob(model, ctx);
-    return { Kind: 'published', ModelID: model.ID, PublishRecordID: recordId, Replaces: check.Replaces, Approver: check.Approver.Kind };
+    return { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: check.Replaces, Approver: check.Approver.Kind };
   }
 
   /**
@@ -486,17 +636,19 @@ export class LifecycleGate {
    * `RunQuery` as text only, because `RunQueryResult` carries no error number. This is owner flag OF4-12.
    */
   private async recordWithheld(modelId: string, request: PublishRequest, refused: Extract<PublishAttempt, { readonly Kind: 'refused' }>, ctx: GateContext): Promise<PublishOutcome> {
-    return ProviderTransactions.Run(ctx, `the refusal record of ML Model ${modelId}`, async () => {
-      const lock = await PublishLocks.RunStored(PUBLISH_LOCK_QUERIES.LockModel, { ModelID: modelId }, ctx);
+    const identity: RefusalWriteIdentity = refused.MissingGrant ? 'gate' : 'caller';
+    const writer = identity === 'gate' ? await this.GateWriteContext(ctx) : ctx;
+    return ProviderTransactions.Run(writer, `the refusal record of ML Model ${modelId}`, async () => {
+      const lock = await PublishLocks.RunStored(PUBLISH_LOCK_QUERIES.LockModel, { ModelID: modelId }, writer);
       const persisted = lock.Success ? LifecycleGate.persistedStatusOf(lock.Results[0]?.Status) : null;
       if (lock.Success === false) {
         LogError(`Predictive Studio lifecycle gate: the model lock of ML Model ${modelId} is held, so the ${refused.Refusal.kind} refusal is recorded without its StatusReason; last error: ${lock.ErrorMessage || 'unknown error'}`);
       } else if (persisted === refused.SeenStatus) {
-        await this.saveWithheldReason(modelId, request, refused, ctx);
+        await this.saveWithheldReason(modelId, request, refused, writer);
       }
-      const recordId = await this.WriteRefusalRecord({ modelId }, request.initiator, request, refused.Refusal, refused.Transient, ctx);
+      const recordId = await this.WriteRefusalRecord({ modelId }, request.initiator, request, refused.Refusal, refused.Transient, writer, identity);
       const withheld: PublishOutcome = {
-        Kind: 'withheld', ModelID: modelId, Status: persisted || refused.SeenStatus, Refusal: refused.Refusal, Transient: refused.Transient, RefusalRecordID: recordId,
+        Kind: 'withheld', Purpose: request.purpose, ModelID: modelId, Status: persisted || refused.SeenStatus, Refusal: refused.Refusal, Transient: refused.Transient, RefusalRecordID: recordId,
       };
       return withheld;
     });
@@ -514,53 +666,111 @@ export class LifecycleGate {
     if (!(await model.Save())) throw new Error(`Saving the StatusReason of ML Model ${modelId} failed: ${model.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 
-  /** A model-subject Evaluate: no record is written for a refusal. */
-  private async evaluateModel(modelId: string, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
+  /**
+   * A model-subject Evaluate. A model past Draft is `illegal-transition` first (so a resume can read its state); then a
+   * caller without Evaluate's write permissions ({@link EVALUATE_WRITES}) is `actor-not-permitted`, before any read of
+   * the run and any status write (D4-134). A refusal is recorded only when `attemptPurpose` is set and its kind is one
+   * {@link RECORDED_EVALUATE_REFUSALS} names ({@link recordEvaluateRefusal}, D4-143).
+   */
+  private async evaluateModel(modelId: string, actor: Actor, ctx: GateContext, attemptPurpose: EvaluateAttempt['AttemptPurpose']): Promise<EvaluateOutcome> {
     if (!IsValidUUID(modelId)) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId } };
     const model = await this.readModel(modelId, ctx);
     if (model === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId } };
+    const attempt = await this.attemptEvaluate(model, actor, ctx);
+    if (attempt.Kind === 'evaluated') return attempt.Outcome;
+    if (attemptPurpose !== undefined && LifecycleGate.RECORDED_EVALUATE_REFUSALS.includes(attempt.Refusal.kind)) {
+      await this.recordEvaluateRefusal(model, attemptPurpose, actor, attempt, ctx);
+    }
+    return { Kind: 'refused', Refusal: attempt.Refusal };
+  }
+
+  /**
+   * The model-level Evaluate refusals a publish attempt records (D4-143). Not `illegal-transition` (a resume's signal,
+   * D4-131, or a served model's re-run, D4-133) and not `model-not-found` (no model row to name).
+   */
+  private static readonly RECORDED_EVALUATE_REFUSALS: readonly TransitionRefusal['kind'][] = ['not-servable', 'gate-no-signal', 'calibration-held', 'actor-not-permitted', 'publish-in-progress'];
+
+  /** The model's Evaluate checks, then its status change under both locks in one transaction (rolled back on a refusal). */
+  private async attemptEvaluate(model: MJMLModelEntity, actor: Actor, ctx: GateContext): Promise<EvaluateAttemptResult> {
     const draft = this.CheckPersistedStatus(model, 'Validated');
-    if (draft !== null) return { Kind: 'refused', Refusal: draft };
+    if (draft !== null) return LifecycleGate.refusedEvaluate(draft, false);
+    const permitted = this.CheckContextUserMayWrite(LifecycleGate.EVALUATE_WRITES, actor, ctx);
+    if (permitted !== null) return LifecycleGate.refusedEvaluate(permitted, true);
     const run = model.TrainingRunID ? await StoredRuns.Read(model.TrainingRunID, ctx) : null;
-    if (run === null || run.Gate === null) return { Kind: 'refused', Refusal: { kind: 'not-servable', reason: `ML Model ${model.ID} has no stored gate decision to evaluate` } };
+    if (run === null || run.Gate === null) return LifecycleGate.refusedEvaluate({ kind: 'not-servable', reason: `ML Model ${model.ID} has no stored gate decision to evaluate` }, false);
     const target = LifecycleGate.evaluationTarget(run.Gate);
-    if (target === null) return { Kind: 'refused', Refusal: { kind: 'gate-no-signal', reason: run.Gate.reason.text } };
+    if (target === null) return LifecycleGate.refusedEvaluate({ kind: 'gate-no-signal', reason: run.Gate.reason.text }, false);
     const hold = target === 'Validated' ? TrainerModelLineageReader.CalibrationHoldOf(model.Lineage) : null;
-    if (hold !== null) return { Kind: 'refused', Refusal: { kind: 'calibration-held', slope: hold.slope } };
+    if (hold !== null) return LifecycleGate.refusedEvaluate({ kind: 'calibration-held', slope: hold.slope }, false);
     return ProviderTransactions.Run(ctx, `the evaluation of ML Model ${model.ID}`, () => this.evaluateLocked(model, target, run.Gate.reason.text, actor, ctx), (o) => o.Kind === 'evaluated');
   }
 
   /**
+   * Records a model-level Evaluate refusal of a publish attempt (D4-143) through the withheld publish's own path,
+   * {@link recordWithheld}: its own short transaction after Evaluate's rolled back, the model's `StatusReason` under the
+   * NOWAIT model lock while the model is still in the status Evaluate saw, and one `refusal` record with `Purpose` the
+   * attempt's purpose, the model and its training run, the caller's actor as initiator, `Transient` for
+   * `publish-in-progress`; written with the gate's identity only for a missing grant (D4-134).
+   */
+  private async recordEvaluateRefusal(
+    model: MJMLModelEntity, purpose: Extract<PublishRequest['purpose'], 'publish'>, actor: Actor, refused: Extract<EvaluateAttemptResult, { readonly Kind: 'refused' }>, ctx: GateContext,
+  ): Promise<void> {
+    const request: PublishRequest = { modelId: model.ID, purpose, initiator: actor, signOffId: null, reason: null };
+    const attempt: Extract<PublishAttempt, { readonly Kind: 'refused' }> = {
+      Kind: 'refused', Refusal: refused.Refusal, Transient: refused.Transient, Artifact: null, SeenStatus: model.Status, MissingGrant: refused.MissingGrant,
+    };
+    await this.recordWithheld(model.ID, request, attempt, ctx);
+  }
+
+  /**
+   * Every permission Evaluate's status change writes with as the caller ({@link evaluateLocked}), required before it:
+   * - `MJ: ML Models` `CanUpdate`: the model's Draft → Validated / KeepBaseline save ({@link ApplyTransition});
+   * - `MJ: ML Output Bindings` `CanCreate`: the model's missing bindings ({@link CreateOutputBindings}).
+   */
+  private static readonly EVALUATE_WRITES: readonly GateWritePermission[] = [
+    { EntityName: 'MJ: ML Models', Need: 'CanUpdate' },
+    { EntityName: 'MJ: ML Output Bindings', Need: 'CanCreate' },
+  ];
+
+  /**
+   * The permission a run-level record is written with as the caller ({@link writeRunOutcome}); a caller without it has
+   * the record written with the gate's write identity instead (D4-134):
+   * - `MJ: ML Model Publish Records` `CanCreate`.
+   */
+  private static readonly RUN_RECORD_WRITES: readonly GateWritePermission[] = [{ EntityName: 'MJ: ML Model Publish Records', Need: 'CanCreate' }];
+
+  /**
    * Evaluate's status change under both locks: re-checks the status the lock read, then parses the locked row's
    * `OutputSemantics` — one that does not parse is refused `not-servable` before anything is written (D4-129: Draft
-   * stays Draft; as for Evaluate's other model-level refusals, no record is written and the transaction rolls back
-   * empty) — then writes the status and creates the model's missing output bindings from the parsed semantics.
+   * stays Draft and the transaction rolls back empty; inside a publish attempt the refusal is then recorded after the
+   * rollback, as `publish-in-progress` is, transiently, D4-143) — then writes the status and creates the model's
+   * missing output bindings from the parsed semantics.
    */
   private async evaluateLocked(
     model: MJMLModelEntity, to: Extract<MJMLModelEntity['Status'], 'Validated' | 'KeepBaseline'>, reason: string, actor: Actor, ctx: GateContext,
-  ): Promise<EvaluateOutcome> {
+  ): Promise<EvaluateAttemptResult> {
     const lock = await this.LockPipelineAndModel(model.PipelineID, model.ID, ctx);
-    if (lock.Locked === false) return { Kind: 'refused', Refusal: lock.Refusal };
+    if (lock.Locked === false) return LifecycleGate.refusedEvaluate(lock.Refusal, false);
     const locked = await this.readModel(model.ID, ctx);
-    if (locked === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: model.ID } };
+    if (locked === null) return LifecycleGate.refusedEvaluate({ kind: 'model-not-found', modelId: model.ID }, false);
     const status = this.CheckPersistedStatus(locked, to);
-    if (status !== null) return { Kind: 'refused', Refusal: status };
+    if (status !== null) return LifecycleGate.refusedEvaluate(status, false);
     const semantics = RegistrySchemas.ParseOutputSemantics(locked.OutputSemantics);
     if (semantics.Ok === false) {
-      return { Kind: 'refused', Refusal: { kind: 'not-servable', reason: `ML Model ${locked.ID}'s OutputSemantics does not parse: ${semantics.Errors.join('; ')}` } };
+      return LifecycleGate.refusedEvaluate({ kind: 'not-servable', reason: `ML Model ${locked.ID}'s OutputSemantics does not parse: ${semantics.Errors.join('; ')}` }, false);
     }
     locked.StatusReason = reason;
     await this.ApplyTransition(locked, to, null, actor, ctx);
     await this.CreateOutputBindings(locked, semantics.Value, ctx);
-    return { Kind: 'evaluated', ModelID: locked.ID, From: 'Draft', To: to };
+    return { Kind: 'evaluated', Outcome: { Kind: 'evaluated', ModelID: locked.ID, From: 'Draft', To: to } };
   }
 
   /** A run-subject Evaluate: the run's model when it has one, else the one run-level record of its outcome. */
-  private async evaluateRun(trainingRunId: string, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
+  private async evaluateRun(trainingRunId: string, actor: Actor, ctx: GateContext, attemptPurpose: EvaluateAttempt['AttemptPurpose']): Promise<EvaluateOutcome> {
     if (!IsValidUUID(trainingRunId)) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: trainingRunId } };
     const run = await StoredRuns.Read(trainingRunId, ctx);
     if (run === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: trainingRunId } };
-    if (run.ResultingModelID) return this.evaluateModel(run.ResultingModelID, actor, ctx);
+    if (run.ResultingModelID) return this.evaluateModel(run.ResultingModelID, actor, ctx, attemptPurpose);
     if (run.Gate === null) return { Kind: 'refused', Refusal: { kind: 'not-servable', reason: `ML Training Run ${trainingRunId} has no stored gate decision` } };
     const refusal = LifecycleGate.runLevelRefusal(run.Gate);
     if (refusal === null) return { Kind: 'refused', Refusal: { kind: 'not-servable', reason: `ML Training Run ${trainingRunId}'s decision ships a model, but the run has no model row` } };
@@ -572,11 +782,14 @@ export class LifecycleGate {
   /**
    * Writes the run's one run-level record. Two evaluations of one run can both find none and both insert; the loser's
    * insert is refused by `UX_MLModelPublishRecord_OneRunOutcome`, so a failed write re-reads the run's outcome and
-   * returns the winner's record, and rethrows only when there is still none.
+   * returns the winner's record, and rethrows only when there is still none. A caller without the permission to create
+   * the record ({@link RUN_RECORD_WRITES}) has it written with the gate's write identity ({@link GateWriteContext}, D4-134).
    */
   private async writeRunOutcome(trainingRunId: string, actor: Actor, refusal: TransitionRefusal, ctx: GateContext): Promise<string> {
+    const identity: RefusalWriteIdentity = this.CheckContextUserMayWrite(LifecycleGate.RUN_RECORD_WRITES, actor, ctx) === null ? 'caller' : 'gate';
+    const writer = identity === 'gate' ? await this.GateWriteContext(ctx) : ctx;
     try {
-      return await ProviderTransactions.Run(ctx, `the run-level record of ML Training Run ${trainingRunId}`, () => this.WriteRefusalRecord({ trainingRunId }, actor, null, refusal, false, ctx));
+      return await ProviderTransactions.Run(writer, `the run-level record of ML Training Run ${trainingRunId}`, () => this.WriteRefusalRecord({ trainingRunId }, actor, null, refusal, false, writer, identity));
     } catch (error) {
       const winner = await PublishRecords.FindRunOutcome(trainingRunId, ctx);
       if (winner !== null) return winner.ID;
@@ -714,7 +927,7 @@ export class LifecycleGate {
         // after the run trained): the refusal names that model, so the record says which row the publish would replace.
         return inputs.CurrentPublishedModelID === null
           ? { kind: 'not-servable', reason: `publish re-verification refused (${r.Reason}): ${r.Detail}` }
-          : { kind: 'not-servable', reason: `the training run stored no comparison with ML Model ${inputs.CurrentPublishedModelID}, which is Published now; retrain to compare with it` };
+          : { kind: 'not-servable', reason: `the training run stored no comparison with ML Model ${inputs.CurrentPublishedModelID}, which is Published now; retrain to compare with it, or, when its artifact is missing (so training cannot use it as an incumbent), the registry check job archives it` };
       default:
         return { kind: 'not-servable', reason: `publish re-verification refused (${r.Reason}): ${r.Detail}` };
     }
@@ -730,8 +943,13 @@ export class LifecycleGate {
     return { Ok: false, Refusal: refusal, Transient: false, Artifact: null };
   }
 
-  private static refusedAttempt(refusal: TransitionRefusal, transient: boolean, artifact: ArtifactCheck | null, seen: MJMLModelEntity['Status']): PublishAttempt {
-    return { Kind: 'refused', Refusal: refusal, Transient: transient, Artifact: artifact, SeenStatus: seen };
+  /** A refused Evaluate; `Transient` is true only for `publish-in-progress` (a retry may succeed). */
+  private static refusedEvaluate(refusal: TransitionRefusal, missingGrant: boolean): EvaluateAttemptResult {
+    return { Kind: 'refused', Refusal: refusal, Transient: refusal.kind === 'publish-in-progress', MissingGrant: missingGrant };
+  }
+
+  private static refusedAttempt(refusal: TransitionRefusal, transient: boolean, artifact: ArtifactCheck | null, seen: MJMLModelEntity['Status'], missingGrant: boolean): PublishAttempt {
+    return { Kind: 'refused', Refusal: refusal, Transient: transient, Artifact: artifact, SeenStatus: seen, MissingGrant: missingGrant };
   }
 
   private static isRefusal(x: StoredPublishInputs | TransitionRefusal): x is TransitionRefusal {

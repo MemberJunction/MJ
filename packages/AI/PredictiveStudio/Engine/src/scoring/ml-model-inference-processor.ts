@@ -223,9 +223,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   }
 
   /**
-   * Warm-load the model, training it first when the run opted into auto-train and the model needs training: it was
-   * never trained ({@link ModelNeedsTrainingError}) or its artifact is lost (`artifact-missing`). A changed or
-   * unregistered artifact (`artifact-hash-mismatch`, `artifact-unverified`) is refused, never retrained over.
+   * Warm-load the model, training it first when the run opted into auto-train and the model needs training
+   * ({@link MLModelInferenceProcessor.IsAutoTrainable}): it was never trained ({@link ModelNeedsTrainingError}), its
+   * artifact is lost (`artifact-missing`), or it is not Published (`model-not-published`: a status that may not score,
+   * {@link ModelNotScorableError}). A changed or unregistered artifact (`artifact-hash-mismatch`, `artifact-unverified`)
+   * is refused, never retrained over. Auto-train serves the pipeline's Published model, resumes a withheld publish, or
+   * trains and publishes; its run is attributed to this Process Run.
    */
   private async loadForPreflight(context: RecordProcessorContext): Promise<LoadedModel> {
     try {
@@ -233,18 +236,21 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      const trainable = err instanceof ModelNeedsTrainingError || (err instanceof ArtifactUnavailableError && err.Refusal.kind === 'artifact-missing');
-      if (!trainable || context.DryRun || !this.autoTrain || !this.autoTrainer) {
+      if (!(err instanceof Error) || !MLModelInferenceProcessor.IsAutoTrainable(err) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
-    // Opt-in train-if-untrained: train the declared pipeline, publish, repoint, then score with it.
+    // Opt-in train-if-untrained: serve the pipeline's Published model (reused, resumed, or trained and published),
+    // repoint, then score with it.
     this.modelId = await this.autoTrainer.EnsureTrainedModel(
       {
         pipelineId: this.autoTrain.pipelineId,
         currentModelId: this.modelId || null,
-        recordProcessId: context.RecordProcessID ?? this.recordProcessId ?? null,
+        recordProcessId: context.RecordProcessID || this.recordProcessId || null,
         binding: this.autoTrain.binding,
+        processRunId: context.ProcessRunID,
+        retryAfterHours: this.autoTrain.retryAfterHours,
+        notifyOnWithheld: this.autoTrain.notifyOnWithheld,
       },
       context.ContextUser,
       context.Provider,
@@ -255,6 +261,16 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       this.resetModelCache();
       throw err;
     }
+  }
+
+  /**
+   * Whether a Preflight load failure is one auto-train answers: the model needs training, its artifact is missing, or
+   * its status is not Published (`model-not-published`). Pure.
+   */
+  public static IsAutoTrainable(err: Error): boolean {
+    return err instanceof ModelNeedsTrainingError
+      || err instanceof ModelNotScorableError
+      || (err instanceof ArtifactUnavailableError && err.Refusal.kind === 'artifact-missing');
   }
 
   /**

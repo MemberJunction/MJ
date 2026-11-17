@@ -1,7 +1,14 @@
 /**
  * `GateTestStore` — the lifecycle gate's fake provider over in-memory rows (Task M3.2), and `GateWorld`, the stored rows
  * of one pipeline that the gate tests act on. The store answers `RunView` (evaluating the `Field='v'`, `Field=n` and
- * `Field IN (…)` clauses the registry writes, case-insensitively as SQL Server's collation does), `GetEntityObject`,
+ * `Field IN (…)` clauses the registry writes, and `Field IN (SELECT ID FROM [__mj].[<view>] WHERE Col='v')` over the
+ * entities {@link GateTestStore.BaseViews} names, case-insensitively as SQL Server's collation does), `GetEntityObject`,
+ * `EntityByName` for the entities {@link GateTestStore.PermissionedEntities} names, with their permissions from
+ * {@link GateTestStore.EntityPermissions} ({@link GateWorld.User}'s role holds every grant, {@link GateTestStore.UserWithPermissions}
+ * makes a user with others; any other name throws, so a test cannot silently get `undefined`), and a `Save()` of one
+ * of those entities that refuses, as `BaseEntity.Save` does, a user without `CanCreate` (a new row) or `CanUpdate`
+ * (and a publish record SQL Server's constraints would refuse, {@link GateTestStore.ConstraintRefusal}, and the one save a
+ * test set to fail, {@link GateTestStore.FailNext}),
  * `RunQuery` for the three stored lock/version Queries and entity transactions (a transaction snapshots every table at
  * its outermost begin and a rollback restores the snapshot). Every read is appended to {@link GateTestStore.Reads} and
  * every save counted, so a test can assert "one read" or "read after the locks". Entity rows are handed to the gate as
@@ -10,7 +17,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
-import { IsPlatformSQL, UserInfo, type EntityTransactionScope, type IMetadataProvider, type RunQueryParams, type RunQueryResult, type RunViewParams } from '@memberjunction/core';
+import {
+  EntityInfo, IsPlatformSQL, UserInfo, UserRoleInfo, type EntityTransactionScope, type IMetadataProvider, type RunQueryParams, type RunQueryResult, type RunViewParams,
+} from '@memberjunction/core';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
@@ -43,7 +52,7 @@ export type Cell = string | number | boolean | null | Date;
 export type Row = Record<string, Cell>;
 
 /** The members of a fake entity that are not columns. */
-const RECORD_MEMBERS = new Set(['Save', 'Delete', 'NewRecord', 'LatestResult', 'IsSaved', 'then']);
+const RECORD_MEMBERS = new Set(['Save', 'Delete', 'Load', 'NewRecord', 'LatestResult', 'IsSaved', 'then']);
 /** The generated `<Column>Object` accessors of JSON-typed columns, answered with the column's parsed JSON (null when unset). */
 const JSON_OBJECT_ACCESSORS = new Set(['RefusalObject', 'EvidenceObject', 'InitiatorObject', 'GateDecisionObject']);
 /** The database defaults a save fills when a new row leaves them unset (`DF_MLModelPublishRecord_RecordedAt`). */
@@ -84,8 +93,35 @@ export class FakeClock implements GateClock {
 /** The binary task every gate-world model scores. */
 export const GATE_TASK: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 };
 
+/** One role's grant on an entity, as an `MJ: Entity Permissions` row holds it. */
+export interface EntityGrant {
+  readonly CanCreate: boolean;
+  readonly CanRead: boolean;
+  readonly CanUpdate: boolean;
+  readonly CanDelete: boolean;
+}
+
 /** The in-memory provider. */
 export class GateTestStore {
+  /** The entities the provider describes (`EntityByName`), by name, with their IDs; their saves enforce permissions. */
+  public static readonly PermissionedEntities: Readonly<Record<string, string>> = {
+    'MJ: ML Models': '6A1D2E3F-0000-4000-8000-0000000000E1',
+    'MJ: ML Model Publish Records': '6A1D2E3F-0000-4000-8000-0000000000E3',
+    'MJ: ML Training Runs': '6A1D2E3F-0000-4000-8000-0000000000E4',
+    'MJ: ML Output Bindings': '6A1D2E3F-0000-4000-8000-0000000000E5',
+    'MJ: Scheduled Jobs': '6A1D2E3F-0000-4000-8000-0000000000E6',
+  };
+  /**
+   * The base view of each entity a filter may name in a `Field IN (SELECT ID FROM [__mj].[<view>] WHERE Col='v')`
+   * subquery (auto-train's refusal read of a pipeline's runs); {@link EntityInfoOf} reports it with schema `__mj`.
+   */
+  public static readonly BaseViews: Readonly<Record<string, string>> = { 'MJ: ML Training Runs': 'vwMLTrainingRuns' };
+  /** The role {@link GateWorld.User} holds; every entity of {@link PermissionedEntities} grants it every permission (the gate's write lists included). */
+  public static readonly FullRoleID = '6A1D2E3F-0000-4000-8000-0000000000E2';
+  /** The entity permission rows the provider's entities answer `GetUserPermisions` from, by entity name and role. */
+  public readonly EntityPermissions: (EntityGrant & { readonly EntityName: string; readonly RoleID: string })[] = Object.keys(GateTestStore.PermissionedEntities).map((EntityName) => ({
+    EntityName, RoleID: GateTestStore.FullRoleID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true,
+  }));
   /** Rows by entity name. */
   public Tables: Record<string, Row[]> = {};
   /** Every read, in order: `view <entity> <filter>` or `query <name>`. */
@@ -94,6 +130,8 @@ export class GateTestStore {
   public readonly ReadLog = new ReadLog(this.Reads);
   /** Every save, in order: `<entity> <ID>`. */
   public readonly Saves: string[] = [];
+  /** The same saves with the user each was saved as: `<entity> <ID> <user ID>`. */
+  public readonly SavedAs: string[] = [];
   /**
    * A stale copy of tables, as a RunView cache would hold it after an out-of-band write: a RunView WITHOUT `BypassCache`
    * reads an entity's rows from here when the entity has an entry; a read with `BypassCache` (and every write) uses
@@ -110,6 +148,8 @@ export class GateTestStore {
   public QueryThrows: string | null = null;
   /** Entity names whose saves fail, with the message. */
   public readonly FailingSaves = new Map<string, string>();
+  /** The next save of each listed entity fails once ({@link FailNext}), with the message; consumed by that save. */
+  private readonly failNextSaves: { readonly EntityName: string; readonly Message: string }[] = [];
   /** Called at the start of each save (before a configured failure) with the entity name and the record being saved. */
   public OnSave: ((entityName: string, record: object) => void) | null = null;
   /** The world whose rows the store holds; {@link PinProtocol} and {@link FlagLeakage} act on it. */
@@ -152,9 +192,26 @@ export class GateTestStore {
     return parsed.Value;
   }
 
+  /**
+   * Makes the next save of `entityName` fail once, as a database write refused mid-transaction does (`Save()` false
+   * with `message`); later saves of the entity succeed. The plan's `provider.FailNextSaveOf(...)` (D4-139). Reads are
+   * failed with {@link ReadLog.FailNext} instead.
+   */
+  public FailNext(entityName: string, message = `GateTestStore: the save of ${entityName} failed`): void {
+    this.failNextSaves.push({ EntityName: entityName, Message: message });
+  }
+
+  /** @internal the message of a one-shot save failure set for `entityName` ({@link FailNext}), consumed; null when none */
+  public TakeSaveFailure(entityName: string): string | null {
+    const at = this.failNextSaves.findIndex((f) => f.EntityName === entityName);
+    if (at < 0) return null;
+    const [failure] = this.failNextSaves.splice(at, 1);
+    return failure.Message;
+  }
+
   /** The model's persisted status. */
   public Status(modelId: string): Cell {
-    return this.Row('MJ: ML Models', modelId)?.['Status'] ?? null;
+    return GateTestStore.cellOrNull(this.Row('MJ: ML Models', modelId)?.['Status']);
   }
 
   /** Sets the model's persisted status directly, as a write outside the gate would (a test's starting state). */
@@ -166,7 +223,7 @@ export class GateTestStore {
 
   /** The model's persisted `StatusReason`. */
   public StatusReason(modelId: string): Cell {
-    return this.Row('MJ: ML Models', modelId)?.['StatusReason'] ?? null;
+    return GateTestStore.cellOrNull(this.Row('MJ: ML Models', modelId)?.['StatusReason']);
   }
 
   /** The model's publish records. */
@@ -182,6 +239,120 @@ export class GateTestStore {
   /** The model's output-binding rows (`MJ: ML Output Bindings`). */
   public OutputBindings(modelId: string): Row[] {
     return (this.Tables['MJ: ML Output Bindings'] || []).filter((r) => UUIDsEqual(String(r['ModelID']), modelId));
+  }
+
+  /** The `MJ: Record Processes` row with this ID, as auto-train repoints it. */
+  public RecordProcess(id: string): { readonly ID: string; readonly Configuration: string | null } {
+    const row = this.Row('MJ: Record Processes', id);
+    if (!row) throw new Error(`GateTestStore: no Record Process ${id}`);
+    const configuration = row['Configuration'];
+    return { ID: String(row['ID']), Configuration: typeof configuration === 'string' ? configuration : null };
+  }
+
+  /** The pipeline's `MJ: ML Training Runs` rows, in the order they were saved. */
+  public TrainingRuns(pipelineId: string): Row[] {
+    return (this.Tables['MJ: ML Training Runs'] || []).filter((r) => UUIDsEqual(String(r['PipelineID']), pipelineId));
+  }
+
+  /**
+   * A model of the pipeline in `Status` with a stored, verifiable artifact and no training run row (a reuse candidate,
+   * or a configured model): see {@link GateWorld.AddModel}.
+   */
+  public AddModel(pipelineId: string, o: { readonly Status: string; readonly ArtifactStatus: string }): WorldModel {
+    return this.world().AddModel(pipelineId, o.Status, o.ArtifactStatus);
+  }
+
+  /** The `MJ: User Notifications` rows sent to `userId`, in the order they were saved. */
+  public Notifications(userId: string): Row[] {
+    return (this.Tables['MJ: User Notifications'] || []).filter((r) => UUIDsEqual(String(r['UserID']), userId));
+  }
+
+  /**
+   * Stores a person's `sign-off` record of the model (approver {@link GateWorld.User}) with the given decision, over
+   * evidence whose hash is `evidenceSha256` (default: a hash no rebuilt evidence has), and returns its ID.
+   */
+  public SignOff(modelId: string, decision: 'approve' | 'reject', evidenceSha256 = '0'.repeat(64)): string {
+    const id = randomUUID().toUpperCase();
+    this.Insert('MJ: ML Model Publish Records', {
+      ID: id, ModelID: modelId, TrainingRunID: GateTestStore.cellOrNull(this.Row('MJ: ML Models', modelId)?.['TrainingRunID']), Kind: 'sign-off', Purpose: 'publish',
+      ApproverKind: 'user', UserID: GateWorld.User.ID, Initiator: JSON.stringify({ kind: 'human', userId: GateWorld.User.ID }), Decision: decision, Reason: 'reviewed',
+      Evidence: JSON.stringify({}), EvidenceSha256: evidenceSha256, OverridesFlags: '[]', RecordedAt: new Date(),
+    });
+    return id;
+  }
+
+  /**
+   * A user holding one new role, which the store's entities grant exactly `grants` (the provider's `EntityByName`
+   * answers `GetUserPermisions` from {@link EntityPermissions}; an entity `grants` does not name grants that role nothing).
+   */
+  public UserWithPermissions(grants: Readonly<Record<string, Partial<EntityGrant>>>): UserInfo {
+    const roleId = randomUUID().toUpperCase();
+    for (const [entityName, grant] of Object.entries(grants)) {
+      this.EntityPermissions.push({ EntityName: entityName, RoleID: roleId, CanCreate: grant.CanCreate === true, CanRead: grant.CanRead === true, CanUpdate: grant.CanUpdate === true, CanDelete: grant.CanDelete === true });
+    }
+    const userId = randomUUID().toUpperCase();
+    return new UserInfo(null, { ID: userId, Email: `gate-tests-${userId}@example.com`, Type: 'User', UserRoles: [new UserRoleInfo({ UserID: userId, RoleID: roleId })] });
+  }
+
+  /**
+   * One of {@link PermissionedEntities} as the provider describes it: every API allowed, its permissions from
+   * {@link EntityPermissions}; null for an entity the store does not describe.
+   */
+  public EntityInfoOf(entityName: string, provider?: IMetadataProvider): EntityInfo | null {
+    const name = Object.keys(GateTestStore.PermissionedEntities).find((n) => n.toLowerCase() === entityName.trim().toLowerCase());
+    if (name === undefined) return null;
+    const entityId = GateTestStore.PermissionedEntities[name];
+    const permissions = this.EntityPermissions.filter((p) => p.EntityName === name).map((p) => ({ ...p, ID: randomUUID().toUpperCase(), EntityID: entityId, Type: 'Allow' }));
+    return new EntityInfo({ ID: entityId, Name: name, SchemaName: '__mj', BaseView: GateTestStore.BaseViews[name] || null, AllowCreateAPI: true, AllowUpdateAPI: true, AllowDeleteAPI: true, EntityPermissions: permissions }, provider);
+  }
+
+  /**
+   * Why `user` may not save a row of `entityName` (`CanCreate` for a new row, `CanUpdate` for a saved one), as
+   * `BaseEntity.Save`'s permission check words it; null when it may, or when the store does not describe the entity.
+   */
+  public SaveRefusal(entityName: string, user: UserInfo | undefined, isNew: boolean): string | null {
+    const entity = this.EntityInfoOf(entityName);
+    if (entity === null) return null;
+    if (user === undefined) return `GateTestStore: a save of ${entityName} has no user`;
+    const permissions = entity.GetUserPermisions(user);
+    const allowed = isNew ? permissions.CanCreate : permissions.CanUpdate;
+    return allowed ? null : `User: ${user.Email} (ID: ${user.ID}) does not have ${isNew ? 'create' : 'update'} permissions on ${entityName}`;
+  }
+
+  /**
+   * Why SQL Server would refuse to store `values` as a row of `entityName`, worded as SQL Server words it; null when it
+   * would not, or when the store emulates no constraint of the entity. For `MJ: ML Model Publish Records` it emulates
+   * the constraints of `migrations/v6/V202611150901__v6.3.x__PS_Honest_Serving_Schema.sql` that decide which refusal
+   * records the gate may write:
+   * - `CK_MLModelPublishRecord_RunLevel` (`:57-58`): `([ModelID] IS NOT NULL AND [Purpose] <> 'evaluate')
+   *   OR ([ModelID] IS NULL AND [Kind] = 'refusal' AND [Purpose] = 'evaluate')`;
+   * - `UX_MLModelPublishRecord_OnePublishPerRun` (`:80-82`): unique `[TrainingRunID]`
+   *   `WHERE [Kind] = 'publish' AND [Purpose] IN ('publish', 'adopt') AND [TrainingRunID] IS NOT NULL`;
+   * - `UX_MLModelPublishRecord_OneRunOutcome` (`:84-86`): unique `[TrainingRunID]`
+   *   `WHERE [Purpose] = 'evaluate' AND [TrainingRunID] IS NOT NULL`.
+   * An update of a stored row is checked against the other rows only. The CHECK message names the statement
+   * (`INSERT` for a new row, `UPDATE` for a stored one), as SQL Server's does.
+   */
+  public ConstraintRefusal(entityName: string, values: Row, isNew: boolean): string | null {
+    if (entityName !== 'MJ: ML Model Publish Records') return null;
+    const hasModel = values['ModelID'] !== null && values['ModelID'] !== undefined;
+    const runLevel = hasModel ? values['Purpose'] !== 'evaluate' : values['Kind'] === 'refusal' && values['Purpose'] === 'evaluate';
+    if (!runLevel) {
+      return `The ${isNew ? 'INSERT' : 'UPDATE'} statement conflicted with the CHECK constraint "CK_MLModelPublishRecord_RunLevel". The conflict occurred in table "__mj.MLModelPublishRecord".`;
+    }
+    const runId = values['TrainingRunID'];
+    if (runId === null || runId === undefined) return null;
+    const indexes: ReadonlyArray<readonly [string, (r: Row) => boolean]> = [
+      ['UX_MLModelPublishRecord_OnePublishPerRun', (r) => r['Kind'] === 'publish' && (r['Purpose'] === 'publish' || r['Purpose'] === 'adopt')],
+      ['UX_MLModelPublishRecord_OneRunOutcome', (r) => r['Purpose'] === 'evaluate'],
+    ];
+    const others = (this.Tables[entityName] || []).filter((r) => !(values['ID'] && UUIDsEqual(String(r['ID']), String(values['ID']))));
+    for (const [index, covers] of indexes) {
+      if (covers(values) && others.some((r) => covers(r) && r['TrainingRunID'] !== null && r['TrainingRunID'] !== undefined && UUIDsEqual(String(r['TrainingRunID']), String(runId)))) {
+        return `Cannot insert duplicate key row in object '__mj.MLModelPublishRecord' with unique index '${index}'. The duplicate key value is (${String(runId)}).`;
+      }
+    }
+    return null;
   }
 
   /** The scheduled jobs whose configuration names the model. */
@@ -282,20 +453,21 @@ export class GateTestStore {
   }
 
   /** @internal the provider's RunView */
-  public RunViewRows(params: RunViewParams): { Success: boolean; Results: object[]; TotalRowCount: number; ErrorMessage: string } {
+  public RunViewRows(params: RunViewParams, contextUser?: UserInfo): { Success: boolean; Results: object[]; TotalRowCount: number; ErrorMessage: string } {
     const filter = GateTestStore.textOf(params.ExtraFilter);
     const orderBy = GateTestStore.textOf(params.OrderBy);
     this.Reads.push(`view ${params.EntityName} ${filter}`);
     this.ViewReads.push({ EntityName: params.EntityName || '', BypassCache: params.BypassCache === true });
     if (this.ReadLog.TakeFailure(params.EntityName || '')) return { Success: false, Results: [], TotalRowCount: 0, ErrorMessage: `GateTestStore: the read of ${params.EntityName} failed` };
-    const predicates = filter.split(' AND ').filter((c) => c.trim().length > 0).map((c) => GateTestStore.clause(c.trim()));
+    const predicates = filter.split(' AND ').filter((c) => c.trim().length > 0).map((c) => this.clause(c.trim()));
     const cached = params.BypassCache === true ? undefined : this.CachedTables[params.EntityName || ''];
     let rows = (cached || this.Tables[params.EntityName || ''] || []).filter((r) => predicates.every((p) => p(r)));
     if (orderBy.includes('RecordedAt DESC')) rows = [...rows].reverse();   // rows are appended in RecordedAt order
+    else rows = GateTestStore.ordered(rows, orderBy);
     if (params.MaxRows) rows = rows.slice(0, params.MaxRows);
     const results = params.ResultType === 'entity_object'
-      ? rows.map((r) => this.record(params.EntityName || '', { ...r }, true))
-      : rows.map((r) => (params.Fields ? Object.fromEntries(params.Fields.map((f) => [f, r[f] ?? null])) : { ...r }));
+      ? rows.map((r) => this.record(params.EntityName || '', { ...r }, true, contextUser))
+      : rows.map((r) => (params.Fields ? Object.fromEntries(params.Fields.map((f) => [f, GateTestStore.cellOrNull(r[f])])) : { ...r }));
     return { Success: true, Results: results, TotalRowCount: results.length, ErrorMessage: '' };
   }
 
@@ -329,6 +501,13 @@ export class GateTestStore {
         const model = this.Row('MJ: ML Models', p['ModelID']);
         return model ? [{ Status: model['Status'] }] : [];
       }
+      case 'Predictive Studio: Running Training Run': {
+        const after = Date.parse(p['StartedAfter']);
+        const running = this.TrainingRuns(p['PipelineID'])
+          .filter((r) => r['Status'] === 'Running' && r['StartedAt'] instanceof Date && r['StartedAt'].getTime() > after)
+          .sort((a, b) => Number(b['StartedAt'] instanceof Date ? b['StartedAt'].getTime() : 0) - Number(a['StartedAt'] instanceof Date ? a['StartedAt'].getTime() : 0));
+        return running.slice(0, 1).map((r) => ({ ID: r['ID'], StartedAt: r['StartedAt'] }));
+      }
       case 'Predictive Studio: Next Model Version': {
         const versions = (this.Tables['MJ: ML Models'] || []).filter((m) => UUIDsEqual(String(m['PipelineID']), p['PipelineID'])).map((m) => Number(m['Version']));
         return [{ NextVersion: Math.max(0, ...versions) + 1 }];
@@ -339,19 +518,19 @@ export class GateTestStore {
   }
 
   /** @internal a new, unsaved record of `entityName` */
-  public NewRecordOf(entityName: string): object {
-    return this.record(entityName, {}, false);
+  public NewRecordOf(entityName: string, contextUser?: UserInfo): object {
+    return this.record(entityName, {}, false, contextUser);
   }
 
   /** A field bag behind a Proxy: column reads and writes go to `values`; `Save()` writes the row back. */
-  private record(entityName: string, values: Row, saved: boolean): object {
+  private record(entityName: string, values: Row, saved: boolean, contextUser: UserInfo | undefined): object {
     const store = this;
     const state: { saved: boolean; latest: { CompleteMessage: string } | null } = { saved, latest: null };
     const target = {
       async Save(): Promise<boolean> {
         store.OnSave?.(entityName, proxy);
-        const failure = store.FailingSaves.get(entityName);
-        if (failure !== undefined) {
+        const failure = store.FailingSaves.get(entityName) || store.TakeSaveFailure(entityName) || store.SaveRefusal(entityName, contextUser, !state.saved) || store.ConstraintRefusal(entityName, values, !state.saved);
+        if (failure !== null && failure !== undefined) {
           state.latest = { CompleteMessage: failure };
           return false;
         }
@@ -364,6 +543,7 @@ export class GateTestStore {
         if (at >= 0) table[at] = { ...table[at], ...values };
         else table.push({ ...values });
         store.Saves.push(`${entityName} ${values['ID']}`);
+        store.SavedAs.push(`${entityName} ${values['ID']} ${contextUser ? contextUser.ID : '(no user)'}`);
         state.saved = true;
         state.latest = { CompleteMessage: '' };
         return true;
@@ -373,6 +553,15 @@ export class GateTestStore {
         return true;
       },
       NewRecord(): boolean {
+        return true;
+      },
+      /** `BaseEntity.Load`: the stored row with this ID becomes the record's values (false when there is none). */
+      async Load(id: string): Promise<boolean> {
+        const row = store.Row(entityName, id);
+        if (!row) return false;
+        for (const key of Object.keys(values)) delete values[key];
+        Object.assign(values, row);
+        state.saved = true;
         return true;
       },
     };
@@ -389,7 +578,7 @@ export class GateTestStore {
           return parsed.Value;
         }
         if (typeof prop === 'string' && RECORD_MEMBERS.has(prop)) return Reflect.get(t, prop);
-        return typeof prop === 'string' ? (values[prop] ?? null) : undefined;
+        return typeof prop === 'string' ? GateTestStore.cellOrNull(values[prop]) : undefined;
       },
       set(_t, prop, value: Cell) {
         if (typeof prop !== 'string') return false;
@@ -407,7 +596,15 @@ export class GateTestStore {
     return value;
   }
 
-  private static clause(clause: string): (row: Row) => boolean {
+  private clause(clause: string): (row: Row) => boolean {
+    if (clause.includes(' OR ')) {
+      const any = clause.split(' OR ').map((c) => this.clause(c.trim()));
+      return (row) => any.some((p) => p(row));
+    }
+    const sub = /^(\w+) IN \(SELECT ID FROM \[__mj\]\.\[(\w+)\] WHERE (\w+)='((?:[^']|'')*)'\)$/.exec(clause);
+    if (sub) return this.subqueryClause(sub[1], sub[2], sub[3], sub[4].replace(/''/g, "'"));
+    const isNull = /^(\w+) IS (NOT )?NULL$/.exec(clause);
+    if (isNull) return (row) => (row[isNull[1]] === null || row[isNull[1]] === undefined) === (isNull[2] === undefined);
     const inList = /^(\w+) IN \((.*)\)$/.exec(clause);
     if (inList) {
       const set = new Set([...inList[2].matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1].replace(/''/g, "'").toLowerCase()));
@@ -418,6 +615,41 @@ export class GateTestStore {
     const num = /^(\w+)\s*=\s*(-?\d+)$/.exec(clause);
     if (num) return (row) => Number(row[num[1]]) === Number(num[2]);
     throw new Error(`GateTestStore cannot evaluate the filter clause "${clause}"`);
+  }
+
+  /**
+   * `column IN (SELECT ID FROM [__mj].[view] WHERE where='value')`: the IDs of the rows of the entity whose base view is
+   * `view` ({@link BaseViews}) with `where` equal to `value` (case-insensitively), read when the filter is evaluated.
+   */
+  private subqueryClause(column: string, view: string, where: string, value: string): (row: Row) => boolean {
+    const entityName = Object.keys(GateTestStore.BaseViews).find((n) => GateTestStore.BaseViews[n] === view);
+    if (entityName === undefined) throw new Error(`GateTestStore cannot evaluate a subquery over the view "${view}"`);
+    const ids = new Set((this.Tables[entityName] || []).filter((r) => String(r[where]).toLowerCase() === value.toLowerCase()).map((r) => String(r['ID']).toLowerCase()));
+    return (row) => row[column] !== null && row[column] !== undefined && ids.has(String(row[column]).toLowerCase());
+  }
+
+  /**
+   * Rows in the order a single-column `<Column> ASC|DESC` clause asks for (a stable sort of numbers, dates and text);
+   * any other clause leaves the stored order.
+   */
+  private static ordered(rows: Row[], orderBy: string): Row[] {
+    const order = /^(\w+) (ASC|DESC)$/.exec(orderBy.trim());
+    if (!order) return rows;
+    const key = (r: Row): number | string => {
+      const cell = r[order[1]];
+      return cell instanceof Date ? cell.getTime() : typeof cell === 'number' ? cell : String(cell);
+    };
+    const sign = order[2] === 'DESC' ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const x = key(a);
+      const y = key(b);
+      return x === y ? 0 : (x < y ? -1 : 1) * sign;
+    });
+  }
+
+  /** A stored cell, or null for a column the row does not hold. */
+  private static cellOrNull(cell: Cell | undefined): Cell {
+    return cell === undefined ? null : cell;
   }
 
   private static copyTables(tables: Record<string, Row[]>): Record<string, Row[]> {
@@ -433,8 +665,8 @@ export class GateTestStore {
 export class GateTestProvider extends DatabaseProviderStub {
   constructor(private readonly store: GateTestStore) {
     super();
-    this.RunView = vi.fn().mockImplementation(async (params: RunViewParams) => store.RunViewRows(params));
-    this.GetEntityObject = vi.fn().mockImplementation(async (entityName: string) => store.NewRecordOf(entityName));
+    this.RunView = vi.fn().mockImplementation(async (params: RunViewParams, contextUser?: UserInfo) => store.RunViewRows(params, contextUser));
+    this.GetEntityObject = vi.fn().mockImplementation(async (entityName: string, contextUser?: UserInfo) => store.NewRecordOf(entityName, contextUser));
   }
 
   public override get SupportsEntityTransactions(): boolean {
@@ -447,6 +679,19 @@ export class GateTestProvider extends DatabaseProviderStub {
 
   public override async RunQuery(params: RunQueryParams): Promise<RunQueryResult> {
     return this.store.RunQueryRows(params);
+  }
+
+  /**
+   * One of the store's {@link GateTestStore.PermissionedEntities}, with its permission rows (the gate's initiator check
+   * reads `MJ: ML Models`).
+   *
+   * @throws Error naming the entity for any other name, so a step that reads an entity the fake does not describe
+   *   fails loudly instead of getting `undefined`
+   */
+  public override EntityByName(entityName: string): EntityInfo | undefined {
+    const entity = this.store.EntityInfoOf(entityName, this);
+    if (entity === null) throw new Error(`GateTestProvider: EntityByName('${entityName}') — the fake describes only ${Object.keys(GateTestStore.PermissionedEntities).join(', ')}`);
+    return entity;
   }
 }
 
@@ -474,13 +719,89 @@ export class GateWorld {
   public static readonly UnitID = '6A1D2E3F-0000-4000-8000-0000000000A2';
   public static readonly StorageProviderID = '6A1D2E3F-0000-4000-8000-0000000000A3';
   public static readonly JobTypeID = '6A1D2E3F-0000-4000-8000-0000000000A4';
-  public static readonly User: UserInfo = new UserInfo(null, { ID: '6A1D2E3F-0000-4000-8000-0000000000A5', Email: 'gate-tests@example.com', Type: 'User' });
+  public static readonly PipelineName = 'Gate Test Pipeline';
+  /** The world's MJ system user (the gate's write identity, D4-134): it holds the full role, like the server's account. */
+  public static readonly SystemUser: UserInfo = new UserInfo(null, {
+    ID: '6A1D2E3F-0000-4000-8000-0000000000A6', Email: 'gate-system@example.com', Type: 'Owner',
+    UserRoles: [new UserRoleInfo({ UserID: '6A1D2E3F-0000-4000-8000-0000000000A6', RoleID: GateTestStore.FullRoleID })],
+  });
+  public static readonly User: UserInfo = new UserInfo(null, {
+    ID: '6A1D2E3F-0000-4000-8000-0000000000A5', Email: 'gate-tests@example.com', Type: 'User',
+    UserRoles: [new UserRoleInfo({ UserID: '6A1D2E3F-0000-4000-8000-0000000000A5', RoleID: GateTestStore.FullRoleID })],
+  });
   private readonly runs = new Map<string, WorldRun>();
   private next = 0;
 
   constructor(public readonly Store: GateTestStore, private readonly storage: MemoryStorageAccount) {
     Store.World = this;
     Store.Insert('MJ: Scheduled Job Types', { ID: GateWorld.JobTypeID, Name: 'Predictive Studio Model Monitoring' });
+    Store.Insert('MJ: ML Training Pipelines', { ID: GateWorld.PipelineID, Name: GateWorld.PipelineName });
+  }
+
+  /**
+   * An `MJ: Process Runs` row started by `startedByUserId` (an auto-train run's recipient, D4-18), of the Record Process
+   * `recordProcessId` when given; returns it.
+   */
+  public ProcessRun(startedByUserId: string | null, recordProcessId: string | null = null): { readonly ID: string; readonly StartedByUserID: string | null } {
+    const row = { ID: this.id(), StartedByUserID: startedByUserId, RecordProcessID: recordProcessId, Status: 'Running' };
+    this.Store.Insert('MJ: Process Runs', row);
+    return row;
+  }
+
+  /** An `MJ: AI Agent Runs` row run for `userId` (an agent publish's recipient, D4-18); returns it. */
+  public AgentRun(userId: string | null): { readonly ID: string; readonly UserID: string | null } {
+    const row = { ID: this.id(), UserID: userId, Status: 'Running' };
+    this.Store.Insert('MJ: AI Agent Runs', row);
+    return row;
+  }
+
+  /** An `MJ: Scheduled Job Runs` row of a new `MJ: Scheduled Jobs` row owned by `ownerUserId` (D4-18); returns the run. */
+  public ScheduledJobRun(ownerUserId: string | null): { readonly ID: string; readonly ScheduledJobID: string } {
+    const job = { ID: this.id(), JobTypeID: GateWorld.JobTypeID, OwnerUserID: ownerUserId, Status: 'Active' };
+    this.Store.Insert('MJ: Scheduled Jobs', job);
+    const run = { ID: this.id(), ScheduledJobID: job.ID, Status: 'Running' };
+    this.Store.Insert('MJ: Scheduled Job Runs', run);
+    return run;
+  }
+
+  /** An `'ML Model'` `MJ: Record Processes` row whose Configuration declares `autoTrain` for the world's pipeline; returns it. */
+  public RecordProcess(): { readonly ID: string } {
+    const row = { ID: this.id(), EntityID: GateWorld.UnitID, WorkType: 'ML Model', ScheduleEnabled: false, Configuration: JSON.stringify({ autoTrain: { pipelineId: GateWorld.PipelineID } }) };
+    this.Store.Insert('MJ: Record Processes', row);
+    return row;
+  }
+
+  /**
+   * Completes the training run row `runId` (one a claim saved `Running`) as the world's trainer would: its stored
+   * results for `outcome` (`model`: the finalist ships; `keep`: the simple baseline is kept; `no-signal`: nothing ships)
+   * and, for a run that ships, its Draft model; returns the run and model IDs.
+   */
+  public TrainRun(runId: string, outcome: 'model' | 'keep' | 'no-signal'): { readonly TrainingRunID: string; readonly ModelID: string | null } {
+    if (outcome === 'no-signal') {
+      this.storeRun(runId, TrainerResultFixtures.CannedNoSignal(runId, ProtocolRowFixture.Spec()), null);
+      return { TrainingRunID: runId, ModelID: null };
+    }
+    const modelId = this.id();
+    const result = outcome === 'model' ? TrainerResultFixtures.CannedModelWins(runId, ProtocolRowFixture.Spec()) : TrainerResultFixtures.CannedCompleted(runId, ProtocolRowFixture.Spec());
+    const run = this.storeRun(runId, result, modelId);
+    this.storeModel(modelId, run, this.storeSnapshot(run), 'Draft', this.nextVersion());
+    return { TrainingRunID: runId, ModelID: modelId };
+  }
+
+  /**
+   * A model of the world's pipeline in `status` with a stored artifact that verifies and no training run row (the
+   * pipeline's training runs stay those a test trains): a reuse candidate, or the model a process is configured with.
+   */
+  public AddModel(pipelineId: string, status: string, artifactStatus: string): WorldModel {
+    if (!UUIDsEqual(pipelineId, GateWorld.PipelineID)) throw new Error(`GateWorld: the world holds one pipeline (${GateWorld.PipelineID}), not ${pipelineId}`);
+    const modelId = this.id();
+    const bytes = new TextEncoder().encode(JSON.stringify({ format: 'ps-predictor/v2', version: 2, candidate: 'xgb', model: modelId }));
+    const fileId = this.storeArtifact(bytes);
+    this.Store.Insert('MJ: ML Models', {
+      ID: modelId, PipelineID: GateWorld.PipelineID, Pipeline: GateWorld.PipelineName, Version: this.nextVersion(), Status: status, StatusReason: null, TrainingRunID: null,
+      ArtifactFileID: fileId, ArtifactSha256: SnapshotHash.Sha256Hex(bytes), ArtifactStatus: artifactStatus, ArtifactCheckedAt: null, Lineage: null,
+    });
+    return { ID: modelId, RunID: '' };
   }
 
   /** A model of `outcome` in `status` (the incumbent's diff, when given, is stored on its run). */
@@ -556,10 +877,13 @@ export class GateWorld {
     if (built.Ok === false) throw new Error(`GateWorld: the gate record was refused: ${built.Refusal.kind}`);
     const run: WorldRun = { RunID: runId, ProtocolID: protocolId, Result: result, Gate: built.Record };
     this.runs.set(runId, run);
-    this.Store.Insert('MJ: ML Training Runs', {
-      ID: runId, PipelineID: GateWorld.PipelineID, ResultingModelID: modelId, EvaluationProtocolID: protocolId, Status: 'Completed',
+    const columns: Row = {
+      ID: runId, PipelineID: GateWorld.PipelineID, Pipeline: GateWorld.PipelineName, ResultingModelID: modelId, EvaluationProtocolID: protocolId, Status: 'Completed',
       ValidationResults: TrainerResultFixtures.ValidationResultsFor(result, { Gate: built.Record }),
-    });
+    };
+    const claimed = this.Store.Row('MJ: ML Training Runs', runId);
+    if (claimed) Object.assign(claimed, columns);
+    else this.Store.Insert('MJ: ML Training Runs', columns);
     return run;
   }
 
@@ -584,15 +908,13 @@ export class GateWorld {
     const shipped = decision.shipped;
     const bytes = new TextEncoder().encode(JSON.stringify({ format: 'ps-predictor/v2', version: 2, candidate: shipped }));
     const sha = SnapshotHash.Sha256Hex(bytes);
-    const fileId = this.id();
-    this.storage.Objects.set(`artifacts/${fileId}`, bytes);
-    this.Store.Insert('MJ: Files', { ID: fileId, ProviderID: GateWorld.StorageProviderID, ProviderKey: `artifacts/${fileId}` });
+    const fileId = this.storeArtifact(bytes);
     const delivery: RegisteredDeliveryView = {
       kind: 'delivered', gate: decision, shipped, shippedRole: decision.shippedRole,
       artifact: { fileId, storageProviderId: GateWorld.StorageProviderID, providerKey: `artifacts/${fileId}`, sha256: sha, sizeBytes: bytes.byteLength, writeOnce: true },
     };
     this.Store.Insert('MJ: ML Models', {
-      ID: modelId, PipelineID: GateWorld.PipelineID, Version: version, Status: status, StatusReason: null, TrainingRunID: run.RunID,
+      ID: modelId, PipelineID: GateWorld.PipelineID, Pipeline: GateWorld.PipelineName, Version: version, Status: status, StatusReason: null, TrainingRunID: run.RunID,
       EvaluationProtocolID: run.ProtocolID, PredictionUnitID: GateWorld.UnitID, OutputSemantics: JSON.stringify({ task: GATE_TASK }),
       Delivery: JSON.stringify(delivery), ArtifactFileID: fileId, ArtifactSha256: sha, ArtifactStatus: 'verified', ArtifactCheckedAt: null,
       Lineage: null, FeatureSchema: JSON.stringify([{ Name: 'EventsAttended' }, { Name: 'Tenure' }]), TrainingSnapshotID: snapshotId,
@@ -605,6 +927,19 @@ export class GateWorld {
   /** The output bindings Evaluate creates, stored for a model the world puts past Draft (it was evaluated). */
   private storeDefaultBindings(modelId: string): void {
     for (const b of SemanticsRules.DefaultBindings({ task: GATE_TASK })) this.Store.Insert('MJ: ML Output Bindings', { ID: this.id(), ModelID: modelId, ...b });
+  }
+
+  /** Stores artifact bytes in the memory storage account with their `MJ: Files` row; returns the file ID. */
+  private storeArtifact(bytes: Uint8Array): string {
+    const fileId = this.id();
+    this.storage.Objects.set(`artifacts/${fileId}`, bytes);
+    this.Store.Insert('MJ: Files', { ID: fileId, ProviderID: GateWorld.StorageProviderID, ProviderKey: `artifacts/${fileId}` });
+    return fileId;
+  }
+
+  /** The next model version of the world's pipeline (the highest stored version plus one). */
+  private nextVersion(): number {
+    return Math.max(0, ...(this.Store.Tables['MJ: ML Models'] || []).map((m) => Number(m['Version']) || 0)) + 1;
   }
 
   private runOf(modelId: string): WorldRun {

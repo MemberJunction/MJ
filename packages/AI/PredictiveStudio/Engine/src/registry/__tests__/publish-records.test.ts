@@ -52,7 +52,7 @@ describe('PublishRecords.FindPublishForRun and FindRunOutcome', () => {
     store.Insert('MJ: ML Model Publish Records', { ID: 'R2', TrainingRunID: 'RUN', ModelID: 'M', Kind: 'publish', Purpose: 'rollback' });
     expect(await PublishRecords.FindPublishForRun('RUN', ctx)).toBeNull();
     store.Insert('MJ: ML Model Publish Records', { ID: 'R3', TrainingRunID: 'run', ModelID: 'M', Kind: 'publish', Purpose: 'adopt' });
-    expect(await PublishRecords.FindPublishForRun('RUN', ctx)).toEqual({ ID: 'R3', ModelID: 'M' });
+    expect(await PublishRecords.FindPublishForRun('RUN', ctx)).toEqual({ ID: 'R3', ModelID: 'M', Purpose: 'adopt' });
   });
   it("finds the run-level outcome with its stored refusal", async () => {
     const store = new GateTestStore();

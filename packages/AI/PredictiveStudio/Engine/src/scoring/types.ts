@@ -266,6 +266,16 @@ export interface MLAutoTrainConfig {
     /** Binding mode; defaults to `Scheduled` when the process is scheduled, else `OnDemand`. */
     mode?: 'OnDemand' | 'Scheduled';
   };
+  /**
+   * Hours auto-train waits after a non-transient refusal of the pipeline's last attempt (a withheld publish, or a run
+   * stopped at Evaluate) before it trains the pipeline again (§5.7 R1). Default 24; 0 retrains on the next run.
+   */
+  retryAfterHours?: number;  // case-violation-ok-legacy-back-compat: a stored Record Process Configuration JSON key, cased like its siblings (pipelineId, binding)
+  /**
+   * Whether a withheld automatic publish (or a run stopped at Evaluate) sends the D4-18 notification (§5.7 R4 (d)).
+   * Default `true`; `false` suppresses only the withheld notices of this process, never the published ones.
+   */
+  notifyOnWithheld?: boolean;  // case-violation-ok-legacy-back-compat: a stored Record Process Configuration JSON key, cased like its siblings (pipelineId, binding)
 }
 
 /** Input to {@link IModelAutoTrainer.EnsureTrainedModel}. */
@@ -278,20 +288,27 @@ export interface AutoTrainRequest {
   recordProcessId: string | null;
   /** Optional binding to ensure (see {@link MLAutoTrainConfig.binding}). */
   binding?: MLAutoTrainConfig['binding'];
+  /** The `MJ: Process Runs` row of this run: the auto-train initiator's `processRunId` (its user is notified, D4-18). */
+  processRunId?: string;  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
+  /** See {@link MLAutoTrainConfig.retryAfterHours}. */
+  retryAfterHours?: MLAutoTrainConfig['retryAfterHours'];  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
+  /** See {@link MLAutoTrainConfig.notifyOnWithheld}. */
+  notifyOnWithheld?: MLAutoTrainConfig['notifyOnWithheld'];  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
 }
 
 /**
  * Seam that turns "this model needs training" into a scoreable model.
- * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, evaluate via
- * the lifecycle gate, repoint the Record Process + bindings). Injected so the
- * processor stays free of training dependencies and is unit-testable.
+ * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, evaluate and publish through the automated
+ * publisher, repoint the Record Process + bindings). Injected so the processor stays free of training dependencies and
+ * is unit-testable.
  */
 export interface IModelAutoTrainer {
   /**
-   * Ensure a scoreable, artifact-backed model exists for the pipeline (a reusable Published one, or a newly trained
-   * one the lifecycle gate evaluated to Validated) and that the Record Process + its bindings point at it. Returns that
+   * Ensure a Published, artifact-backed model exists for the pipeline (a reusable Published one, a resumed publish, or a
+   * newly trained one the lifecycle gate published) and that the Record Process + its bindings point at it. Returns that
    * model's id.
-   * @throws when training or evaluation fails, or the model is not served (e.g. its run flagged leakage needing a sign-off)
+   * @throws when training fails, another training of the pipeline is in flight and no Published model exists, or the
+   *   publish is withheld and no Published model is left to score with (the message names the recorded refusal)
    */
   EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string>;
 }

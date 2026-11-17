@@ -1,6 +1,8 @@
 // Model registry: the request context every registry, gate and scoring call runs on, the artifact registry that
 // stores model artifacts write-once and verifies every load, the registry's read of a model row's entry, the
 // lifecycle gate (the only writer of a model's Status) with its publish records, locks, versions and monitoring jobs,
+// the one unattended publish path over it (AutomatedPublisher) and the notifications of its automatic outcomes
+// (PublishNotifications, with the record link they share with the drift alert),
 // its reads of stored rows (always past the RunView cache), and the PreSave guards that hold the platform to it (the
 // status guard and the write-once evidence guard).
 export * from './registry-context';
@@ -18,6 +20,9 @@ export * from './publish-records';
 export * from './stored-publish-inputs';
 export * from './monitoring-job';
 export * from './lifecycle-gate';
+export * from './record-notification-links';
+export * from './publish-notifications';
+export * from './automated-publisher';
 export * from './evidence-write-authorisations';
 export * from './pre-save-hook-registration';
 export * from './guard-context';

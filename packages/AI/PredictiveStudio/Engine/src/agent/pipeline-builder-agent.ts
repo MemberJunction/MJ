@@ -28,7 +28,7 @@ import {
   type StoredGateRecord, type StoredTrainerResult, type TracedNumber, type TrainingRunResults, type TrustVerdict,
 } from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
+import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload, type ProtocolPromotionSetting } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
@@ -42,12 +42,14 @@ export interface PredictiveStudioBuildOutcome {
   headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   published: boolean;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /**
-   * True when the model is not published only because this build does not publish: it clears the bar (kept in Draft, or
-   * evaluated to Validated or KeepBaseline through the lifecycle gate), so the user may ask for it to be published
-   * (Promote ML Model: `evaluate` for a Draft model, then `publish`).
+   * True when the model is not published only because this build does not publish: the lifecycle gate evaluated it to
+   * Validated or KeepBaseline, so the user may ask for it to be published (Promote ML Model: `publish`).
    */
   readyToPublish: boolean;  // case-violation-ok-legacy-back-compat: agent payload JSON key
-  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold, kept in Draft, evaluated, or the lifecycle gate's refusal); else null. */
+  /**
+   * When not published, the plain reason: "withheld: <the gate's recorded refusal>" for a build that publishes; for one
+   * that does not, the evaluated status, the gate's refusal of the evaluation, or the run's stored reason; else null.
+   */
   heldReason: string | null;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;  // case-violation-ok-legacy-back-compat: agent payload JSON key
@@ -110,7 +112,7 @@ export type CatalogStatus = 'published' | 'ready-to-publish' | 'held';
 /** The report's words for a catalog status. */
 const CATALOG_STATUS_TEXT: Readonly<Record<CatalogStatus, string>> = {
   'published': 'Published to Catalog',
-  'ready-to-publish': 'In Draft — ready to publish when you ask',
+  'ready-to-publish': 'Evaluated — ready to publish when you ask',
   'held': 'Held for Review',
 };
 
@@ -260,7 +262,7 @@ ${measured}
   /**
    * A model's catalog status from its stored status: `Published` is published; `Validated` and `KeepBaseline` (the
    * lifecycle gate evaluated it, and a person may publish it) are ready to publish; any other status, or no model, is
-   * held. A Draft model a build kept only because publishing was off reads as held: its row does not store why it is Draft.
+   * held (a Draft model is one the gate refused to evaluate).
    */
   public static CatalogStatusOfModel(status: MJMLModelEntity['Status'] | null): CatalogStatus {
     if (status === 'Published') return 'published';
@@ -535,12 +537,35 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   public static readonly AUTO_PUBLISH_DATA_KEY = 'PredictiveStudioAutoPublish';
 
   /**
-   * Whether this build publishes a model that clears the bar. Off unless the run's `data` (set by whoever starts the
-   * run, never by the plan an LLM writes) holds `PredictiveStudioAutoPublish: true`: a model the conversation builds
-   * stays in Draft until the user asks for it to be published. Automated runs such as the truth suite's turn it on.
+   * Whether this build publishes a model that clears the bar. Off unless the run's `data` holds
+   * `PredictiveStudioAutoPublish: true`: a model the conversation builds is evaluated and published only when the user
+   * asks. The key is a reserved run-data key (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`), so the
+   * run sees it only when its caller set `ExecuteAgentParams.TrustReservedRunData` — MJServer's agent-run resolvers set
+   * that for the system user and for an API key holding `agent:trusted`, as the truth suite's runs are. `BaseAgent`
+   * removes it from every other run's `data`, and from the `templateParameters` a parent agent's model writes for a
+   * sub-agent. A published model goes through the gate's automated publisher with the agent run as its initiator.
    */
   public static AutoPublishOf(params: Pick<ExecuteAgentParams, 'data'>): boolean {
     return params.data?.[PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY] === true;
+  }
+
+  /**
+   * The run-data key that supplies the promotion setting of the protocol the build creates (OF4-30):
+   * `{ autoPublishKeepBaseline: true }` publishes a kept simple baseline automatically (D-031).
+   */
+  public static readonly PROTOCOL_PROMOTION_DATA_KEY = 'PredictiveStudioProtocolPromotion';
+
+  /**
+   * The protocol promotion setting the run's `data` supplies: `{ autoPublishKeepBaseline: true }` when the key holds an
+   * object whose `autoPublishKeepBaseline` is the boolean `true`; otherwise null, and the build's protocol is the default
+   * one. Like {@link AUTO_PUBLISH_DATA_KEY} the key is reserved run data: only a run whose caller set
+   * `ExecuteAgentParams.TrustReservedRunData` sees it; `BaseAgent` strips it from every other run and from a parent
+   * model's sub-agent `templateParameters`.
+   */
+  public static ProtocolPromotionOf(params: Pick<ExecuteAgentParams, 'data'>): ProtocolPromotionSetting | null {
+    const value: unknown = params.data?.[PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY];
+    if (typeof value !== 'object' || value === null || !('autoPublishKeepBaseline' in value)) return null;
+    return value.autoPublishKeepBaseline === true ? { autoPublishKeepBaseline: true } : null;
   }
 
   /** The catalog status of a build's outcome. */
@@ -554,7 +579,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return {
       success: result.success,
       pipelineId: result.pipelineId,
-      modelId: result.modelId,
+      modelId: result.modelId || undefined,
       trustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
       headline: result.trust?.Headline,
       published: result.published,
@@ -571,7 +596,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
       : '';
     if (!o.success) return `I couldn't build the prediction: ${o.errorMessage || 'unknown error'}.${warningText}`;
-    // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
+    // a published build has a model, so it carries its verdict's title
     if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
     if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It clears the bar to publish; it is published only when you ask.${warningText}`;
     const heldMessage = o.heldReason
@@ -582,7 +607,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
   /**
    * Run the deterministic build once. Reads the approved plan off `params.payload`, builds the
-   * pipeline + trains (+ publishes-gated-on-trust when {@link AutoPublishOf} is on), writes the outcome to the payload, and terminates
+   * pipeline + trains (+ publishes through the gate's automated publisher when {@link AutoPublishOf} is on), writes the outcome to the payload, and terminates
    * the sub-agent with Success (build ran — even when the model is held, that's a successful run with
    * a held outcome) or Failed (the build itself errored).
    */
@@ -605,11 +630,12 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     try {
       const autoPublish = PredictiveStudioPipelineBuilderAgent.AutoPublishOf(params);
       const initiator: Actor = this.AgentRun ? { kind: 'agent', agentRunId: this.AgentRun.ID } : { kind: 'human', userId: user.ID };
-      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user, autoPublish, initiator });
+      const protocolPromotion = PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf(params);
+      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user, autoPublish, initiator, protocolPromotion });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);
-      result = { success: false, published: false, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage };
+      result = { success: false, published: false, readyToPublish: false, heldReason: null, errorMessage };
     }
 
     const outcome = PredictiveStudioPipelineBuilderAgent.SummarizeBuildResult(result);

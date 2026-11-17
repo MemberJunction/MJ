@@ -117,7 +117,7 @@ export class ModelScoringActionGenerator {
     if (!(await existing.Save())) {
       LogError(
         `ModelScoringActionGenerator: failed to disable action '${existing.Name}': ` +
-          `${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+          `${existing.LatestResult?.CompleteMessage || 'unknown error'}`,
       );
       return;
     }
@@ -200,7 +200,7 @@ export class ModelScoringActionGenerator {
     if (!(await cat.Save())) {
       LogError(
         `ModelScoringActionGenerator: failed to create category '${MODELS_CATEGORY_NAME}': ` +
-          `${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+          `${cat.LatestResult?.CompleteMessage || 'unknown error'}`,
       );
       return null;
     }
@@ -248,9 +248,9 @@ export class ModelScoringActionGenerator {
     provider: IMetadataProvider,
     contextUser: UserInfo,
   ): Promise<MJActionEntity | null> {
-    const name = this.scoringActionName(model);
     const existing = await this.FindActionForModel(model.ID, provider, contextUser);
-    const action = existing ?? (await provider.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser));
+    const name = await this.uniqueScoringActionName(model, parent.ID, categoryID, existing, provider, contextUser);
+    const action = existing || (await provider.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser));
     if (!existing) {
       action.NewRecord();
     }
@@ -269,7 +269,7 @@ export class ModelScoringActionGenerator {
     if (!(await action.Save())) {
       LogError(
         `ModelScoringActionGenerator: failed to save scoring action '${name}': ` +
-          `${action.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+          `${action.LatestResult?.CompleteMessage || 'unknown error'}`,
       );
       return null;
     }
@@ -301,13 +301,13 @@ export class ModelScoringActionGenerator {
       param.IsArray = false;
       param.IsRequired = spec.IsRequired;
       param.Description = spec.Description;
-      if (spec.DefaultValue != null) {
+      if (spec.DefaultValue !== undefined) {
         param.DefaultValue = spec.DefaultValue;
       }
       if (!(await param.Save())) {
         LogError(
           `ModelScoringActionGenerator: failed to save param '${spec.Name}' for action ${actionID}: ` +
-            `${param.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            `${param.LatestResult?.CompleteMessage || 'unknown error'}`,
         );
       }
     }
@@ -335,7 +335,7 @@ export class ModelScoringActionGenerator {
       if (!(await row.Delete())) {
         LogError(
           `ModelScoringActionGenerator: failed to delete param ${row.ID} for action ${actionID}: ` +
-            `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            `${row.LatestResult?.CompleteMessage || 'unknown error'}`,
         );
       }
     }
@@ -425,6 +425,42 @@ export class ModelScoringActionGenerator {
     return `Score with ${this.modelLabel(model)} v${this.modelVersion(model)}`;
   }
 
+  /**
+   * The Name the model's Action takes: {@link scoringActionName}, unless another Action under the same parent (and
+   * category) already holds it — then that name with the model's ID appended, which no other model's Action can hold.
+   * The plain name can be taken by an Action this model does not own: a deleted model's Action, which
+   * `spDeleteEntityWithCoreDependencies` leaves behind while a later model of the pipeline takes the freed version
+   * (M4b.6 cell (c)), or a renamed pipeline's. Without this the save fails on `UQ_Action_Name_CategoryID_ParentID` and the
+   * published model gets no scoring Action. Read past the RunView cache (the other Action may have been written out of
+   * band).
+   *
+   * @throws Error when the read fails (a failed read is not "the name is free": the save would then fail)
+   */
+  protected async uniqueScoringActionName(
+    model: MJMLModelEntity,
+    parentId: string,
+    categoryID: string | null,
+    existing: MJActionEntity | null,
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+  ): Promise<string> {
+    const name = this.scoringActionName(model);
+    const scope = categoryID ? ` AND CategoryID='${EscapeSQLString(categoryID)}'` : '';
+    const holders = await RunView.FromMetadataProvider(provider).RunView<Pick<MJActionEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Actions',
+        ExtraFilter: `Name='${EscapeSQLString(name)}' AND ParentID='${EscapeSQLString(parentId)}'${scope}`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      contextUser,
+    );
+    if (!holders.Success) throw new Error(`ModelScoringActionGenerator: reading the Actions named '${name}' failed: ${holders.ErrorMessage || 'unknown error'}`);
+    const takenByAnother = holders.Results.some((a) => existing === null || !UUIDsEqual(a.ID, existing.ID));
+    return takenByAnother ? `${name} (${model.ID})` : name;
+  }
+
   /** Human-readable description naming the model label + version. */
   protected scoringActionDescription(model: MJMLModelEntity): string {
     return (
@@ -442,6 +478,6 @@ export class ModelScoringActionGenerator {
 
   /** The model's version, defaulting to 1 when unset. */
   protected modelVersion(model: MJMLModelEntity): number {
-    return model.Version ?? 1;
+    return model.Version || 1;
   }
 }

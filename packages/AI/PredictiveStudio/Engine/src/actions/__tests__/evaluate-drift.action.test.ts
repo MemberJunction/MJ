@@ -1,3 +1,10 @@
+/**
+ * `EvaluateFeatureAndPredictionDriftAction` and `DefaultDriftAlertEmitter`. Test doubles: the `as` casts in this file
+ * (`UserInfo`, `RunActionParams['Action']`, `MJResourceTypeEntity`, the partial `IMetadataProvider` objects, the
+ * `GetEntityObject<T>` returns and the `ProcessResults` output reads) stand in for framework classes the action only
+ * reads a few members of; building the real classes would need a metadata provider and entity metadata the action
+ * never consults. They are confined to the doubles, and no `any` is used.
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
@@ -13,6 +20,13 @@ import {
 import type { FeatureAndPredictionDriftReport } from '../../maintenance/psi-drift-detector';
 import { RunFeatureValueView, type FeatureValueDoubleRow } from '../../__tests__/feature-value-view-double';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
+
+/** A notification's ResourceConfiguration JSON, parsed through Core's typed reader; null when blank or not JSON. */
+function resourceConfigurationOf(text: string | null): JsonValue {
+  const parsed = JsonParse.ParseJsonText(text, 'ResourceConfiguration');
+  return parsed.Ok ? parsed.Value : null;
+}
 
 const TEST_USER = { ID: 'user-drift-test', Name: 'Drift Tester' } as UserInfo;
 
@@ -22,7 +36,7 @@ function buildRunParams(
   const params: ActionParam[] = Object.entries(entries).map(([name, spec]) => ({
     Name: name,
     Value: spec.value,
-    Type: spec.type ?? 'Input',
+    Type: spec.type || 'Input',
   }));
   return {
     Action: { ID: 'action-drift', Name: 'Evaluate Feature and Prediction Drift' } as RunActionParams['Action'],
@@ -271,8 +285,8 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       const runView = async (viewParams: RunViewParams): Promise<RunViewResult> => {
         if (viewParams.EntityName === 'MJ: Record Processes') {
           // The first read is the sweep's; an alert then reads its own process by ID.
-          capturedProcessQuery ??= viewParams;
-          const idMatch = /^ID = '([^']+)'$/.exec(String(viewParams.ExtraFilter ?? ''));
+          capturedProcessQuery ||= viewParams;
+          const idMatch = /^ID = '([^']+)'$/.exec(String(viewParams.ExtraFilter || ''));
           const processes = [
             { ID: 'rp-ml-1', Name: 'Alpha ML Scorer', WorkType: 'ML Model', Status: 'Active' },
             { ID: 'rp-infer-2', Name: 'Beta Infer Pipeline', WorkType: 'Infer', Status: 'Active' },
@@ -358,7 +372,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         },
         RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> =>
           views.map((v) =>
-            String(v.ExtraFilter ?? '').includes("'rp-broken'")
+            String(v.ExtraFilter || '').includes("'rp-broken'")
               ? { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'timeout' }
               : { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' },
           ),
@@ -592,15 +606,15 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
     ): IMetadataProvider {
       const view = async (v: RunViewParams, user?: UserInfo): Promise<RunViewResult> => {
         // Reads by `ID = '…'` or `ID IN ('…', …)`
-        const ids = [...String(v.ExtraFilter ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
+        const ids = [...String(v.ExtraFilter || '').matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
         const byId = <T extends { ID: string }>(rows: T[]): T[] => rows.filter((r) => ids.includes(r.ID.toLowerCase()));
         let results: unknown[] = [];
         if (v.EntityName === 'MJ: Record Processes') {
           readsAs.push(user?.ID);
-          results = byId(stored.Processes ?? []);
+          results = byId(stored.Processes || []);
         } else if (v.EntityName === 'MJ: ML Models') {
           readsAs.push(user?.ID);
-          results = byId(stored.Models ?? []);
+          results = byId(stored.Models || []);
         } else if (v.EntityName === 'MJ: Feature Values') {
           results = RunFeatureValueView(featureValues, v).Results;
         }
@@ -678,7 +692,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(saved[0].ResourceTypeID).toBe('rt-records');
       expect(byNameSpy).toHaveBeenCalledWith('Records');
       expect(saved[0].ResourceRecordID).toBe('rp-alert-1');
-      expect(JSON.parse(saved[0].ResourceConfiguration ?? '{}')).toEqual({ EntityName: 'MJ: Record Processes', RecordID: 'rp-alert-1' });
+      expect(resourceConfigurationOf(saved[0].ResourceConfiguration)).toEqual({ Entity: 'MJ: Record Processes', RecordID: 'rp-alert-1' });
       // The stored name is read as the caller.
       expect(readsAs).toEqual([OWNER.ID]);
     });
@@ -740,7 +754,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         Models: [{ ID: 'model-7', Pipeline: 'Member Renewal', Version: 3 }],
       });
       expect(saved[0].Title).toBe("Predictive Drift Alert (Critical): ML Model 'Member Renewal' v3");
-      expect(JSON.parse(saved[0].ResourceConfiguration ?? '{}')).toEqual({ EntityName: 'MJ: ML Models', RecordID: 'model-7' });
+      expect(resourceConfigurationOf(saved[0].ResourceConfiguration)).toEqual({ Entity: 'MJ: ML Models', RecordID: 'model-7' });
     });
 
     it('leaves the link off when no Records resource type is seeded', async () => {

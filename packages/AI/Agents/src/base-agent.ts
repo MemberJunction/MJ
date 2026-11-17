@@ -2725,8 +2725,8 @@ export class BaseAgent {
         if (StrippedKeys.length > 0) {
             this.logStatus(
                 `🔒 Ignored reserved run-data key(s) ${StrippedKeys.join(', ')} for agent '${params.agent?.Name}' ` +
-                `(user ${params.contextUser?.Email ?? 'unknown'}): a run's scope and agent-type parameters come from the ` +
-                `ExecuteAgentParams fields, or from data only when the server sets TrustReservedRunData.`,
+                `(user ${params.contextUser?.Email || 'unknown'}): reserved keys are read from data only when the server ` +
+                `sets TrustReservedRunData (a run's scope and agent-type parameters have their own ExecuteAgentParams fields).`,
                 false,
                 params
             );

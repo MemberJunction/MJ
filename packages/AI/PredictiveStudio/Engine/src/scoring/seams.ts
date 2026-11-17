@@ -28,7 +28,9 @@ import { TrainingKeys } from './training-keys';
  * `CodeVersion`, `OutputSemantics`): scoring verifies its artifact against
  * `ArtifactSha256` and records `ArtifactStatus` on this same row, so it must be an
  * entity. The validated `ModelRegistryEntry` of a row is a separate read,
- * `RegistryEntries.Load` (`registry/registry-entry.ts`).
+ * `RegistryEntries.Load` (`registry/registry-entry.ts`). The read goes past the
+ * RunView cache (`BypassCache`, as `registry/stored-row-reads.ts` explains): a model
+ * deleted or demoted out of band is never scored from a stale copy (M4b.6 cell (c)).
  */
 export class RunViewMLModelLoader implements IMLModelLoader {
   /** @inheritdoc */
@@ -41,10 +43,11 @@ export class RunViewMLModelLoader implements IMLModelLoader {
     const result = await rv.RunView<MJMLModelEntity>(
       {
         EntityName: 'MJ: ML Models',
-        ExtraFilter: `ID='${modelId}'`,
+        ExtraFilter: `ID='${EscapeSQLString(modelId)}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
         SkipTotalRowCount: true,
+        BypassCache: true,
       },
       contextUser,
     );

@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocol,
+  JsonParse,
   TrainingRunResultsParser,
   type Actor,
   type CalibrationReport,
   type EvaluationProtocolSpec,
+  type JsonValue,
   type LeakageFlag,
   type SourceColumnImportance,
   type TrainerCompleted,
@@ -21,6 +22,7 @@ import { TrainerModelLineageReader } from '../trainer-model-lineage';
 import type { TrainModelResult } from '../types';
 import { PipelineAutoTrainer } from '../../scoring/auto-train';
 import type { AutoTrainRequest } from '../../scoring/types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import { GateTestStore, GateWorld, type WorldModel } from '../../__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
 import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
@@ -116,12 +118,11 @@ function storedFlags(run: { readonly ValidationResults: string | null }): readon
   return parsed.Value.trainer?.leakageFlags || [];
 }
 
-/** The production auto-trainer over the gate world: its train step returns `model` (its ID and run), no reuse or repoint. */
+/** The production auto-trainer over the gate world: its train step returns `model` (its run and ID), no reuse or repoint. */
 class WorldAutoTrainer extends PipelineAutoTrainer {
   public readonly Repointed: string[] = [];
   constructor(rig: GateWorldRig, model: WorldModel) {
-    // Single deliberate test-double cast: auto-train reads only the trained row's ID and TrainingRunID.
-    super({ gate: rig.Gate, train: async () => ({ ID: model.ID, TrainingRunID: model.RunID }) as unknown as MJMLModelEntity });
+    super({ gate: rig.Gate, train: async () => ({ TrainingRunID: model.RunID, ModelID: model.ID }) });
   }
   protected override async findReusableModel(): Promise<string | null> {
     return null;
@@ -131,13 +132,19 @@ class WorldAutoTrainer extends PipelineAutoTrainer {
   }
 }
 
+/** The model's stored Lineage JSON, parsed through Core's typed reader; null when the column is blank or not JSON. */
+function lineageOf(lineage: string | null): JsonValue {
+  const parsed = JsonParse.ParseJsonText(lineage, 'Lineage');
+  return parsed.Ok ? parsed.Value : null;
+}
+
 const AUTO_TRAIN: AutoTrainRequest = { pipelineId: PIPELINE_ID, currentModelId: null, recordProcessId: null };
 const LEAKY_FLAG: LeakageFlag = { kind: 'single-feature-auc', sourceColumn: 'EventsAttended', heldOutAuc: 0.97 };
 
 describe('G-6: a kept simple baseline carries the run\'s leakage audit to promotion', () => {
   it("records the finalist importance's top feature and share on the kept baseline's Lineage, whose own importance is {}", async () => {
     const { model, run } = await train(keptBaseline({ importance: LEAKING }));
-    expect(JSON.parse(model.Lineage || '{}')).toMatchObject({ shippedMember: 'glm' });
+    expect(lineageOf(model.Lineage)).toMatchObject({ shippedMember: 'glm' });
     expect(model.FeatureImportance).toBe('{}');
     const audit = TrainerModelLineageReader.LeakageAuditOf(model.Lineage);
     expect(audit?.topFeature).toBe('EventsAttended');
@@ -149,7 +156,7 @@ describe('G-6: a kept simple baseline carries the run\'s leakage audit to promot
     const shipped = await train(finalistShips({ importance: LEAKING }));
     expect(TrainerModelLineageReader.LeakageAuditOf(shipped.model.Lineage)?.topFeature).toBe('EventsAttended');
     const unmeasured = await train(keptBaseline());
-    expect(JSON.parse(unmeasured.model.Lineage || '{}')).toMatchObject({ trainingLeakageAudit: null });
+    expect(lineageOf(unmeasured.model.Lineage)).toMatchObject({ trainingLeakageAudit: null });
   });
 
   it("stores the trainer's leakage flags on the run, and the lifecycle gate withholds the publish of the model they flag", async () => {
@@ -162,13 +169,16 @@ describe('G-6: a kept simple baseline carries the run\'s leakage audit to promot
     expect(rig.Store.Status(candidate.ID)).toBe('Validated');
   });
 
-  it('auto-train evaluates a flagged model but does not serve it: the error names the flag, and nothing is repointed', async () => {
+  it('auto-train publishes a flagged model through the gate, which withholds it: the error names the flag, the refusal is recorded, and nothing is repointed', async () => {
     const { model, run } = await train(finalistShips({ leakageFlags: [LEAKY_FLAG] }));
     const rig = gateWorld();
     const trained = asWorldModel(rig, 'Draft', model, storedFlags(run));
     const trainer = new WorldAutoTrainer(rig, trained);
-    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(/single-feature-auc.*sign-off/);
-    expect([rig.Store.Status(trained.ID), trainer.Repointed, rig.Store.PublishRecords(trained.ID)]).toEqual(['Validated', [], []]);
+    const status = ConsoleCapture.Status();
+    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(/publish withheld: .*single-feature-auc.*sign-off/);
+    // The initiator names no Process Run (the request has none), so the withheld notice has no recipient.
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining('notifies nobody')]);
+    expect([rig.Store.Status(trained.ID), trainer.Repointed, rig.Store.PublishRecords(trained.ID).map((r) => r['Kind'])]).toEqual(['Validated', [], ['refusal']]);
   });
 });
 
@@ -189,7 +199,7 @@ describe('G-9: a shipped finalist whose calibration hides its family is held', (
   it('holds nothing when the slope is 1.0, and does not judge a kept baseline by the finalist\'s report', async () => {
     for (const answer of [finalistShips({ calibration: calibration(1.0) }), keptBaseline({ calibration: calibration(0.5) })]) {
       const { model, run } = await train(answer);
-      expect(JSON.parse(model.Lineage || '{}')).toMatchObject({ calibrationHold: null });
+      expect(lineageOf(model.Lineage)).toMatchObject({ calibrationHold: null });
       expect(run.Notes).not.toContain('CALIBRATION HOLD');
     }
   });
@@ -211,8 +221,10 @@ describe('G-9: a shipped finalist whose calibration hides its family is held', (
     const rig = gateWorld();
     const held = asWorldModel(rig, 'Draft', model, []);
     const trainer = new WorldAutoTrainer(rig, held);
-    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(/calibration/);
+    const status = ConsoleCapture.Status();
+    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(new RegExp(`^Auto-train trained model ${held.ID} v\\d+; publish withheld: The model is held for calibration`));
     expect([rig.Store.Status(held.ID), trainer.Repointed]).toEqual(['Draft', []]);
+    expect(ConsoleCapture.Lines(status)).toEqual([`Predictive Studio notifications: the calibration-held outcome of ML Training Run ${held.RunID} notifies nobody: the auto-train initiator names no Process Run.`]);
   });
 });
 

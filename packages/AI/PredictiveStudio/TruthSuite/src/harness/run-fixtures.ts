@@ -13,6 +13,7 @@ import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
 import { HarnessCleanup, RunRecords } from './cleanup';
+import { HarnessNotifications } from './notifications';
 import { HarnessWorldTruth } from './world-truth';
 import { HarnessProvenance } from './provenance';
 import { HarnessSidecar } from './sidecar';
@@ -65,8 +66,9 @@ export class RunFixtures {
 
   /**
    * For every harness bound since the last cleanup: look up the pipelines of its agent runs again by their exact names
-   * (a run can create them after the client call returned), delete the pipelines and models it recorded with their
-   * training runs and scoring bindings through the entity layer, and close its pool. Every step is attempted; throws
+   * (a run can create them after the client call returned), delete the notifications its rows caused by SQL
+   * ({@link HarnessNotifications}, D4-146), delete the pipelines and models it recorded with their training runs and
+   * scoring bindings through the entity layer, and close its pool. Every step is attempted; throws
    * one error naming each failure. No-op when nothing was bound.
    */
   public static async CleanupRun(user: UserInfo): Promise<void> {
@@ -97,6 +99,8 @@ export class RunFixtures {
       const agentPipelines = await HarnessAgent.PipelineIDsNamed(h.Provider, user, h.Created.AgentPipelineNames);
       for (const id of agentPipelines) h.Created.RecordPipeline(id);
       await RunFixtures.recordPipelineBindings(h, user, agentPipelines);
+      const notifications = await HarnessNotifications.SubjectsOf(h.Provider, user, h.Created);
+      failures.push(...(await HarnessNotifications.Delete(conn.Pool, h.Provider, notifications)));
       failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
@@ -237,7 +241,7 @@ export class RunFixtures {
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
       CreatePipeline: (spec) => RunFixtures.createRecordedPipeline(ctx, created, spec),
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
-      RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
+      RunBuilderAgent: (plan, options) => HarnessAgent.RunBuilderAgent(ctx, plan, options),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),
       ModelsForPipelineNamePrefix: (prefix) => HarnessModels.ModelsForPipelineNamePrefix(ctx, prefix),
       Promote: (modelId, transition, reason) => HarnessModels.Promote(ctx, modelId, transition, reason),

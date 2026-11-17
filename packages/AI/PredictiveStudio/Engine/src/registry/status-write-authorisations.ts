@@ -8,7 +8,7 @@
  * keyed by the instance keeps a dropped entity collectable, and the `BaseSingleton` keeps one map per process even when
  * the module is loaded twice (D4-90's plan note).
  *
- * Only `LifecycleGate`'s steps authorise (M4b.1 later adds `CheckInitiator` before them, and M7.2's `AdoptPublished`
+ * Only `LifecycleGate`'s steps authorise (a publish's `CheckInitiator` runs before them, and M7.2's `AdoptPublished`
  * checks its initiator itself). Because this is an exported singleton any module can fill, the guard does not treat an
  * authorisation as proof that the gate ran: it re-derives every authorised move into `Published` from the stored rows,
  * passing the `Initiator` into `StoredPublishInputs`, and resolves the initiator of `Published → Unevaluated` (D4-58, R9).
@@ -23,6 +23,7 @@ import type { Actor, StatusWriteAuthorisationRule } from '@memberjunction/predic
  * `Published`, the model the publish replaces.
  */
 export interface StatusWriteAuthorisation extends StatusWriteAuthorisationRule {
+  /** Who started the gate call that issued the authorisation (the guard re-derives a move into `Published` for it). */
   readonly Initiator: Actor;
   /**
    * The Published model this publish replaces, which the gate archives FIRST in the same transaction (so the guard reads

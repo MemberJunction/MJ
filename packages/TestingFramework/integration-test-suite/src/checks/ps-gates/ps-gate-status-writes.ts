@@ -260,6 +260,7 @@ export class StatusWritePaths {
     job.ConcurrencyMode = 'Skip';
     job.Configuration = JSON.stringify({ ActionID: action.ID, Params: configured.map((p) => ({ ActionParamID: p.ID, ValueType: 'Static', Value: values[p.Name] })) });
     if (!(await job.Save())) throw new Error(`saving the one-off Action job failed: ${job.LatestResult?.CompleteMessage || 'Save() returned false'}`);
+    h.Created.RecordScheduledJob(job.ID);
     return job;
   }
 

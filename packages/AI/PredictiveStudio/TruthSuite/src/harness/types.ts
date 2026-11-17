@@ -53,6 +53,10 @@ export interface CandidateModel {
   HoldoutRowCount: number | null; Metrics: Record<string, number>; HoldoutMetrics: Record<string, number>;
   Trust: TrustVerdict; TrainingRunStatus: MJMLTrainingRunEntity['Status'] | null; TrainingRunNotes: string | null; LineageJSON: string | null;
   ValidationResultsJSON: string | null;
+  /** The model row's training run (`MJ: ML Models.TrainingRunID`): the key its publish and refusal records carry (D4-56). */
+  TrainingRunID: MJMLModelEntity['TrainingRunID'];
+  /** The model row's registered delivery (`MJ: ML Models.Delivery` JSON), whose `gate` is its stored gate decision (D-015). */
+  DeliveryJSON: MJMLModelEntity['Delivery'];
 }
 
 // The operation's shipped input minus the model, so the request keeps the operation's own wire names.
@@ -90,6 +94,15 @@ export interface GateMeasurement {
 /** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
 export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
 
+/** How one builder-agent run is started, beyond its plan. */
+export interface BuilderRunOptions {
+  /**
+   * Supply the protocol the build creates with `autoPublishKeepBaseline: true` (OF4-30, the owner's ruling for the gate
+   * runs of 2026-11-16): a kept simple baseline publishes automatically, so the checks after it decide the publish.
+   */
+  readonly AutoPublishKeepBaseline?: boolean;
+}
+
 /** What `Promote` reports: whether the lifecycle gate applied the transition, the model's status after it, and the gate's refusal (null when applied). */
 export interface PromoteAttempt { Applied: boolean; Status: MJMLModelEntity['Status']; Refusal: PredictiveStudioTransitionRefusal | null }
 
@@ -103,7 +116,8 @@ export interface TruthHarness {
   CreatePipeline(spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity>;
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
-  RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;
+  /** One Pipeline Builder run of `plan` with publishing on; `options` supplies the protocol's promotion setting. */
+  RunBuilderAgent(plan: ModelingPlanSpec, options?: BuilderRunOptions): Promise<AgentStepResult>;
   /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults, Lineage }): the model's training run's stored gate decision, with the model's lineage. */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;

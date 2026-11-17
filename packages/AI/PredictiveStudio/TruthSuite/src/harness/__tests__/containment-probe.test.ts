@@ -44,6 +44,8 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   TrainingRunNotes: null,
   LineageJSON: null,
   ValidationResultsJSON: null,
+  TrainingRunID: null,
+  DeliveryJSON: null,
   ...over,
 });
 

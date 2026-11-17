@@ -198,6 +198,13 @@ export interface TrainModelInput {
    * protocol's compute budget; absent or null means no enclosing budget.
    */
   timeoutSeconds?: number | null;  // case-violation-ok-legacy-back-compat: matches the existing TrainModelInput member casing
+  /**
+   * Single-flight per pipeline (D4-12): the run row is created by `TrainingClaims.SaveClaimedRun`, under the pipeline
+   * lock, only when no other run of the pipeline is `Running` (younger than the stale threshold); otherwise the train
+   * throws `TrainingInFlightError` naming that run and writes nothing more. Auto-train sets it. Absent: the run row is
+   * saved as before, with no claim.
+   */
+  SingleFlight?: true;
 }
 
 /**

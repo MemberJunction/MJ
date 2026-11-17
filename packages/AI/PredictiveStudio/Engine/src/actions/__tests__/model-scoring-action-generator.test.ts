@@ -65,7 +65,7 @@ class FakeEntity {
 
   public async Save(): Promise<boolean> {
     if (this.isNew) {
-      if (this.row['ID'] == null) {
+      if (this.row['ID'] === null || this.row['ID'] === undefined) {
         this.row['ID'] = newId();
       }
       this.store.rows[this.entityName].push(this.row);
@@ -124,14 +124,14 @@ class FakeProvider {
   /** Honors the exact filter shapes the generator issues. */
   public async RunView<T = unknown>(params: RunViewParams): Promise<RunViewResult<T>> {
     // The generator issues plain-string filters; a PlatformSQL filter is read by its default variant.
-    const filter = IsPlatformSQL(params.ExtraFilter) ? params.ExtraFilter.default : (params.ExtraFilter ?? '');
-    const matched = this.match(params.EntityName ?? '', filter);
-    const results = matched.map((row) => makeEntity(this.store, params.EntityName ?? '', row));
+    const filter = IsPlatformSQL(params.ExtraFilter) ? params.ExtraFilter.default : (params.ExtraFilter || '');
+    const matched = this.match(params.EntityName || '', filter);
+    const results = matched.map((row) => makeEntity(this.store, params.EntityName || '', row));
     return { Success: true, Results: results as unknown as T[], RowCount: results.length } as RunViewResult<T>;
   }
 
   private match(entityName: string, extraFilter: string): Row[] {
-    const rows = this.store.rows[entityName] ?? [];
+    const rows = this.store.rows[entityName] || [];
     return rows.filter((r) => this.rowMatches(r, extraFilter));
   }
 
@@ -141,12 +141,13 @@ class FakeProvider {
     return clauses.every((clause) => {
       const nullMatch = clause.match(/^(\w+)\s+IS NULL$/i);
       if (nullMatch) {
-        return row[nullMatch[1]] == null;
+        return row[nullMatch[1]] === null || row[nullMatch[1]] === undefined;
       }
       const eqMatch = clause.match(/^(\w+)='(.*)'$/);
       if (eqMatch) {
         const [, field, value] = eqMatch;
-        return String(row[field] ?? '') === value.replace(/''/g, "'");
+        const stored = row[field];
+        return (stored === null || stored === undefined ? '' : String(stored)) === value.replace(/''/g, "'");
       }
       return true; // unknown clause → don't exclude
     });
@@ -181,14 +182,14 @@ function seedParentAction(store: Store): Row {
  */
 function fakeModel(over: Partial<{ ID: string; Pipeline: string | null; Version: number }> = {}): MJMLModelEntity {
   return {
-    ID: over.ID ?? 'model-uuid-1',
+    ID: over.ID || 'model-uuid-1',
     Pipeline: over.Pipeline === undefined ? 'Renewal Risk' : over.Pipeline,
-    Version: over.Version ?? 3,
+    Version: over.Version || 3,
   } as unknown as MJMLModelEntity;
 }
 
 function actions(store: Store): Row[] {
-  return store.rows['MJ: Actions'].filter((a) => a['ParentID'] != null); // children only
+  return store.rows['MJ: Actions'].filter((a) => a['ParentID'] !== null && a['ParentID'] !== undefined); // children only
 }
 function paramsFor(store: Store, actionID: string): Row[] {
   return store.rows['MJ: Action Params'].filter((p) => p['ActionID'] === actionID);
@@ -283,6 +284,21 @@ describe('ModelScoringActionGenerator — GenerateForModel', () => {
     expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(8); // recreated, not doubled
     expect(store.rows['MJ: Action Categories']).toHaveLength(1); // category reused too
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'")]);
+  });
+});
+
+describe('ModelScoringActionGenerator — a name another Action holds (M4b.6 cell (c))', () => {
+  it('a later model of the pipeline taking a deleted model\'s freed version gets its own Action, named with its ID; the left-behind one is untouched', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(fakeModel({ ID: 'deleted-model', Version: 1 }), USER, provider);
+    await generator.GenerateForModel(fakeModel({ ID: 'new-model', Version: 1 }), USER, provider);
+    expect([byModelID(store, 'deleted-model')['Name'], byModelID(store, 'new-model')['Name']]).toEqual(['Score with Renewal Risk v1', 'Score with Renewal Risk v1 (new-model)']);
+    await generator.GenerateForModel(fakeModel({ ID: 'new-model', Version: 1 }), USER, provider);
+    expect(actions(store).map((a) => a['Name'])).toEqual(['Score with Renewal Risk v1', 'Score with Renewal Risk v1 (new-model)']);
   });
 });
 
