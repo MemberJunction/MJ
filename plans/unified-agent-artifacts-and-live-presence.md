@@ -1,7 +1,16 @@
 # Unified Agent Artifacts, Realtime Workspace & Cross-Device Live Presence — Implementation Plan
 
-> **Target Branch:** `feat/unified-agent-artifacts` (`/Users/amith/mj-worktrees/unified-agent-artifacts`)
-> **Status:** Architecture & Implementation Plan (Ready for Execution)
+> **Implementation Status (2026-11-15 — Shipped across Wave 1 + Wave 2):** **IMPLEMENTED** across `@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/core-actions`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-dashboards`, and `@memberjunction/server`.
+>
+> **Shipped Deviations vs. Original Design Notes Below:**
+> - **WebSocket endpoint:** Shipped on `/collaboration/yjs` (`ARTIFACT_COLLABORATION_WS_PATH` in `ArtifactCollaborationServer.ts`), superseding earlier draft `/ws/collaboration` notes.
+> - **No `any` types:** Codebase ships with strict typing (`ArtifactToolArgs`, `ExecuteAgentResult<P>` without `any`).
+> - **`ArtifactWorkspaceChannel` verbs & state:** Shipped verbs are `open`, `focus`, `show_version`, `refresh`, `close`, **`navigate_to_anchor`** (`sheet`, `range`, `slideNumber`, `elementId`, `heading`, `blockId`, `highlightMs`), and **`set_view_mode`** (`'edit' | 'suggest' | 'diff' | 'present'`) — rather than historical draft names `focus_tab`, `navigate_to`, `save_version`, `get_outline`. Instance IDs use `w1`, `w2`, ... (default `MaxInstances: 6`), `GetState()` returns `{ activeInstanceId, activeSelection, artifacts }`, and user cursor/selection deltas flow back via `EmitSelectionDelta` -> `selection_changed`.
+> - **Live-Sheet Explorer tools:** Implemented in `packages/Angular/Explorer/dashboards/src/shared/live-sheet-client-tool.helper.ts` (`CreateLiveSheetFromQuery`, `AppendQueryToLiveSheet`, `CreateLiveSheetFromView`, atomic `v1` materialization).
+> - **Branch & Target:** Shipped on `feat/artifacts-adversarial-next-wave` in `/Users/amith/mj-worktrees/unified-agent-artifacts`. See [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md) and [`guides/REALTIME_CHANNELS_GUIDE.md`](../guides/REALTIME_CHANNELS_GUIDE.md) for canonical current contracts.
+
+> **Historical Branch Ref:** `feat/unified-agent-artifacts` (`/Users/amith/mj-worktrees/unified-agent-artifacts`)
+> **Original Status:** Architecture & Implementation Plan (Historical Reference)
 > **Scope:** Loop Agents (`@memberjunction/ai-agents`), Governed Artifact Actions (`@memberjunction/core-actions`), Realtime Co-Agents & Channels (`@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`), Explorer Surfaces (`@memberjunction/ng-dashboards`), and Cross-Device Yjs Collaboration & Presence (`@memberjunction/server`, `@memberjunction/ng-artifacts`).
 
 ---
@@ -49,7 +58,7 @@ flowchart TB
     GAS --> SE
     GAS -->|"Enter / Working / Settled / Exit<br/>+ Structured Yjs Diff"| ACS
     ACS <-->|"Pub/Sub Sync + Awareness Frames"| YRR
-    ACS <-->|"WebSocket /ws/collaboration<br/>YJS_MESSAGE_SYNC + YJS_MESSAGE_AWARENESS"| DCS
+    ACS <-->|"WebSocket /collaboration/yjs<br/>YJS_MESSAGE_SYNC + YJS_MESSAGE_AWARENESS"| DCS
     RCS -->|"DelegatedResult.Artifacts"| AWC
     AWC --> AVP
     AVP --> DCS
@@ -109,7 +118,7 @@ Both workspace tools live in `ArtifactToolManager` and delegate core persistence
       /** Optional target MJ: Collections ID; verifies CanEdit on collection via ArtifactPermissionEngine. */
       collectionId?: string;
       /** Optional initial Markdown (for 'document'), SlideDeckDocument JSON, or SpreadsheetWorkbookDocument JSON. */
-      initialContent?: string | Record<string, unknown>;
+      initialContent?: string | ArtifactToolArgs;
       /** Convenience seed for 'spreadsheet': immediately bind & materialize a live query or entity view on Sheet 1! */
       liveDataSource?: {
           sourceType: 'query' | 'view' | 'entity';
@@ -146,7 +155,7 @@ Both workspace tools live in `ArtifactToolManager` and delegate core persistence
          typeName: string;
          canEdit: boolean;
          availableTools: string[];  // Tool names unlocked for this artifact type
-         outline: Record<string, unknown>; // Immediate structural outline (sheets/headers/bounds, slides, or headings)
+         outline: ArtifactToolArgs; // Immediate structural outline (sheets/headers/bounds, slides, or headings)
      }
      ```
 
@@ -188,7 +197,7 @@ To ensure mid-run created or mutated artifacts (`create_artifact`, `create_synth
        Operation: 'created' | 'mutated' | 'synthesized';
    }
    ```
-   Add `touchedArtifacts?: GovernedRunArtifactSummary[]` to `ExecuteAgentResult<P = any>` in `@memberjunction/ai-core-plus`.
+   Add `touchedArtifacts?: GovernedRunArtifactSummary[]` to `ExecuteAgentResult<P = ArtifactToolArgs>` in `@memberjunction/ai-core-plus`.
 2. **Tracking in `ArtifactToolManager` & `GovernedArtifactService`:**
    - `ArtifactToolManager` records every created, synthesized, or mutated artifact (deduplicated by `ArtifactID`, keeping the latest `ArtifactVersionID` and `VersionNumber`, with `'created'` taking precedence over `'mutated'`).
    - `GovernedArtifactService` accepts an optional `agentRunId?: string` (available via `RunActionParams.Context` or `ArtifactToolManager.getAgentRun()`) and registers touched artifacts in a bounded `MJLruCache<string, Map<string, GovernedRunArtifactSummary>>` (`maxSize: 2_000, ttlMs: 2 * 60 * 60 * 1000`) so `BaseAgent` merges **both** `this._artifactToolManager.GetTouchedArtifacts()` AND any artifacts created/mutated via `CoreActions` during the same `agentRun.ID`!
@@ -287,7 +296,7 @@ export interface CreateGovernedArtifactParams {
     CollectionID?: string;
     ConversationDetailID?: string;
     Visibility?: MJArtifactEntity['Visibility'];
-    InitialContent?: string | Record<string, unknown>;
+    InitialContent?: string | ArtifactToolArgs;
     LiveDataSource?: {
         SourceType: 'query' | 'view' | 'entity';
         QueryID?: string;
@@ -316,7 +325,7 @@ export interface CreateGovernedArtifactResult {
     Name?: string;
     ArtifactTypeName?: string;
     DriverClass?: string;
-    Outline?: Record<string, unknown>;
+    Outline?: ArtifactToolArgs;
     MaterializedTable?: {
         TableID: string;
         SheetName: string;
@@ -416,7 +425,7 @@ Because `BaseRealtimeChannelClient.AcceptsDelegationArtifacts(artifacts, config)
 - **`InteractiveComponentChannel.AcceptsDelegationArtifacts` Enhancement (`interactive-component-channel.ts:491`):**
   - Add a 3-line guard: if every `artifact` in `artifacts` carries a non-component `ArtifactTypeName` (`'Markdown Document'`, `'Presentation'`, `'Excel Spreadsheet'`, `'Whiteboard'`), return `false` even when `autoOpenDelegatedComponents: true` — eliminating empty `Interactive Component` tab flashes when an agent creates a Spreadsheet or Slide Deck!
 - **Seamless In-Place Yjs Room Continuity on `OnDelegationArtifacts`:**
-  - When an artifact is ALREADY open in `ArtifactWorkspaceChannel` connected to `/ws/collaboration`, live mutations via `ArtifactToolManager` / `MutateGovernedArtifactAction` stream directly through Yjs CRDT frames without resetting `<mj-artifact-viewer-panel>`. `OnDelegationArtifacts` only swaps `[versionNumber]` when a new persisted `MJ: Artifact Versions` row (`loaded.VersionNumber > open.VersionNumber`) was saved!
+  - When an artifact is ALREADY open in `ArtifactWorkspaceChannel` connected to `/collaboration/yjs`, live mutations via `ArtifactToolManager` / `MutateGovernedArtifactAction` stream directly through Yjs CRDT frames without resetting `<mj-artifact-viewer-panel>`. `OnDelegationArtifacts` only swaps `[versionNumber]` when a new persisted `MJ: Artifact Versions` row (`loaded.VersionNumber > open.VersionNumber`) was saved!
 
 ---
 
@@ -437,7 +446,7 @@ To keep Layer 3 Explorer surfaces thin (`packages/Angular/Explorer/CLAUDE.md`) a
 1. Invokes `Create Governed Artifact` (`__CreateGovernedArtifact`) or `Mutate Governed Artifact` (`__MutateGovernedArtifact` with `tool: 'upsert_live_table'`) on the server via `GraphQLActionClient` (`@memberjunction/graphql-dataprovider`), which runs `GovernedArtifactService` under the authenticated user's GraphQL session (`contextUser`) and returns `{ ArtifactID, ArtifactVersionID, Name, MaterializedTable: { TableID, SheetName, Headers, RowCount, BoundingRange, DataRange } }`.
 2. **Smart UI Reveal (`revealArtifactToUser`):**
    - Injects optional `RealtimeSessionService` (`@memberjunction/ng-conversations`, optional `@Optional()` injection). If a realtime voice session is currently active (`realtimeSession?.IsActive`), calls `await realtimeSession.OpenChannel('ArtifactWorkspace', { artifactId: result.ArtifactID, artifactVersionId: result.ArtifactVersionID })` so the live Sheet pops open right inside the call overlay!
-   - Otherwise opens the governed `MJ: Artifacts` record/viewer cleanly via `NavigationService` (or optional slide-over drawer when `openInTab !== false`) so the user immediately sees the live Sheet on screen and connects to `/ws/collaboration` **before** the agent performs its follow-up formula/chart/narrative steps — letting the user watch the agent work live with cross-device Yjs presence!
+   - Otherwise opens the governed `MJ: Artifacts` record/viewer cleanly via `NavigationService` (or optional slide-over drawer when `openInTab !== false`) so the user immediately sees the live Sheet on screen and connects to `/collaboration/yjs` **before** the agent performs its follow-up formula/chart/narrative steps — letting the user watch the agent work live with cross-device Yjs presence!
 
 #### 1. `QueryBrowserResourceComponent` Additions ([`query-browser-resource.component.ts`](../packages/Angular/Explorer/dashboards/src/QueryBrowser/query-browser-resource.component.ts))
 
@@ -475,8 +484,8 @@ sequenceDiagram
     participant Relay as IYjsRoomRelay (InMemory / Redis)
     participant ACS2 as ArtifactCollaborationServer (Node 2)
 
-    UserA->>ACS1: WS /ws/collaboration?artifactId=X (JWT)
-    UserB->>ACS2: WS /ws/collaboration?artifactId=X (JWT)
+    UserA->>ACS1: WS /collaboration/yjs?artifactId=X (JWT)
+    UserB->>ACS2: WS /collaboration/yjs?artifactId=X (JWT)
     Agent->>ACS1: PresenceHook({ phase: 'working', agentName: 'Query Builder',<br/>actingForUser: 'Amith', tool: 'upsert_live_table', location: 'Sheet1!A1' })
     ACS1->>ACS1: Allocate/update ServerControlledAgentClientIDs[key]<br/>encodeAwarenessUpdate(room.Awareness, [agentClientId])
     ACS1-->>UserA: YJS_MESSAGE_AWARENESS (binary frame)
@@ -590,7 +599,7 @@ In [`packages/MJServer/src/collaboration/ArtifactCollaborationServer.ts`](../pac
    - **Rule 1 (ClientID Isolation):** Reject any browser WebSocket awareness entry whose `clientID` is in `room.ProtectedAgentClientIDSet` (`clientID === room.Awareness.clientID || room.ProtectedAgentClientIDSet.has(clientID)`), preventing any browser client from overwriting or sending a `null` removal frame for a server-owned agent presence!
    - **Rule 2 (Identity & Agent-Flag Sanitization):** When rewriting `state.user` from authenticated `conn.User` (`lines 4946-4955`), explicitly stamp and strip agent fields:
      ```typescript
-     const sanitizedUser: Record<string, unknown> = {
+     const sanitizedUser: AwarenessJsonObject = {
          ...(existingUser ?? {}),
          userId: conn.User.ID,
          userName: conn.User.Name,

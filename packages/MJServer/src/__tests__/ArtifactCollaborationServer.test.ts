@@ -13,6 +13,7 @@ import {
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended
 } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EntityInfo, IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -257,6 +258,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     let permissionTable: Map<string, MockPermissionMapEntry>;
     let resolvePermissionsSpy: ReturnType<typeof vi.spyOn>;
     let aiConfigSpy: ReturnType<typeof vi.spyOn>;
+    let aiProviderInstanceSpy: ReturnType<typeof vi.spyOn>;
 
     function createMockProvider(options?: {
         onBeforeVersionSave?: (draft: MockStoredVersion) => Promise<boolean>;
@@ -475,7 +477,10 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 };
             });
 
-        aiConfigSpy = vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        aiProviderInstanceSpy = vi
+            .spyOn(AIEngineBase, 'GetProviderInstance')
+            .mockReturnValue(AIEngineBase.Instance);
+        aiConfigSpy = vi.spyOn(AIEngineBase.Instance, 'Config').mockResolvedValue(undefined);
 
         const server = ArtifactCollaborationServer.Instance;
         // Reset shutdown flag and rooms via Shutdown, then re-configure
@@ -512,6 +517,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
     afterEach(async () => {
         aiConfigSpy.mockRestore();
+        aiProviderInstanceSpy.mockRestore();
         resolvePermissionsSpy.mockRestore();
         await ArtifactCollaborationServer.Instance.Shutdown();
         ArtifactCollaborationServer.Instance.SetIdleRoomTtlMs(30_000);
@@ -1117,7 +1123,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         sheetEngine.SetCell(wb, ws.SheetID, 'B2', { Value: 100 }, false);
         sheetEngine.SetCell(wb, ws.SheetID, 'B3', { Value: 200 }, false);
         sheetEngine.SetCell(wb, ws.SheetID, 'B4', { Value: 300 }, false);
-        sheetEngine.SetCell(wb, ws.SheetID, 'B5', { Value: 400 }, true);
+        sheetEngine.SetCell(wb, ws.SheetID, 'B5', { Value: 400 }, false);
+        await sheetEngine.EvaluateWorkbookIsolated(wb);
         versions[0].Content = sheetEngine.SerializeWorkbook(wb);
 
         const clientA = await connectYjsClient(editorUser.ID);
@@ -1161,20 +1168,25 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             sheetCellsByCoord.set('sheet-1::sheet-1-row-6::sheet-1-col-B', JSON.stringify(formulaCell));
         });
 
-        // Wait for server room to converge both User A's row insertion AND User B's formula edit
-        await vi.waitFor(async () => {
-            const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(
-                artifactId,
-                editorUser
-            );
-            const mergedWb = JSON.parse(roomJson) as WorkbookSpec;
-            const mergedSheet = mergedWb.Worksheets[0];
-            // Because User A inserted a row at index 1, sheet-1-row-6 moved to row 7 (B7)
-            // and sheet-1-row-2..sheet-1-row-5 moved to B3:B6, so the formula resolved to =SUM(B3:B6) = 1000!
-            expect(mergedSheet.Cells['B7']).toBeDefined();
-            expect(mergedSheet.Cells['B7'].Formula).toBe('=SUM(B3:B6)');
-            expect(mergedSheet.Cells['B7'].ComputedValue).toBe(1000);
-        });
+        // Wait for server room to converge both User A's row insertion AND User B's formula edit.
+        // GetRoomContent evaluates collaborative workbooks inside an isolated worker thread, so allow
+        // generous headroom under loaded CI runners rather than Vitest's 1000ms default.
+        await vi.waitFor(
+            async () => {
+                const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(
+                    artifactId,
+                    editorUser
+                );
+                const mergedWb = JSON.parse(roomJson) as WorkbookSpec;
+                const mergedSheet = mergedWb.Worksheets[0];
+                // Because User A inserted a row at index 1, sheet-1-row-6 moved to row 7 (B7)
+                // and sheet-1-row-2..sheet-1-row-5 moved to B3:B6, so the formula resolved to =SUM(B3:B6) = 1000!
+                expect(mergedSheet.Cells['B7']).toBeDefined();
+                expect(mergedSheet.Cells['B7'].Formula).toBe('=SUM(B3:B6)');
+                expect(mergedSheet.Cells['B7'].ComputedValue).toBe(1000);
+            },
+            { timeout: 15_000, interval: 150 }
+        );
 
         // Compact room into MJ: Artifact Versions and verify both Content and Configuration are persisted
         const compacted = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
@@ -2164,11 +2176,11 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             ID: 'bbbbbbbb-1111-4222-8333-444444444444',
             AgentID: fakeSkipAgent.ID
         };
-        const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const loadedSpy = vi.spyOn(AIEngineBase.Instance, 'Loaded', 'get').mockReturnValue(true);
         const agentsSpy = vi
-            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .spyOn(AIEngineBase.Instance, 'Agents', 'get')
             .mockReturnValue([fakeSkipAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+        const canRunSpy = vi.spyOn(AIEngineBase.Instance, 'CanUserRunAgent').mockResolvedValue(true);
         const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
             success: true,
             payload: {
@@ -2511,6 +2523,11 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             Status: string;
         }> = [];
 
+        let currentThreadAnchorMetadata = JSON.stringify({
+            quote: 'Baseline paragraph.',
+            status: 'Open'
+        });
+
         const baseProvider = createMockProvider();
         const c1Provider: Partial<IMetadataProvider> = {
             ...baseProvider,
@@ -2521,10 +2538,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                         Results: [
                             {
                                 ID: 'dddddddd-2222-4333-8444-555555555555',
-                                AnchorMetadata: JSON.stringify({
-                                    quote: 'Baseline paragraph.',
-                                    status: 'Open'
-                                })
+                                AnchorMetadata: currentThreadAnchorMetadata
                             }
                         ],
                         TotalRowCount: 1
@@ -2585,11 +2599,11 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             AgentID: activeAgent.ID
         };
 
-        const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const loadedSpy = vi.spyOn(AIEngineBase.Instance, 'Loaded', 'get').mockReturnValue(true);
         const agentsSpy = vi
-            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .spyOn(AIEngineBase.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+        const canRunSpy = vi.spyOn(AIEngineBase.Instance, 'CanUserRunAgent').mockResolvedValue(true);
 
         try {
             // 1. API key scope enforcement: 'artifact:comment' key may comment, but 'edit' mode requires 'artifact:edit'
@@ -2671,12 +2685,13 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             });
             runCommentSpy.mockRestore();
 
-            // 4. Edit mode when agent returns no replacement fails closed without overwriting RawMarkdown with prompt text
+            // 4. P0-15: Edit mode when agent returns a plain-text refusal persists the refusal reply as a comment without overwriting content
             const runNoReplaceSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
                 success: true,
                 payload: { reply: 'I cannot rewrite this without Q4 targets.' },
                 agentRun: fakeRun as MJAIAgentRunEntityExtended
             });
+            const repliesBeforeRefusal = savedReplies.length;
             const noReplaceEdit = await resolver.ExecuteAnchoredCommentAgentMention(
                 artifactId,
                 'Research Analyst',
@@ -2685,12 +2700,76 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 'Baseline paragraph.',
                 editorCtx
             );
-            expect(noReplaceEdit.Success).toBe(false);
-            expect(noReplaceEdit.ErrorMessage).toContain('did not produce a valid replacement');
+            expect(noReplaceEdit.Success).toBe(true);
+            expect(noReplaceEdit.ReplyBody).toBe('I cannot rewrite this without Q4 targets.');
+            expect(noReplaceEdit.UpdatedContent).toBeUndefined();
+            expect(savedReplies).toHaveLength(repliesBeforeRefusal + 1);
+            expect(savedReplies[savedReplies.length - 1]?.Message).toBe(
+                'I cannot rewrite this without Q4 targets.'
+            );
             expect(await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser)).toBe(
                 '# Initial Strategy Document\n\nBaseline paragraph.'
             );
             runNoReplaceSpy.mockRestore();
+
+            // 5. P0-15: Repeated quote disambiguated by AnchorMetadata.from AND identical replacement is a version-preserving no-op
+            const repeatedDoc = [
+                '# Doc',
+                'First section: Repeated target.',
+                'Second section: Repeated target.',
+            ].join('\n');
+            await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
+                artifactId,
+                repeatedDoc,
+                editorUser,
+                true
+            );
+            const versionsBeforeSecondEdit = versions.length;
+            currentThreadAnchorMetadata = JSON.stringify({
+                quote: 'Repeated target.',
+                from: repeatedDoc.lastIndexOf('Repeated target.'),
+                status: 'Open'
+            });
+            const runSecondSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
+                success: true,
+                payload: { reply: 'Updated second occurrence.', replacement: 'Second target refined.' },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            });
+            const secondEditRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Research Analyst',
+                'edit',
+                '@Research Analyst refine second occurrence',
+                'Repeated target.',
+                editorCtx,
+                'dddddddd-2222-4333-8444-555555555555'
+            );
+            runSecondSpy.mockRestore();
+            expect(secondEditRes.Success).toBe(true);
+            const expectedAfterSecondEdit =
+                '# Doc\nFirst section: Repeated target.\nSecond section: Second target refined.';
+            expect(await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser)).toBe(
+                expectedAfterSecondEdit
+            );
+
+            const noopSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
+                success: true,
+                payload: { reply: 'Already accurate.', updatedContent: expectedAfterSecondEdit },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            });
+            const versionCountBeforeNoop = versions.length;
+            expect(versionCountBeforeNoop).toBeGreaterThan(versionsBeforeSecondEdit);
+            const noopRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Research Analyst',
+                'edit',
+                '@Research Analyst check',
+                'Second target refined.',
+                editorCtx
+            );
+            noopSpy.mockRestore();
+            expect(noopRes.Success).toBe(true);
+            expect(versions.length).toBe(versionCountBeforeNoop);
         } finally {
             canRunSpy.mockRestore();
             agentsSpy.mockRestore();
@@ -3003,12 +3082,21 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         recoveredPreDoc.destroy();
 
         // R5-3e: Newer-version room hydration 3-way merges uncompacted workingState (at v1) with newer DB v2
+        class HydrateWriterServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
         class HydratePeerServer extends ArtifactCollaborationServer {
             public constructor() {
                 super();
             }
         }
+        const hydrateWriter = new HydrateWriterServer();
         const hydratePeer = new HydratePeerServer();
+        const r5HydArtifactId = '55555555-6666-4777-8888-999999999999';
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: true });
+        hydrateWriter.SetMetadataProviderOverride(createMockProvider());
         hydratePeer.SetMetadataProviderOverride(createMockProvider());
 
         try {
@@ -3017,47 +3105,45 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             versions = [
                 {
                     ID: 'ver-hyd-1',
-                    ArtifactID: artifactId,
+                    ArtifactID: r5HydArtifactId,
                     VersionNumber: 1,
                     Content: v1Base,
                     ContentHash: 'hyd-1',
                     UserID: editorUser.ID,
                     __mj_CreatedAt: new Date(Date.now() - 10_000).toISOString(),
                     __mj_UpdatedAt: new Date(Date.now() - 10_000).toISOString()
-                },
-                {
-                    ID: 'ver-hyd-2',
-                    ArtifactID: artifactId,
-                    VersionNumber: 2,
-                    Content: v2OutOfBand,
-                    ContentHash: 'hyd-2',
-                    UserID: editorUser.ID,
-                    __mj_CreatedAt: new Date(Date.now() + 10_000).toISOString(),
-                    __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
                 }
             ];
 
-            const staleWorkingDoc = new Y.Doc();
-            staleWorkingDoc
-                .getText('content')
-                .insert(0, '# Spec\n\n## Intro\nUncompacted human intro.\n\n## Details\nOriginal details.\n');
-            staleWorkingDoc.getMap('meta').set('versionId', 'ver-hyd-1');
-            staleWorkingDoc.getMap('meta').set('versionNumber', 1);
-            workingStates.set(artifactId, {
-                ID: 'ws-hyd-1',
-                ArtifactID: artifactId,
-                YjsState: BytesToBase64(Y.encodeStateAsUpdate(staleWorkingDoc)),
-                LastModifiedByUserID: editorUser.ID,
-                __mj_UpdatedAt: new Date(Date.now() - 5_000).toISOString()
-            });
-            staleWorkingDoc.destroy();
+            const writerRoom = await hydrateWriter.GetOrCreateRoom(r5HydArtifactId, editorUser);
+            expect(writerRoom).not.toBeNull();
+            writerRoom!.Doc.transact(() => {
+                const yText = writerRoom!.Doc.getText('content');
+                yText.delete(0, yText.length);
+                yText.insert(0, '# Spec\n\n## Intro\nUncompacted human intro.\n\n## Details\nOriginal details.\n');
+            }, 'test-edit');
+            const flushOk = await hydrateWriter.FlushWorkingState(r5HydArtifactId, editorUser);
 
-            const hydratedRoom = await hydratePeer.GetOrCreateRoom(artifactId, editorUser);
+            expect(flushOk).toBe(true);
+
+            versions.push({
+                ID: 'ver-hyd-2',
+                ArtifactID: r5HydArtifactId,
+                VersionNumber: 2,
+                Content: v2OutOfBand,
+                ContentHash: 'hyd-2',
+                UserID: editorUser.ID,
+                __mj_CreatedAt: new Date(Date.now() + 10_000).toISOString(),
+                __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
+            });
+
+            const hydratedRoom = await hydratePeer.GetOrCreateRoom(r5HydArtifactId, editorUser);
             expect(hydratedRoom).not.toBeNull();
             expect(hydratedRoom!.Doc.getText('content').toString()).toBe(
                 '# Spec\n\n## Intro\nUncompacted human intro.\n\n## Details\nUpdated details in v2.\n'
             );
         } finally {
+            await hydrateWriter.Shutdown();
             await hydratePeer.Shutdown();
         }
     });
@@ -3130,9 +3216,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         };
 
         const agentsSpy = vi
-            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .spyOn(AIEngineBase.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+        const canRunSpy = vi.spyOn(AIEngineBase.Instance, 'CanUserRunAgent').mockResolvedValue(true);
 
         const editorCtx: AppContext = {
             dataSource: {} as AppContext['dataSource'],
@@ -3950,79 +4036,94 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             expect(await node.GetRoomContent(artFail, editorUser)).toContain('Restored v3 appendix.');
 
             // --- 5a. Hydrate 3-way merge on EMPTY base ("") ---
-            const artEmptyHydrate = 'b2222222-2222-4222-8222-222222222222';
-            const emptyBaseWorkingDoc = new Y.Doc();
-            emptyBaseWorkingDoc.getText('content').insert(0, 'Human draft from empty base.\n');
-            emptyBaseWorkingDoc.getMap('meta').set('baseContent', '');
-            workingStates.set(artEmptyHydrate, {
-                ID: 'ws-empty-base',
-                ArtifactID: artEmptyHydrate,
-                YjsState: BytesToBase64(Y.encodeStateAsUpdate(emptyBaseWorkingDoc)),
-                LastModifiedByUserID: editorUser.ID,
-                __mj_UpdatedAt: new Date().toISOString()
-            });
-            emptyBaseWorkingDoc.destroy();
-
-            versions = [
-                {
-                    ID: 'ver-empty-hyd-1',
-                    ArtifactID: artEmptyHydrate,
-                    VersionNumber: 1,
-                    Content: 'Agent v1 from empty base.\n',
-                    ContentHash: 'hash-empty-hyd-1',
-                    UserID: editorUser.ID,
-                    __mj_CreatedAt: new Date(Date.now() - 5_000).toISOString(),
-                    __mj_UpdatedAt: new Date(Date.now() - 5_000).toISOString()
+            class R67WriterServer extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
                 }
-            ];
+            }
+            const artEmptyHydrate = 'b2222222-2222-4222-8222-222222222222';
+            const emptyWriterNode = new R67WriterServer();
+            emptyWriterNode.SetMetadataProviderOverride(createMockProvider());
+            try {
+                versions = [];
+                const emptyWriterRoom = await emptyWriterNode.GetOrCreateRoom(artEmptyHydrate, editorUser);
+                expect(emptyWriterRoom).not.toBeNull();
+                emptyWriterRoom!.Doc.transact(() => {
+                    emptyWriterRoom!.Doc.getText('content').insert(0, 'Human draft from empty base.\n');
+                }, 'test-empty-edit');
+                await emptyWriterNode.FlushWorkingState(artEmptyHydrate, editorUser);
 
-            const hydratedEmptyRoom = await node.GetOrCreateRoom(artEmptyHydrate, editorUser);
-            expect(hydratedEmptyRoom).not.toBeNull();
-            const mergedFromEmpty = await node.GetRoomContent(artEmptyHydrate, editorUser);
-            expect(mergedFromEmpty).toContain('Human draft from empty base.');
-            expect(mergedFromEmpty).toContain('Agent v1 from empty base.');
-            expect(hydratedEmptyRoom!.Doc.getMap('meta').get('baseVersionId')).toBe('ver-empty-hyd-1');
+                versions = [
+                    {
+                        ID: 'ver-empty-hyd-1',
+                        ArtifactID: artEmptyHydrate,
+                        VersionNumber: 1,
+                        Content: 'Agent v1 from empty base.\n',
+                        ContentHash: 'hash-empty-hyd-1',
+                        UserID: editorUser.ID,
+                        __mj_CreatedAt: new Date(Date.now() + 5_000).toISOString(),
+                        __mj_UpdatedAt: new Date(Date.now() + 5_000).toISOString()
+                    }
+                ];
+
+                const hydratedEmptyRoom = await node.GetOrCreateRoom(artEmptyHydrate, editorUser);
+                expect(hydratedEmptyRoom).not.toBeNull();
+                const mergedFromEmpty = await node.GetRoomContent(artEmptyHydrate, editorUser);
+                expect(mergedFromEmpty).toContain('Human draft from empty base.');
+                expect(mergedFromEmpty).toContain('Agent v1 from empty base.');
+                expect(hydratedEmptyRoom!.BaseVersionID).toBe('ver-empty-hyd-1');
+            } finally {
+                await emptyWriterNode.Shutdown();
+            }
 
             // --- 5b. Hydrate recognizes a Restored DB version whose text equals base (baseVersionId !== latestVersion.ID) ---
             const artRestored = 'b3333333-3333-4333-8333-333333333333';
-            const workingAtV1 = new Y.Doc();
-            workingAtV1.getText('content').insert(0, 'Original v1 body.\nUncompacted human note.\n');
-            workingAtV1.getMap('meta').set('baseVersionId', 'ver-rest-1');
-            workingAtV1.getMap('meta').set('baseVersionNumber', 1);
-            workingAtV1.getMap('meta').set('baseContent', 'Original v1 body.\n');
-            workingAtV1.getMap('meta').set('versionId', 'ver-rest-1');
-            workingAtV1.getMap('meta').set('versionNumber', 1);
-            workingStates.set(artRestored, {
-                ID: 'ws-rest-1',
-                ArtifactID: artRestored,
-                YjsState: BytesToBase64(Y.encodeStateAsUpdate(workingAtV1)),
-                LastModifiedByUserID: editorUser.ID,
-                // Working state flushed AFTER v3 was restored — must still detect baseVersionId !== ver-rest-3!
-                __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
-            });
-            workingAtV1.destroy();
+            const restoredWriterNode = new R67WriterServer();
+            restoredWriterNode.SetMetadataProviderOverride(createMockProvider());
+            try {
+                versions = [
+                    {
+                        ID: 'ver-rest-1',
+                        ArtifactID: artRestored,
+                        VersionNumber: 1,
+                        Content: 'Original v1 body.\n',
+                        ContentHash: 'hash-rest-1',
+                        UserID: editorUser.ID,
+                        __mj_CreatedAt: new Date(Date.now() - 10_000).toISOString(),
+                        __mj_UpdatedAt: new Date(Date.now() - 10_000).toISOString()
+                    }
+                ];
+                const restoredWriterRoom = await restoredWriterNode.GetOrCreateRoom(artRestored, editorUser);
+                expect(restoredWriterRoom).not.toBeNull();
+                restoredWriterRoom!.Doc.transact(() => {
+                    const yText = restoredWriterRoom!.Doc.getText('content');
+                    yText.insert(yText.length, 'Uncompacted human note.\n');
+                }, 'test-restored-edit');
+                await restoredWriterNode.FlushWorkingState(artRestored, editorUser);
 
-            versions = [
-                {
-                    ID: 'ver-rest-3',
-                    ArtifactID: artRestored,
-                    VersionNumber: 3,
-                    Content: 'Original v1 body.\n',
-                    ContentHash: 'hash-rest-3',
-                    UserID: editorUser.ID,
-                    __mj_CreatedAt: new Date().toISOString(),
-                    __mj_UpdatedAt: new Date().toISOString()
-                }
-            ];
+                versions = [
+                    {
+                        ID: 'ver-rest-3',
+                        ArtifactID: artRestored,
+                        VersionNumber: 3,
+                        Content: 'Original v1 body.\n',
+                        ContentHash: 'hash-rest-3',
+                        UserID: editorUser.ID,
+                        __mj_CreatedAt: new Date().toISOString(),
+                        __mj_UpdatedAt: new Date().toISOString()
+                    }
+                ];
 
-            const restoredRoom = await node.GetOrCreateRoom(artRestored, editorUser);
-            expect(restoredRoom).not.toBeNull();
-            expect(restoredRoom!.BaseVersionID).toBe('ver-rest-3');
-            expect(restoredRoom!.Doc.getMap('meta').get('baseVersionId')).toBe('ver-rest-3');
-            expect(restoredRoom!.Doc.getMap('meta').get('versionNumber')).toBe(3);
-            expect(await node.GetRoomContent(artRestored, editorUser)).toBe(
-                'Original v1 body.\nUncompacted human note.\n'
-            );
+                const restoredRoom = await node.GetOrCreateRoom(artRestored, editorUser);
+                expect(restoredRoom).not.toBeNull();
+                expect(restoredRoom!.BaseVersionID).toBe('ver-rest-3');
+                expect(restoredRoom!.BaseVersionNumber).toBe(3);
+                expect(await node.GetRoomContent(artRestored, editorUser)).toBe(
+                    'Original v1 body.\nUncompacted human note.\n'
+                );
+            } finally {
+                await restoredWriterNode.Shutdown();
+            }
         } finally {
             await node.Shutdown();
         }
@@ -4156,11 +4257,11 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 ID: '76767676-1212-4343-8585-efefefefefef',
                 AgentID: activeAgent.ID
             };
-            const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+            const loadedSpy = vi.spyOn(AIEngineBase.Instance, 'Loaded', 'get').mockReturnValue(true);
             const agentsSpy = vi
-                .spyOn(AIEngine.Instance, 'Agents', 'get')
+                .spyOn(AIEngineBase.Instance, 'Agents', 'get')
                 .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-            const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+            const canRunSpy = vi.spyOn(AIEngineBase.Instance, 'CanUserRunAgent').mockResolvedValue(true);
             const runCommentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
                 success: true,
                 payload: { reply: 'Reviewed note.' },
@@ -4542,20 +4643,31 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
         // 2. Cold room hydration conflict flushes 'merge-conflict' when first WebSocket client connects
         const coldArtifactId = 'd4444444-4444-4444-8444-444444444444';
-        const offlineDoc = new Y.Doc();
-        offlineDoc.getText('content').insert(0, 'Human offline edit.\n');
-        offlineDoc.getMap('meta').set('baseVersionId', 'ver-hyd-1');
-        offlineDoc.getMap('meta').set('baseVersionNumber', 1);
-        offlineDoc.getMap('meta').set('versionId', 'ver-hyd-1');
-        offlineDoc.getMap('meta').set('versionNumber', 1);
-        workingStates.set(coldArtifactId, {
-            ID: 'ws-hyd-conflict',
-            ArtifactID: coldArtifactId,
-            YjsState: BytesToBase64(Y.encodeStateAsUpdate(offlineDoc)),
-            LastModifiedByUserID: editorUser.ID,
-            __mj_UpdatedAt: new Date().toISOString()
-        });
-        offlineDoc.destroy();
+        versions = [
+            {
+                ID: 'ver-hyd-1',
+                ArtifactID: coldArtifactId,
+                VersionNumber: 1,
+                Content: 'Original cold base.\n',
+                ContentHash: 'hash-hyd-1',
+                UserID: editorUser.ID
+            }
+        ];
+        class ColdHydrateWriterServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const coldWriter = new ColdHydrateWriterServer();
+        coldWriter.SetMetadataProviderOverride(createMockProvider());
+        const coldWriterRoom = await coldWriter.GetOrCreateRoom(coldArtifactId, editorUser);
+        expect(coldWriterRoom).not.toBeNull();
+        coldWriterRoom!.Doc.transact(() => {
+            const yText = coldWriterRoom!.Doc.getText('content');
+            yText.delete(0, yText.length);
+            yText.insert(0, 'Human offline edit.\n');
+        }, 'test-offline-edit');
+        await coldWriter.FlushWorkingState(coldArtifactId, editorUser);
 
         versions = [
             {
@@ -4611,6 +4723,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         });
         coldWs.close();
         coldDoc.destroy();
+        await coldWriter.Shutdown();
     });
 
     it(
@@ -5272,9 +5385,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             AgentID: activeAgent.ID
         };
         const agentsSpy = vi
-            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .spyOn(AIEngineBase.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+        const canRunSpy = vi.spyOn(AIEngineBase.Instance, 'CanUserRunAgent').mockResolvedValue(true);
         const runConflictSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementationOnce(async () => {
             // Concurrent co-author rewrites the exact anchored selection while the agent is thinking
             mentionRoom!.Doc.transact(() => {
@@ -5807,17 +5920,23 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
             const newerWsDoc = new Y.Doc();
             newerWsDoc.getText('content').insert(0, 'Newer v5 working state\n');
-            newerWsDoc.getMap('meta').set('baseVersionNumber', 5);
-            newerWsDoc.getMap('meta').set('versionNumber', 5);
             const newerYjsStateB64 = BytesToBase64(Y.encodeStateAsUpdate(newerWsDoc));
             newerWsDoc.destroy();
 
+            versions.push({
+                ID: 'ver-guard-5',
+                ArtifactID: guardArtId,
+                VersionNumber: 5,
+                Content: 'Newer v5 working state\n',
+                ContentHash: 'hash-guard-5',
+                UserID: secondEditorUser.ID
+            });
             workingStates.set(guardArtId, {
                 ID: 'ws-guard-5',
                 ArtifactID: guardArtId,
                 YjsState: newerYjsStateB64,
                 LastModifiedByUserID: secondEditorUser.ID,
-                __mj_UpdatedAt: new Date().toISOString()
+                __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
             });
 
             const guardedFlush = await server.FlushWorkingState(guardArtId, editorUser, {
@@ -5835,6 +5954,10 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     });
 
     it('R9: verified Round 9 restore mutation & idempotency (R9-2), mutation dryRun (R9-5), and monotonic counter AST merge (R9-8)', async () => {
+        const sysSpy = vi
+            .spyOn(UserCache.Instance, 'GetSystemUser')
+            .mockReturnValue(createTestUser('system-user-r9', 'System', 'sys@example.com'));
+        try {
         const server = ArtifactCollaborationServer.Instance;
         const resolver = new DocumentCollaborationResolver();
         const artR9 = 'e8090000-0000-4000-8000-000000000001';
@@ -5987,6 +6110,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(mergedObj.idCounter).toBe(15);
         expect(mergedObj.pages.some((it) => it.id === 'item-15')).toBe(true);
         expect(mergedObj.pages.some((it) => it.id === 'item-12')).toBe(true);
+        } finally {
+            sysSpy.mockRestore();
+        }
     });
 
     it('R9: multi-node concurrent restore, cold working-state restore, and deferCommit + MJ_ARTIFACT_VERSION_SAVED idempotency', async () => {
@@ -6580,22 +6706,22 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             public static Create(): R11NodeA {
                 return new this();
             }
-            public ReconcileOob(
+            public async ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
-            ): void {
-                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            ): Promise<void> {
+                await this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
             }
         }
         class R11NodeB extends ArtifactCollaborationServer {
             public static Create(): R11NodeB {
                 return new this();
             }
-            public ReconcileOob(
+            public async ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
-            ): void {
-                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            ): Promise<void> {
+                await this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
             }
         }
 
@@ -6658,8 +6784,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             versions.push(v3Restore);
 
             // Node A and Node B independently execute reconcileOutOfBandVersionIntoRoom with isRestore: true
-            nodeA.ReconcileOob(roomA!, v3Restore);
-            nodeB.ReconcileOob(roomB!, v3Restore);
+            await nodeA.ReconcileOob(roomA!, v3Restore);
+            await nodeB.ReconcileOob(roomB!, v3Restore);
 
             // Now simulate nodes syncing their Y.Docs directly
             const updateFromB = Y.encodeStateAsUpdate(roomB!.Doc);
@@ -7880,12 +8006,15 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(room!.BaseVersionID).toBe('ver-x1c-v1');
         expect(room!.BaseVersionNumber).toBe(1);
 
-        // Verify syncRoomBaseVersionFromDocMetaOnRollback on a second node (Node 2):
+        // Verify trusted server-authoritative 'room-rollback' relay updates a second node (Node 2):
         // Node 2 has received v2 earlier, so its BaseVersionNumber was 2
         const mockNode2Doc = new Y.Doc();
         Y.applyUpdate(mockNode2Doc, Y.encodeStateAsUpdate(room!.Doc));
         const mockNode2Room: CollaborationRoom = {
             ArtifactID: testArtifactId,
+            RoomKey: room!.RoomKey,
+            ProviderKey: room!.ProviderKey,
+            Provider: room!.Provider,
             Doc: mockNode2Doc,
             Awareness: new awarenessProtocol.Awareness(mockNode2Doc),
             Connections: new Set(),
@@ -7895,6 +8024,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             BaseVersionID: 'ver-x1c-v2',
             BaseVersionNumber: 2,
             BaseVersionText: v2Content,
+            BaseConfiguration: null,
             LastAppliedRestoreVersionID: null,
             LastAppliedRestoreVersionNumber: 0,
             DirtyVersion: false,
@@ -7905,10 +8035,20 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             LastReconciledBaselineText: v1Content
         };
 
-        const syncRollbackFn = Reflect.get(server, 'syncRoomBaseVersionFromDocMetaOnRollback') as (
-            r: CollaborationRoom
+        const applyRollbackFn = Reflect.get(server, 'applyServerRoomRollback') as (
+            r: CollaborationRoom,
+            p: {
+                restoredVersionId?: string | null;
+                restoredVersionNumber?: number;
+                restoredBaseText?: string;
+                restoredBaseConfiguration?: string | null;
+            }
         ) => void;
-        syncRollbackFn.call(server, mockNode2Room);
+        applyRollbackFn.call(server, mockNode2Room, {
+            restoredVersionId: 'ver-x1c-v1',
+            restoredVersionNumber: 1,
+            restoredBaseText: v1Content
+        });
 
         // Node 2 room base version reverted to v1, BaseVersionText reverted to v1, and OOB fields cleared
         expect(mockNode2Room.BaseVersionID).toBe('ver-x1c-v1');

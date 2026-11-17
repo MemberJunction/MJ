@@ -402,6 +402,15 @@ describe('Always-on ArtifactToolManager workspace, GovernedArtifactService & liv
             });
 
         const mgr = new ArtifactToolManager();
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-fail-1',
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Owner',
+        });
         mgr.Initialize(
             [
                 {
@@ -414,6 +423,7 @@ describe('Always-on ArtifactToolManager workspace, GovernedArtifactService & liv
             ],
             {
                 contextUser: user,
+                provider: { Entities: [] } as unknown as IMetadataProvider,
                 agentRunId: 'run-fail-presence',
                 agentName: 'Sage',
                 workspaceEnabled: true,

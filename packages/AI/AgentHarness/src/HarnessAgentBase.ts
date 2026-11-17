@@ -73,9 +73,69 @@ const TURN_END_CONTRACT = [
     'INSIDE the JSON. If you cannot proceed, say that inside the JSON too.',
 ].join('\n');
 
+/** Reasoning effort level passed to harnesses that support `--effort` (e.g. Antigravity CLI). */
+export type HarnessReasoningEffort = 'low' | 'medium' | 'high';
+
+interface EffortConfigurableHarnessAdapter {
+    SetEffort(effort: HarnessReasoningEffort): void;
+}
+
+function isEffortConfigurableAdapter(
+    adapter: BaseHarnessAdapter,
+): adapter is BaseHarnessAdapter & EffortConfigurableHarnessAdapter {
+    const candidate = adapter as Partial<EffortConfigurableHarnessAdapter>;
+    return typeof candidate.SetEffort === 'function';
+}
+
+function normalizeHarnessEffort(value: string | number | null | undefined): HarnessReasoningEffort | undefined {
+    if (value == null) {
+        return undefined;
+    }
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value) || value <= 0) {
+            return undefined;
+        }
+        if (value <= 33) return 'low';
+        if (value <= 66) return 'medium';
+        return 'high';
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return undefined;
+    }
+    if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+        return normalized;
+    }
+    if (normalized === 'xhigh' || normalized === 'max') {
+        return 'high';
+    }
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) {
+        return normalizeHarnessEffort(numeric);
+    }
+    return undefined;
+}
+
+function toPersistedEffortNumber(value: string | number | null | undefined): number | undefined {
+    if (value == null) {
+        return undefined;
+    }
+    const rawNum = typeof value === 'number' ? value : Number(String(value).trim());
+    if (typeof value !== 'boolean' && String(value).trim() !== '' && Number.isFinite(rawNum)) {
+        return rawNum >= 1 && rawNum <= 100 ? Math.round(rawNum) : undefined;
+    }
+    const tier = normalizeHarnessEffort(value);
+    if (tier === 'low') return 25;
+    if (tier === 'medium') return 50;
+    if (tier === 'high') return 100;
+    return undefined;
+}
+
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
 export interface HarnessAgentConfig {
     harnessName?: string;
+    model?: string;
+    effort?: HarnessReasoningEffort;
     sandbox?: {
         provider?: HarnessSandboxProviderType;
         image?: string;
@@ -95,6 +155,8 @@ export interface HarnessAgentConfig {
 
 const KNOWN_HARNESS_CONFIG_KEYS: ReadonlySet<string> = new Set([
     'harnessName',
+    'model',
+    'effort',
     'sandbox',
     'mcpServerUrl',
     'mcpCredential',
@@ -137,6 +199,9 @@ export class HarnessAgentBase extends BaseAgent {
     protected sandboxHandle: SandboxHandle | null = null;
     protected harnessRow: MJAIAgentHarnessEntity | null = null;
     protected sessionEnvironment: Record<string, string> = {};
+    protected configuredModel: string | undefined = undefined;
+    protected configuredEffort: HarnessReasoningEffort | undefined = undefined;
+    protected persistedEffortLevel: number | undefined = undefined;
     protected turnIndex = 0;
 
     /**
@@ -224,6 +289,24 @@ export class HarnessAgentBase extends BaseAgent {
 
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
         const mcpBinding = this.resolveMcpSessionEndpoint(config);
+        const resolvedModel =
+            config.model?.trim() ||
+            harness.DefaultModel?.trim() ||
+            undefined;
+        const resolvedEffort =
+            normalizeHarnessEffort(config.effort) ??
+            normalizeHarnessEffort(promptParams.effortLevel) ??
+            normalizeHarnessEffort(promptParams.prompt?.EffortLevel);
+        this.configuredModel = resolvedModel;
+        this.configuredEffort = resolvedEffort;
+        this.persistedEffortLevel =
+            toPersistedEffortNumber(config.effort) ??
+            toPersistedEffortNumber(promptParams.effortLevel) ??
+            toPersistedEffortNumber(promptParams.prompt?.EffortLevel);
+
+        if (resolvedEffort && isEffortConfigurableAdapter(this.adapter)) {
+            this.adapter.SetEffort(resolvedEffort);
+        }
 
         await this.adapter.StartSession({
             ResumeSessionId: resumeSessionId,
@@ -235,13 +318,17 @@ export class HarnessAgentBase extends BaseAgent {
             Environment: environment,
             McpServerUrl: mcpBinding.mcpServerUrl,
             McpCredential: mcpBinding.mcpCredential,
-            Model: harness.DefaultModel ?? undefined,
+            Model: resolvedModel,
             CancellationToken: promptParams.cancellationToken,
             CloudOptions: config.sandbox?.cloud,
             SandboxMetadata: this.sandboxHandle.Metadata,
         });
 
-        LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
+        LogStatus(
+            `Harness session started for '${harness.Name}' (${harness.DriverClass})` +
+                `${resolvedModel ? ` model=${resolvedModel}` : ''}` +
+                `${resolvedEffort ? ` effort=${resolvedEffort}` : ''}`,
+        );
     }
 
     /**
@@ -478,8 +565,16 @@ export class HarnessAgentBase extends BaseAgent {
             const run = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
-            run.ModelID = (await this.resolveReportedModelId(turn.ReportedModel, promptParams)) ?? ids.ModelID;
-            run.VendorID = ids.VendorID;
+            const reportedId = await this.resolveReportedModelId(turn.ReportedModel, promptParams);
+            const configuredId =
+                !reportedId && this.configuredModel && this.configuredModel !== turn.ReportedModel
+                    ? await this.resolveReportedModelId(this.configuredModel, promptParams)
+                    : null;
+            run.ModelID = promptParams.override?.modelId ?? reportedId ?? configuredId ?? ids.ModelID;
+            run.VendorID = promptParams.override?.vendorId ?? ids.VendorID;
+            if (this.persistedEffortLevel !== undefined) {
+                run.EffortLevel = this.persistedEffortLevel;
+            }
             run.AgentID = this._agentRunAgentId();
             run.UserID = ResolvePromptRunUserID({
                 UserID: promptParams.UserID,
@@ -1302,6 +1397,11 @@ export class HarnessAgentBase extends BaseAgent {
         this.adapter = null;
         this.sandboxHandle = null;
         this.sandboxProvider = null;
+        this.harnessRow = null;
+        this.sessionEnvironment = {};
+        this.configuredModel = undefined;
+        this.configuredEffort = undefined;
+        this.persistedEffortLevel = undefined;
         this.turnIndex = 0;
     }
 

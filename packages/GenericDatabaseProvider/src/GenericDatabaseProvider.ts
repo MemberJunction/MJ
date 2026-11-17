@@ -108,6 +108,8 @@ import {
     ServerOperationScopeManager,
     NormalizeRunViewParameters,
     CompositeFilterSQLCompiler,
+    IsPostRunViewProtectedEntity,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 
 import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
@@ -3891,10 +3893,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             } else {
                 entityInfo = this.EntityByID(viewEntity!.EntityID) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
+                if (typeof params.EntityName === 'string' && params.EntityName.trim().length > 0) {
+                    const requestedEntity = this.EntityByName(params.EntityName.trim());
+                    if (!requestedEntity || !UUIDsEqual(requestedEntity.ID, entityInfo.ID)) {
+                        throw new Error(
+                            `EntityName '${params.EntityName}' does not match view '${viewEntity.Name ?? viewEntity.ID}' target entity '${entityInfo.Name}'.`
+                        );
+                    }
+                }
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
             resolvedEntity = entityInfo;
+
+            if (
+                params.Aggregates &&
+                params.Aggregates.length > 0 &&
+                this.IsPostRunViewProtectedEntity(entityInfo.Name) &&
+                !this.isSystemCaller(user)
+            ) {
+                throw new Error(
+                    `Access denied: aggregate queries are not allowed on PostRunView-protected entity '${entityInfo.Name}' because PostRunView hooks cannot filter SQL aggregates.`
+                );
+            }
 
             // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
             const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
@@ -4432,6 +4453,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ErrorMessage: e instanceof Error ? e.message : String(e),
             } as RunViewResult<T>;
         }
+    }
+
+    /** Returns true when `entityName` is registered as requiring PostRunView row-level ACL hooks. */
+    protected IsPostRunViewProtectedEntity(entityName: string): boolean {
+        return IsPostRunViewProtectedEntity(entityName);
+    }
+
+    /** Returns true when `user` represents the trusted internal server system identity. */
+    protected isSystemCaller(user?: UserInfo): boolean {
+        if (!user) {
+            return false;
+        }
+        return IsSystemUser(user) || WellKnownUserSource.Instance.IsSystemUser(user);
     }
 
     /** The stored view a run names (ViewEntity, else ViewID, else ViewName), or null for an entity run. */
@@ -5429,7 +5463,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: gateRejection });
                     continue;
                 }
-                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
+                const entityInfo = item.params.EntityName
+                    ? this.EntityByName(item.params.EntityName)
+                    : (item.params.ViewEntity && (item.params.ViewEntity as MJUserViewEntityExtended).EntityID
+                        ? this.EntityByID((item.params.ViewEntity as MJUserViewEntityExtended).EntityID)
+                        : undefined);
                 // Read-permission gate for EVERY item whose entity is known, before any leg can answer:
                 // an item with no cache status, and an external entity, are served from the server cache
                 // on a hit WITHOUT re-entering InternalRunView, so a CanRead check that lived only on the
@@ -5438,6 +5476,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     const permissionError = this.readPermissionError(entityInfo, user);
                     if (permissionError !== null) {
                         errorResults.push({ viewIndex: i, status: 'error', errorMessage: permissionError });
+                        continue;
+                    }
+                    if (
+                        item.params.Aggregates &&
+                        item.params.Aggregates.length > 0 &&
+                        this.IsPostRunViewProtectedEntity(entityInfo.Name) &&
+                        !this.isSystemCaller(user)
+                    ) {
+                        errorResults.push({
+                            viewIndex: i,
+                            status: 'error',
+                            errorMessage: `Access denied: aggregate queries are not allowed on PostRunView-protected entity '${entityInfo.Name}' because PostRunView hooks cannot filter SQL aggregates.`,
+                        });
                         continue;
                     }
                 }
@@ -5464,12 +5515,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
+                // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView
+                // hooks driven by sibling permission tables (e.g., ArtifactPermission / CollectionPermission).
+                // Global COUNT(*)/MAX(__mj_UpdatedAt) checks cannot detect ACL revocations on sibling tables,
+                // so never return status: 'current'; always run the full query + PostRunView hook.
+                if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
                 itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits when within freshness window)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
             const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
+            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
             const serverCacheMissItems: Array<{
                 index: number;
                 item: RunViewWithCacheCheckParams;
@@ -5492,6 +5553,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             serverCached: resolved.serverCached,
                             fingerprint: resolved.fingerprint,
                         });
+                    } else if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                        // PostRunView-protected entities bypass differential / cached delta transport and run full query + PostRunView.
+                        staleItemsNoTracking.push({ index, params: item.params });
                     } else if (entityInfo.TrackRecordChanges) {
                         // The client's copy is older and the entity tracks record changes: Phase 2 reads
                         // the DB status and sends only the changed rows, not the full cached copy.
@@ -5512,7 +5576,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 clientMaxUpdatedAt: string; clientRowCount: number;
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
-            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
             /** Queues a differential reply: the rows changed since the client's copy, and the deleted IDs. */
             const queueDifferential = (
                 index: number,
@@ -5580,9 +5643,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         if (this.isCacheCurrent(cachedSlotStatus, serverStatus)) {
                             // Server cache slot is confirmed current against SQL — refresh its verification timestamp in O(1)
                             LocalCacheManager.Instance.TouchRunViewResultVerifiedAt(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
+                            } else if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                                staleItemsNoTracking.push({ index, params: item.params });
                             } else if (entityInfo.TrackRecordChanges) {
                                 queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                             } else {
@@ -5595,7 +5660,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             // Evict the stale server slot and refresh from DB so LocalCacheManager and the client self-heal.
                             LogStatusEx({ message: `    ♻️ [SmartCache RECONCILE-EVICT] "${entityLabel}" — server cache slot disagreed with DB status; invalidating and refreshing from DB`, verboseOnly: true });
                             await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 currentResults.push({ viewIndex: index, status: 'current' });
                             } else {
                                 staleItemsNoTracking.push({ index, params: item.params });
@@ -5604,13 +5669,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         }
                     }
 
-                    if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                    if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
-                    } else if (entityInfo.TrackRecordChanges) {
+                    } else if (entityInfo.TrackRecordChanges && !this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
                         queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                     } else {
-                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
+                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking or PostRunView-protected)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
                     }
                 }
@@ -5750,6 +5815,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 );
                 if (hooked && Array.isArray(hooked.Results)) {
                     rowBearing.results = hooked.Results as T[];
+                    if (typeof hooked.TotalRowCount === 'number') {
+                        rowBearing.rowCount = hooked.TotalRowCount;
+                    } else {
+                        rowBearing.rowCount = hooked.Results.length;
+                    }
                 }
             }
 
@@ -6183,6 +6253,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         | null
     > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
+        if (item.params.EntityName && this.IsPostRunViewProtectedEntity(item.params.EntityName)) {
+            return null;
+        }
         if (!this.runViewCacheEligible(item.params) || this.cacheDeniedForViewOnlyRequest(item.params, contextUser)) {
             return null;
         }
@@ -6294,6 +6367,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         queryParameters?: NamedQueryParameter[],
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
+            if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                return await this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
+            }
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
                 // Unparseable client timestamp — can't trust the differential math; fall
@@ -6734,9 +6810,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   refusal echoes it and nothing else. The query's ID when omitted.
      * @throws Error if the user does not have permission to run the query
      */
+    private static readonly RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS = new Set<string>([
+        '34d2d4d2-c727-4366-996f-3aaf87fc103e', // GetArtifactVersionsByID
+        '8f84dfb4-c38e-4b8d-80e7-9ccf30039e77', // GetConversationComplete
+        'ee272535-9d1d-4e4b-8613-1332cb564501', // GetConversationArtifactsMap
+        'a1b2c3d4-e5f6-4789-abcd-123456789abc', // GetConversationArtifactsForAgent
+    ]);
+
+    private static isMagicLinkRestrictedArtifactQuery(query: MJQueryEntityExtended, user: UserInfo | undefined): boolean {
+        if (!user || (!user.IsMagicLinkAnonymous && !user.MagicLinkScope)) {
+            return false;
+        }
+        if (query.ID && GenericDatabaseProvider.RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS.has(NormalizeUUID(query.ID))) {
+            return true;
+        }
+        const normalized = (query.Name ?? '').trim().toLowerCase();
+        return (
+            normalized === 'getartifactversionsbyid' ||
+            normalized === 'getconversationcomplete' ||
+            normalized === 'getconversationartifactsmap' ||
+            normalized === 'getconversationartifactsforagent'
+        );
+    }
+
     protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo, requestedLabel: string = query.ID): void {
         const user = contextUser || this.CurrentUser;
         if (user) {
+            if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+                this.logQueryRunRefusal(query, user, { deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] });
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
+            }
             const result = query.UserCanRun(user);
             if (!result.canRun) {
                 // This gate, not the rendered-SQL one, is where a role-list denial lands: it
@@ -6957,6 +7060,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         logRefusal = true,
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string; needsColumnFiltering?: boolean } {
+        if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+            const refusal = { canRun: false, deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] };
+            if (logRefusal) {
+                this.logQueryRunRefusal(query, user, refusal);
+            }
+            return refusal;
+        }
         const base = query.UserCanRun(user);
         if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
             // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has

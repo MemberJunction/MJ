@@ -23,16 +23,18 @@
 import { ApplyPlattCalibration, type ChatMessage, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
+    CalibrateEdgeLogitToConfidence,
     ConversationUtility,
     DescribeAnsweringModel,
-    FindDecisionCalibration,
+    IsEdgePreDiscoveryHintConfident,
+    SanitizeEdgePreDiscoveryHint,
     type DecisionAnsweringModel,
-    type DecisionModelCalibration,
+    type EdgePreDiscoveryHint,
     type MentionContent,
     type SpecialContent
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import type { AIEngine } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { EntitySearchResult, IRunViewProvider, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import { IsPlainObject, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -46,7 +48,7 @@ export const DECISION_DISCOVERY_MAX_OPTIONS = 25;
 
 /**
  * The least **calibrated** confidence at which the suggestion is shown (see
- * {@link DECISION_DISCOVERY_CALIBRATION}). Both the Choice's confidence and the Likelihood that any
+ * {@link DECISION_DISCOVERY_USE}). Both the Choice's confidence and the Likelihood that any
  * agent applies must reach it.
  *
  * Set from the agent-discovery Decision Eval (plan Task 3.1, 2026-09-29): 258 labelled requests, 198
@@ -63,17 +65,11 @@ export const DECISION_DISCOVERY_MAX_OPTIONS = 25;
  */
 export const DECISION_DISCOVERY_MIN_CONFIDENCE = 0.85;
 
-/** A decision model's Platt calibration of the two discovery answers. */
-export interface DecisionDiscoveryCalibration {
-    /** The Choice's confidence, as the probability that the chosen agent is the right one. */
-    Confidence: PlattCalibration;
-    /** The Likelihood that a specialist agent should handle the request. */
-    AnyApplies: PlattCalibration;
-}
-
 /**
- * Platt calibration of the discovery answers, each tied to the exact model it was fitted on (see
- * `FindDecisionCalibration` in `@memberjunction/ai-core-plus`): the MJ decision model that answered
+ * Which calibrations discovery reads: use `agent-discovery`, questions `agent` (the Choice's
+ * confidence) and `anyApplies` (the Likelihood), in the answering model's
+ * `ModelConfiguration.Decision.Calibrations` (see `FindDecisionCalibration` in
+ * `@memberjunction/ai-core-plus`). Each fit is tied to the exact model it was fitted on: the MJ decision model that answered
  * (`ModelName`, from `modelInfo.modelName`) and the model its driver reports behind it
  * (`ResolvedModel`, from `DecisionResult.ResolvedModel`). A model's raw answers are not calibrated:
  * Jev's raw any-applies Likelihood sits between 0.1 and 0.8 whatever the request. Any other model,
@@ -90,24 +86,15 @@ export interface DecisionDiscoveryCalibration {
  * - **LLM Decision** when its chat model is GPT-OSS-120B, which answered all 774 of its runs.
  *
  * Refit, and add the new pair, whenever a model, its version, the questions or the catalog's shape
- * changes.
+ * changes. The fits live on the `Jev` and `LLM Decision` rows in `metadata/ai-models`: Jev confidence
+ * `A` 0.4412, `B` 0.4571 and any-applies `A` 1.2469, `B` 1.7700; LLM Decision confidence `A` 1.4301,
+ * `B` -0.0755 and any-applies `A` 0.7114, `B` 0.9073.
  */
-export const DECISION_DISCOVERY_CALIBRATION: readonly DecisionModelCalibration<DecisionDiscoveryCalibration>[] = Object.freeze([
-    Object.freeze({
-        ModelName: 'Jev',
-        ResolvedModel: 'typesafe/jev-1.13-20260917',
-        Calibration: Object.freeze({ Confidence: Object.freeze({ A: 0.4412, B: 0.4571 }), AnyApplies: Object.freeze({ A: 1.2469, B: 1.7700 }) })
-    }),
-    Object.freeze({
-        ModelName: 'LLM Decision',
-        ResolvedModel: 'GPT-OSS-120B',
-        Calibration: Object.freeze({ Confidence: Object.freeze({ A: 1.4301, B: -0.0755 }), AnyApplies: Object.freeze({ A: 0.7114, B: 0.9073 }) })
-    })
-]);
+export const DECISION_DISCOVERY_USE = 'agent-discovery';
 
 /**
  * The answers with the Choice's confidence and the Likelihood calibrated for the exact model that
- * gave them ({@link DECISION_DISCOVERY_CALIBRATION}), or null when that model has no discovery
+ * gave them ({@link DECISION_DISCOVERY_USE}), or null when that model has no discovery
  * calibration. Other answers, and the Choice's distribution, are returned as they are.
  *
  * @param answers - The raw answers, by question key.
@@ -117,7 +104,7 @@ export function CalibrateDiscoveryAnswers(
     answers: Record<string, DecisionAnswer>,
     answeredBy: DecisionAnsweringModel
 ): Record<string, DecisionAnswer> | null {
-    const calibration = FindDecisionCalibration(DECISION_DISCOVERY_CALIBRATION, answeredBy);
+    const calibration = findDiscoveryCalibration(answeredBy);
     if (!calibration) {
         return null;
     }
@@ -131,6 +118,16 @@ export function CalibrateDiscoveryAnswers(
         calibrated[DECISION_DISCOVERY_APPLIES_QUESTION] = { ...applies, Probability: ApplyPlattCalibration(applies.Probability, calibration.AnyApplies) };
     }
     return calibrated;
+}
+
+/**
+ * Both discovery fits for the model that answered, or null when it lacks either: a half-calibrated
+ * answer is as unsure as an uncalibrated one.
+ */
+function findDiscoveryCalibration(answeredBy: DecisionAnsweringModel): { Confidence: PlattCalibration; AnyApplies: PlattCalibration } | null {
+    const confidence = AIEngine.Instance.FindDecisionCalibration({ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION }, answeredBy);
+    const anyApplies = AIEngine.Instance.FindDecisionCalibration({ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_APPLIES_QUESTION }, answeredBy);
+    return confidence && anyApplies ? { Confidence: confidence, AnyApplies: anyApplies } : null;
 }
 
 /**
@@ -259,6 +256,12 @@ export interface DecisionDiscoveryOutcome {
      * so its answer was treated as unsure: discovery never suggests anything for it.
      */
     UncalibratedModel?: string;
+    /** Where a confident suggestion came from: server decision model or client edge pre-discovery. */
+    Source?: 'decision-model' | 'edge-pre-discovery';
+    /** True when a server-verified EdgePreDiscoveryHint informed narrowing or direct suggestion. */
+    EdgeHintUsed?: boolean;
+    /** Count of hinted IDs discarded by server permission/allow-list sanitization. */
+    EdgeHintDiscardedCount?: number;
 }
 
 /**
@@ -604,6 +607,13 @@ export interface DecisionDiscoveryOptionSetParams {
     DeclaredCap?: number;
     /** Narrows a catalog over the limit. Undefined when the provider cannot run the search. */
     Search?: DecisionDiscoverySearch;
+    /**
+     * Optional pre-ranked candidate IDs (e.g. from client edge bi-encoder narrowing), already
+     * verified against the permitted catalog. When this resolves at least
+     * {@link DECISION_DISCOVERY_MIN_OPTIONS} valid options, it narrows catalogs over `limit`
+     * without requiring a server `SearchEntity` round-trip.
+     */
+    PreferredCandidateIDs?: ReadonlyArray<string>;
 }
 
 /**
@@ -703,6 +713,12 @@ export async function BuildDecisionDiscoveryOptionSet(params: DecisionDiscoveryO
     if (options.length <= limit) {
         return set;
     }
+    if (params.PreferredCandidateIDs && params.PreferredCandidateIDs.length > 0) {
+        const preferred = RankOptionsBySearch(options, params.PreferredCandidateIDs, limit);
+        if (preferred.length >= DECISION_DISCOVERY_MIN_OPTIONS) {
+            return { ...set, Options: preferred, NarrowedFrom: options.length };
+        }
+    }
     if (!params.Search) {
         return { ...set, Options: [], NarrowedFrom: options.length,
             Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
@@ -710,4 +726,74 @@ export async function BuildDecisionDiscoveryOptionSet(params: DecisionDiscoveryO
     // Over-fetching threefold for the permission filter, as Find Candidate Agents does.
     const results = await params.Search(limit * 3);
     return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
+}
+
+/** Result of server-side verification and optional fast-path evaluation of an untrusted edge hint. */
+export interface EdgePreDiscoveryEvaluation {
+    /** Server-sanitized hint (only permitted, runnable, directly-discoverable, host-allowed IDs). */
+    SanitizedHint: EdgePreDiscoveryHint | null;
+    /** Non-null when the sanitized hint is confident enough to inject `<suggested_agent>` directly. */
+    DirectOutcome: DecisionDiscoveryOutcome | null;
+    /** Number of raw IDs (candidate + suggested) stripped by server verification. */
+    DiscardedCount: number;
+}
+
+/**
+ * Counts how many raw IDs in an untrusted hint fail verification against `options`,
+ * sanitizes the hint against `options`, and produces a direct discovery outcome only when
+ * `SuggestedAgentId` is verified and clears the calibrated confidence gate.
+ */
+export function EvaluateEdgePreDiscoveryHint(
+    rawHint: unknown,
+    options: ReadonlyArray<DecisionDiscoveryOption>
+): EdgePreDiscoveryEvaluation {
+    if (!rawHint || typeof rawHint !== 'object' || Array.isArray(rawHint)) {
+        return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: 0 };
+    }
+
+    const rawRecord = rawHint as Record<string, unknown>;
+    const rawCandidates = Array.isArray(rawRecord['CandidateAgentIds']) ? rawRecord['CandidateAgentIds'] : [];
+    const allowedNormalized = new Set(options.map(o => NormalizeUUID(o.ID)));
+
+    let discardedCount = 0;
+    for (const entry of rawCandidates) {
+        if (typeof entry !== 'string' || !allowedNormalized.has(NormalizeUUID(entry))) {
+            discardedCount++;
+        }
+    }
+    if (typeof rawRecord['SuggestedAgentId'] === 'string' && !allowedNormalized.has(NormalizeUUID(rawRecord['SuggestedAgentId']))) {
+        discardedCount++;
+    }
+
+    const sanitized = SanitizeEdgePreDiscoveryHint(rawHint, options);
+    if (!sanitized) {
+        return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: discardedCount };
+    }
+
+    if (options.length >= DECISION_DISCOVERY_MIN_OPTIONS && IsEdgePreDiscoveryHintConfident(sanitized) && sanitized.SuggestedAgentId) {
+        const suggested = options.find(o => UUIDsEqual(o.ID, sanitized.SuggestedAgentId));
+        if (suggested) {
+            const confidence = sanitized.Confidence ?? CalibrateEdgeLogitToConfidence(sanitized.TopLogit!);
+            return {
+                SanitizedHint: sanitized,
+                DiscardedCount: discardedCount,
+                DirectOutcome: {
+                    Injected: true,
+                    Succeeded: true,
+                    Source: 'edge-pre-discovery',
+                    EdgeHintUsed: true,
+                    EdgeHintDiscardedCount: discardedCount,
+                    Message: SuggestedAgentMessage(suggested, confidence),
+                    Answer: {
+                        Agent: suggested,
+                        Confidence: confidence,
+                        AnyApplies: confidence,
+                        Probabilities: { [suggested.Name]: confidence },
+                    },
+                },
+            };
+        }
+    }
+
+    return { SanitizedHint: sanitized, DirectOutcome: null, DiscardedCount: discardedCount };
 }

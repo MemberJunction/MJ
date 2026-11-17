@@ -31391,5 +31391,155 @@
       "lastModified": "2026-11-10T23:41:24.359Z",
       "checksum": "402391107cc2cea1b545ac1432e92ed705ce699639f849de35850980079dd175"
     }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen (Medium)",
+      "PowerRank": 26,
+      "Description": "Google Gemini 4 Hydrogen (Medium effort) — high-speed, high-intelligence coding and reasoning model",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718221"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-medium",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718222"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (Medium) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829221"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607111"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen (High)",
+      "PowerRank": 27,
+      "Description": "Google Gemini 4 Hydrogen (High effort) — high-reasoning coding and architecture model via Google Antigravity CLI and Gemini API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718331"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-high",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718333"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (High) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829331"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607222"
+    }
   }
 ]

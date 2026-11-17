@@ -3,7 +3,10 @@ import {
     BaseDecision,
     BaseHostedSystemOneDecision,
     CreateSystemOneHTTPError,
+    DecisionMedia,
+    DecisionMediaType,
     DecisionParams,
+    DecisionResult,
     IsSystemOneWireObject,
     NonEmptyString,
     RedactSecret,
@@ -22,11 +25,13 @@ import { RegisterClass } from '@memberjunction/global';
  * {@link BaseHostedSystemOneDecision}:
  * - **Authentication** is the `x-goog-api-key` header, not a bearer token.
  * - **The shared state is `input`**, not `state`. It takes text or `Content` blocks (text, image, audio,
- *   video, PDF); MJ sends text, with an object state as JSON, because `DecisionParams` has no media yet.
+ *   video, PDF). A request without media sends the state as text, an object state as JSON; a request
+ *   with `DecisionParams.Media` sends a text block followed by one block per item, so the model reads
+ *   them as one input.
  * - **Usage** is `total_input_tokens` / `total_output_tokens`, mapped here onto the System One names.
- *   No `model` or `cost` field is returned on Google's `200` wire response (`ResolvedModel` stays
- *   `undefined` unless a proxy or later revision includes `model`); MJ prices the call from the model's
- *   cost rows.
+ *   No `model` or `cost` field is returned on Google's `200` wire response (`ResolvedModel` falls back
+ *   to the requested model unless a proxy or later revision includes `model`, so calibrations and run
+ *   fitting can identify it); MJ prices the call from the model's cost rows.
  *
  * Questions go out as System One questions keyed by name: a Likelihood as `noul`, a Choice's options as
  * `criteria: { value: description }`, a Score's levels as `criteria: [...]`, lowest first. Answers come
@@ -70,6 +75,11 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
         return 'AI_VENDOR_API_KEY__GEMINIDECISION';
     }
 
+    /** Gemini Decision 1 reads images, audio, video and PDFs alongside the text state. */
+    public override get SupportedMediaTypes(): readonly DecisionMediaType[] {
+        return GEMINI_DECISION_MEDIA_TYPES;
+    }
+
     /** Google's API-key header, which the Gemini API takes in place of a bearer token. */
     protected override GetRequestHeaders(_model: string): Record<string, string> {
         return { 'x-goog-api-key': this.Credential.APIKey, 'Content-Type': 'application/json' };
@@ -77,11 +87,15 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
 
     /**
      * The request body: `{ model, input, questions }`. The System One body with its `state` sent as
-     * `input`, which takes a string or `Content` blocks; an object state goes as JSON text.
+     * `input`: the state as text (an object state as JSON), or, with media, a text block followed by one
+     * `Content` block per item.
      */
     protected override BuildRequestBody(model: string, params: DecisionParams): SystemOneWireObject {
         const systemOneBody = super.BuildRequestBody(model, params);
-        const input = typeof params.State === 'string' ? params.State : JSON.stringify(params.State);
+        const text = typeof params.State === 'string' ? params.State : JSON.stringify(params.State);
+        const input = params.Media && params.Media.length > 0
+            ? [{ type: 'text', text }, ...params.Media.map(toGeminiContent)]
+            : text;
         return { model: systemOneBody['model'], input, questions: systemOneBody['questions'] };
     }
 
@@ -106,6 +120,19 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
     }
 
     /**
+     * Google's `200` wire response omits `model`. When the response names none, record the requested
+     * model (`ResolveModel(params)`) so `ModelSpecificResponseDetails`, calibration lookups and
+     * `fit-decision-calibration` identify the answering model.
+     */
+    protected override async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+        const result = await super.DoDecide(params);
+        if (result.success && !NonEmptyString(result.ResolvedModel)) {
+            result.ResolvedModel = this.ResolveModel(params);
+        }
+        return result;
+    }
+
+    /**
      * Turns Gemini's `{ answers, usage, prompt_feedback }` into the System One `{ model, answers, usage }`,
      * and throws when the input filter blocked the request.
      */
@@ -120,6 +147,16 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
         }
         return { model: body['model'], answers: body['answers'], usage: toSystemOneUsage(body['usage']) };
     }
+}
+
+/** The media types Gemini Decision 1 reads. */
+const GEMINI_DECISION_MEDIA_TYPES: readonly DecisionMediaType[] = Object.freeze(['image', 'audio', 'video', 'document']);
+
+/** One media item as a Gemini `Content` block: `{ type, mime_type, data | uri }`. */
+function toGeminiContent(media: DecisionMedia): SystemOneWireObject {
+    return media.URI
+        ? { type: media.Type, mime_type: media.MimeType, uri: media.URI }
+        : { type: media.Type, mime_type: media.MimeType, data: media.Data };
 }
 
 /** The block reason and its message from `prompt_feedback`, or undefined when the input was not blocked. */
