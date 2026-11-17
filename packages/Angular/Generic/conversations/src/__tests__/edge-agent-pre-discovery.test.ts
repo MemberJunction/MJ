@@ -137,7 +137,12 @@ class FakeEdgePort implements EdgeWorkerPort {
                     this.OnReply({ Type: 'error', RequestId: message.RequestId, Message: 'Embed failed' });
                     return;
                 }
-                const vectors = message.Texts.map((t) => deterministicEmbed(t).buffer);
+                const vectors = message.Texts.map((t) => {
+                    const vec = deterministicEmbed(t);
+                    const buf = new ArrayBuffer(vec.byteLength);
+                    new Float32Array(buf).set(vec);
+                    return buf;
+                });
                 this.OnReply({
                     Type: 'embedded',
                     RequestId: message.RequestId,

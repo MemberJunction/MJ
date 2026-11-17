@@ -55,6 +55,12 @@ function semanticEmbed(text: string): Float32Array {
     return vec;
 }
 
+function toArrayBuffer(vec: Float32Array): ArrayBuffer {
+    const buf = new ArrayBuffer(vec.byteLength);
+    new Float32Array(buf).set(vec);
+    return buf;
+}
+
 class OmnibarFakePort implements EdgeWorkerPort {
     public OnReply: ((reply: EdgeWorkerReply) => void) | null = null;
     public EmbedCalls = 0;
@@ -79,7 +85,7 @@ class OmnibarFakePort implements EdgeWorkerPort {
                 this.OnReply({
                     Type: 'embedded',
                     RequestId: message.RequestId,
-                    Vectors: message.Texts.map((t) => semanticEmbed(t).buffer),
+                    Vectors: message.Texts.map((t) => toArrayBuffer(semanticEmbed(t))),
                     Dimensions: 32,
                     DurationMs: 1,
                 });
