@@ -15,16 +15,20 @@ type SyncSeam = { initQuerySyncState: () => Promise<void> };
 
 const ARTIFACT_ID = 'a1';
 
+function stubEntity<T extends object>(fields: Partial<T>): T {
+    return Object.assign(Object.create(null) as T, fields);
+}
+
 function cachedVersions(numbers: number[]): MJArtifactVersionEntity[] {
     return [...numbers]
         .sort((a, b) => b - a)
-        .map((n) => ({ ID: `ver-${n}`, ArtifactID: ARTIFACT_ID, VersionNumber: n, Content: '{}' }) as unknown as MJArtifactVersionEntity);
+        .map((n) => stubEntity<MJArtifactVersionEntity>({ ID: `ver-${n}`, ArtifactID: ARTIFACT_ID, VersionNumber: n, Content: '{}' }));
 }
 
 function viewerAt(versionNumber: number, visible: number[] | null): DataArtifactViewerComponent {
-    const cdr = { detectChanges: () => undefined, markForCheck: () => undefined } as unknown as ChangeDetectorRef;
+    const cdr = stubEntity<ChangeDetectorRef>({ detectChanges: () => undefined, markForCheck: () => undefined });
     const viewer = new DataArtifactViewerComponent(cdr);
-    viewer.artifactVersion = { ID: `ver-${versionNumber}`, ArtifactID: ARTIFACT_ID, VersionNumber: versionNumber, Content: '{}' } as unknown as MJArtifactVersionEntity;
+    viewer.artifactVersion = stubEntity<MJArtifactVersionEntity>({ ID: `ver-${versionNumber}`, ArtifactID: ARTIFACT_ID, VersionNumber: versionNumber, Content: '{}' });
     viewer.VisibleVersionNumbers = visible;
     viewer.spec = {};
     return viewer;
@@ -41,7 +45,7 @@ describe('DataArtifactViewerComponent latest version', () => {
 
     it('is the greatest visible version when the viewer passes visible version numbers', async () => {
         const viewer = viewerAt(4, [1, 2, 4]);
-        await (viewer as unknown as SyncSeam).initQuerySyncState();
+        await (Object.assign(viewer) as SyncSeam).initQuerySyncState();
         expect(viewer.LatestVersionNumber).toBe(4);
         expect(viewer.IsLatestVersion).toBe(true);
         expect(viewer.QuerySyncState).toBe('no-query-latest');
@@ -49,7 +53,7 @@ describe('DataArtifactViewerComponent latest version', () => {
 
     it('is the artifact-wide latest version without visible version numbers', async () => {
         const viewer = viewerAt(4, null);
-        await (viewer as unknown as SyncSeam).initQuerySyncState();
+        await (Object.assign(viewer) as SyncSeam).initQuerySyncState();
         expect(viewer.LatestVersionNumber).toBe(5);
         expect(viewer.IsLatestVersion).toBe(false);
         expect(viewer.QuerySyncState).toBe('no-query-older');
@@ -57,7 +61,7 @@ describe('DataArtifactViewerComponent latest version', () => {
 
     it('is the artifact-wide latest version when the visible list is empty', async () => {
         const viewer = viewerAt(4, []);
-        await (viewer as unknown as SyncSeam).initQuerySyncState();
+        await (Object.assign(viewer) as SyncSeam).initQuerySyncState();
         expect(viewer.LatestVersionNumber).toBe(5);
     });
 });

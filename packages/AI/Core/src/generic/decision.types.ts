@@ -97,6 +97,26 @@ export type DecisionQuestion = LikelihoodQuestion | ChoiceQuestion | ScoreQuesti
  */
 export type DecisionQuestionKind = DecisionQuestion['Kind'];
 
+/** The kinds of media a decision's input can carry besides its text state. */
+export type DecisionMediaType = 'image' | 'audio' | 'video' | 'document';
+
+/**
+ * One piece of media the questions are asked about, alongside the text state: a photo, a screenshot,
+ * a call recording, a scanned PDF. Give exactly one of {@link Data} or {@link URI}. Only drivers whose
+ * model reads that media type accept it (`BaseDecision.SupportedMediaTypes`); the decision runner
+ * skips, with failover, every model that does not.
+ */
+export interface DecisionMedia {
+    /** What kind of media this is. */
+    Type: DecisionMediaType;
+    /** Its MIME type, such as `image/png`, `audio/wav` or `application/pdf`. */
+    MimeType: string;
+    /** The content, base64-encoded, without a `data:` prefix. */
+    Data?: string;
+    /** A URI the provider can fetch the content from, such as an `https://` or `gs://` URL. */
+    URI?: string;
+}
+
 /**
  * Parameters for a decision operation.
  */
@@ -117,6 +137,13 @@ export interface DecisionParams {
      * Question keys identify answers in code and are NOT instructions to the model.
      */
     Questions: Record<string, DecisionQuestion>;
+
+    /**
+     * Optional media the questions are also asked about, read together with {@link State} as one
+     * shared input. Only a driver whose {@link BaseDecision.SupportedMediaTypes} include every item's
+     * type accepts the request.
+     */
+    Media?: DecisionMedia[];
 
     /**
      * Optional signal for cancelling the request. The driver is responsible for honoring it:

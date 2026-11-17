@@ -391,6 +391,8 @@ function buildProseMenu(
         ID: 'propose-suggestion',
         Label: 'Propose Tracked Suggestion…',
         Icon: 'fa-solid fa-code-pull-request',
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'propose-suggestion', SegmentID: seg.SegmentID },
       },
       { Kind: 'separator', ID: 'sep-suggest' },
@@ -677,6 +679,8 @@ function buildProseMenu(
       ID: 'propose-suggestion',
       Label: 'Propose Tracked Suggestion…',
       Icon: 'fa-solid fa-code-pull-request',
+      Disabled: segLocked,
+      DisabledReason: lockReason,
       Command: { Type: 'propose-suggestion', SegmentID: seg.SegmentID },
     });
   }
@@ -1424,12 +1428,16 @@ function buildSuggestionCardMenu(
   const items: ContextMenuItem<DocsContextMenuCommand>[] = [];
 
   if (ctx.CanUserEdit && sug.Status === 'Pending') {
+    const segLocked = !ctx.SegmentEditable;
+    const lockReason = getEditLockReason(ctx);
     items.push(
       {
         Kind: 'action',
         ID: 'suggestion-accept',
         Label: 'Accept Suggestion',
         Icon: 'fa-solid fa-check',
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'suggestion-accept', SuggestionID: sug.SuggestionID },
       },
       {
@@ -1438,6 +1446,8 @@ function buildSuggestionCardMenu(
         Label: 'Reject Suggestion',
         Icon: 'fa-solid fa-xmark',
         Destructive: true,
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'suggestion-reject', SuggestionID: sug.SuggestionID },
       },
       { Kind: 'separator', ID: 'sep-suggestion-nav' },

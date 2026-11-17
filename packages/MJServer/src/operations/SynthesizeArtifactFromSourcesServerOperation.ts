@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { BaseLLM, ChatMessageRole, ChatParams, GetAIAPIKey } from '@memberjunction/ai';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIAgentPermissionHelper, AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     BaseRemotableOperation,
     IMetadataProvider,
@@ -27,12 +27,33 @@ import {
     SynthesizeArtifactFromSourcesOperation,
     SynthesizeArtifactFromSourcesOutput,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsValidUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+
+const GLOBAL_KEY_SYNTHESIS_SCOPE_CACHE = '__MJ_SYNTHESIS_RESOLVED_SCOPE_CACHE__';
 
 interface ResolvedSynthesisScope {
     CombinedSourceIds: string[];
     CollectionId: string | null;
     CollectionEnvironmentId: string | null;
+}
+
+interface CachedSynthesisScopeEntry {
+    userId: string;
+    scope: ResolvedSynthesisScope;
+}
+
+function getSynthesisScopeCache(): WeakMap<object, CachedSynthesisScopeEntry> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[GLOBAL_KEY_SYNTHESIS_SCOPE_CACHE];
+        if (existing instanceof WeakMap) {
+            return existing;
+        }
+        const created = new WeakMap<object, CachedSynthesisScopeEntry>();
+        store[GLOBAL_KEY_SYNTHESIS_SCOPE_CACHE] = created;
+        return created;
+    }
+    return new WeakMap<object, CachedSynthesisScopeEntry>();
 }
 
 /**
@@ -43,11 +64,38 @@ interface ResolvedSynthesisScope {
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY)
 export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArtifactFromSourcesOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
+    public override async GetScopeResourceIds(
+        input: SynthesizeArtifactFromSourcesInput,
+        context?: { provider?: IMetadataProvider; user?: UserInfo },
+    ): Promise<string[]> {
+        if (context?.provider && context?.user) {
+            const scope = await this.resolveCombinedSourceScope(input, context.provider, context.user);
+            return scope.CombinedSourceIds;
+        }
+        const ids = new Set<string>();
+        for (const srcId of input?.SourceArtifactIds ?? []) {
+            if (typeof srcId === 'string' && IsValidUUID(srcId)) {
+                ids.add(srcId.trim());
+            }
+        }
+        if (input?.CollectionId && IsValidUUID(input.CollectionId)) {
+            ids.add(input.CollectionId.trim());
+        }
+        return Array.from(ids);
+    }
+
     protected override async Authorize(
         input: SynthesizeArtifactFromSourcesInput,
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot synthesize artifacts.');
+        }
         const provider = context?.provider;
         if (!provider) {
             throw new RemoteOperationError('NO_PROVIDER', 'Metadata provider is required.');
@@ -63,6 +111,9 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
                 );
             }
         }
+        if (input && typeof input === 'object') {
+            getSynthesisScopeCache().set(input, { userId: user.ID, scope });
+        }
         return true;
     }
 
@@ -72,7 +123,15 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
         user: UserInfo,
         context: RemoteOpServerContext,
     ): Promise<SynthesizeArtifactFromSourcesOutput> {
-        const scope = await this.resolveCombinedSourceScope(input, provider, user);
+        const scopeCache = getSynthesisScopeCache();
+        const cachedEntry = input && typeof input === 'object' ? scopeCache.get(input) : undefined;
+        if (cachedEntry) {
+            scopeCache.delete(input);
+        }
+        const scope =
+            cachedEntry && UUIDsEqual(cachedEntry.userId, user.ID)
+                ? cachedEntry.scope
+                : await this.resolveCombinedSourceScope(input, provider, user);
         const normalizedKind = ArtifactSynthesisEngine.Instance.NormalizeTargetKind(input.TargetKind);
 
         context.emitProgress({
@@ -96,7 +155,13 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
             );
         }
 
-        const digests = Sources.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
+        const digests: ReturnType<typeof ArtifactSynthesisEngine.Instance.ExtractSourceDigest>[] = [];
+        for (let i = 0; i < Sources.length; i += 4) {
+            const batch = await Promise.all(
+                Sources.slice(i, i + 4).map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigestIsolated(s))
+            );
+            digests.push(...batch);
+        }
         const allowedSourceIds = digests.map((d) => d.ArtifactID);
         const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
         const linkCharts = input.LinkChartsAndRanges !== false;
@@ -126,14 +191,18 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
 
         const trimmedAgentHandle = (input.AgentHandle ?? '').trim().replace(/^@+/, '').trim();
         if (trimmedAgentHandle) {
-            const agent = await this.resolveAgentByHandle(trimmedAgentHandle, user);
+            const agent = await this.resolveAgentByHandle(trimmedAgentHandle, provider, user);
             const agentRunner = new AgentRunner(provider);
-            const runRes = await agentRunner.RunAgent<Record<string, unknown> | string>({
+            const runRes = await agentRunner.RunAgent<string>({
                 agent,
                 conversationMessages: [
                     {
+                        role: 'system',
+                        content: prompts.SystemPrompt,
+                    },
+                    {
                         role: 'user',
-                        content: `${prompts.SystemPrompt}\n\n${prompts.UserPrompt}`,
+                        content: prompts.UserPrompt,
                     },
                 ],
                 contextUser: user,
@@ -153,11 +222,11 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
                       ? JSON.stringify(runRes.payload)
                       : '';
         } else {
-            rawModelOutput = await this.runDirectSynthesisLlm(prompts.SystemPrompt, prompts.UserPrompt, user);
+            rawModelOutput = await this.runDirectSynthesisLlm(prompts.SystemPrompt, prompts.UserPrompt, provider, user);
         }
 
         let normalized = rawModelOutput
-            ? ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutput({
+            ? await ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutputIsolated({
                   TargetKind: normalizedKind,
                   RawOutput: rawModelOutput,
                   FallbackTitle: cleanTitle || undefined,
@@ -306,26 +375,18 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
             throw new RemoteOperationError('NOT_FOUND', `Target collection '${collectionId}' was not found.`);
         }
         const collection = colRes.Results[0];
-        const isOwner = Boolean(collection.OwnerID && UUIDsEqual(collection.OwnerID, user.ID));
-        if (!isOwner) {
-            const permRes = await rv.RunView<{ CanEdit?: boolean }>(
-                {
-                    EntityName: 'MJ: Collection Permissions',
-                    ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}' AND UserID='${EscapeSQLString(user.ID)}'`,
-                    Fields: ['CanEdit'],
-                    MaxRows: 10,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple',
-                },
-                user,
+        const collectionPerms = await ArtifactPermissionEngine.Instance.ResolveCollectionAncestryPermissions(
+            provider,
+            collectionId,
+            user,
+        );
+        if (!collectionPerms.CanEdit) {
+            throw new RemoteOperationError(
+                'ACCESS_DENIED',
+                collectionPerms.Reason
+                    ? `Permission denied (CanEdit required on target collection): ${collectionPerms.Reason}`
+                    : 'Permission denied: User lacks CanEdit permission on the target collection.',
             );
-            const canEdit = (permRes.Success && permRes.Results ? permRes.Results : []).some((r) => Boolean(r.CanEdit));
-            if (!canEdit) {
-                throw new RemoteOperationError(
-                    'ACCESS_DENIED',
-                    'Permission denied: User lacks CanEdit permission on the target collection.',
-                );
-            }
         }
 
         const artifactIds: string[] = [];
@@ -335,7 +396,6 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
                     EntityName: 'MJ: Collection Artifacts',
                     ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
                     Fields: ['ArtifactVersionID'],
-                    MaxRows: 50,
                     SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
@@ -348,14 +408,15 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
                         .filter(Boolean),
                 ),
             );
-            if (verIds.length > 0) {
-                const inList = verIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const chunkSize = 200;
+            for (let i = 0; i < verIds.length; i += chunkSize) {
+                const chunk = verIds.slice(i, i + chunkSize);
+                const inList = chunk.map((id) => `'${EscapeSQLString(id)}'`).join(',');
                 const verRes = await rv.RunView<{ ArtifactID?: string | null }>(
                     {
                         EntityName: 'MJ: Artifact Versions',
                         ExtraFilter: `ID IN (${inList})`,
                         Fields: ['ArtifactID'],
-                        MaxRows: 50,
                         SkipTotalRowCount: true,
                         ResultType: 'simple',
                     },
@@ -374,9 +435,14 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
         };
     }
 
-    private async resolveAgentByHandle(handle: string, user: UserInfo): Promise<MJAIAgentEntityExtended> {
-        await AIEngine.Instance.Config(false, user);
-        const agents = AIEngine.Instance.Agents ?? [];
+    private async resolveAgentByHandle(
+        handle: string,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<MJAIAgentEntityExtended> {
+        const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+        await aiEngine.Config(false, user, provider);
+        const agents = aiEngine.Agents ?? [];
         const lower = handle.toLowerCase();
         const collapsed = lower.replace(/[\s_-]+/g, '');
         const exactMatches = agents.filter((a) => (a.Name ?? '').trim().toLowerCase() === lower);
@@ -395,14 +461,12 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
                 `AI agent '${normalizedMatches[0].Name}' is not active (Status: ${normalizedMatches[0].Status}).`,
             );
         }
-        if (typeof AIEngine.Instance.CanUserRunAgent === 'function') {
-            const canRun = await AIEngine.Instance.CanUserRunAgent(activeAgent.ID, user);
-            if (!canRun) {
-                throw new RemoteOperationError(
-                    'ACCESS_DENIED',
-                    `User does not have permission to run AI agent '${activeAgent.Name}'.`,
-                );
-            }
+        const canRun = await AIAgentPermissionHelper.HasPermission(activeAgent.ID, user, 'run');
+        if (!canRun) {
+            throw new RemoteOperationError(
+                'ACCESS_DENIED',
+                `User does not have permission to run AI agent '${activeAgent.Name}'.`,
+            );
         }
         return activeAgent;
     }
@@ -481,11 +545,13 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
     private async runDirectSynthesisLlm(
         systemPrompt: string,
         userPrompt: string,
+        provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<string> {
         try {
-            await AIEngine.Instance.Config(false, user);
-            const activeModels = (AIEngine.Instance.Models ?? []).filter(
+            const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+            await aiEngine.Config(false, user, provider);
+            const activeModels = (aiEngine.Models ?? []).filter(
                 (m) => m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive && m.DriverClass,
             );
             const keyReadyModels = activeModels.filter((m) => {

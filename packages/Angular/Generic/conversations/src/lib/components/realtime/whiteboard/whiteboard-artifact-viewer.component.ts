@@ -1,8 +1,13 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent, SerializeSvgToDataUrl } from '@memberjunction/ng-artifacts';
+import {
+  ArtifactNavigationAnchor,
+  BaseArtifactViewerPluginComponent,
+  PrintHtmlInSandboxedIframe,
+  SerializeSvgToDataUrl,
+} from '@memberjunction/ng-artifacts';
 import {
   BuildWhiteboardExportHtml,
   BuildWhiteboardExportSvg,
@@ -173,14 +178,45 @@ import {
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'WhiteboardArtifactViewerPlugin')
-export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnDestroy {
+export class WhiteboardArtifactViewerComponent
+  extends BaseArtifactViewerPluginComponent
+  implements OnInit, OnDestroy
+{
   /** Memoized parse — keyed by the raw content string so version switches re-parse. */
   private parsedForJson: string | null = null;
   private parsedState: WhiteboardState | null = null;
   private editableState: WhiteboardState | null = null;
   private stateChangeSub: Subscription | null = null;
+  private selectionChangeSub: Subscription | null = null;
   private hasUncommittedChanges = false;
   private suppressStateChangeTracking = false;
+  private suppressSelectionEmit = false;
+
+  public ngOnInit(): void {
+    void this.BoardState;
+    if (this.NavigationAnchor) {
+      this.onNavigationAnchorChanged(this.NavigationAnchor);
+    }
+  }
+
+  /**
+   * Selects the target element when host {@link NavigationAnchor} provides `ElementID` (`NW-6`).
+   */
+  protected override onNavigationAnchorChanged(anchor: ArtifactNavigationAnchor): void {
+    if (!anchor.ElementID) {
+      return;
+    }
+    const state = !this.readonly && this.editableState ? this.editableState : this.BoardState;
+    if (!state) {
+      return;
+    }
+    this.suppressSelectionEmit = true;
+    try {
+      state.Select(anchor.ElementID);
+    } finally {
+      this.suppressSelectionEmit = false;
+    }
+  }
 
   /** Whether the inline editable board has unsaved changes waiting to be committed. */
   public get IsDirty(): boolean {
@@ -309,15 +345,13 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
     if (!state) {
       return;
     }
-    const printWindow = window.open('about:blank', '_blank');
-    if (!printWindow) {
-      console.warn('Whiteboard print: popup was blocked — allow popups for this site and retry.');
-      return;
-    }
-    printWindow.document.write(this.buildExportHtml(state));
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
+    const exportHtml = this.buildExportHtml(state);
+    const styleMatch = exportHtml.match(/<style>([\s\S]*?)<\/style>/i);
+    const trustedCss = styleMatch ? styleMatch[1] : undefined;
+    PrintHtmlInSandboxedIframe(exportHtml, {
+      Title: 'Print Whiteboard',
+      TrustedPrintCss: trustedCss,
+    });
   }
 
   private syncEditableState(parsed: WhiteboardState | null): void {
@@ -331,6 +365,15 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
       }
       this.hasUncommittedChanges = true;
     });
+    this.selectionChangeSub = this.editableState.SelectionChanged$.subscribe((evt) => {
+      if (this.suppressSelectionEmit || !evt.SelectedID) {
+        return;
+      }
+      this.SelectionChanged.emit({
+        domain: 'whiteboard',
+        elementId: evt.SelectedID,
+      });
+    });
     this.suppressStateChangeTracking = false;
   }
 
@@ -338,6 +381,10 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
     if (this.stateChangeSub) {
       this.stateChangeSub.unsubscribe();
       this.stateChangeSub = null;
+    }
+    if (this.selectionChangeSub) {
+      this.selectionChangeSub.unsubscribe();
+      this.selectionChangeSub = null;
     }
   }
 

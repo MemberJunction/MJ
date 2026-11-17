@@ -37,6 +37,7 @@ import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.che
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
+import { ListRefreshChecks } from '../checks/list-refresh.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
 import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
@@ -67,6 +68,7 @@ import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
 import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
+import { WidgetGuestIsolationChecks } from '../checks/widget-guest-isolation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
@@ -200,6 +202,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
+        ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -212,7 +215,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
         ['agent-payload-guards', PayloadGuardsChecks, 9],
-        ['agent-artifact-tools', ArtifactToolsChecks, 9],
+        ['agent-artifact-tools', ArtifactToolsChecks, 14],
         ['agent-skills-live', AgentSkillsLiveChecks, 5],
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
@@ -235,6 +238,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
+        ['widget-guest-isolation', WidgetGuestIsolationChecks, 6], // WG1-WG6 widget guests read and update only their own session's rows (IT156)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -262,7 +266,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
-        ['performance-benchmark', PerformanceBenchmarkChecks, 20], // PB1-PB20 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2/Wave 4/Wave 5.2/Wave 5.4 regression guards + longitudinal baseline gate (IT128)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 23], // PB1-PB23 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2/Wave 4/Wave 5.2/Wave 5.4/Wave 6A/Wave 6B/Wave 6C regression guards + longitudinal baseline gate (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
@@ -291,8 +295,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
-        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 7], // DSL1-DSL7 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, and Library/Chat wiring (IT170)
-        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 4], // DSLC1-DSLC4 Client-transport GraphQL + WebSocket collaboration checks (IT171)
+        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -347,7 +351,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
         'actions-pipeline': 6,
-        'agent-artifact-tools': 9,
+        'agent-artifact-tools': 14,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-consult': 1,
@@ -402,8 +406,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'diagnostics': 4,
-        'docs-slides-sheets-library': 7,
-        'docs-slides-sheets-library-client': 4,
+        'docs-slides-sheets-library': 10,
+        'docs-slides-sheets-library-client': 14,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -433,6 +437,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
+        'list-refresh': 7,
         'lists': 3,
         'livekit-room': 1,
         'materialized-entity-read': 2,
@@ -446,7 +451,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'performance-benchmark': 20,
+        'performance-benchmark': 23,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-shadow-drift': 2,
@@ -586,6 +591,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
+        'widget-guest-isolation': 6,
         'work-bus-core': 10,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
@@ -612,7 +618,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(243);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(245);
     });
 });
 
@@ -728,6 +734,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-delete-client.CD2',
         'conversation-delete-client.CD3',
         'docs-slides-sheets-library.DSL3',
+        'docs-slides-sheets-library.DSL8',
         'encrypted-read-client.ER1',
         'encrypted-read-client.ER2',
         'encrypted-read-client.ER3',
@@ -1110,6 +1117,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_AGENT_TESTS=1 arms the weekly live-model lane.
     const EXPECTED_LIVE_MODEL_GATED: string[] = [
         'agent-artifact-tools.AT1',
+        'agent-artifact-tools.AT10',
+        'agent-artifact-tools.AT11',
+        'agent-artifact-tools.AT12',
+        'agent-artifact-tools.AT13',
+        'agent-artifact-tools.AT14',
         'agent-artifact-tools.AT2',
         'agent-artifact-tools.AT3',
         'agent-artifact-tools.AT4',
@@ -1199,7 +1211,51 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
 });
 
 describe('skip allowlist', () => {
-    it('every allowlist entry names a registered check and gives a reason', () => {
+    const ALLOWLIST_TEST_LOCAL_PREFIXES = new Set(['regtest', 'bundleX', 'bundleY', 'lifecycletest', 'self-test']);
+
+    // Mutation-gated checks that call SkipCheck(...) directly inside their body without a
+    // SKIP_ALLOWLIST entry. On PRs (RUN_MUTATION_TESTS unset) the driver skips these at the
+    // mutation-tier gate and passes; on the nightly lane (RUN_MUTATION_TESTS=1) their body runs,
+    // so any secondary SkipCheck(...) they hit will FAIL the nightly unless the precondition is
+    // guaranteed in CI or the check is in SKIP_ALLOWLIST.
+    //
+    // Every check pinned below has been audited as a defensive guard against a corrupted fixture
+    // or a transport mismatch that the suite metadata already filters out. If a new
+    // RequiresMutation check calls SkipCheck(...), either:
+    //   1. Add an entry in skip-allowlist.ts (with a tracking issue if CI should satisfy it), OR
+    //   2. Confirm the precondition is guaranteed on nightly CI and paste the updated list below.
+    const EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS: string[] = [
+        'app-behavioral.AB1',
+        'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
+        'conversation-authorship-client.CA12',
+        'graph-runtime.GR6',
+        'livekit-room.LKR1',
+        'nested-transactions.NT9',
+        'permission-engine.PE11',
+        'permission-engine.PE12',
+        'permission-engine.PE13',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'server-cache.S29',
+        'server-cache.S31b',
+        'task-graph-security.TGS10',
+        'task-graph-security.TGS4',
+        'task-graph-security.TGS5',
+        'task-graph-security.TGS6',
+        'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
+        'task-graph-security.TGS9',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
+        'user-elevation.UE4',
+    ];
+
+    it('every allowlist entry names a registered check, gives a reason, and uses a valid transport when scoped', () => {
         const reg = IntegrationCheckRegistry.Instance;
         const entries = reg.GetAllowedSkips();
         expect(entries.length).toBe(SKIP_ALLOWLIST.length);
@@ -1207,5 +1263,35 @@ describe('skip allowlist', () => {
         const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
         expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
         expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
+        const invalidTransports = entries
+            .filter(e => e.Transport !== undefined && e.Transport !== 'server' && e.Transport !== 'client')
+            .map(e => e.CheckId);
+        expect(invalidTransports).toEqual([]);
+    });
+
+    it('pins every RequiresMutation check whose body calls SkipCheck without a SKIP_ALLOWLIST entry (PR-vs-nightly asymmetry guard)', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const actual: string[] = [];
+        for (const name of reg.GetBundleNames()) {
+            if (ALLOWLIST_TEST_LOCAL_PREFIXES.has(name)) {
+                continue;
+            }
+            for (const c of reg.GetBundle(name)) {
+                const bundleId = name;
+                const isAllowlisted = Boolean(reg.GetAllowedSkip(c.Id) || reg.GetAllowedSkip(bundleId));
+                if (c.RequiresMutation && !isAllowlisted && /\bSkipCheck\b/.test(c.Fn.toString())) {
+                    actual.push(c.Id);
+                }
+            }
+        }
+        actual.sort();
+        const pasteReady = actual.map(id => `        '${id}',`).join('\n');
+        expect(
+            actual,
+            `RequiresMutation checks calling SkipCheck() without a SKIP_ALLOWLIST entry changed.\n` +
+            `On PRs these skip at the mutation gate and stay green, but on nightly (RUN_MUTATION_TESTS=1) ` +
+            `any SkipCheck() they hit fails the run. Add a SKIP_ALLOWLIST entry or, if nightly CI satisfies ` +
+            `the precondition, paste over EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS:\n${pasteReady}`,
+        ).toEqual(EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS);
     });
 });

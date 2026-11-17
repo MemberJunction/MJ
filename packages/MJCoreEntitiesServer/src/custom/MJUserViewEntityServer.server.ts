@@ -43,8 +43,8 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
 
     /**
      * Applies the approval rules (see `ApplyApprovalRulesAsync`). The base save regenerates the
-     * WhereClause before it writes, so an approving save stamps the fingerprint after the write,
-     * from the definition as stored, with one more write.
+     * WhereClause before it writes, so the fingerprints are stamped after the write, from the
+     * definition as stored, with one more write when either changed (see `stampFingerprintsAsync`).
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         let approving: boolean;
@@ -57,17 +57,29 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
         if (!await super.Save(options)) {
             return false;
         }
-        if (approving) {
-            try {
-                this.ApprovedFingerprint = await ComputeUserViewFingerprintAsync(this);
-                if (!await super.Save(options)) {
-                    LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
-                }
-            } catch (e) {
-                LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
-            }
+        if (!options?.ReplayOnly) {
+            await this.stampFingerprintsAsync(options, approving);
         }
         return true;
+    }
+
+    /**
+     * Stores the fingerprint of the view's definition as now stored. It always goes in
+     * `DefinitionFingerprint`, which a list linked to this view compares before each refresh, and on
+     * an approving save in `ApprovedFingerprint` too. Nothing is written when neither changed.
+     */
+    private async stampFingerprintsAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<void> {
+        try {
+            const fingerprint = await ComputeUserViewFingerprintAsync(this);
+            this.DefinitionFingerprint = fingerprint;
+            if (approving) this.ApprovedFingerprint = fingerprint;
+            if (!this.Dirty) return;
+            if (!await super.Save(options)) {
+                LogError(`[MJUserViewEntityServer] View "${this.Name}" saved, but its fingerprint was not: ${this.LatestResult?.CompleteMessage}`);
+            }
+        } catch (e) {
+            LogError(`[MJUserViewEntityServer] View "${this.Name}" saved, but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     public override Validate(): ValidationResult {

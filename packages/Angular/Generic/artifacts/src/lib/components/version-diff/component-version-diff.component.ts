@@ -3,13 +3,17 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject,
 } from '@angular/core';
+import { IEntityDataProvider, Metadata, type IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import {
+  EvaluateComponentPermissions,
+  type PermissionEvaluationResult,
+} from '../plugins/component-permission-evaluation';
 import {
   ArtifactVersionDiffService,
   type ComponentCodeUnitDiff,
@@ -37,7 +41,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
               [class.mj-comp-vdiff__tab--active]="ActiveTab === 'overview'"
               (click)="SetTab('overview')"
             >
-              <i class="fas fa-sitemap"></i> Architecture & Data
+              <i class="fa-solid fa-sitemap"></i> Architecture & Data
             </button>
             <button
               type="button"
@@ -47,7 +51,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
               (click)="SetTab('code')"
               data-testid="comp-diff-tab-code"
             >
-              <i class="fas fa-code"></i> JSX Code Diff
+              <i class="fa-solid fa-code"></i> JSX Code Diff
               @if (ChangedCodeUnitsCount > 0) {
                 <span class="mj-comp-vdiff__badge">{{ ChangedCodeUnitsCount }}</span>
               }
@@ -60,7 +64,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
               (click)="SetTab('preview')"
               data-testid="comp-diff-tab-preview"
             >
-              <i class="fas fa-columns"></i> Live Side-by-Side Preview
+              <i class="fa-solid fa-columns"></i> Live Side-by-Side Preview
             </button>
             <button
               type="button"
@@ -69,7 +73,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
               [class.mj-comp-vdiff__tab--active]="ActiveTab === 'specs'"
               (click)="SetTab('specs')"
             >
-              <i class="fas fa-compass-drafting"></i> Requirements & Design
+              <i class="fa-solid fa-compass-drafting"></i> Requirements & Design
             </button>
           </div>
         </div>
@@ -78,7 +82,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
         @if (DiffResult.ChangeRequestPrompt) {
           <div class="mj-comp-vdiff__prompt-banner" data-testid="comp-diff-change-request">
             <div class="mj-comp-vdiff__prompt-head">
-              <i class="fas fa-wand-magic-sparkles"></i>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
               <strong>Revision Intent</strong>
               @if (DiffResult.ChangeRequestType) {
                 <span class="mj-comp-vdiff__type-pill">{{ DiffResult.ChangeRequestType }}</span>
@@ -102,7 +106,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
             <div class="mj-comp-vdiff__grid">
               <!-- Component Hierarchy & Code Units Card -->
               <section class="mj-comp-vdiff__card">
-                <h4><i class="fas fa-cubes"></i> Component Hierarchy</h4>
+                <h4><i class="fa-solid fa-cubes"></i> Component Hierarchy</h4>
                 <div class="mj-comp-vdiff__unit-list">
                   @for (unit of DiffResult.CodeUnits; track unit.UnitKey) {
                     @if (unit.UnitKey !== 'bundle:complete') {
@@ -132,7 +136,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
 
               <!-- Spec Metadata & Role Changes -->
               <section class="mj-comp-vdiff__card">
-                <h4><i class="fas fa-sliders"></i> Contract & Metadata Deltas</h4>
+                <h4><i class="fa-solid fa-sliders"></i> Contract & Metadata Deltas</h4>
                 @if (DiffResult.MetadataDeltas.length === 0 && DiffResult.LibraryDeltas.length === 0) {
                   <div class="mj-comp-vdiff__none">No contract, role, or library changes.</div>
                 } @else {
@@ -149,7 +153,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                     @for (lib of DiffResult.LibraryDeltas; track lib.Name) {
                       <div class="mj-comp-vdiff__kv">
                         <span class="mj-comp-vdiff__kv-key">
-                          <i class="fas fa-box-open"></i> {{ lib.Name }}
+                          <i class="fa-solid fa-box-open"></i> {{ lib.Name }}
                         </span>
                         <span class="mj-c-status" [attr.data-status]="lib.Status">
                           {{ lib.Status }} ({{ lib.OldVersion }} → {{ lib.NewVersion }})
@@ -162,7 +166,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
 
               <!-- Data Requirements: Entities & Queries -->
               <section class="mj-comp-vdiff__card mj-comp-vdiff__card--wide">
-                <h4><i class="fas fa-database"></i> Data Requirements Deltas (Entities & Queries)</h4>
+                <h4><i class="fa-solid fa-database"></i> Data Requirements Deltas (Entities & Queries)</h4>
                 @if (DiffResult.EntityDeltas.length === 0 && DiffResult.QueryDeltas.length === 0) {
                   <div class="mj-comp-vdiff__none">No entity or stored-query requirement changes.</div>
                 } @else {
@@ -170,7 +174,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                     @for (ent of DiffResult.EntityDeltas; track ent.EntityName) {
                       <div class="mj-comp-vdiff__data-item">
                         <div class="mj-comp-vdiff__data-head">
-                          <strong><i class="fas fa-table"></i> {{ ent.EntityName }}</strong>
+                          <strong><i class="fa-solid fa-table"></i> {{ ent.EntityName }}</strong>
                           <span class="mj-c-status" [attr.data-status]="ent.Status">{{ ent.Status }}</span>
                         </div>
                         <div class="mj-comp-vdiff__muted">{{ ent.Summary }}</div>
@@ -186,7 +190,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                     @for (q of DiffResult.QueryDeltas; track q.QueryKey) {
                       <div class="mj-comp-vdiff__data-item">
                         <div class="mj-comp-vdiff__data-head">
-                          <strong><i class="fas fa-terminal"></i> {{ q.CategoryPath ? q.CategoryPath + '/' : '' }}{{ q.Name }}</strong>
+                          <strong><i class="fa-solid fa-terminal"></i> {{ q.CategoryPath ? q.CategoryPath + '/' : '' }}{{ q.Name }}</strong>
                           <span class="mj-c-status" [attr.data-status]="q.Status">{{ q.Status }}</span>
                         </div>
                         <div class="mj-comp-vdiff__muted">{{ q.Summary }}</div>
@@ -241,7 +245,18 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                   Base · v{{ BaseVersion.VersionNumber }} ({{ DiffResult.BaseSpec?.title || DiffResult.BaseSpec?.name || 'Base' }})
                 </div>
                 <div class="mj-comp-vdiff__preview-stage">
-                  @if (DiffResult.BaseSpec && (DiffResult.BaseSpec.code || DiffResult.BaseSpec.namespace)) {
+                  @if (DiffResult.BaseSpec && (!BasePermissionResult || !BasePermissionResult.canRun)) {
+                    <div class="mj-comp-vdiff__perm-blocked" data-testid="comp-diff-base-permission-blocked">
+                      <i class="fa-solid fa-shield-halved"></i>
+                      <strong>Preview blocked — insufficient permissions</strong>
+                      @if ((BasePermissionResult?.missingEntities?.length ?? 0) > 0) {
+                        <div class="mj-comp-vdiff__muted">Missing entity access: {{ BasePermissionResult!.missingEntities.join(', ') }}</div>
+                      }
+                      @if ((BasePermissionResult?.missingQueries?.length ?? 0) > 0) {
+                        <div class="mj-comp-vdiff__muted">Missing query access: {{ BasePermissionResult!.missingQueries.join(', ') }}</div>
+                      }
+                    </div>
+                  } @else if (DiffResult.BaseSpec && (DiffResult.BaseSpec.code || DiffResult.BaseSpec.namespace)) {
                     <mj-react-component [component]="DiffResult.BaseSpec"></mj-react-component>
                   } @else {
                     <div class="mj-comp-vdiff__none">No executable JSX in v{{ BaseVersion.VersionNumber }}.</div>
@@ -254,7 +269,18 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                   Target · v{{ TargetVersion.VersionNumber }} ({{ DiffResult.TargetSpec?.title || DiffResult.TargetSpec?.name || 'Target' }})
                 </div>
                 <div class="mj-comp-vdiff__preview-stage">
-                  @if (DiffResult.TargetSpec && (DiffResult.TargetSpec.code || DiffResult.TargetSpec.namespace)) {
+                  @if (DiffResult.TargetSpec && (!TargetPermissionResult || !TargetPermissionResult.canRun)) {
+                    <div class="mj-comp-vdiff__perm-blocked" data-testid="comp-diff-target-permission-blocked">
+                      <i class="fa-solid fa-shield-halved"></i>
+                      <strong>Preview blocked — insufficient permissions</strong>
+                      @if ((TargetPermissionResult?.missingEntities?.length ?? 0) > 0) {
+                        <div class="mj-comp-vdiff__muted">Missing entity access: {{ TargetPermissionResult!.missingEntities.join(', ') }}</div>
+                      }
+                      @if ((TargetPermissionResult?.missingQueries?.length ?? 0) > 0) {
+                        <div class="mj-comp-vdiff__muted">Missing query access: {{ TargetPermissionResult!.missingQueries.join(', ') }}</div>
+                      }
+                    </div>
+                  } @else if (DiffResult.TargetSpec && (DiffResult.TargetSpec.code || DiffResult.TargetSpec.namespace)) {
                     <mj-react-component [component]="DiffResult.TargetSpec"></mj-react-component>
                   } @else {
                     <div class="mj-comp-vdiff__none">No executable JSX in v{{ TargetVersion.VersionNumber }}.</div>
@@ -268,7 +294,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
             <div class="mj-comp-vdiff__specs">
               <section class="mj-comp-vdiff__card">
                 <h4>
-                  <i class="fas fa-clipboard-check"></i> Functional Requirements Redline
+                  <i class="fa-solid fa-clipboard-check"></i> Functional Requirements Redline
                   @if (!DiffResult.FunctionalChanged) {
                     <span class="mj-c-status" data-status="unchanged">unchanged</span>
                   }
@@ -278,7 +304,7 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
 
               <section class="mj-comp-vdiff__card">
                 <h4>
-                  <i class="fas fa-microchip"></i> Technical Design Redline
+                  <i class="fa-solid fa-microchip"></i> Technical Design Redline
                   @if (!DiffResult.TechnicalChanged) {
                     <span class="mj-c-status" data-status="unchanged">unchanged</span>
                   }
@@ -619,30 +645,113 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
         border-radius: 3px;
         font-weight: 600;
       }
+
+      .mj-comp-vdiff__perm-blocked {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 24px 16px;
+        text-align: center;
+        color: var(--mj-status-warning-text, var(--mj-text-primary));
+        background: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 10%, var(--mj-bg-surface));
+        border: 1px solid color-mix(in srgb, var(--mj-status-warning, var(--mj-border-default)) 35%, transparent);
+        border-radius: 8px;
+      }
     `,
   ],
 })
-export class ComponentVersionDiffComponent implements IArtifactVersionDiffViewer, OnChanges {
+export class ComponentVersionDiffComponent implements IArtifactVersionDiffViewer {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  @Input() BaseVersion!: MJArtifactVersionEntity;
-  @Input() TargetVersion!: MJArtifactVersionEntity;
+  private baseVersion!: MJArtifactVersionEntity;
+  private targetVersion!: MJArtifactVersionEntity;
+  private provider?: IMetadataProvider | null;
+
+  @Input()
+  public get Provider(): IMetadataProvider | null | undefined {
+    return this.provider;
+  }
+  public set Provider(value: IMetadataProvider | null | undefined) {
+    if (this.provider !== value) {
+      this.provider = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      this.recomputeDiff();
+    }
+  }
 
   public DiffResult: ComponentSpecVisualDiffResult | null = null;
+  public BasePermissionResult: PermissionEvaluationResult | null = null;
+  public TargetPermissionResult: PermissionEvaluationResult | null = null;
   public ActiveTab: ComponentDiffTabKind = 'overview';
   public SelectedCodeUnit: ComponentCodeUnitDiff | null = null;
 
-  ngOnChanges(_changes: SimpleChanges): void {
-    if (this.BaseVersion && this.TargetVersion) {
-      this.DiffResult = this.diffService.ComputeComponentSpecDiff(
-        this.BaseVersion.Content,
-        this.TargetVersion.Content,
-      );
-      const firstChangedCode = this.DiffResult.CodeUnits.find((u) => !u.CodeDiff.IsIdentical);
-      this.SelectedCodeUnit = firstChangedCode ?? this.DiffResult.CodeUnits[0] ?? null;
-      this.cdr.markForCheck();
+  private recomputeDiff(): void {
+    if (!this.baseVersion || !this.targetVersion) {
+      return;
     }
+    this.DiffResult = this.diffService.ComputeComponentSpecDiff(
+      this.baseVersion.Content,
+      this.targetVersion.Content,
+    );
+    this.BasePermissionResult = this.evaluateSpecPermissions(this.DiffResult.BaseSpec);
+    this.TargetPermissionResult = this.evaluateSpecPermissions(this.DiffResult.TargetSpec);
+    const firstChangedCode = this.DiffResult.CodeUnits.find((u) => !u.CodeDiff.IsIdentical);
+    this.SelectedCodeUnit = firstChangedCode ?? this.DiffResult.CodeUnits[0] ?? null;
+    this.cdr.markForCheck();
+  }
+
+  private isMetadataProvider(
+    provider: IMetadataProvider | IEntityDataProvider | null | undefined,
+  ): provider is IMetadataProvider {
+    return Boolean(provider && 'EntityByName' in provider && typeof provider.EntityByName === 'function');
+  }
+
+  private evaluateSpecPermissions(spec: ComponentSpec | null): PermissionEvaluationResult | null {
+    if (!spec) return null;
+    const candidateProvider = this.provider ?? this.baseVersion?.ProviderToUse ?? this.targetVersion?.ProviderToUse;
+    const provider: IMetadataProvider | undefined = this.isMetadataProvider(candidateProvider)
+      ? candidateProvider
+      : Metadata.Provider; // global-provider-ok: fallback only when neither Input provider nor version ProviderToUse supplies an IMetadataProvider
+    const currentUser = provider?.CurrentUser;
+    if (!currentUser) {
+      // Fail closed when user context is unavailable so unverified previews never mount.
+      const missingEntities = (spec.dataRequirements?.entities ?? [])
+        .map((e) => e.name)
+        .filter((n): n is string => Boolean(n));
+      const missingQueries = (spec.dataRequirements?.queries ?? [])
+        .map((q) => q.name)
+        .filter((n): n is string => Boolean(n));
+      return {
+        canRun: false,
+        missingEntities: missingEntities.length > 0 ? missingEntities : ['(User context unavailable)'],
+        missingQueries,
+      };
+    }
+    return EvaluateComponentPermissions(spec, currentUser, provider);
   }
 
   public get ChangedCodeUnitsCount(): number {

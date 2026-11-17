@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { IMetadataProvider } from '@memberjunction/core';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJConversationArtifactEntity, MJArtifactEntity } from '@memberjunction/core-entities';
 
@@ -17,9 +18,14 @@ export class ArtifactIconService {
      * Gets the appropriate Font Awesome icon class for an artifact.
      * @param artifact The artifact to get an icon for (MJConversationArtifactEntity or MJArtifactEntity)
      * @param pluginIcon Optional icon provided by a viewer plugin (highest priority)
+     * @param provider Optional scoped metadata provider
      * @returns Font Awesome icon class (e.g., 'fa-file-code', 'fa-chart-line')
      */
-    public GetArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
+    public GetArtifactIcon(
+        artifact: MJConversationArtifactEntity | MJArtifactEntity,
+        pluginIcon?: string,
+        provider?: IMetadataProvider | null,
+    ): string {
         if (!artifact) {
             return 'fa-file';
         }
@@ -30,7 +36,7 @@ export class ArtifactIconService {
         }
 
         // Priority 2: Database metadata icon
-        const metadataIcon = this.getMetadataIcon(artifact);
+        const metadataIcon = this.getMetadataIcon(artifact, provider);
         if (metadataIcon) {
             return metadataIcon;
         }
@@ -40,8 +46,12 @@ export class ArtifactIconService {
     }
 
     /** @deprecated Use {@link GetArtifactIcon}. */
-    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
-        return this.GetArtifactIcon(artifact, pluginIcon);
+    public getArtifactIcon(
+        artifact: MJConversationArtifactEntity | MJArtifactEntity,
+        pluginIcon?: string,
+        provider?: IMetadataProvider | null,
+    ): string {
+        return this.GetArtifactIcon(artifact, pluginIcon, provider);
     }
 
     /**
@@ -74,11 +84,17 @@ export class ArtifactIconService {
     /**
      * Attempts to retrieve icon from artifact type metadata.
      */
-    private getMetadataIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity): string | null {
+    private getMetadataIcon(
+        artifact: MJConversationArtifactEntity | MJArtifactEntity,
+        provider?: IMetadataProvider | null,
+    ): string | null {
         try {
             // MJConversationArtifactEntity has ArtifactType field, MJArtifactEntity has Type field
             const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
-            const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName ?? '');
+            const engine = provider
+                ? (ArtifactMetadataEngine.GetProviderInstance(provider, ArtifactMetadataEngine) as ArtifactMetadataEngine)
+                : ArtifactMetadataEngine.Instance;
+            const artifactType = engine.FindArtifactType(typeName ?? '');
             if (artifactType?.Icon) {
                 return this.NormalizeMetadataIcon(artifactType.Icon);
             }
