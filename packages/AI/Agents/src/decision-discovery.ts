@@ -20,13 +20,20 @@
  * @module @memberjunction/ai-agents
  */
 
-import { ApplyPlattCalibration, type ChatMessage, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
+import {
+    ApplyPlattCalibration,
+    type ChatMessage,
+    type DecisionAnswer,
+    type DecisionQuestion,
+    type PlattCalibration,
+} from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     CalibrateEdgeLogitToConfidence,
     ConversationUtility,
     DescribeAnsweringModel,
     IsEdgePreDiscoveryHintConfident,
+    ResolveEdgePreDiscoveryCalibration,
     SanitizeEdgePreDiscoveryHint,
     type DecisionAnsweringModel,
     type EdgePreDiscoveryHint,
@@ -741,11 +748,14 @@ export interface EdgePreDiscoveryEvaluation {
 /**
  * Counts how many raw IDs in an untrusted hint fail verification against `options`,
  * sanitizes the hint against `options`, and produces a direct discovery outcome only when
- * `SuggestedAgentId` is verified and clears the calibrated confidence gate.
+ * `SuggestedAgentId` is verified and clears the calibrated confidence gate (resolved from
+ * `ModelConfiguration.Decision.Calibrations` via `AIEngine.Instance.FindDecisionCalibration`,
+ * falling back to {@link EDGE_PRE_DISCOVERY_DEFAULT_PLATT_CALIBRATION} if unsynced).
  */
 export function EvaluateEdgePreDiscoveryHint(
     rawHint: unknown,
-    options: ReadonlyArray<DecisionDiscoveryOption>
+    options: ReadonlyArray<DecisionDiscoveryOption>,
+    calibration?: PlattCalibration | null
 ): EdgePreDiscoveryEvaluation {
     if (!rawHint || typeof rawHint !== 'object' || Array.isArray(rawHint)) {
         return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: 0 };
@@ -765,15 +775,26 @@ export function EvaluateEdgePreDiscoveryHint(
         discardedCount++;
     }
 
-    const sanitized = SanitizeEdgePreDiscoveryHint(rawHint, options);
+    const modelId = typeof rawRecord['ModelId'] === 'string' ? rawRecord['ModelId'] : undefined;
+    const effectiveCalibration = calibration && Number.isFinite(calibration.A) && Number.isFinite(calibration.B)
+        ? calibration
+        : ResolveEdgePreDiscoveryCalibration(AIEngine.Instance, modelId);
+
+    const sanitized = SanitizeEdgePreDiscoveryHint(rawHint, options, effectiveCalibration);
     if (!sanitized) {
         return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: discardedCount };
     }
 
-    if (options.length >= DECISION_DISCOVERY_MIN_OPTIONS && IsEdgePreDiscoveryHintConfident(sanitized) && sanitized.SuggestedAgentId) {
+    if (
+        options.length >= DECISION_DISCOVERY_MIN_OPTIONS &&
+        IsEdgePreDiscoveryHintConfident(sanitized, undefined, undefined, effectiveCalibration) &&
+        sanitized.SuggestedAgentId
+    ) {
         const suggested = options.find(o => UUIDsEqual(o.ID, sanitized.SuggestedAgentId));
         if (suggested) {
-            const confidence = sanitized.Confidence ?? CalibrateEdgeLogitToConfidence(sanitized.TopLogit!);
+            const confidence = sanitized.TopLogit !== undefined
+                ? CalibrateEdgeLogitToConfidence(sanitized.TopLogit, effectiveCalibration)
+                : (sanitized.Confidence ?? CalibrateEdgeLogitToConfidence(0, effectiveCalibration));
             return {
                 SanitizedHint: sanitized,
                 DiscardedCount: discardedCount,
