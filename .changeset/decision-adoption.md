@@ -13,6 +13,9 @@
 "@memberjunction/server": minor
 "@memberjunction/search-engine": minor
 "@memberjunction/testing-engine": minor
+"@memberjunction/integration-test-suite": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
 ---
 
 Decision adoption: closed-set calls move onto decision models, each behind one switch.

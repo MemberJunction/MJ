@@ -33,7 +33,7 @@ import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
  * network time, and a budget under 300 ms, network included, would give up on more. 350 ms leaves
  * room for the network. The cost is bounded and safe: a call that misses the deadline keeps
  * continuity, as if routing were off; the wait falls only on an unmentioned message in a chat with
- * `EnableDecisionRouting` on, which is off by default; and it is at most this long. LLM Decision, the
+ * `EnableDecisionRouting` on (the default); and it is at most this long. LLM Decision, the
  * failover, answered in about 520 ms at p50, so while Jev is unavailable routing times out and keeps
  * continuity. Revisit the figure, or the plan's budget, once client-side latency is measured.
  */

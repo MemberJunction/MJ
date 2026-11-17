@@ -1,4 +1,4 @@
-import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
 import { BaseRubricEvaluator, type EvidenceRef, type RubricCandidate } from './RubricEvaluator.js';
@@ -178,7 +178,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         const byKey = new Map(LeafNodes(version).map(node => [node.key, node]));
         const candidates: RubricCandidate[] = [];
         for (const decision of decisions) {
-            const node = decision.key ? byKey.get(decision.key) : undefined;
+            const node = resolveCriterionNode(decision.key, byKey);
             if (!node) {
                 droppedUnknownKeys += 1;
                 continue;
@@ -233,17 +233,20 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 : await this.perCriterion(version, content, criteria, subject));
         }
         const leaves = LeafNodes(version);
-        const known = new Set(leaves.map(node => node.key));
+        const byKey = new Map(leaves.map(node => [node.key, node]));
         let droppedUnknownKeys = 0;
-        for (const run of runs) {
-            for (const decision of run) {
-                if (!decision.key || !known.has(decision.key)) droppedUnknownKeys += 1;
+        const normalizedRuns = runs.map(run => run.map(decision => {
+            const node = resolveCriterionNode(decision.key, byKey);
+            if (!node) {
+                droppedUnknownKeys += 1;
+                return { ...decision, key: undefined };
             }
-        }
+            return decision.key === node.key ? decision : { ...decision, key: node.key };
+        }));
         const chosen: LLMDecision[] = [];
         const sampleSpread: { key: string; levels: string[]; median: string }[] = [];
         for (const node of leaves) {
-            const samples = runs
+            const samples = normalizedRuns
                 .map(run => run.find(item => item.key === node.key))
                 .filter((item): item is LLMDecision => !!item);
             const levels: string[] = [];
@@ -390,4 +393,46 @@ function assertInScale(key: string, scale: RubricVersionSnapshot['scales'][numbe
     if (value < scale.minValue || value > scale.maxValue) {
         throw new Error(`${key} is outside ${scale.minValue}..${scale.maxValue}.`);
     }
+}
+
+/**
+ * Matches a model's `key` back to its leaf criterion: exact key, backtick-quoted key (`` `key` ``),
+ * or the rendered criterion heading (`Name (\`key\`)` / `### Name (\`key\`)`) when its title also matches.
+ */
+function resolveCriterionNode(
+    rawKey: string | undefined,
+    byKey: Map<string, RubricNodeSnapshot>,
+): RubricNodeSnapshot | undefined {
+    if (!rawKey) return undefined;
+    const trimmed = rawKey.trim();
+    if (!trimmed) return undefined;
+    const direct = byKey.get(rawKey) ?? byKey.get(trimmed);
+    if (direct) return direct;
+    if (trimmed.length > 2 && trimmed.startsWith('`') && trimmed.endsWith('`')) {
+        const unquoted = trimmed.slice(1, -1).trim();
+        const byUnquoted = byKey.get(unquoted);
+        if (byUnquoted) return byUnquoted;
+    }
+    if (trimmed.endsWith(')')) {
+        const openParen = trimmed.lastIndexOf('(');
+        if (openParen > 0) {
+            let inner = trimmed.slice(openParen + 1, -1).trim();
+            if (inner.length > 2 && inner.startsWith('`') && inner.endsWith('`')) {
+                inner = inner.slice(1, -1).trim();
+            }
+            const candidate = byKey.get(inner);
+            if (candidate && stripHeadingHashes(trimmed.slice(0, openParen)) === candidate.name.trim()) {
+                return candidate;
+            }
+        }
+    }
+    return undefined;
+}
+
+function stripHeadingHashes(value: string): string {
+    let index = 0;
+    while (index < value.length && value.charCodeAt(index) === 35) {
+        index += 1;
+    }
+    return value.slice(index).trim();
 }

@@ -129,6 +129,34 @@ describe('DecisionThenLLMRubricEvaluator', () => {
         });
     });
 
+    it('merges a single deferred evidence-required criterion when the LLM echoes the rendered heading as key', async () => {
+        const prompts = FakePromptService(async () => ({
+            Text: JSON.stringify({
+                decisions: [{
+                    key: 'Sources (`sources`)',
+                    level: 'High',
+                    rationale: 'Quotes the 2024 census directly.',
+                    evidence: [{ quote: 'cites the 2024 census' }],
+                    confidence: 0.99,
+                }],
+            }),
+            PromptRunID: 'llm-run-sources',
+        }));
+        const output = await run({ Decisions: decisions([], { clarity: HIGH, accuracy: THREE }), Prompts: prompts });
+        expect(output.answers.map(answer => answer.criterionId)).toEqual(['a', 'b', 'c']);
+        expect(output.answers[2]).toMatchObject({
+            criterionId: 'c',
+            scaleLevelId: 'high',
+            evidence: [{ ref: 'cites the 2024 census', quote: 'cites the 2024 census' }],
+        });
+        expect(output.metadata).toMatchObject({
+            AnsweredBy: 'DecisionThenLLM',
+            DecisionCriteria: ['clarity', 'accuracy'],
+            LLMCriteria: [{ Key: 'sources', Reason: 'EvidenceRequired' }],
+            DroppedUnknownKeys: 0,
+        });
+    });
+
     it('sends a criterion whose calibrated confidence is under the threshold to the LLM, and keeps an uncalibrated one', async () => {
         serveCalibrations({ clarity: { A: 1, B: -1 } });
         const prompts = llm();
