@@ -109,7 +109,7 @@ describe('which entity a source\'s items are', () => {
 type Row = Record<string, unknown>;
 
 /** An entity object over a stored row, with only `fields` as columns. `link` sets what `ISAChild` returns. */
-function entityObject(name: string, fields: string[], stored: Row | null, log: string[]) {
+function entityObject(name: string, fields: string[], stored: Row | null, log: string[], opts: { copyCoreOnAttach?: Row } = {}) {
     let row: Row = stored ?? {};
     let isNew = false;
     const target: Row = {
@@ -127,6 +127,9 @@ function entityObject(name: string, fields: string[], stored: Row | null, log: s
         },
         AttachToParent: async (key: { KeyValuePairs: { Value: string }[] }) => {
             log.push(`attach ${name} to ${key.KeyValuePairs[0].Value}`);
+            if (opts.copyCoreOnAttach) {
+                Object.assign(row, opts.copyCoreOnAttach);
+            }
             row.ID = key.KeyValuePairs[0].Value;
             return true;
         },
@@ -151,14 +154,14 @@ function entityObject(name: string, fields: string[], stored: Row | null, log: s
 }
 
 /** A provider over one core row and, unless `missing`, its extension row. */
-function providerOver(core: Row, extension: Row | null, opts: { linkChild?: boolean } = {}) {
+function providerOver(core: Row, extension: Row | null, opts: { linkChild?: boolean; copyCoreOnAttach?: boolean } = {}) {
     const log: string[] = [];
     const created: string[] = [];
     const provider = {
         GetEntityObject: async (name: string) => {
             created.push(name);
             if (name === EXTENSION) {
-                return entityObject(EXTENSION, EXTENSION_FIELDS, extension, log).proxy;
+                return entityObject(EXTENSION, EXTENSION_FIELDS, extension, log, opts.copyCoreOnAttach ? { copyCoreOnAttach: core } : {}).proxy;
             }
             const coreObject = entityObject(BASE_ITEM_ENTITY, CORE_FIELDS, core, log).proxy as unknown as Row;
             if (opts.linkChild && extension) {
@@ -253,6 +256,20 @@ describe('saving an item', () => {
             `load ${EXTENSION}`,
             `attach ${EXTENSION} to I1`,
             expect.stringMatching(new RegExp(`^insert ${EXTENSION}: .*Audience.*TaggingStatus`)),
+        ]);
+    });
+
+    it('saves an attached extension row even when zero columns change', async () => {
+        const { provider, log } = providerOver({ ...coreRow(), FieldConfidence: '{}' }, null, { copyCoreOnAttach: true });
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
+        record.SetExtension('Pipeline', 'itemEntity', EXTENSION);
+
+        await new WorkingRecordCommitter(provider as never, {} as never).Commit(record, null, null);
+
+        expect(log).toEqual([
+            `load ${EXTENSION}`,
+            `attach ${EXTENSION} to I1`,
+            expect.stringMatching(new RegExp(`^insert ${EXTENSION}:`)),
         ]);
     });
 

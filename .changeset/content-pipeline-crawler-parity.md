@@ -2,6 +2,7 @@
 "@memberjunction/content-autotagging": minor
 "@memberjunction/content-pipeline": minor
 "@memberjunction/content-pipeline-base": minor
+"@memberjunction/server-bootstrap": minor
 ---
 
 Content pipeline: the website crawler's Discover gains sitemap seeding, walks in parts and page rendering, and Extract can read pages through a renderer.
