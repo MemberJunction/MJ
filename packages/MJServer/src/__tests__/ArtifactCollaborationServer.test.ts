@@ -1168,20 +1168,25 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             sheetCellsByCoord.set('sheet-1::sheet-1-row-6::sheet-1-col-B', JSON.stringify(formulaCell));
         });
 
-        // Wait for server room to converge both User A's row insertion AND User B's formula edit
-        await vi.waitFor(async () => {
-            const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(
-                artifactId,
-                editorUser
-            );
-            const mergedWb = JSON.parse(roomJson) as WorkbookSpec;
-            const mergedSheet = mergedWb.Worksheets[0];
-            // Because User A inserted a row at index 1, sheet-1-row-6 moved to row 7 (B7)
-            // and sheet-1-row-2..sheet-1-row-5 moved to B3:B6, so the formula resolved to =SUM(B3:B6) = 1000!
-            expect(mergedSheet.Cells['B7']).toBeDefined();
-            expect(mergedSheet.Cells['B7'].Formula).toBe('=SUM(B3:B6)');
-            expect(mergedSheet.Cells['B7'].ComputedValue).toBe(1000);
-        });
+        // Wait for server room to converge both User A's row insertion AND User B's formula edit.
+        // GetRoomContent evaluates collaborative workbooks inside an isolated worker thread, so allow
+        // generous headroom under loaded CI runners rather than Vitest's 1000ms default.
+        await vi.waitFor(
+            async () => {
+                const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(
+                    artifactId,
+                    editorUser
+                );
+                const mergedWb = JSON.parse(roomJson) as WorkbookSpec;
+                const mergedSheet = mergedWb.Worksheets[0];
+                // Because User A inserted a row at index 1, sheet-1-row-6 moved to row 7 (B7)
+                // and sheet-1-row-2..sheet-1-row-5 moved to B3:B6, so the formula resolved to =SUM(B3:B6) = 1000!
+                expect(mergedSheet.Cells['B7']).toBeDefined();
+                expect(mergedSheet.Cells['B7'].Formula).toBe('=SUM(B3:B6)');
+                expect(mergedSheet.Cells['B7'].ComputedValue).toBe(1000);
+            },
+            { timeout: 15_000, interval: 150 }
+        );
 
         // Compact room into MJ: Artifact Versions and verify both Content and Configuration are persisted
         const compacted = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
