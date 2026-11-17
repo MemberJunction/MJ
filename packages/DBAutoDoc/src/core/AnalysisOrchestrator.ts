@@ -356,6 +356,7 @@ export class AnalysisOrchestrator {
           ConfidenceThreshold: this.config.analysis.convergence.confidenceThreshold,
           IncrementalConfig: this.config.analysis.incremental,
           ReanalyzeBelowConfidence: this.reanalyzeBelowConfidence,
+          NewOrChangedTargetTables: incrementalScope?.NewOrChangedTargetTables,
         });
         analysisEngine.SetIncrementalTracker(incrementalTracker, nodes);
         this.onProgress('Incremental subgraph computed', {

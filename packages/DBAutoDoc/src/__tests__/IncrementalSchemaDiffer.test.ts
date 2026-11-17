@@ -254,4 +254,85 @@ describe('SchemaDiffer', () => {
     expect(diff.HasChanges).toBe(false);
     expect(diff.UnchangedTables).toEqual(['dbo.Staging']);
   });
+
+  it('handles legacy state files with rejected composite PK sibling flags and target-divergent soft FKs', () => {
+    const priorEmployee = makeTable(
+      'Employee',
+      [
+        makeColumn('BusinessEntityID', { isPrimaryKey: false, isForeignKey: true }),
+        makeColumn('LoginID', { isPrimaryKey: true }), // legacy orphaned flag from a rejected composite PK
+      ],
+      {
+        dependsOn: [{ schema: 'Person', table: 'Person', column: 'BusinessEntityID', referencedColumn: 'BusinessEntityID' }],
+      },
+    );
+    const priorState = makeBaseState([{ name: 'HumanResources', tables: [priorEmployee], descriptionIterations: [] }]);
+    priorState.phases.keyDetection = {
+      triggered: true,
+      triggerReason: 'both',
+      triggerDetails: { tablesWithoutPK: 1, expectedFKs: 1, actualFKs: 0, fkDeficitPercentage: 1 },
+      startedAt: '2026-01-01T00:00:00Z',
+      tokenBudget: { allocated: 1000, used: 100, remaining: 900 },
+      iterations: [],
+      discovered: {
+        primaryKeys: [
+          {
+            schemaName: 'HumanResources',
+            tableName: 'Employee',
+            columnNames: ['BusinessEntityID', 'LoginID'],
+            confidence: 75,
+            evidence: { uniqueness: 1, nullCount: 0, totalRows: 100, dataPattern: 'composite', namingScore: 0.8, dataTypeScore: 0.9, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: false,
+            status: 'rejected',
+          },
+          {
+            schemaName: 'HumanResources',
+            tableName: 'Employee',
+            columnNames: ['BusinessEntityID'],
+            confidence: 100,
+            evidence: { uniqueness: 1, nullCount: 0, totalRows: 100, dataPattern: 'sequential', namingScore: 0.8, dataTypeScore: 0.9, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: true,
+            status: 'confirmed',
+          },
+        ],
+        foreignKeys: [
+          {
+            schemaName: 'HumanResources',
+            sourceTable: 'Employee',
+            sourceColumn: 'BusinessEntityID',
+            targetSchema: 'Person',
+            targetTable: 'BusinessEntity',
+            targetColumn: 'BusinessEntityID',
+            confidence: 90,
+            evidence: { namingMatch: 1, valueOverlap: 1, cardinalityRatio: 1, dataTypeMatch: true, nullPercentage: 0, sampleSize: 100, orphanCount: 0, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: true,
+            status: 'confirmed',
+          },
+        ],
+      },
+      schemaEnhancements: { pkeysAdded: 1, fkeysAdded: 1, overallConfidence: 95 },
+      feedbackFromAnalysis: [],
+      summary: { totalTablesAnalyzed: 1, tablesWithDiscoveredPKs: 1, relationshipsDiscovered: 1, averageConfidence: 95, highConfidenceCount: 2, mediumConfidenceCount: 0, lowConfidenceCount: 0, rejectedCount: 1 },
+    };
+
+    const liveSchemas: SchemaDefinition[] = [
+      {
+        name: 'HumanResources',
+        descriptionIterations: [],
+        tables: [
+          makeTable('Employee', [
+            makeColumn('BusinessEntityID', { isPrimaryKey: false, isCatalogPrimaryKey: false, isForeignKey: false, isCatalogForeignKey: false }),
+            makeColumn('LoginID', { isPrimaryKey: false, isCatalogPrimaryKey: false }),
+          ]),
+        ],
+      },
+    ];
+
+    const diff = DiffSchemas(priorState, liveSchemas);
+    expect(diff.HasChanges).toBe(false);
+    expect(diff.UnchangedTables).toEqual(['HumanResources.Employee']);
+  });
 });

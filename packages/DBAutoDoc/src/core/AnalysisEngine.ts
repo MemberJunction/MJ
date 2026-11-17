@@ -968,11 +968,13 @@ export class AnalysisEngine {
   /**
    * Sanitize LLM-returned enum values: trim whitespace, drop empties and null sentinels.
    */
-  private sanitizeEnumValues(values: string[]): string[] {
+  private sanitizeEnumValues(values: string[] | undefined): string[] {
+    if (!Array.isArray(values)) return [];
     const sentinels = new Set(['', 'NULL', 'null', 'N/A', 'n/a', '-', '--']);
     const seen = new Set<string>();
     const result: string[] = [];
     for (const raw of values) {
+      if (typeof raw !== 'string') continue;
       const trimmed = raw.trim();
       if (sentinels.has(trimmed)) continue;
       if (seen.has(trimmed)) continue;
@@ -1651,11 +1653,14 @@ export class AnalysisEngine {
         }
       };
 
-      // Check if this column is already a detected PK
+      // Check if this column is already a detected single-column PK (1:1 / is-a).
+      // Composite PK members (junction/history tables) routinely double as FKs.
       const existingPK = discoveryPhase.discovered.primaryKeys.find(pk =>
+        pk.status !== 'rejected' &&
         pk.schemaName === schemaName &&
         pk.tableName === tableName &&
-        pk.columnNames.includes(columnName)
+        pk.columnNames.length === 1 &&
+        pk.columnNames[0] === columnName
       );
 
       if (existingPK && existingPK.status === 'confirmed') {
@@ -1713,16 +1718,31 @@ export class AnalysisEngine {
         // that the PK detection was wrong. Reject the PK.
         existingPK.status = 'rejected';
         feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
-        const column = this.findColumnInState(state, schemaName, tableName, columnName);
-        if (column) column.isPrimaryKey = false;
+        for (const pkColName of existingPK.columnNames) {
+          const coveredElsewhere = discoveryPhase.discovered.primaryKeys.some(
+            other =>
+              other !== existingPK &&
+              other.status !== 'rejected' &&
+              other.schemaName === schemaName &&
+              other.tableName === tableName &&
+              other.columnNames.includes(pkColName)
+          );
+          if (!coveredElsewhere) {
+            const pkCol = this.findColumnInState(state, schemaName, tableName, pkColName);
+            if (pkCol && !pkCol.isCatalogPrimaryKey) pkCol.isPrimaryKey = false;
+          }
+        }
         console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
       }
 
-      // Check if we already have this FK - boost confidence
+      // Check if we already have this exact FK candidate - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
         fk.schemaName === schemaName &&
         fk.sourceTable === tableName &&
-        fk.sourceColumn === columnName
+        fk.sourceColumn === columnName &&
+        fk.targetSchema === referencesSchema &&
+        fk.targetTable === referencesTable &&
+        fk.targetColumn === referencesColumn
       );
 
       if (existingFK && existingFK.status === 'candidate') {

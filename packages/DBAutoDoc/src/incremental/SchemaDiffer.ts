@@ -60,17 +60,20 @@ export function IsCatalogForeignKeyRef(
   if (dep.constraintName !== undefined && dep.constraintName.length > 0) {
     return true;
   }
+  const prevSchema = FindNamedItem(previousState.schemas ?? [], schemaName);
+  const prevTable = prevSchema ? FindNamedItem(prevSchema.tables, tableName) : undefined;
+  const prevCol = prevTable ? FindNamedItem(prevTable.columns, dep.column) : undefined;
+  if (prevCol?.isCatalogForeignKey === false) {
+    return false;
+  }
   const discovered = previousState.phases?.keyDetection?.discovered?.foreignKeys ?? [];
-  const matchesDiscovered = discovered.some(
+  const matchesDiscoveredSource = discovered.some(
     (fk) =>
       fk.schemaName.toLowerCase() === schemaName.toLowerCase() &&
       fk.sourceTable.toLowerCase() === tableName.toLowerCase() &&
-      fk.sourceColumn.toLowerCase() === dep.column.toLowerCase() &&
-      fk.targetSchema.toLowerCase() === dep.schema.toLowerCase() &&
-      fk.targetTable.toLowerCase() === dep.table.toLowerCase() &&
-      fk.targetColumn.toLowerCase() === dep.referencedColumn.toLowerCase(),
+      fk.sourceColumn.toLowerCase() === dep.column.toLowerCase(),
   );
-  return !matchesDiscovered;
+  return !matchesDiscoveredSource;
 }
 
 /** Extract only the catalog-declared outgoing foreign keys of `table` from `previousState`. */
@@ -275,7 +278,6 @@ function isDiscoveredPKColumn(
   const candidates = previousState.phases?.keyDetection?.discovered?.primaryKeys ?? [];
   return candidates.some(
     (pk) =>
-      pk.status !== 'rejected' &&
       pk.schemaName.toLowerCase() === schemaName.toLowerCase() &&
       pk.tableName.toLowerCase() === tableName.toLowerCase() &&
       pk.columnNames.some((c) => c.toLowerCase() === columnName.toLowerCase()),

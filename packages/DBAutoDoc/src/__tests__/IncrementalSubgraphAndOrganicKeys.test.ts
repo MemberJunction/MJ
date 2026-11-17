@@ -347,6 +347,160 @@ describe('IncrementalAnalysisTracker & AnalysisEngine Subgraph Execution', () =>
     expect(badCol.foreignKeyReferences).toBeUndefined();
     expect(products.dependsOn).toHaveLength(0);
   });
+
+  it('wakes up composite-PK junction tables for GATE-8 PK-as-FK targets and accepts LLM FKs on confirmed composite PK columns', async () => {
+    const priorProductVendor: TableDefinition = {
+      name: 'ProductVendor',
+      rowCount: 200,
+      dependsOn: [],
+      dependents: [],
+      description: 'Maps products to vendors.',
+      descriptionIterations: [
+        { description: 'Maps products to vendors.', reasoning: 'init', generatedAt: '2026-01-01', modelUsed: 'm', confidence: 0.95 },
+      ],
+      columns: [
+        makeCol('ProductID', 'int', { isPrimaryKey: true, isCatalogPrimaryKey: false }),
+        makeCol('BusinessEntityID', 'int', {
+          isPrimaryKey: true,
+          isCatalogPrimaryKey: false,
+          statistics: { totalRows: 200, distinctCount: 80, uniquenessRatio: 0.4, nullCount: 0, nullPercentage: 0, sampleValues: [1, 2] },
+        }),
+      ],
+    };
+    const priorState = new StateManager('/tmp/pv-prior.json').createInitialState('AW', 'localhost');
+    priorState.schemas = [{ name: 'Purchasing', descriptionIterations: [], tables: [structuredClone(priorProductVendor)] }];
+
+    const addedVendor: TableDefinition = {
+      name: 'Vendor',
+      rowCount: 100,
+      dependsOn: [],
+      dependents: [],
+      descriptionIterations: [],
+      columns: [
+        makeCol('BusinessEntityID', 'int', {
+          isPrimaryKey: true,
+          isCatalogPrimaryKey: false,
+          statistics: { totalRows: 100, distinctCount: 100, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [1, 2] },
+        }),
+      ],
+    };
+    const currState = structuredClone(priorState);
+    currState.schemas[0].tables.push(addedVendor);
+    currState.phases.keyDetection = {
+      triggered: true,
+      triggerReason: 'both',
+      triggerDetails: { tablesWithoutPK: 2, expectedFKs: 1, actualFKs: 0, fkDeficitPercentage: 1 },
+      startedAt: '2026-01-01',
+      tokenBudget: { allocated: 10000, used: 0, remaining: 10000 },
+      iterations: [],
+      discovered: {
+        primaryKeys: [
+          {
+            schemaName: 'Purchasing',
+            tableName: 'ProductVendor',
+            columnNames: ['ProductID', 'BusinessEntityID'],
+            confidence: 100,
+            evidence: { uniqueness: 1, nullCount: 0, totalRows: 200, dataPattern: 'composite', namingScore: 0.9, dataTypeScore: 1, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: true,
+            status: 'confirmed',
+          },
+          {
+            schemaName: 'Purchasing',
+            tableName: 'Vendor',
+            columnNames: ['BusinessEntityID'],
+            confidence: 99,
+            evidence: { uniqueness: 1, nullCount: 0, totalRows: 100, dataPattern: 'sequential', namingScore: 0.9, dataTypeScore: 1, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: true,
+            status: 'confirmed',
+          },
+        ],
+        foreignKeys: [],
+      },
+      schemaEnhancements: { pkeysAdded: 2, fkeysAdded: 0, overallConfidence: 99 },
+      feedbackFromAnalysis: [],
+      summary: { totalTablesAnalyzed: 2, tablesWithDiscoveredPKs: 2, relationshipsDiscovered: 0, averageConfidence: 99, highConfidenceCount: 2, mediumConfidenceCount: 0, lowConfidenceCount: 0, rejectedCount: 0 },
+    };
+
+    const sorter = new TopologicalSorter();
+    const { nodes, levels } = sorter.buildAndSort(currState.schemas);
+    const diff: SchemaDiffSummary = {
+      AddedSchemas: [],
+      RemovedSchemas: [],
+      AddedTables: ['Purchasing.Vendor'],
+      RemovedTables: [],
+      ModifiedTables: [],
+      UnchangedTables: ['Purchasing.ProductVendor'],
+      TotalColumnsToSample: 1,
+      HasChanges: true,
+    };
+
+    const tracker = new IncrementalAnalysisTracker({
+      PreviousState: priorState,
+      CurrentState: currState,
+      Diff: diff,
+      Nodes: nodes,
+      ConfidenceThreshold: 0.85,
+      NewOrChangedTargetTables: new Set(['Purchasing.Vendor']),
+    });
+    expect(tracker.ShouldAnalyzeTable('Purchasing.ProductVendor', 1)).toBe(true);
+
+    const mockPromptEngine = {
+      setGuardrailCheck: vi.fn(),
+      executePrompt: vi.fn(async (promptName: string, ctx: Record<string, unknown>) => {
+        if (promptName === 'table-analysis') {
+          const tbl = String(ctx['table']);
+          return {
+            success: true,
+            tokensUsed: 100,
+            result: {
+              tableDescription: tbl === 'Vendor' ? 'Approved vendors.' : 'Links products to vendors.',
+              reasoning: 'ok',
+              confidence: 0.98,
+              columnDescriptions:
+                tbl === 'Vendor'
+                  ? [{ columnName: 'BusinessEntityID', description: 'Vendor ID', reasoning: 'pk' }]
+                  : [
+                      { columnName: 'ProductID', description: 'Product ID', reasoning: 'pk' },
+                      // Intentionally omit `values` on `valueList: { isEnum: false }` to guard against crash
+                      { columnName: 'BusinessEntityID', description: 'Vendor FK', reasoning: 'fk', valueList: { isEnum: false, type: 'List', confidence: 0.9, reasoning: 'not enum' } },
+                    ],
+              foreignKeys:
+                tbl === 'ProductVendor'
+                  ? [{ columnName: 'BusinessEntityID', referencesSchema: 'Purchasing', referencesTable: 'Vendor', referencesColumn: 'BusinessEntityID', confidence: 0.98 }]
+                  : [],
+            },
+          };
+        }
+        return { success: true, tokensUsed: 20, result: { tableMateriallyChanged: false, tableChangeReasoning: 'same', columnChanges: [] } };
+      }),
+    } as unknown as PromptEngine;
+
+    const sm = new StateManager('/tmp/pv-curr.json');
+    vi.spyOn(sm, 'save').mockResolvedValue(undefined);
+    const itTracker = new IterationTracker();
+    const engine = new AnalysisEngine(makeConfig(), mockPromptEngine, sm, itTracker);
+    engine.SetIncrementalTracker(tracker, nodes);
+    const run = sm.createAnalysisRun(currState, 'gemini-flash', 'gemini', 0.1);
+    itTracker.incrementIteration(currState, run);
+
+    for (let lvl = 0; lvl < levels.length; lvl++) {
+      await engine.ProcessLevel(currState, run, lvl, levels[lvl]);
+    }
+
+    const fks = currState.phases.keyDetection.discovered.foreignKeys;
+    expect(fks).toHaveLength(1);
+    expect(fks[0]).toMatchObject({
+      schemaName: 'Purchasing',
+      sourceTable: 'ProductVendor',
+      sourceColumn: 'BusinessEntityID',
+      targetSchema: 'Purchasing',
+      targetTable: 'Vendor',
+      targetColumn: 'BusinessEntityID',
+      status: 'confirmed',
+    });
+  });
 });
 
 describe('OrganicKeyCache — Per-Table Normalization & Embedding Reuse', () => {

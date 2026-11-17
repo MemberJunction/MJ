@@ -30,6 +30,7 @@ export interface TrackerOptions {
   ConfidenceThreshold: number;
   IncrementalConfig?: IncrementalConfig;
   ReanalyzeBelowConfidence?: number;
+  NewOrChangedTargetTables?: ReadonlySet<string>;
 }
 
 export class IncrementalAnalysisTracker {
@@ -183,10 +184,11 @@ export class IncrementalAnalysisTracker {
     for (const modified of options.Diff.ModifiedTables) {
       this.markInitialDirty(modified.TableKey);
     }
+    const newTargetPKs = collectNewTargetSinglePKs(options.CurrentState, options.NewOrChangedTargetTables);
     for (const schema of options.CurrentState.schemas) {
       const prevSchema = FindNamedItem(options.PreviousState.schemas ?? [], schema.name);
       for (const table of schema.tables) {
-        this.checkRetainedTableDirty(options, schema, table, prevSchema);
+        this.checkRetainedTableDirty(options, schema, table, prevSchema, newTargetPKs);
       }
     }
   }
@@ -196,6 +198,7 @@ export class IncrementalAnalysisTracker {
     schema: SchemaDefinition,
     table: TableDefinition,
     prevSchema: SchemaDefinition | undefined,
+    newTargetPKs: NewTargetPKInfo[],
   ): void {
     if (table.userApproved) return;
     const key = `${schema.name}.${table.name}`;
@@ -214,6 +217,10 @@ export class IncrementalAnalysisTracker {
     }
     const prevTable = prevSchema ? FindNamedItem(prevSchema.tables, table.name) : undefined;
     if (prevTable && didTableRelationshipsChange(options.PreviousState, options.CurrentState, schema.name, prevTable, table)) {
+      this.markInitialDirty(key);
+      return;
+    }
+    if (newTargetPKs.length > 0 && hasGate8PKAsFKMatch(key, table, newTargetPKs)) {
       this.markInitialDirty(key);
     }
   }
@@ -277,4 +284,65 @@ function findNodeCaseInsensitive(nodes: Map<string, TableNode>, lowerKey: string
     if (k.toLowerCase() === lowerKey) return node;
   }
   return undefined;
+}
+
+interface NewTargetPKInfo {
+  TableKeyLower: string;
+  TableNameLower: string;
+  ColumnNameLower: string;
+  DistinctCount?: number;
+}
+
+/**
+ * Collect single-column PKs on tables in `newOrChangedTargets`.
+ * `FKDetector` intentionally skips PK source columns (GATE 8) and delegates
+ * PK-as-FK identifying/junction relationships to LLM table analysis.
+ */
+function collectNewTargetSinglePKs(
+  state: DatabaseDocumentation,
+  newOrChangedTargets?: ReadonlySet<string>,
+): NewTargetPKInfo[] {
+  if (!newOrChangedTargets || newOrChangedTargets.size === 0) return [];
+  const lowerSet = new Set(Array.from(newOrChangedTargets, (t) => t.toLowerCase()));
+  const results: NewTargetPKInfo[] = [];
+
+  for (const schema of state.schemas) {
+    for (const table of schema.tables) {
+      const keyLower = `${schema.name}.${table.name}`.toLowerCase();
+      if (!lowerSet.has(keyLower)) continue;
+      const pkCols = table.columns.filter((c) => c.isPrimaryKey);
+      if (pkCols.length === 1) {
+        results.push({
+          TableKeyLower: keyLower,
+          TableNameLower: table.name.toLowerCase(),
+          ColumnNameLower: pkCols[0].name.toLowerCase(),
+          DistinctCount: pkCols[0].statistics?.distinctCount,
+        });
+      }
+    }
+  }
+  return results;
+}
+
+function hasGate8PKAsFKMatch(tableKey: string, table: TableDefinition, newTargetPKs: NewTargetPKInfo[]): boolean {
+  const keyLower = tableKey.toLowerCase();
+  for (const col of table.columns) {
+    if (!col.isPrimaryKey || col.isForeignKey) continue;
+    const colLower = col.name.toLowerCase();
+    const srcDistinct = col.statistics?.distinctCount;
+
+    for (const tgt of newTargetPKs) {
+      if (tgt.TableKeyLower === keyLower) continue;
+      const nameMatches =
+        colLower === tgt.ColumnNameLower ||
+        colLower === `${tgt.TableNameLower}${tgt.ColumnNameLower}` ||
+        colLower === `${tgt.TableNameLower}id`;
+      if (!nameMatches) continue;
+      if (srcDistinct !== undefined && tgt.DistinctCount !== undefined && srcDistinct > tgt.DistinctCount * 1.05) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
 }
