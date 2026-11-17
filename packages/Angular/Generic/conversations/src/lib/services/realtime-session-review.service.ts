@@ -216,7 +216,14 @@ export interface RealtimeSessionReview {
    * panel, and they carry into a resumed live session. Empty when none / on any
    * tolerated load failure.
    */
+  /** Artifacts attached to the chain's conversation history... */
   Artifacts: ParsedDelegationArtifact[];
+  /**
+   * The voice model id resolved for the reviewed session (from `Config.realtimeMintSnapshot.modelID`),
+   * when recorded. Passed as `preferredModelId` on resume so a user who chose e.g. Grok Voice 3 keeps
+   * that same voice model instead of dropping back to the co-agent's default model.
+   */
+  ModelID?: string | null;
 }
 
 // ── Raw row shapes (ResultType: 'simple', narrowed Fields) ──────────────────
@@ -298,6 +305,9 @@ interface LegRows {
 interface SessionConfigJson {
   targetAgentID?: string;
   coAgentRunID?: string;
+  realtimeMintSnapshot?: {
+    modelID?: string;
+  };
 }
 
 const SESSION_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'ConversationID', 'Config', 'LastSessionID', 'LastActiveAt', 'ClosedAt', 'CloseReason', 'RecordingFileID', 'RecordingStartedAt', 'RecordingMedia', '__mj_CreatedAt'];
@@ -677,11 +687,23 @@ export class RealtimeSessionReviewService {
     const session = primary.session;
     const config = this.parseSessionConfig(session.Config);
     const legs = chain.map(leg => this.mapLeg(leg));
+    let modelId: string | null = config.realtimeMintSnapshot?.modelID?.trim() || null;
+    if (!modelId) {
+      for (let i = chain.length - 2; i >= 0; i--) {
+        const legConfig = this.parseSessionConfig(chain[i].session.Config);
+        const legModelId = legConfig.realtimeMintSnapshot?.modelID?.trim();
+        if (legModelId) {
+          modelId = legModelId;
+          break;
+        }
+      }
+    }
     return {
       SessionID: session.ID,
       AgentID: session.AgentID,
       AgentName: resolvedAgentName || session.Agent || 'the agent',
       TargetAgentID: config.targetAgentID ?? session.AgentID,
+      ModelID: modelId,
       ConversationID: session.ConversationID ?? null,
       Status: session.Status,
       CloseReason: session.CloseReason ?? null,

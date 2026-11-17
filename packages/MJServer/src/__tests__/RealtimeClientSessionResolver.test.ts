@@ -1859,6 +1859,60 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         });
     });
 
+    it('synthesizes ArtifactWorkspace restore state from ConversationDetailArtifact when no ArtifactWorkspace channel row was saved', async () => {
+        setupHappyStart();
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-doc',
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+        });
+        const runView = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: AI Agent Session Channels':
+                    return { Success: true, Results: [{ AgentSessionID: PRIOR_1, Channel: 'Media', Config: '{"items":[]}' }] };
+                case 'MJ: Conversation Details':
+                    return { Success: true, Results: [{ ID: 'det-1' }] };
+                case 'MJ: Conversation Detail Artifacts':
+                    return { Success: true, Results: [{ ConversationDetailID: 'det-1', ArtifactVersionID: 'ver-doc' }] };
+                case 'MJ: Artifact Versions':
+                    return { Success: true, Results: [{ ID: 'ver-doc', ArtifactID: 'art-doc', VersionNumber: 2, Name: 'Demo Document' }] };
+                case 'MJ: Artifacts':
+                    return { Success: true, Results: [{ ID: 'art-doc', Name: 'Demo Document', Type: 'Markdown Document' }] };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const { provider: baseProvider } = makeRestoreProvider({});
+        currentProvider = {
+            ...(baseProvider as object),
+            RunView: runView,
+        };
+        const resolver = makeResolver();
+
+        try {
+            const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+            const parsed = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
+            expect(parsed.Media).toBe('{"items":[]}');
+            expect(JSON.parse(parsed.ArtifactWorkspace)).toEqual({
+                activeArtifactId: 'art-doc',
+                instances: [
+                    {
+                        ArtifactID: 'art-doc',
+                        ArtifactVersionID: 'ver-doc',
+                        VersionNumber: 2,
+                        Name: 'Demo Document',
+                        ArtifactTypeName: 'Markdown Document',
+                    },
+                ],
+            });
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
     it('tolerates a failed restore query (start succeeds, field omitted)', async () => {
         setupHappyStart();
         const { provider } = makeRestoreProvider({ runViewResult: { Success: false, ErrorMessage: 'db down' } });

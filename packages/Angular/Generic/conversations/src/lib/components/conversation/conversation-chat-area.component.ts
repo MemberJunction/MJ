@@ -9063,13 +9063,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const agentName = this.RealtimeReview?.AgentName ?? null;
+    const preferredModelId = this.RealtimeReview?.ModelID ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
-        null, // preferredModelId
+        preferredModelId,
         null, // clientTools
         null, // coAgentId
         null, // configOverridesJson

@@ -229,6 +229,24 @@ describe('RealtimeSessionReviewService', () => {
       expect(review?.TargetAgentID).toBe('AGENT-TARGET');
     });
 
+    it('extracts ModelID from Config.realtimeMintSnapshot.modelID so resume keeps the session voice model', async () => {
+      mockRunViews([
+        ok([
+          sessionRow({
+            Config: JSON.stringify({
+              targetAgentID: 'AGENT-TARGET',
+              realtimeMintSnapshot: { modelID: 'MODEL-GROK-VOICE-3' }
+            })
+          })
+        ]),
+        ok([]),
+        ok([]),
+        ok([])
+      ]);
+      const review = await service.LoadSessionReview('SESSION-1', provider);
+      expect(review?.ModelID).toBe('MODEL-GROK-VOICE-3');
+    });
+
     it('tolerates malformed Config JSON (fallback target, no run exclusion)', async () => {
       mockRunViews([ok([sessionRow({ Config: '{not json' })]), ok([]), ok([runRow('RUN-CO')]), ok([])]);
       const review = await service.LoadSessionReview('SESSION-1', provider);

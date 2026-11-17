@@ -2570,9 +2570,76 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             const states = this.collectChannelStates(sortedRows, lastSessionId);
+            const hasWorkspaceState = Object.keys(states).some((k) => k.trim().toLowerCase() === 'artifactworkspace');
+            if (!hasWorkspaceState) {
+                const fallbackWorkspace = await this.loadPriorArtifactWorkspaceFallback(legIDs, contextUser, provider);
+                if (fallbackWorkspace) {
+                    const currentTotal = Object.values(states).reduce((sum, v) => sum + v.length, 0);
+                    if (currentTotal + fallbackWorkspace.length <= MAX_CHANNEL_STATE_CHARS) {
+                        states['ArtifactWorkspace'] = fallbackWorkspace;
+                    }
+                }
+            }
             return Object.keys(states).length > 0 ? JSON.stringify(states) : null;
         } catch (error) {
             LogError(`StartRealtimeClientSession: channel-state restore failed for prior session ${lastSessionId}: ${(error as Error).message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Backstop for sessions that created/edited collaborative artifacts via delegated runs
+     * (linked in `MJ: Conversation Detail Artifacts`) without a saved `ArtifactWorkspace`
+     * channel-state row — synthesizes `ArtifactWorkspace` restore JSON so resuming opens those
+     * workspace tabs immediately alongside the rest of the session's restored channels.
+     */
+    private async loadPriorArtifactWorkspaceFallback(
+        legIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (legIDs.length === 0) {
+            return null;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const idList = legIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const detailRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `AgentSessionID IN (${idList})`,
+                    Fields: ['ID'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    MaxRows: 200,
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const detailIDs = (detailRes.Success ? (detailRes.Results ?? []) : [])
+                .map((r) => r.ID)
+                .filter((id) => typeof id === 'string' && id.length > 0);
+            if (detailIDs.length === 0) {
+                return null;
+            }
+            const artifacts = await this.loadConversationArtifacts(rv, detailIDs, contextUser, provider);
+            const collaborative = artifacts.filter(
+                (a) => (a.Type ?? '').trim().toLowerCase() !== 'component',
+            );
+            if (collaborative.length === 0) {
+                return null;
+            }
+            const instances = collaborative.map((a) => ({
+                ArtifactID: a.ArtifactID,
+                ...(a.LatestVersionID ? { ArtifactVersionID: a.LatestVersionID } : {}),
+                ...(typeof a.LatestVersionNumber === 'number' ? { VersionNumber: a.LatestVersionNumber } : {}),
+                Name: a.Name,
+                ...(a.Type ? { ArtifactTypeName: a.Type } : {}),
+            }));
+            return JSON.stringify({
+                activeArtifactId: instances[instances.length - 1].ArtifactID,
+                instances,
+            });
+        } catch {
             return null;
         }
     }
