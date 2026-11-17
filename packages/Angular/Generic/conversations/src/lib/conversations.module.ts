@@ -315,3 +315,4 @@ const COMPONENTS = [
   ]
 })
 export class ConversationsModule {}
+// CI test: Angular-only change, the integration tier should skip. Do not merge.
