@@ -155,6 +155,37 @@ describe('AuthProviderCatalog.Resolve', () => {
   });
 });
 
+describe('AuthProviderCatalog sign-up intent across a reload', () => {
+  beforeEach(() => {
+    installStorage();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reports autoSignUp once after a sign-up selection that required a reload', () => {
+    AuthProviderCatalog.Select(provider({ name: 'okta' }), 'auth0', true);
+    const catalog = [provider({ name: 'auth0' }), provider({ name: 'okta' })];
+
+    const first = AuthProviderCatalog.Resolve(catalog);
+    expect(first.autoLogin).toBe(true);
+    expect(first.autoSignUp).toBe(true);
+
+    const second = AuthProviderCatalog.Resolve(catalog);
+    expect(second.autoLogin).toBe(false);
+    expect(second.autoSignUp).toBe(false);
+  });
+
+  it('does not report autoSignUp after a plain sign-in selection', () => {
+    AuthProviderCatalog.Select(provider({ name: 'okta' }), 'auth0');
+    const result = AuthProviderCatalog.Resolve([provider({ name: 'auth0' }), provider({ name: 'okta' })]);
+
+    expect(result.autoLogin).toBe(true);
+    expect(result.autoSignUp).toBe(false);
+  });
+});
+
 describe('AuthProviderCatalog.Select', () => {
   beforeEach(() => {
     installStorage();

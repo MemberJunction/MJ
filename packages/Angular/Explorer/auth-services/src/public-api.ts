@@ -17,6 +17,7 @@ export * from './lib/AngularAuthProviderFactory';
 // Metadata-driven provider catalog (pre-auth) + the reusable multi-IdP login picker
 export * from './lib/auth-provider-catalog';
 export * from './lib/catalog-environment';
+export * from './lib/sign-up-hint';
 export * from './lib/login-picker.component';
 
 // Designed sign-in page (Login Studio): the pre-auth loader and the region renderer

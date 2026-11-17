@@ -19,6 +19,8 @@ import {
   StandardUserInfo,
   AuthErrorType,
   AuthProviderCatalog,
+  ReadSignUpHint,
+  RemoveSignUpHint,
   LoginScreenLoader,
   MJ_AUTH_PROVIDER_RESOLUTION,
   type AuthProviderResolution
@@ -457,6 +459,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** True while a sign-in is being initiated, so the picker cannot start two at once. */
   public SigningIn = false;
 
+  /** True when the visitor arrived with the sign-up hint and has not started a login yet. */
+  private signUpRequested = false;
+
   /** Providers offered by the server catalog. Empty for a single-provider deployment. */
   public get AuthProviderChoices(): PublicAuthProviderInfo[] {
     return this.authResolution?.choices ?? [];
@@ -501,14 +506,16 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       return;
     }
     this.SigningIn = true;
+    const signUp = this.signUpRequested;
+    this.signUpRequested = false;
 
-    const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null);
+    const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null, signUp);
     if (requiresReload) {
       this.Document.defaultView?.location.reload();
       return;
     }
 
-    this.AuthBase.login().subscribe({
+    this.AuthBase.login(this.loginOptions(signUp)).subscribe({
       error: (error: unknown) => {
         this.SigningIn = false;
         LogError(`[Auth] Sign-in with provider '${provider.name}' failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -524,7 +531,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   private startAutoLoginIfPending(): void {
     if (this.authResolution?.autoLogin) {
       this.SigningIn = true;
-      this.AuthBase.login().subscribe({
+      this.AuthBase.login(this.loginOptions(this.authResolution.autoSignUp === true)).subscribe({
         error: (error: unknown) => {
           this.SigningIn = false;
           LogError(`[Auth] Automatic sign-in after provider switch failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -532,6 +539,40 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         }
       });
     }
+  }
+
+  /** Options for `login()`: the provider's sign-up options when `signUp` is true, else none. */
+  private loginOptions(signUp: boolean): Record<string, unknown> | undefined {
+    return signUp ? this.AuthBase.GetSignUpOptions() ?? undefined : undefined;
+  }
+
+  /** Records the `?signup=1` hint and removes it from the address bar. */
+  private captureSignUpHint(): void {
+    const { pathname, search, hash } = window.location;
+    if (!ReadSignUpHint(search)) {
+      return;
+    }
+    this.signUpRequested = true;
+    window.history.replaceState(window.history.state, '', RemoveSignUpHint(pathname + search + hash));
+  }
+
+  /**
+   * Opens the provider's sign-up form for a visitor with no session who arrived with the hint.
+   * With the provider picker shown, the intent waits for the visitor's choice instead.
+   */
+  private startSignUpIfRequested(): void {
+    if (!this.signUpRequested || this.ShowProviderPicker || this.SigningIn) {
+      return;
+    }
+    this.signUpRequested = false;
+    this.SigningIn = true;
+    this.AuthBase.login(this.loginOptions(true)).subscribe({
+      error: (error: unknown) => {
+        this.SigningIn = false;
+        LogError(`[Auth] Sign-up start failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   /**
@@ -635,6 +676,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   async SetupAuth() {
     // Auth provider already initialized by APP_INITIALIZER
+    this.captureSignUpHint();
 
     // v3.0 API - Clean abstraction using observables
     this.AuthBase.getUserInfo()
@@ -694,10 +736,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.AuthBase.isAuthenticated()
       .pipe(take(1))
       .subscribe((loggedIn: boolean) => {
-        if (!loggedIn) {
-          // Instead of kicking off the login process,
-          // just display the login screen to the user
-          // Auth state is already false if we're here
+        if (loggedIn) {
+          this.signUpRequested = false;
+        } else {
+          // Display the login screen, unless the visitor asked to create an account
+          this.startSignUpIfRequested();
         }
       });
 

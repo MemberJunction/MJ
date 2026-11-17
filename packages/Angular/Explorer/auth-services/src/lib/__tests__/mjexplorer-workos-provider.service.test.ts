@@ -19,6 +19,7 @@ const sdk = vi.hoisted(() => {
     getUser: vi.fn(),
     getAccessToken: vi.fn(),
     signIn: vi.fn().mockResolvedValue(undefined),
+    signUp: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn(),
     dispose: vi.fn(),
   };
@@ -307,6 +308,24 @@ describe('MJWorkOSProvider', () => {
       await firstValueFrom(provider.login({ organizationId: 'org_1' }));
 
       expect(sdk.mockClient.signIn).toHaveBeenCalledWith({ organizationId: 'org_1' });
+    });
+
+    it('GetSignUpOptions asks for the AuthKit sign-up screen', async () => {
+      const Provider = await importProvider();
+      const provider = newProvider(Provider);
+
+      expect(provider.GetSignUpOptions()).toEqual({ screenHint: 'sign-up' });
+    });
+
+    it('login with the sign-up options redirects through AuthKit signUp', async () => {
+      const Provider = await importProvider();
+      const provider = newProvider(Provider);
+      sdk.mockClient.getUser.mockReturnValue(null);
+
+      await firstValueFrom(provider.login({ ...provider.GetSignUpOptions(), organizationId: 'org_1' }));
+
+      expect(sdk.mockClient.signUp).toHaveBeenCalledWith({ organizationId: 'org_1' });
+      expect(sdk.mockClient.signIn).not.toHaveBeenCalled();
     });
 
     it('getProfilePictureUrl returns the WorkOS profile picture', async () => {
