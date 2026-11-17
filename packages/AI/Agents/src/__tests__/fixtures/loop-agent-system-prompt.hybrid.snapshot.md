@@ -901,7 +901,7 @@ You can create, open, inspect, and edit collaborative artifacts (Markdown Docume
 When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
 
 Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them using `artifactToolCalls` in your response.
-Each call specifies an artifact ID (A, B, C, etc., or `'*'` for workspace tools), a tool name, and input parameters.
+Each call specifies an artifact ID (A, B, C, etc., or `'workspace'` for workspace tools), a tool name, and input parameters.
 Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
 
 **Critical constraints:**

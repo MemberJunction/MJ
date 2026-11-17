@@ -579,4 +579,58 @@ describe('BuildDocsContextMenu', () => {
     );
     expect(findAction(ownerHeadingItems, 'toggle-heading-lock')?.Disabled).toBe(false);
   });
+
+  it('closes lock bypasses in context menus by disabling propose-suggestion and suggestion-accept/reject when SegmentEditable is false', () => {
+    const lockedPara = makeSegment({
+      SegmentID: 'locked-p1',
+      BlockKind: 'paragraph',
+      RawMarkdown: '<!-- mj-lock: owner-only -->\nRestricted clause.',
+    });
+    const pendingSug: DocumentSuggestionItem = {
+      SuggestionID: 'sug-lock-1',
+      BlockID: 'locked-p1',
+      AuthorName: 'Collaborator',
+      CreatedAt: '2026-11-15T00:00:00Z',
+      OriginalMarkdown: 'Restricted clause.',
+      ProposedMarkdown: 'Altered clause.',
+      Rationale: 'Bypass attempt',
+      Status: 'Pending',
+    };
+
+    const lockedProseMenu = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'edit',
+        CanUserEdit: true,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: { Kind: 'prose', Segment: lockedPara },
+      }),
+    );
+    const proposeItem = findAction(lockedProseMenu, 'propose-suggestion');
+    expect(proposeItem?.Disabled).toBe(true);
+    expect((proposeItem?.DisabledReason ?? '').toLowerCase()).toContain('locked');
+
+    const lockedSuggestMenu = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'suggest',
+        CanUserEdit: true,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: { Kind: 'prose', Segment: lockedPara },
+      }),
+    );
+    expect(findAction(lockedSuggestMenu, 'propose-suggestion')?.Disabled).toBe(true);
+
+    const lockedSuggestionCardMenu = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'suggest',
+        CanUserEdit: true,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: { Kind: 'suggestion-card', Suggestion: pendingSug },
+      }),
+    );
+    expect(findAction(lockedSuggestionCardMenu, 'suggestion-accept')?.Disabled).toBe(true);
+    expect(findAction(lockedSuggestionCardMenu, 'suggestion-reject')?.Disabled).toBe(true);
+  });
 });

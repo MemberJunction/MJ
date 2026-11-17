@@ -3,10 +3,9 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject,
 } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import {
@@ -35,7 +34,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               (click)="SetTab('sql')"
               data-testid="query-diff-tab-sql"
             >
-              <i class="fas fa-database"></i> SQL & Parameters
+              <i class="fa-solid fa-database"></i> SQL & Parameters
               @if (DiffResult.SqlChanged) {
                 <span class="mj-q-dot"></span>
               }
@@ -48,7 +47,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               (click)="SetTab('schema')"
               data-testid="query-diff-tab-schema"
             >
-              <i class="fas fa-table-columns"></i> Schema & Sample Rows
+              <i class="fa-solid fa-table-columns"></i> Schema & Sample Rows
               @if (TotalSchemaChanges > 0) {
                 <span class="mj-q-badge">{{ TotalSchemaChanges }}</span>
               }
@@ -60,7 +59,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               [class.mj-query-vdiff__tab--active]="ActiveTab === 'narrative'"
               (click)="SetTab('narrative')"
             >
-              <i class="fas fa-lightbulb"></i> Plan & Interpretation
+              <i class="fa-solid fa-lightbulb"></i> Plan & Interpretation
             </button>
           </div>
         </div>
@@ -72,7 +71,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               <div class="mj-query-vdiff__cards">
                 @if (DiffResult.MetadataDeltas.length > 0) {
                   <section class="mj-query-vdiff__card">
-                    <h4><i class="fas fa-gauge-high"></i> Query & Execution Deltas</h4>
+                    <h4><i class="fa-solid fa-gauge-high"></i> Query & Execution Deltas</h4>
                     <div class="mj-query-vdiff__kv-list">
                       @for (m of DiffResult.MetadataDeltas; track m.Label) {
                         <div class="mj-query-vdiff__kv">
@@ -89,7 +88,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
 
                 @if (DiffResult.ParameterDeltas.length > 0) {
                   <section class="mj-query-vdiff__card">
-                    <h4><i class="fas fa-sliders"></i> Query Parameters</h4>
+                    <h4><i class="fa-solid fa-sliders"></i> Query Parameters</h4>
                     <div class="mj-query-vdiff__kv-list">
                       @for (p of DiffResult.ParameterDeltas; track p.Label) {
                         <div class="mj-query-vdiff__kv">
@@ -108,7 +107,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
 
             @if (DiffResult.IsWhitespaceOnlySqlChange) {
               <div class="mj-query-vdiff__notice">
-                <i class="fas fa-info-circle"></i>
+                <i class="fa-solid fa-info-circle"></i>
                 <span>SQL formatting/whitespace changed, while normalized SQL tokens remain equivalent.</span>
               </div>
             }
@@ -122,7 +121,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               ></mj-git-diff-lines-view>
             } @else {
               <div class="mj-query-vdiff__empty">
-                <i class="fas fa-table"></i>
+                <i class="fa-solid fa-table"></i>
                 <span>This data artifact uses inline/view data without a SQL statement. Check Schema & Sample Rows.</span>
               </div>
             }
@@ -133,7 +132,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
               @for (tbl of DiffResult.Tables; track tbl.TableName) {
                 <section class="mj-query-vdiff__card">
                   <div class="mj-query-vdiff__tbl-head">
-                    <h4><i class="fas fa-table"></i> {{ tbl.TableName }}</h4>
+                    <h4><i class="fa-solid fa-table"></i> {{ tbl.TableName }}</h4>
                     <div class="mj-query-vdiff__tbl-meta">
                       @if (tbl.OldRowCount !== null || tbl.NewRowCount !== null) {
                         <span>Rows: {{ tbl.OldRowCount ?? '—' }} → <strong>{{ tbl.NewRowCount ?? '—' }}</strong></span>
@@ -243,7 +242,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
             <div class="mj-query-vdiff__tables">
               <section class="mj-query-vdiff__card">
                 <h4>
-                  <i class="fas fa-diagram-project"></i> Query Plan Redline
+                  <i class="fa-solid fa-diagram-project"></i> Query Plan Redline
                   @if (!DiffResult.PlanChanged) {
                     <span class="mj-q-status" data-status="unchanged">unchanged</span>
                   }
@@ -253,7 +252,7 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
 
               <section class="mj-query-vdiff__card">
                 <h4>
-                  <i class="fas fa-lightbulb"></i> Interpretation Redline
+                  <i class="fa-solid fa-lightbulb"></i> Interpretation Redline
                   @if (!DiffResult.InterpretationChanged) {
                     <span class="mj-q-status" data-status="unchanged">unchanged</span>
                   }
@@ -532,21 +531,45 @@ export type QueryDiffTabKind = 'sql' | 'schema' | 'narrative';
     `,
   ],
 })
-export class QueryVersionDiffComponent implements IArtifactVersionDiffViewer, OnChanges {
+export class QueryVersionDiffComponent implements IArtifactVersionDiffViewer {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  @Input() BaseVersion!: MJArtifactVersionEntity;
-  @Input() TargetVersion!: MJArtifactVersionEntity;
+  private baseVersion!: MJArtifactVersionEntity;
+  private targetVersion!: MJArtifactVersionEntity;
+
+  @Input() public Provider?: IMetadataProvider | null = null;
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      this.recomputeDiff();
+    }
+  }
 
   public DiffResult: QueryVisualDiffResult | null = null;
   public ActiveTab: QueryDiffTabKind = 'sql';
 
-  ngOnChanges(_changes: SimpleChanges): void {
-    if (this.BaseVersion && this.TargetVersion) {
+  private recomputeDiff(): void {
+    if (this.baseVersion && this.targetVersion) {
       this.DiffResult = this.diffService.ComputeQueryDataDiff(
-        this.BaseVersion.Content,
-        this.TargetVersion.Content,
+        this.baseVersion.Content,
+        this.targetVersion.Content,
       );
       if (!this.DiffResult.HasSql && this.DiffResult.Tables.length > 0) {
         this.ActiveTab = 'schema';

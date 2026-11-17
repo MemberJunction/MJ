@@ -850,7 +850,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() ExportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fa-solid fa-download';
 
   /** @deprecated Use {@link ExportButtonIcon}. */
   @Input() set exportButtonIcon(value: string) {

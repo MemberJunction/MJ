@@ -145,12 +145,13 @@ const WORKSPACE_ARTIFACT_TOOLS: ReadonlySet<string> = new Set([
     'open_artifact',
     'list_workspace_artifacts',
     'create_synthesized_artifact',
+    'refresh_and_snapshot_artifact',
 ]);
 
 function artifactTool(host: FrameworkToolHost): AgentToolDefinition {
     return {
         Name: ARTIFACT_TOOL,
-        Description: 'Run one artifact or workspace tool (for example `create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`, or a domain tool like `upsert_live_table` / `write_cells` / `insert_block_after` / `add_slide` on an artifact in Available Artifacts). Call with `tool`, optional `artifactId` (A, B, … — required for domain tools, optional for workspace tools), and `input`.',
+        Description: 'Run one artifact or workspace tool (for example `create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`, `refresh_and_snapshot_artifact`, or a domain tool like `upsert_live_table` / `write_cells` / `insert_block_after` / `add_slide` on an artifact in Available Artifacts). Call with `tool`, optional `artifactId` (A, B, … — required for domain tools, optional for workspace tools), and `input`.',
         InputSchema: {
             type: 'object',
             properties: {

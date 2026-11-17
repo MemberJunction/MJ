@@ -5,6 +5,7 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import { ArtifactGuestSharingEnabledDefault } from './magicLinkConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
 import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
@@ -616,6 +617,27 @@ const magicLinkSchema = z.object({
    * never expose an open redirect carrying session tokens.
    */
   allowedRedirectOrigins: z.array(z.string()).optional(),
+  /**
+   * Configuration for external anonymous `resource-share` Magic Links scoped to Frozen artifacts.
+   * Default-disabled (`enabled: false`) so public redemption & guest share minting stay off unless
+   * explicitly opted in.
+   */
+  artifactGuestSharing: z.object({
+    /** Explicit opt-in switch enabling external Frozen artifact guest share links. Default false unless MJ_ARTIFACT_GUEST_SHARING_ENABLED is set truthy. */
+    enabled: zodBooleanWithTransforms().default(() => ArtifactGuestSharingEnabledDefault(process.env.MJ_ARTIFACT_GUEST_SHARING_ENABLED)),
+    /** Maximum allowed expiration window in hours for newly issued guest share links. Default 720 (30 days). */
+    maxExpiresInHours: z.coerce.number().positive().optional().default(720),
+    /** Maximum redemption uses permitted per guest share link. Default 100. */
+    maxUses: z.coerce.number().int().positive().optional().default(100),
+    /** Optional MJ Authorization name checked before issuing an external guest share link. */
+    requiredAuthorizationName: z.string().optional(),
+    /** Explicit MJ Application name bound onto resource-share invites. Fails closed if not found. */
+    applicationName: z.string().optional().default('Chat'),
+    /** Explicit MJ Role name bound onto resource-share invites (defaults to magicLink.restrictedRoleName; fails closed if not found). */
+    roleName: z.string().optional(),
+    /** Explicit MJ Resource Type name bound onto resource-share invites. Fails closed if not found. */
+    resourceTypeName: z.string().optional().default('Artifacts'),
+  }).optional().default({}),
 }).passthrough();
 
 /**
