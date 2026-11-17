@@ -40,8 +40,8 @@ export interface IRecordChangeSyncContext {
     RunID: string;
     /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
     OriginChangeIDs: string[];
-    /** Email address of the user who authored the latest change on the origin deployment. */
-    OriginUserEmail: string;
+    /** Email address of the user who authored the latest change on the origin deployment (optional for service accounts). */
+    OriginUserEmail?: string;
 }
 
 export interface IRecordChangeContext {

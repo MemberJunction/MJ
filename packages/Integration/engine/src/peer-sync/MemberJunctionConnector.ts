@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import {
     CompositeKey,
     IMetadataProvider,
@@ -37,7 +38,6 @@ import {
     PlanPeerEntityOrder,
 } from './ChangeSetPlanner.js';
 import { PeerSyncApplier } from './PeerSyncApplier.js';
-import { GraphQLPeerSyncTransport } from './PeerSyncEndpointService.js';
 import { ComputePairingID, SchemaPlanner } from './SchemaPlanner.js';
 import { DEFAULT_PEER_SYNC_CONFIG } from './types.js';
 import type {
@@ -355,12 +355,14 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         let totalErrored = 0;
         let totalSkipped = 0;
 
-        // Phase 3: Dependency-Ordered Pull (Pass 1 + Pass 2 Deferred FKs)
+        // Phase 3 & 4: Dependency-Ordered Pull & Push (Pass 1 + Pass 2 Deferred FKs)
+        const localIntegrationID = context.CompanyIntegration.IntegrationID || undefined;
         const allPullDeferredFKs: Array<{
             entityMap: ICompanyIntegrationEntityMap;
             mapResult: EntityMapSyncResult;
             updates: PeerDeferredFKUpdate[];
         }> = [];
+        const pushedMapResults: EntityMapSyncResult[] = [];
 
         for (const entityMap of orderedMaps) {
             if (context.AbortSignal?.aborted) break;
@@ -391,6 +393,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                     entityMap,
                     fieldMaps,
                     deferredFieldsByEntityID.get(NormalizeUUID(entityMap.EntityID)) ?? [],
+                    localIntegrationID,
                     pairingID,
                     localManifest.InstanceID,
                     remoteManifest.InstanceID,
@@ -421,6 +424,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
             }
 
             if (shouldPush) {
+                pushedMapResults.push(mapResult);
                 const pushOutcome = await this.pushEntityChanges(
                     entityMap,
                     pairingID,
@@ -465,6 +469,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                 },
                 {
                     CompanyIntegrationID: context.CompanyIntegration.ID,
+                    IntegrationID: localIntegrationID,
                     EntityMap: item.entityMap,
                     PreservePrimaryKeys: peerConfig.PreservePrimaryKeys,
                     DuplicateThreshold: peerConfig.DuplicateThreshold,
@@ -479,6 +484,42 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                 item.mapResult.Success = false;
                 totalErrored += deferredResult.errorCount;
                 deferredErrorMessages.push(...deferredResult.errors);
+            }
+        }
+
+        // Pass 2 of Two-Pass Nullable FK Cycle Breaking on Outbound Push
+        if (pushedMapResults.length > 0 && !context.AbortSignal?.aborted) {
+            const pushDeferredResult = await transport.FlushDeferredForeignKeys({
+                PairingID: pairingID,
+                OriginInstanceID: localManifest.InstanceID,
+                RunID: context.Run.ID,
+            });
+            if (pushDeferredResult.errorCount > 0) {
+                totalErrored += pushDeferredResult.errorCount;
+                deferredErrorMessages.push(...pushDeferredResult.errors);
+
+                let attributedCount = 0;
+                if (pushDeferredResult.errorsByEntityName) {
+                    for (const [remoteEntityName, count] of Object.entries(pushDeferredResult.errorsByEntityName)) {
+                        if (count <= 0) continue;
+                        const matchingMapResult = pushedMapResults.find(
+                            mr =>
+                                (mr.ExternalObjectName || mr.EntityName).toLowerCase() ===
+                                    remoteEntityName.toLowerCase() ||
+                                mr.EntityName.toLowerCase() === remoteEntityName.toLowerCase()
+                        );
+                        if (matchingMapResult) {
+                            matchingMapResult.RecordsErrored += count;
+                            matchingMapResult.Success = false;
+                            attributedCount += count;
+                        }
+                    }
+                }
+                const unattributedCount = pushDeferredResult.errorCount - attributedCount;
+                if (unattributedCount > 0) {
+                    pushedMapResults[0].RecordsErrored += unattributedCount;
+                    pushedMapResults[0].Success = false;
+                }
             }
         }
 
@@ -501,6 +542,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         entityMap: ICompanyIntegrationEntityMap,
         fieldMaps: ICompanyIntegrationFieldMap[],
         deferredFieldNames: string[],
+        integrationID: string | undefined,
         pairingID: string,
         localInstanceID: string,
         remoteInstanceID: string,
@@ -554,6 +596,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                     },
                     {
                         CompanyIntegrationID: entityMap.CompanyIntegrationID,
+                        IntegrationID: integrationID,
                         EntityMap: entityMap,
                         FieldMaps: fieldMaps.length > 0 ? fieldMaps : undefined,
                         DeferredFieldNames: deferredFieldNames,
@@ -916,22 +959,29 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         };
     }
 
-    private resolveTransport(peerConfig: PeerSyncConfiguration): IPeerSyncTransport {
+    private resolveTransport(_peerConfig: PeerSyncConfiguration): IPeerSyncTransport {
         if (this.deps.Transport) {
             return this.deps.Transport;
         }
-        return new GraphQLPeerSyncTransport({
-            PeerGraphQLUrl: peerConfig.PeerGraphQLUrl,
-        });
+        throw new Error(
+            'MemberJunctionConnector requires an injected IPeerSyncTransport (e.g., InProcessPeerSyncTransport). ' +
+            'Network GraphQL transport, MJServer Remote Operations, Credentials-backed API key binding, ' +
+            'and target-entity RLS read projection ship in Phase 1b.'
+        );
     }
 
     private resolveLocalInstanceID(peerConfig: PeerSyncConfiguration): string {
-        return (
-            this.deps.LocalInstanceID ||
-            peerConfig.PeerInstanceID ||
-            process.env['MJ_DEPLOYMENT_ID'] ||
-            '00000000-0000-0000-0000-000000000001'
-        );
+        const configuredID =
+            this.deps.LocalInstanceID?.trim() ||
+            peerConfig.PeerInstanceID?.trim() ||
+            process.env['MJ_DEPLOYMENT_ID']?.trim();
+        if (!configuredID) {
+            throw new Error(
+                'MemberJunctionConnector requires a configured local deployment ID via ' +
+                'deps.LocalInstanceID, PeerSyncConfiguration.PeerInstanceID, or MJ_DEPLOYMENT_ID.'
+            );
+        }
+        return configuredID;
     }
 
     private buildLocalManifest(
@@ -941,7 +991,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         return {
             InstanceID: this.resolveLocalInstanceID(peerConfig),
             InstanceName: this.deps.LocalInstanceName ?? 'Local MJ Instance',
-            MJCoreVersion: this.deps.LocalMJCoreVersion ?? '5.27.0',
+            MJCoreVersion: this.deps.LocalMJCoreVersion ?? resolveInstalledMJCoreVersion(),
             DatabaseEngine: this.deps.LocalDatabaseEngine ?? 'SQLServer',
             ServerTimestamp: new Date().toISOString(),
             SupportedCapabilities: [
@@ -954,4 +1004,19 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
             AllowedEntityNames: entityMaps.map(em => em.Entity || em.ExternalObjectName),
         };
     }
+}
+
+let cachedMJCoreVersion: string | null = null;
+function resolveInstalledMJCoreVersion(): string {
+    if (cachedMJCoreVersion) {
+        return cachedMJCoreVersion;
+    }
+    try {
+        const req = createRequire(import.meta.url);
+        const pkg = req('@memberjunction/core/package.json') as { version?: string };
+        cachedMJCoreVersion = pkg.version || '6.3.0';
+    } catch {
+        cachedMJCoreVersion = '6.3.0';
+    }
+    return cachedMJCoreVersion;
 }

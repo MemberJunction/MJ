@@ -1468,6 +1468,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     : entity.SyncContext
                       ? SerializeSyncChangeContext(entity.SyncContext)
                       : null,
+                entity.SyncContext?.IntegrationID ?? null,
             )
             : null;
 

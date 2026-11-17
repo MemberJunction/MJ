@@ -199,6 +199,8 @@ export interface PeerRecordChangeEntry {
     ChangedAt: string;
     ChangesJSON: string | null;
     FullRecordJSON: string | null;
+    /** Optional email of the user who authored this change on the origin deployment. */
+    UserEmail?: string | null;
 }
 
 /**
@@ -213,6 +215,10 @@ export interface CoalescedRecordChange {
     ChangedFields: string[];
     LatestChangedAt: string;
     LatestChangeID: string;
+    /** All origin `MJ: Record Changes` IDs folded into this coalesced change. */
+    OriginChangeIDs?: string[];
+    /** Email address of the user who authored the latest change on the origin deployment (when available). */
+    OriginUserEmail?: string;
 }
 
 /**
@@ -239,10 +245,14 @@ export interface PeerIdentityResolution {
 export interface PeerDeferredFKUpdate {
     EntityName: string;
     LocalRecordID: string;
-    SourceRecordID: string;
+    SourceRecordID?: string;
     FieldName: string;
     RelatedEntityID: string;
     SourceForeignKeyValue: string;
+    /** Origin `MJ: Record Changes` IDs carried from Pass 1 for Pass 2 provenance stamping. */
+    OriginChangeIDs?: string[];
+    /** Origin user email carried from Pass 1 for Pass 2 provenance stamping. */
+    OriginUserEmail?: string;
 }
 
 /**
@@ -321,6 +331,8 @@ export interface PeerDeferredFKApplyResult {
     updatedCount: number;
     errorCount: number;
     errors: string[];
+    /** Optional per-entity breakdown of Pass 2 failure counts for EntityMapSyncResult attribution. */
+    errorsByEntityName?: Record<string, number>;
 }
 
 /**
@@ -381,7 +393,7 @@ export interface IPeerSyncSchemaEvolutionRunner {
 }
 
 /**
- * Transport interface for the 6 `PeerSync.*` RPC operations.
+ * Transport interface for `PeerSync.*` RPC operations.
  */
 export interface IPeerSyncTransport {
     GetManifest(): Promise<PeerManifest>;
@@ -395,6 +407,11 @@ export interface IPeerSyncTransport {
     ApplyChangeBatch(
         request: PeerApplyBatchRequest
     ): Promise<PeerApplyBatchResponse>;
+    FlushDeferredForeignKeys(requestMeta: {
+        PairingID: string;
+        OriginInstanceID: string;
+        RunID: string;
+    }): Promise<PeerDeferredFKApplyResult>;
     NotifyChangeBatch(
         notification: PeerDoorbellNotification
     ): Promise<PeerDoorbellResponse>;

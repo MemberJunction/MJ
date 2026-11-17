@@ -128,6 +128,8 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
         changedFields: Set<string>;
         latestChangedAt: string;
         latestChangeID: string;
+        originChangeIDs: string[];
+        originUserEmail?: string;
     }
 
     const byRecordKey = new Map<string, Accumulator>();
@@ -143,6 +145,7 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
         const key = `${entry.EntityName.toLowerCase()}::${NormalizeUUID(entry.RecordID)}`;
         const parsedRecord = parseRecordJSON(entry.FullRecordJSON);
         const parsedChanges = parseChangesJSON(entry.ChangesJSON);
+        const entryEmail = entry.UserEmail?.trim() || undefined;
 
         const existing = byRecordKey.get(key);
         if (!existing) {
@@ -168,6 +171,8 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
                 changedFields,
                 latestChangedAt: entry.ChangedAt,
                 latestChangeID: entry.ID,
+                originChangeIDs: [entry.ID],
+                originUserEmail: entryEmail,
             });
             continue;
         }
@@ -182,6 +187,8 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
                 existing.latestRecordData = parsedRecord;
                 existing.ancestorData = {};
                 existing.changedFields.clear();
+                existing.originChangeIDs = [entry.ID];
+                existing.originUserEmail = entryEmail;
             } else if (existing.operation === 'Delete') {
                 // Deleted then re-created with same PK in the same window -> net Update
                 existing.operation = 'Update';
@@ -189,10 +196,16 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
                 for (const field of Object.keys(parsedRecord)) {
                     existing.changedFields.add(field);
                 }
+                existing.originChangeIDs.push(entry.ID);
+                if (entryEmail) existing.originUserEmail = entryEmail;
             } else {
                 existing.latestRecordData = parsedRecord;
+                existing.originChangeIDs.push(entry.ID);
+                if (entryEmail) existing.originUserEmail = entryEmail;
             }
         } else if (entry.Type === 'Update') {
+            existing.originChangeIDs.push(entry.ID);
+            if (entryEmail) existing.originUserEmail = entryEmail;
             if (existing.operation === 'Create') {
                 // Create + Update -> stays Create with latest snapshot
                 existing.latestRecordData = {
@@ -225,8 +238,12 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
                 existing.latestRecordData = {};
                 existing.ancestorData = {};
                 existing.changedFields.clear();
+                existing.originChangeIDs = [];
+                existing.originUserEmail = undefined;
             } else {
                 existing.operation = 'Delete';
+                existing.originChangeIDs.push(entry.ID);
+                if (entryEmail) existing.originUserEmail = entryEmail;
             }
         }
     }
@@ -245,6 +262,8 @@ export function CoalesceRecordChanges(changes: PeerRecordChangeEntry[]): Coalesc
             ChangedFields: Array.from(acc.changedFields),
             LatestChangedAt: acc.latestChangedAt,
             LatestChangeID: acc.latestChangeID,
+            OriginChangeIDs: [...acc.originChangeIDs],
+            ...(acc.originUserEmail ? { OriginUserEmail: acc.originUserEmail } : {}),
         });
     }
 

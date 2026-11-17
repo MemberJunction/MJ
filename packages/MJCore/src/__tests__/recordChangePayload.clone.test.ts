@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseProviderBase } from '../generic/databaseProviderBase';
-import { CloneContext, RestoreContext, SyncContext, SerializeSyncChangeContext } from '../generic/baseEntity';
+import { BaseEntity, CloneContext, RestoreContext, SyncContext, SerializeSyncChangeContext } from '../generic/baseEntity';
 import { EntityInfo, UserInfo } from '../index';
 
 class ConcreteTestProvider extends DatabaseProviderBase {
@@ -198,5 +198,33 @@ describe('BuildRecordChangePayload — CloneContext & SyncContext (§10.3)', () 
         expect(payload!.source).toBe('Internal');
         expect(payload!.changeContext).toBeNull();
         expect(payload!.integrationID).toBeNull();
+    });
+
+    it('accepts service-account SyncContext without OriginUserEmail and omits empty email in ChangeContext JSON', () => {
+        class ConcreteTestEntity extends BaseEntity {}
+        const entity = new ConcreteTestEntity(mockEntityInfo);
+
+        const serviceAccountContext: SyncContext = {
+            OriginDeploymentID: 'DEPLOY-SERVICE-A',
+            PairingID: 'PAIR-SVC-01',
+            RunID: 'RUN-SVC-01',
+            OriginChangeIDs: ['CHG-SVC-1'],
+        };
+
+        expect(() => entity.SetSyncContext(serviceAccountContext)).not.toThrow();
+        expect(entity.SyncContext).toEqual(serviceAccountContext);
+
+        const serialized = JSON.parse(SerializeSyncChangeContext(serviceAccountContext));
+        expect(serialized).toEqual({
+            Version: 1,
+            Kind: 'Sync',
+            Sync: {
+                OriginDeploymentID: 'DEPLOY-SERVICE-A',
+                PairingID: 'PAIR-SVC-01',
+                RunID: 'RUN-SVC-01',
+                OriginChangeIDs: ['CHG-SVC-1'],
+            },
+        });
+        expect('OriginUserEmail' in serialized.Sync).toBe(false);
     });
 });

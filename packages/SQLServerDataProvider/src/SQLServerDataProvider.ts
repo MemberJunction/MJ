@@ -3627,6 +3627,7 @@ export class SQLServerDataProvider
     safeUserId: string,
     source?: RecordChangeSource,
     changeContext?: string | null,
+    integrationID?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -3637,10 +3638,15 @@ export class SQLServerDataProvider
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);
 
-    const lineageClause = source === 'Clone' || source === 'Sync'
+    const lineageClause = source === 'Clone'
       ? `,
-        @Source='${source}',
+        @Source='Clone',
         @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : source === 'Sync'
+      ? `,
+        @Source='Sync',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'${integrationID ? `,
+        @IntegrationID='${EscapeSQLString(integrationID)}'` : ''}`
       : '';
 
     return `

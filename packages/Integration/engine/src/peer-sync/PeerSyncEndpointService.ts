@@ -1,5 +1,5 @@
 import { IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID } from '@memberjunction/global';
 import {
     BuildCompositeWatermarkWhereClause,
     CoalesceRecordChanges,
@@ -43,6 +43,11 @@ export interface PeerSyncEndpointConfig {
     /** Local `CompanyIntegration.ID` used when applying inbound changes for this pairing. */
     CompanyIntegrationID: string;
     /**
+     * Optional `MJ: Integrations` ID (`Integration.ID`, NOT `CompanyIntegration.ID`)
+     * recorded on inbound `RecordChange.IntegrationID`.
+     */
+    IntegrationID?: string | null;
+    /**
      * Explicit entity allowlist exposed to the remote peer.
      * If non-empty, requests for any entity not in this list are rejected.
      */
@@ -83,11 +88,17 @@ export interface PeerSyncEndpointConfig {
  * entity-level authorization relies solely on `contextUser` permissions and API-key scopes/filters.
  */
 export class PeerSyncEndpointService {
+    private static readonly MAX_TRACKED_DEFERRED_RUNS = 256;
+
     private readonly config: PeerSyncEndpointConfig;
     private readonly schemaPlanner = new SchemaPlanner();
     private readonly applier = new PeerSyncApplier();
     private readonly allowedLowerSet: Set<string>;
-    private pendingDeferredFKs: PeerDeferredFKUpdate[] = [];
+    private readonly pendingDeferredFKsByRun = new Map<
+        string,
+        { updates: PeerDeferredFKUpdate[]; preservePrimaryKeys: boolean }
+    >();
+    private cachedDeferredFieldsByEntityID: Map<string, string[]> | null = null;
 
     constructor(config: PeerSyncEndpointConfig) {
         this.config = config;
@@ -245,24 +256,18 @@ export class PeerSyncEndpointService {
         if (!overrideContext?.DeferredFieldNames) {
             const targetEntity = md.EntityByName(request.EntityName);
             if (targetEntity) {
-                const scopeEntities =
-                    this.allowedLowerSet.size > 0
-                        ? md.Entities.filter(e => this.allowedLowerSet.has(e.Name.toLowerCase()))
-                        : md.Entities;
-                const depPlan = PlanPeerEntityOrder(
-                    scopeEntities.map(e => e.ID),
-                    md
-                );
-                computedDeferredFields = depPlan.DeferredNullableFields
-                    .filter(edge => edge.AllowsNull && UUIDsEqual(edge.FromEntityID, targetEntity.ID))
-                    .map(edge => edge.FieldName);
+                computedDeferredFields = this.getDeferredFieldsForEntity(targetEntity.ID, md);
             }
         }
 
+        const effectivePreservePrimaryKeys =
+            request.PreservePrimaryKeys ?? this.config.PreservePrimaryKeys ?? true;
+
         const applyCtx: PeerSyncApplyContext = {
             CompanyIntegrationID: this.config.CompanyIntegrationID,
+            IntegrationID: this.config.IntegrationID,
             DeferredFieldNames: computedDeferredFields,
-            PreservePrimaryKeys: this.config.PreservePrimaryKeys ?? true,
+            PreservePrimaryKeys: effectivePreservePrimaryKeys,
             DuplicateThreshold: this.config.DuplicateThreshold ?? 0.92,
             PotentialMatchThreshold: this.config.PotentialMatchThreshold ?? 0.75,
             DuplicateFinder: this.config.DuplicateFinder,
@@ -278,30 +283,48 @@ export class PeerSyncEndpointService {
             applyCtx
         );
         if (DeferredFKUpdates.length > 0) {
-            this.pendingDeferredFKs.push(...DeferredFKUpdates);
+            const runKey = this.buildDeferredRunKey(request.PairingID, request.RunID);
+            const existing = this.pendingDeferredFKsByRun.get(runKey);
+            if (existing) {
+                existing.updates.push(...DeferredFKUpdates);
+            } else {
+                if (this.pendingDeferredFKsByRun.size >= PeerSyncEndpointService.MAX_TRACKED_DEFERRED_RUNS) {
+                    const oldestKey = this.pendingDeferredFKsByRun.keys().next().value;
+                    if (oldestKey !== undefined) {
+                        this.pendingDeferredFKsByRun.delete(oldestKey);
+                    }
+                }
+                this.pendingDeferredFKsByRun.set(runKey, {
+                    updates: [...DeferredFKUpdates],
+                    preservePrimaryKeys: effectivePreservePrimaryKeys,
+                });
+            }
         }
         return Response;
     }
 
     /**
-     * Flushes any deferred nullable FK updates accumulated during Pass 1 of a multi-entity sync.
+     * Flushes deferred nullable FK updates accumulated during Pass 1 for `(PairingID, RunID)`.
      */
     public async FlushDeferredForeignKeys(
         requestMeta: { PairingID: string; OriginInstanceID: string; RunID: string },
         contextUser: UserInfo
     ): Promise<PeerDeferredFKApplyResult> {
-        if (this.pendingDeferredFKs.length === 0) {
-            return { updatedCount: 0, errorCount: 0, errors: [] };
+        const runKey = this.buildDeferredRunKey(requestMeta.PairingID, requestMeta.RunID);
+        const queued = this.pendingDeferredFKsByRun.get(runKey);
+        if (!queued || queued.updates.length === 0) {
+            this.pendingDeferredFKsByRun.delete(runKey);
+            return { updatedCount: 0, errorCount: 0, errors: [], errorsByEntityName: {} };
         }
-        const toFlush = [...this.pendingDeferredFKs];
-        this.pendingDeferredFKs = [];
+        this.pendingDeferredFKsByRun.delete(runKey);
 
         return this.applier.ApplyDeferredForeignKeys(
-            toFlush,
+            queued.updates,
             requestMeta,
             {
                 CompanyIntegrationID: this.config.CompanyIntegrationID,
-                PreservePrimaryKeys: this.config.PreservePrimaryKeys ?? true,
+                IntegrationID: this.config.IntegrationID,
+                PreservePrimaryKeys: queued.preservePrimaryKeys,
                 DuplicateThreshold: this.config.DuplicateThreshold ?? 0.92,
                 PotentialMatchThreshold: this.config.PotentialMatchThreshold ?? 0.75,
                 ContextUser: contextUser,
@@ -309,6 +332,33 @@ export class PeerSyncEndpointService {
                 RunViewProvider: this.config.RunViewProvider,
             }
         );
+    }
+
+    private getDeferredFieldsForEntity(entityID: string, md: IMetadataProvider): string[] {
+        if (!this.cachedDeferredFieldsByEntityID) {
+            const scopeEntities =
+                this.allowedLowerSet.size > 0
+                    ? md.Entities.filter(e => this.allowedLowerSet.has(e.Name.toLowerCase()))
+                    : md.Entities;
+            const depPlan = PlanPeerEntityOrder(
+                scopeEntities.map(e => e.ID),
+                md
+            );
+            const byEntityID = new Map<string, string[]>();
+            for (const edge of depPlan.DeferredNullableFields) {
+                if (!edge.AllowsNull) continue;
+                const normFrom = NormalizeUUID(edge.FromEntityID);
+                const fields = byEntityID.get(normFrom) ?? [];
+                fields.push(edge.FieldName);
+                byEntityID.set(normFrom, fields);
+            }
+            this.cachedDeferredFieldsByEntityID = byEntityID;
+        }
+        return this.cachedDeferredFieldsByEntityID.get(NormalizeUUID(entityID)) ?? [];
+    }
+
+    private buildDeferredRunKey(pairingID: string, runID: string): string {
+        return `${pairingID}::${runID}`;
     }
 
     /**
@@ -383,137 +433,17 @@ export class InProcessPeerSyncTransport implements IPeerSyncTransport {
         return this.endpoint.ApplyChangeBatch(request, this.contextUser);
     }
 
+    public async FlushDeferredForeignKeys(requestMeta: {
+        PairingID: string;
+        OriginInstanceID: string;
+        RunID: string;
+    }): Promise<PeerDeferredFKApplyResult> {
+        return this.endpoint.FlushDeferredForeignKeys(requestMeta, this.contextUser);
+    }
+
     public async NotifyChangeBatch(
         notification: PeerDoorbellNotification
     ): Promise<PeerDoorbellResponse> {
         return this.endpoint.NotifyChangeBatch(notification, this.contextUser);
-    }
-}
-
-/**
- * GraphQL HTTP/HTTPS implementation of `IPeerSyncTransport` that communicates
- * with a remote MemberJunction instance's `/graphql` endpoint.
- */
-export class GraphQLPeerSyncTransport implements IPeerSyncTransport {
-    private readonly graphqlUrl: string;
-    private readonly headers: Record<string, string>;
-
-    constructor(options: {
-        PeerGraphQLUrl: string;
-        ApiKey?: string;
-        BearerToken?: string;
-    }) {
-        this.graphqlUrl = options.PeerGraphQLUrl;
-        this.headers = {
-            'Content-Type': 'application/json',
-        };
-        if (options.ApiKey) {
-            this.headers['x-api-key'] = options.ApiKey;
-        }
-        if (options.BearerToken) {
-            this.headers['Authorization'] = `Bearer ${options.BearerToken}`;
-        }
-    }
-
-    public async GetManifest(): Promise<PeerManifest> {
-        const query = `query PeerSyncGetManifest { PeerSyncGetManifest }`;
-        const data = await this.executeGraphQL<{ PeerSyncGetManifest: string }>(query, {});
-        return JSON.parse(data.PeerSyncGetManifest) as PeerManifest;
-    }
-
-    public async GetSchemaFingerprint(
-        entityNames: string[]
-    ): Promise<PeerEntitySchemaFingerprint[]> {
-        const query = `query PeerSyncGetSchemaFingerprint($entityNames: [String!]!) {
-            PeerSyncGetSchemaFingerprint(entityNames: $entityNames)
-        }`;
-        const data = await this.executeGraphQL<{ PeerSyncGetSchemaFingerprint: string }>(
-            query,
-            { entityNames }
-        );
-        return JSON.parse(data.PeerSyncGetSchemaFingerprint) as PeerEntitySchemaFingerprint[];
-    }
-
-    public async PreviewSchemaPlan(
-        remoteSchemas: PeerEntitySchemaFingerprint[]
-    ): Promise<SchemaReconciliationPlan> {
-        const query = `query PeerSyncPreviewSchemaPlan($remoteSchemasJSON: String!) {
-            PeerSyncPreviewSchemaPlan(remoteSchemasJSON: $remoteSchemasJSON)
-        }`;
-        const data = await this.executeGraphQL<{ PeerSyncPreviewSchemaPlan: string }>(
-            query,
-            { remoteSchemasJSON: JSON.stringify(remoteSchemas) }
-        );
-        return JSON.parse(data.PeerSyncPreviewSchemaPlan) as SchemaReconciliationPlan;
-    }
-
-    public async FetchChangeBatch(
-        request: PeerFetchChangesRequest
-    ): Promise<PeerFetchChangesResponse> {
-        const query = `query PeerSyncFetchChangeBatch($requestJSON: String!) {
-            PeerSyncFetchChangeBatch(requestJSON: $requestJSON)
-        }`;
-        const data = await this.executeGraphQL<{ PeerSyncFetchChangeBatch: string }>(
-            query,
-            { requestJSON: JSON.stringify(request) }
-        );
-        return JSON.parse(data.PeerSyncFetchChangeBatch) as PeerFetchChangesResponse;
-    }
-
-    public async ApplyChangeBatch(
-        request: PeerApplyBatchRequest
-    ): Promise<PeerApplyBatchResponse> {
-        const mutation = `mutation PeerSyncApplyChangeBatch($requestJSON: String!) {
-            PeerSyncApplyChangeBatch(requestJSON: $requestJSON)
-        }`;
-        const data = await this.executeGraphQL<{ PeerSyncApplyChangeBatch: string }>(
-            mutation,
-            { requestJSON: JSON.stringify(request) }
-        );
-        return JSON.parse(data.PeerSyncApplyChangeBatch) as PeerApplyBatchResponse;
-    }
-
-    public async NotifyChangeBatch(
-        notification: PeerDoorbellNotification
-    ): Promise<PeerDoorbellResponse> {
-        const mutation = `mutation PeerSyncNotifyChangeBatch($notificationJSON: String!) {
-            PeerSyncNotifyChangeBatch(notificationJSON: $notificationJSON)
-        }`;
-        const data = await this.executeGraphQL<{ PeerSyncNotifyChangeBatch: string }>(
-            mutation,
-            { notificationJSON: JSON.stringify(notification) }
-        );
-        return JSON.parse(data.PeerSyncNotifyChangeBatch) as PeerDoorbellResponse;
-    }
-
-    private async executeGraphQL<TData>(
-        query: string,
-        variables: Record<string, string | string[]>
-    ): Promise<TData> {
-        const response = await fetch(this.graphqlUrl, {
-            method: 'POST',
-            headers: this.headers,
-            body: JSON.stringify({ query, variables }),
-        });
-
-        if (!response.ok) {
-            throw new Error(
-                `PeerSync GraphQL HTTP error ${response.status}: ${response.statusText}`
-            );
-        }
-
-        const payload = (await response.json()) as {
-            data?: TData;
-            errors?: Array<{ message: string }>;
-        };
-        if (payload.errors && payload.errors.length > 0) {
-            throw new Error(
-                `PeerSync GraphQL error: ${payload.errors.map(e => e.message).join('; ')}`
-            );
-        }
-        if (!payload.data) {
-            throw new Error('PeerSync GraphQL response contained no data.');
-        }
-        return payload.data;
     }
 }

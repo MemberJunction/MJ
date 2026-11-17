@@ -30,8 +30,13 @@ import type {
  * Options for applying an inbound Peer Sync batch on the local MJ instance.
  */
 export interface PeerSyncApplyContext {
-    /** Local `CompanyIntegration.ID` for this peer pairing. */
+    /** Local `CompanyIntegration.ID` for this peer pairing (used for `CompanyIntegrationRecordMap` lookups). */
     CompanyIntegrationID: string;
+    /**
+     * Optional `MJ: Integrations` ID (`Integration.ID`, NOT `CompanyIntegration.ID`)
+     * recorded on `RecordChange.IntegrationID` (`FK_RecordChange_IntegrationID`).
+     */
+    IntegrationID?: string | null;
     /** Local entity map configuration for the entity being synced (optional when applying via direct RPC). */
     EntityMap?: ICompanyIntegrationEntityMap;
     /** Active field maps for this entity map (optional; defaults to 1:1 same-name field mapping). */
@@ -230,6 +235,10 @@ export class PeerSyncApplier {
                     deferredForRecord.length > 0 &&
                     (upsertResult.Status === 'Created' || upsertResult.Status === 'Updated')
                 ) {
+                    const originChangeIDs =
+                        change.OriginChangeIDs && change.OriginChangeIDs.length > 0
+                            ? [...change.OriginChangeIDs]
+                            : [change.LatestChangeID];
                     for (const def of deferredForRecord) {
                         deferredFKUpdates.push({
                             EntityName: entityInfo.Name,
@@ -238,6 +247,8 @@ export class PeerSyncApplier {
                             FieldName: def.fieldName,
                             RelatedEntityID: def.relatedEntityID,
                             SourceForeignKeyValue: def.sourceFKValue,
+                            OriginChangeIDs: originChangeIDs,
+                            ...(change.OriginUserEmail ? { OriginUserEmail: change.OriginUserEmail } : {}),
                         });
                     }
                 }
@@ -298,13 +309,18 @@ export class PeerSyncApplier {
         context: PeerSyncApplyContext
     ): Promise<PeerDeferredFKApplyResult> {
         if (deferredUpdates.length === 0) {
-            return { updatedCount: 0, errorCount: 0, errors: [] };
+            return { updatedCount: 0, errorCount: 0, errors: [], errorsByEntityName: {} };
         }
 
         const md = context.MetadataProvider ?? Metadata.Provider;
         let updatedCount = 0;
         let errorCount = 0;
         const errors: string[] = [];
+        const errorsByEntityName: Record<string, number> = {};
+        const recordEntityError = (entityName: string): void => {
+            errorCount++;
+            errorsByEntityName[entityName] = (errorsByEntityName[entityName] ?? 0) + 1;
+        };
 
         // Group lookups by RelatedEntityID
         const mapByRelatedEntity = new Map<string, Map<string, string>>();
@@ -324,7 +340,7 @@ export class PeerSyncApplier {
         for (const item of deferredUpdates) {
             const entityInfo = md.EntityByName(item.EntityName);
             if (!entityInfo) {
-                errorCount++;
+                recordEntityError(item.EntityName);
                 errors.push(`Pass 2 deferred FK failed: entity '${item.EntityName}' not found in metadata.`);
                 continue;
             }
@@ -340,7 +356,7 @@ export class PeerSyncApplier {
                 (context.PreservePrimaryKeys ? item.SourceForeignKeyValue : null);
 
             if (!translatedFK) {
-                errorCount++;
+                recordEntityError(entityInfo.Name);
                 errors.push(
                     `Pass 2 deferred FK unresolved for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ` +
                     `no record map entry found for source key '${item.SourceForeignKeyValue}'.`
@@ -352,7 +368,7 @@ export class PeerSyncApplier {
             const key = new CompositeKey([{ FieldName: firstPk.Name, Value: item.LocalRecordID }]);
             const loaded = await entity.InnerLoad(key);
             if (!loaded) {
-                errorCount++;
+                recordEntityError(entityInfo.Name);
                 errors.push(
                     `Pass 2 deferred FK failed: could not load ${entityInfo.Name} (${item.LocalRecordID}).`
                 );
@@ -364,23 +380,23 @@ export class PeerSyncApplier {
                 OriginDeploymentID: requestMeta.OriginInstanceID,
                 PairingID: requestMeta.PairingID,
                 RunID: requestMeta.RunID,
-                OriginChangeIDs: [],
-                OriginUserEmail: context.ContextUser.Email ?? '',
-                IntegrationID: context.CompanyIntegrationID,
+                OriginChangeIDs: item.OriginChangeIDs ? [...item.OriginChangeIDs] : [],
+                OriginUserEmail: item.OriginUserEmail,
+                IntegrationID: context.IntegrationID ?? undefined,
             });
             try {
                 const saved = await entity.Save();
                 if (saved) {
                     updatedCount++;
                 } else {
-                    errorCount++;
+                    recordEntityError(entityInfo.Name);
                     const detail = entity.LatestResult?.CompleteMessage ?? 'Save() returned false';
                     errors.push(
                         `Pass 2 deferred FK save failed for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ${detail}`
                     );
                 }
             } catch (err) {
-                errorCount++;
+                recordEntityError(entityInfo.Name);
                 const msg = err instanceof Error ? err.message : String(err);
                 errors.push(
                     `Pass 2 deferred FK save threw for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ${msg}`
@@ -390,7 +406,7 @@ export class PeerSyncApplier {
             }
         }
 
-        return { updatedCount, errorCount, errors };
+        return { updatedCount, errorCount, errors, errorsByEntityName };
     }
 
     private async applyDelete(
@@ -442,9 +458,12 @@ export class PeerSyncApplier {
             OriginDeploymentID: request.SenderInstanceID,
             PairingID: request.PairingID,
             RunID: request.RunID,
-            OriginChangeIDs: [change.LatestChangeID],
-            OriginUserEmail: context.ContextUser.Email ?? '',
-            IntegrationID: context.CompanyIntegrationID,
+            OriginChangeIDs:
+                change.OriginChangeIDs && change.OriginChangeIDs.length > 0
+                    ? [...change.OriginChangeIDs]
+                    : [change.LatestChangeID],
+            OriginUserEmail: change.OriginUserEmail,
+            IntegrationID: context.IntegrationID ?? undefined,
         });
         try {
             const deleted = await entity.Delete();
@@ -584,9 +603,12 @@ export class PeerSyncApplier {
             OriginDeploymentID: request.SenderInstanceID,
             PairingID: request.PairingID,
             RunID: request.RunID,
-            OriginChangeIDs: [change.LatestChangeID],
-            OriginUserEmail: context.ContextUser.Email ?? '',
-            IntegrationID: context.CompanyIntegrationID,
+            OriginChangeIDs:
+                change.OriginChangeIDs && change.OriginChangeIDs.length > 0
+                    ? [...change.OriginChangeIDs]
+                    : [change.LatestChangeID],
+            OriginUserEmail: change.OriginUserEmail,
+            IntegrationID: context.IntegrationID ?? undefined,
         });
 
         try {

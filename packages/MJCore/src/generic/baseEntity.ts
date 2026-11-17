@@ -789,8 +789,8 @@ export interface SyncContext {
     RunID: string;
     /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
     OriginChangeIDs: string[];
-    /** Email address of the user who authored the latest change on the origin deployment. */
-    OriginUserEmail: string;
+    /** Email address of the user who authored the latest change on the origin deployment (optional for service accounts). */
+    OriginUserEmail?: string;
     /** Optional `MJ: Integrations` ID to record on `RecordChange.IntegrationID`. */
     IntegrationID?: string | null;
 }
@@ -809,7 +809,7 @@ export function SerializeSyncChangeContext(context: SyncContext): string {
             PairingID: context.PairingID,
             RunID: context.RunID,
             OriginChangeIDs: [...context.OriginChangeIDs],
-            OriginUserEmail: context.OriginUserEmail,
+            ...(context.OriginUserEmail ? { OriginUserEmail: context.OriginUserEmail } : {}),
         },
     });
 }
@@ -6122,11 +6122,10 @@ export abstract class BaseEntity<T = unknown> {
             !context.OriginDeploymentID ||
             !context.PairingID ||
             !context.RunID ||
-            !Array.isArray(context.OriginChangeIDs) ||
-            !context.OriginUserEmail
+            !Array.isArray(context.OriginChangeIDs)
         ) {
             throw new Error(
-                'BaseEntity.SetSyncContext: context is required with OriginDeploymentID, PairingID, RunID, OriginChangeIDs, and OriginUserEmail',
+                'BaseEntity.SetSyncContext: context is required with OriginDeploymentID, PairingID, RunID, and OriginChangeIDs',
             );
         }
         this._syncContext = context;

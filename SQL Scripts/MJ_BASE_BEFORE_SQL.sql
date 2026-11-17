@@ -719,22 +719,71 @@ GO
 ----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
 CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
-    @EntityName       NVARCHAR(100),
-    @RecordID         NVARCHAR(750),
-    @UserID           UNIQUEIDENTIFIER,
-    @Type             NVARCHAR(20),
-    @ChangesJSON      NVARCHAR(MAX),
-    @ChangesDescription NVARCHAR(MAX),
-    @FullRecordJSON   NVARCHAR(MAX),
-    @Status           NCHAR(15),
-    @Comments         NVARCHAR(MAX),
-    @Source           NVARCHAR(20)     = NULL,
-    @RestoredFromID   UNIQUEIDENTIFIER = NULL,
-    @RestoreReason    NVARCHAR(MAX)    = NULL,
-    @ChangeContext    NVARCHAR(MAX)    = NULL
+    @EntityName          NVARCHAR(100),
+    @RecordID            NVARCHAR(750),
+    @UserID              UNIQUEIDENTIFIER,
+    @Type                NVARCHAR(20),
+    @ChangesJSON         NVARCHAR(MAX),
+    @ChangesDescription  NVARCHAR(MAX),
+    @FullRecordJSON      NVARCHAR(MAX),
+    @Status              NCHAR(15),
+    @Comments            NVARCHAR(MAX),
+    @Source              NVARCHAR(20)     = NULL,
+    @RestoredFromID      UNIQUEIDENTIFIER = NULL,
+    @RestoreReason       NVARCHAR(MAX)    = NULL,
+    @ChangeContext       NVARCHAR(MAX)    = NULL,
+    @EntityID            UNIQUEIDENTIFIER = NULL,
+    @SuppressReturn      BIT              = 0,
+    @IntegrationID       UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @ResolvedEntityID UNIQUEIDENTIFIER = COALESCE(
+        @EntityID,
+        (SELECT ID FROM __mj.[Entity] WHERE [Name] = @EntityName)
+    );
+
+    IF @SuppressReturn = 1
+    BEGIN
+        INSERT INTO __mj.[RecordChange]
+            (
+                EntityID,
+                RecordID,
+                UserID,
+                Type,
+                Source,
+                ChangedAt,
+                ChangesJSON,
+                ChangesDescription,
+                FullRecordJSON,
+                Status,
+                Comments,
+                RestoredFromID,
+                RestoreReason,
+                ChangeContext,
+                IntegrationID
+            )
+        VALUES
+            (
+                @ResolvedEntityID,
+                @RecordID,
+                @UserID,
+                @Type,
+                ISNULL(@Source, 'Internal'),
+                GETUTCDATE(),
+                @ChangesJSON,
+                @ChangesDescription,
+                @FullRecordJSON,
+                @Status,
+                @Comments,
+                @RestoredFromID,
+                @RestoreReason,
+                @ChangeContext,
+                @IntegrationID
+            );
+        RETURN;
+    END
 
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER);
 
@@ -753,12 +802,13 @@ BEGIN
             Comments,
             RestoredFromID,
             RestoreReason,
-            ChangeContext
+            ChangeContext,
+            IntegrationID
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
+            @ResolvedEntityID,
             @RecordID,
             @UserID,
             @Type,
@@ -771,7 +821,8 @@ BEGIN
             @Comments,
             @RestoredFromID,
             @RestoreReason,
-            @ChangeContext
+            @ChangeContext,
+            @IntegrationID
         );
 
     -- Return the new record from the base view so calculated fields are included

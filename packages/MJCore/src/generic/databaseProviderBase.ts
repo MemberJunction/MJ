@@ -1756,6 +1756,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     : entity.SyncContext
                       ? SerializeSyncChangeContext(entity.SyncContext)
                       : null,
+                entity.SyncContext?.IntegrationID ?? null,
             );
         }
         return null;
@@ -3414,6 +3415,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         extraExecOptions?: Record<string, unknown>,
         source: RecordChangeSource = 'Internal',
         changeContext: string | null = null,
+        integrationID: string | null = null,
     ): Promise<void> {
         const sqlParts: string[] = [];
 
@@ -3445,6 +3447,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     safeUserId,
                     source,
                     changeContext,
+                    integrationID,
                 ));
             }
         }
@@ -3475,6 +3478,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string;
 
     /**************************************************************************/

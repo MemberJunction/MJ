@@ -654,6 +654,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PreviewSchemaPlan: vi.fn(),
                 FetchChangeBatch: vi.fn(),
                 ApplyChangeBatch: vi.fn(),
+                FlushDeferredForeignKeys: vi.fn().mockResolvedValue({ updatedCount: 0, errorCount: 0, errors: [] }),
                 NotifyChangeBatch: vi.fn(async (n: PeerDoorbellNotification) => {
                     notifications.push(n);
                     return { Accepted: true, TriggeredRunID: 'run-1' };
@@ -1112,6 +1113,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     PreviewSchemaPlan: vi.fn(),
                     FetchChangeBatch: vi.fn(),
                     ApplyChangeBatch: vi.fn(),
+                    FlushDeferredForeignKeys: vi.fn().mockResolvedValue({ updatedCount: 0, errorCount: 0, errors: [] }),
                     NotifyChangeBatch: vi.fn(async (n: PeerDoorbellNotification) => {
                         attempts++;
                         if (attempts === 1) {
@@ -1354,6 +1356,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     HasMore: false,
                 })),
                 ApplyChangeBatch: vi.fn(),
+                FlushDeferredForeignKeys: vi.fn().mockResolvedValue({ updatedCount: 0, errorCount: 0, errors: [] }),
                 NotifyChangeBatch: vi.fn(),
             };
 
@@ -1442,6 +1445,763 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     }
                 )
             ).rejects.toThrow(/has no primary key defined in metadata/);
+        });
+    });
+
+    describe('Round-2 Review Regression Suite — FK IntegrationID, Provenance, Push Pass 2 Flush & Manifest Guards', () => {
+        const buildCyclicEntityPair = (): { companyEntity: EntityInfo; contactEntity: EntityInfo } => {
+            const companyEntity = {
+                ID: ENTITY_COMPANIES_ID,
+                Name: 'Companies',
+                SchemaName: 'crm',
+                BaseTable: 'Company',
+                BaseView: 'vwCompanies',
+                TrackRecordChanges: true,
+                PrimaryKeys: [{ Name: 'ID' }],
+                FirstPrimaryKey: { Name: 'ID' },
+                ParentEntityInfo: null,
+                Fields: [
+                    {
+                        Name: 'ID',
+                        DisplayNameOrName: 'ID',
+                        Type: 'uniqueidentifier',
+                        SQLFullType: 'uniqueidentifier',
+                        AllowsNull: false,
+                        MaxLength: 0,
+                        Precision: 0,
+                        Scale: 0,
+                        DefaultValue: null,
+                        IsPrimaryKey: true,
+                        IsVirtual: false,
+                        ReadOnly: false,
+                        HasDefaultValue: true,
+                        RelatedEntityID: null,
+                        RelatedEntity: null,
+                        RelatedEntityFieldName: null,
+                    },
+                    {
+                        Name: 'PrimaryContactID',
+                        DisplayNameOrName: 'PrimaryContactID',
+                        Type: 'uniqueidentifier',
+                        SQLFullType: 'uniqueidentifier',
+                        AllowsNull: true,
+                        MaxLength: 0,
+                        Precision: 0,
+                        Scale: 0,
+                        DefaultValue: null,
+                        IsPrimaryKey: false,
+                        IsVirtual: false,
+                        ReadOnly: false,
+                        HasDefaultValue: false,
+                        RelatedEntityID: ENTITY_CONTACTS_ID,
+                        RelatedEntity: 'Contacts',
+                        RelatedEntityFieldName: 'ID',
+                    },
+                ],
+            } as unknown as EntityInfo;
+
+            const contactEntity = {
+                ID: ENTITY_CONTACTS_ID,
+                Name: 'Contacts',
+                SchemaName: 'crm',
+                BaseTable: 'Contact',
+                BaseView: 'vwContacts',
+                TrackRecordChanges: true,
+                PrimaryKeys: [{ Name: 'ID' }],
+                FirstPrimaryKey: { Name: 'ID' },
+                ParentEntityInfo: null,
+                Fields: [
+                    {
+                        Name: 'ID',
+                        DisplayNameOrName: 'ID',
+                        Type: 'uniqueidentifier',
+                        SQLFullType: 'uniqueidentifier',
+                        AllowsNull: false,
+                        MaxLength: 0,
+                        Precision: 0,
+                        Scale: 0,
+                        DefaultValue: null,
+                        IsPrimaryKey: true,
+                        IsVirtual: false,
+                        ReadOnly: false,
+                        HasDefaultValue: true,
+                        RelatedEntityID: null,
+                        RelatedEntity: null,
+                        RelatedEntityFieldName: null,
+                    },
+                    {
+                        Name: 'CompanyID',
+                        DisplayNameOrName: 'CompanyID',
+                        Type: 'uniqueidentifier',
+                        SQLFullType: 'uniqueidentifier',
+                        AllowsNull: false,
+                        MaxLength: 0,
+                        Precision: 0,
+                        Scale: 0,
+                        DefaultValue: null,
+                        IsPrimaryKey: false,
+                        IsVirtual: false,
+                        ReadOnly: false,
+                        HasDefaultValue: false,
+                        RelatedEntityID: ENTITY_COMPANIES_ID,
+                        RelatedEntity: 'Companies',
+                        RelatedEntityFieldName: 'ID',
+                    },
+                ],
+            } as unknown as EntityInfo;
+
+            return { companyEntity, contactEntity };
+        };
+
+        it('passes Integration.ID (not CompanyIntegration.ID), preserves coalesced OriginChangeIDs + OriginUserEmail into Pass 2, and accepts service accounts without Email', async () => {
+            const { companyEntity, contactEntity } = buildCyclicEntityPair();
+            const serviceAccountUser = {
+                ID: '77777777-7777-4777-8777-777777777777',
+                Name: 'Sync Service Account',
+                Email: '',
+            } as UserInfo;
+
+            const coalescedCompanyChanges = CoalesceRecordChanges([
+                {
+                    ID: 'chg-comp-1',
+                    EntityID: ENTITY_COMPANIES_ID,
+                    EntityName: 'Companies',
+                    RecordID: 'comp-100',
+                    Type: 'Create',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T12:00:00.000Z',
+                    ChangesJSON: null,
+                    FullRecordJSON: JSON.stringify({ ID: 'comp-100', PrimaryContactID: null }),
+                    UserEmail: 'creator@peer-b.com',
+                },
+                {
+                    ID: 'chg-comp-2',
+                    EntityID: ENTITY_COMPANIES_ID,
+                    EntityName: 'Companies',
+                    RecordID: 'comp-100',
+                    Type: 'Update',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T12:01:00.000Z',
+                    ChangesJSON: JSON.stringify({
+                        PrimaryContactID: {
+                            fieldName: 'PrimaryContactID',
+                            oldValue: null,
+                            newValue: 'cont-100',
+                        },
+                    }),
+                    FullRecordJSON: JSON.stringify({ ID: 'comp-100', PrimaryContactID: 'cont-100' }),
+                    UserEmail: 'editor@peer-b.com',
+                },
+            ]);
+            expect(coalescedCompanyChanges).toHaveLength(1);
+            expect(coalescedCompanyChanges[0].OriginChangeIDs).toEqual(['chg-comp-1', 'chg-comp-2']);
+            expect(coalescedCompanyChanges[0].OriginUserEmail).toBe('editor@peer-b.com');
+
+            const coalescedContactChanges = CoalesceRecordChanges([
+                {
+                    ID: 'chg-cont-1',
+                    EntityID: ENTITY_CONTACTS_ID,
+                    EntityName: 'Contacts',
+                    RecordID: 'cont-100',
+                    Type: 'Create',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T12:02:00.000Z',
+                    ChangesJSON: null,
+                    FullRecordJSON: JSON.stringify({ ID: 'cont-100', CompanyID: 'comp-100' }),
+                },
+            ]);
+
+            const recordedContexts: Array<{ entityName: string; context: SyncContext | null }> = [];
+            const savedRecordMaps: Array<{ EntityID: string; ExternalSystemRecordID: string; EntityRecordID: string }> = [];
+            const rowsByEntity = new Map<string, Record<string, string | number | boolean | null>>();
+
+            const runViewProvider: IRunViewProvider = {
+                RunView: vi.fn(async (params) => {
+                    if (params.EntityName === 'MJ: Company Integration Record Maps') {
+                        const filtered = savedRecordMaps.filter(rm =>
+                            params.ExtraFilter?.includes(rm.EntityID) ?? true
+                        );
+                        return {
+                            Success: true,
+                            Results: filtered,
+                            RowCount: filtered.length,
+                            TotalRowCount: filtered.length,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        } as RunViewResult;
+                    }
+                    return {
+                        Success: true,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    } as RunViewResult;
+                }),
+                RunViews: vi.fn(async () => []),
+            };
+
+            const metadataProvider = {
+                Entities: [companyEntity, contactEntity],
+                EntityByName: (name: string) =>
+                    name.toLowerCase() === 'companies'
+                        ? companyEntity
+                        : name.toLowerCase() === 'contacts'
+                            ? contactEntity
+                            : undefined,
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: Company Integration Record Maps') {
+                        const rm = {
+                            CompanyIntegrationID: '',
+                            EntityID: '',
+                            ExternalSystemRecordID: '',
+                            EntityRecordID: '',
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn().mockResolvedValue(true),
+                            Save: vi.fn(async () => {
+                                savedRecordMaps.push({
+                                    EntityID: rm.EntityID,
+                                    ExternalSystemRecordID: rm.ExternalSystemRecordID,
+                                    EntityRecordID: rm.EntityRecordID,
+                                });
+                                return true;
+                            }),
+                        };
+                        return rm;
+                    }
+                    if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                        return {
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn().mockResolvedValue(true),
+                            Save: vi.fn().mockResolvedValue(true),
+                        };
+                    }
+
+                    const targetMeta = entityName === 'Companies' ? companyEntity : contactEntity;
+                    const fields = targetMeta.Fields.map(f => ({
+                        Name: f.Name,
+                        Value: null as string | number | boolean | null,
+                    }));
+                    let activeSyncCtx: SyncContext | null = null;
+                    return {
+                        EntityInfo: targetMeta,
+                        Fields: fields,
+                        get SyncContext(): SyncContext | null {
+                            return activeSyncCtx;
+                        },
+                        SetSyncContext(ctx: SyncContext): void {
+                            activeSyncCtx = ctx;
+                        },
+                        ClearSyncContext(): void {
+                            activeSyncCtx = null;
+                        },
+                        NewRecord: vi.fn(),
+                        InnerLoad: vi.fn(async (key: { KeyValuePairs: Array<{ Value: unknown }> }) => {
+                            const id = String(key.KeyValuePairs[0]?.Value ?? '');
+                            const stored = rowsByEntity.get(`${entityName}::${id}`);
+                            if (!stored) return false;
+                            for (const f of fields) {
+                                f.Value = stored[f.Name] ?? null;
+                            }
+                            return true;
+                        }),
+                        Save: vi.fn(async () => {
+                            const snap: Record<string, string | number | boolean | null> = {};
+                            for (const f of fields) {
+                                snap[f.Name] = f.Value;
+                            }
+                            rowsByEntity.set(`${entityName}::${String(snap['ID'])}`, snap);
+                            recordedContexts.push({ entityName, context: activeSyncCtx });
+                            return true;
+                        }),
+                    };
+                }),
+            } as unknown as IMetadataProvider;
+
+            const planner = new SchemaPlanner();
+            const fps = planner.ExtractLocalSchemaFingerprints(['Companies', 'Contacts'], metadataProvider);
+            const transport = {
+                GetManifest: vi.fn().mockResolvedValue(buildManifest(INSTANCE_B, '6.3.0-edge.0')),
+                GetSchemaFingerprint: vi.fn().mockResolvedValue(fps),
+                PreviewSchemaPlan: vi.fn(),
+                FetchChangeBatch: vi.fn(async (req: { EntityName: string }) => ({
+                    PairingID: ComputePairingID(INSTANCE_A, INSTANCE_B),
+                    EntityName: req.EntityName,
+                    Changes: req.EntityName === 'Companies' ? coalescedCompanyChanges : coalescedContactChanges,
+                    NextCursor: { ChangedAt: '2026-04-20T12:02:00.000Z', ChangeID: 'chg-cont-1' },
+                    HasMore: false,
+                })),
+                ApplyChangeBatch: vi.fn(),
+                FlushDeferredForeignKeys: vi.fn().mockResolvedValue({ updatedCount: 0, errorCount: 0, errors: [] }),
+                NotifyChangeBatch: vi.fn(),
+            };
+
+            const connector = new MemberJunctionConnector({
+                Transport: transport,
+                LocalInstanceID: INSTANCE_A,
+                MetadataProvider: metadataProvider,
+                RunViewProvider: runViewProvider,
+            });
+
+            const makePullMap = (id: string, entityID: string, name: string): ICompanyIntegrationEntityMap => ({
+                ID: id,
+                CompanyIntegrationID: 'ci-company-row-id',
+                ExternalObjectName: name,
+                ExternalObjectLabel: name,
+                EntityID: entityID,
+                SyncDirection: 'Pull',
+                SyncEnabled: true,
+                MatchStrategy: null,
+                ConflictResolution: 'SourceWins',
+                Priority: 1,
+                DeleteBehavior: 'DoNothing',
+                Status: 'Active',
+                Configuration: null,
+                Entity: name,
+                Get: () => null,
+            });
+
+            const res = await connector.RunPipeline({
+                CompanyIntegration: {
+                    ID: 'ci-company-row-id',
+                    IntegrationID: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                    Configuration: JSON.stringify({ PreservePrimaryKeys: true }),
+                    ExternalSystemID: '',
+                } as unknown as MJCompanyIntegrationEntity,
+                Run: { ID: 'run-fk-provenance' } as unknown as MJCompanyIntegrationRunEntity,
+                EntityMaps: [
+                    makePullMap('em-comp', ENTITY_COMPANIES_ID, 'Companies'),
+                    makePullMap('em-cont', ENTITY_CONTACTS_ID, 'Contacts'),
+                ],
+                FieldMapsByEntityMapID: new Map(),
+                FullSync: false,
+                ContextUser: serviceAccountUser,
+            });
+
+            expect(res.Success).toBe(true);
+            // 3 saves: Pass 1 Companies, Pass 1 Contacts, Pass 2 Companies.PrimaryContactID
+            expect(recordedContexts).toHaveLength(3);
+
+            // Every single save must carry Integration.ID (NEVER CompanyIntegration.ID!)
+            for (const entry of recordedContexts) {
+                expect(entry.context?.IntegrationID).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+                expect(entry.context?.IntegrationID).not.toBe('ci-company-row-id');
+            }
+
+            // Pass 1 Companies & Pass 2 Companies both carry the coalesced OriginChangeIDs and origin user email
+            expect(recordedContexts[0].entityName).toBe('Companies');
+            expect(recordedContexts[0].context?.OriginChangeIDs).toEqual(['chg-comp-1', 'chg-comp-2']);
+            expect(recordedContexts[0].context?.OriginUserEmail).toBe('editor@peer-b.com');
+
+            // Pass 1 Contacts had no UserEmail and serviceAccountUser.Email === '' -> undefined without throwing
+            expect(recordedContexts[1].entityName).toBe('Contacts');
+            expect(recordedContexts[1].context?.OriginChangeIDs).toEqual(['chg-cont-1']);
+            expect(recordedContexts[1].context?.OriginUserEmail).toBeUndefined();
+
+            // Pass 2 Companies deferred FK update preserves ['chg-comp-1', 'chg-comp-2'] and 'editor@peer-b.com'
+            expect(recordedContexts[2].entityName).toBe('Companies');
+            expect(recordedContexts[2].context?.OriginChangeIDs).toEqual(['chg-comp-1', 'chg-comp-2']);
+            expect(recordedContexts[2].context?.OriginUserEmail).toBe('editor@peer-b.com');
+            expect(rowsByEntity.get('Companies::comp-100')?.['PrimaryContactID']).toBe('cont-100');
+        });
+
+        it('flushes Push Pass 2 deferred FKs on the remote endpoint, isolates queues per RunID, and attributes Push Pass 2 errors', async () => {
+            const { companyEntity, contactEntity } = buildCyclicEntityPair();
+            const user = createContextUser();
+
+            const createCyclicPeer = (
+                instanceID: string,
+                localChanges: PeerRecordChangeEntry[],
+                failPass2CompanySave = false
+            ) => {
+                const storedRows = new Map<string, Record<string, string | number | boolean | null>>();
+                const recordMaps: Array<{ EntityID: string; ExternalSystemRecordID: string; EntityRecordID: string }> = [];
+                let companySaveCount = 0;
+
+                const rvProvider: IRunViewProvider = {
+                    RunView: vi.fn(async (params) => {
+                        if (params.EntityName === 'MJ: Record Changes') {
+                            const forEntity = localChanges.filter(c =>
+                                params.ExtraFilter?.includes(c.EntityID)
+                            );
+                            return {
+                                Success: true,
+                                Results: forEntity,
+                                RowCount: forEntity.length,
+                                TotalRowCount: forEntity.length,
+                                ExecutionTime: 1,
+                                ErrorMessage: '',
+                            } as RunViewResult;
+                        }
+                        if (params.EntityName === 'MJ: Company Integration Record Maps') {
+                            const filtered = recordMaps.filter(rm =>
+                                params.ExtraFilter?.includes(rm.EntityID) ?? true
+                            );
+                            return {
+                                Success: true,
+                                Results: filtered,
+                                RowCount: filtered.length,
+                                TotalRowCount: filtered.length,
+                                ExecutionTime: 1,
+                                ErrorMessage: '',
+                            } as RunViewResult;
+                        }
+                        return {
+                            Success: true,
+                            Results: [],
+                            RowCount: 0,
+                            TotalRowCount: 0,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        } as RunViewResult;
+                    }),
+                    RunViews: vi.fn(async () => []),
+                };
+
+                const mdProvider = {
+                    Entities: [companyEntity, contactEntity],
+                    EntityByName: (name: string) =>
+                        name.toLowerCase() === 'companies'
+                            ? companyEntity
+                            : name.toLowerCase() === 'contacts'
+                                ? contactEntity
+                                : undefined,
+                    GetEntityObject: vi.fn(async (entityName: string) => {
+                        if (entityName === 'MJ: Company Integration Record Maps') {
+                            const rm = {
+                                CompanyIntegrationID: '',
+                                EntityID: '',
+                                ExternalSystemRecordID: '',
+                                EntityRecordID: '',
+                                NewRecord: vi.fn(),
+                                InnerLoad: vi.fn().mockResolvedValue(true),
+                                Save: vi.fn(async () => {
+                                    recordMaps.push({
+                                        EntityID: rm.EntityID,
+                                        ExternalSystemRecordID: rm.ExternalSystemRecordID,
+                                        EntityRecordID: rm.EntityRecordID,
+                                    });
+                                    return true;
+                                }),
+                            };
+                            return rm;
+                        }
+                        if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                            return {
+                                NewRecord: vi.fn(),
+                                InnerLoad: vi.fn().mockResolvedValue(true),
+                                Save: vi.fn().mockResolvedValue(true),
+                            };
+                        }
+
+                        const meta = entityName === 'Companies' ? companyEntity : contactEntity;
+                        const fields = meta.Fields.map(f => ({
+                            Name: f.Name,
+                            Value: null as string | number | boolean | null,
+                        }));
+                        return {
+                            EntityInfo: meta,
+                            Fields: fields,
+                            LatestResult: { CompleteMessage: 'Endpoint Pass 2 FK rejected' },
+                            SetSyncContext: vi.fn(),
+                            ClearSyncContext: vi.fn(),
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn(async (key: { KeyValuePairs: Array<{ Value: unknown }> }) => {
+                                const id = String(key.KeyValuePairs[0]?.Value ?? '');
+                                const existing = storedRows.get(`${entityName}::${id}`);
+                                if (!existing) return false;
+                                for (const f of fields) {
+                                    f.Value = existing[f.Name] ?? null;
+                                }
+                                return true;
+                            }),
+                            Save: vi.fn(async () => {
+                                if (entityName === 'Companies') {
+                                    companySaveCount++;
+                                    if (failPass2CompanySave && companySaveCount >= 2) {
+                                        return false;
+                                    }
+                                }
+                                const snap: Record<string, string | number | boolean | null> = {};
+                                for (const f of fields) {
+                                    snap[f.Name] = f.Value;
+                                }
+                                storedRows.set(`${entityName}::${String(snap['ID'])}`, snap);
+                                return true;
+                            }),
+                        };
+                    }),
+                } as unknown as IMetadataProvider;
+
+                const endpoint = new PeerSyncEndpointService({
+                    InstanceID: instanceID,
+                    InstanceName: `Peer-${instanceID.slice(0, 4)}`,
+                    MJCoreVersion: '6.3.0-edge.0',
+                    DatabaseEngine: 'SQLServer',
+                    CompanyIntegrationID: `ci-${instanceID.slice(0, 4)}`,
+                    IntegrationID: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+                    AllowedEntityNames: ['Companies', 'Contacts'],
+                    PreservePrimaryKeys: true,
+                    MetadataProvider: mdProvider,
+                    RunViewProvider: rvProvider,
+                });
+
+                return { endpoint, mdProvider, rvProvider, storedRows };
+            };
+
+            const hubChanges: PeerRecordChangeEntry[] = [
+                {
+                    ID: 'push-chg-comp-1',
+                    EntityID: ENTITY_COMPANIES_ID,
+                    EntityName: 'Companies',
+                    RecordID: 'comp-push-1',
+                    Type: 'Create',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T13:00:00.000Z',
+                    ChangesJSON: null,
+                    FullRecordJSON: JSON.stringify({ ID: 'comp-push-1', PrimaryContactID: 'cont-push-1' }),
+                },
+                {
+                    ID: 'push-chg-cont-1',
+                    EntityID: ENTITY_CONTACTS_ID,
+                    EntityName: 'Contacts',
+                    RecordID: 'cont-push-1',
+                    Type: 'Create',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T13:00:01.000Z',
+                    ChangesJSON: null,
+                    FullRecordJSON: JSON.stringify({ ID: 'cont-push-1', CompanyID: 'comp-push-1' }),
+                },
+            ];
+
+            // 1. Happy path: outbound Push writes null in Pass 1 and populates PrimaryContactID in Pass 2!
+            const hubA = createCyclicPeer(INSTANCE_A, hubChanges);
+            const endpointB = createCyclicPeer(INSTANCE_B, []);
+
+            // Seed an unrelated run's deferred item on endpointB to prove per-RunID isolation
+            await endpointB.endpoint.ApplyChangeBatch(
+                {
+                    PairingID: ComputePairingID(INSTANCE_A, INSTANCE_B),
+                    SenderInstanceID: INSTANCE_A,
+                    RunID: 'other-concurrent-run',
+                    EntityName: 'Companies',
+                    Changes: [
+                        {
+                            EntityName: 'Companies',
+                            SourceRecordID: 'comp-other-run',
+                            Operation: 'Create',
+                            RecordData: { ID: 'comp-other-run', PrimaryContactID: 'missing-other-contact' },
+                            AncestorData: null,
+                            ChangedFields: ['ID', 'PrimaryContactID'],
+                            LatestChangedAt: '2026-04-20T12:59:00.000Z',
+                            LatestChangeID: 'chg-other',
+                        },
+                    ],
+                    PreservePrimaryKeys: false,
+                },
+                user
+            );
+
+            const connectorOk = new MemberJunctionConnector({
+                Transport: new InProcessPeerSyncTransport(endpointB.endpoint, user),
+                LocalInstanceID: INSTANCE_A,
+                LocalMJCoreVersion: '6.3.0-edge.0',
+                MetadataProvider: hubA.mdProvider,
+                RunViewProvider: hubA.rvProvider,
+            });
+
+            const makePushMap = (id: string, entityID: string, name: string): ICompanyIntegrationEntityMap => ({
+                ID: id,
+                CompanyIntegrationID: 'ci-hub',
+                ExternalObjectName: name,
+                ExternalObjectLabel: name,
+                EntityID: entityID,
+                SyncDirection: 'Push',
+                SyncEnabled: true,
+                MatchStrategy: null,
+                ConflictResolution: 'SourceWins',
+                Priority: 1,
+                DeleteBehavior: 'DoNothing',
+                Status: 'Active',
+                Configuration: null,
+                Entity: name,
+                Get: () => null,
+            });
+
+            const okResult = await connectorOk.RunPipeline({
+                CompanyIntegration: {
+                    ID: 'ci-hub',
+                    IntegrationID: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                    Configuration: JSON.stringify({ PreservePrimaryKeys: true }),
+                    ExternalSystemID: '',
+                } as unknown as MJCompanyIntegrationEntity,
+                Run: { ID: 'run-push-ok' } as unknown as MJCompanyIntegrationRunEntity,
+                EntityMaps: [
+                    makePushMap('em-comp', ENTITY_COMPANIES_ID, 'Companies'),
+                    makePushMap('em-cont', ENTITY_CONTACTS_ID, 'Contacts'),
+                ],
+                FieldMapsByEntityMapID: new Map(),
+                FullSync: false,
+                ContextUser: user,
+            });
+
+            expect(okResult.Success).toBe(true);
+            expect(okResult.RecordsErrored).toBe(0);
+            expect(endpointB.storedRows.get('Companies::comp-push-1')?.['PrimaryContactID']).toBe('cont-push-1');
+
+            // Verify 'other-concurrent-run' was NOT drained by 'run-push-ok'
+            const otherFlush = await endpointB.endpoint.FlushDeferredForeignKeys(
+                {
+                    PairingID: ComputePairingID(INSTANCE_A, INSTANCE_B),
+                    OriginInstanceID: INSTANCE_A,
+                    RunID: 'other-concurrent-run',
+                },
+                user
+            );
+            expect(otherFlush.errorCount).toBe(1);
+
+            // 2. Failure path: when endpoint Pass 2 save fails on Push, RunPipeline & Companies mapResult report failure
+            const hubFail = createCyclicPeer(INSTANCE_A, hubChanges);
+            const endpointFail = createCyclicPeer(INSTANCE_B, [], true);
+            const connectorFail = new MemberJunctionConnector({
+                Transport: new InProcessPeerSyncTransport(endpointFail.endpoint, user),
+                LocalInstanceID: INSTANCE_A,
+                LocalMJCoreVersion: '6.3.0-edge.0',
+                MetadataProvider: hubFail.mdProvider,
+                RunViewProvider: hubFail.rvProvider,
+            });
+
+            const failResult = await connectorFail.RunPipeline({
+                CompanyIntegration: {
+                    ID: 'ci-hub',
+                    IntegrationID: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                    Configuration: JSON.stringify({ PreservePrimaryKeys: true }),
+                    ExternalSystemID: '',
+                } as unknown as MJCompanyIntegrationEntity,
+                Run: { ID: 'run-push-fail' } as unknown as MJCompanyIntegrationRunEntity,
+                EntityMaps: [
+                    makePushMap('em-comp', ENTITY_COMPANIES_ID, 'Companies'),
+                    makePushMap('em-cont', ENTITY_CONTACTS_ID, 'Contacts'),
+                ],
+                FieldMapsByEntityMapID: new Map(),
+                FullSync: false,
+                ContextUser: user,
+            });
+
+            expect(failResult.Success).toBe(false);
+            expect(failResult.RecordsErrored).toBe(1);
+            expect(failResult.ErrorMessage).toContain('Pass 2 deferred FK save failed');
+            const compMapRes = failResult.EntityMapResults.find(m => m.EntityName === 'Companies');
+            expect(compMapRes?.Success).toBe(false);
+            expect(compMapRes?.RecordsErrored).toBe(1);
+        });
+
+        it('caches PlanPeerEntityOrder across multiple ApplyChangeBatch calls when AllowedEntityNames is empty', async () => {
+            const { companyEntity, contactEntity } = buildCyclicEntityPair();
+            const user = createContextUser();
+            let entitiesGetterReads = 0;
+
+            const countingMetadata = {
+                get Entities(): EntityInfo[] {
+                    entitiesGetterReads++;
+                    return [companyEntity, contactEntity];
+                },
+                EntityByName: (name: string) =>
+                    name.toLowerCase() === 'companies' ? companyEntity : contactEntity,
+            } as unknown as IMetadataProvider;
+
+            const emptyRv: IRunViewProvider = {
+                RunView: vi.fn(async () => ({
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                } as RunViewResult)),
+                RunViews: vi.fn(async () => []),
+            };
+
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                const service = new PeerSyncEndpointService({
+                    InstanceID: INSTANCE_B,
+                    InstanceName: 'Peer-B',
+                    MJCoreVersion: '6.3.0-edge.0',
+                    DatabaseEngine: 'SQLServer',
+                    CompanyIntegrationID: 'ci-b',
+                    AllowedEntityNames: [],
+                    MetadataProvider: countingMetadata,
+                    RunViewProvider: emptyRv,
+                });
+
+                const readsPerBatch: number[] = [];
+                for (let i = 0; i < 3; i++) {
+                    const before = entitiesGetterReads;
+                    await service.ApplyChangeBatch(
+                        {
+                            PairingID: 'pair-cache',
+                            SenderInstanceID: INSTANCE_A,
+                            RunID: `run-${i}`,
+                            EntityName: 'Companies',
+                            Changes: [],
+                            PreservePrimaryKeys: true,
+                        },
+                        user
+                    );
+                    readsPerBatch.push(entitiesGetterReads - before);
+                }
+
+                // Batch 1 runs PlanPeerEntityOrder (2 reads) + loadRelatedEntityRecordMaps (1 read) = 3;
+                // Batches 2 & 3 reuse cachedDeferredFieldsByEntityID (0 planning reads) and only run loadRelatedEntityRecordMaps (1 read each)!
+                expect(readsPerBatch).toEqual([3, 1, 1]);
+            } finally {
+                warnSpy.mockRestore();
+            }
+        });
+
+        it('fails loudly when Transport or local deployment ID is missing instead of using dead or colliding defaults', async () => {
+            const user = createContextUser();
+            const savedEnv = process.env['MJ_DEPLOYMENT_ID'];
+            delete process.env['MJ_DEPLOYMENT_ID'];
+            try {
+                // 1. Missing Transport -> TestConnection captures the loud error
+                const noTransportConnector = new MemberJunctionConnector({
+                    LocalInstanceID: INSTANCE_A,
+                });
+                const connTest = await noTransportConnector.TestConnection(
+                    { Configuration: '{}', ExternalSystemID: '' } as unknown as MJCompanyIntegrationEntity,
+                    user
+                );
+                expect(connTest.Success).toBe(false);
+                expect(connTest.Message).toContain('InProcessPeerSyncTransport');
+
+                // 2. Missing LocalInstanceID / PeerInstanceID / MJ_DEPLOYMENT_ID -> FetchChanges throws loudly
+                const noInstanceConnector = new MemberJunctionConnector({
+                    Transport: {
+                        GetManifest: vi.fn().mockResolvedValue(buildManifest(INSTANCE_B)),
+                        GetSchemaFingerprint: vi.fn(),
+                        PreviewSchemaPlan: vi.fn(),
+                        FetchChangeBatch: vi.fn(),
+                        ApplyChangeBatch: vi.fn(),
+                        FlushDeferredForeignKeys: vi.fn(),
+                        NotifyChangeBatch: vi.fn(),
+                    },
+                });
+                await expect(
+                    noInstanceConnector.FetchChanges({
+                        CompanyIntegration: { Configuration: '{}', ExternalSystemID: '' } as unknown as MJCompanyIntegrationEntity,
+                        ObjectName: 'Contacts',
+                        WatermarkValue: null,
+                        ContextUser: user,
+                    })
+                ).rejects.toThrow(/configured local deployment ID/);
+            } finally {
+                if (savedEnv !== undefined) {
+                    process.env['MJ_DEPLOYMENT_ID'] = savedEnv;
+                }
+            }
         });
     });
 });

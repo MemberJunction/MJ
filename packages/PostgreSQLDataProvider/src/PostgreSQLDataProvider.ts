@@ -2114,6 +2114,7 @@ SELECT * FROM delete_result`;
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -2126,8 +2127,10 @@ SELECT * FROM delete_result`;
 
         const sourceVal = source ?? 'Internal';
         // Named only when set, like the other sites: see changeContextSQL.
-        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
-        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+        const changeContextColumn = `${changeContext ? ', "ChangeContext"' : ''}${integrationID ? ', "IntegrationID"' : ''}`;
+        const changeContextValue =
+            `${changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : ''}` +
+            `${integrationID ? `,\n    '${EscapeSQLString(integrationID)}'::uuid` : ''}`;
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"
