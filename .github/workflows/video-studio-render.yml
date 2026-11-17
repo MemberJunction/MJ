@@ -140,11 +140,11 @@ jobs:
               echo "Worker /health response: $HEALTH_JSON"
               node -e '
                 const h = JSON.parse(process.argv[1]);
-                if (!h.Ok || !h.ChromeVersion || !h.FfmpegVersion || !h.RendererVersion) {
+                if (!h.Healthy || !h.ChromiumVersion || !h.FfmpegVersion || !h.HyperFramesVersion) {
                   console.error("Invalid health payload:", h);
                   process.exit(1);
                 }
-                console.log(`Verified RenderWorker container health: Chrome=${h.ChromeVersion}, ffmpeg=${h.FfmpegVersion}, HyperFrames=${h.RendererVersion}`);
+                console.log(`Verified RenderWorker container health: Chromium=${h.ChromiumVersion}, ffmpeg=${h.FfmpegVersion}, HyperFrames=${h.HyperFramesVersion}`);
               ' "$HEALTH_JSON"
               HEALTH_OK=1
               break
