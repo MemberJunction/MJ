@@ -15,13 +15,13 @@ export interface SheetData {
 export interface XlsxModuleShim {
   read(data: ArrayBuffer, opts: { type: 'array' | 'buffer' | 'binary' | 'base64' | 'string' }): WorkbookShim;
   utils: {
-    sheet_to_json<T>(sheet: unknown, opts: { defval: null; raw: boolean }): T[];
+    sheet_to_json<T>(sheet: object, opts: { defval: null; raw: boolean }): T[];
   };
 }
 
 export interface WorkbookShim {
   SheetNames: string[];
-  Sheets: Record<string, unknown>;
+  Sheets: Record<string, object>;
 }
 
 /** The minimum of mammoth this code uses. */

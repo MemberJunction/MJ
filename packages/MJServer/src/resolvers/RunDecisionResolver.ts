@@ -91,8 +91,12 @@ export class RunDecisionResolver extends ResolverBase {
     /** The most characters the questions' JSON may have. Checked before it is parsed. */
     public static readonly MAX_QUESTIONS_CHARACTERS = 128_000;
 
-    /** The most questions one request may carry. */
-    public static readonly MAX_QUESTIONS = 32;
+    /**
+     * The most questions one request may carry: the most any decision model takes in one call
+     * (Gemini Decision 1 takes 1,000). The character caps above still bound the payload, and the
+     * runner splits a request that exceeds the answering model's own `MaxQuestionsPerCall`.
+     */
+    public static readonly MAX_QUESTIONS = 1000;
 
     /**
      * The most options a Choice question, or levels a Score question, may list: Jev's declared

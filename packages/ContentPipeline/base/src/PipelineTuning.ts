@@ -26,23 +26,40 @@ export interface PipelineTuning {
      * `walkStartedAt` when Sync compares `__mj_CreatedAt` to spare concurrently created items. Default 60000 (60s).
      */
     ClockSkewOverlapMs?: number;
+    /**
+     * How long a record waits after its first Retry outcome before a stage may pick it up again, in ms.
+     * Each Retry in a row doubles the wait, up to {@link RetryBackoffMaxMs}. Default 60000 (1 minute).
+     */
+    RetryBackoffBaseMs?: number;
+    /** The longest a record waits between retries, in ms. Default 3600000 (1 hour). */
+    RetryBackoffMaxMs?: number;
+    /**
+     * How long one Discover walk may run, in ms, before the driver is asked to stop and return a resume token
+     * (`DiscoverRequest.Deadline`); the next walk carries on from it. Unset means no deadline.
+     */
+    DiscoverWalkBudgetMs?: number;
 }
 
 /** A run's tuning with defaults applied; knobs without a default are null when unset. */
-export type ResolvedPipelineTuning = Required<Omit<PipelineTuning, 'MaxBlockCharacters' | 'MaxArchiveMembers' | 'MaxArchiveBytes'>> & {
+export type ResolvedPipelineTuning = Required<
+    Omit<PipelineTuning, 'MaxBlockCharacters' | 'MaxArchiveMembers' | 'MaxArchiveBytes' | 'DiscoverWalkBudgetMs'>
+> & {
     MaxBlockCharacters: number | null;
     MaxArchiveMembers: number | null;
     MaxArchiveBytes: number | null;
+    DiscoverWalkBudgetMs: number | null;
 };
 
 /** Defaults for the knobs that have one. */
-export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes'> = {
+export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes' | 'DiscoverWalkBudgetMs'> = {
     ProgressEveryItems: 25,
     MinimumPrintableRatio: 0.85,
     MaxBlockCharacters: null,
     MaxArchiveDepth: 3,
     MaxSyncRemovalShare: 0.5,
     ClockSkewOverlapMs: 60_000,
+    RetryBackoffBaseMs: 60_000,
+    RetryBackoffMaxMs: 3_600_000,
 };
 
 /**
@@ -71,7 +88,25 @@ export function ResolveTuning(...configurations: (Readonly<Record<string, unknow
         MaxArchiveDepth: positiveInteger(raw.MaxArchiveDepth) ?? DefaultPipelineTuning.MaxArchiveDepth,
         MaxSyncRemovalShare: ratio(raw.MaxSyncRemovalShare) ?? DefaultPipelineTuning.MaxSyncRemovalShare,
         ClockSkewOverlapMs: nonNegativeInteger(raw.ClockSkewOverlapMs) ?? DefaultPipelineTuning.ClockSkewOverlapMs,
+        RetryBackoffBaseMs: positiveInteger(raw.RetryBackoffBaseMs) ?? DefaultPipelineTuning.RetryBackoffBaseMs,
+        RetryBackoffMaxMs: positiveInteger(raw.RetryBackoffMaxMs) ?? DefaultPipelineTuning.RetryBackoffMaxMs,
+        DiscoverWalkBudgetMs: positiveInteger(raw.DiscoverWalkBudgetMs),
     };
+}
+
+/** The two knobs that set a record's wait after a Retry. */
+export type RetryBackoff = Pick<ResolvedPipelineTuning, 'RetryBackoffBaseMs' | 'RetryBackoffMaxMs'>;
+
+/**
+ * How long a record waits before its next attempt, given how many Retry outcomes it has had in a row
+ * (1 for the first). The wait doubles each time: base, 2×base, 4×base, … never more than the maximum.
+ */
+export function RetryDelayMs(retryCount: number, tuning: RetryBackoff): number {
+    const attempt = Math.max(1, Math.floor(retryCount));
+    const max = Math.max(tuning.RetryBackoffBaseMs, tuning.RetryBackoffMaxMs);
+    // Past 2^30 the doubling only overflows; the maximum has long since been reached.
+    const doublings = Math.min(attempt - 1, 30);
+    return Math.min(tuning.RetryBackoffBaseMs * 2 ** doublings, max);
 }
 
 function positiveInteger(value: unknown): number | null {

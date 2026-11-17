@@ -635,7 +635,7 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
         expect(room).not.toBeNull();
         expect(room!.Doc.getMap<string>('workbookMeta').get('PreferredObjectsPaneHeightPx')).toBe('320');
 
-        const wb2 = engine.ParseWorkbook(v1Json);
+        const wb2 = engine.ParseWorkbook(v1Json, undefined, { SkipEvaluate: true });
         delete wb2.PreferredObjectsPaneHeightPx;
         const v2Json = engine.SerializeWorkbook(wb2);
 

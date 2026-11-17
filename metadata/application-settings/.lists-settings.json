@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Lists",
+      "Name": "Lists.Refresh.DefaultCron",
+      "Value": "0 2 * * *",
+      "Comments": "Cron expression a list's refresh routine gets when the owner turns on Refresh automatically. The default runs daily at 2:00 am. Each routine copies the value when it is created, so changing it later leaves existing routines alone."
+    },
+    "primaryKey": {
+      "ID": "62A48ACE-DF06-4F10-A4C0-DCDCA81EBB7A"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Lists",
+      "Name": "Lists.Refresh.DefaultTimezone",
+      "Value": "America/New_York",
+      "Comments": "IANA time zone a list's refresh routine runs its cron in. Each routine copies the value when it is created, so changing it later leaves existing routines alone."
+    },
+    "primaryKey": {
+      "ID": "6794C1D7-A1DC-4A3D-957B-745AA2AAB8B1"
+    }
+  }
+]

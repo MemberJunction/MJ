@@ -3,7 +3,7 @@
     <div class="panel-header">
       <div class="panel-header-left">
         <h3>
-          <i class="fas" [ngClass]="artifactIcon"></i>
+          <i class="fa-solid" [ngClass]="artifactIcon"></i>
           {{ displayName }}
         </h3>
         @if (displayDescription) {
@@ -15,10 +15,10 @@
              [class.clickable]="allVersions.length > 1"
              [class.comparing]="IsCompareMode"
              (click)="toggleVersionDropdown(); $event.stopPropagation()">
-          <i class="fas" [ngClass]="IsCompareMode ? 'fa-code-compare' : 'fa-history'"></i>
+          <i class="fa-solid" [ngClass]="IsCompareMode ? 'fa-code-compare' : 'fa-history'"></i>
           <span class="version-label">{{ IsCompareMode ? ('v' + CompareBaseVersionNumber + ' → v' + CompareTargetVersionNumber) : ('v' + selectedVersionNumber) }}</span>
           @if (allVersions.length > 1) {
-            <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
+            <i class="fa-solid fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
           }
           @if (showVersionDropdown) {
             <div class="version-dropdown" (click)="$event.stopPropagation()">
@@ -30,7 +30,7 @@
                     <span class="version-number">{{ GetVersionLabel(version.VersionNumber) }}</span>
                     <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
                     @if (!IsCompareMode && version.VersionNumber === selectedVersionNumber) {
-                      <i class="fas fa-check"></i>
+                      <i class="fa-solid fa-check"></i>
                     }
                   </div>
                 }
@@ -42,7 +42,7 @@
                             class="version-compare-trigger"
                             data-testid="open-version-compare-option"
                             (click)="OpenVersionCompare(); $event.stopPropagation()">
-                      <i class="fas fa-code-compare"></i>
+                      <i class="fa-solid fa-code-compare"></i>
                       <span>Compare Versions…</span>
                     </button>
                   } @else {
@@ -50,7 +50,7 @@
                             class="version-compare-trigger active"
                             data-testid="exit-version-compare-option"
                             (click)="ExitVersionCompare(); $event.stopPropagation()">
-                      <i class="fas fa-arrow-left"></i>
+                      <i class="fa-solid fa-arrow-left"></i>
                       <span>Exit Version Compare</span>
                     </button>
                   }
@@ -63,7 +63,7 @@
           <button class="feedback-btn"
                   (click)="pluginViewer?.AskUserForFeedback()"
                   title="Inspect & rate components">
-            <i class="fas fa-star-half-stroke"></i>
+            <i class="fa-solid fa-star-half-stroke"></i>
           </button>
         }
         @if (pluginViewer?.SupportsPDFExport) {
@@ -74,15 +74,15 @@
                     aria-haspopup="menu"
                     [attr.aria-expanded]="ShowPDFMenu"
                     [title]="IsExportingPDF ? 'Preparing PDF…' : 'Export as PDF'">
-              <i class="fas" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+              <i class="fa-solid" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
             </button>
             @if (ShowPDFMenu) {
               <div class="export-pdf-dropdown" role="menu">
                 <button type="button" role="menuitem" (click)="OnExportPDF('portrait')">
-                  <i class="fas fa-file"></i> PDF – Portrait
+                  <i class="fa-solid fa-file"></i> PDF – Portrait
                 </button>
                 <button type="button" role="menuitem" (click)="OnExportPDF('landscape')">
-                  <i class="fas fa-file fa-rotate-90"></i> PDF – Landscape
+                  <i class="fa-solid fa-file fa-rotate-90"></i> PDF – Landscape
                 </button>
               </div>
             }
@@ -93,7 +93,7 @@
                   [class.in-collection]="isInCollection"
                   (click)="onSaveToLibrary()"
                   [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
-            <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+            <i [class]="isInCollection ? 'fa-solid fa-bookmark' : 'fa-regular fa-bookmark'"></i>
           </button>
         }
         @if (ShowConnectedDriveSyncControls) {
@@ -104,7 +104,7 @@
             title="Push this version to Connected Drive"
             data-testid="connected-drive-push-btn"
           >
-            <i class="fas fa-cloud-arrow-up"></i>
+            <i class="fa-solid fa-cloud-arrow-up"></i>
           </button>
           <button
             type="button"
@@ -113,38 +113,38 @@
             title="Pull latest version from Connected Drive and compare"
             data-testid="connected-drive-pull-btn"
           >
-            <i class="fas fa-cloud-arrow-down"></i>
+            <i class="fa-solid fa-cloud-arrow-down"></i>
           </button>
         }
         @if (canShare) {
           <button class="share-btn"
                   (click)="onShare()"
                   title="Share">
-            <i class="fas fa-share-nodes"></i>
+            <i class="fa-solid fa-share-nodes"></i>
           </button>
           <button class="guest-share-btn"
                   type="button"
                   (click)="OpenGuestShareModal()"
                   title="External Guest Share Links (Frozen Snapshot Only)"
                   data-testid="guest-share-btn">
-            <i class="fas fa-link"></i>
+            <i class="fa-solid fa-link"></i>
           </button>
         }
         <button class="analyze-btn"
                 (click)="OnAnalyze()"
                 title="Analyze this artifact with AI">
-          <i class="fas fa-magnifying-glass-chart"></i>
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
         </button>
         @if (showMaximizeButton) {
           <button class="maximize-btn"
                   (click)="onMaximizeToggle()"
                   [title]="isMaximized ? 'Restore Width' : 'Maximize Width'">
-            <i class="fas" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
+            <i class="fa-solid" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
           </button>
         }
         @if (showCloseButton) {
           <button class="close-btn" (click)="onClose()" title="Close">
-            <i class="fas fa-times"></i>
+            <i class="fa-solid fa-times"></i>
           </button>
         }
       </div>
@@ -154,7 +154,7 @@
   <div class="panel-content">
     @if (isLoading) {
       <div class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <i class="fa-solid fa-spinner fa-spin"></i>
         <span>Loading artifact...</span>
       </div>
     }
@@ -170,7 +170,7 @@
 
     @if (!isLoading && !error && artifact && ScopeNotice) {
       <div class="scope-notice" role="status">
-        <i class="fas fa-code-branch" aria-hidden="true"></i>
+        <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
         <span class="scope-notice-text">{{ ScopeNotice }}</span>
       </div>
     }
@@ -207,6 +207,7 @@
               [IsLoadingVersions]="IsLoadingCompareVersions"
               [CanEdit]="canEdit === true"
               [IsRestoring]="IsRestoringVersion"
+              [Provider]="Provider"
               (ExitRequested)="ExitVersionCompare()"
               (ComparePairChanged)="OnComparePairChanged($event)"
               (RestoreVersionRequested)="OnRestoreComparedVersion($event)">
@@ -214,12 +215,16 @@
           }
 
           <!-- Plugin Viewer - Created once, kept alive, shown/hidden with CSS -->
-          @if (hasPlugin && artifactVersion && artifactTypeName) {
+          @if (hasPlugin && artifactVersion && (artifactTypeName || DriverClass)) {
             <div class="plugin-container" [class.plugin-hidden]="IsCompareMode || activeTab !== 'display'">
               <mj-artifact-type-plugin-viewer
                 [Provider]="Provider"
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
+                [DriverClass]="DriverClass"
+                [PreVerifiedFrozenSnapshots]="PreVerifiedFrozenSnapshots"
+                [ViewMode]="SyncViewMode"
+                [NavigationAnchor]="NavigationAnchor"
                 [contentType]="contentType"
                 [readonly]="!canEdit"
                 [VisibleVersionNumbers]="PluginVisibleVersionNumbers"
@@ -228,7 +233,8 @@
                 (pluginLoaded)="onPluginLoaded()"
                 (tabsChanged)="onTabsChanged()"
                 (applyFormRequested)="applyFormRequested.emit($event)"
-                (ContentCommitted)="OnPluginContentCommitted($event)">
+                (ContentCommitted)="OnPluginContentCommitted($event)"
+                (SelectionChanged)="SelectionChanged.emit($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
@@ -240,10 +246,10 @@
                 <!-- Fallback to extracted markdown/HTML attributes -->
                 <div class="display-toolbar">
                   <button class="btn-icon" title="Print" (click)="onPrintDisplayContent()">
-                    <i class="fas fa-print"></i> Print
+                    <i class="fa-solid fa-print"></i> Print
                   </button>
                   <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
-                    <i class="fas fa-copy"></i> Copy
+                    <i class="fa-solid fa-copy"></i> Copy
                   </button>
                 </div>
                 @if (displayMarkdown) {
@@ -261,13 +267,13 @@
                 <!-- No viewer plugin for this type: a file card with a real Download, plus the text for text-like content -->
                 <div class="file-fallback" data-testid="file-fallback">
                   <div class="file-fallback-card">
-                    <i class="fas" [ngClass]="artifactIcon" aria-hidden="true"></i>
+                    <i class="fa-solid" [ngClass]="artifactIcon" aria-hidden="true"></i>
                     <div class="file-fallback-meta">
                       <div class="file-fallback-name">{{ fallbackFileName }}</div>
                       <div class="file-fallback-sub">{{ artifactVersion?.MimeType || artifact.Type }}@if (fallbackSize) { · {{ fallbackSize }}}</div>
                     </div>
                     <button class="btn-icon btn-primary" type="button" (click)="downloadArtifactFile()" [disabled]="fallbackBusy" title="Download">
-                      <i class="fas fa-download"></i> {{ fallbackBusy ? 'Preparing…' : 'Download' }}
+                      <i class="fa-solid fa-download"></i> {{ fallbackBusy ? 'Preparing…' : 'Download' }}
                     </button>
                   </div>
                   @if (fallbackText !== null) {
@@ -346,9 +352,9 @@
                        [title]="link.hasAccess ? 'Click to open' : 'No access'">
                     <div class="link-icon">
                       @if (link.type === 'conversation') {
-                        <i class="fas fa-comments"></i>
+                        <i class="fa-solid fa-comments"></i>
                       } @else {
-                        <i class="fas fa-folder"></i>
+                        <i class="fa-solid fa-folder"></i>
                       }
                     </div>
                     <div class="link-content">
@@ -356,7 +362,7 @@
                       <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
                     </div>
                     <div class="link-actions">
-                      <i class="fas fa-arrow-right"></i>
+                      <i class="fa-solid fa-arrow-right"></i>
                     </div>
                   </div>
                 }
@@ -393,7 +399,7 @@
                       <div class="json-viewer">
                         <div class="json-toolbar">
                           <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-                            <i class="fas fa-copy"></i> Copy
+                            <i class="fa-solid fa-copy"></i> Copy
                           </button>
                         </div>
                         <div class="json-editor-container">
@@ -411,7 +417,7 @@
                       <div class="code-viewer">
                         <div class="code-toolbar">
                           <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()">
-                            <i class="fas fa-copy"></i> Copy
+                            <i class="fa-solid fa-copy"></i> Copy
                           </button>
                         </div>
                         <div class="code-editor-container">
@@ -451,9 +457,9 @@
         data-testid="guest-share-modal"
       >
         <div class="guest-share-modal__header">
-          <h4><i class="fas fa-shield-halved"></i> External Guest Share Links (Frozen Snapshot Only)</h4>
+          <h4><i class="fa-solid fa-shield-halved"></i> External Guest Share Links (Frozen Snapshot Only)</h4>
           <button type="button" class="close-btn" (click)="CloseGuestShareModal()">
-            <i class="fas fa-times"></i>
+            <i class="fa-solid fa-times"></i>
           </button>
         </div>
         <div class="guest-share-modal__body">
@@ -484,20 +490,20 @@
               (click)="CreateGuestShareLink()"
               data-testid="create-guest-share-btn"
             >
-              <i class="fas" [ngClass]="GuestShareBusy ? 'fa-spinner fa-spin' : 'fa-link'"></i>
+              <i class="fa-solid" [ngClass]="GuestShareBusy ? 'fa-spinner fa-spin' : 'fa-link'"></i>
               Create Link
             </button>
           </div>
           @if (GuestShareError) {
             <div class="guest-share-error" role="alert" data-testid="guest-share-error">
-              <i class="fas fa-triangle-exclamation"></i> {{ GuestShareError }}
+              <i class="fa-solid fa-triangle-exclamation"></i> {{ GuestShareError }}
             </div>
           }
           @if (LatestCreatedGuestShareUrl) {
             <div class="guest-share-created" data-testid="guest-share-created-url">
               <input type="text" readonly [value]="LatestCreatedGuestShareUrl" class="guest-share-input" />
               <button type="button" class="btn-icon" (click)="CopyGuestShareUrl(LatestCreatedGuestShareUrl)">
-                <i class="fas fa-copy"></i> Copy
+                <i class="fa-solid fa-copy"></i> Copy
               </button>
             </div>
           }

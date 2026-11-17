@@ -31395,6 +31395,172 @@
   },
   {
     "fields": {
+      "Name": "Gemini 4 Hydrogen (Medium)",
+      "PowerRank": 26,
+      "Description": "Google Gemini 4 Hydrogen (Medium effort) — high-speed, high-intelligence coding and reasoning model",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718221"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-medium",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718222"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (Medium) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829221"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607111"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen (High)",
+      "PowerRank": 27,
+      "Description": "Google Gemini 4 Hydrogen (High effort) — high-reasoning coding and architecture model via Google Antigravity CLI and Gemini API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718331"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-high",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718333"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (High) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829331"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607222"
+    }
+  },
+  {
+    "fields": {
       "Name": "Claude Fable 5.2",
       "PowerRank": 28,
       "Description": "Anthropic's Fable-class flagship, released November 9, 2026 as the successor to Claude Fable 5.1. Positioned by Anthropic for demanding reasoning and long-horizon agentic work - the model to reach for when evals on Claude Opus 5.5 at higher effort still fall short. 1M-token context, 128K max output, adaptive thinking always on with a default effort of `high`. Reliable knowledge cutoff June 2026. Per-token price DROPS 20% from Fable 5.1 to $8/$40 per 1M in/out (from $10/$50), with cache hits and refreshes at $0.20/1M (0.025x base input, the same discounted multiplier Fable 5.1 introduced); 5-minute cache writes $10/1M, 1-hour writes $16/1M. Batch API is half rate. Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Generally available on the Claude API, Claude Platform on AWS, Amazon Bedrock, Claude Models on Google Cloud, and Microsoft Foundry; the Bedrock route uses the global inference profile ID `global.anthropic.claude-fable-5-2`. Companion Claude Mythos 5.2 shares the same specifications and rate card but is limited-availability through Anthropic's verification programs. Tentative retirement not sooner than November 9, 2027.",

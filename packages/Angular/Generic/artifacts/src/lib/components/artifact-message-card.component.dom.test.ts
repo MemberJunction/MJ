@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, Input } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { RunView } from '@memberjunction/core';
 import type { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { ArtifactMessageCardComponent } from './artifact-message-card.component';
@@ -8,22 +10,39 @@ import { ArtifactPreviewResolverService } from '../services/artifact-preview-res
 
 /**
  * DOM coverage for <mj-artifact-message-card> — the inline artifact chip/preview shown in a chat
- * message (~3×). Passing `artifact` + `artifactVersion` skips its RunView load path; the two injected
- * services (icon + preview-resolver) are faked. Covers the info-bar box (name / type badge + colour /
- * version / icon), the open → actionPerformed emit, the error branch (no id, no entities), and the
- * inline-preview branch when the resolver returns a preview component.
+ * message (~3×). Covers both passing `artifact` + `artifactVersion` directly and loading by
+ * `artifactId` (`MJ: Artifacts` primary lookup with `MJ: Conversation Artifacts` fallback).
  */
 
 @Component({ standalone: true, selector: 'stub-preview', template: '<div class="stub-preview-body"></div>' })
 class StubPreview {
-  @Input() artifactVersion: unknown; // forwarded by *ngComponentOutlet via previewInputs
+  @Input() artifactVersion: MJArtifactVersionEntity | undefined;
 }
 
-const ARTIFACT = { ID: 'a1', Name: 'Q3 Report', Type: 'Document', Description: 'desc' } as unknown as MJArtifactEntity;
-const VERSION = { VersionNumber: 2, Name: 'Q3 Report v2', MimeType: 'application/pdf' } as unknown as MJArtifactVersionEntity;
+const ARTIFACT = Object.assign(Object.create(null) as MJArtifactEntity, {
+  ID: 'a1',
+  Name: 'Q3 Report',
+  Type: 'Document',
+  Description: 'desc',
+});
+const VERSION = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+  VersionNumber: 2,
+  Name: 'Q3 Report v2',
+  MimeType: 'application/pdf',
+});
 
-interface Fakes { icon?: string; preview?: unknown }
-const render = (inputs: Record<string, unknown> = {}, fakes: Fakes = {}) =>
+interface Fakes {
+  icon?: string;
+  preview?: typeof StubPreview | null;
+}
+
+interface CardRenderInputs {
+  artifact?: MJArtifactEntity;
+  artifactVersion?: MJArtifactVersionEntity;
+  artifactId?: string;
+}
+
+const render = (inputs: CardRenderInputs = {}, fakes: Fakes = {}) =>
   renderComponentFixture(ArtifactMessageCardComponent, {
     declarations: [ArtifactMessageCardComponent],
     imports: [StubPreview],
@@ -31,9 +50,17 @@ const render = (inputs: Record<string, unknown> = {}, fakes: Fakes = {}) =>
       { provide: ArtifactIconService, useValue: { getArtifactIcon: () => fakes.icon ?? 'fa-file-pdf' } },
       { provide: ArtifactPreviewResolverService, useValue: { resolvePreviewComponent: () => fakes.preview ?? null } },
     ],
-    inputs: { artifact: ARTIFACT, artifactVersion: VERSION, ...inputs },
+    inputs: {
+      artifact: 'artifact' in inputs ? inputs.artifact : ARTIFACT,
+      artifactVersion: 'artifactVersion' in inputs ? inputs.artifactVersion : VERSION,
+      ...(inputs.artifactId !== undefined ? { artifactId: inputs.artifactId } : {}),
+    },
   });
-type Fx = ReturnType<typeof render>;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  TestBed.resetTestingModule();
+});
 
 describe('ArtifactMessageCardComponent (DOM)', () => {
   it('renders the info-bar box with the version display name, type badge and version number', () => {
@@ -80,5 +107,86 @@ describe('ArtifactMessageCardComponent (DOM)', () => {
     (query(f, '.artifact-preview-wrapper') as HTMLElement).click();
     expect(out.length).toBe(1);
     expect(out[0].action).toBe('open');
+  });
+
+  it('loads Library / Voice session artifacts from MJ: Artifacts first without falling back to MJ: Conversation Artifacts', async () => {
+    const queriedEntities: string[] = [];
+    const runViewMock = vi.fn(async (params: { EntityName: string }) => {
+      queriedEntities.push(params.EntityName);
+      if (params.EntityName === 'MJ: Artifacts') {
+        return { Success: true, Results: [ARTIFACT] };
+      }
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return { Success: true, Results: [VERSION] };
+      }
+      return { Success: true, Results: [] };
+    });
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(
+      Object.assign(Object.create(RunView.prototype) as RunView, { RunView: runViewMock }),
+    );
+
+    const f = render({ artifact: undefined, artifactVersion: undefined, artifactId: 'a1' });
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+    f.detectChanges();
+
+    expect(queriedEntities).toEqual(['MJ: Artifacts', 'MJ: Artifact Versions']);
+    expect(query(f, '.artifact-error')).toBeNull();
+    expect(text(f, '.artifact-info-bar .artifact-name')).toBe('Q3 Report v2');
+  });
+
+  it('falls back to MJ: Conversation Artifacts when MJ: Artifacts returns 0 rows', async () => {
+    const queriedEntities: string[] = [];
+    const legacyArtifact = Object.assign(Object.create(null) as MJArtifactEntity, {
+      ID: 'legacy-1',
+      Name: 'Legacy Conv Artifact',
+      Type: 'JSON',
+      Description: 'legacy',
+    });
+    const legacyVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      VersionNumber: 1,
+      Name: 'Legacy v1',
+      MimeType: 'application/json',
+    });
+    const runViewMock = vi.fn(async (params: { EntityName: string }) => {
+      queriedEntities.push(params.EntityName);
+      if (params.EntityName === 'MJ: Conversation Artifacts') {
+        return { Success: true, Results: [legacyArtifact] };
+      }
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return { Success: true, Results: [legacyVersion] };
+      }
+      return { Success: true, Results: [] };
+    });
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(
+      Object.assign(Object.create(RunView.prototype) as RunView, { RunView: runViewMock }),
+    );
+
+    const f = render({ artifact: undefined, artifactVersion: undefined, artifactId: 'legacy-1' });
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+    f.detectChanges();
+
+    expect(queriedEntities).toEqual(['MJ: Artifacts', 'MJ: Conversation Artifacts', 'MJ: Artifact Versions']);
+    expect(query(f, '.artifact-error')).toBeNull();
+    expect(text(f, '.artifact-info-bar .artifact-name')).toBe('Legacy v1');
+  });
+
+  it('renders error state when both MJ: Artifacts and MJ: Conversation Artifacts return 0 rows', async () => {
+    const runViewMock = vi.fn(async () => ({ Success: true, Results: [] }));
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(
+      Object.assign(Object.create(RunView.prototype) as RunView, { RunView: runViewMock }),
+    );
+
+    const f = render({ artifact: undefined, artifactVersion: undefined, artifactId: 'missing-id' });
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+    f.detectChanges();
+
+    expect(query(f, '.artifact-error')).not.toBeNull();
+    expect(text(f, '.artifact-error')).toContain('Failed to load artifact');
   });
 });

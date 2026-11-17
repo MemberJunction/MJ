@@ -13,6 +13,7 @@ import {
     type IMetadataProvider,
     type RemoteOpInvokeOptions,
     type RemoteOpResult,
+    UserInfo,
     type RemoteOpServerContext,
     type UserInfo,
 } from '@memberjunction/core';
@@ -72,6 +73,25 @@ class StructuredFailureOperation extends BaseRemotableOperation<TestOpInput, Tes
     }
 }
 void StructuredFailureOperation;
+
+@RegisterClass(BaseRemotableOperation, 'TestServer.ArtifactMagicBlocked')
+class ArtifactMagicBlockedOperation extends BaseRemotableOperation<{ ArtifactID?: string }, TestOpOutput> {
+    public readonly OperationKey = 'TestServer.ArtifactMagicBlocked';
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+    public override get RequiredScope(): string {
+        return 'artifact:read';
+    }
+    public override GetScopeResourceIds(input: { ArtifactID?: string }): string[] {
+        return input?.ArtifactID ? [input.ArtifactID] : [];
+    }
+
+    protected override async InternalExecute(input: { ArtifactID?: string }): Promise<TestOpOutput> {
+        return { echoed: input.ArtifactID ?? 'ok' };
+    }
+}
+void ArtifactMagicBlockedOperation;
 
 describe('ExecuteRemoteOperationResolver', () => {
     const fakeUser = { ID: 'user-1', Email: 'ada@example.com' } as UserInfo;
@@ -209,5 +229,62 @@ describe('ExecuteRemoteOperationResolver', () => {
         expect(res.success).toBe(false);
         expect(res.resultCode).toBe('CUSTOM_DOMAIN_CODE');
         expect(res.errorMessage).toBe('Structured domain validation rejected request');
+    });
+
+    it('N1 / S4: allows non-artifact Magic Link remote ops, rejects DisallowMagicLinkScope ops, and rejects empty GetScopeResourceIds without key fallback', async () => {
+        const resolver = new ExecuteRemoteOperationResolver();
+        const { ctx, capturedOptions } = buildContext();
+        const magicUser = new UserInfo(undefined, {
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Guest',
+            Email: 'guest@magic-link.local',
+            IsActive: true,
+        });
+        magicUser.IsMagicLinkAnonymous = true;
+        ctx.userPayload = { ...ctx.userPayload!, userRecord: magicUser };
+
+        // Non-artifact op (DisallowMagicLinkScope === false) still works for Magic Link sessions (e.g. Open Apps visitor ops)
+        const allowedMagicRes = await resolver.ExecuteRemoteOperation(
+            {
+                operationKey: 'TestServer.ContextEcho',
+                inputJSON: JSON.stringify({ message: 'visitor-ok' }),
+                invokeMode: 'attached',
+            },
+            ctx,
+            pubSub,
+        );
+        expect(allowedMagicRes.success).toBe(true);
+        expect(capturedOptions).toHaveLength(1);
+
+        // Ops opting into DisallowMagicLinkScope (all 5 artifact server ops) are rejected for Magic Link sessions
+        const blockedMagicRes = await resolver.ExecuteRemoteOperation(
+            {
+                operationKey: 'TestServer.ArtifactMagicBlocked',
+                inputJSON: JSON.stringify({ ArtifactID: '11111111-2222-4333-8444-555555555555' }),
+                invokeMode: 'attached',
+            },
+            ctx,
+            pubSub,
+        );
+        expect(blockedMagicRes.success).toBe(false);
+        expect(blockedMagicRes.resultCode).toBe('FORBIDDEN');
+        expect(blockedMagicRes.errorMessage).toContain('Magic Link');
+        expect(capturedOptions).toHaveLength(1);
+
+        // S4: Normal user invoking an op whose GetScopeResourceIds returns [] fails closed with INVALID_INPUT
+        const { ctx: normalCtx } = buildContext();
+        const scopeCheckSpy = vi.spyOn(resolver as unknown as { CheckAPIKeyScopeAuthorization: () => Promise<void> }, 'CheckAPIKeyScopeAuthorization');
+        const emptyScopeRes = await resolver.ExecuteRemoteOperation(
+            {
+                operationKey: 'TestServer.ArtifactMagicBlocked',
+                inputJSON: JSON.stringify({}),
+                invokeMode: 'attached',
+            },
+            normalCtx,
+            pubSub,
+        );
+        expect(emptyScopeRes.success).toBe(false);
+        expect(emptyScopeRes.resultCode).toBe('INVALID_INPUT');
+        expect(scopeCheckSpy).not.toHaveBeenCalled();
     });
 });

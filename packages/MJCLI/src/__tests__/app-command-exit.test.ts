@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 vi.mock('@memberjunction/open-app-engine', () => ({
+    NormalizeAppSource: vi.fn((source: string) => ({ Success: true, Source: source })),
     InstallApp: vi.fn(async () => ({ Success: false, ErrorMessage: 'Cannot read Acme/Private.' })),
     UpgradeApp: vi.fn(async () => ({ Success: false, ErrorMessage: 'Cannot read Acme/Private.' })),
     RemoveApp: vi.fn(async () => ({ Success: false, ErrorMessage: "App 'no-such-app' is not installed" })),

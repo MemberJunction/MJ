@@ -28,6 +28,7 @@ import { MutateGovernedArtifactAction } from '@memberjunction/core-actions';
 import {
     ArtifactPermissionEngine,
     DocumentLiveBlockEngine,
+    QueryEngine,
     SpreadsheetEngine,
 } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -235,6 +236,22 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             AppliedParameters: {},
         });
 
+        // Saved queries resolve through the provider's QueryEngine; its deprecated query list stays empty.
+        const queryEngineStub = {
+            Config: async () => undefined,
+            Queries: [
+                {
+                    ID: 'qry-1',
+                    Name: 'Monthly Revenue',
+                    CategoryPath: '',
+                    QueryParameters: [],
+                    QueryEntities: [],
+                    UserCanRun: () => ({ canRun: true, deniedEntities: [] }),
+                },
+            ],
+        } as unknown as QueryEngine;
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(queryEngineStub);
+
         const providerStub: Partial<IMetadataProvider & IRunViewProvider & IRunQueryProvider> = {
             Entities: [],
             Queries: [],
@@ -326,6 +343,10 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         awareness: awarenessProtocol.Awareness;
     }> {
         const doc = new Y.Doc();
+        // Ensure the random browser Y.Doc clientID never collides with the reserved server agent range (1 in 16 chance).
+        if (doc.clientID >= AGENT_AWARENESS_CLIENT_ID_BASE && doc.clientID <= AGENT_AWARENESS_CLIENT_ID_MAX) {
+            doc.clientID = (doc.clientID ^ 0x40000000) >>> 0;
+        }
         const awareness = new awarenessProtocol.Awareness(doc);
         const ws = new WsClient(
             `ws://127.0.0.1:${wsPort}/collaboration/yjs?artifactId=${encodeURIComponent(artifactId)}&testUserId=${encodeURIComponent(alice.ID)}`,
@@ -469,9 +490,11 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             expect(liveJson).toContain('Total');
             expect(liveJson).toContain('=SUM(B2:B3)');
 
-            const hydratedWb = SpreadsheetEngine.Instance.ParseWorkbook(liveJson);
+            const hydratedWb = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(liveJson, undefined, {
+                SkipEvaluate: true
+            });
             await SpreadsheetEngine.Instance.RefreshLiveTables(hydratedWb, alice, createMockProvider());
-            SpreadsheetEngine.Instance.EvaluateWorkbook(hydratedWb);
+            await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(hydratedWb);
             expect(hydratedWb.Worksheets[0].Cells['A1']?.ComputedValue).toBe('Month');
             expect(hydratedWb.Worksheets[0].Cells['B2']?.ComputedValue).toBe(12000);
             expect(hydratedWb.Worksheets[0].Cells['B3']?.ComputedValue).toBe(15500);
@@ -516,6 +539,12 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         const sharedBus = new InMemoryYjsRelayBus();
         const serverB = ArtifactCollaborationServer.Instance;
         serverB.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus));
+        serverB.SetAgentPresenceTimings({
+            throttleMs: 0,
+            decayMs: 2_000,
+            ttlMs: 60_000,
+            exitGraceMs: 0,
+        });
 
         const serverA = new TestDetachedRelayCollabNode();
         serverA.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus));

@@ -1,6 +1,6 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { RealtimeToolDefinition, type JSONObject } from '@memberjunction/ai';
+import { RealtimeToolDefinition, type JSONObject, type JSONValue } from '@memberjunction/ai';
 import { CompareExposure, REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { ChannelInboundVideoBridge, IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
@@ -26,8 +26,8 @@ import { DEFAULT_WHITEBOARD_CHANNEL_CONFIG, ParseWhiteboardChannelConfig, type W
  */
 function toolSucceeded(result: string): boolean {
   try {
-    const parsed: unknown = JSON.parse(result);
-    return parsed !== null && typeof parsed === 'object' && (parsed as { success?: unknown }).success === true;
+    const parsed = JSON.parse(result) as JSONValue;
+    return IsPlainObject(parsed) && parsed['success'] === true;
   } catch {
     // A non-JSON result cannot be confirmed as a mutation — the host returned something this
     // channel does not understand, so it does not get a "your change is on screen" note.
@@ -165,7 +165,7 @@ function widgetToolFailure(errorCode: WidgetToolErrorCode, error: string): strin
 /** Parses tool arguments into a JSON object, or null when they are not one. */
 function parseToolArgs(argsJson: string): JSONObject | null {
   try {
-    const parsed: unknown = JSON.parse(argsJson);
+    const parsed = JSON.parse(argsJson) as JSONValue;
     // JSON.parse output is JSON by construction, so narrowing a plain object to JSONObject is not a type lie.
     return IsPlainObject(parsed) ? (parsed as JSONObject) : null;
   } catch {

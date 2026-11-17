@@ -4,13 +4,32 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ActionEngineBase, ActionParam, RunActionParams, type MJActionEntityExtended } from '@memberjunction/actions-base';
-import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import {
+  EntityInfo,
+  EntityUserPermissionInfo,
+  RunView,
+  type EntityFieldInfo,
+  type IMetadataProvider,
+  type RunViewResult,
+  type UserInfo,
+} from '@memberjunction/core';
+import {
+  SanitizeWorksheetName,
+  SpreadsheetEngine,
+  type MJActionEntity,
+  type MJArtifactEntity,
+  type MJArtifactVersionEntity,
+  type MJCollectionArtifactEntity,
+  type SpreadsheetLiveTableSpec,
+  type WorkbookSpec,
+} from '@memberjunction/core-entities';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
   CreateGraphQLGovernedActionExecutor,
   CreateLiveSheetHelperForProvider,
   ExtractActionOutputParams,
   LiveSheetClientToolHelper,
+  RollbackCreatedArtifact,
   type GovernedActionExecutionRequest,
   type GovernedActionExecutionResult,
   type GovernedArtifactRollback,
@@ -55,23 +74,17 @@ describe('live-sheet-client-tool.helper', () => {
   });
 
   describe('LiveSheetClientToolHelper.CreateLiveSheetFromQuery', () => {
-    it('creates an Excel Spreadsheet and populates a SavedQuery live table', async () => {
+    it('creates an Excel Spreadsheet and populates a SavedQuery live table atomically at v1 via InitialOperations', async () => {
       const calls: GovernedActionExecutionRequest[] = [];
       const executor = vi.fn(
         async (req: GovernedActionExecutionRequest): Promise<GovernedActionExecutionResult> => {
           calls.push(req);
-          if (req.ActionName === '__CreateGovernedArtifact') {
-            return {
-              Success: true,
-              OutputParams: { ArtifactID: 'art-q1', VersionID: 'ver-1', VersionNumber: 1 },
-            };
-          }
           return {
             Success: true,
             OutputParams: {
               ArtifactID: 'art-q1',
-              VersionID: 'ver-2',
-              VersionNumber: 2,
+              VersionID: 'ver-1',
+              VersionNumber: 1,
               ArtifactName: 'Monthly Revenue — Live Sheet',
               Results: [{ ok: true, data: { boundingRange: 'A1:D25', rowCount: 24 } }],
             },
@@ -90,8 +103,8 @@ describe('live-sheet-client-tool.helper', () => {
       expect(res).toEqual({
         Success: true,
         ArtifactID: 'art-q1',
-        VersionID: 'ver-2',
-        VersionNumber: 2,
+        VersionID: 'ver-1',
+        VersionNumber: 1,
         ArtifactName: 'Monthly Revenue — Live Sheet',
         ArtifactTypeName: 'Excel Spreadsheet',
         DriverClass: 'SpreadsheetArtifactViewerPlugin',
@@ -100,30 +113,29 @@ describe('live-sheet-client-tool.helper', () => {
         RowCount: 24,
       });
 
-      expect(calls).toHaveLength(2);
+      expect(calls).toHaveLength(1);
       expect(calls[0].ActionName).toBe('__CreateGovernedArtifact');
       expect(calls[0].Params).toEqual([
         { Name: 'Title', Value: 'Monthly Revenue — Live Sheet', Type: 'Input' },
         { Name: 'ArtifactType', Value: 'Excel Spreadsheet', Type: 'Input' },
         { Name: 'SheetNames', Value: ['Query Data'], Type: 'Input' },
-      ]);
-
-      expect(calls[1].ActionName).toBe('__MutateGovernedArtifact');
-      expect(calls[1].Params).toEqual([
-        { Name: 'ArtifactID', Value: 'art-q1', Type: 'Input' },
-        { Name: 'Tool', Value: 'upsert_live_table', Type: 'Input' },
         {
-          Name: 'Input',
-          Value: {
-            sheet: 'Query Data',
-            title: 'Monthly Revenue',
-            sourceType: 'SavedQuery',
-            queryId: 'qry-123',
-            queryName: 'Monthly Revenue',
-            parameters: { Year: 2026 },
-            maxRows: 250,
-            anchorCell: 'A1',
-          },
+          Name: 'InitialOperations',
+          Value: [
+            {
+              tool: 'upsert_live_table',
+              input: {
+                sheet: 'Query Data',
+                title: 'Monthly Revenue',
+                sourceType: 'SavedQuery',
+                queryId: 'qry-123',
+                queryName: 'Monthly Revenue',
+                parameters: { Year: 2026 },
+                maxRows: 250,
+                anchorCell: 'A1',
+              },
+            },
+          ],
           Type: 'Input',
         },
       ]);
@@ -257,23 +269,137 @@ describe('live-sheet-client-tool.helper', () => {
       expect(res.ErrorMessage).toContain('ArtifactID');
       expect(executor).not.toHaveBeenCalled();
     });
-  });
 
-  describe('LiveSheetClientToolHelper.CreateLiveSheetFromView', () => {
-    it('creates an EntityView live table with view metadata and filters', async () => {
+    it('stops and returns inspection error without mutating when __InspectGovernedArtifact fails', async () => {
       const calls: GovernedActionExecutionRequest[] = [];
       const helper = new LiveSheetClientToolHelper(async (req) => {
         calls.push(req);
-        if (req.ActionName === '__CreateGovernedArtifact') {
-          return { Success: true, OutputParams: { ArtifactID: 'art-v1', VersionNumber: 1 } };
+        return {
+          Success: false,
+          Message: 'Access denied inspecting artifact',
+          OutputParams: {},
+        };
+      });
+
+      const res = await helper.AppendQueryToLiveSheet({
+        ArtifactID: 'art-locked',
+        QueryID: 'qry-2',
+        QueryName: 'Top Accounts',
+        SheetName: 'Accounts: Tab',
+      });
+
+      expect(res.Success).toBe(false);
+      expect(res.ArtifactID).toBe('art-locked');
+      expect(res.ErrorMessage).toContain('Access denied inspecting artifact');
+      expect(calls.map((c) => c.ActionName)).toEqual(['__InspectGovernedArtifact']);
+    });
+  });
+
+  describe('LiveSheetClientToolHelper.CreateLiveSheetFromView', () => {
+    it('materializes an EntityView live table atomically at v1 through real SpreadsheetEngine execution', async () => {
+      const fakeUser = { ID: 'user-exec-1', Name: 'Analyst' } as UserInfo;
+      const fakeFields = [
+        { Name: 'ID', DisplayName: 'ID', Type: 'uniqueidentifier', IsBinaryFieldType: false, DefaultInView: false } as EntityFieldInfo,
+        { Name: 'Name', DisplayName: 'Name', Type: 'nvarchar', IsBinaryFieldType: false, DefaultInView: true } as EntityFieldInfo,
+        { Name: 'Email', DisplayName: 'Email', Type: 'nvarchar', IsBinaryFieldType: false, DefaultInView: true } as EntityFieldInfo,
+        { Name: 'Type', DisplayName: 'Type', Type: 'nvarchar', IsBinaryFieldType: false, DefaultInView: true } as EntityFieldInfo,
+      ];
+      const fakeEntityInfo = {
+        Name: 'MJ: Users',
+        DisplayNameOrName: 'Users',
+        FieldLevelSecurityApplies: false,
+        Fields: fakeFields,
+        GetUserPermisions: () =>
+          Object.assign(new EntityUserPermissionInfo(), {
+            CanRead: true,
+            CanCreate: false,
+            CanUpdate: false,
+            CanDelete: false,
+          }),
+      } as Partial<EntityInfo> as EntityInfo;
+
+      const capturedRunViews: Array<{ EntityName: string; ExtraFilter?: string; Fields?: string[]; MaxRows?: number }> = [];
+      const fakeProvider = {
+        CurrentUser: fakeUser,
+        EntityByName: (name: string) => (name === 'MJ: Users' ? fakeEntityInfo : undefined),
+        RunView: vi.fn(async (params: { EntityName: string; ExtraFilter?: string; Fields?: string[]; MaxRows?: number }) => {
+          capturedRunViews.push(params);
+          return {
+            Success: true,
+            Results: [
+              { Name: 'Alice', Email: 'alice@example.com' },
+              { Name: 'Bob', Email: 'bob@example.com' },
+            ],
+            RowCount: 2,
+            TotalRowCount: 2,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }),
+      } as Partial<IMetadataProvider> as IMetadataProvider;
+
+      let materializedWorkbook: WorkbookSpec | null = null;
+      const calls: GovernedActionExecutionRequest[] = [];
+      const helper = new LiveSheetClientToolHelper(async (req) => {
+        calls.push(req);
+        expect(req.ActionName).toBe('__CreateGovernedArtifact');
+
+        const title = String(req.Params.find((p) => p.Name === 'Title')?.Value ?? 'Untitled');
+        const sheetNames = req.Params.find((p) => p.Name === 'SheetNames')?.Value as string[] | undefined;
+        const initialOps = req.Params.find((p) => p.Name === 'InitialOperations')?.Value as Array<{
+          tool: string;
+          input: Record<string, string | number | boolean | string[] | null | undefined>;
+        }>;
+
+        const engine = SpreadsheetEngine.Instance;
+        const workbook = engine.CreateEmptyWorkbook(title, sheetNames);
+        let boundingRange: string | undefined;
+        let rowCount = 0;
+
+        for (const op of initialOps) {
+          if (op.tool === 'upsert_live_table') {
+            const targetSheet = engine.GetWorksheet(workbook, String(op.input['sheet'] ?? ''));
+            if (!targetSheet) {
+              return { Success: false, Message: 'Target sheet missing', OutputParams: {} };
+            }
+            const liveSpec: SpreadsheetLiveTableSpec = {
+              TableID: 'tbl-live-1',
+              Title: String(op.input['title'] ?? 'Live Table'),
+              SourceType: op.input['sourceType'] === 'SavedQuery' ? 'SavedQuery' : 'EntityView',
+              EntityName: typeof op.input['entityName'] === 'string' ? op.input['entityName'] : undefined,
+              ViewID: typeof op.input['viewId'] === 'string' ? op.input['viewId'] : undefined,
+              ViewName: typeof op.input['viewName'] === 'string' ? op.input['viewName'] : undefined,
+              ExtraFilter: typeof op.input['extraFilter'] === 'string' ? op.input['extraFilter'] : undefined,
+              Fields: Array.isArray(op.input['fields']) ? op.input['fields'].map(String) : undefined,
+              MaxRows: typeof op.input['maxRows'] === 'number' ? op.input['maxRows'] : undefined,
+              AnchorCell: typeof op.input['anchorCell'] === 'string' ? op.input['anchorCell'] : 'A1',
+              IncludeHeaders: true,
+              Mode: 'Live',
+            };
+            targetSheet.LiveTables.push(liveSpec);
+            const refreshRes = await engine.RefreshLiveTables(workbook, fakeUser, fakeProvider, {
+              TableID: liveSpec.TableID,
+            });
+            const tblResult = refreshRes[liveSpec.TableID];
+            if (!tblResult?.Success) {
+              return { Success: false, Message: tblResult?.ErrorMessage || 'Refresh failed', OutputParams: {} };
+            }
+            rowCount = tblResult.Rows.length;
+            const colCount = Math.max(tblResult.Columns.length, 1);
+            const lastColLetter = String.fromCharCode(64 + colCount);
+            boundingRange = `A1:${lastColLetter}${rowCount + 1}`;
+          }
         }
+        materializedWorkbook = workbook;
+
         return {
           Success: true,
           OutputParams: {
             ArtifactID: 'art-v1',
-            VersionID: 'ver-v2',
-            VersionNumber: 2,
-            Results: [{ ok: true, data: { boundingRange: 'A1:E51', rowCount: 50 } }],
+            VersionID: 'ver-v1',
+            VersionNumber: 1,
+            ArtifactName: title,
+            Results: [{ ok: true, data: { boundingRange, rowCount } }],
           },
         };
       });
@@ -287,31 +413,51 @@ describe('live-sheet-client-tool.helper', () => {
         MaxRows: 100,
       });
 
+      const expectedSheet = SanitizeWorksheetName('MJ: Users');
+      expect(expectedSheet).toBe('MJ  Users');
+      expect(calls).toHaveLength(1);
       expect(res).toEqual({
         Success: true,
         ArtifactID: 'art-v1',
-        VersionID: 'ver-v2',
-        VersionNumber: 2,
+        VersionID: 'ver-v1',
+        VersionNumber: 1,
         ArtifactName: 'MJ: Users — Active Admins',
         ArtifactTypeName: 'Excel Spreadsheet',
         DriverClass: 'SpreadsheetArtifactViewerPlugin',
-        SheetName: 'MJ: Users',
-        BoundingRange: 'A1:E51',
-        RowCount: 50,
+        SheetName: expectedSheet,
+        BoundingRange: 'A1:B3',
+        RowCount: 2,
       });
 
-      expect(calls[1].Params.find((p) => p.Name === 'Input')?.Value).toEqual({
-        sheet: 'MJ: Users',
-        title: 'Active Admins',
-        sourceType: 'EntityView',
-        entityName: 'MJ: Users',
-        viewId: 'view-99',
-        viewName: 'Active Admins',
-        extraFilter: "Type='Owner'",
-        fields: ['Name', 'Email'],
-        maxRows: 100,
-        anchorCell: 'A1',
+      expect(capturedRunViews).toHaveLength(1);
+      expect(capturedRunViews[0]).toMatchObject({
+        EntityName: 'MJ: Users',
+        ExtraFilter: "Type='Owner'",
+        Fields: ['Name', 'Email', 'ID'],
+        MaxRows: 100,
       });
+
+      expect(materializedWorkbook).not.toBeNull();
+      const ws = materializedWorkbook!.Worksheets[0];
+      expect(ws.Name).toBe(expectedSheet);
+      expect(ws.LiveTables).toHaveLength(1);
+      expect(ws.LiveTables[0]).toMatchObject({
+        SourceType: 'EntityView',
+        EntityName: 'MJ: Users',
+        ViewID: 'view-99',
+        ViewName: 'Active Admins',
+        ExtraFilter: "Type='Owner'",
+        Fields: ['Name', 'Email'],
+        MaxRows: 100,
+        AnchorCell: 'A1',
+      });
+      // Verify SpreadsheetEngine.RefreshLiveTables populated header and data cells
+      expect(ws.Cells['A1']?.RawValue).toBe('Name');
+      expect(ws.Cells['B1']?.RawValue).toBe('Email');
+      expect(ws.Cells['A2']?.RawValue).toBe('Alice');
+      expect(ws.Cells['B2']?.RawValue).toBe('alice@example.com');
+      expect(ws.Cells['A3']?.RawValue).toBe('Bob');
+      expect(ws.Cells['B3']?.RawValue).toBe('bob@example.com');
     });
 
     it('rejects empty EntityName', async () => {
@@ -322,39 +468,41 @@ describe('live-sheet-client-tool.helper', () => {
       expect(executor).not.toHaveBeenCalled();
     });
 
-    it('rolls back step-1 artifact when step-2 fails, and skips __CreateGovernedArtifact when ExistingArtifactID is provided', async () => {
+    it('fails atomically with zero orphan on Create failure, and inspects/creates missing worksheet when ExistingArtifactID is provided', async () => {
       const rollbackArtifact = vi.fn<GovernedArtifactRollback>(async () => true);
-      const executor = vi.fn(async (req: GovernedActionExecutionRequest): Promise<GovernedActionExecutionResult> => {
-        if (req.ActionName === '__CreateGovernedArtifact') {
-          return {
-            Success: true,
-            OutputParams: { ArtifactID: 'art-orphan', VersionID: 'ver-orphan', VersionNumber: 1 },
-          };
-        }
-        return {
-          Success: false,
-          Message: 'Entity view permission denied',
-          OutputParams: {},
-        };
-      });
+      const executor = vi.fn(async (): Promise<GovernedActionExecutionResult> => ({
+        Success: false,
+        Message: 'Entity view permission denied',
+        OutputParams: {},
+      }));
 
       const helper = new LiveSheetClientToolHelper(executor, rollbackArtifact);
       const failedRes = await helper.CreateLiveSheetFromView({ EntityName: 'MJ: Users' });
       expect(failedRes.Success).toBe(false);
       expect(failedRes.ArtifactID).toBeUndefined();
-      expect(rollbackArtifact).toHaveBeenCalledWith('art-orphan', 'ver-orphan');
+      expect(failedRes.ErrorMessage).toContain('Entity view permission denied');
+      expect(executor).toHaveBeenCalledTimes(1);
+      expect(rollbackArtifact).not.toHaveBeenCalled();
 
-      // ExistingArtifactID path skips __CreateGovernedArtifact and mutates directly
-      const reuseCalls: string[] = [];
+      // ExistingArtifactID path skips __CreateGovernedArtifact, inspects sheets, and prepends add_sheet when absent
+      const reuseCalls: GovernedActionExecutionRequest[] = [];
       const reuseExecutor = vi.fn(async (req: GovernedActionExecutionRequest): Promise<GovernedActionExecutionResult> => {
-        reuseCalls.push(req.ActionName);
+        reuseCalls.push(req);
+        if (req.ActionName === '__InspectGovernedArtifact') {
+          return {
+            Success: true,
+            OutputParams: {
+              InspectionResult: { sheets: [{ name: 'Sheet1' }] },
+            },
+          };
+        }
         return {
           Success: true,
           OutputParams: {
             ArtifactID: 'art-v1',
             VersionID: 'ver-v2',
             VersionNumber: 2,
-            Results: [{ ok: true, data: { boundingRange: 'A1:B5', rowCount: 4 } }],
+            Results: [{ ok: true }, { ok: true, data: { boundingRange: 'A1:B5', rowCount: 4 } }],
           },
         };
       });
@@ -363,12 +511,89 @@ describe('live-sheet-client-tool.helper', () => {
       const reused = await reuseHelper.CreateLiveSheetFromQuery({
         QueryID: 'q-1',
         QueryName: 'Sales',
+        SheetName: 'Sales: Q4',
         ExistingArtifactID: 'art-v1',
       });
       expect(reused.Success).toBe(true);
-      expect(reuseCalls).toEqual(['__MutateGovernedArtifact']);
+      expect(reused.SheetName).toBe('Sales  Q4');
+      expect(reuseCalls.map((c) => c.ActionName)).toEqual([
+        '__InspectGovernedArtifact',
+        '__MutateGovernedArtifact',
+      ]);
+      const reuseOps = reuseCalls[1].Params.find((p) => p.Name === 'Operations')?.Value;
+      expect(reuseOps).toEqual([
+        { tool: 'add_sheet', input: { name: 'Sales  Q4' } },
+        {
+          tool: 'upsert_live_table',
+          input: {
+            sheet: 'Sales  Q4',
+            title: 'Sales',
+            sourceType: 'SavedQuery',
+            queryId: 'q-1',
+            queryName: 'Sales',
+            anchorCell: 'A1',
+          },
+        },
+      ]);
       expect(reused.ArtifactID).toBe('art-v1');
       expect(reused.VersionNumber).toBe(2);
+    });
+  });
+
+  describe('RollbackCreatedArtifact', () => {
+    it('deletes MJ: Collection Artifacts links before deleting version and artifact entities', async () => {
+      const fakeUser = { ID: 'user-1', Name: 'Tester' } as UserInfo;
+      const deleteOrder: string[] = [];
+
+      const linkEntity = {
+        Delete: vi.fn(async () => {
+          deleteOrder.push('collection-link');
+          return true;
+        }),
+      } as Partial<MJCollectionArtifactEntity> as MJCollectionArtifactEntity;
+
+      const versionEntity = {
+        Load: vi.fn(async () => true),
+        Delete: vi.fn(async () => {
+          deleteOrder.push('version');
+          return true;
+        }),
+      } as Partial<MJArtifactVersionEntity> as MJArtifactVersionEntity;
+
+      const artifactEntity = {
+        Load: vi.fn(async () => true),
+        Delete: vi.fn(async () => {
+          deleteOrder.push('artifact');
+          return true;
+        }),
+      } as Partial<MJArtifactEntity> as MJArtifactEntity;
+
+      const fakeProvider = {
+        GetEntityObject: vi.fn(async (entityName: string) => {
+          if (entityName === 'MJ: Artifact Versions') return versionEntity;
+          if (entityName === 'MJ: Artifacts') return artifactEntity;
+          throw new Error(`Unexpected entity ${entityName}`);
+        }),
+      } as Partial<GraphQLDataProvider> as GraphQLDataProvider;
+
+      const mockRunView = {
+        RunView: vi.fn(async () => ({
+          Success: true,
+          Results: [linkEntity],
+        } as Partial<RunViewResult<MJCollectionArtifactEntity>> as RunViewResult<MJCollectionArtifactEntity>)),
+      } as Partial<RunView> as RunView;
+      vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(mockRunView);
+
+      const ok = await RollbackCreatedArtifact(fakeProvider, fakeUser, 'art-1', 'ver-1');
+      expect(ok).toBe(true);
+      expect(mockRunView.RunView).toHaveBeenCalledWith(
+        expect.objectContaining({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: "ArtifactVersionID='ver-1'",
+        }),
+        fakeUser,
+      );
+      expect(deleteOrder).toEqual(['collection-link', 'version', 'artifact']);
     });
   });
 
@@ -397,7 +622,7 @@ describe('live-sheet-client-tool.helper', () => {
           versionNumber: 1,
           name: 'From Message',
         }),
-        Result: undefined as never,
+        ResultCode: 'SUCCESS',
       });
 
       const executor = CreateGraphQLGovernedActionExecutor(fakeProvider, fakeUser);
@@ -407,11 +632,57 @@ describe('live-sheet-client-tool.helper', () => {
       });
 
       expect(getProviderSpy).toHaveBeenCalledWith(fakeProvider, ActionEngineBase);
-      expect(runActionSpy).toHaveBeenCalledWith('act-create-1', expect.arrayContaining([expect.any(ActionParam)]));
+      expect(runActionSpy).toHaveBeenCalledTimes(1);
+      expect(runActionSpy.mock.calls[0]?.[0]).toBe('act-create-1');
+      expect(runActionSpy.mock.calls[0]?.[1]?.some((p) => p instanceof ActionParam)).toBe(true);
       expect(res.Success).toBe(true);
       expect(res.OutputParams['ArtifactID']).toBe('art-from-msg');
       expect(res.OutputParams['VersionID']).toBe('ver-from-msg');
       expect(res.OutputParams['VersionNumber']).toBe(1);
+    });
+
+    it('falls back to RunView.FromMetadataProvider when ActionEngineBase cache does not contain the action', async () => {
+      const fakeUser = { ID: 'user-1', Name: 'Tester' } as UserInfo;
+      const fakeProvider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+
+      vi.spyOn(ActionEngineBase, 'GetProviderInstance').mockReturnValue({
+        Actions: [],
+        Config: vi.fn(async () => undefined),
+      } as Partial<ActionEngineBase> as ActionEngineBase);
+
+      const fallbackAction = { ID: 'act-mutate-rv' } as Partial<MJActionEntity> as MJActionEntity;
+      const mockRunView = {
+        RunView: vi.fn(async () => ({
+          Success: true,
+          Results: [fallbackAction],
+        } as Partial<RunViewResult<MJActionEntity>> as RunViewResult<MJActionEntity>)),
+      } as Partial<RunView> as RunView;
+      vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(mockRunView);
+
+      const runActionSpy = vi.spyOn(GraphQLActionClient.prototype, 'RunAction').mockResolvedValue({
+        RunParams: new RunActionParams(),
+        Success: true,
+        Message: JSON.stringify({ ArtifactID: 'art-rv', VersionNumber: 2 }),
+        ResultCode: 'SUCCESS',
+      });
+
+      const executor = CreateGraphQLGovernedActionExecutor(fakeProvider, fakeUser);
+      const res = await executor({
+        ActionName: '__MutateGovernedArtifact',
+        Params: [{ Name: 'ArtifactID', Value: 'art-rv', Type: 'Input' }],
+      });
+
+      expect(mockRunView.RunView).toHaveBeenCalledWith(
+        expect.objectContaining({
+          EntityName: 'MJ: Actions',
+          MaxRows: 1,
+        }),
+        fakeUser,
+      );
+      expect(runActionSpy).toHaveBeenCalledTimes(1);
+      expect(runActionSpy.mock.calls[0]?.[0]).toBe('act-mutate-rv');
+      expect(Array.isArray(runActionSpy.mock.calls[0]?.[1])).toBe(true);
+      expect(res.Success).toBe(true);
     });
 
     it('CreateLiveSheetHelperForProvider returns null without GraphQLDataProvider and builds helper with one', () => {

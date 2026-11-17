@@ -9,7 +9,7 @@ import { UserInfo } from '@memberjunction/core';
     <div class="conversation-navigation">
       <div class="nav-left">
         <button class="nav-btn sidebar-toggle" (click)="sidebarToggled.emit()">
-          <i class="fas fa-bars"></i>
+          <i class="fa-solid fa-bars"></i>
         </button>
       </div>
       <div class="nav-tabs">
@@ -17,21 +17,21 @@ import { UserInfo } from '@memberjunction/core';
           class="nav-tab"
           [class.active]="activeTab === 'conversations'"
           (click)="tabChanged.emit('conversations')">
-          <i class="fas fa-comments"></i>
+          <i class="fa-solid fa-comments"></i>
           <span>Chats</span>
         </button>
         <button
           class="nav-tab"
           [class.active]="activeTab === 'collections'"
           (click)="tabChanged.emit('collections')">
-          <i class="fas fa-folder"></i>
+          <i class="fa-solid fa-folder"></i>
           <span>Collections</span>
         </button>
         <button
           class="nav-tab"
           [class.active]="activeTab === 'tasks'"
           (click)="tabChanged.emit('tasks')">
-          <i class="fas fa-diagram-project"></i>
+          <i class="fa-solid fa-diagram-project"></i>
           <span>Agent Activity</span>
         </button>
       </div>
@@ -42,10 +42,10 @@ import { UserInfo } from '@memberjunction/core';
           (navigateToConversation)="navigateToConversation.emit($event)">
         </mj-tasks-dropdown>
         <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">
-          <i class="fas fa-search"></i>
+          <i class="fa-solid fa-search"></i>
         </button>
         <button class="nav-btn refresh-btn" (click)="refreshTriggered.emit()" title="Refresh agent cache">
-          <i class="fas fa-sync-alt"></i>
+          <i class="fa-solid fa-sync-alt"></i>
         </button>
       </div>
     </div>

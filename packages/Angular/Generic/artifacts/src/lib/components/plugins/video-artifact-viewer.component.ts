@@ -138,7 +138,7 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     async ngOnInit(): Promise<void> {
         try {
             if (this.artifactVersion?.ContentMode === 'File' && this.artifactVersion.ID) {
-                this.setVideoUrl(await this.fileService.getDownloadUrl(this.artifactVersion.ID));
+                this.setVideoUrl(await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.ProviderToUse));
             } else {
                 const content = this.artifactVersion?.Content;
                 if (content) {

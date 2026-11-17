@@ -121,34 +121,84 @@ export abstract class BaseGovernedArtifactAction extends BaseAction {
         return undefined;
     }
 
-    protected getOperationsParam(params: RunActionParams, name: string): ArtifactMutationOperation[] | undefined {
+    protected parseOperationsParam(
+        params: RunActionParams,
+        name: string,
+    ): { operations?: ArtifactMutationOperation[]; errorMessage?: string } {
         let value = this.getParamValue(params, name);
+        if (value === undefined || value === null) {
+            return {};
+        }
         if (typeof value === 'string') {
             const trimmed = value.trim();
-            if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-                try {
-                    value = JSON.parse(trimmed) as ArtifactJsonValue;
-                } catch {
-                    return undefined;
+            if (!trimmed) {
+                return {};
+            }
+            try {
+                value = JSON.parse(trimmed) as ArtifactJsonValue;
+            } catch (err) {
+                return {
+                    errorMessage: `Parameter '${name}' is not valid JSON (${err instanceof Error ? err.message : String(err)}). Expected an array like [{ "tool": "write_cells", "input": { ... } }].`,
+                };
+            }
+        }
+        if (!Array.isArray(value)) {
+            return {
+                errorMessage: `Parameter '${name}' must be an array of { tool: string, input?: object } items.`,
+            };
+        }
+        const ops: ArtifactMutationOperation[] = [];
+        for (let idx = 0; idx < value.length; idx++) {
+            const item = value[idx];
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                return {
+                    errorMessage: `${name}[${idx}] must be an object with required string field 'tool', e.g. { "tool": "write_cells", "input": { ... } }.`,
+                };
+            }
+            const rec = item as RawOperationItem;
+            if (typeof rec.tool !== 'string' || !rec.tool.trim()) {
+                return {
+                    errorMessage: `${name}[${idx}] is missing required string field 'tool', e.g. { "tool": "write_cells", "input": { ... } }.`,
+                };
+            }
+            let parsedInput: ArtifactToolArgs | undefined;
+            if (rec.input !== undefined && rec.input !== null) {
+                if (typeof rec.input === 'string') {
+                    const trimmedInput = rec.input.trim();
+                    if (trimmedInput) {
+                        try {
+                            const parsed = JSON.parse(trimmedInput) as ArtifactJsonValue;
+                            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                                return {
+                                    errorMessage: `${name}[${idx}].input must decode to a JSON object matching the '${rec.tool.trim()}' tool schema.`,
+                                };
+                            }
+                            parsedInput = parsed as ArtifactToolArgs;
+                        } catch (err) {
+                            return {
+                                errorMessage: `${name}[${idx}].input is invalid JSON (${err instanceof Error ? err.message : String(err)}).`,
+                            };
+                        }
+                    }
+                } else if (typeof rec.input === 'object' && !Array.isArray(rec.input)) {
+                    parsedInput = rec.input as ArtifactToolArgs;
+                } else {
+                    return {
+                        errorMessage: `${name}[${idx}].input must be an object matching the '${rec.tool.trim()}' tool schema.`,
+                    };
                 }
             }
+            ops.push({
+                tool: rec.tool.trim(),
+                input: parsedInput,
+            });
         }
-        if (!Array.isArray(value)) return undefined;
-        const ops: ArtifactMutationOperation[] = [];
-        for (const item of value) {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-            const rec = item as RawOperationItem;
-            if (typeof rec.tool === 'string' && rec.tool.trim()) {
-                ops.push({
-                    tool: rec.tool.trim(),
-                    input:
-                        rec.input && typeof rec.input === 'object' && !Array.isArray(rec.input)
-                            ? (rec.input as ArtifactToolArgs)
-                            : undefined,
-                });
-            }
-        }
-        return ops.length > 0 ? ops : undefined;
+        return { operations: ops };
+    }
+
+    protected getOperationsParam(params: RunActionParams, name: string): ArtifactMutationOperation[] | undefined {
+        const parsed = this.parseOperationsParam(params, name);
+        return parsed.operations && parsed.operations.length > 0 ? parsed.operations : undefined;
     }
 
     protected setOutputParam(params: RunActionParams, name: string, value: GovernedActionParamValue): void {
