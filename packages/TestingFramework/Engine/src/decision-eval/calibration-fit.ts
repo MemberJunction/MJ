@@ -443,7 +443,7 @@ function renderGroupRow(group: CalibrationGroupResult): string {
         scores('BalancedAccuracy'), scores('ECE'), scores('Brier'),
         group.Entry ? String(group.Entry.A) : '—', group.Entry ? String(group.Entry.B) : '—', status
     ];
-    return `| ${cells.map(cell => cell.replace(/\|/g, '\\|')).join(' | ')} |`;
+    return `| ${cells.map(cell => cell.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')).join(' | ')} |`;
 }
 
 function formatScore(value: number | null): string {
