@@ -37,12 +37,19 @@ export class HeadlessPageRenderer extends BasePageRenderer {
     private static idleTimer: ReturnType<typeof setTimeout> | null = null;
 
     public async Render(request: PageRenderRequest): Promise<PageRenderResult> {
+        if (request.Signal.aborted) {
+            throw new Error('Render aborted before starting');
+        }
         await this.AssertAllowed(request.URL);
         const browser = await HeadlessPageRenderer.acquire();
-        const context = await browser.newContext({ serviceWorkers: 'block' });
-        const abort = () => void context.close().catch(() => undefined);
+        let context: Awaited<ReturnType<Browser['newContext']>> | null = null;
+        const abort = () => void context?.close().catch(() => undefined);
         request.Signal.addEventListener('abort', abort, { once: true });
         try {
+            if (request.Signal.aborted) {
+                throw new Error('Render aborted before navigation');
+            }
+            context = await browser.newContext({ serviceWorkers: 'block' });
             const allowedHosts = new Map<string, boolean>();
             await context.route('**/*', (route) => this.route(route, request, allowedHosts));
             const page = await context.newPage();
@@ -50,10 +57,14 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 waitUntil: 'networkidle',
                 timeout: request.TimeoutMs ?? DEFAULT_TIMEOUT_MS,
             });
-            return { Html: await page.content(), FinalURL: page.url(), Status: response?.status() ?? 0 };
+            const finalUrl = page.url();
+            if (/^https?:/i.test(finalUrl)) {
+                await this.AssertAllowed(finalUrl);
+            }
+            return { Html: await page.content(), FinalURL: finalUrl, Status: response?.status() ?? 0 };
         } finally {
             request.Signal.removeEventListener('abort', abort);
-            await context.close().catch(() => undefined);
+            await context?.close().catch(() => undefined);
             HeadlessPageRenderer.release();
         }
     }
@@ -132,6 +143,12 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             clearTimeout(HeadlessPageRenderer.idleTimer);
             HeadlessPageRenderer.idleTimer = null;
         }
+        if (HeadlessPageRenderer.browser) {
+            const existing = await HeadlessPageRenderer.browser.catch(() => null);
+            if (!existing || !existing.isConnected()) {
+                HeadlessPageRenderer.browser = null;
+            }
+        }
         HeadlessPageRenderer.browser ??= HeadlessPageRenderer.launch();
         try {
             return await HeadlessPageRenderer.browser;
@@ -151,7 +168,11 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 `The Headless page renderer needs the 'playwright' package (and a Chromium for it: npx playwright install chromium): ${error instanceof Error ? error.message : String(error)}`,
             );
         }
-        return chromium.launch({ headless: true });
+        const browser = await chromium.launch({ headless: true });
+        browser.once('disconnected', () => {
+            HeadlessPageRenderer.browser = null;
+        });
+        return browser;
     }
 
     /** One render done; close the browser once nothing has used it for a while. */

@@ -60,6 +60,9 @@ const FRAMEWORK_OWNED_COLUMNS: ReadonlySet<string> = new Set([
     'EmbeddingModelID',
     'Sequence',
     'ForceDiscovery',
+    'RetryCount',
+    'RetryAfter',
+    'DiscoverState',
     'Name',
     'Text',
     'Date',
@@ -77,6 +80,9 @@ const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
  * A commit is safe to repeat: nothing here depends on the record's prior state.
  */
 export class WorkingRecordCommitter {
+    /** Existing core rows promoted to an IS-A extension in {@link load}, awaiting the commit's single `Save()`. */
+    private readonly pendingExtensionAttachments = new WeakSet<BaseEntity>();
+
     constructor(
         private readonly provider: IMetadataProvider,
         private readonly contextUser: UserInfo,
@@ -270,7 +276,7 @@ export class WorkingRecordCommitter {
             if (dateChanged) {
                 this.writeColumn(entityObject, statusField, status);
                 written.push(statusField);
-            } else if (written.length === 0) {
+            } else if (written.length === 0 && !this.pendingExtensionAttachments.has(entityObject)) {
                 return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
             }
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
@@ -321,7 +327,7 @@ export class WorkingRecordCommitter {
         const changed = this.contentChanged(child, entityObject);
         const forceReprocess = request === 'Reprocess';
         if (!changed && !forceReprocess && !wasPendingDelete && request !== 'Reextract') {
-            if (written.length === 0 && request !== 'MetadataChanged') {
+            if (written.length === 0 && request !== 'MetadataChanged' && !this.pendingExtensionAttachments.has(entityObject)) {
                 return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
             }
             await this.settleMetadataChange(entityObject, written);
@@ -455,6 +461,7 @@ export class WorkingRecordCommitter {
                 EntityName: 'MJ: Content Item Chunks',
                 ExtraFilter: WhereEqual({ ContentItemID: itemID, EmbeddingStatus: 'Complete', DeleteStatus: null }),
                 ResultType: 'entity_object',
+                IgnoreMaxRows: true,
             },
             this.contextUser,
         );
@@ -472,13 +479,15 @@ export class WorkingRecordCommitter {
 
     private async save(record: WorkingRecord, entityObject: BaseEntity, written: string[], created: boolean): Promise<CommitResult> {
         const existingID = this.readString(entityObject, 'ID');
-        if (!created && written.length === 0 && existingID) {
+        const mustSave = created || this.pendingExtensionAttachments.has(entityObject);
+        if (!mustSave && written.length === 0 && existingID) {
             record.ClearChanged();
             return { RecordID: existingID, ColumnsWritten: [], Created: false };
         }
         if (!(await entityObject.Save())) {
             throw new Error(`Failed to commit ${GetEntityName(record.Entity)} '${record.Identity.Key}': ${this.describeFailure(entityObject)}`);
         }
+        this.pendingExtensionAttachments.delete(entityObject);
         const recordID = this.readColumn(entityObject, 'ID') as string;
         record.Identity.RecordID = recordID;
         record.ClearChanged();
@@ -717,8 +726,8 @@ export class WorkingRecordCommitter {
 
     /**
      * Give an existing item the extension row it lacks (created before the setting, or by a path that wrote
-     * only the core row): bind a new extension record to the existing core row and save it, which inserts
-     * only the extension's row. The commit then goes on as an update of the now complete item.
+     * only the core row): bind a new extension record to the existing core row so the commit's single save
+     * inserts the extension row together with any extension columns.
      */
     private async addExtensionRow(entityName: string, key: CompositeKey, recordID: string): Promise<BaseEntity> {
         const extension = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
@@ -726,10 +735,8 @@ export class WorkingRecordCommitter {
         if (!(await extension.AttachToParent(key))) {
             throw new Error(`${BASE_ITEM_ENTITY} record '${recordID}' vanished before commit`);
         }
-        if (!(await extension.Save())) {
-            throw new Error(`Could not add the '${entityName}' row to item '${recordID}': ${this.describeFailure(extension)}`);
-        }
-        LogStatus(`WorkingRecordCommitter: added the missing '${entityName}' row to item '${recordID}'`);
+        this.pendingExtensionAttachments.add(extension);
+        LogStatus(`WorkingRecordCommitter: attached the missing '${entityName}' row to item '${recordID}'`);
         return extension;
     }
 

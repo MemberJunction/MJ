@@ -109,6 +109,14 @@ describe('the manifest extractor', () => {
         await expect(new ManifestExtractor().Extract(request(MANIFEST, OPTIONS, { Tuning: { MaxArchiveMembers: 2 } }))).rejects.toThrow(/more than the limit of 2/);
         await expect(new ManifestExtractor().Extract(request(MANIFEST, OPTIONS, { Tuning: { MaxArchiveMembers: null } }))).rejects.toThrow(/no row limit/);
     });
+
+    it('throws when the stop signal is aborted instead of returning partial rows', async () => {
+        const controller = new AbortController();
+        controller.abort('shutting down');
+        await expect(new ManifestExtractor().Extract(request(MANIFEST, OPTIONS, { Signal: controller.signal }))).rejects.toThrow(
+            /manifest extraction stopped/,
+        );
+    });
 });
 
 // ─── through Extract ──────────────────────────────────────────────────────────────────────────────────
@@ -213,5 +221,15 @@ describe('Extract expanding a manifest', () => {
 
         expect(record.Children).toHaveLength(0);
         expect(String(record.Get('Text'))).toContain('Annual Report'); // read as plain text, a dataset
+    });
+
+    it('records manifest row fields as listing data so high-confidence titles survive the linked document Extract', async () => {
+        const record = manifestItem();
+        await new ExtractStage().Run(record, contextWith({ ...RUN, Confidence: { DiscoveredTitle: 8 } }));
+        const linked = record.Children[0];
+        expect(linked.GetField('Title')?.SetBy).toBe('Listing.Block');
+        // Simulate hydrating and running Extract on the linked HTML page (ExtractorTitle is 6 < 8).
+        expect(linked.Propose('Title', 'HTML Title', ConfidenceScale.ExtractorTitle, 'Extract')).toBe(false);
+        expect(linked.Get('Title')).toBe('Annual Report');
     });
 });

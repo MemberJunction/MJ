@@ -423,10 +423,11 @@ export class AutotagWebsite extends AutotagBase {
         const page = async (url: string): Promise<CrawlPage | null> => {
             try {
                 if (renderer) {
+                    const sourceOrigin = this.originOf(request.URL);
                     const rendered = await renderer.Render({
                         URL: url,
                         Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
-                        AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : [new URL(request.URL).origin],
+                        AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
                         TimeoutMs: renderTimeoutMs,
                         Signal: request.Signal,
                     });
@@ -481,6 +482,14 @@ export class AutotagWebsite extends AutotagBase {
             Headers: access?.Headers ? { ...access.Headers } : undefined,
             Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
         };
+    }
+
+    private originOf(url: string): string | null {
+        try {
+            return new URL(url).origin;
+        } catch {
+            return null;
+        }
     }
 
     private sessionAppliesToUrl(req: DiscoverRequest, targetUrl: string): boolean {

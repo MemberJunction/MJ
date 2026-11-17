@@ -387,6 +387,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             } catch (e) {
                 result = { Status: 'Failed', ErrorMessage: e instanceof Error ? e.message : String(e) };
             }
+            if (options.Signal?.aborted && result.Status !== 'Succeeded' && result.Status !== 'Skipped') {
+                return; // stopped before settling: not committed, still ready for the next run
+            }
             if (result.DurationMs == null) {
                 result.DurationMs = Date.now() - started;
             }

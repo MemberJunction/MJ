@@ -597,7 +597,9 @@ export class ExtractStage extends BasePipelineStage {
         }
         for (const field of block.Fields ?? []) {
             if (field.Value != null) {
-                child.Propose(field.Field, field.Value, field.Confidence, `${EXTRACT_STAGE}.Block`);
+                // Listing metadata competes on confidence against the child's own later Extract pass, so its
+                // stage prefix must stay distinct from Extract.
+                child.Propose(field.Field, field.Value, field.Confidence, 'Listing.Block');
             }
         }
         if (block.FileType) {

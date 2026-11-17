@@ -22,6 +22,7 @@ import {
     DiscoveredField,
     ExtractRequest,
     ExtractResult,
+    TransientStageError,
 } from '@memberjunction/content-pipeline-base';
 
 /** The registered key. */
@@ -80,7 +81,7 @@ export class ManifestExtractor extends BaseContentExtractor {
         const blocks: ContentBlock[] = [];
         for (const [index, row] of rows.entries()) {
             if (request.Signal.aborted) {
-                break;
+                throw new TransientStageError('manifest extraction stopped before finishing all rows');
             }
             const link = this.resolveLink(at(row, options.LinkColumn), request.URL);
             const text = at(row, options.TextColumn);

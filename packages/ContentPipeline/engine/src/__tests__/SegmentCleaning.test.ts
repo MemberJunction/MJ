@@ -75,14 +75,20 @@ function chunkText(record: WorkingRecord): string {
 }
 
 /** A source (and its content type) with these columns and Configuration. */
-function stubSource(source: { CleanerKey?: string | null; ContentTypeCleanerKey?: string | null; Configuration?: Record<string, unknown>; TypeConfiguration?: Record<string, unknown> }) {
+function stubSource(source: {
+    CleanerKey?: string | null;
+    ContentTypeCleanerKey?: string | null;
+    ContentTypeConfiguration?: Record<string, unknown>;
+    Configuration?: Record<string, unknown>;
+    TypeConfiguration?: Record<string, unknown>;
+}) {
     const engine = KnowledgeHubMetadataEngine.Instance;
     vi.spyOn(engine, 'Config').mockResolvedValue(undefined as never);
     vi.spyOn(engine, 'ContentSources', 'get').mockReturnValue([
         { ID: 'S1', ContentTypeID: 'T1', SegmenterKey: null, CleanerKey: source.CleanerKey ?? null },
     ] as never);
     vi.spyOn(engine, 'ContentTypes', 'get').mockReturnValue([
-        { ID: 'T1', SegmenterKey: null, CleanerKey: source.ContentTypeCleanerKey ?? null },
+        { ID: 'T1', SegmenterKey: null, CleanerKey: source.ContentTypeCleanerKey ?? null, ConfigurationObject: source.ContentTypeConfiguration ?? null },
     ] as never);
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         Settings: {},
@@ -200,6 +206,26 @@ describe('which cleaner runs', () => {
         await new SegmentStage().Run(record, context());
 
         expect(chunkText(record)).toBe('cleaned by source');
+    });
+
+    it("layers CleaningOptions from ContentType.ConfigurationObject under source and run", async () => {
+        stubSource({
+            ContentTypeCleanerKey: 'MarkerCleaner',
+            ContentTypeConfiguration: { CleaningOptions: { Label: 'by content type' } },
+        });
+        const record = item('x', null, 'S1');
+
+        await new SegmentStage().Run(record, context());
+        expect(chunkText(record)).toBe('cleaned by content type');
+
+        const overridden = item('x', null, 'S1');
+        stubSource({
+            ContentTypeCleanerKey: 'MarkerCleaner',
+            ContentTypeConfiguration: { CleaningOptions: { Label: 'by content type' } },
+            Configuration: { CleaningOptions: { Label: 'by source' } },
+        });
+        await new SegmentStage().Run(overridden, context());
+        expect(chunkText(overridden)).toBe('cleaned by source');
     });
 
     it('falls back to the plain-text cleaner for a key nothing registered, and records the one that ran', async () => {

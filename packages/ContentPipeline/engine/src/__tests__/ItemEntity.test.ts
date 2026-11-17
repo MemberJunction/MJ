@@ -241,7 +241,7 @@ describe('saving an item', () => {
         expect(log.at(-1)).toMatch(new RegExp(`^insert ${EXTENSION}: .*Audience`));
     });
 
-    it('adds the extension row to an existing item that has none, then commits to it', async () => {
+    it('adds the extension row to an existing item that has none, and saves it in one call with its extension columns', async () => {
         const { provider, log } = providerOver(coreRow(), null);
         const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
         record.SetExtension('Pipeline', 'itemEntity', EXTENSION);
@@ -252,12 +252,11 @@ describe('saving an item', () => {
         expect(log).toEqual([
             `load ${EXTENSION}`,
             `attach ${EXTENSION} to I1`,
-            `insert ${EXTENSION}: `,
-            expect.stringMatching(new RegExp(`^update ${EXTENSION}: .*Audience.*TaggingStatus`)),
+            expect.stringMatching(new RegExp(`^insert ${EXTENSION}: .*Audience.*TaggingStatus`)),
         ]);
     });
 
-    it('accepts Columns that name an extension field, and still refuses a framework-owned one', async () => {
+    it('accepts Columns that name an extension field, and still refuses framework-owned ones including RetryCount/RetryAfter/DiscoverState', async () => {
         const { provider } = providerOver(coreRow(), { ...coreRow(), Audience: null });
         const committer = new WorkingRecordCommitter(provider as never, {} as never);
         const record = (columns: Row) => {
@@ -268,9 +267,11 @@ describe('saving an item', () => {
         };
 
         await expect(committer.Commit(record({ Audience: 'Members' }), 'TaggingStatus', 'Complete')).resolves.toBeTruthy();
-        await expect(committer.Commit(record({ EmbeddingStatus: 'Complete' }), 'TaggingStatus', 'Complete')).rejects.toThrow(
-            `Column 'EmbeddingStatus' on ${EXTENSION} is owned by the pipeline framework`,
-        );
+        for (const owned of ['EmbeddingStatus', 'RetryCount', 'RetryAfter', 'DiscoverState']) {
+            await expect(committer.Commit(record({ [owned]: 'x' }), 'TaggingStatus', 'Complete')).rejects.toThrow(
+                `Column '${owned}' on ${EXTENSION} is owned by the pipeline framework`,
+            );
+        }
         await expect(committer.Commit(record({ Nope: 1 }), 'TaggingStatus', 'Complete')).rejects.toThrow(`Column 'Nope' does not exist on ${EXTENSION}`);
     });
 

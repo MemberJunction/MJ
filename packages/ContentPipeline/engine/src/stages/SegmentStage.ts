@@ -207,9 +207,11 @@ export class SegmentStage extends BasePipelineStage {
             nonEmpty(resolvedConfig?.Configuration.CleanerKey) ??
             nonEmpty(resolvedConfig?.Settings.CleanerKey);
         const typeCleanerKey = nonEmpty(contentType?.CleanerKey) ?? nonEmpty(resolvedConfig?.TypeConfiguration.CleanerKey);
+        const contentTypeConfig = readTypeConfiguration(contentType);
         return {
             CleanerKey: runCleanerKey ?? sourceCleanerKey ?? typeCleanerKey,
             CleaningOptions: {
+                ...(contentTypeConfig.CleaningOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.TypeConfiguration.CleaningOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.Configuration.CleaningOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.Settings.CleaningOptions as Record<string, unknown> | undefined),
@@ -218,6 +220,7 @@ export class SegmentStage extends BasePipelineStage {
             SegmenterKey: itemOverride ?? runKey ?? sourceKey ?? typeKey ?? null,
             Confidence: ResolveConfidence(resolvedConfig?.Confidence, context.Configuration),
             Options: {
+                ...(contentTypeConfig.SegmentationOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.TypeConfiguration.SegmentationOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.Configuration.SegmentationOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.Settings.SegmentationOptions as Record<string, unknown> | undefined),
@@ -230,4 +233,17 @@ export class SegmentStage extends BasePipelineStage {
 /** A trimmed non-empty string, or `null`. */
 function nonEmpty(value: unknown): string | null {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+/** Content Type configuration JSON, or `{}` when unset or malformed. */
+function readTypeConfiguration(contentType: { ConfigurationObject?: unknown } | undefined): Record<string, unknown> {
+    if (!contentType) {
+        return {};
+    }
+    try {
+        const obj = contentType.ConfigurationObject;
+        return obj && typeof obj === 'object' && !Array.isArray(obj) ? (obj as Record<string, unknown>) : {};
+    } catch {
+        return {};
+    }
 }

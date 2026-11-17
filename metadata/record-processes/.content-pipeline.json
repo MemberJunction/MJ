@@ -200,7 +200,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')) AND (SegmentationStatus = 'Complete') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL) AND ID IN (SELECT ContentItemID FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL) AND ID NOT IN (SELECT ContentItemID FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL AND (EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')))",
+      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')) AND (SegmentationStatus = 'Complete') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL) AND ID IN (SELECT [ContentItemID] FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL) AND ID NOT IN (SELECT [ContentItemID] FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL AND (EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')))",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,

@@ -133,7 +133,7 @@ export class ItemEmbeddingRollup {
     /** A fresh read (never the cache: the rows were just written), or `null` after logging a failure. */
     private async query<T>(entityName: string, extraFilter: string, fields: string[]): Promise<T[] | null> {
         const result = await RunView.FromMetadataProvider(this.provider).RunView<T>(
-            { EntityName: entityName, ExtraFilter: extraFilter, Fields: fields, ResultType: 'simple', BypassCache: true },
+            { EntityName: entityName, ExtraFilter: extraFilter, Fields: fields, ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
             this.contextUser,
         );
         if (!result.Success) {

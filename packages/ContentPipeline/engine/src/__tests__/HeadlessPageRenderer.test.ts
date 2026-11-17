@@ -99,4 +99,12 @@ describe('the headless renderer', () => {
             new HeadlessPageRenderer().Render({ URL: `${siteURL}/page`, AccessOrigins: [], Signal: new AbortController().signal }),
         ).rejects.toThrow(/private or reserved/);
     });
+
+    it('refuses immediately when Signal is already aborted', async () => {
+        const controller = new AbortController();
+        controller.abort('cancelled');
+        await expect(
+            new LocalPageRenderer().Render({ URL: `${siteURL}/page`, AccessOrigins: [], Signal: controller.signal }),
+        ).rejects.toThrow(/aborted/);
+    });
 });

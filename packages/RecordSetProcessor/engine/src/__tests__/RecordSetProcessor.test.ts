@@ -535,4 +535,24 @@ describe('RecordSetProcessor.Process — the caller stop signal', () => {
         expect(result.Status).toBe('Paused');
         expect(result.Processed).toBeLessThan(10);
     });
+
+    it('does not count an aborted in-flight non-batch record as an Error', async () => {
+        const controller = new AbortController();
+        const processor = new FunctionRecordProcessor((r) => {
+            if (r.RecordID === 'r0') {
+                controller.abort('lease lost');
+                return { Status: 'Failed', ErrorMessage: 'stopped mid-record' };
+            }
+            return ok();
+        });
+        const tracker = new SpyTracker();
+        const result = await engine.Process({
+            Source: new ArraySource(recs(3), 'E'), Processor: processor, Tracker: tracker,
+            ContextUser: USER, Provider: PROVIDER, BatchSize: 3, Signal: controller.signal,
+        });
+        expect(result.Status).toBe('Paused');
+        expect(result.Error).toBe(0);
+        expect(result.Processed).toBe(0);
+        expect(tracker.details).toHaveLength(0);
+    });
 });
