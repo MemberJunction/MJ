@@ -7,7 +7,8 @@
  * - Saved Views are queried via `RunView.FromMetadataProvider(provider)` AS `user` (avoiding the
  *   process-wide `UserViewEngine.Instance` singleton's mutable `_contextUserId`) and filtered by
  *   `v.UserCanView`.
- * - Saved Queries require `q.UserCanRun(user)` and expose only non-server-set parameters.
+ * - Saved Queries come from `QueryEngine`, require `q.UserCanRun(user).canRun` (query roles plus read
+ *   access to the entities the query reads), and expose only non-server-set parameters.
  *
  * @module @memberjunction/excel-addin-server
  */
@@ -15,15 +16,19 @@ import {
     ApplicationInfo,
     EntityInfo,
     IMetadataProvider,
-    QueryCategoryInfo,
-    QueryInfo,
-    QueryParameterInfo,
     RunView,
     RunViewParams,
     RunViewResult,
     UserInfo,
 } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import {
+    MJQueryCategoryEntity,
+    MJQueryEntityExtended,
+    MJQueryParameterEntity,
+    MJUserViewEntityExtended,
+    QueryEngine,
+    ResourcePermissionEngine,
+} from '@memberjunction/core-entities';
 import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     ExcelAddinCatalogOutput,
@@ -47,13 +52,15 @@ export interface ExcelViewRunner {
  * Builds the signed-in user's permission-filtered catalog of applications, entities, query categories,
  * and saved queries.
  */
-export function BuildExcelCatalog(provider: IMetadataProvider, user: UserInfo): ExcelAddinCatalogOutput {
+export async function BuildExcelCatalog(provider: IMetadataProvider, user: UserInfo): Promise<ExcelAddinCatalogOutput> {
     const entities = buildReadableEntities(provider.Entities ?? [], user);
     const canonicalEntityIdByLower = new Map<string, string>(entities.map(e => [e.ID.toLowerCase(), e.ID]));
     const applications = buildApplications(provider.Applications ?? [], canonicalEntityIdByLower);
+    const queryEngine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await queryEngine.Config(false, user, provider);
     const { Categories: queryCategories, Queries: queries } = buildQueriesAndCategories(
-        provider.Queries ?? [],
-        provider.QueryCategories ?? [],
+        queryEngine.Queries ?? [],
+        queryEngine.QueryCategories ?? [],
         user,
     );
     return {
@@ -182,11 +189,11 @@ function buildApplications(
 }
 
 function buildQueriesAndCategories(
-    allQueries: QueryInfo[],
-    allCategories: QueryCategoryInfo[],
+    allQueries: MJQueryEntityExtended[],
+    allCategories: MJQueryCategoryEntity[],
     user: UserInfo,
 ): { Categories: ExcelCatalogQueryCategory[]; Queries: ExcelCatalogQuery[] } {
-    const categoryById = new Map<string, QueryCategoryInfo>();
+    const categoryById = new Map<string, MJQueryCategoryEntity>();
     for (const cat of allCategories) {
         if (cat.ID) {
             categoryById.set(cat.ID.toLowerCase(), cat);
@@ -233,11 +240,11 @@ function buildQueriesAndCategories(
     };
 
     const queries: ExcelCatalogQuery[] = allQueries
-        .filter(q => q.Status !== 'Rejected' && q.Status !== 'Expired' && q.UserCanRun(user))
+        .filter(q => q.Status !== 'Rejected' && q.Status !== 'Expired' && q.UserCanRun(user).canRun)
         .map(q => {
             markCategoryAncestors(q.CategoryID);
             const categoryPath = computePath(q.CategoryID);
-            const callerParams = (q.Parameters ?? [])
+            const callerParams = (q.QueryParameters ?? [])
                 .filter(p => !p.IsServerSet)
                 .map(mapQueryParameter);
             return {
@@ -267,7 +274,7 @@ function buildQueriesAndCategories(
     return { Categories: categories, Queries: queries };
 }
 
-function mapQueryParameter(param: QueryParameterInfo): ExcelCatalogQueryParameter {
+function mapQueryParameter(param: MJQueryParameterEntity): ExcelCatalogQueryParameter {
     return {
         Name: param.Name,
         Type: normalizeParameterType(param.Type),
@@ -278,7 +285,7 @@ function mapQueryParameter(param: QueryParameterInfo): ExcelCatalogQueryParamete
     };
 }
 
-function normalizeParameterType(rawType: QueryParameterInfo['Type']): ExcelQueryParameterType {
+function normalizeParameterType(rawType: MJQueryParameterEntity['Type']): ExcelQueryParameterType {
     switch (rawType) {
         case 'number':
         case 'date':
