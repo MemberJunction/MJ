@@ -1,11 +1,13 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { DataSnapshot, RunView } from '@memberjunction/core';
 import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
+import { OpenHtmlInSandboxedWindow, PrintHtmlInSandboxedIframe } from '../../utils/html-sandbox.util';
 
 /**
  * Viewer component for JSON artifacts.
@@ -22,23 +24,23 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
         @if (displayHtml && displayMarkdown) {
           <div class="display-mode-toggle">
             <button class="btn-icon" [class.active]="ActiveDisplayMode === 'html'" (click)="SetDisplayMode('html')">
-              <i class="fas fa-desktop"></i> Interactive Mockup
+              <i class="fa-solid fa-desktop"></i> Interactive Mockup
             </button>
             <button class="btn-icon" [class.active]="ActiveDisplayMode === 'markdown'" (click)="SetDisplayMode('markdown')">
-              <i class="fas fa-file-alt"></i> Plan &amp; Architecture
+              <i class="fa-solid fa-file-lines"></i> Plan &amp; Architecture
             </button>
           </div>
         }
         <div class="display-toolbar-actions">
           <button class="btn-icon" title="Copy Content" (click)="onCopy()">
-            <i class="fas fa-copy"></i> Copy
+            <i class="fa-solid fa-copy"></i> Copy
           </button>
           @if (displayHtml && (!displayMarkdown || ActiveDisplayMode === 'html')) {
             <button class="btn-icon" title="Open in New Window" (click)="openInNewWindow()">
-              <i class="fas fa-external-link-alt"></i> New Window
+              <i class="fa-solid fa-up-right-from-square"></i> New Window
             </button>
             <button class="btn-icon" title="Print" (click)="printHtml()">
-              <i class="fas fa-print"></i> Print
+              <i class="fa-solid fa-print"></i> Print
             </button>
           }
         </div>
@@ -46,16 +48,16 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
 
       <!-- Display content: priority order = displayHtml > displayMarkdown > JSON editor -->
       <div class="display-content">
-        @if (displayHtml && htmlBlobUrl && (!displayMarkdown || ActiveDisplayMode === 'html')) {
-          <!-- Sandboxed iframe for rich HTML using blob URL.
-               SECURITY: never add allow-same-origin here — a blob: URL inherits the app origin,
-               so allow-same-origin + allow-scripts on LLM-produced HTML is in-origin XSS
-               (script in the artifact could read the app's storage/cookies and DOM).
-               Same pattern as whiteboard-srcdoc.pipe.ts. -->
+        @if (displayHtml && SafeDisplayHtml && (!displayMarkdown || ActiveDisplayMode === 'html')) {
+          <!-- Opaque-origin sandboxed iframe for interactive HTML mockups via [srcdoc].
+               SECURITY: never use a host-origin Blob URL and never add allow-same-origin,
+               allow-popups, or allow-popups-to-escape-sandbox. With sandbox="allow-scripts"
+               on [srcdoc], the frame executes in an opaque null origin with no access to host
+               cookies, storage, or DOM. -->
           <iframe
             #htmlFrame
-            [src]="htmlBlobUrl"
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
+            [srcdoc]="SafeDisplayHtml"
+            sandbox="allow-scripts"
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>
@@ -169,7 +171,7 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'JsonArtifactViewerPlugin')
-export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
+export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
   @ViewChild('htmlFrame') HtmlFrame?: ElementRef<HTMLIFrameElement>;
 
   /** @deprecated Use {@link HtmlFrame}. */
@@ -201,7 +203,19 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public set displayMarkdown(value: string | null) {
     this.DisplayMarkdown = value;
   }
-  public DisplayHtml: string | null = null;
+  private _displayHtml: string | null = null;
+  public SafeDisplayHtml: SafeHtml | null = null;
+
+  public get DisplayHtml(): string | null {
+    return this._displayHtml;
+  }
+  public set DisplayHtml(value: string | null) {
+    if (value === this._displayHtml && (value === null || this.SafeDisplayHtml !== null)) {
+      return;
+    }
+    this._displayHtml = value;
+    this.SafeDisplayHtml = value ? this.sanitizer.bypassSecurityTrustHtml(value) : null;
+  }
 
   /** @deprecated Use {@link DisplayHtml}. */
   public get displayHtml(): string | null {
@@ -211,16 +225,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public set displayHtml(value: string | null) {
     this.DisplayHtml = value;
   }
-  public HtmlBlobUrl: SafeResourceUrl | null = null;
 
-  /** @deprecated Use {@link HtmlBlobUrl}. */
-  public get htmlBlobUrl(): SafeResourceUrl | null {
-    return this.HtmlBlobUrl;
-  }
-  /** @deprecated Use {@link HtmlBlobUrl}. */
-  public set htmlBlobUrl(value: SafeResourceUrl | null) {
-    this.HtmlBlobUrl = value;
-  }
   public ActiveDisplayMode: 'html' | 'markdown' = 'html';
 
   public SetDisplayMode(mode: 'html' | 'markdown'): void {
@@ -229,7 +234,6 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   private versionAttributes: MJArtifactVersionAttributeEntity[] = [];
-  private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
   /**
    * JSON artifacts always have content to display (JSON editor, displayHtml, or displayMarkdown)
@@ -243,15 +247,6 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     private sanitizer: DomSanitizer
   ) {
     super();
-  }
-
-  ngOnDestroy(): void {
-    // Clean up blob URL to prevent memory leaks
-    if (this.unsafeBlobUrl) {
-      URL.revokeObjectURL(this.unsafeBlobUrl);
-      this.unsafeBlobUrl = null;
-      this.HtmlBlobUrl = null;
-    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -293,7 +288,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
-        ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
+        ExtraFilter: `ArtifactVersionID='${EscapeSQLString(this.artifactVersion.ID)}'`,
         ResultType: 'entity_object'
       });
 
@@ -321,14 +316,6 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Clean up double-escaped characters in HTML (from LLM generation)
         if (this.DisplayHtml) {
           this.DisplayHtml = this.cleanEscapedCharacters(this.DisplayHtml);
-        }
-
-        // Create blob URL for HTML to avoid srcdoc sanitization issues
-        if (this.DisplayHtml) {
-          const blob = new Blob([this.DisplayHtml], { type: 'text/html' });
-          this.unsafeBlobUrl = URL.createObjectURL(blob);
-          // Sanitize the blob URL so Angular trusts it in the iframe
-          this.HtmlBlobUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.unsafeBlobUrl);
         }
 
         // Note: Markdown rendering is now handled by <mj-markdown> component in template
@@ -474,11 +461,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   OpenInNewWindow(): void {
     if (this.DisplayHtml) {
-      const newWindow = window.open('', '_blank');
-      if (newWindow) {
-        newWindow.document.write(this.DisplayHtml);
-        newWindow.document.close();
-      }
+      OpenHtmlInSandboxedWindow(this.DisplayHtml, this.getDisplayTitle() || 'Artifact Preview');
     }
   }
 
@@ -488,20 +471,8 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   PrintHtml(): void {
-    if (this.HtmlFrame) {
-      try {
-        const iframe = this.HtmlFrame.nativeElement;
-        const iframeWindow = iframe.contentWindow;
-        if (iframeWindow) {
-          iframeWindow.focus();
-          iframeWindow.print();
-        }
-      } catch {
-        // The sandboxed frame is cross-origin, so scripting into it can throw a
-        // SecurityError in some browsers. Fall back to printing the host page,
-        // which includes the rendered iframe content.
-        window.print();
-      }
+    if (this.DisplayHtml) {
+      PrintHtmlInSandboxedIframe(this.DisplayHtml, { Title: this.getDisplayTitle() || 'Print' });
     }
   }
 

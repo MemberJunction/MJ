@@ -6,7 +6,7 @@ import {
 } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { AuthorizationError } from 'type-graphql';
-import { EntityInfo, EntityFieldInfo, DatasetItemResultType, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, DatasetItemResultType, ProjectRowsToFields, UserInfo } from '@memberjunction/core';
 import sql from 'mssql';
 import {
   ApplyBuiltInDirectivesTransformer,
@@ -278,6 +278,45 @@ describe('Wave 4.7 Wire, Schema Diet & Directives Optimizations', () => {
       const binResult = resolver.testProcessRawData([binaryRow], 'ent-2', binaryEntity);
       const parsed = JSON.parse(binResult[0].Data) as Record<string, string>;
       expect(parsed.Data).toBe('AQIDBA==');
+    });
+
+    it('preserves FrozenRowSerializationCache hits for full-coverage and narrow-Fields projections on frozen cached rows', () => {
+      const resolver = new TestRunViewResolver() as TestRunViewResolver & {
+        testProcessRawDataWithFields(
+          rawData: Record<string, unknown>[],
+          entityId: string,
+          entityInfo: EntityInfo,
+          fields?: string[] | null,
+        ): ReturnType<TestRunViewResolver['testProcessRawData']>;
+      };
+      const callProcess = (rows: Record<string, unknown>[], entityId: string, entityInfo: EntityInfo, fields?: string[] | null) =>
+        (resolver as unknown as {
+          processRawData(rawData: Record<string, unknown>[], entityId: string, entityInfo: EntityInfo, fields?: string[] | null): ReturnType<TestRunViewResolver['testProcessRawData']>;
+        }).processRawData(rows, entityId, entityInfo, fields);
+
+      const frozenCacheRows = Object.freeze([
+        Object.freeze({ ID: 'row-1', Name: 'Frozen Item', Extra: 'WideColumn' }),
+      ]) as unknown as Record<string, unknown>[];
+
+      // 1. Full-coverage Fields with PreserveFrozen: true keeps the exact frozen row reference
+      const fullProjected = ProjectRowsToFields(frozenCacheRows, ['Extra', 'Name', 'ID'], { PreserveFrozen: true });
+      expect(fullProjected).toBe(frozenCacheRows);
+      const fullFirst = callProcess(fullProjected, 'ent-fields', nonBinaryEntity, ['Extra', 'Name', 'ID']);
+      const fullSecond = callProcess(fullProjected, 'ent-fields', nonBinaryEntity, ['id', ' name ', 'extra']);
+      expect(fullSecond[0]).toBe(fullFirst[0]);
+      expect(FrozenRowSerializationCache.get(frozenCacheRows[0])?.get('ent-fields|extra,id,name')).toBe(fullFirst[0]);
+
+      // 2. Subset Fields with PreserveFrozen: true memoizes a frozen projected row and hits FrozenRowSerializationCache
+      const subsetFirstRows = ProjectRowsToFields(frozenCacheRows, ['ID', 'Name'], { PreserveFrozen: true });
+      const subsetSecondRows = ProjectRowsToFields(frozenCacheRows, [' name ', 'id'], { PreserveFrozen: true });
+      expect(Object.isFrozen(subsetFirstRows[0])).toBe(true);
+      expect(subsetSecondRows[0]).toBe(subsetFirstRows[0]);
+
+      const subFirst = callProcess(subsetFirstRows, 'ent-fields', nonBinaryEntity, ['ID', 'Name']);
+      const subSecond = callProcess(subsetSecondRows, 'ent-fields', nonBinaryEntity, [' name ', 'id']);
+      expect(subSecond[0]).toBe(subFirst[0]);
+      expect(JSON.parse(subFirst[0].Data)).toEqual({ ID: 'row-1', Name: 'Frozen Item' });
+      expect(FrozenRowSerializationCache.get(subsetFirstRows[0])?.get('ent-fields|id,name')).toBe(subFirst[0]);
     });
   });
 

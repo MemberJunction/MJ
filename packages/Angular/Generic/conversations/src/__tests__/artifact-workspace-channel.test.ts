@@ -3,16 +3,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionEngine, type ResolvedArtifactPermissions } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { BaseRealtimeChannelClient, type RealtimeChannelEvent } from '@memberjunction/realtime-runtime';
 import {
   ArtifactWorkspaceChannel,
   LoadRealtimeArtifactWorkspaceChannel,
 } from '../lib/components/realtime/artifact-workspace/artifact-workspace-channel';
 import { ArtifactWorkspaceEngine } from '../lib/components/realtime/artifact-workspace/artifact-workspace-engine';
+import { RealtimeArtifactWorkspaceSurfaceComponent } from '../lib/components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 import {
   ARTIFACT_WORKSPACE_CHANNEL_KEY,
   ARTIFACT_WORKSPACE_CLIENT_PLUGIN_CLASS,
   IsCollaborativeArtifactDescriptor,
+  type ArtifactNavigateToAnchorPayload,
 } from '../lib/components/realtime/artifact-workspace/artifact-workspace-types';
 import {
   InteractiveComponentChannel,
@@ -661,7 +663,7 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
           CanShare: false,
           CanDelete: false,
           Source: artifactId === docId || artifactId === compId ? 'ArtifactPermission' : 'Denied',
-          Reason: 'test permission double',
+          Reason: 'Test mock resolution',
         }));
 
       const fakeUser = { ID: 'u-name', Name: 'Name Lookup User' } as UserInfo;
@@ -719,6 +721,183 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
         channel.Dispose();
         permSpy.mockRestore();
       }
+    });
+  });
+
+  describe('NW-6 client selection delta, navigate_to_anchor, set_view_mode, version_changed, and LIKE escaping', () => {
+    it('emits selection_changed on EmitSelectionDelta and handles navigate_to_anchor + set_view_mode + version_changed', async () => {
+      const log: ChannelLog & { Events?: Array<{ event: string; payload: RealtimeChannelEvent['Payload'] }> } = {
+        Notes: [],
+        Events: [],
+      };
+      const nw6ArtId = 'dddddddd-1111-4111-8111-111111111111';
+      const nw6VerId1 = 'eeeeeeee-1111-4111-8111-111111111111';
+      const nw6VerId2 = 'ffffffff-2222-4222-8222-222222222222';
+      const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+        ArtifactID: nw6ArtId,
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: false,
+        CanShare: false,
+        Source: 'Owner',
+        Reason: 'test fixture',
+      });
+      const fakeUser = { ID: 'u-nw6', Name: 'NW6 User' } as UserInfo;
+      const runViewMock = vi.fn(async (params: RunViewParams) => {
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: nw6VerId1,
+                ArtifactID: nw6ArtId,
+                VersionNumber: 1,
+                Name: 'Board Forecast',
+              },
+            ],
+            TotalRowCount: 1,
+          };
+        }
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [{ ID: nw6ArtId, Name: 'Board Forecast', Type: 'Excel Spreadsheet' }],
+            TotalRowCount: 1,
+          };
+        }
+        return { Success: true, Results: [], TotalRowCount: 0 };
+      });
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: typeof runViewMock } = {
+        CurrentUser: fakeUser,
+        RunView: runViewMock,
+      };
+      const baseCtx = MakeContext(log);
+      const emittedEvents: Array<{ name: string; payload: RealtimeChannelEvent['Payload'] }> = [];
+      const ctx = {
+        ...baseCtx,
+        Provider: fakeProvider as IMetadataProvider,
+      };
+
+      const channel = new ArtifactWorkspaceChannel();
+      const sub = channel.Events$.subscribe((ev) => {
+        emittedEvents.push({ name: ev.Name, payload: ev.Payload });
+      });
+      try {
+        await channel.Initialize(ctx);
+
+        const opened = await channel.Open({
+          artifactId: nw6ArtId,
+          artifactVersionId: nw6VerId1,
+          versionNumber: 1,
+          name: 'Board Forecast',
+          artifactTypeName: 'Excel Spreadsheet',
+        });
+        expect(opened.Success).toBe(true);
+        const instanceId = channel.Engine.Instances[0].InstanceID;
+
+        // 1. NW-6 bound surface ReportSelectionAnchor -> OnUserSelectionChanged -> EmitSelectionDelta -> selection_changed
+        const surface = Object.create(
+          RealtimeArtifactWorkspaceSurfaceComponent.prototype,
+        ) as RealtimeArtifactWorkspaceSurfaceComponent;
+        Object.assign(surface as object, {
+          cdr: { markForCheck: vi.fn() },
+        });
+        channel.BindSurface(surface);
+
+        const navPayloads: ArtifactNavigateToAnchorPayload[] = [];
+        const navSub = channel.Engine.NavigateAnchor$.subscribe((p) => navPayloads.push(p));
+
+        surface.ReportSelectionAnchor(instanceId, {
+          domain: 'spreadsheet',
+          sheet: 'Q4',
+          range: 'B2:D12',
+        });
+        expect(emittedEvents.some((e) => e.name === 'selection_changed')).toBe(true);
+        expect(channel.Engine.Get(instanceId)?.Selection).toMatchObject({
+          domain: 'spreadsheet',
+          sheet: 'Q4',
+          range: 'B2:D12',
+        });
+
+        // 2. navigate_to_anchor tool sets active instance, updates anchor, emits NavigateAnchor$ & navigated_to_anchor
+        const navResult = await channel.ApplyVerb(
+          'navigate_to_anchor',
+          { sheet: 'Revenue', range: 'A1:C5', highlightMs: 1500 },
+          'agent',
+          instanceId,
+        );
+        expect(navResult.Success).toBe(true);
+        expect(emittedEvents.some((e) => e.name === 'navigated_to_anchor')).toBe(true);
+        expect(navPayloads).toEqual([
+          expect.objectContaining({
+            InstanceID: instanceId,
+            ArtifactID: nw6ArtId,
+            Sheet: 'Revenue',
+            Range: 'A1:C5',
+            HighlightMs: 1500,
+          }),
+        ]);
+        navSub.unsubscribe();
+
+        // 3. set_view_mode validates mode and emits view_mode_changed
+        const badMode = await channel.ApplyVerb(
+          'set_view_mode',
+          { mode: 'bogus' },
+          'agent',
+          instanceId,
+        );
+        expect(badMode.Success).toBe(false);
+
+        const goodMode = await channel.ApplyVerb(
+          'set_view_mode',
+          { mode: 'suggest' },
+          'agent',
+          instanceId,
+        );
+        expect(goodMode.Success).toBe(true);
+        expect(channel.Engine.Get(instanceId)?.ViewMode).toBe('suggest');
+        expect(emittedEvents.some((e) => e.name === 'view_mode_changed')).toBe(true);
+
+        // 4. version_changed standardized event key when user saves from bound surface
+        surface.OnViewerVersionSaved(instanceId, {
+          ArtifactID: nw6ArtId,
+          VersionID: nw6VerId2,
+          VersionNumber: 2,
+          UpdatedAt: new Date(),
+        });
+        expect(emittedEvents.some((e) => e.name === 'version_changed')).toBe(true);
+      } finally {
+        sub.unsubscribe();
+        channel.Dispose();
+        permSpy.mockRestore();
+      }
+    });
+
+    it('escapes SQL LIKE wildcards (%, _, [) when looking up artifact by name', async () => {
+      const capturedFilters: string[] = [];
+      const fakeUser = { ID: 'u-like', Name: 'Tester' } as UserInfo;
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: ReturnType<typeof vi.fn> } = {
+        CurrentUser: fakeUser,
+        RunView: vi.fn(async (params: RunViewParams) => {
+          if (params.EntityName === 'MJ: Artifacts') {
+            capturedFilters.push(String(params.ExtraFilter ?? ''));
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }),
+      };
+
+      const channel = new ArtifactWorkspaceChannel();
+      await channel.Initialize({
+        ...MakeContext({ Notes: [] }),
+        Provider: fakeProvider as IMetadataProvider,
+      });
+
+      await channel.Open({ name: '100%_Q4[Plan]' });
+      channel.Dispose();
+
+      expect(capturedFilters).toHaveLength(2);
+      expect(capturedFilters[1]).toContain('100\\%\\_Q4\\[Plan]');
+      expect(capturedFilters[1]).toContain("Visibility <> 'System Only'");
     });
   });
 });

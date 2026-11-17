@@ -311,7 +311,7 @@ The overlay is generic — it raises events for navigation and tool execution. T
 
 ### Collections, Unified Library Workspace & Stateless Connected Drives
 
-`<mj-library-workspace>` powers MemberJunction's top-level **`Library`** application (`LibraryResource`, pinned beside `Chat` in the global header bar) and any embedded collection/artifact browser (`ChatCollectionsResource`):
+`<mj-library-workspace>` powers MemberJunction's top-level **`Library`** application (`LibraryResource`, pinned beside `Chat` in the global header bar) and the **`Library`** nav tab inside `Chat` (`ChatCollectionsResource`, with `MOVED_NAV_ITEMS` redirecting legacy `Chat -> Collections` links):
 
 ```html
 <mj-library-workspace
@@ -324,12 +324,12 @@ The overlay is generic — it raises events for navigation and tool execution. T
 ```
 
 - **3 Progressive Workspace Modes**:
-  1. **`hub`** *(default landing)*: *Create New* quick-launch cards (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), *Continue Working* recents, *Collections* overview cards, and *Connected Cloud Drives* tiles.
-  2. **`navigator`** *(Power Navigator)*: Split-pane hierarchy with nested `MJ: Collections` + Connected Cloud Drives on the left, faceted `MJFilterPanelComponent` search & list/grid toggle in the center, and slide-over preview inspector on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
-  3. **`studio`** *(Full-Canvas Studio)*: Distraction-free collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation, **Save to Collection**, **Export to Connected Drive** (`<mj-library-export-drive-dialog>`), **Share**, and **Compare Versions**.
+  1. **`hub`** *(default landing)*: *Create New* quick-launch cards (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), **Multi-Artifact Synthesis** (`Artifact.SynthesizeFromSources`), *Continue Working* recents, *Collections* overview cards, and *Connected Cloud Drives* tiles.
+  2. **`navigator`** *(Power Navigator)*: Split-pane hierarchy with nested `MJ: Collections` (supporting hierarchical `ParentID` ACL inheritance & `'Defer'`) + Connected Cloud Drives on the left, faceted `MJFilterPanelComponent` search & list/grid toggle in the center, and slide-over preview inspector on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
+  3. **`studio`** *(Full-Canvas Studio)*: Distraction-free collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation, **Save to Collection**, **Export to Connected Drive** (`<mj-library-export-drive-dialog>`), **Linked Drive Push/Pull/ETag Sync** (`ConnectedDriveSyncRequested`), **Share** (`<mj-artifact-share-modal>` with internal ACL & Guest Share links), and **Compare Versions**.
 - **Stateless Connected Cloud Drives (`<mj-library-remote-drive-pane>`) — Zero `MJ: Files` Invariant**:
   - Dynamically browses, searches (`GraphQLFileStorageClient.SearchFiles`), previews, uploads (`CreatePreAuthUploadUrl`), creates folders, moves, copies, renames, and deletes files across external `MJStorage` accounts (Google Drive, SharePoint/OneDrive, Dropbox, Box, S3, Azure Blob) **without creating `MJ: Files` database rows**.
-  - Supports one-click **Import to MJ Library** (converting remote `.md`, `.docx`, `.xlsx`, and `.csv` files into governed, versioned `MJ: Artifacts` records) and **Export to Drive** (`.docx`/`.md`, `.xlsx`/`.csv`, `.pptx`).
+  - Supports one-click **Import to MJ Library** (converting remote `.md`, `.docx`, `.xlsx`, and `.csv` files into governed, versioned `MJ: Artifacts` records), **Export to Drive** (`.docx`/`.md`, `.xlsx`/`.csv`, `.pptx`), and bidirectional **Push/Pull ETag-checked Sync** for linked artifacts.
 
 ```html
 <!-- Standalone collection tree or legacy library subviews -->
@@ -497,15 +497,18 @@ Folder sharing controls which conversations are listed, not who can read them. C
 | `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
 | `RealtimeComposerComponent` | `mj-realtime-composer` | The bottom dock: phone-call strip (levels 0–1: mute / captions / Details peek / End) ⇄ fused minis + typed composer (level 2+) |
 | `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: channel tabs first, glowing unfocused artifact tabs, Activity pinned last (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
+| `RealtimeArtifactWorkspaceSurfaceComponent` | `mj-realtime-artifact-workspace-surface` | Side-by-side multi-tab collaborative viewer/editor for Docs, Slides, Sheets, and Whiteboards powered by `ArtifactWorkspaceChannel` (`navigate_to_anchor`, `set_view_mode`, `EmitSelectionDelta`) |
+| `RealtimeInteractiveComponentSurfaceComponent` | `mj-realtime-interactive-component-surface` | Multi-tab live React/Angular `Component` host powered by `InteractiveComponentChannel` |
 | `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board & inline MS OLE artifact viewer (`WhiteboardArtifactViewerPlugin`, `SupportsInlineEdit = true`); renders `<mj-whiteboard-snapshot>` in read-only mode and interactive `<mj-realtime-whiteboard-host>` in inline edit mode |
 
-> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
+> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab. For full channel documentation, see [`src/lib/components/realtime/README.md`](./src/lib/components/realtime/README.md).
 
 ### Utility Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
-| `ShareModalComponent` | `mj-share-modal` | Resource sharing modal |
+| `ShareModalComponent` | `mj-share-modal` | Generic conversation/collection sharing modal |
+| `ArtifactShareModalComponent` | `mj-artifact-share-modal` | Artifact ACL sharing modal + **Guest Share Link** creation/revocation (Magic Link `/guest/artifact`, `artifact:share` scope, Frozen-only invariant) |
 | `MembersModalComponent` | `mj-members-modal` | Members management |
 | `ExportModalComponent` | `mj-export-modal` | Data export modal |
 | `SearchPanelComponent` | `mj-search-panel` | Search across conversations |
@@ -621,10 +624,12 @@ Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, in
 
 ### Peer Dependencies
 
+- `@angular/animations` ^21.x
+- `@angular/cdk` ^21.x
 - `@angular/common` ^21.x
 - `@angular/core` ^21.x
 - `@angular/forms` ^21.x
-- `@angular/router` ^21.x
+- `@angular/platform-browser` ^21.x
 
 ## Build
 

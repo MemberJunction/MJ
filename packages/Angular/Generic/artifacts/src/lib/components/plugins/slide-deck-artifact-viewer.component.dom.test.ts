@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import { type IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { type CompositeKey, type IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJArtifactVersionEntity,
   SlideDeckEngine,
@@ -12,6 +12,8 @@ import {
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { SlideDeckArtifactViewerComponent } from './slide-deck-artifact-viewer.component';
+import { DocumentCollaborationService } from '../../services/document-collaboration.service';
+import { type NavigationRequest } from '../base-artifact-viewer.component';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
 import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
@@ -26,8 +28,11 @@ class SlidePluginViewerStubComponent {
   @Input() artifactVersion: MJArtifactVersionEntity | null = null;
   @Input() artifactTypeName = '';
   @Input() ArtifactTypeName = '';
+  @Input() AncestorArtifactIDs: ReadonlySet<string> | null = null;
   @Input() readonly = true;
   @Output() ContentCommitted = new EventEmitter<string>();
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 }
 
 afterEach(() => {
@@ -708,5 +713,253 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     expect(sheetBtns.length).toBe(2);
     expect(sheetBtns[0].classList.contains('primary')).toBe(true);
     expect(sheetBtns[1].textContent?.trim()).toBe('Cancel');
+  });
+
+  it('renders 4:3 stage aspect-ratio, real SVG chart bars, sanitized image/table regions, and empty CSS placeholders without fake defaults', () => {
+    const customDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Visual Fidelity Deck', 'deck-dom-vis');
+    customDeck.AspectRatio = '4:3';
+    customDeck.Slides[0].Title = '';
+    customDeck.Slides[0].Subtitle = '';
+    customDeck.Slides[0].Regions = [
+      {
+        RegionID: 'reg-chart-1',
+        Label: 'Quarterly Chart',
+        Kind: 'mj-block',
+        MarkdownContent: '',
+        BlockSpec: {
+          BlockID: 'blk-svg-chart',
+          Kind: 'EntityView',
+          Mode: 'Frozen',
+          Title: 'Revenue Bar Chart',
+          EntityName: 'MJ: Artifacts',
+          DisplayMode: 'chart',
+          ChartType: 'bar',
+          FrozenSnapshot: {
+            Columns: [
+              { Name: 'Quarter', DisplayName: 'Quarter', Type: 'nvarchar' },
+              { Name: 'ARR', DisplayName: 'ARR', Type: 'decimal' },
+            ],
+            Rows: [
+              { Quarter: 'Q1', ARR: 120 },
+              { Quarter: 'Q2', ARR: 185 },
+            ],
+            TotalRowCount: 2,
+            FrozenAt: '2026-11-15T10:00:00.000Z',
+            FrozenByUserID: 'u-1',
+            FrozenByUserName: 'Alice',
+            SecurityWarningAcknowledged: true,
+          },
+        },
+      },
+      {
+        RegionID: 'reg-img-1',
+        Label: 'Safe Image',
+        Kind: 'image',
+        MarkdownContent: '',
+        ImageUrl: 'https://cdn.example.com/diagram.png',
+        ImageAlt: 'Architecture Diagram',
+      },
+      {
+        RegionID: 'reg-tbl-1',
+        Label: 'Pipe Table',
+        Kind: 'table',
+        MarkdownContent: '| Item | Status |\n|---|---|\n| Auth | Complete |',
+      },
+    ];
+
+    const f = makeDeckFixture({ readonly: false, customDeck });
+    const stage = query(f, '.mj-slide-canvas-stage') as HTMLElement | null;
+    expect(stage?.getAttribute('data-aspect-ratio')).toBe('4:3');
+    expect(stage?.style.aspectRatio).toBe('4 / 3');
+
+    // CSS data-placeholder instead of literal fake default text when Title is blank
+    f.componentInstance.ActiveSlide.Title = '';
+    f.debugElement.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    const titleEl = query(f, '[data-testid="editable-slide-title"]') as HTMLElement | null;
+    expect(titleEl?.textContent?.trim()).toBe('');
+    expect(titleEl?.getAttribute('data-placeholder')).toBe('Slide Title');
+
+    // Real SVG chart rendered on stage
+    const chartSvg = query(f, '[data-testid="slide-block-chart-reg-chart-1"] svg.mj-slide-chart-svg');
+    expect(chartSvg).not.toBeNull();
+    expect(chartSvg?.querySelectorAll('rect').length).toBe(2);
+
+    // Sanitized image and markdown pipe table rendered
+    const imgEl = query(f, '[data-testid="slide-image-region-reg-img-1"] img') as HTMLImageElement | null;
+    expect(imgEl?.getAttribute('src')).toBe('https://cdn.example.com/diagram.png');
+    const mdTbl = query(f, '[data-testid="slide-markdown-table-reg-tbl-1"] table');
+    expect(mdTbl?.textContent).toContain('Auth');
+  });
+
+  it('renders NW-1 Drift banner & compare popover and NW-3 filter, reply box, and suggestion Accept/Reject cards in DOM', () => {
+    const f = makeDeckFixture({ readonly: false });
+    const slideId = f.componentInstance.ActiveSlide.SlideID;
+    const regionId = f.componentInstance.ActiveSlide.Regions[0].RegionID;
+    const cdr = f.debugElement.injector.get(ChangeDetectorRef);
+
+    // NW-1 Drift banner + popover
+    f.componentInstance.ActiveSlideDriftSummaries = [
+      {
+        RegionID: regionId,
+        BlockID: 'blk-drift-1',
+        BlockTitle: 'Pipeline Telemetry',
+        FrozenAt: '2026-11-15T10:00:00.000Z',
+        FrozenByUserName: 'Alice',
+        SignatureVerified: true,
+        FrozenRowCount: 4,
+        LiveRowCount: 5,
+        HasDrift: true,
+        AddedRowCount: 1,
+        RemovedRowCount: 0,
+        ChangedRowCount: 1,
+      },
+    ];
+    f.componentInstance.ShowDriftComparePopover = true;
+
+    // Reset conflict banner
+    f.componentInstance.HasPendingResetConflict = true;
+
+    // NW-3 Comments + Suggestions drawer
+    f.componentInstance.RightDrawerTab = 'comments';
+    f.componentInstance.AnchoredThreads = [
+      {
+        ConversationID: 'conv-dom-1',
+        AnchorKey: `${slideId}::${regionId}`,
+        AnchorLabel: `Slide 1 · Main`,
+        QuotedText: '',
+        Status: 'Open',
+        AgentMode: 'edit',
+        CreatedAt: '2026-11-15T10:00:00.000Z',
+        Messages: [
+          {
+            DetailID: 'm-1',
+            UserName: 'Alice',
+            Role: 'User',
+            Message: 'Please tighten the executive hook.',
+            CreatedAt: '2026-11-15T10:00:00.000Z',
+            Mentions: [],
+          },
+        ],
+      },
+    ];
+    f.componentInstance.SharedSuggestions = [
+      {
+        SuggestionID: 'sug-dom-1',
+        SlideID: slideId,
+        Field: 'slide-title',
+        AuthorID: 'agent-1',
+        AuthorName: 'DeckAgent',
+        OriginalText: f.componentInstance.ActiveSlide.Title,
+        SuggestedText: 'Board Strategy Q4',
+        Status: 'Pending',
+        CreatedAt: '2026-11-15T10:05:00.000Z',
+      },
+    ];
+
+    cdr.markForCheck();
+    f.detectChanges();
+
+    expect(query(f, '[data-testid="slides-nw1-drift-banner"]')).not.toBeNull();
+    expect(query(f, '[data-testid="slides-nw1-drift-popover"]')?.textContent).toContain('+1 added');
+    expect(query(f, '[data-testid="slides-nw1-hmac-verified"]')?.textContent).toContain('Signed by Alice');
+    expect(query(f, '[data-testid="slides-room-reset-conflict-banner"]')).not.toBeNull();
+    expect(query(f, '[data-testid="slides-comment-filter-slide-btn"]')).not.toBeNull();
+    expect(query(f, '[data-testid="reply-input-slide-thread-conv-dom-1"]')).not.toBeNull();
+
+    // Accept suggestion button updates active slide title
+    const acceptBtn = query(f, '[data-testid="slides-accept-suggestion-sug-dom-1"]') as HTMLButtonElement | null;
+    expect(acceptBtn).not.toBeNull();
+    acceptBtn?.click();
+    f.detectChanges();
+    expect(f.componentInstance.ActiveSlide.Title).toBe('Board Strategy Q4');
+  });
+
+  it('isolates GuestSnapshotMode in Slides (P0-P3-4): skips Yjs connect & server permission/snapshot RPCs', async () => {
+    const hasBackendSpy = vi.spyOn(DocumentCollaborationService.prototype, 'HasCollaborationBackend').mockReturnValue(true);
+    const verifyServerSpy = vi.spyOn(DocumentCollaborationService.prototype, 'VerifyFrozenSnapshotOnServer');
+    const resolvePermSpy = vi.spyOn(DocumentCollaborationService.prototype, 'ResolvePermissionsFromServer');
+    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }));
+    const fakeProvider = {
+      CurrentUser: new UserInfo(undefined, { ID: 'u-guest-1', Name: 'Signed In Visitor' }),
+      RunView: runViewSpy,
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
+      imports: [
+        FormsModule,
+        SlidePluginViewerStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
+      declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
+      providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
+      inputs: {
+        Provider: fakeProvider,
+        GuestSnapshotMode: true,
+        artifactVersion: makeSlideVersion(makeThreeSlideDeck(), 'art-slide-guest-1'),
+        readonly: false,
+      },
+    });
+    await f.whenStable();
+    f.detectChanges();
+
+    expect(f.componentInstance.AccessRevoked).toBe(false);
+    expect(f.componentInstance.ConnectionStatus).toBe('local');
+    expect(f.componentInstance.ResolvedPermissions).toBeNull();
+    expect((f.nativeElement as HTMLElement).textContent ?? '').not.toContain('Access Revoked');
+    expect(hasBackendSpy).not.toHaveBeenCalled();
+    expect(verifyServerSpy).not.toHaveBeenCalled();
+    expect(resolvePermSpy).not.toHaveBeenCalled();
+    expect(runViewSpy).not.toHaveBeenCalled();
+  });
+
+  it('re-applies pre-init ViewMode/NavigationAnchor on deck init (NW-6) and replaces only OriginalText slice (NW-3)', () => {
+    const deck = makeThreeSlideDeck();
+    const slide2 = deck.Slides[1];
+    const bodyRegion = slide2.Regions.find((r) => r.Label.toLowerCase().includes('body')) ?? slide2.Regions[0];
+    bodyRegion.MarkdownContent = 'Keep bullet A\nbullet B\nKeep bullet C';
+
+    const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
+      imports: [
+        FormsModule,
+        SlidePluginViewerStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
+      declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
+      providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
+      inputs: {
+        ViewMode: 'diff',
+        NavigationAnchor: { SlideNumber: 2 },
+        artifactVersion: makeSlideVersion(deck, ''),
+        readonly: false,
+      },
+    });
+    f.detectChanges();
+
+    expect(f.componentInstance.WorkspaceMode).toBe('diff');
+    expect(f.componentInstance.ActiveSlideIndex).toBe(1);
+
+    // NW-3: SlideNumber fallback + slice-only replacement when OriginalText is present in MarkdownContent
+    f.componentInstance.SharedSuggestions = [
+      {
+        SuggestionID: 'sug-slice-2',
+        SlideID: '',
+        SlideNumber: 2,
+        RegionID: bodyRegion.RegionID,
+        Field: 'region-markdown',
+        AuthorID: 'agent-1',
+        AuthorName: 'DeckAgent',
+        OriginalText: 'bullet B',
+        SuggestedText: 'bullet B revised',
+        Status: 'Pending',
+        CreatedAt: '2026-11-15T10:05:00.000Z',
+      },
+    ];
+    f.componentInstance.AcceptSlideSuggestion(f.componentInstance.SharedSuggestions[0]);
+    expect(f.componentInstance.ActiveSlide.Regions.find((r) => r.RegionID === bodyRegion.RegionID)?.MarkdownContent).toBe(
+      'Keep bullet A\nbullet B revised\nKeep bullet C',
+    );
   });
 });

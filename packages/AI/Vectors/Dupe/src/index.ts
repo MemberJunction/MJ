@@ -23,7 +23,7 @@ export {
 export { PromptReasoningProvider } from './reasoning/PromptReasoningProvider';
 export {
     DecisionReasoningProvider,
-    DUPLICATE_DECISION_CALIBRATION,
+    DUPLICATE_DECISION_CALIBRATION_KEY,
     DuplicateDecisionCalibrationFor,
     CalibratedDuplicateProbability,
 } from './reasoning/DecisionReasoningProvider';

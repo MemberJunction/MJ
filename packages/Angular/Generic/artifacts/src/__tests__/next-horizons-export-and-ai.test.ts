@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import '@angular/compiler';
 import { inflateRawSync } from 'node:zlib';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -6,10 +7,15 @@ import {
   DocumentLiveBlockEngine,
   SlideDeckEngine,
   SpreadsheetEngine,
+  type DocumentBlockExecutionResult,
   type DocumentBlockSpec,
   type SlideDeckSpec,
 } from '@memberjunction/core-entities';
 import { DocumentImportExportService } from '../lib/services/document-import-export.service';
+import {
+  BuildSandboxedHtmlDocument,
+  SanitizeHtmlForSandboxedFrame,
+} from '../lib/utils/html-sandbox.util';
 import { SlideDeckExportService } from '../lib/services/slide-deck-export.service';
 import { DocumentCollaborationService } from '../lib/services/document-collaboration.service';
 import { SpreadsheetArtifactViewerComponent } from '../lib/components/plugins/spreadsheet-artifact-viewer.component';
@@ -141,15 +147,16 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
     expect(docXml).toContain('Executive Brief');
   });
 
-  it('embeds native PNG <p:pic> media and relationships in .pptx for Chart and Whiteboard slide blocks (§3.4)', () => {
+  it('emits native DrawingML charts (<c:chartSpace>) for Chart blocks and PNG <p:pic> media for Whiteboard blocks (§3.4, NW-4)', () => {
     const baseDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Visual Review', 'deck-png-1');
     const chartBlock: DocumentBlockSpec = {
       BlockID: 'slide-blk-chart',
-      Kind: 'Artifact',
-      Mode: 'Frozen',
+      Kind: 'EntityView',
+      Mode: 'Live',
       Title: 'Revenue Growth Chart',
-      ArtifactID: 'sheet-art-1',
-      ArtifactType: 'Excel Spreadsheet',
+      EntityName: 'MJ: Artifacts',
+      DisplayMode: 'chart',
+      ChartType: 'bar',
       SheetChartID: 'chart-1',
     };
     const whiteboardBlock: DocumentBlockSpec = {
@@ -187,27 +194,54 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
       ],
     };
 
-    const fakeUser = { ID: 'u-exporter', Name: 'Exporter User', Email: 'exp@test.local' } as unknown as UserInfo;
-    const pkg = slideExportService.ExportToPptxPackage(deck, new Map(), fakeUser);
+    const fakeUser = { ID: 'u-exporter', Name: 'Exporter User', Email: 'exp@test.local' } as Partial<UserInfo> as UserInfo;
+    const resultsMap = new Map<string, DocumentBlockExecutionResult>([
+      [
+        'slide-blk-chart',
+        {
+          Success: true,
+          BlockID: 'slide-blk-chart',
+          Kind: 'EntityView',
+          Mode: 'Live',
+          Columns: [
+            { Name: 'Quarter', DisplayName: 'Quarter', Type: 'nvarchar' },
+            { Name: 'Revenue', DisplayName: 'Revenue', Type: 'decimal' },
+          ],
+          Rows: [
+            { Quarter: 'Q1', Revenue: 120 },
+            { Quarter: 'Q2', Revenue: 185 },
+          ],
+          TotalRowCount: 2,
+        },
+      ],
+    ]);
+    const pkg = slideExportService.ExportToPptxPackage(deck, resultsMap, fakeUser);
     const textEntries = slideExportService.InspectPptxArchiveEntries(pkg.Bytes);
     const binEntries = slideExportService.InspectPptxArchiveBinaryEntries(pkg.Bytes);
 
+    // Chart block emits native DrawingML ppt/charts/chart1.xml instead of a PNG bitmap
+    const chartXml = textEntries.get('ppt/charts/chart1.xml') ?? '';
+    expect(chartXml).toContain('<c:chartSpace');
+    expect(chartXml).toContain('Revenue');
+
+    // Whiteboard block continues to emit PNG <p:pic> media
     const pngNames = Array.from(binEntries.keys()).filter(
-      (k) => k.startsWith('ppt/media/') && k.endsWith('.png'),
+      (k) => pStartsWithMedia(k),
     );
-    expect(pngNames).toContain('ppt/media/image1.png');
-    expect(pngNames).toContain('ppt/media/image2.png');
+    function pStartsWithMedia(k: string): boolean {
+      return k.startsWith('ppt/media/') && k.endsWith('.png');
+    }
+    expect(pngNames).toEqual(['ppt/media/image1.png']);
     expect(hasPngSignature(binEntries.get('ppt/media/image1.png'))).toBe(true);
-    expect(hasPngSignature(binEntries.get('ppt/media/image2.png'))).toBe(true);
 
     const slide1Xml = textEntries.get('ppt/slides/slide1.xml') ?? '';
+    expect(slide1Xml).toContain('http://schemas.openxmlformats.org/drawingml/2006/chart');
     expect(slide1Xml).toContain('<p:pic>');
-    expect(slide1Xml).toContain('r:embed="rIdImg1"');
-    expect(slide1Xml).toContain('r:embed="rIdImg2"');
+    expect(slide1Xml).toContain('r:embed="rIdImg1_1"');
 
     const slide1Rels = textEntries.get('ppt/slides/_rels/slide1.xml.rels') ?? '';
+    expect(slide1Rels).toContain('../charts/chart1.xml');
     expect(slide1Rels).toContain('../media/image1.png');
-    expect(slide1Rels).toContain('../media/image2.png');
 
     const contentTypes = textEntries.get('[Content_Types].xml') ?? '';
     expect(contentTypes).toContain('Extension="png"');
@@ -313,5 +347,172 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
 
     comp.RemoveRangeChart(chart);
     expect(sheet.Charts).toHaveLength(0);
+  });
+
+  it('P0-19: strips XSS/mXSS vectors from printable HTML and builds a sandbox="allow-modals" document without allow-same-origin or document.write', () => {
+    const dirtyHtml = [
+      '<h1>Quarterly Summary</h1>',
+      '<script>alert("xss")</script>',
+      '<link rel="stylesheet" href="https://evil.test/steal.css">',
+      '<form action="https://evil.test/phish"><input name="tok"></form>',
+      '<img src="https://example.org/ok.png" onerror="alert(1)">',
+      '<a href="javascript:alert(2)">bad link</a>',
+      '<a href="data:application/xhtml+xml,<html/>">bad data</a>',
+      '<img src="data:image/svg+xml,<svg onload=alert(3)/>">',
+      '<iframe src="https://evil.test/frame"></iframe>',
+    ].join('\n');
+
+    const sanitizedBody = SanitizeHtmlForSandboxedFrame('<h1>Quarterly Summary</h1><script>alert("xss")</script>');
+    const docHtml = BuildSandboxedHtmlDocument({
+      Title: 'Title <script>alert(1)</script>',
+      BodyHtml: sanitizedBody,
+    });
+    expect(docHtml).not.toContain('<script');
+    expect(docHtml).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(docHtml).toContain('Content-Security-Policy');
+    expect(docHtml).toContain('Quarterly Summary');
+
+    // Verify sandboxed iframe print path & ExportPrintablePdf DOM/regex fragment sanitizer
+    const originalDoc = Reflect.get(globalThis, 'document') as Document | undefined;
+    const appended: Array<{ tagName: string; attrs: Record<string, string>; srcdoc?: string }> = [];
+    let printCalled = false;
+    const printMock = (): void => {
+      printCalled = true;
+    };
+    try {
+      const loadListeners: Array<() => void> = [];
+      const mockFrame = {
+        attrs: {} as Record<string, string>,
+        style: {} as Record<string, string>,
+        srcdoc: '',
+        setAttribute(k: string, v: string): void {
+          this.attrs[k] = v;
+        },
+        addEventListener(eventName: string, listener: () => void): void {
+          if (eventName === 'load') {
+            loadListeners.push(listener);
+          }
+        },
+        remove(): void {},
+        contentWindow: {
+          addEventListener: (): void => {},
+          focus: (): void => {},
+          print: printMock,
+        },
+      };
+      Reflect.set(globalThis, 'document', {
+        createElement: (tag: string) => {
+          if (tag === 'iframe') {
+            return mockFrame;
+          }
+          return {
+            innerHTML: dirtyHtml,
+            content: {
+              querySelectorAll: () => [],
+              childNodes: [],
+            },
+          };
+        },
+        body: {
+          appendChild: (el: { attrs: Record<string, string>; srcdoc?: string }) => {
+            appended.push({ tagName: 'iframe', attrs: el.attrs, srcdoc: el.srcdoc });
+            for (const listener of loadListeners) {
+              listener();
+            }
+            return el;
+          },
+        },
+      });
+      const svc = new DocumentImportExportService();
+      svc.ExportPrintablePdf(dirtyHtml, 'Printable <script>bad</script> Report', 'landscape');
+      expect(appended).toHaveLength(1);
+      expect(printCalled).toBe(false);
+      expect(appended[0].attrs['sandbox']).toBe('allow-modals allow-scripts');
+      expect(appended[0].attrs['sandbox']).not.toContain('allow-same-origin');
+      const srcdoc = appended[0].srcdoc ?? '';
+      expect(srcdoc).toContain('@page { size: A4 landscape;');
+      expect(srcdoc).toContain("script-src 'nonce-");
+      expect(srcdoc).toContain("connect-src 'none'");
+      expect(srcdoc).toContain('window.print()');
+      expect(srcdoc).toContain("type: 'mj-print-done'");
+      expect(srcdoc).not.toContain('<script>bad</script>');
+      expect(srcdoc).not.toContain('<script>alert(1)');
+      expect(srcdoc).not.toContain('<link');
+      expect(srcdoc).not.toContain('<form');
+      expect(srcdoc).not.toContain('<iframe');
+      expect(srcdoc).not.toContain('onerror');
+      expect(srcdoc).not.toContain('javascript:');
+      expect(srcdoc).not.toContain('data:application/xhtml+xml');
+      expect(srcdoc).not.toContain('data:image/svg+xml');
+    } finally {
+      Reflect.set(globalThis, 'document', originalDoc);
+    }
+  });
+
+  it('DOCX export normalizes CRLF, preserves escaped table pipes, renders LiveBlockResults, and flags unverified frozen snapshots without attribution', async () => {
+    const svc = new DocumentImportExportService();
+    const liveBlock: DocumentBlockSpec = {
+      BlockID: 'blk-live-export',
+      Kind: 'EntityView',
+      Mode: 'Live',
+      Title: 'Live Accounts',
+      EntityName: 'Accounts',
+    };
+    const tamperedFrozenBlock: DocumentBlockSpec = {
+      BlockID: 'blk-tampered-export',
+      Kind: 'SavedQuery',
+      Mode: 'Frozen',
+      Title: 'Forged Snapshot',
+      QueryName: 'ARR Query',
+      FrozenSnapshot: {
+        FrozenAt: '2026-11-01T00:00:00Z',
+        FrozenByUserID: 'attacker-id',
+        FrozenByUserName: 'Spoofed Exec',
+        Columns: [{ Name: 'Metric', DisplayName: 'Metric', Type: 'string' }],
+        Rows: [{ Metric: 'ARR $10M' }],
+        TotalRowCount: 1,
+        SecurityWarningAcknowledged: false,
+      },
+    };
+
+    const md = [
+      '# CRLF Heading\r\n',
+      'Check ~~old price~~ and [Docs](https://memberjunction.org).\r\n',
+      '1. First ordered item\r\n2. Second ordered item\r\n',
+      '---\r\n',
+      '| Metric | Formula |\r\n| --- | --- |\r\n| Net | A \\| B |\r\n',
+      DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(liveBlock).replace(/\n/g, '\r\n'),
+      '\r\n',
+      DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(tamperedFrozenBlock).replace(/\n/g, '\r\n'),
+    ].join('\r\n');
+
+    const liveResults = new Map([
+      [
+        'blk-live-export',
+        {
+          BlockID: 'blk-live-export',
+          Kind: 'EntityView' as const,
+          Mode: 'Live' as const,
+          Success: true,
+          Columns: [{ Name: 'Account', DisplayName: 'Account', Type: 'string' }],
+          Rows: [{ Account: 'Acme Corp' }],
+          TotalRowCount: 1,
+        },
+      ],
+    ]);
+
+    const bytes = await svc.ConvertMarkdownToDocxBytes(md, 'CRLF Audit', {
+      LiveBlockResults: liveResults,
+      VerifyFrozenSnapshot: (b) => b.BlockID !== 'blk-tampered-export',
+    });
+    const entries = parseZipArchiveEntries(bytes);
+    const docXml = Buffer.from(entries.get('word/document.xml') ?? new Uint8Array()).toString('utf8');
+
+    expect(docXml).toContain('CRLF Heading');
+    expect(docXml).toContain('old price');
+    expect(docXml).toContain('A | B');
+    expect(docXml).toContain('Acme Corp');
+    expect(docXml).toContain('Unverified Snapshot (signature missing or invalid)');
+    expect(docXml).not.toContain('Spoofed Exec');
   });
 });

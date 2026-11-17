@@ -11,6 +11,7 @@ import {
   ArtifactPermissionEngine,
   MJArtifactEntity,
   MJArtifactVersionEntity,
+  MJEnvironmentEntityExtended,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { ChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
@@ -25,10 +26,15 @@ import {
   ARTIFACT_WORKSPACE_CHANNEL_KEY,
   ARTIFACT_WORKSPACE_CLIENT_PLUGIN_CLASS,
   DEFAULT_ARTIFACT_WORKSPACE_CONFIG,
+  IsCollaborativeArtifactDescriptor,
   IsComponentArtifactDescriptor,
+  type ArtifactSelectionAnchor,
+  type ArtifactSelectionDelta,
+  type ArtifactSelectionDomain,
   type ArtifactWorkspaceConfig,
   type ArtifactWorkspaceOpenPayload,
   type ArtifactWorkspaceRecord,
+  type ArtifactWorkspaceViewMode,
 } from './artifact-workspace-types';
 import { RealtimeArtifactWorkspaceSurfaceComponent } from './realtime-artifact-workspace-surface.component';
 
@@ -75,11 +81,58 @@ function parseArtifactWorkspaceConfig(raw?: JSONObject): ArtifactWorkspaceConfig
  * Strictly partitioned from `InteractiveComponent`, which owns React/Angular `Component`
  * artifacts and their derived spec methods.
  */
+function anchorToJson(anchor: ArtifactSelectionAnchor): JSONObject {
+  const out: JSONObject = { domain: anchor.domain };
+  if (anchor.heading !== undefined) out['heading'] = anchor.heading;
+  if (anchor.blockId !== undefined) out['blockId'] = anchor.blockId;
+  if (anchor.quote !== undefined) out['quote'] = anchor.quote;
+  if (anchor.sheet !== undefined) out['sheet'] = anchor.sheet;
+  if (anchor.range !== undefined) out['range'] = anchor.range;
+  if (anchor.slideNumber !== undefined) out['slideNumber'] = anchor.slideNumber;
+  if (anchor.slideId !== undefined) out['slideId'] = anchor.slideId;
+  if (anchor.elementId !== undefined) out['elementId'] = anchor.elementId;
+  return out;
+}
+
+function inferSelectionDomain(
+  args: JSONObject,
+  artifactTypeName?: string,
+): ArtifactSelectionDomain {
+  if (readString(args, 'sheet') || readString(args, 'range')) {
+    return 'spreadsheet';
+  }
+  if (readNumber(args, 'slideNumber') !== undefined || readString(args, 'elementId')) {
+    const t = artifactTypeName?.trim().toLowerCase() ?? '';
+    return t.includes('whiteboard') ? 'whiteboard' : 'slides';
+  }
+  const t = artifactTypeName?.trim().toLowerCase() ?? '';
+  if (t.includes('spreadsheet') || t.includes('excel')) return 'spreadsheet';
+  if (t.includes('presentation') || t.includes('slide')) return 'slides';
+  if (t.includes('whiteboard')) return 'whiteboard';
+  return 'document';
+}
+
+const VALID_VIEW_MODES: ReadonlySet<ArtifactWorkspaceViewMode> = new Set([
+  'edit',
+  'suggest',
+  'diff',
+  'present',
+]);
+
+function readViewMode(bag: JSONObject, key: string): ArtifactWorkspaceViewMode | undefined {
+  const raw = readString(bag, key);
+  if (!raw) return undefined;
+  return VALID_VIEW_MODES.has(raw as ArtifactWorkspaceViewMode)
+    ? (raw as ArtifactWorkspaceViewMode)
+    : undefined;
+}
+
 @RegisterClass(BaseRealtimeChannelClient, ARTIFACT_WORKSPACE_CLIENT_PLUGIN_CLASS)
 export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<RealtimeArtifactWorkspaceSurfaceComponent> {
   public readonly Engine = new ArtifactWorkspaceEngine(DEFAULT_ARTIFACT_WORKSPACE_CONFIG.MaxInstances);
   public Config: ArtifactWorkspaceConfig = { ...DEFAULT_ARTIFACT_WORKSPACE_CONFIG };
   private surface: RealtimeArtifactWorkspaceSurfaceComponent | null = null;
+  private pendingRehydration: Promise<void> | null = null;
   private disposed = false;
 
   public get ChannelName(): string {
@@ -169,6 +222,43 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         },
         InvokableBy: 'agent',
       },
+      {
+        Name: 'navigate_to_anchor',
+        Description: 'Scrolls/focuses a specific worksheet range, slide number, heading, or block inside an open workspace artifact.',
+        ParametersSchema: {
+          type: 'object',
+          properties: {
+            artifactId: { type: 'string', description: 'Optional artifact ID; defaults to the active tab.' },
+            sheet: { type: 'string', description: 'Target worksheet tab name.' },
+            range: { type: 'string', description: 'Target A1 cell or range.' },
+            slideNumber: { type: 'number', description: '1-based target slide number.' },
+            elementId: { type: 'string', description: 'Target slide or whiteboard element ID.' },
+            heading: { type: 'string', description: 'Target Markdown heading text.' },
+            blockId: { type: 'string', description: 'Target block or section identifier.' },
+            highlightMs: { type: 'number', description: 'Optional temporary highlight duration in milliseconds.' },
+          },
+          additionalProperties: false,
+        },
+        InvokableBy: 'agent',
+      },
+      {
+        Name: 'set_view_mode',
+        Description: 'Switches the display mode of an open workspace artifact viewer.',
+        ParametersSchema: {
+          type: 'object',
+          properties: {
+            artifactId: { type: 'string', description: 'Optional artifact ID; defaults to the active tab.' },
+            mode: {
+              type: 'string',
+              enum: ['edit', 'suggest', 'diff', 'present'],
+              description: 'Target viewer mode.',
+            },
+          },
+          required: ['mode'],
+          additionalProperties: false,
+        },
+        InvokableBy: 'agent',
+      },
     ];
 
     return {
@@ -212,6 +302,9 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
           Description: 'A newer version of an open workspace artifact is available while SwapToNewerVersions is disabled.',
         },
         { Name: 'refreshed', Description: 'A workspace tab refreshed its rendered artifact.' },
+        { Name: 'selection_changed', Description: 'User moved active cursor, range, or slide selection inside a workspace artifact.' },
+        { Name: 'navigated_to_anchor', Description: 'Workspace viewer focused a requested section, range, or slide.' },
+        { Name: 'view_mode_changed', Description: 'Workspace artifact view mode changed.' },
         { Name: 'closed', Description: 'A workspace artifact tab was closed.' },
       ],
       DisplayPolicy: 'on-demand',
@@ -265,7 +358,10 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     instance.Provider = this.Context?.Provider ?? null;
     instance.CurrentUser = this.Context?.Provider?.CurrentUser ?? null;
     const configuredEnvId = this.Context?.ChannelConfig?.['environmentId'];
-    instance.EnvironmentID = typeof configuredEnvId === 'string' ? configuredEnvId : '';
+    instance.EnvironmentID =
+      typeof configuredEnvId === 'string' && configuredEnvId.trim().length > 0
+        ? configuredEnvId.trim()
+        : MJEnvironmentEntityExtended.DefaultEnvironmentID;
     instance.OnUserSelected = (instanceId: string) => {
       this.EmitChannelEvent('focused', { instanceId, by: 'user' }, undefined, instanceId);
       this.RecordChange({ Author: 'user' });
@@ -275,6 +371,39 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       this.EmitChannelEvent('closed', { instanceId, by: 'user' }, undefined, instanceId);
       this.RecordChange({ Author: 'user' });
     };
+    instance.OnUserVersionSaved = (instanceId: string, event) => {
+      const rec = this.Engine.Get(instanceId);
+      this.EmitChannelEvent(
+        'version_changed',
+        {
+          artifactId: event.ArtifactID,
+          artifactVersionId: event.VersionID ?? rec?.ArtifactVersionID ?? null,
+          versionNumber: event.VersionNumber,
+          by: 'user',
+        },
+        undefined,
+        instanceId,
+      );
+      this.RecordChange({ Author: 'user' });
+    };
+    instance.OnUserSelectionChanged = (delta: ArtifactSelectionDelta) => {
+      this.EmitSelectionDelta(delta);
+    };
+  }
+
+  public EmitSelectionDelta(delta: ArtifactSelectionDelta): void {
+    this.Engine.UpdateSelection(delta.instanceId, delta.anchor);
+    const payload: JSONObject = {
+      instanceId: delta.instanceId,
+      artifactId: delta.artifactId,
+      anchor: anchorToJson(delta.anchor),
+    };
+    if (delta.artifactTypeName) {
+      payload['artifactTypeName'] = delta.artifactTypeName;
+    }
+    this.EmitChannelEvent('selection_changed', payload, undefined, delta.instanceId);
+    this.RecordChange({ Author: 'user' });
+    void this.NotifyVisualChange();
   }
 
   public override UnbindSurface(): void {
@@ -337,45 +466,62 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         this.Engine.SetActive(active.InstanceID);
       }
     }
-    void this.rehydrateRestoredInstances();
+    const provider = this.Context?.Provider;
+    if (provider?.CurrentUser) {
+      this.Engine.SetRehydrating(true);
+    }
+    this.pendingRehydration = this.rehydrateRestoredInstances();
     return true;
+  }
+
+  public WaitForRehydration(): Promise<void> {
+    return this.pendingRehydration ?? Promise.resolve();
   }
 
   private async rehydrateRestoredInstances(): Promise<void> {
     const provider = this.Context?.Provider;
     const user = provider?.CurrentUser;
     if (!provider || !user) {
+      this.Engine.SetRehydrating(false);
+      this.pendingRehydration = null;
       return;
     }
-    const snapshot = [...this.Engine.Instances];
-    for (const record of snapshot) {
-      if (this.disposed) {
-        return;
+    try {
+      const snapshot = [...this.Engine.Instances];
+      for (const record of snapshot) {
+        if (this.disposed) {
+          return;
+        }
+        const resolved = await this.resolveArtifactMetadata({
+          artifactId: record.ArtifactID,
+          artifactVersionId: record.ArtifactVersionID,
+          versionNumber: record.VersionNumber,
+          name: undefined,
+          fallbackName: record.Name,
+          artifactTypeName: record.ArtifactTypeName,
+          driverClass: record.DriverClass,
+        });
+        if (this.disposed) {
+          return;
+        }
+        if ('Success' in resolved) {
+          this.Engine.Remove(record.InstanceID);
+          continue;
+        }
+        this.Engine.UpdateRecordMetadata(record.InstanceID, {
+          ArtifactVersionID: resolved.ArtifactVersionID,
+          VersionNumber: resolved.VersionNumber,
+          Name: resolved.Name,
+          ArtifactTypeName: resolved.ArtifactTypeName,
+          DriverClass: resolved.DriverClass,
+          CanEdit: resolved.CanEdit,
+        });
       }
-      const resolved = await this.resolveArtifactMetadata({
-        artifactId: record.ArtifactID,
-        artifactVersionId: record.ArtifactVersionID,
-        versionNumber: record.VersionNumber,
-        name: undefined,
-        fallbackName: record.Name,
-        artifactTypeName: record.ArtifactTypeName,
-        driverClass: record.DriverClass,
-      });
-      if (this.disposed) {
-        return;
+    } finally {
+      if (!this.disposed) {
+        this.Engine.SetRehydrating(false);
       }
-      if ('Success' in resolved) {
-        this.Engine.Remove(record.InstanceID);
-        continue;
-      }
-      this.Engine.UpdateRecordMetadata(record.InstanceID, {
-        ArtifactVersionID: resolved.ArtifactVersionID,
-        VersionNumber: resolved.VersionNumber,
-        Name: resolved.Name,
-        ArtifactTypeName: resolved.ArtifactTypeName,
-        DriverClass: resolved.DriverClass,
-        CanEdit: resolved.CanEdit,
-      });
+      this.pendingRehydration = null;
     }
   }
 
@@ -390,10 +536,22 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         artifactTypeName: record.ArtifactTypeName ?? null,
         driverClass: record.DriverClass ?? null,
         active: this.Engine.ActiveID === record.InstanceID,
+        viewMode: record.ViewMode ?? 'edit',
+        selection: record.Selection ? anchorToJson(record.Selection) : null,
       };
     }
+    const activeRecord = this.Engine.ActiveID ? this.Engine.Get(this.Engine.ActiveID) : undefined;
+    const activeSelection: JSONObject | null = activeRecord?.Selection
+      ? {
+          instanceId: activeRecord.InstanceID,
+          artifactId: activeRecord.ArtifactID,
+          ...(activeRecord.ArtifactTypeName ? { artifactTypeName: activeRecord.ArtifactTypeName } : {}),
+          anchor: anchorToJson(activeRecord.Selection),
+        }
+      : null;
     return {
       activeInstanceId: this.Engine.ActiveID,
+      activeSelection,
       artifacts,
     };
   }
@@ -476,7 +634,9 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       return false;
     }
     return artifacts.some(
-      (a) => !IsComponentArtifactDescriptor(a.ArtifactTypeName, a.DriverClass),
+      (a) =>
+        !IsComponentArtifactDescriptor(a.ArtifactTypeName, a.DriverClass) &&
+        IsCollaborativeArtifactDescriptor(a.ArtifactTypeName, a.DriverClass),
     );
   }
 
@@ -493,7 +653,10 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       const existing = this.Engine.FindByArtifact(artifact.ArtifactID);
       if (existing) {
         await this.handleDelegatedUpdateForExistingTab(existing, artifact);
-      } else if (this.Config.AutoOpenDelegatedArtifacts) {
+      } else if (
+        this.Config.AutoOpenDelegatedArtifacts &&
+        IsCollaborativeArtifactDescriptor(artifact.ArtifactTypeName, artifact.DriverClass)
+      ) {
         await this.Open({
           artifactId: artifact.ArtifactID,
           artifactVersionId: artifact.ArtifactVersionID,
@@ -619,7 +782,11 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       this.Engine.SwapVersion(record.InstanceID, versionId, versionNumber);
       this.EmitChannelEvent(
         'version_changed',
-        { artifactId: record.ArtifactID, versionId, versionNumber: record.VersionNumber ?? null },
+        {
+          artifactId: record.ArtifactID,
+          artifactVersionId: versionId,
+          versionNumber: record.VersionNumber ?? null,
+        },
         undefined,
         record.InstanceID,
       );
@@ -627,7 +794,11 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       return {
         Success: true,
         Instance: record.InstanceID,
-        Result: { artifactId: record.ArtifactID, versionId, versionNumber: record.VersionNumber ?? null },
+        Result: {
+          artifactId: record.ArtifactID,
+          artifactVersionId: versionId,
+          versionNumber: record.VersionNumber ?? null,
+        },
       };
     }
 
@@ -645,6 +816,73 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         Success: true,
         Instance: record.InstanceID,
         Result: { refreshed: true, artifactId: record.ArtifactID },
+      };
+    }
+
+    if (normalized === 'navigate_to_anchor') {
+      const sheet = readString(args, 'sheet');
+      const range = readString(args, 'range');
+      const slideNumber = readNumber(args, 'slideNumber');
+      const elementId = readString(args, 'elementId');
+      const heading = readString(args, 'heading');
+      const blockId = readString(args, 'blockId');
+      const highlightMs = readNumber(args, 'highlightMs');
+      const anchor: ArtifactSelectionAnchor = {
+        domain: inferSelectionDomain(args, record.ArtifactTypeName),
+        ...(sheet ? { sheet } : {}),
+        ...(range ? { range } : {}),
+        ...(slideNumber !== undefined ? { slideNumber } : {}),
+        ...(elementId ? { elementId } : {}),
+        ...(heading ? { heading } : {}),
+        ...(blockId ? { blockId } : {}),
+      };
+      this.Engine.SetActive(record.InstanceID);
+      this.Engine.UpdateSelection(record.InstanceID, anchor);
+      this.Engine.RequestNavigateToAnchor({
+        InstanceID: record.InstanceID,
+        ArtifactID: record.ArtifactID,
+        ...(sheet ? { Sheet: sheet } : {}),
+        ...(range ? { Range: range } : {}),
+        ...(slideNumber !== undefined ? { SlideNumber: slideNumber } : {}),
+        ...(elementId ? { ElementID: elementId } : {}),
+        ...(heading ? { Heading: heading } : {}),
+        ...(blockId ? { BlockID: blockId } : {}),
+        ...(highlightMs !== undefined ? { HighlightMs: highlightMs } : {}),
+      });
+      this.EmitChannelEvent(
+        'navigated_to_anchor',
+        { artifactId: record.ArtifactID, anchor: anchorToJson(anchor) },
+        undefined,
+        record.InstanceID,
+      );
+      this.RecordChange({ Author: actor });
+      return {
+        Success: true,
+        Instance: record.InstanceID,
+        Result: { artifactId: record.ArtifactID, anchor: anchorToJson(anchor) },
+      };
+    }
+
+    if (normalized === 'set_view_mode') {
+      const mode = readViewMode(args, 'mode');
+      if (!mode) {
+        return failure(
+          'invalid_params',
+          'set_view_mode requires mode to be one of: edit, suggest, diff, present.',
+        );
+      }
+      this.Engine.SetViewMode(record.InstanceID, mode);
+      this.EmitChannelEvent(
+        'view_mode_changed',
+        { artifactId: record.ArtifactID, mode },
+        undefined,
+        record.InstanceID,
+      );
+      this.RecordChange({ Author: actor });
+      return {
+        Success: true,
+        Instance: record.InstanceID,
+        Result: { artifactId: record.ArtifactID, mode },
       };
     }
 
@@ -816,8 +1054,15 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     user: UserInfo,
     name: string,
   ): Promise<{ ArtifactEntity: MJArtifactEntity; CanEdit: boolean } | RealtimeChannelVerbResult> {
-    const escaped = EscapeSQLString(name);
-    const filters = [`Name='${escaped}'`, `Name LIKE '%${escaped}%'`];
+    const escapedExact = EscapeSQLString(name);
+    const escapedLike = EscapeSQLString(name.replace(/([\\_%[])/g, '\\$1'));
+    const configuredEnvId = readString(this.Context?.ChannelConfig ?? {}, 'environmentId');
+    const environmentId = EscapeSQLString(configuredEnvId || MJEnvironmentEntityExtended.DefaultEnvironmentID);
+    const scopeClause = `(Visibility IS NULL OR Visibility <> 'System Only') AND EnvironmentID='${environmentId}'`;
+    const filters = [
+      `Name='${escapedExact}' AND ${scopeClause}`,
+      `Name LIKE '%${escapedLike}%' ESCAPE '\\' AND ${scopeClause}`,
+    ];
     let componentFallback: { ArtifactEntity: MJArtifactEntity; CanEdit: boolean } | null = null;
 
     for (const extraFilter of filters) {

@@ -243,6 +243,32 @@ describe('Hook Integration Tests', () => {
             const calledParams = (spy.mock.calls[0][0] as RunViewParams[])[0];
             expect(calledParams.ExtraFilter).toBe('Injected=1');
         });
+
+        it('should propagate shallow-copied PreRunViewHook params into InternalRunView and PostRunView on server RunView (TrustLocalCacheCompletely)', async () => {
+            vi.spyOn(provider, 'TrustLocalCacheCompletely', 'get').mockReturnValue(true);
+            const internalRunViewSpy = vi.spyOn(provider as never, 'InternalRunView')
+                .mockResolvedValue(makeRunViewResult([{ ID: '1', Secret: 'x' }]));
+
+            let postSawParams: RunViewParams | undefined;
+            const preHook: PreRunViewHook = async (params) => ({
+                ...params,
+                ExtraFilter: 'Scoped=1',
+                Fields: [...(params.Fields ?? []), 'Secret'],
+            });
+            const postHook: PostRunViewHook = (params, result) => {
+                postSawParams = params;
+                return result;
+            };
+            RegisterDataHook('PreRunView', preHook);
+            RegisterDataHook('PostRunView', postHook);
+
+            await provider.RunView({ EntityName: 'Customers', Fields: ['ID'] });
+
+            const internalParams = internalRunViewSpy.mock.calls[0][0] as RunViewParams;
+            expect(internalParams.ExtraFilter).toBe('Scoped=1');
+            expect(internalParams.Fields).toEqual(['ID', 'Secret']);
+            expect(postSawParams).toBe(internalParams);
+        });
     });
 
     // ===================================================================

@@ -1,6 +1,12 @@
 import { ActionEngineBase, ActionParam, type ActionResult } from '@memberjunction/actions-base';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJActionEntity, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import {
+  SanitizeWorksheetName,
+  type MJActionEntity,
+  type MJArtifactEntity,
+  type MJArtifactVersionEntity,
+  type MJCollectionArtifactEntity,
+} from '@memberjunction/core-entities';
 import { EscapeSQLString, SafeJSONParse } from '@memberjunction/global';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
@@ -264,7 +270,7 @@ export function CreateGraphQLGovernedActionExecutor(
   };
 }
 
-async function rollbackCreatedArtifact(
+export async function RollbackCreatedArtifact(
   provider: GraphQLDataProvider,
   contextUser: UserInfo,
   artifactId: string,
@@ -272,6 +278,21 @@ async function rollbackCreatedArtifact(
 ): Promise<boolean> {
   try {
     if (versionId) {
+      const rv = RunView.FromMetadataProvider(provider);
+      const safeVersionId = EscapeSQLString(versionId);
+      const collectionLinks = await rv.RunView<MJCollectionArtifactEntity>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `ArtifactVersionID='${safeVersionId}'`,
+          ResultType: 'entity_object',
+        },
+        contextUser,
+      );
+      if (collectionLinks.Success) {
+        for (const link of collectionLinks.Results) {
+          await link.Delete();
+        }
+      }
       const versionEntity = await provider.GetEntityObject<MJArtifactVersionEntity>(
         'MJ: Artifact Versions',
         contextUser,
@@ -308,7 +329,7 @@ export function CreateLiveSheetHelperForProvider(
   }
   return new LiveSheetClientToolHelper(
     CreateGraphQLGovernedActionExecutor(provider, user),
-    (artifactId, versionId) => rollbackCreatedArtifact(provider, user, artifactId, versionId),
+    (artifactId, versionId) => RollbackCreatedArtifact(provider, user, artifactId, versionId),
   );
 }
 
@@ -355,7 +376,7 @@ export class LiveSheetClientToolHelper {
   public async CreateLiveSheetFromQuery(
     input: CreateLiveSheetFromQueryInput,
   ): Promise<LiveSheetToolResult> {
-    const sheetName = input.SheetName?.trim() || 'Query Data';
+    const sheetName = SanitizeWorksheetName(input.SheetName?.trim() || 'Query Data');
     const title = input.Title?.trim() || `${input.QueryName} — Live Sheet`;
     const tableTitle = input.TableTitle?.trim() || input.QueryName;
 
@@ -386,7 +407,8 @@ export class LiveSheetClientToolHelper {
       return { Success: false, ErrorMessage: 'ArtifactID is required to append a query table.' };
     }
 
-    const targetSheet = input.SheetName?.trim();
+    const rawTargetSheet = input.SheetName?.trim();
+    const targetSheet = rawTargetSheet ? SanitizeWorksheetName(rawTargetSheet) : undefined;
     const operations: Array<{ tool: string; input: LiveSheetJsonObject }> = [];
 
     if (targetSheet) {
@@ -398,6 +420,14 @@ export class LiveSheetClientToolHelper {
           { Name: 'Input', Value: {}, Type: 'Input' },
         ],
       });
+
+      if (!inspected.Success) {
+        return {
+          Success: false,
+          ArtifactID: input.ArtifactID,
+          ErrorMessage: inspected.Message || 'Failed to inspect target spreadsheet worksheets.',
+        };
+      }
 
       const sheetExists = this.hasExistingWorksheet(inspected.OutputParams['InspectionResult'], targetSheet);
       if (!sheetExists) {
@@ -457,7 +487,7 @@ export class LiveSheetClientToolHelper {
       return { Success: false, ErrorMessage: 'EntityName is required.' };
     }
 
-    const sheetName = input.SheetName?.trim() || input.EntityName;
+    const sheetName = SanitizeWorksheetName(input.SheetName?.trim() || input.EntityName);
     const title =
       input.Title?.trim() ||
       (input.ViewName ? `${input.EntityName} — ${input.ViewName}` : `${input.EntityName} — Live Sheet`);
@@ -494,11 +524,13 @@ export class LiveSheetClientToolHelper {
     defaultMutationFailureMessage: string;
     tableInput: LiveSheetJsonObject;
   }): Promise<LiveSheetToolResult> {
-    const existingId = opts.existingArtifactId?.trim();
-    let artifactId = existingId;
-    let createdVersionId: string | undefined;
-    let createdVersionNumber: number | undefined;
-    let createdArtifactName: string | undefined;
+    const normalizedSheetName = SanitizeWorksheetName(opts.sheetName);
+    const tableInputWithSanitizedSheet: LiveSheetJsonObject = {
+      ...opts.tableInput,
+      sheet: normalizedSheetName,
+    };
+    let artifactId = opts.existingArtifactId?.trim();
+    const operations: Array<{ tool: string; input: LiveSheetJsonObject }> = [];
 
     if (!artifactId) {
       const created = await this.executor({
@@ -506,7 +538,12 @@ export class LiveSheetClientToolHelper {
         Params: [
           { Name: 'Title', Value: opts.title, Type: 'Input' },
           { Name: 'ArtifactType', Value: 'Excel Spreadsheet', Type: 'Input' },
-          { Name: 'SheetNames', Value: [opts.sheetName], Type: 'Input' },
+          { Name: 'SheetNames', Value: [normalizedSheetName], Type: 'Input' },
+          {
+            Name: 'InitialOperations',
+            Value: [{ tool: 'upsert_live_table', input: tableInputWithSanitizedSheet }],
+            Type: 'Input',
+          },
           ...(opts.description
             ? [{ Name: 'Description', Value: opts.description, Type: 'Input' as const }]
             : []),
@@ -518,33 +555,76 @@ export class LiveSheetClientToolHelper {
 
       artifactId = readStringOut(created.OutputParams, 'ArtifactID');
       if (!created.Success || !artifactId) {
+        if (!created.Success && artifactId && this.rollbackArtifact) {
+          await this.rollbackArtifact(artifactId, readStringOut(created.OutputParams, 'VersionID'));
+        }
         return {
           Success: false,
           ErrorMessage: created.Message || 'Failed to create governed spreadsheet artifact.',
         };
       }
-      createdVersionId = readStringOut(created.OutputParams, 'VersionID');
-      createdVersionNumber = readNumberOut(created.OutputParams, 'VersionNumber');
-      createdArtifactName = readStringOut(created.OutputParams, 'ArtifactName');
+
+      const metrics = extractMutationMetrics(created.OutputParams);
+      return {
+        Success: true,
+        ArtifactID: artifactId,
+        VersionID: readStringOut(created.OutputParams, 'VersionID'),
+        VersionNumber: readNumberOut(created.OutputParams, 'VersionNumber') ?? 1,
+        ArtifactName: readStringOut(created.OutputParams, 'ArtifactName') ?? opts.title,
+        ArtifactTypeName: 'Excel Spreadsheet',
+        DriverClass: 'SpreadsheetArtifactViewerPlugin',
+        SheetName: normalizedSheetName,
+        BoundingRange: metrics.BoundingRange,
+        RowCount: metrics.RowCount,
+      };
     }
 
-    const mutated = await this.executor({
-      ActionName: '__MutateGovernedArtifact',
+    const inspected = await this.executor({
+      ActionName: '__InspectGovernedArtifact',
       Params: [
         { Name: 'ArtifactID', Value: artifactId, Type: 'Input' },
-        { Name: 'Tool', Value: 'upsert_live_table', Type: 'Input' },
-        { Name: 'Input', Value: opts.tableInput, Type: 'Input' },
+        { Name: 'Tool', Value: 'get_sheets', Type: 'Input' },
+        { Name: 'Input', Value: {}, Type: 'Input' },
       ],
     });
-
-    if (!mutated.Success) {
-      const rolledBack =
-        !existingId && this.rollbackArtifact
-          ? await this.rollbackArtifact(artifactId, createdVersionId)
-          : false;
+    if (!inspected.Success) {
       return {
         Success: false,
-        ...(rolledBack ? {} : { ArtifactID: artifactId }),
+        ArtifactID: artifactId,
+        ErrorMessage: inspected.Message || 'Failed to inspect target spreadsheet worksheets.',
+      };
+    }
+    const sheetExists = this.hasExistingWorksheet(inspected.OutputParams['InspectionResult'], normalizedSheetName);
+    if (!sheetExists) {
+      operations.push({ tool: 'add_sheet', input: { name: normalizedSheetName } });
+    }
+
+    const mutated =
+      operations.length > 0
+        ? await this.executor({
+            ActionName: '__MutateGovernedArtifact',
+            Params: [
+              { Name: 'ArtifactID', Value: artifactId, Type: 'Input' },
+              {
+                Name: 'Operations',
+                Value: [...operations, { tool: 'upsert_live_table', input: tableInputWithSanitizedSheet }],
+                Type: 'Input',
+              },
+            ],
+          })
+        : await this.executor({
+            ActionName: '__MutateGovernedArtifact',
+            Params: [
+              { Name: 'ArtifactID', Value: artifactId, Type: 'Input' },
+              { Name: 'Tool', Value: 'upsert_live_table', Type: 'Input' },
+              { Name: 'Input', Value: tableInputWithSanitizedSheet, Type: 'Input' },
+            ],
+          });
+
+    if (!mutated.Success) {
+      return {
+        Success: false,
+        ArtifactID: artifactId,
         ErrorMessage: mutated.Message || opts.defaultMutationFailureMessage,
       };
     }
@@ -553,12 +633,12 @@ export class LiveSheetClientToolHelper {
     return {
       Success: true,
       ArtifactID: readStringOut(mutated.OutputParams, 'ArtifactID') ?? artifactId,
-      VersionID: readStringOut(mutated.OutputParams, 'VersionID') ?? createdVersionId,
-      VersionNumber: readNumberOut(mutated.OutputParams, 'VersionNumber') ?? createdVersionNumber ?? 1,
-      ArtifactName: readStringOut(mutated.OutputParams, 'ArtifactName') ?? createdArtifactName ?? opts.title,
+      VersionID: readStringOut(mutated.OutputParams, 'VersionID'),
+      VersionNumber: readNumberOut(mutated.OutputParams, 'VersionNumber') ?? 1,
+      ArtifactName: readStringOut(mutated.OutputParams, 'ArtifactName') ?? opts.title,
       ArtifactTypeName: 'Excel Spreadsheet',
       DriverClass: 'SpreadsheetArtifactViewerPlugin',
-      SheetName: opts.sheetName,
+      SheetName: normalizedSheetName,
       BoundingRange: metrics.BoundingRange,
       RowCount: metrics.RowCount,
     };

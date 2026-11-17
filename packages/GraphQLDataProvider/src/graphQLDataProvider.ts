@@ -34,6 +34,19 @@ import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
 import { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from "./graphQLOperationKind";
 import { ClientTabInvalidationMultiplexer, TabMultiplexerEnvironment, CacheInvalidationEventData } from "./ClientTabInvalidationMultiplexer";
+import {
+    SharedTabKernelClient,
+    type KernelRunViewSlotAcquisition,
+    type SharedTabKernelCatchUpPayload,
+    type SharedWorkerFactory,
+} from "./SharedTabKernelClient";
+import { SharedTabKernelStorageProvider } from "./SharedTabKernelStorageProvider";
+import {
+    CanonicalizeKernelRequestKey,
+    CloneKernelValue,
+    type SharedTabKernelEnvironment,
+    type SharedTabKernelStats,
+} from "./SharedTabKernelProtocol";
 
 /**
  * Structured network operation observation emitted by {@link GraphQLDataProvider}
@@ -672,7 +685,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
             await this.connectClient(configData, separateConnection, forceRefreshSessionId);
-            return super.Config(configData); // now parent class can do it's config
+            const result = await super.Config(configData); // now parent class can do it's config
+            if (!separateConnection && GraphQLDataProvider.Instance === this) {
+                this.initOrUpdateSharedTabKernel();
+            }
+            return result;
         }
         catch (e) {
             LogError(e);
@@ -747,6 +764,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // This ensures ExecuteGQL() can use this._client.request()
             this._sessionId = GraphQLDataProvider.Instance._sessionId;
             this._client = GraphQLDataProvider.Instance._client;
+
+            this.initOrUpdateSharedTabKernel();
+            if (this._sharedTabKernel && configData.Token) {
+                this._sharedTabKernel.UpdateAuthToken(configData.Token, Boolean(configData.Data?.RefreshTokenFunction));
+            }
         }
     }
 
@@ -1278,6 +1300,169 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
 
 
+    public override InvalidateRunViewDedupCache(entityNames?: readonly string[]): void {
+        super.InvalidateRunViewDedupCache(entityNames);
+        if (this._sharedTabKernel?.IsKernelConnected) {
+            this._sharedTabKernel.NotifyMutation(entityNames);
+        }
+    }
+
+    private collectEntityNamesForKernel(entityName: string): string[] {
+        const names: string[] = [];
+        let current = entityName ? this.EntityByName(entityName) : undefined;
+        while (current) {
+            names.push(current.Name);
+            current = current.ParentEntityInfo ?? undefined;
+        }
+        if (names.length === 0 && entityName) {
+            names.push(entityName);
+        }
+        return names;
+    }
+
+    private canUseKernelForRunViewItem(params: RunViewParams): boolean {
+        return !(
+            params.BypassCache ||
+            params.SaveViewResults ||
+            params.ForceAuditLog ||
+            params.AfterKey ||
+            params.ExcludeUserViewRunID ||
+            params.ExcludeDataFromAllPriorViewRuns
+        );
+    }
+
+    private async getReadySharedTabKernel(): Promise<SharedTabKernelClient | null> {
+        const kernel = this._sharedTabKernel;
+        if (!kernel || kernel.IsDisposed) {
+            return null;
+        }
+        if (kernel.IsKernelConnected) {
+            return kernel;
+        }
+        if (kernel.Mode === 'connecting') {
+            const connected = await kernel.WaitUntilReady();
+            return connected && kernel.IsKernelConnected ? kernel : null;
+        }
+        return null;
+    }
+
+    /**
+     * Coordinates a batch of RunView/RunViewsWithCacheCheck items against the worker L1 cache
+     * and in-flight coalescing registry, executing only missing/non-coalesced indices over HTTP.
+     */
+    private async executeBatchWithKernelCoalescing<TResult>(
+        kernel: SharedTabKernelClient,
+        items: ReadonlyArray<{ Eligible: boolean; CacheKey: string; EntityNames: string[] }>,
+        executeSubset: (indices: number[]) => Promise<TResult[]>
+    ): Promise<TResult[]> {
+        const results = new Array<TResult>(items.length);
+        const slots = new Array<KernelRunViewSlotAcquisition<TResult> | null>(items.length).fill(null);
+
+        await Promise.all(
+            items.map(async (item, index) => {
+                if (!item.Eligible) {
+                    return;
+                }
+                slots[index] = await kernel.AcquireRunViewSlot<TResult>(
+                    item.CacheKey,
+                    item.EntityNames,
+                    true,
+                    true
+                );
+            })
+        );
+
+        const executeIndices: number[] = [];
+        const executeEpochs = new Map<number, { RequestId: string; Epoch: number }>();
+        const waitPromises: Array<Promise<void>> = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const slot = slots[i];
+            if (!slot) {
+                executeIndices.push(i);
+                continue;
+            }
+            if (slot.Outcome === 'l1_hit') {
+                results[i] = CloneKernelValue(slot.Data as TResult);
+            } else if (slot.Outcome === 'execute') {
+                executeIndices.push(i);
+                executeEpochs.set(i, { RequestId: slot.RequestId, Epoch: slot.Epoch });
+            } else if (slot.Outcome === 'wait' && slot.WaitForCoalescedOrFailover) {
+                const followUpFn = slot.WaitForCoalescedOrFailover;
+                const reqId = slot.RequestId;
+                waitPromises.push(
+                    followUpFn().then(
+                        (followUp) => {
+                            if (followUp.Outcome === 'coalesced_result') {
+                                results[i] = CloneKernelValue(followUp.Data as TResult);
+                            } else {
+                                executeIndices.push(i);
+                                executeEpochs.set(i, { RequestId: reqId, Epoch: followUp.Epoch });
+                            }
+                        },
+                        (err) => {
+                            if (!kernel.IsKernelConnected) {
+                                executeIndices.push(i);
+                            } else {
+                                throw err;
+                            }
+                        }
+                    )
+                );
+            } else {
+                executeIndices.push(i);
+            }
+        }
+
+        if (waitPromises.length > 0) {
+            await Promise.all(waitPromises);
+        }
+
+        if (executeIndices.length > 0) {
+            executeIndices.sort((a, b) => a - b);
+            try {
+                const subsetResults = await executeSubset(executeIndices);
+                for (let k = 0; k < executeIndices.length; k++) {
+                    const origIndex = executeIndices[k];
+                    const itemResult = subsetResults[k];
+                    results[origIndex] = itemResult;
+
+                    const execMeta = executeEpochs.get(origIndex);
+                    const itemMeta = items[origIndex];
+                    if (execMeta && itemMeta.Eligible) {
+                        kernel.CompleteRunViewSlot(
+                            execMeta.RequestId,
+                            itemMeta.CacheKey,
+                            itemMeta.EntityNames,
+                            true,
+                            execMeta.Epoch,
+                            { Success: true, Data: itemResult }
+                        );
+                    }
+                }
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                for (const origIndex of executeIndices) {
+                    const execMeta = executeEpochs.get(origIndex);
+                    const itemMeta = items[origIndex];
+                    if (execMeta && itemMeta.Eligible) {
+                        kernel.CompleteRunViewSlot(
+                            execMeta.RequestId,
+                            itemMeta.CacheKey,
+                            itemMeta.EntityNames,
+                            true,
+                            execMeta.Epoch,
+                            { Success: false, ErrorMessage: errMsg }
+                        );
+                    }
+                }
+                throw err;
+            }
+        }
+
+        return results;
+    }
+
     /**************************************************************************/
     // START ---- IRunViewProvider
     /**************************************************************************/
@@ -1428,46 +1613,64 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     });
                 }
 
-                const viewData = await this.ExecuteGQL(query, {input: innerParams} );
-                if (viewData && viewData[qName]) {
-                    // Log aggregate response for debugging
-                    const responseAggregates = viewData[qName].AggregateResults;
-                    if (innerParams.Aggregates?.length > 0) {
-                        LogStatusEx({
-                            message: '[GraphQLDataProvider] Received aggregate results:',
-                            verboseOnly: true,
-                            additionalArgs: [{
-                                entityName: entity,
-                                aggregateResultCount: responseAggregates?.length || 0,
-                                aggregateResults: responseAggregates,
-                                aggregateExecutionTime: viewData[qName].AggregateExecutionTime
-                            }]
-                        });
-                    }
+                const executeSingleRunView = async (): Promise<RunViewResult<T> | null> => {
+                    const viewData = await this.ExecuteGQL(query, {input: innerParams} );
+                    if (viewData && viewData[qName]) {
+                        // Log aggregate response for debugging
+                        const responseAggregates = viewData[qName].AggregateResults;
+                        if (innerParams.Aggregates?.length > 0) {
+                            LogStatusEx({
+                                message: '[GraphQLDataProvider] Received aggregate results:',
+                                verboseOnly: true,
+                                additionalArgs: [{
+                                    entityName: entity,
+                                    aggregateResultCount: responseAggregates?.length || 0,
+                                    aggregateResults: responseAggregates,
+                                    aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                                }]
+                            });
+                        }
 
-                    // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
-                    // so that the caller gets back what they expect
-                    const results = viewData[qName].Results;
-                    if (results && results.length > 0) {
-                        const codeNameDiffFields = e.Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
-                        results.forEach(r => {
-                            // for _mj__ results, we need to convert them back to the Name
-                            this.ConvertBackToMJFields(r);
-                            codeNameDiffFields.forEach(f => {
-                                r[f.Name] = r[f.CodeName];
-                                // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+                        // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
+                        // so that the caller gets back what they expect
+                        const results = viewData[qName].Results;
+                        if (results && results.length > 0) {
+                            const codeNameDiffFields = e.Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
+                            results.forEach(r => {
+                                // for _mj__ results, we need to convert them back to the Name
+                                this.ConvertBackToMJFields(r);
+                                codeNameDiffFields.forEach(f => {
+                                    r[f.Name] = r[f.CodeName];
+                                    // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+                                })
                             })
-                        })
-                    }
-                    const result = viewData[qName];
+                        }
+                        const result = viewData[qName];
 
-                    return result;
+                        return result;
+                    }
+                    return null;
+                };
+
+                const kernel = this.canUseKernelForRunViewItem(params)
+                    ? await this.getReadySharedTabKernel()
+                    : null;
+                if (kernel) {
+                    const cacheKey = CanonicalizeKernelRequestKey('rv', { qName, innerParams, fieldList });
+                    const entityNames = this.collectEntityNamesForKernel(e.Name);
+                    return await kernel.ExecuteWithKernelCoalescing<RunViewResult<T> | null>(
+                        cacheKey,
+                        entityNames,
+                        true,
+                        true,
+                        executeSingleRunView
+                    );
                 }
+
+                return await executeSingleRunView();
             }
             else
                 throw ("No parameters passed to RunView");
-
-            return null;
         }
         catch (e) {
             LogError(e);
@@ -1647,31 +1850,52 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }`;
 
-            const viewData: unknown = await this.ExecuteGQL(query, {input: innerParams} );
-            if (viewData && viewData["RunViews"]) {
-                // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
-                // so that the caller gets back what they expect
-                const results: RunViewResult[] = viewData["RunViews"];
-                for(const [index, result] of results.entries()){
-                    //const codeNameDiffFields = entityInfos[index].Fields.filter(f => f.CodeName !== f.Name && f.CodeName !== undefined);
-                    result.Results = result.Results.map((data: unknown) => {
-                        let deserializeData: Record<string, unknown> = JSON.parse(data["Data"]);
-                        // for _mj__ results, we need to convert them back to the Name
-                        this.ConvertBackToMJFields(deserializeData);
-                        /*
-                        codeNameDiffFields.forEach(f => {
-                            deserializeData[f.Name] = deserializeData[f.CodeName];
-                            // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+            const executeRunViewsSubset = async (subsetInnerParams: unknown[]): Promise<RunViewResult<T>[] | null> => {
+                const viewData: unknown = await this.ExecuteGQL(query, {input: subsetInnerParams} );
+                if (viewData && viewData["RunViews"]) {
+                    // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
+                    // so that the caller gets back what they expect
+                    const results: RunViewResult<T>[] = viewData["RunViews"];
+                    for(const result of results){
+                        result.Results = result.Results.map((data: unknown) => {
+                            const deserializeData: Record<string, unknown> = JSON.parse(data["Data"]);
+                            // for _mj__ results, we need to convert them back to the Name
+                            this.ConvertBackToMJFields(deserializeData);
+                            return deserializeData as unknown as T;
                         });
-                        */
-                       return deserializeData;
-                    });
+                    }
+
+                    return results;
                 }
 
-                return results;
+                return null;
+            };
+
+            const kernel = params.length > 0 ? await this.getReadySharedTabKernel() : null;
+            if (kernel && params.some((p) => this.canUseKernelForRunViewItem(p))) {
+                const kernelItems = params.map((param, idx) => ({
+                    Eligible: this.canUseKernelForRunViewItem(param),
+                    CacheKey: CanonicalizeKernelRequestKey('rvs', {
+                        innerParam: innerParams[idx],
+                        resultType: param.ResultType ?? 'simple',
+                    }),
+                    EntityNames: this.collectEntityNamesForKernel(entityInfos[idx]?.Name ?? ''),
+                }));
+                return await this.executeBatchWithKernelCoalescing<RunViewResult<T>>(
+                    kernel,
+                    kernelItems,
+                    async (indices) => {
+                        const subsetInput = indices.map((i) => innerParams[i]);
+                        const subsetResults = await executeRunViewsSubset(subsetInput);
+                        if (!subsetResults) {
+                            throw new Error('RunViews returned empty response');
+                        }
+                        return subsetResults;
+                    }
+                );
             }
 
-            return null;
+            return await executeRunViewsSubset(innerParams);
 
         }
         catch (e) {
@@ -1694,8 +1918,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunViewsWithCacheCheckResponse<T>> {
         try {
-            // Build the GraphQL input
-            const buildInput = (includeFieldSecurityKey: boolean) => params.map(item => ({
+            // Build a single GraphQL input item
+            const buildSingleInput = (item: RunViewWithCacheCheckParams, includeFieldSecurityKey: boolean) => ({
                 params: {
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
@@ -1746,7 +1970,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ...(includeFieldSecurityKey && item.cacheStatus.fieldSecurityKey != null
                         ? { fieldSecurityKey: item.cacheStatus.fieldSecurityKey } : {}),
                 } : null,
-            }));
+            });
 
             const query = gql`
                 query RunViewsWithCacheCheckQuery($input: [RunViewWithCacheCheckInput!]!) {
@@ -1789,8 +2013,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             `;
 
-            const responseData = await this.executeRunViewsCacheCheckGQL(query, buildInput);
-            const response = responseData?.['RunViewsWithCacheCheck'] as {
+            type RawCacheCheckResponse = {
                 success: boolean;
                 errorMessage?: string;
                 results: Array<{
@@ -1808,84 +2031,123 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }>;
             };
 
-            if (!response) {
-                return {
-                    success: false,
-                    results: [],
-                    errorMessage: 'No response from server',
-                };
-            }
+            const transformCacheCheckResults = (rawResults: RawCacheCheckResponse['results']): RunViewWithCacheCheckResult<T>[] => {
+                return rawResults.map((result) => {
+                    if (result.status === 'differential' && result.differentialData) {
+                        const deserializedUpdatedRows: T[] = result.differentialData.updatedRows.map(r => {
+                            const data = JSON.parse(r.Data);
+                            this.ConvertBackToMJFields(data);
+                            return data as T;
+                        });
 
-            // Transform results - deserialize Data fields for stale/differential results
-            const transformedResults: RunViewWithCacheCheckResult<T>[] = response.results.map((result, index) => {
-                const inputItem = params[index];
+                        return {
+                            viewIndex: result.viewIndex,
+                            status: result.status as 'current' | 'stale' | 'differential' | 'error',
+                            results: undefined,
+                            differentialData: {
+                                updatedRows: deserializedUpdatedRows,
+                                deletedRecordIDs: result.differentialData.deletedRecordIDs,
+                            },
+                            maxUpdatedAt: result.maxUpdatedAt,
+                            rowCount: result.rowCount,
+                            errorMessage: result.errorMessage,
+                        };
+                    }
 
-                if (result.status === 'differential' && result.differentialData) {
-                    // Deserialize the differential data
-                    const deserializedUpdatedRows: T[] = result.differentialData.updatedRows.map(r => {
-                        const data = JSON.parse(r.Data);
-                        this.ConvertBackToMJFields(data);
-                        return data as T;
-                    });
+                    if (result.status === 'stale' && result.Results) {
+                        const deserializedResults: T[] = result.Results.map(r => {
+                            const data = JSON.parse(r.Data);
+                            this.ConvertBackToMJFields(data);
+                            return data as T;
+                        });
+
+                        // Aggregates ride the stale reply (B40). The resolver JSON-stringifies each
+                        // value to preserve its type across GraphQL; parse it back so consumers get
+                        // the native number/string the AggregateResult contract declares.
+                        const aggregateResults = result.aggregateResults?.map(a => ({
+                            expression: a.expression,
+                            alias: a.alias,
+                            value: a.value !== undefined && a.value !== null ? JSON.parse(a.value) : null,
+                            error: a.error,
+                        }));
+
+                        return {
+                            viewIndex: result.viewIndex,
+                            status: result.status as 'current' | 'stale' | 'differential' | 'error',
+                            results: deserializedResults,
+                            maxUpdatedAt: result.maxUpdatedAt,
+                            rowCount: result.rowCount,
+                            errorMessage: result.errorMessage,
+                            aggregateResults,
+                        };
+                    }
 
                     return {
                         viewIndex: result.viewIndex,
                         status: result.status as 'current' | 'stale' | 'differential' | 'error',
                         results: undefined,
-                        differentialData: {
-                            updatedRows: deserializedUpdatedRows,
-                            deletedRecordIDs: result.differentialData.deletedRecordIDs,
-                        },
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
                         errorMessage: result.errorMessage,
                     };
-                }
+                });
+            };
 
-                if (result.status === 'stale' && result.Results) {
-                    // Deserialize the Data field and convert back MJ fields
-                    const deserializedResults: T[] = result.Results.map(r => {
-                        const data = JSON.parse(r.Data);
-                        this.ConvertBackToMJFields(data);
-                        return data as T;
-                    });
+            const executeSubset = async (subsetItems: RunViewWithCacheCheckParams[]): Promise<RunViewsWithCacheCheckResponse<T>> => {
+                const subsetBuildInput = (includeFieldSecurityKey: boolean) =>
+                    subsetItems.map(item => buildSingleInput(item, includeFieldSecurityKey));
+                const responseData = await this.executeRunViewsCacheCheckGQL(query, subsetBuildInput);
+                const response = responseData?.['RunViewsWithCacheCheck'] as RawCacheCheckResponse | undefined;
 
-                    // Aggregates ride the stale reply (B40). The resolver JSON-stringifies each
-                    // value to preserve its type across GraphQL; parse it back so consumers get
-                    // the native number/string the AggregateResult contract declares.
-                    const aggregateResults = result.aggregateResults?.map(a => ({
-                        expression: a.expression,
-                        alias: a.alias,
-                        value: a.value !== undefined && a.value !== null ? JSON.parse(a.value) : null,
-                        error: a.error,
-                    }));
-
+                if (!response) {
                     return {
-                        viewIndex: result.viewIndex,
-                        status: result.status as 'current' | 'stale' | 'differential' | 'error',
-                        results: deserializedResults,
-                        maxUpdatedAt: result.maxUpdatedAt,
-                        rowCount: result.rowCount,
-                        errorMessage: result.errorMessage,
-                        aggregateResults,
+                        success: false,
+                        results: [],
+                        errorMessage: 'No response from server',
                     };
                 }
 
                 return {
-                    viewIndex: result.viewIndex,
-                    status: result.status as 'current' | 'stale' | 'differential' | 'error',
-                    results: undefined,
-                    maxUpdatedAt: result.maxUpdatedAt,
-                    rowCount: result.rowCount,
-                    errorMessage: result.errorMessage,
+                    success: response.success,
+                    results: transformCacheCheckResults(response.results),
+                    errorMessage: response.errorMessage,
                 };
-            });
-
-            return {
-                success: response.success,
-                results: transformedResults,
-                errorMessage: response.errorMessage,
             };
+
+            const kernel = params.length > 0 ? await this.getReadySharedTabKernel() : null;
+            if (kernel && params.some((item) => this.canUseKernelForRunViewItem(item.params))) {
+                const kernelItems = params.map((item) => ({
+                    Eligible: this.canUseKernelForRunViewItem(item.params),
+                    CacheKey: CanonicalizeKernelRequestKey('rvcc', buildSingleInput(item, true)),
+                    EntityNames: this.collectEntityNamesForKernel(item.params.EntityName ?? ''),
+                }));
+                let subsetErrorMessage: string | undefined;
+                const coalesced = await this.executeBatchWithKernelCoalescing<RunViewWithCacheCheckResult<T>>(
+                    kernel,
+                    kernelItems,
+                    async (indices) => {
+                        const subsetItems = indices.map((i) => params[i]);
+                        const res = await executeSubset(subsetItems);
+                        if (!res.success) {
+                            subsetErrorMessage = res.errorMessage || 'RunViewsWithCacheCheck failed';
+                            throw new Error(subsetErrorMessage);
+                        }
+                        return res.results;
+                    }
+                );
+                for (let i = 0; i < coalesced.length; i++) {
+                    if (coalesced[i]) {
+                        coalesced[i].viewIndex = i;
+                    }
+                }
+                return {
+                    success: true,
+                    results: coalesced,
+                    errorMessage: subsetErrorMessage,
+                };
+            }
+
+            return await executeSubset(params);
         } catch (e) {
             LogError(e);
             return {
@@ -4348,30 +4610,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private async performTokenRefresh(): Promise<void> {
         if (this._configData.Data.RefreshTokenFunction) {
             try {
-                const newToken = await this._configData.Data.RefreshTokenFunction();
-                if (newToken) {
-                    this._configData.Token = newToken; // update the token
-                    const newClient = this.CreateNewGraphQLClient(this._configData.URL,
-                                                                  this._configData.Token,
-                                                                  this._sessionId,
-                                                                  this._configData.MJAPIKey,
-                                                                  this._configData.UserAPIKey);
-
-                    // Update this instance's client
-                    this._client = newClient;
-
-                    // CRITICAL: Also update the singleton's client if we're in singleton mode
-                    // Check if this._configData is the same reference as Instance._configData
-                    if (GraphQLDataProvider.Instance &&
-                        GraphQLDataProvider.Instance._configData === this._configData) {
-                        GraphQLDataProvider.Instance._client = newClient;
+                const candidateKernel = this._sharedTabKernel;
+                const shouldCoordinate =
+                    candidateKernel &&
+                    !candidateKernel.IsDisposed &&
+                    (candidateKernel.IsKernelConnected || candidateKernel.Mode === 'connecting');
+                if (shouldCoordinate) {
+                    const kernel = await this.getReadySharedTabKernel();
+                    if (kernel) {
+                        const newToken = await kernel.CoordinateTokenRefresh(() => this.executeLocalRefreshTokenFn());
+                        this.applySyncedAuthToken(newToken);
+                        return;
                     }
                 }
-                else {
-                    const error = new Error('Refresh token function returned null or undefined token');
-                    this.notifyAuthenticationError(error);
-                    throw error;
-                }
+                await this.executeLocalRefreshTokenFn();
             }
             catch (e) {
                 const error = e instanceof Error ? e : new Error(String(e));
@@ -4383,6 +4635,43 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const error = new Error('No refresh token function provided');
             this.notifyAuthenticationError(error);
             throw error;
+        }
+    }
+
+    private async executeLocalRefreshTokenFn(): Promise<string> {
+        const refreshFn = this._configData?.Data?.RefreshTokenFunction;
+        if (!refreshFn) {
+            throw new Error('No refresh token function provided');
+        }
+        const newToken = await refreshFn();
+        if (!newToken) {
+            const error = new Error('Refresh token function returned null or undefined token');
+            this.notifyAuthenticationError(error);
+            throw error;
+        }
+        this.applySyncedAuthToken(newToken);
+        return newToken;
+    }
+
+    private applySyncedAuthToken(newToken: string): void {
+        if (!newToken || !this._configData) {
+            return;
+        }
+        this._configData.Token = newToken; // update the token
+        const newClient = this.CreateNewGraphQLClient(this._configData.URL,
+                                                      this._configData.Token,
+                                                      this._sessionId,
+                                                      this._configData.MJAPIKey,
+                                                      this._configData.UserAPIKey);
+
+        // Update this instance's client
+        this._client = newClient;
+
+        // CRITICAL: Also update the singleton's client if we're in singleton mode
+        // Check if this._configData is the same reference as Instance._configData
+        if (GraphQLDataProvider.Instance &&
+            GraphQLDataProvider.Instance._configData === this._configData) {
+            GraphQLDataProvider.Instance._client = newClient;
         }
     }
 
@@ -4528,15 +4817,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
 
     private _localStorageProvider: ILocalStorageProvider;
-    get LocalStorageProvider(): ILocalStorageProvider {
-        if (!this._localStorageProvider) {
+    private _fallbackLocalStorageProvider: ILocalStorageProvider | null = null;
+
+    private getFallbackLocalStorageProvider(): ILocalStorageProvider {
+        if (!this._fallbackLocalStorageProvider) {
             // Use BrowserIndexedDBStorageProvider in browser environments where indexedDB is available,
             // otherwise fall back to InMemoryLocalStorageProvider for Node.js/server environments
             if (typeof indexedDB !== 'undefined') {
-                this._localStorageProvider = new BrowserIndexedDBStorageProvider();
+                this._fallbackLocalStorageProvider = new BrowserIndexedDBStorageProvider();
             } else {
-                this._localStorageProvider = new InMemoryLocalStorageProvider();
+                this._fallbackLocalStorageProvider = new InMemoryLocalStorageProvider();
             }
+        }
+        return this._fallbackLocalStorageProvider;
+    }
+
+    get LocalStorageProvider(): ILocalStorageProvider {
+        if (!this._localStorageProvider) {
+            this._localStorageProvider = new SharedTabKernelStorageProvider(
+                () => this._sharedTabKernel,
+                () => this.getFallbackLocalStorageProvider()
+            );
         }
 
         return this._localStorageProvider;
@@ -4597,6 +4898,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * /healthcheck confirms the server is back online.
      */
     public ForceSocketReconnect(): void {
+        if (this._sharedTabKernel?.IsKernelConnected) {
+            this._sharedTabKernel.ForceSocketReconnect();
+        }
         this.disposeWSClient();
     }
     private _pushStatusSubjects: Map<string, {
@@ -4883,24 +5187,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * Generic subscription method for GraphQL subscriptions
-     * @param subscription The GraphQL subscription query
-     * @param variables Variables to pass to the subscription
-     * @returns Observable that emits subscription data
+     * Opens a GraphQL subscription over the direct per-tab `graphql-ws` client.
      */
-    public Subscribe(subscription: string, variables?: any): Observable<any> {
+    private openDirectWebSocketSubscription(
+        subscription: string,
+        variables?: Record<string, unknown>,
+        extensions?: Record<string, unknown>
+    ): Observable<unknown> {
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
-            const { traceparent } = GraphQLDataProvider.MintTraceparent();
-            const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
-            const extensions: Record<string, unknown> = {
-                traceparent,
-                ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
-            };
+            const effectiveExtensions = extensions ?? (() => {
+                const { traceparent } = GraphQLDataProvider.MintTraceparent();
+                const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+                return {
+                    traceparent,
+                    ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
+                };
+            })();
 
             const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
-                { query: subscription, variables, extensions },
+                { query: subscription, variables, extensions: effectiveExtensions },
                 {
                     next: (data) => {
                         observer.next(data.data);
@@ -4946,6 +5253,88 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this.ExecuteInBackgroundScope(() => unsubscribe());
             };
         });
+    }
+
+    /**
+     * Subscribes via the SharedTabKernelHost single origin WebSocket when active/connecting,
+     * transparently falling back to the direct per-tab WebSocket when unavailable.
+     */
+    private subscribeViaKernelOrDirect(
+        kind: 'cache_invalidation' | 'status_updates' | 'generic',
+        channelKey: string,
+        subscription: string,
+        variables?: Record<string, unknown>,
+        sessionId?: string
+    ): Observable<unknown> {
+        const { traceparent } = GraphQLDataProvider.MintTraceparent();
+        const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const extensions: Record<string, unknown> = {
+            traceparent,
+            ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
+        };
+
+        const kernel = this._sharedTabKernel;
+        if (!kernel || kernel.IsDisposed) {
+            return this.openDirectWebSocketSubscription(subscription, variables, extensions);
+        }
+
+        if (kernel.IsKernelConnected) {
+            return new Observable((observer) => {
+                this._activeSubscriptionCount++;
+                const sub = kernel.Subscribe(kind, channelKey, subscription, variables, sessionId, extensions).subscribe(observer);
+                return () => {
+                    this._activeSubscriptionCount--;
+                    sub.unsubscribe();
+                };
+            });
+        }
+
+        if (kernel.Mode === 'connecting') {
+            return new Observable((observer) => {
+                let cancelled = false;
+                let innerSub: Subscription | null = null;
+                void kernel.WaitUntilReady().then((connected) => {
+                    if (cancelled) {
+                        return;
+                    }
+                    if (connected && kernel.IsKernelConnected) {
+                        this._activeSubscriptionCount++;
+                        const s = kernel.Subscribe(kind, channelKey, subscription, variables, sessionId, extensions).subscribe(observer);
+                        innerSub = new Subscription(() => {
+                            this._activeSubscriptionCount--;
+                            s.unsubscribe();
+                        });
+                    } else {
+                        innerSub = this.openDirectWebSocketSubscription(subscription, variables, extensions).subscribe(observer);
+                    }
+                });
+                return () => {
+                    cancelled = true;
+                    innerSub?.unsubscribe();
+                };
+            });
+        }
+
+        return this.openDirectWebSocketSubscription(subscription, variables, extensions);
+    }
+
+    /**
+     * Generic subscription method for GraphQL subscriptions
+     * @param subscription The GraphQL subscription query
+     * @param variables Variables to pass to the subscription
+     * @returns Observable that emits subscription data
+     */
+    public Subscribe(subscription: string, variables?: any): Observable<any> {
+        const channelKey = CanonicalizeKernelRequestKey('sub', {
+            subscription,
+            variables: variables ?? null,
+        });
+        return this.subscribeViaKernelOrDirect(
+            'generic',
+            channelKey,
+            subscription,
+            variables as Record<string, unknown> | undefined
+        );
     }
 
     /** @deprecated Use {@link Subscribe}. */
@@ -4994,66 +5383,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Create new Subject for status updates (no buffering - status updates are ephemeral)
         const subject = new Subject<string>();
-        const client = this.getOrCreateWSClient();
+        const channelKey = `status_updates:${sessionId}`;
 
-        // Subscribe to WebSocket and pipe data to Subject
+        // Subscribe to SharedTabKernel single WS (or direct WS fallback) and pipe data to Subject
         const subscription = new Subscription();
         subscription.add(
-            new Observable((observer) => {
-                const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
-                    { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
-                    {
-                        next: (data: any) => {
-                            // Update last emission time
-                            const entry = this._pushStatusSubjects.get(sessionId);
-                            if (entry) {
-                                entry.lastEmissionAt = Date.now();
-                            }
-                            // Extract the message and emit to subject
-                            observer.next(data.data.statusUpdates.message);
-                        },
-                        error: async (error: unknown) => {
-                            // Check if error is JWT_EXPIRED
-                            const errorObj = error as { extensions?: { code?: string }, message?: string };
-                            const isTokenExpired =
-                                errorObj?.extensions?.code === 'JWT_EXPIRED' ||
-                                errorObj?.message?.includes('token has expired') ||
-                                errorObj?.message?.includes('JWT_EXPIRED');
-
-                            if (isTokenExpired) {
-                                LogStatusEx({ message: '[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...', verboseOnly: true });
-                                try {
-                                    // Refresh the token
-                                    await this.RefreshToken();
-
-                                    // Dispose old WebSocket client
-                                    this.disposeWSClient();
-
-                                    // Complete the subscription - components will auto-reconnect via RxJS retry logic
-                                    observer.complete();
-                                } catch (refreshError) {
-                                    console.error('[GraphQLDataProvider] Failed to refresh token for PushStatusUpdates:', refreshError);
-                                    observer.error(refreshError);
-                                }
-                            } else {
-                                observer.error(error);
-                            }
-                        },
-                        complete: () => {
-                            observer.complete();
-                        },
+            this.subscribeViaKernelOrDirect(
+                'status_updates',
+                channelKey,
+                SUBSCRIBE_TO_STATUS,
+                { sessionId },
+                sessionId
+            ).subscribe({
+                next: (rawPayload: unknown) => {
+                    const entry = this._pushStatusSubjects.get(sessionId);
+                    if (entry) {
+                        entry.lastEmissionAt = Date.now();
                     }
-                ));
-
-                // Increment AFTER successful subscription setup
-                this._activeSubscriptionCount++;
-
-                return () => {
-                    this._activeSubscriptionCount--;
-                    this.ExecuteInBackgroundScope(() => unsubscribe());
-                };
-            }).subscribe({
-                next: (message: string) => subject.next(message),
+                    const payload = rawPayload as {
+                        statusUpdates?: { message?: string };
+                        data?: { statusUpdates?: { message?: string } };
+                    } | null | undefined;
+                    const message = payload?.statusUpdates?.message ?? payload?.data?.statusUpdates?.message;
+                    if (message !== undefined) {
+                        subject.next(message);
+                    }
+                },
                 error: (error) => {
                     // On error, complete subject and remove from cache
                     subject.error(error);
@@ -5262,6 +5617,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _catchUpInFlight: Promise<boolean> | null = null;
     private _tabMuxEnv: TabMultiplexerEnvironment | null = null;
     private _tabInvalidationMultiplexer: ClientTabInvalidationMultiplexer | null = null;
+    private static _sharedWorkerFactory: SharedWorkerFactory | null = null;
+    private _sharedTabKernelEnv: SharedTabKernelEnvironment | null = null;
+    private _sharedTabKernel: SharedTabKernelClient | null = null;
+    private _sharedTabKernelScopeKey: string | null = null;
+
+    /**
+     * Enables or disables the cross-tab SharedWorker WebSocket, L1 cache, and IDB owner kernel.
+     * Falls back automatically to {@link ClientTabInvalidationMultiplexer} (`BroadcastChannel` + Web Locks)
+     * when `SharedWorker` is unavailable in the runtime (e.g. mobile Safari, SSR, Node).
+     */
+    public static EnableSharedTabKernel: boolean = true;
+
+    /**
+     * Registers a browser `SharedWorker` factory (called at app bootstrap, e.g. in `MJExplorer` with
+     * `() => new SharedWorker(new URL('./shared-tab-kernel.worker', import.meta.url), { type: 'module' })`)
+     * so Angular's bundler compiles the worker natively without leaking worker URLs into `@memberjunction/graphql-dataprovider`.
+     */
+    public static SetSharedWorkerFactory(factory: SharedWorkerFactory | null): void {
+        GraphQLDataProvider._sharedWorkerFactory = factory;
+    }
+
+    /**
+     * Returns the currently registered browser `SharedWorker` factory, if any.
+     */
+    public static GetSharedWorkerFactory(): SharedWorkerFactory | null {
+        return GraphQLDataProvider._sharedWorkerFactory;
+    }
 
     /**
      * Enables or disables multi-tab cache invalidation multiplexing across tabs.
@@ -5280,10 +5662,35 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Injects a test or custom Shared Tab Kernel environment (`CreateKernelPort` / `CreateKernelWorker` /
+     * fallback `BroadcastChannel` + `Locks`) and starts/reconfigures the kernel when already configured.
+     */
+    public SetSharedTabKernelEnvironment(env: SharedTabKernelEnvironment | null): void {
+        this._sharedTabKernelEnv = env;
+    }
+
+    /**
+     * Gets the active Shared Tab Kernel client, if initialized.
+     */
+    public get SharedTabKernel(): SharedTabKernelClient | null {
+        return this._sharedTabKernel;
+    }
+
+    /**
+     * Queries live runtime metrics from the SharedWorker kernel host (returns `null` in fallback or non-kernel mode).
+     */
+    public async GetSharedTabKernelStats(): Promise<SharedTabKernelStats | null> {
+        if (!this._sharedTabKernel) {
+            return null;
+        }
+        return this._sharedTabKernel.GetKernelStats();
+    }
+
+    /**
      * Gets the active multi-tab invalidation multiplexer, if initialized.
      */
     public get TabInvalidationMultiplexer(): ClientTabInvalidationMultiplexer | null {
-        return this._tabInvalidationMultiplexer;
+        return this._sharedTabKernel ?? this._tabInvalidationMultiplexer;
     }
 
     /**
@@ -5329,6 +5736,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         this._lastCacheInvalidationSequence = 0;
         this._lastCacheServerProcessId = null;
         this._catchUpInFlight = null;
+        if (this._sharedTabKernel) {
+            void this._sharedTabKernel.Dispose();
+            this._sharedTabKernel = null;
+            this._sharedTabKernelScopeKey = null;
+        }
         if (this._tabInvalidationMultiplexer) {
             void this._tabInvalidationMultiplexer.Dispose();
             this._tabInvalidationMultiplexer = null;
@@ -5358,8 +5770,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return;
         }
         if (serverSequence > this._lastCacheInvalidationSequence) {
-            if (this._tabInvalidationMultiplexer && !this._tabInvalidationMultiplexer.IsLeader) {
-                void this._tabInvalidationMultiplexer.RequestCatchUp(
+            const mux = this.TabInvalidationMultiplexer;
+            if (mux && !mux.IsLeader) {
+                void mux.RequestCatchUp(
                     serverSequence,
                     serverProcessId ?? this._lastCacheServerProcessId
                 );
@@ -5390,9 +5803,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    private async performCacheInvalidationCatchUp(sinceSequence: number): Promise<boolean> {
+    private async executeCacheInvalidationCatchUpQuery(sinceSequence: number): Promise<SharedTabKernelCatchUpPayload> {
         if (!this._client) {
-            return false;
+            return {
+                Success: false,
+                CurrentSequence: this._lastCacheInvalidationSequence,
+                ServerProcessId: this._lastCacheServerProcessId,
+                RequiresFullRefresh: false,
+                Events: [],
+            };
         }
         const query = gql`
             query GetCacheInvalidationsSince($sinceSequence: Int!) {
@@ -5433,42 +5852,68 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }>(query, { sinceSequence });
             const catchUp = response?.GetCacheInvalidationsSince;
             if (!catchUp) {
-                return false;
+                return {
+                    Success: false,
+                    CurrentSequence: this._lastCacheInvalidationSequence,
+                    ServerProcessId: this._lastCacheServerProcessId,
+                    RequiresFullRefresh: false,
+                    Events: [],
+                };
             }
-            this._lastCacheServerProcessId = catchUp.ServerProcessID;
-            if (catchUp.CurrentSequence > this._lastCacheInvalidationSequence) {
-                this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
-            }
-            if (catchUp.RequiresFullRefresh) {
-                if (this._tabInvalidationMultiplexer?.IsLeader) {
-                    this._tabInvalidationMultiplexer.PublishWatermarkSync(
-                        catchUp.CurrentSequence,
-                        catchUp.ServerProcessID,
-                        true
-                    );
-                }
-                return false;
-            }
-            for (const event of catchUp.Events) {
-                this.dispatchCacheInvalidationEvent(event);
-                if (this._tabInvalidationMultiplexer?.IsLeader) {
-                    this._tabInvalidationMultiplexer.PublishInvalidationToFollowers(event, this._lastCacheServerProcessId);
-                }
-            }
-            if (this._tabInvalidationMultiplexer?.IsLeader) {
-                this._tabInvalidationMultiplexer.PublishWatermarkSync(
-                    catchUp.CurrentSequence,
-                    catchUp.ServerProcessID,
-                    false
-                );
-            }
-            return true;
+            return {
+                Success: true,
+                CurrentSequence: catchUp.CurrentSequence,
+                ServerProcessId: catchUp.ServerProcessID,
+                RequiresFullRefresh: catchUp.RequiresFullRefresh,
+                Events: catchUp.Events,
+            };
         } catch (err) {
             if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
                 console.warn('[GraphQLDataProvider] CatchUpCacheInvalidations failed:', err);
             }
+            return {
+                Success: false,
+                CurrentSequence: this._lastCacheInvalidationSequence,
+                ServerProcessId: this._lastCacheServerProcessId,
+                RequiresFullRefresh: false,
+                Events: [],
+            };
+        }
+    }
+
+    private async performCacheInvalidationCatchUp(sinceSequence: number): Promise<boolean> {
+        const catchUp = await this.executeCacheInvalidationCatchUpQuery(sinceSequence);
+        if (!catchUp.Success) {
             return false;
         }
+        this._lastCacheServerProcessId = catchUp.ServerProcessId;
+        if (catchUp.CurrentSequence > this._lastCacheInvalidationSequence) {
+            this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
+        }
+        if (catchUp.RequiresFullRefresh) {
+            if (this._tabInvalidationMultiplexer?.IsLeader) {
+                this._tabInvalidationMultiplexer.PublishWatermarkSync(
+                    catchUp.CurrentSequence,
+                    catchUp.ServerProcessId,
+                    true
+                );
+            }
+            return false;
+        }
+        for (const event of catchUp.Events) {
+            this.dispatchCacheInvalidationEvent(event);
+            if (this._tabInvalidationMultiplexer?.IsLeader) {
+                this._tabInvalidationMultiplexer.PublishInvalidationToFollowers(event, this._lastCacheServerProcessId);
+            }
+        }
+        if (this._tabInvalidationMultiplexer?.IsLeader) {
+            this._tabInvalidationMultiplexer.PublishWatermarkSync(
+                catchUp.CurrentSequence,
+                catchUp.ServerProcessId,
+                false
+            );
+        }
+        return true;
     }
 
     private dispatchCacheInvalidationEvent(event: CacheInvalidationEventData): void {
@@ -5539,13 +5984,188 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return this.Subscribe(query, { sessionID: sessionId });
     }
 
+    private _shouldSubscribeCacheInvalidation = false;
+
+    private computeSharedTabKernelScopeKey(): string {
+        const wsOrHttpUrl = this.ConfigData?.WSURL || this.ConfigData?.URL || 'default';
+        const userId = this.CurrentUser?.ID ?? 'anon';
+        return `${wsOrHttpUrl}|${userId}`;
+    }
+
+    private shouldUseSharedTabKernel(): boolean {
+        return (
+            GraphQLDataProvider.EnableSharedTabKernel &&
+            GraphQLDataProvider.EnableMultiTabInvalidationMultiplexing &&
+            (this._sharedTabKernelEnv !== null || GraphQLDataProvider._sharedWorkerFactory !== null)
+        );
+    }
+
+    /**
+     * Initializes or upgrades the {@link SharedTabKernelClient} when a worker factory or test
+     * kernel environment is registered. Re-keys seamlessly when `CurrentUser` resolves.
+     */
+    private initOrUpdateSharedTabKernel(): void {
+        if (!this.shouldUseSharedTabKernel() || !this.ConfigData) {
+            return;
+        }
+        const scopeKey = this.computeSharedTabKernelScopeKey();
+        if (this._sharedTabKernel && !this._sharedTabKernel.IsDisposed && this._sharedTabKernelScopeKey === scopeKey) {
+            return;
+        }
+
+        if (this._sharedTabKernel) {
+            this.closeCacheInvalidationSubscription();
+            void this._sharedTabKernel.Dispose();
+            this._sharedTabKernel = null;
+            this._sharedTabKernelScopeKey = null;
+        }
+
+        const kernel = new SharedTabKernelClient({
+            ScopeKey: scopeKey,
+            SessionId: this._sessionId || uuidv4(),
+            WsUrl: this.ConfigData.WSURL || '',
+            GraphQLUrl: this.ConfigData.URL || '',
+            Token: this.ConfigData.Token || '',
+            MJAPIKey: this.ConfigData.MJAPIKey,
+            UserAPIKey: this.ConfigData.UserAPIKey,
+            CanRefreshToken: Boolean(this.ConfigData.Data?.RefreshTokenFunction),
+            Environment: this._sharedTabKernelEnv ?? undefined,
+            WorkerFactory: GraphQLDataProvider._sharedWorkerFactory,
+            OnTokenSynced: (newToken: string) => {
+                this.applySyncedAuthToken(newToken);
+            },
+            OnRefreshTokenRequested: () => this.executeLocalRefreshTokenFn(),
+            OnSocketStateChanged: (state: SocketConnectionState, reconnected: boolean) => {
+                this._socketStateSubject.next(state);
+                if (reconnected) {
+                    this._socketReconnectedSubject.next();
+                }
+            },
+            OnAuthError: (err: Error) => {
+                this.notifyAuthenticationError(err);
+            },
+            OnPerformDelegateCatchUp: (sinceSequence: number) =>
+                this.executeCacheInvalidationCatchUpQuery(sinceSequence),
+            OnRemoteMutationNotice: (entityNames?: readonly string[]) => {
+                super.InvalidateRunViewDedupCache(entityNames);
+            },
+            Callbacks: {
+                OnBecomeLeader: async () => {
+                    if (this._shouldSubscribeCacheInvalidation) {
+                        this.openCacheInvalidationSubscription();
+                        if (this._lastCacheInvalidationSequence > 0) {
+                            await this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                        }
+                    }
+                },
+                OnLoseLeadership: () => {
+                    this.closeCacheInvalidationSubscription();
+                },
+                OnRemoteInvalidation: (event: CacheInvalidationEventData, serverProcessId: string | null) => {
+                    if (serverProcessId) {
+                        this._lastCacheServerProcessId = serverProcessId;
+                    }
+                    this.dispatchCacheInvalidationEvent(event);
+                },
+                OnPerformCatchUp: async (_targetSeq: number, _srvProcId: string | null) => {
+                    return this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                },
+                GetCurrentSequence: () => this._lastCacheInvalidationSequence,
+                GetServerProcessId: () => this._lastCacheServerProcessId,
+                OnWatermarkSync: (sequence: number, serverProcessId: string | null, requiresFullRefresh: boolean) => {
+                    if (serverProcessId) {
+                        this._lastCacheServerProcessId = serverProcessId;
+                    }
+                    if (sequence > this._lastCacheInvalidationSequence) {
+                        this._lastCacheInvalidationSequence = sequence;
+                    }
+                    if (requiresFullRefresh) {
+                        void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                    }
+                },
+            },
+        });
+
+        this._sharedTabKernel = kernel;
+        this._sharedTabKernelScopeKey = scopeKey;
+        this.ExecuteInBackgroundScope(() => kernel.Start());
+    }
+
+    private openKernelCacheInvalidationSubscription(kernel: SharedTabKernelClient): void {
+        if (this._cacheInvalidationSubscription || !this.ConfigData?.WSURL || kernel.IsDisposed) {
+            return;
+        }
+
+        const CACHE_INVALIDATION_SUB = gql`subscription CacheInvalidation {
+            cacheInvalidation {
+                EntityName
+                PrimaryKeyValues
+                Action
+                SourceServerID
+                Timestamp
+                OriginSessionID
+                RecordData
+                Sequence
+            }
+        }`;
+
+        this._activeSubscriptionCount++;
+        const sub = kernel.Subscribe(
+            'cache_invalidation',
+            'cache_invalidation',
+            CACHE_INVALIDATION_SUB
+        ).subscribe({
+            next: (rawData: unknown) => {
+                const event = (rawData as { cacheInvalidation?: CacheInvalidationEventData } | null | undefined)?.cacheInvalidation;
+                if (event) {
+                    this.dispatchCacheInvalidationEvent(event);
+                }
+            },
+            error: (error: unknown) => {
+                console.error('[GraphQLDataProvider] Kernel cache invalidation subscription error:', error);
+                this._cacheInvalidationSubscription = null;
+            },
+            complete: () => {
+                this._cacheInvalidationSubscription = null;
+            },
+        });
+
+        this._cacheInvalidationSubscription = new Subscription(() => {
+            this._activeSubscriptionCount = Math.max(0, this._activeSubscriptionCount - 1);
+            sub.unsubscribe();
+        });
+    }
+
     public SubscribeToCacheInvalidation(): void {
+        this._shouldSubscribeCacheInvalidation = true;
         if (this._cacheInvalidationSubscription || this._tabInvalidationMultiplexer) {
-            return; // Already subscribed or multiplexing active
+            return; // Already subscribed or legacy multiplexing active
         }
 
         if (!this.ConfigData?.WSURL) {
             return; // No WebSocket URL configured, skip
+        }
+
+        if (this.shouldUseSharedTabKernel()) {
+            this.initOrUpdateSharedTabKernel();
+            const kernel = this._sharedTabKernel;
+            if (kernel && !kernel.IsDisposed) {
+                void kernel.WaitUntilReady().then((connected) => {
+                    if (!this._shouldSubscribeCacheInvalidation || kernel.IsDisposed || this._cacheInvalidationSubscription) {
+                        return;
+                    }
+                    if (connected && kernel.IsKernelConnected) {
+                        this.openKernelCacheInvalidationSubscription(kernel);
+                    } else if (ClientTabInvalidationMultiplexer.IsSupported(this._sharedTabKernelEnv)) {
+                        if (kernel.IsLeader) {
+                            this.openCacheInvalidationSubscription();
+                        }
+                    } else {
+                        this.openCacheInvalidationSubscription();
+                    }
+                });
+                return;
+            }
         }
 
         if (GraphQLDataProvider.EnableMultiTabInvalidationMultiplexing &&
@@ -5710,7 +6330,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        this._shouldSubscribeCacheInvalidation = false;
         this.CancelPendingMetadataMemberRefresh();
+        if (this._sharedTabKernel) {
+            void this._sharedTabKernel.Dispose();
+            this._sharedTabKernel = null;
+            this._sharedTabKernelScopeKey = null;
+        }
         if (this._tabInvalidationMultiplexer) {
             void this._tabInvalidationMultiplexer.Dispose();
             this._tabInvalidationMultiplexer = null;

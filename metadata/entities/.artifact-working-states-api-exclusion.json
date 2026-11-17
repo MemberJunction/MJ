@@ -18,5 +18,130 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Working States"
     }
+  },
+  {
+    "_comments": [
+      "Hide incoming Artifact Working States relationships from Artifact/User forms and API bundles"
+    ],
+    "fields": {
+      "Name": "MJ: Artifacts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Working States&RelatedEntityJoinField=ArtifactID"
+          }
+        },
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifacts"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Artifact Versions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactVersionID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Users&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Working States&RelatedEntityJoinField=LastModifiedByUserID"
+          }
+        },
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Users&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=CreatedByUserID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invites"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Magic Link Invites&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=MagicLinkInviteID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    }
+  },
+  {
+    "_comments": [
+      "External guest share links bind Frozen ArtifactVersions to MagicLinkInvites and must only be accessed via governed Remote Operations and scoped resolvers, never public GraphQL CRUD or user search"
+    ],
+    "fields": {
+      "Name": "MJ: Artifact Guest Share Links",
+      "IncludeInAPI": true,
+      "AllowAllRowsAPI": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowUserSearchAPI": false,
+      "AllowCaching": false,
+      "TrustServerCacheCompletely": false,
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links"
+    }
   }
 ]

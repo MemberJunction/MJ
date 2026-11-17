@@ -10699,6 +10699,71 @@ export const MJArchiveRunSchema = z.object({
 export type MJArchiveRunEntityType = z.infer<typeof MJArchiveRunSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Guest Share Links
+ */
+export const MJArtifactGuestShareLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key of the artifact guest share link binding record.`),
+    MagicLinkInviteID: z.string().describe(`
+        * * Field Name: MagicLinkInviteID
+        * * Display Name: Magic Link Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit.`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+        * * Description: Foreign key to the shared Artifact record. Cascades on artifact deletion.`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Foreign key to the specific pinned ArtifactVersion snapshot exposed by this guest link.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User who created this external guest share link.`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Optional human-readable label identifying the external recipient or review purpose.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+    CreatedByUser: z.string().nullable().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJArtifactGuestShareLinkEntityType = z.infer<typeof MJArtifactGuestShareLinkSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifact Permissions
  */
 export const MJArtifactPermissionSchema = z.object({
@@ -11047,10 +11112,11 @@ export const MJArtifactVersionSchema = z.object({
         * * Display Name: Content
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The content of the artifact at this version`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJArtifactVersionEntity_IArtifactVersionConfiguration
         * * Description: JSON configuration for this version`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
@@ -12417,10 +12483,11 @@ export const MJCommentTypeSchema = z.object({
         * * Display Name: UI Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Optional ClassFactory registration key of an EntitySubtypeUIDriverBase component used by the Notes & suggestions panel to render cards of this comment type (for example FieldSuggestionCardComponent).`),
-    AllowedAnchorTypes: z.string().nullable().describe(`
+    AllowedAnchorTypes: z.any().nullable().describe(`
         * * Field Name: AllowedAnchorTypes
         * * Display Name: Allowed Anchor Types
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>
         * * Description: Optional JSON array of Conversation.AnchorType values permitted for this comment type (for example ["Field"] for Field Suggestion). NULL allows all anchor types.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -15112,6 +15179,17 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Decorator
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk.`),
+    RetryAfter: z.date().nullable().describe(`
+        * * Field Name: RetryAfter
+        * * Display Name: Retry After
+        * * SQL Data Type: datetimeoffset
+        * * Description: The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
@@ -15511,6 +15589,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes.`),
+    RetryAfter: z.date().nullable().describe(`
+        * * Field Name: RetryAfter
+        * * Display Name: Retry After
+        * * SQL Data Type: datetimeoffset
+        * * Description: The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -16073,6 +16162,12 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
         * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
+    DiscoverState: z.any().nullable().describe(`
+        * * Field Name: DiscoverState
+        * * Display Name: Discover State
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentSourceEntity_IContentSourceDiscoverState
+        * * Description: Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress.`),
     ContentType: z.string().nullable().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name

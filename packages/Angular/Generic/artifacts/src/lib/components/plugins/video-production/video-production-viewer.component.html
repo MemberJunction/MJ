@@ -130,13 +130,13 @@
               <dd class="vp-stats__value">
                 <span
                   class="vp-badge vp-badge--audio"
-                  [class.vp-badge--audio-muted]="Spec.Audio?.Narration?.Enabled === false"
+                  [class.vp-badge--audio-muted]="Spec.Audio.Narration?.Enabled === false"
                   data-testid="vp-badge-audio"
                 >
                   <i
                     class="fa-solid"
-                    [class.fa-volume-high]="Spec.Audio?.Narration?.Enabled !== false"
-                    [class.fa-volume-xmark]="Spec.Audio?.Narration?.Enabled === false"
+                    [class.fa-volume-high]="Spec.Audio.Narration?.Enabled !== false"
+                    [class.fa-volume-xmark]="Spec.Audio.Narration?.Enabled === false"
                     aria-hidden="true"
                   ></i>
                   <span>{{ soundText }}</span>

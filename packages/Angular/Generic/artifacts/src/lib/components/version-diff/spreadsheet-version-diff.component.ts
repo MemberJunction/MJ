@@ -3,10 +3,9 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject,
 } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import {
@@ -26,10 +25,10 @@ import {
         <div class="mj-sheets-vdiff__toolbar">
           <div class="mj-sheets-vdiff__stats">
             <span class="mj-sh-chip mj-sh-chip--mod">
-              <i class="fas fa-table-cells"></i> {{ DiffResult.TotalValueEdits }} cell value changes
+              <i class="fa-solid fa-table-cells"></i> {{ DiffResult.TotalValueEdits }} cell value changes
             </span>
             <span class="mj-sh-chip mj-sh-chip--fx">
-              <i class="fas fa-square-root-variable"></i> {{ DiffResult.TotalFormulaEdits }} formula edits
+              <i class="fa-solid fa-square-root-variable"></i> {{ DiffResult.TotalFormulaEdits }} formula edits
             </span>
             @if (DiffResult.AddedSheets > 0) {
               <span class="mj-sh-chip mj-sh-chip--add">+{{ DiffResult.AddedSheets }} sheet</span>
@@ -104,7 +103,7 @@ import {
 
           @if (sheet.TotalChangedCells === 0 && sheet.StructureDeltas.length === 0) {
             <div class="mj-sheets-vdiff__empty">
-              <i class="fas fa-circle-check"></i>
+              <i class="fa-solid fa-circle-check"></i>
               <span>No cell or formula changes in worksheet "{{ sheet.Name }}".</span>
             </div>
           } @else if (ViewMode === 'grid') {
@@ -151,7 +150,7 @@ import {
                               @if (cell.ValueChanged) {
                                 <div class="mj-sh-val-pair">
                                   <del class="mj-sh-val-old">{{ cell.OldDisplay || '∅' }}</del>
-                                  <i class="fas fa-arrow-right"></i>
+                                  <i class="fa-solid fa-arrow-right"></i>
                                   <strong class="mj-sh-val-new">{{ cell.NewDisplay || '∅' }}</strong>
                                 </div>
                               } @else {
@@ -513,23 +512,47 @@ import {
     `,
   ],
 })
-export class SpreadsheetVersionDiffComponent implements IArtifactVersionDiffViewer, OnChanges {
+export class SpreadsheetVersionDiffComponent implements IArtifactVersionDiffViewer {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  @Input() BaseVersion!: MJArtifactVersionEntity;
-  @Input() TargetVersion!: MJArtifactVersionEntity;
+  private baseVersion!: MJArtifactVersionEntity;
+  private targetVersion!: MJArtifactVersionEntity;
+
+  @Input() public Provider?: IMetadataProvider | null = null;
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      this.recomputeDiff();
+    }
+  }
 
   public DiffResult: SpreadsheetVisualDiffResult | null = null;
   public ActiveSheet: SpreadsheetSheetDiffItem | null = null;
   public ViewMode: 'grid' | 'list' = 'grid';
   public ChangedRowsOnly = false;
 
-  ngOnChanges(_changes: SimpleChanges): void {
-    if (this.BaseVersion && this.TargetVersion) {
+  private recomputeDiff(): void {
+    if (this.baseVersion && this.targetVersion) {
       this.DiffResult = this.diffService.ComputeSpreadsheetVisualDiff(
-        this.BaseVersion.Content,
-        this.TargetVersion.Content,
+        this.baseVersion.Content,
+        this.targetVersion.Content,
       );
       const firstChanged = this.DiffResult.Sheets.find((s) => s.Status !== 'unchanged');
       this.ActiveSheet = firstChanged ?? this.DiffResult.Sheets[0] ?? null;
