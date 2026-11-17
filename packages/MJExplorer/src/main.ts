@@ -1,33 +1,13 @@
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { AuthProviderCatalog, LoginScreenLoader } from '@memberjunction/ng-auth-services/preload';
+import { BootstrapMJ } from '@memberjunction/ng-public-host/bootstrap';
 import { environment } from './environments/environment';
+import { PUBLIC_PAGES } from './app/generated/public-pages.generated';
 
-async function initAndBootstrap() {
-  // Fetch the server's public authentication-provider catalog BEFORE the root module is
-  // imported. `AuthServicesModule.forRoot()` runs while the @NgModule decorator's `imports`
-  // array is being constructed — i.e. at module-definition time — so the catalog has to be in
-  // hand before that module is evaluated. Preload never rejects: on any failure it yields an
-  // empty catalog and the app falls back to the compiled `AUTH_TYPE`, so a slow or older server
-  // delays the login screen briefly but never blocks it.
-  //
-  // The sign-in page published in Login Studio is fetched alongside it, so the login screen's first
-  // paint is already designed. It never rejects either; the explorer app awaits the same request.
-  await Promise.all([
-    AuthProviderCatalog.Preload(environment.GRAPHQL_URI),
-    LoginScreenLoader.Load(environment.GRAPHQL_URI),
-  ]);
-
-  // Dynamic import is REQUIRED here, not a convenience. A static import is hoisted, so AppModule
-  // — and with it AuthServicesModule.forRoot — would evaluate before the await above ever ran,
-  // making the preload pointless. This is the framework-ordering exception, the same reason
-  // Angular's runtime-configuration guidance defers the root module import.
-  const { AppModule } = await import('./app/app.module');
-
-  platformBrowserDynamic().bootstrapModule(AppModule)
-    .then(ref => {
-      //LogStatus('Bootstrap success: ' + ref);
-    })
-    .catch(err => console.error(err));
-}
-
-initAndBootstrap();
+// A path under /p/ starts the public host with the Open App's page. Every other path preloads the
+// auth provider catalog and sign-in design, then starts Explorer.
+BootstrapMJ({
+  Environment: environment,
+  PublicPages: PUBLIC_PAGES,
+  // Dynamic import, lazy-route category: Explorer's root module is evaluated only after the auth
+  // catalog preload, and a public page never downloads it.
+  LoadExplorerModule: () => import('./app/app.module').then(m => m.AppModule),
+});
