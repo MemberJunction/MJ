@@ -67,5 +67,3 @@ Declare the page in the Open App's `mj-app.json`:
   { "slug": "pricing", "package": "@acme/app-public", "export": "PricingPageComponent", "title": "Pricing" }
 ]
 ```
-
-See `Demos/OpenApps/AcmeLumen` for a full example.
