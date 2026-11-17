@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { STANDARD_COLUMN_DESCRIPTIONS } from '../DDLGenerator.js';
 import { SchemaEvolution } from '../SchemaEvolution.js';
 import type { SourceObjectInfo, TargetTableConfig, TargetColumnConfig, ExistingTableInfo } from '../interfaces.js';
 
@@ -194,6 +195,17 @@ describe('SchemaEvolution', () => {
             // Already-present standard columns are NOT re-added.
             expect(added).not.toContain('__mj_integration_SyncStatus');
             expect(added).not.toContain('__mj_integration_LastSyncedAt');
+
+            // Backfilled standard columns carry STANDARD_COLUMN_DESCRIPTIONS end-to-end into DDL.
+            const snapshotCol = diff.AddedColumns.find(c => c.TargetColumnName === '__mj_integration_LastSyncedSnapshot');
+            expect(snapshotCol?.Description).toBe(STANDARD_COLUMN_DESCRIPTIONS['__mj_integration_LastSyncedSnapshot']);
+            const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
+            expect(ssSql).toContain('sp_addextendedproperty');
+            expect(ssSql).toContain("@level2name = '__mj_integration_LastSyncedSnapshot'");
+
+            const pgDiff = evo.DiffSchema(MakeSourceObject(), target, existing, 'postgresql');
+            const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
+            expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."__mj_integration_LastSyncedSnapshot" IS`);
         });
 
         it('should add a key column that the existing table does not have, as nullable', () => {

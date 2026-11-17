@@ -142,19 +142,26 @@ export class DDLGenerator {
         // "There is already an object named '<table>'" collisions.
         const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
-        const trailing: string[] = [...softIndexes];
-        // Generate extended properties for descriptions (SQL Server) or COMMENT ON (PostgreSQL)
-        if (platform === 'sqlserver') {
-            trailing.push(...this.GenerateExtendedProperties(config));
-        } else if (platform === 'postgresql') {
-            trailing.push(...this.GeneratePostgresComments(config));
-        }
+        const trailing: string[] = [...softIndexes, ...this.generateDescriptionsForPlatform(config, platform)];
 
         if (trailing.length > 0) {
             return createTable + '\n\n' + trailing.join('\n\n');
         }
 
         return createTable;
+    }
+
+    private generateDescriptionsForPlatform(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+        switch (platform) {
+            case 'sqlserver':
+                return this.GenerateExtendedProperties(config);
+            case 'postgresql':
+                return this.GeneratePostgresComments(config);
+            default: {
+                const unsupported: never = platform;
+                throw new Error(`GenerateDescriptionsForPlatform: unsupported database platform '${String(unsupported)}'`);
+            }
+        }
     }
 
     /**
@@ -182,32 +189,21 @@ export class DDLGenerator {
      * Generate sp_addextendedproperty calls for table and column descriptions.
      */
     GenerateExtendedProperties(config: TargetTableConfig): string[] {
+        const { tableDescription, columnDescriptions } = this.collectDescriptions(config);
         const props: string[] = [];
 
-        // Table-level description
-        if (config.Description && config.Description.trim().length > 0) {
-            const escaped = EscapeSQLString(config.Description);
+        if (tableDescription !== null) {
             const exec =
                 `EXEC sp_addextendedproperty\n` +
                 `    @name = N'MS_Description',\n` +
-                `    @value = N'${escaped}',\n` +
+                `    @value = N'${EscapeSQLString(tableDescription)}',\n` +
                 `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
                 `    @level1type = N'TABLE', @level1name = '${config.TableName}';`;
             props.push(this.guardExtendedProperty(config.SchemaName, config.TableName, null, exec));
         }
 
-        // Standard column descriptions
-        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
-            props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
-        }
-
-        // User-configured column descriptions
-        for (const col of config.Columns) {
-            if (col.Description && col.Description.trim().length > 0) {
-                props.push(this.makeColumnExtendedProperty(
-                    config.SchemaName, config.TableName, col.TargetColumnName, col.Description
-                ));
-            }
+        for (const { columnName, description } of columnDescriptions) {
+            props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, columnName, description));
         }
 
         return props;
@@ -217,26 +213,59 @@ export class DDLGenerator {
      * Generate PostgreSQL COMMENT ON TABLE and COMMENT ON COLUMN statements for descriptions.
      */
     GeneratePostgresComments(config: TargetTableConfig): string[] {
+        const { tableDescription, columnDescriptions } = this.collectDescriptions(config);
         const comments: string[] = [];
-        const fullTable = `${QuotePostgres(config.SchemaName)}.${QuotePostgres(config.TableName)}`;
 
-        if (config.Description && config.Description.trim().length > 0) {
-            comments.push(`COMMENT ON TABLE ${fullTable} IS '${EscapeSQLString(config.Description)}';`);
+        if (tableDescription !== null) {
+            const fullTable = `${QuotePostgres(config.SchemaName)}.${QuotePostgres(config.TableName)}`;
+            comments.push(`COMMENT ON TABLE ${fullTable} IS '${EscapeSQLString(tableDescription)}';`);
         }
 
-        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
-            comments.push(this.makePostgresColumnComment(config.SchemaName, config.TableName, colName, desc));
-        }
-
-        for (const col of config.Columns) {
-            if (col.Description && col.Description.trim().length > 0) {
-                comments.push(this.makePostgresColumnComment(
-                    config.SchemaName, config.TableName, col.TargetColumnName, col.Description
-                ));
-            }
+        for (const { columnName, description } of columnDescriptions) {
+            comments.push(this.makePostgresColumnComment(config.SchemaName, config.TableName, columnName, description));
         }
 
         return comments;
+    }
+
+    private collectDescriptions(config: TargetTableConfig): {
+        tableDescription: string | null;
+        columnDescriptions: Array<{ columnName: string; description: string }>;
+    } {
+        ValidateIdentifier(config.SchemaName, 'schema');
+        ValidateIdentifier(config.TableName, 'table');
+
+        const tableDescription = config.Description && config.Description.trim().length > 0
+            ? config.Description
+            : null;
+
+        const columnDescriptions: Array<{ columnName: string; description: string }> = [];
+        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
+            columnDescriptions.push({ columnName: colName, description: desc });
+        }
+        for (const col of config.Columns) {
+            ValidateIdentifier(col.TargetColumnName, 'column');
+            if (col.Description && col.Description.trim().length > 0) {
+                columnDescriptions.push({ columnName: col.TargetColumnName, description: col.Description });
+            }
+        }
+
+        return { tableDescription, columnDescriptions };
+    }
+
+    private makeColumnDescriptionStatement(
+        schemaName: string, tableName: string, columnName: string, description: string, platform: DatabasePlatform
+    ): string {
+        switch (platform) {
+            case 'sqlserver':
+                return this.makeColumnExtendedProperty(schemaName, tableName, columnName, description);
+            case 'postgresql':
+                return this.makePostgresColumnComment(schemaName, tableName, columnName, description);
+            default: {
+                const unsupported: never = platform;
+                throw new Error(`MakeColumnDescriptionStatement: unsupported database platform '${String(unsupported)}'`);
+            }
+        }
     }
 
     private makePostgresColumnComment(
@@ -301,20 +330,28 @@ export class DDLGenerator {
         // gate with a single-statement IF over sys.columns (no BEGIN/END, so RSU's ';\n' batch chunker
         // can't split it — same shape as GuardExtendedProperty). Postgres has native IF NOT EXISTS.
         let alterStmt: string;
-        if (platform === 'sqlserver') {
-            const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
-            alterStmt =
-                `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
-                `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
-                `AND name = N'${column.TargetColumnName}')\n${addStmt}`;
-        } else {
-            alterStmt = `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+        switch (platform) {
+            case 'sqlserver': {
+                const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+                alterStmt =
+                    `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
+                    `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
+                    `AND name = N'${column.TargetColumnName}')\n${addStmt}`;
+                break;
+            }
+            case 'postgresql':
+                alterStmt = `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+                break;
+            default: {
+                const unsupported: never = platform;
+                throw new Error(`GenerateAlterTableAddColumn: unsupported database platform '${String(unsupported)}'`);
+            }
         }
 
         if (column.Description && column.Description.trim().length > 0) {
-            const descStmt = platform === 'sqlserver'
-                ? this.makeColumnExtendedProperty(schemaName, tableName, column.TargetColumnName, column.Description)
-                : this.makePostgresColumnComment(schemaName, tableName, column.TargetColumnName, column.Description);
+            const descStmt = this.makeColumnDescriptionStatement(
+                schemaName, tableName, column.TargetColumnName, column.Description, platform
+            );
             return `${alterStmt}\n\n${descStmt}`;
         }
 
