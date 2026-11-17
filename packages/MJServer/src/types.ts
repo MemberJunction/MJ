@@ -90,7 +90,7 @@ export type AppContext = {
 
 export class ProviderInfo {
   provider: DatabaseProviderBase;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
-  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Adhoc-Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class DataSourceInfo  {

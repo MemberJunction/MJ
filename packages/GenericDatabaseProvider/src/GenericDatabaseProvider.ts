@@ -6260,7 +6260,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             true,
         );
         const results = callerFields
-            ? ProjectRowsToFields(materialized, callerFields)
+            ? ProjectRowsToFields(materialized, callerFields, { PreserveFrozen: true })
             : materialized;
         return {
             viewIndex,
