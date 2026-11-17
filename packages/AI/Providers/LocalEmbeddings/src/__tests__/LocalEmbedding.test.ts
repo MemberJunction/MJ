@@ -7,6 +7,7 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
 }));
 
+const base = vi.hoisted(() => ({ embedTexts: vi.fn() }));
 vi.mock('@memberjunction/ai', () => {
   class MockBaseEmbeddings {
     protected _apiKey: string;
@@ -15,6 +16,11 @@ vi.mock('@memberjunction/ai', () => {
     get apiKey() { return this._apiKey; }
     SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
+    }
+    /** Stands in for the real one, which calls embedBatch and checks the result is 1:1 with the texts. */
+    EmbedTexts(params: unknown) {
+      base.embedTexts(params);
+      return (this as unknown as { embedBatch(p: unknown): Promise<unknown> }).embedBatch(params);
     }
     ThrowIfRequestAborted(error: unknown, token?: { aborted: boolean; reason?: unknown }) {
       if (token?.aborted) {
@@ -125,6 +131,10 @@ describe('LocalEmbedding', () => {
 
   /* ---- EmbedTexts ---- */
   describe('EmbedTexts', () => {
+    it('goes through BaseEmbeddings.EmbedTexts, which checks the vectors are 1:1 with the texts', async () => {
+      await embedding.EmbedTexts({ model: 'm', texts: ['x'] } as never);
+      expect(base.embedTexts).toHaveBeenCalledOnce();
+    });
 
     it('should throw error when model name is missing', async () => {
       await expect(embedding.EmbedTexts({ texts: ['hello'] } as never))
@@ -203,6 +213,21 @@ describe('LocalEmbedding', () => {
 
     it('returns the vector unchanged at the native size', async () => {
       expect((await embedOne(4)).vector).toEqual([0.5, 0.5, 0.5, 0.5]);
+    });
+
+    it.each([-1, 2.5])('refuses dimensions %j before embedding', async (dimensions) => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      host.run.mockResolvedValue({ Vectors: [new Float32Array([0.5, 0.5, 0.5, 0.5])], Tokens: 1 });
+      host.run.mockClear();
+      expect((await embedding.EmbedText({ model: 'm', text: 'x', dimensions } as never)).vector).toEqual([]);
+      expect((await embedding.EmbedTexts({ model: 'm', texts: ['x'], dimensions } as never)).vectors).toEqual([]);
+      expect(host.run).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
+      error.mockRestore();
+    });
+
+    it('treats dimensions 0 as the native size, as BaseEmbeddings.DimensionsParam does', async () => {
+      expect((await embedOne(0)).vector).toEqual([0.5, 0.5, 0.5, 0.5]);
     });
 
     it('returns an empty vector when more dimensions are requested than the model produces', async () => {

@@ -25,6 +25,17 @@ function truncateToDimensions(vector: number[], dimensions: number): number[] {
     return norm > 0 ? head.map(x => x / norm) : head;
 }
 
+/**
+ * Refuses a `dimensions` that is not a positive integer, which `slice` would otherwise turn into a
+ * silently shortened vector. None or 0 means the model's native width, as
+ * `BaseEmbeddings.DimensionsParam` reads it.
+ */
+function assertValidDimensions(dimensions: number | undefined): void {
+    if (dimensions && !(Number.isInteger(dimensions) && dimensions > 0)) {
+        throw new Error(`dimensions must be a positive integer; got ${dimensions}`);
+    }
+}
+
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
 export class LocalEmbedding extends BaseEmbeddings {
     constructor(apiKey?: string) {
@@ -75,6 +86,7 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
+            assertValidDimensions(params.dimensions);
             const { vectors: [rawVector], tokens } = await this.embedVectors(modelName, [params.text], params.maxInputTokens);
             const vector = (rawVector && params.dimensions) ? truncateToDimensions(rawVector, params.dimensions) : (rawVector ?? []);
             
@@ -105,13 +117,6 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
-     * Embed multiple text strings
-     */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
-        return this.embedBatch(params);
-    }
-
-    /**
      * Native batch path behind {@link BaseEmbeddings.EmbedTexts}, which checks the result is 1:1
      * with the inputs.
      */
@@ -121,6 +126,7 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
+            assertValidDimensions(params.dimensions);
             const { vectors: rawVectors, tokens } = await this.embedVectors(modelName, params.texts, params.maxInputTokens);
             const vectors = params.dimensions
                 ? rawVectors.map(v => truncateToDimensions(v, params.dimensions!))
