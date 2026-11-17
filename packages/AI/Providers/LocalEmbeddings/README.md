@@ -143,16 +143,27 @@ the life of the model session. A sync that embeds long texts therefore left the 
 peak, long after the work finished. This package turns the arena (and the memory pattern) off, and
 `ClearSharedCache()` releases the model's ONNX sessions, not just the JavaScript object.
 
-Measured on Linux arm64 with 4 CPUs, replaying the nightly sync's calls (MJ #6689):
+Measured with this package on Linux arm64 (Docker, 4 CPUs, Node 24), replaying the nightly sync's
+calls for `Xenova/gte-small` — about 1,100 texts in batches of 50, several batches in flight — three
+passes each (MJ #6689):
 
-| | Peak | Held after the sync | Time per pass |
-|---|---|---|---|
-| Arena on | 1245 MB | 1245 MB | 68 s |
-| Arena off (default) | 433 MB | 433 MB | 71 s (about 4% slower) |
+| | Held after the sync | Time per pass |
+|---|---|---|
+| Arena on | 1240–1305 MB | 37 s |
+| Arena off (default) | 560–740 MB | 22 s |
+| Arena off, with `MALLOC_MMAP_THRESHOLD_=131072` | about 275 MB | 25 s |
 
 To keep the arena on a dedicated inference host that can spare the memory, set
 `MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true` (`1` and `yes` also work). It is read each time a model loads.
 A remote embedding model avoids local model memory entirely.
+
+**What arena off still holds is glibc's heap, not ONNX Runtime.** glibc raises its mmap threshold
+as large blocks are freed, so later large ONNX buffers come from the heap, and freed heap is not
+returned to the operating system. On Linux, setting `MALLOC_MMAP_THRESHOLD_=131072` in the
+environment of the process that embeds (MJAPI) keeps large blocks on mmap, so they go back to the OS
+when freed. It is a process-wide glibc setting read at start-up — it cannot be set from JavaScript —
+so it is a deployment choice, not a default of this package. Measure it under your own traffic
+before you adopt it.
 
 ## Runtime loading
 

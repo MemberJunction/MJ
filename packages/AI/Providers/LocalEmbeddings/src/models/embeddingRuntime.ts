@@ -274,9 +274,10 @@ function textOnly(config: PretrainedConfig): PretrainedConfig {
  * availableParallelism() honors cpusets and CPU quotas.
  *
  * Arena: ONNX Runtime's CPU arena and memory pattern keep every buffer they ever grew to for the
- * life of the session, so a sync's long inputs left the process holding the peak. Measured on Linux
- * arm64 with 4 CPUs, replaying the nightly sync's calls: arena on peaks and holds 1245 MB;
- * arena off peaks at 433 MB and holds it, for ~4% more time (68 s to 71 s per pass). MJ #6689.
+ * life of the session, so a sync's long inputs left the process holding the peak. Measured with
+ * this package on Linux arm64 with 4 CPUs, replaying the nightly sync's calls (MJ #6689): arena on
+ * holds 1240-1305 MB after a sync; arena off holds 560-740 MB and is no slower (22 s vs 37 s per
+ * pass). What arena off still holds is glibc heap, not ONNX: see the README's Memory section.
  * Off by default; MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true opts back in.
  */
 function sessionOptions(): { intraOpNumThreads: number; enableCpuMemArena?: false; enableMemPattern?: false } {
