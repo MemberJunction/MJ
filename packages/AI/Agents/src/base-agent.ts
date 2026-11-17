@@ -955,6 +955,13 @@ export class BaseAgent {
      */
     private static _deferredSpilloverSeq = 0;
 
+    /**
+     * Tracks `Action.ID:reason` keys that have already logged an incomplete `Action.Config`
+     * expiration warning in this process so misconfigured metadata is surfaced without per-step spam.
+     * @private
+     */
+    private static readonly _warnedIncompleteActionExpirationConfigs: Set<string> = new Set();
+
     private static readonly SPILLOVER_COMPACT_LENGTH_FALLBACK = 500;
     private static readonly SPILLOVER_COMPACT_CHAR_RATIO = 0.75;
     private static readonly SPILLOVER_COMPACT_MIN_CHARS = 200;
@@ -971,6 +978,14 @@ export class BaseAgent {
     /** Discards any unmaterialized deferred action-output spillover closures for this run. @protected */
     protected ClearDeferredActionSpillovers(): void {
         this._deferredActionSpillovers.clear();
+    }
+
+    /**
+     * Clears cached one-time incomplete `Action.Config` expiration warnings (used for test isolation).
+     * @protected
+     */
+    protected ClearIncompleteActionExpirationWarnings(): void {
+        BaseAgent._warnedIncompleteActionExpirationConfigs.clear();
     }
 
     /**
@@ -1682,16 +1697,38 @@ export class BaseAgent {
         }
 
         // 3. Action-level metadata default (Action.Config_Object), shared by skill-bundled and direct actions
-        if (actionConfig && actionConfig.resultExpirationTurns != null) {
-            const mode: ActionExpirationMode = actionConfig.resultExpirationMode ?? 'None';
-            if (mode !== 'None') {
-                return {
-                    ExpirationTurns: actionConfig.resultExpirationTurns,
-                    ExpirationMode: mode,
-                    CompactMode: actionConfig.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
-                    CompactLength: actionConfig.compactLength,
-                    CompactPromptID: defaultPromptId,
-                };
+        if (actionConfig) {
+            if (actionConfig.resultExpirationTurns != null) {
+                const mode: ActionExpirationMode = actionConfig.resultExpirationMode ?? 'None';
+                if (mode !== 'None') {
+                    return {
+                        ExpirationTurns: actionConfig.resultExpirationTurns,
+                        ExpirationMode: mode,
+                        CompactMode: actionConfig.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
+                        CompactLength: actionConfig.compactLength,
+                        CompactPromptID: defaultPromptId,
+                    };
+                }
+                if (actionConfig.resultExpirationMode === undefined) {
+                    const warnKey = `${actionEntity.ID}:missing-mode`;
+                    if (!BaseAgent._warnedIncompleteActionExpirationConfigs.has(warnKey)) {
+                        BaseAgent._warnedIncompleteActionExpirationConfigs.add(warnKey);
+                        LogError(
+                            `BaseAgent.ResolveActionExpirationConfig: Action '${actionEntity.Name}' (${actionEntity.ID}) sets Action.Config.resultExpirationTurns=${actionConfig.resultExpirationTurns} without resultExpirationMode ('Compact' or 'Remove'); expiration is inactive.`
+                        );
+                    }
+                }
+            } else if (
+                actionConfig.resultExpirationMode === 'Compact' ||
+                actionConfig.resultExpirationMode === 'Remove'
+            ) {
+                const warnKey = `${actionEntity.ID}:missing-turns`;
+                if (!BaseAgent._warnedIncompleteActionExpirationConfigs.has(warnKey)) {
+                    BaseAgent._warnedIncompleteActionExpirationConfigs.add(warnKey);
+                    LogError(
+                        `BaseAgent.ResolveActionExpirationConfig: Action '${actionEntity.Name}' (${actionEntity.ID}) sets Action.Config.resultExpirationMode='${actionConfig.resultExpirationMode}' without resultExpirationTurns; expiration is inactive.`
+                    );
+                }
             }
         }
 
@@ -1785,6 +1822,30 @@ export class BaseAgent {
         }));
     }
 
+    /**
+     * Checks whether a tabular row array meets row or character spillover thresholds without
+     * serializing the entire array when an early prefix already exceeds `thresholds.CharThreshold`.
+     */
+    private wouldTabularRowsSpillOver(
+        rows: Array<Record<string, unknown>>,
+        thresholds: ActionSpilloverThresholds
+    ): boolean {
+        if (rows.length >= thresholds.RowThreshold) {
+            return true;
+        }
+        let approxChars = 2; // '[' and ']'
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
+            const rowJson = JSON.stringify(row);
+            approxChars += (rowJson ? rowJson.length : 4) + (i > 0 ? 1 : 0);
+            if (approxChars >= thresholds.CharThreshold) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private buildTabularSpilloverArtifacts(
         actionName: string,
         outputParams: ActionParam[],
@@ -1803,12 +1864,12 @@ export class BaseAgent {
                 continue;
             }
             const rows = param.Value;
-            // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
-            if (rows.length < thresholds.RowThreshold && JSON.stringify(rows).length < thresholds.CharThreshold) {
+            if (!this.wouldTabularRowsSpillOver(rows, thresholds)) {
                 continue;
             }
             const tableName = param.Name || 'Results';
             const columns = this.inferSnapshotColumns(rows[0], rawColumns);
+            // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
             const snapshotJson = JSON.stringify({
                 tables: [{ name: tableName, columns, rows, metadata: { rowCount: rows.length } }],
             });
@@ -1948,7 +2009,39 @@ export class BaseAgent {
         message: string | undefined,
         expirationConfig?: ResolvedActionExpirationConfig
     ): boolean {
-        return this.collectActionSpilloverCandidates('action', outputParams, message, 0, expirationConfig).length > 0;
+        const thresholds = this.ResolveSpilloverThresholds(expirationConfig);
+        for (const param of outputParams) {
+            if (param.Name?.trim().toLowerCase() !== 'columns' && BaseAgent.isTabularRowArray(param.Value)) {
+                if (this.wouldTabularRowsSpillOver(param.Value, thresholds)) {
+                    return true;
+                }
+            }
+        }
+        for (const param of outputParams) {
+            const lowerName = (param.Name || '').trim().toLowerCase();
+            if (lowerName === 'columns') {
+                continue;
+            }
+            const val = param.Value;
+            if (val == null || BaseAgent.isTabularRowArray(val)) {
+                continue;
+            }
+            if (typeof val === 'object') {
+                if (JSON.stringify(val, null, 2).length >= thresholds.CharThreshold) {
+                    return true;
+                }
+                continue;
+            }
+            if (
+                typeof val === 'string' &&
+                val.length >= thresholds.CharThreshold &&
+                !val.startsWith('[Media output') &&
+                !val.startsWith('[File output')
+            ) {
+                return true;
+            }
+        }
+        return typeof message === 'string' && message.length >= thresholds.CharThreshold;
     }
 
     /**
@@ -1966,21 +2059,22 @@ export class BaseAgent {
         expirationConfig?: ResolvedActionExpirationConfig,
         trustLevel: ActionOutputTrustLevel = 'Trusted'
     ): string | undefined {
-        const candidates = this.collectActionSpilloverCandidates(
-            actionName,
-            outputParams,
-            message,
-            stepNumber,
-            expirationConfig,
-            trustLevel
-        );
-        if (candidates.length === 0) {
+        if (!this.WouldActionOutputSpillOver(outputParams, message, expirationConfig)) {
             return undefined;
         }
+        const capturedParams = outputParams.map(param => ({ ...param }));
         const token = `spillover_${++BaseAgent._deferredSpilloverSeq}_${Math.random().toString(36).slice(2, 10)}`;
-        this._deferredActionSpillovers.set(token, () =>
-            candidates.map(candidate => this._artifactToolManager.RegisterArtifact(candidate))
-        );
+        this._deferredActionSpillovers.set(token, () => {
+            const candidates = this.collectActionSpilloverCandidates(
+                actionName,
+                capturedParams,
+                message,
+                stepNumber,
+                expirationConfig,
+                trustLevel
+            );
+            return candidates.map(candidate => this._artifactToolManager.RegisterArtifact(candidate));
+        });
         return token;
     }
 
@@ -20027,6 +20121,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
             const allPendingSpilloverIds: string[] = [];
+            const resolvedExpirationConfigs: ResolvedActionExpirationConfig[] = [];
             const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
                 const actionResult = result.result;
                 const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
@@ -20060,6 +20155,9 @@ The context is now within limits. Please retry your request with the recovered c
                 // artifact spillover until compaction, expiry/removal, or context recovery
                 // so `_ARTIFACT_MANIFEST` and provider KV cache stay stable while inline.
                 const expirationConfig = this.ResolveActionExpirationConfig(result.actionEntity, params.agent.ID, params);
+                if (expirationConfig != null && expirationConfig.ExpirationMode !== 'None') {
+                    resolvedExpirationConfigs.push(expirationConfig);
+                }
                 const pendingSpilloverId = isActionSuccess && addConversationMessage && this.AreArtifactToolsEnabled(params)
                     ? this.QueueDeferredActionOutputSpillover(
                         result.action.name,
@@ -20103,9 +20201,6 @@ The context is now within limits. Please retry your request with the recovered c
             // If multiple actions ran in parallel, use the most restrictive (shortest) active expiration settings,
             // ignoring 'None' so an unexpirable action does not mask an expirable one running alongside it.
             let metadata: AgentChatMessageMetadata | undefined;
-            const resolvedExpirationConfigs = actionResults
-                .map(r => this.ResolveActionExpirationConfig(r.actionEntity, params.agent.ID, params))
-                .filter((cfg): cfg is ResolvedActionExpirationConfig => cfg != null && cfg.ExpirationMode !== 'None');
 
             if (resolvedExpirationConfigs.length > 0) {
                 // Find the most restrictive expiration settings

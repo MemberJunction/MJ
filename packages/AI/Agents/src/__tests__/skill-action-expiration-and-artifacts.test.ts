@@ -218,6 +218,10 @@ class UnifiedActionPathwayProbeAgent extends BaseAgent {
         this.ClearDeferredActionSpillovers();
     }
 
+    public ResetExpirationWarnings(): void {
+        this.ClearIncompleteActionExpirationWarnings();
+    }
+
     public GetPendingSpilloverCount(): number {
         return this.PendingDeferredSpilloverCount;
     }
@@ -346,7 +350,68 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             });
         });
 
-        it('allows an active per-agent AIAgentAction row with ResultExpirationTurns to override Action.Config_Object while inheriting unset compact fields', () => {
+        it('allows an active per-agent AIAgentAction row with ResultExpirationTurns to override Action.Config_Object while inheriting unset CompactPromptID', () => {
+            const agent = new UnifiedActionPathwayProbeAgent();
+            const adhocWithActionPrompt = makeActionEntity(
+                RUN_ADHOC_QUERY_ID,
+                'Run Ad-hoc Query',
+                {
+                    resultExpirationTurns: 1,
+                    resultExpirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 2000,
+                    compactPromptId: 'ACTION-CONFIG-PROMPT-ID',
+                },
+                'DEFAULT-PROMPT-ID'
+            );
+
+            // DB-constraint-compliant Compact/AI Summary row: ResultExpirationMode='Compact' sets CompactMode='AI Summary'
+            // (CK_AIAgentAction_CompactModeRequired), leaving CompactPromptID null to inherit Action.Config.compactPromptId.
+            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+                {
+                    AgentID: SAGE_AGENT_ID,
+                    ActionID: RUN_ADHOC_QUERY_ID,
+                    Status: 'Active',
+                    ResultExpirationTurns: 3,
+                    ResultExpirationMode: 'Compact',
+                    CompactMode: 'AI Summary',
+                    CompactLength: null,
+                    CompactPromptID: null,
+                } as Partial<MJAIAgentActionEntity> as MJAIAgentActionEntity,
+            ]);
+
+            const resolvedFromConfig = agent.ResolveExpiration(adhocWithActionPrompt, SAGE_AGENT_ID);
+            expect(resolvedFromConfig).toEqual({
+                ExpirationTurns: 3,
+                ExpirationMode: 'Compact',
+                CompactMode: 'AI Summary',
+                CompactLength: 2000,
+                CompactPromptID: 'ACTION-CONFIG-PROMPT-ID',
+            });
+
+            // When Action.Config.compactPromptId is omitted, falls back to Action.DefaultCompactPromptID
+            const adhocWithEntityDefaultPrompt = makeActionEntity(
+                RUN_ADHOC_QUERY_ID,
+                'Run Ad-hoc Query',
+                {
+                    resultExpirationTurns: 1,
+                    resultExpirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 2000,
+                },
+                'DEFAULT-PROMPT-ID'
+            );
+            const resolvedFromEntityDefault = agent.ResolveExpiration(adhocWithEntityDefaultPrompt, SAGE_AGENT_ID);
+            expect(resolvedFromEntityDefault).toEqual({
+                ExpirationTurns: 3,
+                ExpirationMode: 'Compact',
+                CompactMode: 'AI Summary',
+                CompactLength: 2000,
+                CompactPromptID: 'DEFAULT-PROMPT-ID',
+            });
+        });
+
+        it('defensively falls back to Action.Config compactMode and compactLength for programmatic in-memory AIAgentAction rows', () => {
             const agent = new UnifiedActionPathwayProbeAgent();
             const adhocQueryAction = makeActionEntity(
                 RUN_ADHOC_QUERY_ID,
@@ -360,7 +425,6 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 'DEFAULT-PROMPT-ID'
             );
 
-            // Agent row overrides turns to 3, leaves CompactLength null so it inherits 2000 from Action.Config
             vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
                 {
                     AgentID: SAGE_AGENT_ID,
@@ -455,6 +519,8 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                     Status: 'Active',
                     ResultExpirationTurns: 2,
                     ResultExpirationMode: 'Compact',
+                    CompactMode: 'First N Chars',
+                    CompactLength: 1000,
                 } as Partial<MJAIAgentActionEntity> as MJAIAgentActionEntity,
             ]);
 
@@ -508,6 +574,37 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             expect(agent.GetConfigObject(bothBadAction)).toBeUndefined();
             expect(logErrorSpy).toHaveBeenCalledTimes(2);
             expect(logErrorSpy.mock.calls[1][0]).toContain('Broken Config Action');
+        });
+
+        it('logs a one-time LogError warning when Action.Config specifies incomplete expiration settings', () => {
+            const agent = new UnifiedActionPathwayProbeAgent();
+            agent.ResetExpirationWarnings();
+            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            const logErrorSpy = vi.spyOn(CoreLogging, 'LogError').mockImplementation(() => {});
+
+            const missingTurnsAction = makeActionEntity('00000000-0000-0000-0000-000000000901', 'Half Config Missing Turns', {
+                resultExpirationMode: 'Compact',
+            });
+            expect(agent.ResolveExpiration(missingTurnsAction, SAGE_AGENT_ID)).toBeUndefined();
+            expect(logErrorSpy).toHaveBeenCalledTimes(1);
+            expect(logErrorSpy.mock.calls[0][0]).toContain('Half Config Missing Turns');
+            expect(logErrorSpy.mock.calls[0][0]).toContain('without resultExpirationTurns');
+
+            // Repeated lookup for the same action ID does not spam LogError
+            expect(agent.ResolveExpiration(missingTurnsAction, SAGE_AGENT_ID)).toBeUndefined();
+            expect(logErrorSpy).toHaveBeenCalledTimes(1);
+
+            const missingModeAction = makeActionEntity('00000000-0000-0000-0000-000000000902', 'Half Config Missing Mode', {
+                resultExpirationTurns: 2,
+            });
+            expect(agent.ResolveExpiration(missingModeAction, SAGE_AGENT_ID)).toBeUndefined();
+            expect(logErrorSpy).toHaveBeenCalledTimes(2);
+            expect(logErrorSpy.mock.calls[1][0]).toContain('Half Config Missing Mode');
+            expect(logErrorSpy.mock.calls[1][0]).toContain('without resultExpirationMode');
+
+            // Repeated lookup for the same action ID does not spam LogError
+            expect(agent.ResolveExpiration(missingModeAction, SAGE_AGENT_ID)).toBeUndefined();
+            expect(logErrorSpy).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -1894,6 +1991,72 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             });
             expect(aggCall.result.success).toBe(true);
             expect((aggCall.result.data as { value: number }).value).toBe(127500);
+        });
+
+        it('defers full snapshot serialization until MaterializeDeferredActionSpillover runs', async () => {
+            const agent = new UnifiedActionPathwayProbeAgent();
+            let tailRowSerializations = 0;
+
+            const rows: Array<Record<string, unknown>> = Array.from({ length: 200 }, (_, i) => ({
+                CustomerName: `Enterprise Customer ${String(i + 1).padStart(3, '0')}`,
+                Revenue: (i + 1) * 100,
+                Details: `Account tier segment summary entry ${'Z'.repeat(40)}`,
+            }));
+            const lastIndex = rows.length - 1;
+            const lastRowData = { ...rows[lastIndex] };
+            rows[lastIndex] = {
+                CustomerName: lastRowData.CustomerName,
+                Revenue: lastRowData.Revenue,
+                Details: lastRowData.Details,
+                toJSON() {
+                    tailRowSerializations += 1;
+                    return lastRowData;
+                },
+            };
+
+            const compactConfig: ResolvedActionExpirationConfig = {
+                ExpirationTurns: 1,
+                ExpirationMode: 'Compact',
+                CompactMode: 'First N Chars',
+                CompactLength: 2000,
+            };
+
+            const token = agent.QueueSpillover(
+                'Run Ad-hoc Query',
+                undefined,
+                [{ Name: 'Results', Type: 'Output', Value: rows }],
+                'Returned 200 rows',
+                1,
+                compactConfig
+            );
+
+            // Queueing checks only the early prefix needed to cross CharThreshold (1500) without serializing all 200 rows
+            expect(token).toBeDefined();
+            expect(tailRowSerializations).toBe(0);
+            expect(agent.GetPendingSpilloverCount()).toBe(1);
+            expect(agent.GetArtifactManager().HasArtifacts()).toBe(false);
+
+            const msg: AgentChatMessage = {
+                role: 'user',
+                content: 'inline results',
+                metadata: {
+                    messageType: 'action-result',
+                    pendingSpilloverIds: [token as string],
+                },
+            };
+
+            const ids = agent.MaterializeSpillover(msg);
+            expect(ids).toEqual(['A']);
+            expect(tailRowSerializations).toBe(1);
+            expect(agent.GetArtifactManager().HasArtifacts()).toBe(true);
+
+            const pageCall = await agent.GetArtifactManager().ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_rows',
+                input: { table: 'Results', start: 195, count: 5 },
+            });
+            expect(pageCall.result.success).toBe(true);
+            expect(pageCall.result.data).toHaveLength(5);
         });
     });
 
