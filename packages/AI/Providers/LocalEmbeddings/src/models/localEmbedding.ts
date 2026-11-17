@@ -51,12 +51,12 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Inference blocks the thread it runs on, so running it here would stall every request on
      * the process for the length of the batch (MJ #5510).
      */
-    private async embedVectors(modelName: string, texts: string[]): Promise<number[][]> {
+    private async embedVectors(modelName: string, texts: string[], maxInputTokens?: number): Promise<{ vectors: number[][]; tokens: number }> {
         const host = EmbeddingWorkerHost.Instance;
-        const vectors = host.IsAvailable
-            ? await host.Run({ Kind: 'embed', Model: modelName, Texts: texts, Settings: CurrentEmbeddingSettings() })
-            : await EmbedTextsWithModel(modelName, texts);
-        return vectors.map(vector => Array.from(vector));
+        const embedded = host.IsAvailable
+            ? await host.Run({ Kind: 'embed', Model: modelName, Texts: texts, MaxInputTokens: maxInputTokens, Settings: CurrentEmbeddingSettings() })
+            : await EmbedTextsWithModel(modelName, texts, maxInputTokens);
+        return { vectors: embedded.Vectors.map(vector => Array.from(vector)), tokens: embedded.Tokens };
     }
 
     private requireModel(model: string | undefined): string {
@@ -75,11 +75,8 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
-            const [rawVector] = await this.embedVectors(modelName, [params.text]);
+            const { vectors: [rawVector], tokens } = await this.embedVectors(modelName, [params.text], params.maxInputTokens);
             const vector = (rawVector && params.dimensions) ? truncateToDimensions(rawVector, params.dimensions) : (rawVector ?? []);
-            
-            // Calculate approximate token count (rough estimation)
-            const tokenCount = Math.ceil(params.text.length / 4);
             
             const endTime = Date.now();
             // Only log if it took more than 1 second (indicating potential performance issues)
@@ -90,7 +87,7 @@ export class LocalEmbedding extends BaseEmbeddings {
             return {
                 object: 'object',
                 model: modelName,
-                ModelUsage: new ModelUsage(tokenCount, 0),
+                ModelUsage: new ModelUsage(tokens, 0),
                 vector
             };
         } catch (error) {
@@ -124,13 +121,10 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         try {
             ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
-            const rawVectors = await this.embedVectors(modelName, params.texts);
+            const { vectors: rawVectors, tokens } = await this.embedVectors(modelName, params.texts, params.maxInputTokens);
             const vectors = params.dimensions
                 ? rawVectors.map(v => truncateToDimensions(v, params.dimensions!))
                 : rawVectors;
-            // Estimate token count
-            const totalTokens = params.texts.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0);
-            
             const endTime = Date.now();
             // Only log if it took more than 1 second per text on average
             if (params.texts.length > 0 && (endTime - startTime) / params.texts.length > 1000) {
@@ -140,7 +134,7 @@ export class LocalEmbedding extends BaseEmbeddings {
             return {
                 object: 'list',
                 model: modelName,
-                ModelUsage: new ModelUsage(totalTokens, 0),
+                ModelUsage: new ModelUsage(tokens, 0),
                 vectors
             };
         } catch (error) {
@@ -180,9 +174,9 @@ export class LocalEmbedding extends BaseEmbeddings {
             LocalURL: typeof settings.localURL === 'string' ? settings.localURL : undefined,
         });
         
-        // Handle quantized model preference
+        // Models always load at q8 (DTYPE in embeddingRuntime); the preference is stored only so
+        // callers that read it back from the settings still see what they set.
         if (settings.useQuantized !== undefined) {
-            // Store for use when loading models
             this._additionalSettings.useQuantized = settings.useQuantized;
         }
     }

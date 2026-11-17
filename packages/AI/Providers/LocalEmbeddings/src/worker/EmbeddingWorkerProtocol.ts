@@ -11,11 +11,13 @@ export interface EmbeddingSettings {
   LocalURL?: string;
 }
 
-/** Embed texts with a model. Resolves with one vector per text, in order. */
+/** Embed texts with a model. Resolves with one vector per text, in order, and the tokens consumed. */
 export interface EmbedCall {
   Kind: 'embed';
   Model: string;
   Texts: string[];
+  /** Truncate each text to this many tokens before embedding; the model's own limit applies when unset. */
+  MaxInputTokens?: number;
   Settings: EmbeddingSettings;
 }
 

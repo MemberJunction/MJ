@@ -9,7 +9,10 @@ import { HandleEmbeddingRequest, type EmbeddingRuntimeOperations } from '../work
 function fakeOperations(overrides: Partial<EmbeddingRuntimeOperations> = {}): EmbeddingRuntimeOperations {
   return {
     ApplySettings: vi.fn(),
-    Embed: vi.fn(async (_model: string, texts: string[]) => texts.map((t) => new Float32Array([t.length]))),
+    Embed: vi.fn(async (_model: string, texts: string[], _maxInputTokens?: number) => ({
+      Vectors: texts.map((t) => new Float32Array([t.length])),
+      Tokens: texts.join('').length,
+    })),
     Preload: vi.fn(async () => undefined),
     Clear: vi.fn(),
     ...overrides,
@@ -24,9 +27,16 @@ describe('HandleEmbeddingRequest', () => {
       ops,
     );
     expect(ops.ApplySettings).toHaveBeenCalledWith({ CacheDir: '/models' });
-    expect(ops.Embed).toHaveBeenCalledWith('Xenova/gte-small', ['ab', 'abc']);
-    expect(Result).toEqual([new Float32Array([2]), new Float32Array([3])]);
+    expect(ops.Embed).toHaveBeenCalledWith('Xenova/gte-small', ['ab', 'abc'], undefined);
+    expect(Result.Vectors).toEqual([new Float32Array([2]), new Float32Array([3])]);
+    expect(Result.Tokens).toBe(5);
     expect(Transfer).toHaveLength(2);
+  });
+
+  it('passes maxInputTokens to the runtime', async () => {
+    const ops = fakeOperations();
+    await HandleEmbeddingRequest({ Kind: 'embed', Model: 'm', Texts: ['a'], MaxInputTokens: 8192, Settings: {} }, ops);
+    expect(ops.Embed).toHaveBeenCalledWith('m', ['a'], 8192);
   });
 
   it('throws when inference fails, so the worker answers with the error', async () => {
@@ -47,13 +57,13 @@ describe('HandleEmbeddingRequest', () => {
     const { Result } = await HandleEmbeddingRequest({ Kind: 'preload', Model: 'm', Settings: { LocalURL: 'http://models' } }, ops);
     expect(ops.ApplySettings).toHaveBeenCalledWith({ LocalURL: 'http://models' });
     expect(ops.Preload).toHaveBeenCalledWith('m');
-    expect(Result).toEqual([]);
+    expect(Result).toEqual({ Vectors: [], Tokens: 0 });
   });
 
   it('clears the loaded models', async () => {
     const ops = fakeOperations();
     const { Result } = await HandleEmbeddingRequest({ Kind: 'clear' }, ops);
     expect(ops.Clear).toHaveBeenCalledOnce();
-    expect(Result).toEqual([]);
+    expect(Result).toEqual({ Vectors: [], Tokens: 0 });
   });
 });

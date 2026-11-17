@@ -1,15 +1,44 @@
+import { availableParallelism } from 'node:os';
 import { ErrorAnalyzer } from '@memberjunction/ai';
+import type { PreTrainedModel, PreTrainedTokenizer, PretrainedConfig, Tensor } from '@huggingface/transformers';
 import type { EmbeddingSettings } from '../worker/EmbeddingWorkerProtocol.js';
 
 /**
- * The model side of local embeddings: loading @xenova/transformers, caching one pipeline per
- * model, and running inference. It has no MemberJunction class registrations, so the same code
- * runs on the worker thread that {@link EmbeddingWorkerHost} owns and, when no worker is
- * available, in-process.
+ * The model side of local embeddings: loading @huggingface/transformers, caching one tokenizer +
+ * ONNX model per model ID, and running batched inference. It has no MemberJunction class
+ * registrations, so the same code runs on the worker thread that {@link EmbeddingWorkerHost} owns
+ * and, when no worker is available, in-process.
  *
- * Inference is CPU-bound and, with onnxruntime-node 1.14, synchronous native code: a batch blocks
- * the thread it runs on for seconds (MJ #5510). Run it on the worker whenever one is available.
+ * Inference is CPU-bound and synchronous native code: a batch blocks the thread it runs on for
+ * seconds (MJ #5510). Run it on the worker whenever one is available.
+ *
+ * The model is driven directly (tokenizer + `AutoModel` + mean pooling) instead of through the
+ * `feature-extraction` pipeline, because the pipeline cannot do what local embedding needs:
+ * transformers.js v4 ignores the pipeline's `quantized` option and loads fp32; it embeds one text
+ * per call; and it cannot load only the text half of a multimodal model or truncate to a caller's
+ * token limit. PR #6606 moved to the pipeline and lost all of these (MJ #6689).
  */
+
+type TransformersModule = typeof import('@huggingface/transformers');
+
+/** A loaded model: its tokenizer and ONNX model, shared by every call for that model ID. */
+interface LoadedModel {
+  tokenizer: PreTrainedTokenizer;
+  model: PreTrainedModel;
+}
+
+/** The part of a feature-extraction model's output this driver reads. */
+interface ModelOutput {
+  last_hidden_state: Tensor;
+}
+
+/** Vectors for a set of texts and the tokens the model actually consumed to produce them. */
+export interface EmbeddedTexts {
+  /** One normalized vector per text, in input order. Each owns its buffer so a worker can transfer it. */
+  Vectors: Float32Array[];
+  /** Real token count (padding excluded), for usage accounting. */
+  Tokens: number;
+}
 
 /**
  * Whether verbose logging is enabled, mirroring the MJ_VERBOSE semantics used by
@@ -24,37 +53,35 @@ function isVerbose(): boolean {
   return v !== undefined && ['true', '1', 'yes'].includes(v.toLowerCase());
 }
 
-// TypeScript types for @xenova/transformers (since we can't import them directly)
-interface TransformersEnv {
-  allowLocalModels: boolean;
-  cacheDir: string;
-  localURL?: string;
-}
+/**
+ * Most texts per ONNX call. One call per batch is ~6x faster than one call per text. The `Xenova/*`
+ * models are dynamically quantized, so a vector depends slightly on its batch-mates (cosine >= 0.998
+ * to the same text embedded alone); EmbeddingGemma 2 is unaffected.
+ */
+const BATCH_SIZE = 32;
 
-interface FeatureExtractionOutput {
-  data: Float32Array;
-}
+/**
+ * Most padded tokens per ONNX call (texts x the longest one). A batch is padded to its longest text,
+ * so memory grows with both; this keeps 32 texts at 256 tokens in one call, while 8k-token documents
+ * go one at a time. A text longer than the budget still goes, alone.
+ */
+const BATCH_TOKENS = 8192;
 
-type FeatureExtractionPipeline = (text: string, options: { pooling: 'mean'; normalize: boolean }) => Promise<FeatureExtractionOutput>;
-
-interface TransformersModule {
-  pipeline: (task: string, model: string, options?: Record<string, unknown>) => Promise<FeatureExtractionPipeline>;
-  env: TransformersEnv;
-}
-
-let transformers: TransformersModule | null = null;
-let transformersLoadingPromise: Promise<TransformersModule> | null = null;
-const pendingSettings: EmbeddingSettings = {};
-const pipelines = new Map<string, FeatureExtractionPipeline>();
-const loadingPipelines = new Map<string, Promise<FeatureExtractionPipeline>>();
+/**
+ * ONNX precision. `q8` loads `onnx/model_quantized.onnx`, the same file `@xenova/transformers`'
+ * `quantized: true` loaded, and is lossless for EmbeddingGemma 2 (cosine 0.99996 to fp32).
+ */
+const DTYPE = 'q8';
 
 // Retry configuration for model downloads
 const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_INITIAL_DELAY_MS = 2000;
 const DEFAULT_MAX_DELAY_MS = 30000;
 
-/** Texts embedded together per batch. */
-const BATCH_SIZE = 32;
+let transformersLoading: Promise<TransformersModule> | null = null;
+let loadedTransformers: TransformersModule | null = null;
+const pendingSettings: EmbeddingSettings = {};
+const models = new Map<string, Promise<LoadedModel>>();
 
 /**
  * Records settings to apply to transformers.js. Applied immediately when it is already loaded,
@@ -67,8 +94,8 @@ export function ApplyEmbeddingSettings(settings: EmbeddingSettings): void {
   if (settings.LocalURL) {
     pendingSettings.LocalURL = settings.LocalURL;
   }
-  if (transformers) {
-    configureEnv(transformers.env);
+  if (loadedTransformers) {
+    configureEnv(loadedTransformers.env);
   }
 }
 
@@ -78,31 +105,54 @@ export function CurrentEmbeddingSettings(): EmbeddingSettings {
 }
 
 /**
- * Embeds each text with the model's mean-pooled, normalized output. Each vector owns its buffer,
- * so a worker can transfer it to the main thread without copying.
+ * Embeds texts with mean pooling and L2 normalization, the same computation as the transformers.js
+ * `feature-extraction` pipeline. The runtime tokenizes itself so it can truncate to
+ * `maxInputTokens`: the pipeline only truncates to the tokenizer's own limit, and some tokenizers
+ * declare none (EmbeddingGemma 2's reads as 1e30, past its 8,192-token window).
  */
-export async function EmbedTextsWithModel(modelName: string, texts: string[]): Promise<Float32Array[]> {
-  const pipe = await getPipeline(modelName);
-  const vectors: Float32Array[] = [];
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE);
-    const outputs = await Promise.all(batch.map((text) => pipe(text, { pooling: 'mean', normalize: true })));
-    for (const output of outputs) {
-      vectors.push(new Float32Array(output.data));
-    }
+export async function EmbedTextsWithModel(modelName: string, texts: string[], maxInputTokens?: number): Promise<EmbeddedTexts> {
+  if (texts.length === 0) {
+    return { Vectors: [], Tokens: 0 };
   }
-  return vectors;
+  const { tokenizer, model } = await getModel(modelName);
+  const { mean_pooling } = await loadTransformers();
+  const vectors: Float32Array[] = [];
+  let tokens = 0;
+
+  const lengths = texts.map((t) => Math.min(tokenizer.encode(t).length, maxInputTokens ?? Infinity));
+  for (let start = 0, end = 0; start < texts.length; start = end) {
+    end = batchEnd(lengths, start);
+    const inputs = tokenizer(texts.slice(start, end), { padding: true, truncation: true, max_length: maxInputTokens });
+    const output: ModelOutput = await model(inputs);
+    const pooled = mean_pooling(output.last_hidden_state, inputs.attention_mask).normalize(2, -1);
+    for (const row of pooled.tolist() as number[][]) {
+      vectors.push(Float32Array.from(row));
+    }
+    tokens += Number(inputs.attention_mask.sum().item());
+  }
+  return { Vectors: vectors, Tokens: tokens };
+}
+
+/** The exclusive end of the batch that starts at `start`: at most BATCH_SIZE texts and BATCH_TOKENS padded tokens. */
+function batchEnd(lengths: number[], start: number): number {
+  let longest = lengths[start];
+  let end = start + 1;
+  for (; end < lengths.length && end - start < BATCH_SIZE; end++) {
+    const next = Math.max(longest, lengths[end]);
+    if (next * (end - start + 1) > BATCH_TOKENS) break;
+    longest = next;
+  }
+  return end;
 }
 
 /** Loads a model so the first embedding call doesn't pay for it. */
 export async function PreloadEmbeddingModel(modelName: string): Promise<void> {
-  await getPipeline(modelName);
+  await getModel(modelName);
 }
 
-/** Drops every loaded pipeline to free memory. */
+/** Drops every loaded model to free memory. */
 export function ClearEmbeddingPipelines(): void {
-  pipelines.clear();
-  loadingPipelines.clear();
+  models.clear();
 }
 
 function delay(ms: number): Promise<void> {
@@ -116,7 +166,7 @@ function calculateBackoffDelay(attempt: number, initialDelay: number, maxDelay: 
   return Math.min(exponentialDelay + jitter, maxDelay);
 }
 
-function configureEnv(env: TransformersEnv): void {
+function configureEnv(env: TransformersModule['env']): void {
   env.allowLocalModels = true;
   // Note: localURL might not be available in all versions of transformers.js
   if ('localURL' in env) {
@@ -126,52 +176,69 @@ function configureEnv(env: TransformersEnv): void {
 }
 
 /**
- * Loads the @xenova/transformers ESM module once. Concurrent callers share one load, so parallel
- * embedding requests during startup don't import it several times.
+ * Loads @huggingface/transformers once. This is a deferred import (category 3 in
+ * `.claude/rules/typescript-style.md`): importing it costs ~80-150 ms and ~50 MB RSS (native
+ * onnxruntime and sharp), and every process that loads the server class manifest imports this
+ * module, whether or not it ever embeds locally. The package is still a declared dependency.
+ * Concurrent callers share one load.
  */
-async function loadTransformers(): Promise<TransformersModule> {
-  if (transformers) {
-    return transformers;
-  }
-  if (!transformersLoadingPromise) {
-    transformersLoadingPromise = (async () => {
-      // Deferred import for @huggingface/transformers.
-      const mod = (await import('@huggingface/transformers')) as unknown as TransformersModule;
-      configureEnv(mod.env);
-      transformers = mod;
-      return mod;
-    })();
-  }
-  return transformersLoadingPromise;
-}
-
-/** Gets or creates the pipeline for a model (a Hugging Face model ID, e.g. 'Xenova/gte-small'). */
-async function getPipeline(modelName: string): Promise<FeatureExtractionPipeline> {
-  const mod = await loadTransformers();
-  const existing = pipelines.get(modelName);
-  if (existing) {
-    return existing;
-  }
-  const loading = loadingPipelines.get(modelName);
-  if (loading) {
-    return loading;
-  }
-  const loadingPromise = loadPipeline(mod, modelName);
-  loadingPipelines.set(modelName, loadingPromise);
-  try {
-    const pipe = await loadingPromise;
-    pipelines.set(modelName, pipe);
-    return pipe;
-  } finally {
-    loadingPipelines.delete(modelName);
-  }
+function loadTransformers(): Promise<TransformersModule> {
+  transformersLoading ??= import('@huggingface/transformers').then((mod) => {
+    configureEnv(mod.env);
+    loadedTransformers = mod;
+    return mod;
+  });
+  return transformersLoading;
 }
 
 /**
- * Loads a pipeline with retries. Exponential backoff handles transient network failures when
+ * Drops the vision and audio encoder configs of a multimodal model (e.g. EmbeddingGemma 2) so only
+ * the text session loads: 314 MB of text weights at q8 instead of 850 MB. A text-only config has no
+ * such keys and is returned unchanged.
+ */
+function textOnly(config: PretrainedConfig): PretrainedConfig {
+  const encoders = config as PretrainedConfig & { vision_config?: object | null; audio_config?: object | null };
+  if (encoders.vision_config) encoders.vision_config = null;
+  if (encoders.audio_config) encoders.audio_config = null;
+  return config;
+}
+
+/**
+ * ONNX Runtime session options. ONNX Runtime sizes its thread pool from the host's cores and
+ * ignores a container's CPU limit; with 2 CPUs on an 18-core host that made EmbeddingGemma 2
+ * queries 1.3 s instead of 0.1 s. availableParallelism() honors cpusets and CPU quotas.
+ */
+function sessionOptions(): { intraOpNumThreads: number } {
+  return { intraOpNumThreads: availableParallelism() };
+}
+
+/**
+ * Gets or starts loading the model for a Hugging Face model ID (e.g. 'Xenova/gte-small').
+ * Concurrent callers share one load; a failed load is forgotten so the next call retries.
+ */
+function getModel(modelName: string): Promise<LoadedModel> {
+  let loading = models.get(modelName);
+  if (!loading) {
+    const pending = loadModel(modelName);
+    loading = pending;
+    models.set(modelName, pending);
+    // The callers of `pending` see the rejection; this only forgets the failed entry, and only if a
+    // ClearEmbeddingPipelines() + newer load has not already replaced it.
+    pending.catch(() => {
+      if (models.get(modelName) === pending) {
+        models.delete(modelName);
+      }
+    });
+  }
+  return loading;
+}
+
+/**
+ * Loads a model with retries. Exponential backoff handles transient network failures when
  * downloading models from the Hugging Face Hub on first startup.
  */
-async function loadPipeline(mod: TransformersModule, modelId: string): Promise<FeatureExtractionPipeline> {
+async function loadModel(modelId: string): Promise<LoadedModel> {
+  const { AutoConfig, AutoModel, AutoTokenizer } = await loadTransformers();
   let lastError: unknown = null;
   for (let attempt = 0; attempt < DEFAULT_MAX_RETRIES; attempt++) {
     try {
@@ -183,14 +250,18 @@ async function loadPipeline(mod: TransformersModule, modelId: string): Promise<F
         console.log(`  Retrying download (attempt ${attempt + 1}/${DEFAULT_MAX_RETRIES})...`);
         await delay(calculateBackoffDelay(attempt - 1, DEFAULT_INITIAL_DELAY_MS, DEFAULT_MAX_DELAY_MS));
       }
-      const pipe = await mod.pipeline('feature-extraction', modelId, { quantized: true });
+      const config = textOnly(await AutoConfig.from_pretrained(modelId));
+      const [tokenizer, model] = await Promise.all([
+        AutoTokenizer.from_pretrained(modelId),
+        AutoModel.from_pretrained(modelId, { config, dtype: DTYPE, device: 'cpu', session_options: sessionOptions() }),
+      ]);
       if (attempt > 0) {
         // Recovered after a retry — worth surfacing regardless of verbosity
         console.log(`Successfully loaded model ${modelId} on attempt ${attempt + 1}`);
       } else if (isVerbose()) {
         console.log(`Model ${modelId} loaded successfully`);
       }
-      return pipe;
+      return { tokenizer, model };
     } catch (error) {
       lastError = error;
       if (IsTransientNetworkError(error) && attempt < DEFAULT_MAX_RETRIES - 1) {
