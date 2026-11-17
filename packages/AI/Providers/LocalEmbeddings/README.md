@@ -150,8 +150,11 @@ passes each (MJ #6689):
 | | Held after the sync | Time per pass |
 |---|---|---|
 | Arena on | 1240–1305 MB | 37 s |
-| Arena off (default) | 560–740 MB | 22 s |
+| Arena off (default) | 550–830 MB in 10 of 11 runs; one run 1130 MB | 22 s |
 | Arena off, with `MALLOC_MMAP_THRESHOLD_=131072` | about 275 MB | 25 s |
+
+With the arena off, what stays held depends on how glibc's heap fragments, so it varies from run
+to run more than the arena-on number does.
 
 To keep the arena on a dedicated inference host that can spare the memory, set
 `MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true` (`1` and `yes` also work). It is read each time a model loads.
