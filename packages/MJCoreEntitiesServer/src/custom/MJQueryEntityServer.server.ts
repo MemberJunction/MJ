@@ -251,16 +251,19 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             return false;
         }
         if (extraction) {
-            await this.writeExtractionAsync(extraction, options, postCommit);
+            await this.writeExtractionAsync(extraction);
             // A refresh brings the derived rows in line with the SQL; it never writes SQL, a dialect variant's included.
             if (!this.refreshing) await this.autoConvertDialectsAsync();
         } else if (!this.hasSQL) {
             await this.cleanupEmptyQueryAsync();
         }
-        // The child and dialect rows are rewritten after the Query row, so the approved fingerprint is
-        // taken last, from the definition as stored.
-        if (approving) {
-            await this.stampApprovalFingerprintAsync(options);
+        // The child and dialect rows are rewritten after the Query row, so the fingerprints are taken
+        // last, from the definition as stored. A ReplayOnly save writes nothing, so it has nothing to stamp.
+        if (!options?.ReplayOnly) {
+            await this.stampFingerprintsAsync(options, approving);
+        }
+        if (this.lastWriteSummary) {
+            this.queueDescriptionPass(this.lastWriteSummary, options, postCommit);
         }
         return true;
     }
@@ -394,18 +397,25 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     }
 
     /**
-     * Stores the fingerprint of the definition just approved: this row's SQL, template flag and
-     * external source, with its dialect and parameter rows read back from the database. Until this
-     * write lands the approval is not current, so a failure here fails closed.
+     * Stores the fingerprint of the definition as now stored: this row's SQL, template flag and
+     * external source, with its dialect and parameter rows read back from the database.
+     *
+     * It always goes in `DefinitionFingerprint`, which a list linked to this query compares before
+     * each refresh. On an approving save it also goes in `ApprovedFingerprint`; until that write
+     * lands the approval is not current, so a failure here fails closed. Nothing is written when
+     * neither value changed.
      */
-    private async stampApprovalFingerprintAsync(options?: EntitySaveOptions): Promise<void> {
+    private async stampFingerprintsAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<void> {
         try {
-            this.ApprovedFingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
+            const fingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
+            this.DefinitionFingerprint = fingerprint;
+            if (approving) this.ApprovedFingerprint = fingerprint;
+            if (!this.Dirty) return;
             if (!await super.Save(options)) {
-                LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+                LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint was not: ${this.LatestResult?.CompleteMessage}`);
             }
         } catch (e) {
-            LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -541,16 +551,15 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Writes the derived child rows as the system user, inside the caller's transaction when there
-     * is one, then queues the description pass. A failed write is recorded on the query
-     * (`ExtractionStatus` `Error`) rather than failing a save whose row is already written.
+     * is one. A failed write is recorded on the query (`ExtractionStatus` `Error`) rather than
+     * failing a save whose row is already written.
      */
-    private async writeExtractionAsync(extraction: QueryExtractionResult, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): Promise<void> {
+    private async writeExtractionAsync(extraction: QueryExtractionResult): Promise<void> {
         const provider = this.extractionProvider;
         try {
             if (!provider) throw new Error('the query is not saved through a database provider');
             const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser, EntityName: id => this.entityNameOf(id) }, extraction);
             this.lastWriteSummary = summary;
-            this.queueDescriptionPass(summary, options, postCommit);
         } catch (e) {
             // An explicit refresh runs in its own transaction, which a failed write rolls back.
             if (this.refreshing) throw e;

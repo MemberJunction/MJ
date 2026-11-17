@@ -373,22 +373,27 @@ describe('TwitterDeleteTweetAction', () => {
     expect(details.text).toBe('bye');
   });
 
-  it('deletes a non-owned tweet anyway — the ownership guard is dead code (swallowed by the detail-retrieval catch)', async () => {
+  it('refuses to delete a tweet another account owns (#3790)', async () => {
     mockGetByUrl({
       '/tweets/t-9': {
         data: { id: 't-9', text: 'not mine', created_at: '2024-06-15T10:00:00Z', author_id: 'someone-else' },
       },
       '/users/me': { data: twitterUser },
     });
-    http.instance.Delete.mockResolvedValue({ Data: {}, Headers: {}, Status: 200 });
 
-    // NOTE (current behavior): the ownership check throws inside the inner
-    // try/catch that also guards detail retrieval, so the error is swallowed
-    // and the delete proceeds anyway. This test documents that the delete
-    // still succeeds — the ownership guard is dead code as written.
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', TweetID: 't-9', ConfirmDeletion: true }));
-    expect(result.Success).toBe(true);
-    expect(http.instance.Delete).toHaveBeenCalledWith('/tweets/t-9');
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('NOT_OWNER');
+    expect(http.instance.Delete).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the tweet cannot be read, since ownership cannot be verified', async () => {
+    http.instance.Get.mockRejectedValue(new Error('Not Found'));
+
+    const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', TweetID: 't-404', ConfirmDeletion: true }));
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('OWNERSHIP_UNVERIFIED');
+    expect(http.instance.Delete).not.toHaveBeenCalled();
   });
 });
 
@@ -600,7 +605,7 @@ describe('TwitterScheduleTweetAction', () => {
     expect(result.ResultCode).toBe('CONTENT_TOO_LONG');
   });
 
-  it('should build the scheduled tweet record and outputs on happy path', async () => {
+  it('refuses a valid request with NOT_SUPPORTED instead of reporting a schedule it never stored (#3790)', async () => {
     mockGetByUrl({ '/users/me': { data: twitterUser } });
     const soon = new Date(Date.now() + 60 * 60 * 1000);
 
@@ -612,18 +617,9 @@ describe('TwitterScheduleTweetAction', () => {
       ),
     );
 
-    expect(result.Success).toBe(true);
-    expect(result.ResultCode).toBe('SUCCESS');
-    expect(String(outParam(result, 'ScheduledTweetID'))).toMatch(/^scheduled_/);
-    expect(outParam(result, 'EstimatedURL')).toBe('https://twitter.com/mjtester/status/[pending]');
-    const data = outParam(result, 'ScheduledTweetData') as {
-      tweetData: { text: string; reply?: { in_reply_to_tweet_id: string } };
-      status: string;
-    };
-    expect(data.tweetData.text).toBe('later gator');
-    expect(data.tweetData.reply).toEqual({ in_reply_to_tweet_id: 'r-1' });
-    expect(data.status).toBe('scheduled');
-    // No tweet is actually posted for scheduling
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('NOT_SUPPORTED');
+    expect(outParam(result, 'ScheduledTweetID')).toBeFalsy();
     expect(http.instance.Post).not.toHaveBeenCalled();
   });
 });

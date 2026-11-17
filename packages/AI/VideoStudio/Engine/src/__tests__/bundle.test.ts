@@ -14,6 +14,13 @@ import {
     StillPointsFor,
 } from '../render/bundle.js';
 
+/**
+ * Wall-clock ceiling for the "pathological input in linear time" checks. They guard against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 const mockUser = {
     ID: '00000000-0000-0000-0000-000000000001',
     Name: 'Test User',
@@ -675,7 +682,7 @@ describe('bundle.ts (VS-AGT-3)', () => {
         const elapsedMs = performance.now() - start;
 
         expect(result).toBe(attack);
-        expect(elapsedMs).toBeLessThan(200);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     });
 
     it('BuildRenderBundle auto-injects HyperFrames <audio> tags for staged narration clips and skips narration when Audio.Narration.Enabled is false', async () => {

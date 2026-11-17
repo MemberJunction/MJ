@@ -131,6 +131,16 @@ describe('user views, dashboards and components', () => {
         expect(await GetUserViewApprovalStateAsync({ ...VIEW, WhereClause: '1=1', ApprovalStatus: 'Approved', ApprovedFingerprint: fp })).toBe('Stale');
     });
 
+    it('a view fingerprint includes the alternate base view only when one is set', async () => {
+        const fp = await ComputeUserViewFingerprintAsync(VIEW);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: null })).toBe(fp);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: '  ' })).toBe(fp);
+        const withAlt = await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: 'Active' });
+        expect(withAlt).not.toBe(fp);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: ' active ' })).toBe(withAlt);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: 'Archived' })).not.toBe(withAlt);
+    });
+
     it('a dashboard fingerprint follows its configuration and code', async () => {
         const fp = await ComputeDashboardFingerprintAsync(DASHBOARD);
         expect(await ComputeDashboardFingerprintAsync({ ...DASHBOARD, Name: 'Renamed', Description: 'x' } as typeof DASHBOARD)).toBe(fp);

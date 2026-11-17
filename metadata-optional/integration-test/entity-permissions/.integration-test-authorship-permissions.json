@@ -37,5 +37,44 @@
     "primaryKey": {
       "ID": "004116DC-7F6C-42C8-8D7A-C95CF9F9C8B3"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Comments",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "004116DC-7F6C-42C8-8D7A-C95CF9F9C8B4"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "004116DC-7F6C-42C8-8D7A-C95CF9F9C8B5"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Comment Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "004116DC-7F6C-42C8-8D7A-C95CF9F9C8B6"
+    }
   }
 ]

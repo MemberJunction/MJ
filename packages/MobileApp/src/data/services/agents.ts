@@ -9,7 +9,14 @@
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { ConversationsRuntime, MentionAutocomplete } from '@memberjunction/conversations-runtime';
-import type { MJAIAgentEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATION_TYPE_CODES,
+    ConversationEngine,
+    type MJAIAgentEntity,
+    type MJConversationDetailEntity,
+    type MJConversationEntity,
+} from '@memberjunction/core-entities';
 
 /** Default Environment ID — matches the EnvironmentID column default on MJ: Conversations. */
 const DEFAULT_ENVIRONMENT_ID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
@@ -293,7 +300,9 @@ export async function CreateConversation(
     conv.NewRecord();
     conv.Name = name || 'New conversation';
     if (currentUser?.ID) conv.UserID = currentUser.ID;
-    conv.Type = 'Chat';
+    conv.TypeID =
+        ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.CHAT) ??
+        BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
     conv.IsArchived = false;
     conv.Status = 'Available';
     // Default Environment (matches the EnvironmentID column default in the schema).

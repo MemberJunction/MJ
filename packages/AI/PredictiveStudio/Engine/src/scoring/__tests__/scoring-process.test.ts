@@ -5,6 +5,7 @@ import {
   CreateScoringProcess,
   type CreateScoringProcessOptions,
 } from '../scoring-process';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the on-demand `createScoringProcess` helper (the "Operate this model"
@@ -247,12 +248,14 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
   });
 
   it('throws (and does not swallow) when the binding fails to save after the RP saved', async () => {
+    const errors = ConsoleCapture.Errors();
     // RP saves OK (true); the binding save fails (false) with a message.
     const { opts, rp, binding } = setup({}, true, undefined, false, 'binding duplicate key');
     await expect(CreateScoringProcess(opts)).rejects.toThrow(/binding duplicate key/);
     // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
     expect(rp.SaveCalled).toBe(true);
     expect(binding.SaveCalled).toBe(true);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("upsertScoringBinding: failed to save scoring binding for model 'model-1': binding duplicate key"), expect.stringContaining("createScoringProcess: Record Process 'rp-1' saved but its scoring binding failed for model 'model-1'")]);
   });
 });
 

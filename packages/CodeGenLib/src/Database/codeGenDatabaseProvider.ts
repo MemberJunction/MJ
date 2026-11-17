@@ -811,7 +811,7 @@ export abstract class CodeGenDatabaseProvider {
      * metadata and getting the indexes you need were mutually exclusive, and the more correct the
      * metadata became the worse the query plans got.
      *
-     * TWO SOURCES, both of which are MJ's own verified join declarations rather than inferences:
+     * THREE SOURCES, all of which are MJ's own verified join declarations rather than inferences:
      *
      *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
      *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
@@ -821,6 +821,11 @@ export abstract class CodeGenDatabaseProvider {
      *
      *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
      *    key is a human-verified join over columns that carry no constraint at all.
+     *
+     *  - Polymorphic foreign-key column pairs declared via `EntityField.EntityIDFieldName` (such as
+     *    `RecordID` paired with `EntityIDFieldName: 'EntityID'`). Both the record pointer and its
+     *    companion entity type field are indexed so polymorphic join and lookup queries resolve via
+     *    index seeks rather than table scans.
      *
      * ONLY `ExactMatch`, DELIBERATELY. Every other normalization strategy wraps the column in a
      * function — `LOWER(LTRIM(RTRIM(col)))` for the default `LowerCaseTrim` — and a plain B-tree
@@ -846,6 +851,16 @@ export abstract class CodeGenDatabaseProvider {
                 if (trimmed) {
                     out.add(trimmed.toLowerCase());
                 }
+            }
+        }
+        for (const f of entity.Fields ?? []) {
+            const entityIdFieldName = f.EntityIDFieldName?.trim();
+            if (entityIdFieldName) {
+                const fieldName = f.Name?.trim();
+                if (fieldName) {
+                    out.add(fieldName.toLowerCase());
+                }
+                out.add(entityIdFieldName.toLowerCase());
             }
         }
         return out;
@@ -1571,6 +1586,14 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }
         }
+        if (parts.length > 0) {
+            const updatedAtField = entityFields.find(
+                f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim()
+            );
+            if (updatedAtField) {
+                parts.push(`${dialect.QuoteIdentifier(updatedAtField.Name)} = ${dialect.CurrentTimestampUTC()}`);
+            }
+        }
         return parts.join(',\n        ');
     }
 
@@ -2100,6 +2123,7 @@ export abstract class CodeGenDatabaseProvider {
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult>;
 
     // ─── POST-RUN VALIDATION ─────────────────────────────────────────────

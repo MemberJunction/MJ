@@ -184,6 +184,10 @@ if [ -f "turbo.json" ]; then
 fi
 
 # Sync container environment variables (API keys, encryption key, DB_USER, local dev auth) into workspace .env files
+[ -z "${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-}" ] && unset MJ_ARTIFACT_COLLAB_HMAC_SECRET
+[ -z "${MJ_COLLABORATION_TICKET_SECRET:-}" ] && unset MJ_COLLABORATION_TICKET_SECRET
+[ -z "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}" ] && unset MJ_FROZEN_BLOCK_HMAC_SECRET
+[ -z "${MJ_FROZEN_SNAPSHOT_SECRET:-}" ] && unset MJ_FROZEN_SNAPSHOT_SECRET
 export MJ_DEV_AUTH_ENABLED="${MJ_DEV_AUTH_ENABLED:-true}"
 node -e "
   const fs = require('fs');
@@ -193,12 +197,18 @@ node -e "
     if (re.test(content)) return content.replace(re, () => line);
     return content + (content.endsWith('\n') ? '' : '\n') + line + '\n';
   };
+  const crypto = require('crypto');
   const keysToSync = [
     'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD',
-    'MJ_BASE_ENCRYPTION_KEY', 'MJ_DEV_AUTH_ENABLED',
+    'MJ_BASE_ENCRYPTION_KEY',
+    'MJ_ARTIFACT_COLLAB_HMAC_SECRET', 'MJ_COLLABORATION_TICKET_SECRET',
+    'MJ_FROZEN_BLOCK_HMAC_SECRET', 'MJ_FROZEN_SNAPSHOT_SECRET',
+    'MJ_DEV_AUTH_ENABLED',
     'AI_VENDOR_API_KEY__OpenAILLM', 'AI_VENDOR_API_KEY__AnthropicLLM',
     'AI_VENDOR_API_KEY__GeminiLLM', 'AI_VENDOR_API_KEY__GroqLLM', 'AI_VENDOR_API_KEY__MistralLLM'
   ];
+  const generatedCollabSecret = crypto.randomBytes(32).toString('hex');
+  const generatedFrozenSecret = crypto.randomBytes(32).toString('hex');
   for (const envFile of ['.env', 'apps/MJAPI/.env', 'packages/MJAPI/.env']) {
     if (fs.existsSync(envFile)) {
       let content = fs.readFileSync(envFile, 'utf8');
@@ -208,23 +218,34 @@ node -e "
           content = upsertVar(content, k, v);
         }
       }
+      if (!/^MJ_ARTIFACT_COLLAB_HMAC_SECRET=.+/m.test(content) && !/^MJ_COLLABORATION_TICKET_SECRET=.+/m.test(content)) {
+        content = upsertVar(content, 'MJ_ARTIFACT_COLLAB_HMAC_SECRET', generatedCollabSecret);
+      }
+      if (!/^MJ_FROZEN_BLOCK_HMAC_SECRET=.+/m.test(content) && !/^MJ_FROZEN_SNAPSHOT_SECRET=.+/m.test(content)) {
+        content = upsertVar(content, 'MJ_FROZEN_BLOCK_HMAC_SECRET', generatedFrozenSecret);
+      }
       content = upsertVar(content, 'DB_USER', process.env.DB_USERNAME || 'sa');
       fs.writeFileSync(envFile, content);
     }
   }
-  if (process.env.MJ_DEV_AUTH_ENABLED === 'true') {
-    for (const ngEnv of [
-      'apps/MJExplorer/src/environments/environment.ts',
-      'apps/MJExplorer/src/environments/environment.development.ts',
-      'packages/MJExplorer/src/environments/environment.ts',
-      'packages/MJExplorer/src/environments/environment.development.ts',
-    ]) {
-      if (fs.existsSync(ngEnv)) {
-        const src = fs.readFileSync(ngEnv, 'utf8');
-        const next = src.replace(/AUTH_TYPE:\s*['\"][^'\"]*['\"]/g, \"AUTH_TYPE: 'local'\");
-        if (next !== src) {
-          fs.writeFileSync(ngEnv, next);
-        }
+  const rawApiPort = String(process.env.API_PORT || '4000').trim();
+  const apiPort = /^\d+$/.test(rawApiPort) ? rawApiPort : '4000';
+  for (const ngEnv of [
+    'apps/MJExplorer/src/environments/environment.ts',
+    'apps/MJExplorer/src/environments/environment.development.ts',
+    'packages/MJExplorer/src/environments/environment.ts',
+    'packages/MJExplorer/src/environments/environment.development.ts',
+  ]) {
+    if (fs.existsSync(ngEnv)) {
+      const src = fs.readFileSync(ngEnv, 'utf8');
+      let next = src
+        .replace(/GRAPHQL_URI:\s*['\"][^'\"]*['\"]/g, \"GRAPHQL_URI: 'http://localhost:\" + apiPort + \"/'\")
+        .replace(/GRAPHQL_WS_URI:\s*['\"][^'\"]*['\"]/g, \"GRAPHQL_WS_URI: 'ws://localhost:\" + apiPort + \"/'\");
+      if (process.env.MJ_DEV_AUTH_ENABLED === 'true') {
+        next = next.replace(/AUTH_TYPE:\s*['\"][^'\"]*['\"]/g, \"AUTH_TYPE: 'local'\");
+      }
+      if (next !== src) {
+        fs.writeFileSync(ngEnv, next);
       }
     }
   }
@@ -291,30 +312,30 @@ fi
 echo "Starting MJAPI and MJExplorer services..."
 pm2 delete all 2>/dev/null || true
 
-# Start API service
-if [ -f "package.json" ]; then
-  if grep -q "start:api" package.json; then
-    pm2 start "npm run start:api" --name mjapi
-  elif [ -d "apps/MJAPI" ]; then
-    pm2 start "cd apps/MJAPI && npm start" --name mjapi
-  else
-    pm2 start "npm start" --name mjapi
-  fi
+# Start API service directly in apps/MJAPI (avoids turbo wrapper masking OOM exits in pm2)
+if [ -d "apps/MJAPI" ]; then
+  pm2 start npm --name mjapi --cwd /workspace/apps/MJAPI -- start
+elif [ -d "packages/MJAPI" ]; then
+  pm2 start npm --name mjapi --cwd /workspace/packages/MJAPI -- start
+elif [ -f "package.json" ] && grep -q "start:api" package.json; then
+  pm2 start "npm run start:api" --name mjapi
+else
+  pm2 start "npm start" --name mjapi
 fi
 
-# Start Explorer service
-if [ -f "package.json" ]; then
-  if grep -q "start:explorer" package.json; then
-    pm2 start "npm run start:explorer" --name mjexplorer
-  elif [ -d "apps/MJExplorer" ]; then
-    pm2 start "cd apps/MJExplorer && npm start" --name mjexplorer
-  fi
+# Start Explorer service directly in apps/MJExplorer
+if [ -d "apps/MJExplorer" ]; then
+  pm2 start npm --name mjexplorer --cwd /workspace/apps/MJExplorer -- start
+elif [ -d "packages/MJExplorer" ]; then
+  pm2 start npm --name mjexplorer --cwd /workspace/packages/MJExplorer -- start
+elif [ -f "package.json" ] && grep -q "start:explorer" package.json; then
+  pm2 start "npm run start:explorer" --name mjexplorer
 fi
 
 echo "========================================================================"
 echo " 🎉 MemberJunction Stack is Running!"
-echo "    MJAPI:       http://localhost:4000 (GraphQL & API)"
-echo "    MJExplorer:  http://localhost:4200 (Web Interface — Zero-Config Local Dev Auth active)"
+echo "    MJAPI:       http://localhost:${API_PORT:-4000} (GraphQL & API)"
+echo "    MJExplorer:  http://localhost:${EXPLORER_PORT:-4202} (Web Interface — Zero-Config Local Dev Auth active)"
 echo "    Database:    localhost:$DB_PORT (DB: $DB_DATABASE)"
 echo "========================================================================"
 

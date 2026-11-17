@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, IsEmailShaped } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { UserCache } from "@memberjunction/generic-database-provider";
 
@@ -29,8 +29,7 @@ export class ValidateEmailUniqueAction extends BaseAction {
             }
 
             // Basic email format validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
+            if (!IsEmailShaped(email)) {
                 return {
                     Success: false,
                     ResultCode: 'INVALID_EMAIL_FORMAT',

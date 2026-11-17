@@ -317,3 +317,34 @@ export interface StoreUserDelegatedCredentialOptions {
     expiresAt?: Date;
     categoryId?: string;
 }
+
+/**
+ * Values for "GitHub App" credential type (`schemas/github-app.schema.json`).
+ * Used to mint short-lived, repository-scoped installation access tokens via RS256 JWT.
+ */
+export interface GitHubAppCredentialValues {
+    [key: string]: string | undefined;
+    appId: string;
+    installationId: string;
+    privateKey: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+    webhookSecret?: string;
+}
+
+/**
+ * Values for "GitHub Personal Access Token" credential type (`schemas/github-pat.schema.json`).
+ */
+export interface GitHubPATCredentialValues {
+    [key: string]: string | undefined;
+    token: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+}
+

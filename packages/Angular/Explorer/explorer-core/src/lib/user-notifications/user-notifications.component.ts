@@ -89,6 +89,27 @@ interface NotificationUrlInfo {
   queryString: string;
 }
 
+/**
+ * Type-filter value for notifications with no NotificationTypeID. Not a UUID, so it cannot
+ * collide with a real type ID.
+ */
+export const NO_NOTIFICATION_TYPE_FILTER = '__no-type__';
+
+/**
+ * Whether a notification's type matches the Type dropdown's selection: `null` (All Types)
+ * matches everything, {@link NO_NOTIFICATION_TYPE_FILTER} matches untyped notifications,
+ * and any other value matches that type ID.
+ */
+export function MatchesNotificationTypeFilter(notificationTypeId: string | null | undefined, filter: string | null): boolean {
+  if (filter == null) {
+    return true;
+  }
+  if (filter === NO_NOTIFICATION_TYPE_FILTER) {
+    return !notificationTypeId;
+  }
+  return UUIDsEqual(notificationTypeId, filter);
+}
+
 /** Collapsed-preview cap (characters of plain text). */
 const PREVIEW_MAX_CHARS = 240;
 
@@ -136,6 +157,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     this.NotificationTypes = value;
   }
   public SelectedTypeFilter: string | null = null;
+
+  /** Dropdown value for the "Other (no type)" option. */
+  public readonly NoTypeFilter = NO_NOTIFICATION_TYPE_FILTER;
 
   /** @deprecated Use {@link SelectedTypeFilter}. */
   public get selectedTypeFilter(): string | null {
@@ -278,8 +302,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply type filter if selected
-    if (this.SelectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.SelectedTypeFilter));
+    if (this.SelectedTypeFilter != null) {
+      const typeFilter = this.SelectedTypeFilter;
+      temp = temp.filter(n => MatchesNotificationTypeFilter(n.NotificationTypeID, typeFilter));
     }
 
     // Apply text filter if it is not empty
@@ -632,13 +657,16 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
+    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+    // group, so wait for every one to be queued; submitting earlier sends an empty group that
+    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+    const queued: Promise<boolean>[] = [];
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+        queued.push(this.MarkAsRead(notification, bRead, transGroup));
       }
     }
+    await Promise.all(queued);
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())

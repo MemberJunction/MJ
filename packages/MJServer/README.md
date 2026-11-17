@@ -469,6 +469,18 @@ sequenceDiagram
     Note over P,DB: Transaction auto-committed on success, rolled back on error
 ```
 
+### Startup and Health Checks
+
+`Serve()` binds its port before it boots, behind a startup gate, so a slow start answers probes instead of refusing connections:
+
+| Path (under `MJAPI_BASE_PATH`) | While starting | Once ready |
+|---|---|---|
+| `/healthcheck` (readiness) | `503` with `{ status: 'starting', phase, phaseElapsedMs, elapsedMs }` (`status: 'failed'` if the boot threw) | `200` `{ status: 'ok' }` |
+| `/healthcheck/live` (liveness) | `200` | `200` |
+| anything else, including WebSocket upgrades | `503` with `Retry-After` | handled by the app |
+
+`/healthcheck` keeps meaning "serve traffic", so load balancers, the Explorer reconnect poll and the MJAPI image's `HEALTHCHECK` work unchanged. Platforms that restart a container which is not live within a time limit can point their liveness probe at `/healthcheck/live`. A port already in use now fails at the start of boot rather than the end. A boot that throws logs the phase it failed in; the error text is not served.
+
 ### Per-Request Provider Isolation
 
 Each GraphQL request receives its own `SQLServerDataProvider` instance, ensuring complete transaction isolation between concurrent requests. Metadata is cached and reused across providers for efficiency.
@@ -813,10 +825,23 @@ scheduledJobs: {
   maxConcurrentJobs: 5,
   defaultLockTimeout: 600000,    // 10 minutes
   staleLockCleanupInterval: 300000, // 5 minutes
+  routineIndexRefreshMinutes: 60,   // longest idle sleep; re-read of the routine index without Redis
 }
 ```
 
 The service starts automatically during server initialization and shuts down gracefully on SIGTERM/SIGINT.
+
+### Event-loop stall monitor
+
+MJAPI samples its event-loop delay. A sampling window whose worst delay reaches `warnThresholdMs` logs one warning naming the lag, the heap, and the agent runs and scheduled jobs running in the process, and `/healthcheck` returns the latest window's `eventLoopLagMs`:
+
+```javascript
+eventLoopMonitor: {
+  enabled: true,          // default
+  warnThresholdMs: 1000,  // default
+  sampleIntervalMs: 5000, // default
+}
+```
 
 ## Idle databases (serverless SQL auto-pause)
 
@@ -891,6 +916,26 @@ mutation {
 ```
 
 All AI operations have system-user variants (e.g., `RunAIPromptSystemUser`) that use the `@RequireSystemUser` directive for server-to-server operations.
+
+### Decision-model modes
+
+Some closed-set calls MJServer makes can be answered by a decision model instead of a chat prompt (`RunDecisionUse` in `@memberjunction/ai-prompts`). Each has a mode: `Prompt` (the existing path only), `Shadow` (the existing path answers; the decision runs beside it, and its prompt run, named `Shadow: <use>`, records whether the two agreed) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). Values are case-insensitive; anything else reads as the use's default.
+
+| Use | Setting | Env var | Default | Why that default |
+|---|---|---|---|---|
+| `feedback-classifier`: `ClassifyFeedback`'s category and severity | `feedbackSettings.decisionMode` | `MJ_FEEDBACK_DECISION_MODE` | `Decision` | Two Choice questions; the most likely option needs no calibration. The chat-completion classifier is the fallback. |
+| `restricted-field-classifier`: the semantic stage of the anchored-comment field-security check | `decisions.restrictedFieldClassifier` | `MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE` | `Shadow` | One Likelihood per restricted field, flagged at a calibrated 0.2. No calibration is fitted yet; the shadow runs are its data. |
+| `tag-match`: a tag keyword in `TagEngine`'s suggestion band, just under the match threshold | `decisions.tagMatch` | `MJ_TAG_MATCH_DECISION_MODE` | `Shadow` | One Likelihood ("same concept?"); the tag is applied at a calibrated 0.8, otherwise the keyword is queued for review as before. No calibration is fitted yet. |
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  feedbackSettings: { decisionMode: 'Decision' },
+  decisions: { restrictedFieldClassifier: 'Shadow', tagMatch: 'Shadow' },
+};
+```
+
+Each decision runs as the requesting user, through the `Default Decision` prompt.
 
 ## API Reference
 

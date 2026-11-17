@@ -63,10 +63,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         MJGlobal: {
             Instance: {
                 ClassFactory: {
-                    // The factory resolves through TryCreateInstance, not CreateInstance, precisely so an
+                    // The factory resolves through TryCreateInstanceAsync, not CreateInstance, precisely so an
                     // unresolvable key is an ERROR rather than a hollow anchor-base object that answers
                     // plausibly and wrongly. `Resolved: false` is what an unregistered key looks like.
-                    TryCreateInstance: (_base: unknown, driverClass: string) => {
+                    TryCreateInstanceAsync: async (_base: unknown, driverClass: string) => {
                         tryCreateInstanceCalls++;
                         createdDriverClass = driverClass;
                         return instanceToReturn

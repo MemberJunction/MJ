@@ -124,6 +124,23 @@ describe('spRecompileAllViews — PostgreSQL has one now, and it is honest about
     });
 });
 
+describe('vwSQLColumnsAndEntityFields — generated columns report no default (#6511)', () => {
+    const view = ddl.slice(ddl.indexOf('CREATE VIEW __mj."vwSQLColumnsAndEntityFields"'));
+    const defaultExpr = view.slice(0, view.indexOf('AS "DefaultValue"'));
+    const lastCase = defaultExpr.lastIndexOf('CASE WHEN');
+
+    it('returns NULL as DefaultValue when the base-table column is generated', () => {
+        expect(lastCase).toBeGreaterThan(-1);
+        const expr = defaultExpr.slice(lastCase);
+        expect(expr).toContain("CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL");
+        expect(expr).toContain('ELSE __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) END');
+    });
+
+    it('keeps the generation expression in ComputedColumnDefinition', () => {
+        expect(view).toContain(`CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN __mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid) ELSE NULL END AS "ComputedColumnDefinition"`);
+    });
+});
+
 describe('the DDL is a valid TypeScript template literal and a valid schema substitution', () => {
     it('contains no backtick, which would terminate the String.raw template', () => {
         expect(ddl).not.toContain('`');

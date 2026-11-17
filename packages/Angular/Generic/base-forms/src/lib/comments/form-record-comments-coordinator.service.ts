@@ -2,17 +2,23 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BaseEntity, EntityInfo, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import {
     AnchoredCommentRollup,
+    BUILT_IN_COMMENT_TYPE_IDS,
+    COMMENT_TYPE_CODES,
     ComputeAnchoredCommentCounts,
     ConversationAnchorMetadata,
     ConversationAnchorType,
     ConversationEngine,
     IsConversationHiddenByFieldSecurity,
+    MJCommentEntity,
+    MJCommentTypeEntity,
     MJConversationDetailEntity,
     MJConversationEntity,
+    MJFieldSuggestionEntity,
     ParseConversationAnchorMetadata
 } from '@memberjunction/core-entities';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { Observable, Subject } from 'rxjs';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * Viewport rectangle used to tether the inline anchored comment popover to a field or section trigger button.
@@ -39,6 +45,8 @@ export interface FormCommentAnchorTarget {
     GroupKey?: string;
     GroupDisplayName?: string;
     AnchorRect?: CommentPopoverAnchorRect;
+    /** Optional comment-type code (`'all'`, `'COMMENT'`, `'FIELD_SUGGESTION'`, etc.) pre-selected when opening from a typed badge. */
+    PreferredTypeFilter?: string | null;
 }
 
 /**
@@ -59,13 +67,17 @@ const EMPTY_ROLLUP: AnchoredCommentRollup = {
     ByField: new Map(),
     BySection: new Map(),
     ByGroup: new Map(),
-    ByContribution: new Map()
+    ByContribution: new Map(),
+    OpenNoteCount: 0,
+    OpenSuggestionCount: 0,
+    ByFieldSuggestions: new Map(),
+    ByFieldByType: new Map()
 };
 
 /**
  * Per-form coordinator service (provided by `<mj-record-form-container>`) that manages
- * anchored conversations and inline comments across the record as a whole, its `<mj-form-field>`
- * instances, `<mj-collapsible-panel>` sections, and left-nav rail groups.
+ * anchored conversations, notes, and field suggestions across the record as a whole, its
+ * `<mj-form-field>` instances, `<mj-collapsible-panel>` sections, and left-nav rail groups.
  */
 @Injectable()
 export class FormRecordCommentsCoordinatorService implements OnDestroy {
@@ -84,8 +96,12 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
 
     private _record: BaseEntity | null = null;
     private _provider: IMetadataProvider | null = null;
+    private _refreshCoordinator: FormRecordRefreshCoordinator | null = null;
     private _conversations: MJConversationEntity[] = [];
     private _detailsByConversationId = new Map<string, MJConversationDetailEntity[]>();
+    private _commentsByConversationId = new Map<string, MJCommentEntity>();
+    private _suggestionsByConversationId = new Map<string, MJFieldSuggestionEntity>();
+    private _commentTypeCodeByConversationId = new Map<string, string>();
     private _rollup: AnchoredCommentRollup = EMPTY_ROLLUP;
     private _isLoading = false;
     private _isLoaded = false;
@@ -93,6 +109,8 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
 
     private _isDrawerOpen = false;
     private _drawerStatusFilter: 'open' | 'resolved' | 'all' = 'open';
+    private _drawerTypeFilter = 'all';
+    private _popoverTypeFilter = 'all';
     private _drawerTargetFilter: FormCommentAnchorTarget | null = null;
     private _activePopoverTarget: FormCommentAnchorTarget | null = null;
 
@@ -110,6 +128,18 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
 
     public get DetailsByConversationId(): ReadonlyMap<string, MJConversationDetailEntity[]> {
         return this._detailsByConversationId;
+    }
+
+    public get CommentsByConversationId(): ReadonlyMap<string, MJCommentEntity> {
+        return this._commentsByConversationId;
+    }
+
+    public get SuggestionsByConversationId(): ReadonlyMap<string, MJFieldSuggestionEntity> {
+        return this._suggestionsByConversationId;
+    }
+
+    public get CommentTypeCodeByConversationId(): ReadonlyMap<string, string> {
+        return this._commentTypeCodeByConversationId;
     }
 
     public get Rollup(): AnchoredCommentRollup {
@@ -132,6 +162,14 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
         return this._drawerStatusFilter;
     }
 
+    public get DrawerTypeFilter(): string {
+        return this._drawerTypeFilter;
+    }
+
+    public get PopoverTypeFilter(): string {
+        return this._popoverTypeFilter;
+    }
+
     public get DrawerTargetFilter(): FormCommentAnchorTarget | null {
         return this._drawerTargetFilter;
     }
@@ -146,6 +184,14 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
 
     public get EntityInfo(): EntityInfo | null {
         return this._record?.EntityInfo ?? null;
+    }
+
+    /**
+     * Connects the host container's {@link FormRecordRefreshCoordinator} so accepting a
+     * field suggestion broadcasts live field refreshes across open `<mj-form-field>` controls.
+     */
+    public BindRefreshCoordinator(refreshCoordinator: FormRecordRefreshCoordinator | null): void {
+        this._refreshCoordinator = refreshCoordinator;
     }
 
     /**
@@ -164,17 +210,22 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
         if (prevEntityId !== nextEntityId || prevRecordId !== nextRecordId) {
             this._conversations = [];
             this._detailsByConversationId.clear();
+            this._commentsByConversationId.clear();
+            this._suggestionsByConversationId.clear();
+            this._commentTypeCodeByConversationId.clear();
             this._rollup = EMPTY_ROLLUP;
             this._isLoaded = false;
             this._activePopoverTarget = null;
             this._drawerTargetFilter = null;
+            this._drawerTypeFilter = 'all';
+            this._popoverTypeFilter = 'all';
             this.notifyChanged();
         }
     }
 
     /**
-     * Loads all anchored conversations and their detail messages for the bound record,
-     * applying RLS and FLS filtering for the current user and recomputing rollups.
+     * Loads all anchored conversations, their `MJ: Comments` / `MJ: Field Suggestions` subtype rows,
+     * and their detail messages for the bound record, applying RLS and FLS filtering for the current user.
      */
     public async LoadForRecord(
         record?: BaseEntity | null,
@@ -194,6 +245,9 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
         if (!activeRecord?.IsSaved || !activeProvider || !currentUser || !linkedEntityId || !linkedRecordId) {
             this._conversations = [];
             this._detailsByConversationId.clear();
+            this._commentsByConversationId.clear();
+            this._suggestionsByConversationId.clear();
+            this._commentTypeCodeByConversationId.clear();
             this._rollup = EMPTY_ROLLUP;
             this._isLoaded = false;
             this.notifyChanged();
@@ -233,22 +287,45 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
                         c.AnchorMetadataObject ?? c.AnchorMetadata
                     )
             );
-            const detailsMap = await ConversationEngine.Instance.LoadAnchoredConversationDetails(
-                visibleConversations.map((c) => c.ID),
-                currentUser,
-                activeProvider,
-                forceRefresh
-            );
+            const visibleIds = visibleConversations.map((c) => c.ID);
+            const emptyCommentsBundle = {
+                CommentsByConversationId: new Map<string, MJCommentEntity>(),
+                SuggestionsByConversationId: new Map<string, MJFieldSuggestionEntity>(),
+                CommentTypeCodeByConversationId: new Map<string, string>()
+            };
+            const loadCommentsPromise =
+                typeof ConversationEngine.Instance.LoadAnchoredCommentsAndSuggestions === 'function'
+                    ? ConversationEngine.Instance.LoadAnchoredCommentsAndSuggestions(
+                          visibleIds,
+                          currentUser,
+                          activeProvider,
+                          forceRefresh
+                      )
+                    : Promise.resolve(emptyCommentsBundle);
+
+            const [detailsMap, commentsBundle] = await Promise.all([
+                ConversationEngine.Instance.LoadAnchoredConversationDetails(
+                    visibleIds,
+                    currentUser,
+                    activeProvider,
+                    forceRefresh
+                ),
+                loadCommentsPromise
+            ]);
             if (generation !== this._loadGeneration) {
                 return this._rollup;
             }
 
             this._conversations = visibleConversations;
             this._detailsByConversationId = detailsMap;
+            this._commentsByConversationId = commentsBundle.CommentsByConversationId;
+            this._suggestionsByConversationId = commentsBundle.SuggestionsByConversationId;
+            this._commentTypeCodeByConversationId = commentsBundle.CommentTypeCodeByConversationId;
             this._rollup = ComputeAnchoredCommentCounts(
                 this._conversations,
                 currentUser,
-                activeRecord.EntityInfo
+                activeRecord.EntityInfo,
+                this._commentTypeCodeByConversationId
             );
             this._isLoaded = true;
         } catch (error) {
@@ -268,12 +345,89 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
     }
 
     /**
-     * Returns the number of open anchored comment threads on a specific field (`FieldName`).
+     * Returns the total number of open anchored threads (notes + suggestions) on a specific field (`FieldName`).
      */
     public GetFieldOpenCommentCount(fieldName: string | null | undefined): number {
         const key = (fieldName ?? '').trim().toLowerCase();
         if (!key) return 0;
         return this._rollup.ByField.get(key) ?? 0;
+    }
+
+    /**
+     * Returns the number of open `FIELD_SUGGESTION` threads targeting `fieldName`.
+     */
+    public GetFieldOpenSuggestionCount(fieldName: string | null | undefined): number {
+        const key = (fieldName ?? '').trim().toLowerCase();
+        if (!key) return 0;
+        return this._rollup.ByFieldSuggestions?.get(key) ?? 0;
+    }
+
+    /**
+     * Returns the number of open non-suggestion note threads targeting `fieldName`.
+     */
+    public GetFieldOpenNoteCount(fieldName: string | null | undefined): number {
+        return Math.max(0, this.GetFieldOpenCommentCount(fieldName) - this.GetFieldOpenSuggestionCount(fieldName));
+    }
+
+    /**
+     * Returns open thread counts targeting `fieldName`, keyed by uppercase `CommentType.Code`.
+     */
+    public GetFieldOpenCountByType(fieldName: string | null | undefined): ReadonlyMap<string, number> {
+        const key = (fieldName ?? '').trim().toLowerCase();
+        if (!key) return new Map();
+        return this._rollup.ByFieldByType?.get(key) ?? new Map();
+    }
+
+    /**
+     * Returns the loaded `MJ: Comments` subtype row for `conversationId`, if present.
+     */
+    public GetCommentForConversation(conversationId: string): MJCommentEntity | null {
+        return this._commentsByConversationId.get(NormalizeUUID(conversationId)) ?? null;
+    }
+
+    /**
+     * Returns the loaded `MJ: Field Suggestions` subtype row for `conversationId`, if present.
+     */
+    public GetSuggestionForConversation(conversationId: string): MJFieldSuggestionEntity | null {
+        return this._suggestionsByConversationId.get(NormalizeUUID(conversationId)) ?? null;
+    }
+
+    /**
+     * Returns the normalized uppercase `CommentType.Code` for `conversationId`
+     * (defaulting to `'COMMENT'` for plain anchored comments).
+     */
+    public GetCommentTypeCodeForConversation(conversationId: string): string {
+        const normId = NormalizeUUID(conversationId);
+        const mapped = this._commentTypeCodeByConversationId.get(normId);
+        if (mapped) {
+            return mapped.trim().toUpperCase();
+        }
+        if (this._suggestionsByConversationId.has(normId)) {
+            return COMMENT_TYPE_CODES.FIELD_SUGGESTION;
+        }
+        const comment = this._commentsByConversationId.get(normId);
+        if (comment && UUIDsEqual(comment.CommentTypeID, BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION)) {
+            return COMMENT_TYPE_CODES.FIELD_SUGGESTION;
+        }
+        return COMMENT_TYPE_CODES.COMMENT;
+    }
+
+    /**
+     * Resolves the cached `MJ: Comment Types` metadata row for `conversationId`, when available.
+     */
+    public GetCommentTypeForConversation(conversationId: string): MJCommentTypeEntity | null {
+        const comment = this.GetCommentForConversation(conversationId);
+        if (comment?.CommentTypeID && typeof ConversationEngine.Instance.CommentTypeByID === 'function') {
+            const byId = ConversationEngine.Instance.CommentTypeByID(comment.CommentTypeID);
+            if (byId) {
+                return byId;
+            }
+        }
+        const code = this.GetCommentTypeCodeForConversation(conversationId);
+        if (typeof ConversationEngine.Instance.CommentTypeByCode === 'function') {
+            return ConversationEngine.Instance.CommentTypeByCode(code) ?? null;
+        }
+        return null;
     }
 
     /**
@@ -499,11 +653,145 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
     }
 
     /**
+     * Accepts a pending `MJ: Field Suggestions` row as the current user, reloads the open
+     * target record so live form fields reflect the accepted value immediately, and refreshes
+     * the record's anchored comments and rollups.
+     */
+    public async AcceptFieldSuggestion(suggestionId: string): Promise<MJFieldSuggestionEntity | null> {
+        const provider = this._provider;
+        const currentUser = provider?.CurrentUser ?? null;
+        if (!provider || !currentUser) {
+            return null;
+        }
+
+        const updated = await ConversationEngine.Instance.AcceptFieldSuggestion(
+            suggestionId,
+            currentUser,
+            provider
+        );
+
+        this.applyDisposedSuggestionOptimistically(updated, suggestionId, 'Accepted', currentUser.ID);
+
+        const activeRecord = this._record;
+        if (activeRecord?.IsSaved && activeRecord.PrimaryKey && !activeRecord.Dirty) {
+            const changedField = (updated.AnchorKey ?? '').trim();
+            const changedSet = new Set<string>();
+            if (changedField) {
+                changedSet.add(changedField);
+                changedSet.add(changedField.toLowerCase());
+            }
+            let reloaded = false;
+            if (typeof activeRecord.InnerLoad === 'function') {
+                try {
+                    reloaded = await activeRecord.InnerLoad(activeRecord.PrimaryKey);
+                } catch (reloadError) {
+                    LogError(
+                        `FormRecordCommentsCoordinatorService.AcceptFieldSuggestion: target record reload failed after suggestion accept succeeded: ${
+                            reloadError instanceof Error ? reloadError.message : String(reloadError)
+                        }`
+                    );
+                }
+            }
+            if (reloaded && this._refreshCoordinator) {
+                if (changedSet.size > 0) {
+                    this._refreshCoordinator.NotifyRemoteUpdate(activeRecord, changedSet);
+                } else {
+                    this._refreshCoordinator.Notify(activeRecord);
+                }
+            }
+        }
+
+        try {
+            await this.LoadForRecord(this._record, provider, true);
+        } catch (refreshError) {
+            LogError(
+                `FormRecordCommentsCoordinatorService.AcceptFieldSuggestion: comments refresh failed after suggestion accept succeeded: ${
+                    refreshError instanceof Error ? refreshError.message : String(refreshError)
+                }`
+            );
+        }
+        return updated;
+    }
+
+    /**
+     * Rejects a pending `MJ: Field Suggestions` row as the current user and refreshes
+     * the record's anchored comments and rollups.
+     */
+    public async RejectFieldSuggestion(suggestionId: string): Promise<MJFieldSuggestionEntity | null> {
+        const provider = this._provider;
+        const currentUser = provider?.CurrentUser ?? null;
+        if (!provider || !currentUser) {
+            return null;
+        }
+
+        const updated = await ConversationEngine.Instance.RejectFieldSuggestion(
+            suggestionId,
+            currentUser,
+            provider
+        );
+
+        this.applyDisposedSuggestionOptimistically(updated, suggestionId, 'Rejected', currentUser.ID);
+
+        try {
+            await this.LoadForRecord(this._record, provider, true);
+        } catch (refreshError) {
+            LogError(
+                `FormRecordCommentsCoordinatorService.RejectFieldSuggestion: comments refresh failed after suggestion reject succeeded: ${
+                    refreshError instanceof Error ? refreshError.message : String(refreshError)
+                }`
+            );
+        }
+        return updated;
+    }
+
+    private applyDisposedSuggestionOptimistically(
+        updated: MJFieldSuggestionEntity,
+        fallbackSuggestionId: string,
+        outcome: NonNullable<MJFieldSuggestionEntity['Outcome']>,
+        actingUserId: string
+    ): void {
+        const normId = NormalizeUUID(updated.ID || fallbackSuggestionId);
+        this._suggestionsByConversationId.set(normId, updated);
+        this._commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+
+        const now = updated.ResolvedAt ?? new Date();
+        const resolvedBy = updated.ResolvedByUserID ?? actingUserId;
+        const acceptedAnchorKey = outcome === 'Accepted' ? (updated.AnchorKey ?? '').trim().toLowerCase() : '';
+
+        for (const conv of this._conversations) {
+            const convNormId = NormalizeUUID(conv.ID);
+            if (convNormId === normId) {
+                conv.IsResolved = true;
+                conv.ResolvedByUserID = resolvedBy;
+                conv.ResolvedAt = now;
+                continue;
+            }
+            if (acceptedAnchorKey) {
+                const sibling = this._suggestionsByConversationId.get(convNormId);
+                if (
+                    sibling &&
+                    sibling.Outcome === null &&
+                    (sibling.AnchorKey ?? '').trim().toLowerCase() === acceptedAnchorKey
+                ) {
+                    sibling.Outcome = 'Superseded';
+                    conv.IsResolved = true;
+                    conv.ResolvedByUserID = resolvedBy;
+                    conv.ResolvedAt = now;
+                }
+            }
+        }
+
+        this.recomputeRollup();
+        this.notifyChanged();
+    }
+
+    /**
      * Opens the inline anchored comment popover tethered to a specific field or section,
      * lazy-loading the record's anchored conversations if not yet loaded.
      */
     public OpenPopoverForTarget(target: FormCommentAnchorTarget): void {
         this._activePopoverTarget = target;
+        this._popoverTypeFilter = target.PreferredTypeFilter?.trim() || 'all';
         if (!this._isLoaded && !this._isLoading) {
             void this.LoadForRecord();
         }
@@ -516,19 +804,24 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
     public ClosePopover(): void {
         if (!this._activePopoverTarget) return;
         this._activePopoverTarget = null;
+        this._popoverTypeFilter = 'all';
         this.notifyChanged();
     }
 
     /**
-     * Opens or closes the Record Comments slide-in drawer, optionally pre-filtering to a target.
+     * Opens or closes the Notes & suggestions slide-in drawer, optionally pre-filtering to a target.
      */
     public SetDrawerOpen(open: boolean, targetFilter?: FormCommentAnchorTarget | null): void {
         this._isDrawerOpen = open;
         if (targetFilter !== undefined) {
             this._drawerTargetFilter = targetFilter;
+            if (targetFilter?.PreferredTypeFilter) {
+                this._drawerTypeFilter = targetFilter.PreferredTypeFilter;
+            }
         }
         if (open) {
             this._activePopoverTarget = null;
+            this._popoverTypeFilter = 'all';
             if (!this._isLoaded && !this._isLoading) {
                 void this.LoadForRecord();
             }
@@ -538,6 +831,18 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
 
     public SetDrawerStatusFilter(status: 'open' | 'resolved' | 'all'): void {
         this._drawerStatusFilter = status;
+        this.notifyChanged();
+    }
+
+    public SetDrawerTypeFilter(typeCode: string): void {
+        const cleaned = (typeCode ?? '').trim();
+        this._drawerTypeFilter = !cleaned || cleaned.toLowerCase() === 'all' ? 'all' : cleaned.toUpperCase();
+        this.notifyChanged();
+    }
+
+    public SetPopoverTypeFilter(typeCode: string): void {
+        const cleaned = (typeCode ?? '').trim();
+        this._popoverTypeFilter = !cleaned || cleaned.toLowerCase() === 'all' ? 'all' : cleaned.toUpperCase();
         this.notifyChanged();
     }
 
@@ -567,7 +872,8 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
         this._rollup = ComputeAnchoredCommentCounts(
             this._conversations,
             this.CurrentUser,
-            this.EntityInfo
+            this.EntityInfo,
+            this._commentTypeCodeByConversationId
         );
     }
 

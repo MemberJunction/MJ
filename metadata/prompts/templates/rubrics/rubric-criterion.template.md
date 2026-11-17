@@ -8,7 +8,7 @@ Guidance: {{ Criterion.Guidance | safe }}
 {% endif %}{% if Criterion.Hints %}
 Hints: {{ Criterion.Hints | safe }}
 {% endif %}{% if Criterion.RequireQuote %}
-Quote the subject as evidence for this criterion.
+Quote the subject as evidence for this criterion.{% if Criterion.EvidenceRequired %} At least one verbatim substring from the subject is required in `evidence` for every level (when something is missing, quote the passage where it should appear) unless `notApplicable` is `true`.{% endif %}
 {% endif %}
 {% if Criterion.NotApplicablePolicy == 'NotAllowed' %}Not applicable is not allowed: choose a level.{% elif Criterion.NotApplicablePolicy == 'CountAsZero' %}Not applicable is allowed and counts as the lowest score.{% elif Criterion.NotApplicablePolicy == 'FailEvaluation' %}Not applicable is allowed, and it fails the evaluation.{% else %}Not applicable is allowed: the criterion is then left out and its weight goes to the others.{% endif %}
 {% if Criterion.Scale and Criterion.Scale.Type == 'Numeric' %}

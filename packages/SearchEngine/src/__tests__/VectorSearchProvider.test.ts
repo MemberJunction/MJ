@@ -114,6 +114,7 @@ vi.mock('@memberjunction/ai-prompts', () => {
         RunEmbedding = mockRunEmbeddingFn;
     }
     return {
+        EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
         AIEmbeddingRunner: MockAIEmbeddingRunner,
     };
 });
@@ -852,6 +853,8 @@ describe('VectorSearchProvider', () => {
                 ModelID: 'embed-model-1',
                 Dimensions: 384,
                 ContextUser: contextUser,
+                // Booked under the vector search carrier prompt (#4923).
+                PromptName: 'Vector Search Embedding',
             }));
         });
 

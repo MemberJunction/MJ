@@ -1,6 +1,7 @@
 import {
   IsWhiteboardFontFamily,
   IsWhiteboardFontWeight,
+  IsWhiteboardHexColor,
   WHITEBOARD_DEFAULTS,
   WhiteboardAuthor,
   WhiteboardBounds,
@@ -180,15 +181,17 @@ export function RenderMarkdownInert(markdown: string): string {
       code = [];
       continue;
     }
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    // Each `\s+` is followed by `\S` (or the line's end), so a line of tabs is read in linear time
+    // (CodeQL js/polynomial-redos); the captured text is the same as with `\s+(.*)$`.
+    const heading = /^(#{1,6})\s+((?:\S.*)?)$/.exec(line);
     if (heading) {
       flushPara();
       flushList();
       out.push(`<h${heading[1].length}>${markdownInline(heading[2])}</h${heading[1].length}>`);
       continue;
     }
-    const ul = /^\s*[-*]\s+(.*)$/.exec(line);
-    const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+    const ul = /^\s*[-*]\s+((?:\S.*)?)$/.exec(line);
+    const ol = /^\s*\d+\.\s+((?:\S.*)?)$/.exec(line);
     if (ul || ol) {
       flushPara();
       const tag: 'ul' | 'ol' = ul ? 'ul' : 'ol';
@@ -303,8 +306,18 @@ function shapeHtml(item: WhiteboardShapeItem, ox: number, oy: number, agentName:
   return `<div class="it shape" style="${style}">${chipHtml(item, agentName)}<div class="it-label">${escapeHtml(item.Label)}</div>${sub}</div>`;
 }
 
+/**
+ * Whether an item's `Color` may be written into a style or SVG attribute: only a hex color
+ * ({@link IsWhiteboardHexColor}). Anything else could add CSS declarations or a `url(...)` the
+ * viewer's browser would fetch, so callers fall back to the palette instead. State loaded from
+ * a saved board is already normalized; this covers state built some other way.
+ */
+function safeColor(color: string | undefined): color is string {
+  return typeof color === 'string' && IsWhiteboardHexColor(color);
+}
+
 function textHtml(item: WhiteboardTextItem, ox: number, oy: number, agentName: string): string {
-  const color = item.Color ? `color:${escapeHtml(item.Color)};` : '';
+  const color = safeColor(item.Color) ? `color:${item.Color};` : '';
   // explicit wrap width wins; otherwise wrap at the on-board default max width
   const width = item.W ? `width:${n(item.W)}px;` : 'max-width:380px;';
   const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;${width}${color}${textStyleCss(item)}`;
@@ -352,7 +365,7 @@ function inkChipHtml(item: WhiteboardInkItem, state: WhiteboardState, ox: number
 
 function inkSvg(item: WhiteboardInkItem, ox: number, oy: number): string {
   const points = item.Points.map((p) => `${n(p.X - ox)},${n(p.Y - oy)}`).join(' ');
-  return `<polyline points="${points}" fill="none" stroke="${escapeHtml(item.Color)}" stroke-width="${n(item.StrokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return `<polyline points="${points}" fill="none" stroke="${safeColor(item.Color) ? item.Color : PALETTE.TextPrimary}" stroke-width="${n(item.StrokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
 function connectorSvg(item: WhiteboardConnectorItem, state: WhiteboardState, ox: number, oy: number): string {
@@ -559,7 +572,7 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
       const fs = item.FontSize ?? 12;
       const font = fontStackOf(item);
       const weight = fontWeightOf(item) ?? 400;
-      const color = item.Color ? escapeHtml(item.Color) : PALETTE.TextPrimary;
+      const color = safeColor(item.Color) ? item.Color : PALETTE.TextPrimary;
       return `<text x="${n(item.X - ox)}" y="${n(item.Y - oy + fs)}" font-size="${n(fs)}" font-family="${font}" font-weight="${weight}" fill="${color}">${svgLine(item.Text)}</text>`;
     }
     case 'image': {

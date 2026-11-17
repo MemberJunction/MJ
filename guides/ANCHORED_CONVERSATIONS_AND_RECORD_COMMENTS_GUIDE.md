@@ -1,42 +1,95 @@
-# Anchored Conversations & Record Commenting Guide
+# Anchored Conversations, Typed Record Comments & Field Suggestions Guide
 
-MemberJunction provides a unified **Anchored Conversations & Record Commenting** system built on top of `MJ: Conversations` and `MJ: Conversation Details`. Instead of introducing a separate commenting table, record discussions—whether anchored to an entire record, a specific form field, a collapsible section, a left-nav rail tab/group, a related-entity contribution grid, or a document/slide/spreadsheet block—are stored as first-class conversations.
+MemberJunction provides a unified **Anchored Conversations, Typed Record Comments & Field Suggestions** architecture built on top of `MJ: Conversations`, `MJ: Conversation Types`, `MJ: Comments` (IS-A `MJ: Conversations`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `MJ: Comments`).
 
-This means every anchored comment thread automatically inherits:
-- Multi-message threading (`MJ: Conversation Details`)
-- User and AI agent `@mention` autocomplete and in-app notifications (`MJ: User Notifications`)
-- Resolution tracking (`IsResolved`, `ResolvedByUserID`, `ResolvedAt`)
-- Row-Level Security (RLS) and Field-Level Security (FLS) enforcement across both reads and writes
+Instead of bolting separate comment or AI-suggestion tables onto individual domain entities, record discussions and structured field proposals are modeled once in MJ Core as typed, anchored conversations:
+- **Multi-message threading** (`MJ: Conversation Details`) — created on demand only when someone posts a note or clicks **Discuss** on a suggestion
+- **User and AI agent `@mention` autocomplete** and in-app notifications (`MJ: User Notifications`)
+- **Shared resolution tracking** (`IsResolved`, `ResolvedByUserID`, `ResolvedAt` on `MJ: Conversations`)
+- **Row-Level Security (RLS) and Field-Level Security (FLS)** enforced uniformly across `MJ: Conversations`, `MJ: Comments`, `MJ: Field Suggestions`, and `MJ: Conversation Details`
+- **Declarative IS-A Subtype Chaining (`Entity.SubtypeSelector`)** — saving an `MJ: Field Suggestions` entity writes the `Conversation`, `Comment`, and `FieldSuggestion` rows atomically in one transaction
 
 ---
 
-## 1. Database Schema (`MJ: Conversations`)
+## 1. Entity Model & Two-Level IS-A Chain
 
-Migration `V202611022155__v6.2.x__Anchored_Conversations_And_Record_Comments.sql` adds the following columns, constraints, and indexes to `__mj.Conversation`:
+```mermaid
+erDiagram
+    ConversationType ||--o{ Conversation : "TypeID (Type is virtual)"
+    Conversation ||--o| Comment : "IS-A (PK = ID)"
+    CommentType ||--o{ Comment : "CommentTypeID"
+    Comment ||--o| FieldSuggestion : "IS-A (PK = ID)"
 
-| Column | Type | Nullable | Description |
+    ConversationType {
+        uuid ID PK
+        string Name
+        string Code UK
+        string ExtensionEntity
+        string DriverClass
+    }
+    Conversation {
+        uuid ID PK
+        uuid TypeID FK
+        string Type "Virtual from TypeID"
+        uuid LinkedEntityID FK
+        string LinkedRecordID
+        string AnchorType
+        string AnchorKey
+        json AnchorMetadata
+        bit IsResolved
+        uuid ResolvedByUserID FK
+        datetimeoffset ResolvedAt
+    }
+    Comment {
+        uuid ID PK,FK
+        uuid CommentTypeID FK
+    }
+    CommentType {
+        uuid ID PK
+        string Name
+        string Code UK
+        string ExtensionEntity
+        string DriverClass
+        string UIDriverClass
+        json AllowedAnchorTypes
+    }
+    FieldSuggestion {
+        uuid ID PK,FK
+        string SuggestedValue
+        decimal Confidence
+        string Source
+        string Outcome
+        uuid AIPromptRunID FK
+    }
+```
+
+### 1.1 Schema Entities (Migrations `v6.2.x` & `V202611091230__v6.3.x`)
+
+| Entity | Relationship | Key Columns | Purpose |
 | :--- | :--- | :--- | :--- |
-| `AnchorType` | `NVARCHAR(30)` | `NULL` | Discriminator for anchored threads (`NULL` = standard standalone chat conversation). Constrained by `CK_Conversation_AnchorType` to `'Contribution'`, `'DocBlock'`, `'Field'`, `'Group'`, `'Record'`, `'Section'`, `'SheetRange'`, or `'SlideRegion'`. |
-| `AnchorKey` | `NVARCHAR(255)` | `NULL` | Target identifier within the record: `EntityField.Name` when `AnchorType = 'Field'`, `SectionKey` when `AnchorType = 'Section'`, rail `GroupKey` when `AnchorType = 'Group'`, or block/cell ID for documents/sheets/slides. |
-| `AnchorMetadata` | `NVARCHAR(MAX)` | `NULL` | Strongly-typed JSON payload (`JSONType = 'IConversationAnchorMetadata'`, exposed on `MJConversationEntity` as `AnchorMetadataObject`) storing display labels, quoted value snapshots, and FLS `restrictedFields` stamps. |
-| `IsResolved` | `BIT` | `NOT NULL` | Default `0`. Whether the anchored thread has been marked resolved. |
-| `ResolvedByUserID` | `UNIQUEIDENTIFIER` | `NULL` | Foreign key to `__mj.User(ID)` recording who resolved the thread. |
-| `ResolvedAt` | `DATETIMEOFFSET` | `NULL` | Timestamp when the thread was resolved. |
+| **`MJ: Conversation Types`** | Lookup / Type Table | `Name`, `Code` (unique), `Description`, `ExtensionEntity`, `DriverClass` | Seeded with `Chat` (`CHAT`), `Skip` (`SKIP`), `Routine` (`ROUTINE`), `Meeting Room` (`MEETING_ROOM`), and `Comment` (`COMMENT`, `ExtensionEntity = 'MJ: Comments'`), plus any custom legacy `Conversation.Type` values migrated during upgrade. |
+| **`MJ: Conversations`** | IS-A Root | `TypeID` (FK), virtual `Type`, `LinkedEntityID`, `LinkedRecordID`, `AnchorType`, `AnchorKey`, `AnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt` | Declares `SubtypeSelector` (`Path: "TypeID.ExtensionEntity"`, `AutoEnsureOnSave: true`, `Driver: { Path: "TypeID.DriverClass", BaseClass: "ConversationTypeDriver" }`). |
+| **`MJ: Comments`** | IS-A `MJ: Conversations` | `ID` (PK/FK to `Conversation.ID`), `CommentTypeID` (FK) | Extension entity for the `Comment` conversation type. Declares `SubtypeSelector` (`Path: "CommentTypeID.ExtensionEntity"`, `AutoEnsureOnSave: true`, `Driver: { Path: "CommentTypeID.DriverClass", BaseClass: "CommentTypeDriver" }`, `UIDriver: { Path: "CommentTypeID.UIDriverClass" }`). |
+| **`MJ: Comment Types`** | Lookup / Type Table | `Name`, `Code` (unique), `ExtensionEntity`, `DriverClass`, `UIDriverClass`, `AllowedAnchorTypes` (`JSONType = 'CommentTypeAllowedAnchorTypes'`) | Seeded with **Comment** (`COMMENT`, plain note) and **Field Suggestion** (`FIELD_SUGGESTION`, `ExtensionEntity = 'MJ: Field Suggestions'`, `DriverClass = 'FieldSuggestionCommentDriver'`, `UIDriverClass = 'FieldSuggestionCardComponent'`, `AllowedAnchorTypes = ['Field']`). |
+| **`MJ: Field Suggestions`** | IS-A `MJ: Comments` | `ID` (PK/FK to `Comment.ID`), `SuggestedValue`, `Confidence`, `Source` (`LLM`, `Integration`, `Agent`, `Person`), `Outcome` (`Accepted`, `Rejected`, `Superseded`), `AIPromptRunID` | First shipped structured comment subtype. Stores proposed field values without overwriting record truth until accepted by an authorized user or superseded by authoritative data. |
 
-### Constraints & Indexes
-- **`CK_Conversation_AnchorType`**: Enforces valid `AnchorType` values (`NULL` or one of the 8 canonical anchor types).
-- **`CK_Conversation_AnchorLinkBinding`**: Enforces `AnchorType IS NULL OR (LinkedEntityID IS NOT NULL AND LinkedRecordID IS NOT NULL)` so an anchored conversation cannot exist without a parent record link.
-- **`IDX_Conversation_LinkedRecord_Anchor`**: Filtered index on `(LinkedEntityID, LinkedRecordID, AnchorType, AnchorKey, IsResolved) WHERE LinkedEntityID IS NOT NULL AND AnchorType IS NOT NULL` for sub-millisecond form comment pre-warming.
+### 1.2 Virtual `Conversation.Type` & Release / GraphQL Migration Note
 
-### Main Chat List Isolation & Record-Bound "Ask AI" Conversations
-- **Anchored Comments (`AnchorType IS NOT NULL`)**: `ConversationEngine.LoadConversations()` filters main chat history with `AND AnchorType IS NULL` by default (unless `{ includeAnchored: true }` is passed), ensuring inline record comments never clutter a user's primary AI chat sidebar.
-- **Record-Bound "Ask AI" Chats (`LinkedEntityID IS NOT NULL AND AnchorType IS NULL`)**: When a user starts an "Ask AI" conversation from `<mj-chat-agents-overlay>` while viewing an entity record form, `ChatAgentsOverlayComponent` binds the conversation to `(LinkedEntityID, LinkedRecordID)` with `AnchorType = NULL`. `ConversationEngine.LoadConversations()` also excludes record-linked conversations by default (`AND LinkedEntityID IS NULL`, unless `{ includeRecordLinked: true }` is passed), while `ConversationEngine.LoadRecordConversations(linkedEntityId, linkedRecordId, contextUser, environmentId)` loads prior AI conversations scoped to that specific record as the user navigates between records.
+In MJ 6.3 (`V202611091230__v6.3.x__Conversation_Types_Comments_And_Field_Suggestions.sql`), the physical `Conversation.Type` column was replaced by `Conversation.TypeID` (`NOT NULL`, referencing `MJ: Conversation Types`):
+- **Reads & Filters Stay Unchanged**: Because the foreign key is named `TypeID`, CodeGen exposes `Type` on `vwConversations` (and inherited IS-A views `vwComments` and `vwFieldSuggestions`) as a read-only virtual column. Existing `RunView` filters such as `Type = 'Skip'` or `Type = 'Comment'` and property reads (`conversation.Type`) continue to work identically.
+- **TypeScript Writers Use `TypeID` + `CONVERSATION_TYPE_CODES`**: `ConversationEngine.Instance.TypeByCode(CONVERSATION_TYPE_CODES.ROUTINE)` resolves the cached `MJConversationTypeEntity` row without magic strings. When `TypeID` is omitted on a new conversation, `MJConversationEntityServer` defaults `TypeID` to `Comment` when `AnchorType IS NOT NULL` and to `Chat` otherwise.
+- **⚠️ Breaking Change for External GraphQL Mutation Callers**: Because `Conversation.Type` is now a virtual view column (`IncludeInGeneratedForm = 0`, no stored-procedure parameter), `CreateMJConversationInput` and `UpdateMJConversationInput` no longer include `Type`. External GraphQL clients that previously sent `Type` in `CreateMJConversation` or `UpdateMJConversation` mutations must either omit `Type` (to accept the server default) or pass `TypeID`.
+
+### 1.3 Constraints & Indexes
+- **`CK_Conversation_AnchorType`**: Enforces valid `AnchorType` values (`NULL`, `'Contribution'`, `'DocBlock'`, `'Field'`, `'Group'`, `'Record'`, `'Section'`, `'SheetRange'`, `'SlideRegion'`).
+- **`CK_Conversation_AnchorLinkBinding`**: Enforces `AnchorType IS NULL OR (LinkedEntityID IS NOT NULL AND LinkedRecordID IS NOT NULL)`.
+- **`IDX_Conversation_LinkedRecord_Anchor_Type`**: Composite index on `(LinkedEntityID, LinkedRecordID, AnchorType, TypeID)` (plus `AnchorKey`, `IsResolved`) for sub-millisecond anchored note/suggestion loading while keeping anchored threads isolated from main AI chat lists (`AnchorType IS NULL AND LinkedEntityID IS NULL`).
 
 ---
 
 ## 2. Strongly-Typed JSON Metadata (`IConversationAnchorMetadata`)
 
-Defined in `metadata/entities/JSONType-interfaces/IConversationAnchorMetadata.ts` and generated onto `MJConversationEntity.AnchorMetadataObject`:
+Defined in `metadata/entities/JSONType-interfaces/IConversationAnchorMetadata.ts` and generated onto `MJConversationEntity.AnchorMetadataObject` (inherited by `MJCommentEntity` and `MJFieldSuggestionEntity`):
 
 ```typescript
 export interface IConversationAnchorMetadata {
@@ -65,88 +118,94 @@ export interface IConversationAnchorMetadata {
 }
 ```
 
-> **Type Derivation Rule**: Always derive the `AnchorType` union from the generated entity class (`MJConversationEntity['AnchorType']` or `ConversationAnchorType` from `@memberjunction/core-entities`) rather than hand-copying string literals.
+> **Type Derivation Rule**: Always derive value-list unions from generated entity types (`MJConversationEntity['AnchorType']`, `MJFieldSuggestionEntity['Source']`, `MJFieldSuggestionEntity['Outcome']`) rather than hand-copying string unions.
 
 ---
 
-## 3. Security Architecture: RLS & Two-Stage FLS Protection
+## 3. Comment Type Drivers & Field Suggestion Lifecycle
 
-Anchored record comments are governed by a defense-in-depth security model across `@memberjunction/core-entities` (`AnchoredConversationSecurity.ts`, `ConversationWriteAccess.ts`, `mentionNotification.ts`) and `@memberjunction/core-entities-server` (`AnchoredConversationReadSecurityHook.ts`, `RestrictedFieldCommentClassifier.ts`, `MJConversationEntityServer`, and `MJConversationDetailEntityServer`).
+Each `MJ: Comment Types` row can name a server/shared behavior driver (`DriverClass`, extending `CommentTypeDriver` -> `EntitySubtypeDriverBase`) and an Angular card renderer (`UIDriverClass`, extending `EntitySubtypeUIDriverBase`).
 
-### 3.1 Row-Level Security (RLS) & Server-Side Read Hook (`AnchoredConversationPostRunViewHook`)
-- **Server-Side `PostRunView` Enforcement (`AnchoredConversationReadSecurityHook.ts`)**: Registered via `RegisterProviderHook('PostRunView', AnchoredConversationPostRunViewHook)` in `@memberjunction/core-entities-server` and `MJServer`, every server-side `RunView` against `MJ: Conversations` or `MJ: Conversation Details` automatically filters out any anchored thread (`AnchorType IS NOT NULL`) or message row whose linked record fails `UserCanReadLinkedRecord` (RLS) or whose target/stamped fields fail `IsConversationHiddenByFieldSecurity` (FLS) for `contextUser`—even when callers request narrow `Fields` projections. Verified by FLS closeout check `CO20` (`fls-closeout:anchored-comments-protected`).
-- **Engine Read Gate (`UserCanReadLinkedRecord`)**: `ConversationEngine.LoadAnchoredConversations()` also runs `FilterAnchoredConversationsForUser()`, verifying that the caller has `EntityPermission.CanRead` on the target entity **and** that the target record passes `RunView` (`ResultType: 'count_only'`) under the caller's RLS filter (supporting both SQL Server and PostgreSQL identifier quoting via `provider.QuoteIdentifier`).
-- **Write Gate (`UserMayWriteConversation` & `MJConversationEntityServer`)**: Any authenticated user who can read the linked record, satisfies `entityInfo.CanUserComment(user)`, and is not blocked by FLS on the target field can start or reply to an anchored comment thread on that record without needing explicit `MJ: Resource Permissions` share rows. Users denied RLS read access to the record are rejected on both `MJConversationEntity` and `MJConversationDetailEntity` saves.
+### 3.1 `CommentTypeDriver` & `FieldSuggestionCommentDriver`
 
-### 3.2 Field-Level Security (FLS) — Read Gate (`IsConversationHiddenByFieldSecurity`) & `quotedValue` Redaction
-When `entityInfo.FieldLevelSecurityApplies === true`, `IsConversationHiddenByFieldSecurity(entityInfo, user, anchorType, anchorKey, anchorMetadata)` computes `denied = entityInfo.GetDeniedReadFields(user)` and hides the conversation in 0ms when:
-1. `conv.AnchorType === 'Field'` and `denied.has(conv.AnchorKey.toLowerCase())`, OR
-2. `conv.AnchorMetadataObject.fieldName` is in `denied`, OR
-3. Any field listed in `conv.AnchorMetadataObject.restrictedFields` is in `denied`.
+`FieldSuggestionCommentDriver` (`@RegisterClass(CommentTypeDriver, 'FieldSuggestionCommentDriver')` in `@memberjunction/core-entities`) implements the full lifecycle for `MJ: Field Suggestions`:
 
-**No `quotedValue` Snapshots on Restricted or Encrypted Fields**: Both client-side (`<mj-form-field>` and `<mj-record-comments>`) and server-side (`MJConversationEntityServer.Save()`) strip `AnchorMetadataObject.quotedValue` whenever the target field has `HasFieldPermissions === true` or `Encrypt === true`, preventing sensitive field values from being persisted in plaintext JSON metadata, `MJ: Record Changes`, or search indexes.
+1. **Anchor & Entity Opt-In Validation (`Validate` & `MJFieldSuggestionEntityServer`)**:
+   - Verifies `AnchorType === 'Field'` (matching `CommentType.AllowedAnchorTypes = ['Field']`), a valid `AnchorKey` naming an existing `EntityField` on the linked entity, and that the linked entity allows `'FIELD_SUGGESTION'` in `EntityInfo.AllowedCommentTypeCodes`.
+2. **Accept (`ConversationEngine.AcceptFieldSuggestion` -> `FieldSuggestionCommentDriver.OnAccept`)**:
+   - Loads the linked target record as `acceptingUser`, verifies `entityInfo.AllowUpdateAPI`, entity `CanUpdate` permission, and FLS `IsFieldUpdatableByUser(field, acceptingUser)`.
+   - Coerces `SuggestedValue` to the field's MJ scalar/boolean/numeric/date type and saves the target record normally as `acceptingUser` — so **`MJ: Record Changes` auditing, server-side entity hooks, and FLS apply identically to a manual user edit**.
+   - Marks the suggestion `Outcome = 'Accepted'`, `IsResolved = true`, `ResolvedByUserID = acceptingUser.ID`, `ResolvedAt = new Date()`.
+3. **Reject (`ConversationEngine.RejectFieldSuggestion` -> `FieldSuggestionCommentDriver.OnReject`)**:
+   - Requires the exact same entity and field update permissions on the target field as `Accept`.
+   - Marks the suggestion `Outcome = 'Rejected'`, `IsResolved = true`, `ResolvedByUserID = rejectingUser.ID`, `ResolvedAt = new Date()` without modifying the target record.
+4. **Automatic Superseding (`AfterSave` & `FieldSuggestionPostSaveHook`)**:
+   - **Newer Suggestion Supersedes Older**: When a new open `MJ: Field Suggestions` row is saved for `(LinkedEntityID, LinkedRecordID, AnchorKey)`, `FieldSuggestionCommentDriver.AfterSave()` automatically marks any older unresolved suggestion on that same field as `Outcome = 'Superseded'` and `IsResolved = true`.
+   - **Direct Field Edit Supersedes Pending Suggestions (`PostSaveHook`)**: `@memberjunction/core` provides a generic `'PostSave'` provider hook (`PostSaveHook`, fired after `BaseEntity` commits a create or update with `ChangedFieldNames`). `FieldSuggestionPostSaveHook` (`@memberjunction/core-entities-server`) listens for saves on entities that opt into `FIELD_SUGGESTION`, resolves each open comment's `CommentTypeDriver`, and invokes `OnRecordChanged()`, automatically marking pending suggestions for modified fields as `Outcome = 'Superseded'` and `IsResolved = true` (skipping the suggestion currently being accepted via `AcceptFieldSuggestion`).
+5. **Zero-Noise Discussion (`Discuss`)**:
+   - Creating a `Field Suggestion` does **not** require creating an `MJ: Conversation Details` message row. Message rows exist only if a user or agent clicks **Discuss** on the suggestion card to start a thread inside that suggestion's conversation.
 
-### 3.3 Field-Level Security (FLS) — Write-Time Unanchored Comment Classifier (`InspectAndStampRestrictedFieldsForComment`)
-What if an entity has FLS enabled (for example, a restricted `Salary` or `SSN` column), and a user posts a comment anchored at the **Record** or **Section** level that discusses or quotes the restricted field?
+### 3.2 Entity-Level Opt-In (`MJ: Entities.Configuration.Comments`)
 
-On every `MJConversationDetailEntityServer.Save()` belonging to an anchored conversation (`conversation.AnchorType != null`) on an FLS-governed entity, `InspectAndStampRestrictedFieldsForComment()` runs a two-stage detector:
-1. **Stage 1 — Deterministic Lexical + Author-Readable Value Match (No Refusal Oracle)**:
-   - Checks whether the comment mentions any FLS-restricted field's `Name` or `DisplayName` (word-boundary matched).
-   - Loads the linked record via `RunView` and checks whether any non-trivial current value of an FLS-restricted field **that the authoring user is permitted to read** appears verbatim in the comment text (catching cases where an HR user with `Salary` read access writes `"Can we bump 185000 to 195000?"` without typing `"Salary"`, so `Salary` is stamped into `restrictedFields`).
-   - **Refusal-Oracle Prevention**: Fields the authoring user is *denied* Read access to are **never** value-matched against their comment text, preventing a denied user from probing secret column values via save refusals.
-2. **Stage 2 — Governed Semantic `AIPromptRunner` Classifier**:
-   - Invokes the governed system prompt `'Anchored Comment Restricted Field Classifier'` (`metadata/prompts/.prompts.json`) via `AIPromptRunner` + `AIPromptParams` (or a custom classifier registered via `RegisterRestrictedFieldLLMClassifier()`) to detect indirect or paraphrased references to restricted fields (e.g., `"base comp"`, `"annual pay"` → `Salary`).
-   - Non-anchored record-linked AI chats (`AnchorType == null`) bypass this classifier so normal agent turns do not incur extra LLM classification calls.
-3. **Enforcement & Stamping**:
-   - If the **author** is denied read access to a matched restricted field, the save is **rejected** with a generic message (`'You do not have permission to comment on restricted fields.'`) that does not disclose which restricted field matched.
-   - If the **author** is authorized to read the field, the save succeeds and the matched field names are stamped into `conversation.AnchorMetadataObject.restrictedFields` and persisted on `MJ: Conversations`. All subsequent reads filter the thread deterministically in 0ms via `IsConversationHiddenByFieldSecurity()`.
-
-### 3.4 Entity-Level Commenting Control (`MJ: Entities.Configuration.Comments`)
-Administrators can enable, disable, or restrict record commenting per entity via `MJ: Entities.Configuration` (`IEntityConfiguration.Comments?: IEntityCommentsConfiguration`):
+Administrators and Open Apps configure commenting and allowed comment types per entity in `MJ: Entities.Configuration`:
 
 ```json
 {
   "Comments": {
     "Enabled": true,
     "RequiredPermission": "Read",
-    "AllowedRoles": ["Developer", "Reviewer"]
+    "AllowedRoles": ["Developer", "Reviewer"],
+    "AllowedCommentTypes": ["COMMENT", "FIELD_SUGGESTION"]
   }
 }
 ```
 
-- **`Enabled`** (`boolean`, default `true`): Set to `false` to completely hide commenting affordances (`<mj-form-field>`, `<mj-collapsible-panel>`, `<mj-form-toolbar>`, `<mj-record-form-container>`) and reject server-side anchored conversation saves for that entity (`EntityInfo.AllowRecordComments === false`).
-- **`RequiredPermission`** (`'Read' | 'Update'`, default `'Read'`): Controls whether a user only needs `CanRead` on the entity (default) or must also have `CanUpdate` permission (`EntityInfo.CanUserComment(user)`).
-- **`AllowedRoles`** (`string[]`, optional): When populated, restricts commenting to users holding at least one of the listed role names or role IDs.
+- **`Enabled`** (`boolean`, default `true`): Set to `false` to disable all record commenting on the entity (`EntityInfo.AllowRecordComments === false`).
+- **`RequiredPermission`** (`'Read' | 'Update'`, default `'Read'`): Controls whether starting/replying to plain comments requires `CanRead` or `CanUpdate` (`EntityInfo.CanUserComment(user)`). Accepting or rejecting a `Field Suggestion` **always** requires update permission on both the entity and the target field regardless of `RequiredPermission`.
+- **`AllowedRoles`** (`string[]`, optional): Restricts commenting to users holding at least one listed role name or ID.
+- **`AllowedCommentTypes`** (`string[]`, default `['COMMENT']`): Lists the `MJ: Comment Types.Code` values permitted on this entity (`EntityInfo.AllowedCommentTypeCodes`, `EntityInfo.IsCommentTypeAllowed(code)`). Plain notes (`'COMMENT'`) are enabled by default; structured types such as `'FIELD_SUGGESTION'` are opt-in per entity (e.g., `MJ_BizApps_Tasks: Tasks`, `GitHubIssueTask`, `GitHubPullRequestTask`).
 
 ---
 
-## 4. `@Mention` Notifications with FLS/RLS Gating
+## 4. Security Architecture: RLS & Two-Stage FLS Protection Across All IS-A Views
 
-When a message is saved in `MJConversationDetailEntityExtended.Save()`, `DispatchConversationMentionNotifications()` parses `@{"type":"user","id":"...","name":"..."}` tokens in `detail.Message` and creates in-app `MJ: User Notifications`:
-- Skips self-mentions and duplicate user tokens in the same message.
-- Deduplicates against any notification already created by `CreateShareNotification` during `SyncPermissionsFromMentions`.
-- **Security Gate**:
-  - For **anchored conversations**, verifies both `IsConversationHiddenByFieldSecurity(entityInfo, recipientUser, ...)` and `UserCanReadLinkedRecord(provider, recipientUser, conv.LinkedEntityID, conv.LinkedRecordID)`. A user denied FLS or RLS access never receives a notification that would leak a restricted comment preview.
-  - For **unlinked private conversations** (`LinkedEntityID IS NULL`), verifies `canRecipientAccessUnlinkedConversation` so notifications are only sent to the conversation owner (`conversation.UserID`) or users/roles holding an `'Approved'` `MJ: Resource Permissions` grant on `conversation.ID`.
+Anchored conversations, comments, and field suggestions share one defense-in-depth security pipeline across `@memberjunction/core-entities` and `@memberjunction/core-entities-server`:
+
+### 4.1 Server-Side `PostRunView` Enforcement (`AnchoredConversationPostRunViewHook`)
+Registered via `RegisterProviderHook('PostRunView', AnchoredConversationPostRunViewHook)` in `@memberjunction/core-entities-server` and `MJServer`, every server-side `RunView` against **`MJ: Conversations`**, **`MJ: Comments`**, **`MJ: Field Suggestions`**, or **`MJ: Conversation Details`** automatically filters out any row whose linked record fails `UserCanReadLinkedRecord` (RLS) or whose target/stamped fields fail `IsConversationHiddenByFieldSecurity` (FLS) for `contextUser` — even when callers request narrow `Fields` projections that omit `AnchorType`, `AnchorKey`, or `LinkedEntityID`.
+
+### 4.2 Field-Level Security (FLS) — Read Gate & `quotedValue` Redaction
+When `entityInfo.FieldLevelSecurityApplies === true`, `IsConversationHiddenByFieldSecurity(entityInfo, user, anchorType, anchorKey, anchorMetadata)` computes `denied = entityInfo.GetDeniedReadFields(user)` and hides the note or suggestion in 0ms when:
+1. `AnchorType === 'Field'` and `denied.has(anchorKey.toLowerCase())` — **a `Field Suggestion` on a field the user cannot read is completely invisible**, OR
+2. `AnchorMetadataObject.fieldName` is in `denied`, OR
+3. Any field listed in `AnchorMetadataObject.restrictedFields` is in `denied`.
+
+Both client-side (`<mj-form-field>` and `<mj-record-comments>`) and server-side (`MJConversationEntityServer.Save()`) strip `AnchorMetadataObject.quotedValue` whenever the target field has `HasFieldPermissions === true` or `Encrypt === true`.
+
+### 4.3 Write-Time Unanchored Comment Classifier (`InspectAndStampRestrictedFieldsForComment`)
+On every `MJConversationDetailEntityServer.Save()` belonging to an anchored thread (`AnchorType != null`) on an FLS-governed entity, `InspectAndStampRestrictedFieldsForComment()` runs the two-stage lexical/author-readable-value + governed `AIPromptRunner` classifier (`'Anchored Comment Restricted Field Classifier'`), rejecting unauthorized restricted-field references with a generic non-oracle error and stamping authorized references into `AnchorMetadataObject.restrictedFields`.
+
+### 4.4 `@Mention` Notifications with FLS/RLS Gating
+`DispatchConversationMentionNotifications()` verifies both `IsConversationHiddenByFieldSecurity` and `UserCanReadLinkedRecord` before dispatching `MJ: User Notifications`, ensuring restricted comment or suggestion discussions never leak via notification previews.
 
 ---
 
 ## 5. Angular Form UX (`@memberjunction/ng-base-forms`)
 
-Anchored commenting is built directly into `<mj-record-form-container>`, `<mj-form-toolbar>`, `<mj-collapsible-panel>`, and `<mj-form-field>` with zero extra boilerplate required on generated or custom forms:
+Generated and custom forms inherit the unified **Notes & suggestions** UX automatically through `<mj-record-form-container>`, `<mj-form-toolbar>`, `<mj-collapsible-panel>`, and `<mj-form-field>`:
 
-1. **Field-Level Affordances (`<mj-form-field>`)**:
-   - Hovering any field on a saved record reveals a subtle comment trigger button (`fa-regular fa-comment-dots`).
-   - Fields with open comment threads display a persistent pill badge (`💬 N`) in the label row and are never auto-hidden as "empty" in read mode.
-   - Clicking the trigger or pill opens the inline anchored popover (`<mj-record-comments Mode="popover">`) tethered to that field, capturing the field's current formatted value (`quotedValue`) unless the field is FLS-governed (`HasFieldPermissions`) or encrypted (`Encrypt`).
-2. **Section-Level Affordances (`<mj-collapsible-panel>`)**:
-   - Each section header rolls up open comment counts across both section-anchored threads and all fields rendered inside the section (`SectionIndicators.CommentCount`).
-   - Displays a clickable comment badge in the panel header (`OnOpenSectionComments`) and reveals an add-comment icon button on header hover.
-3. **Left-Nav Rail & Collapsed Spine (`<mj-record-form-container>`)**:
-   - Because `CommentCount` is part of `FormSectionIndicators` and summed by `SumSectionIndicators()`, open comment counts roll up automatically to left-nav rail tabs, the `More` folder, and the collapsed rail spine.
-4. **Toolbar Action & Organized Side-Rail Drawer (`<mj-form-toolbar>` + `RecordCommentsToolbarAction` + `<mj-record-comments Mode="drawer">`)**:
-   - Registers `Key: 'comments'` (`Mode: 'both'`, `Pinnable: true`, not in `DEFAULT_PINNED_TOOLBAR_ACTIONS`) on `<mj-form-toolbar>` so **Comments** appears in the **More (`...`)** menu by default with a live open-thread count badge, and can be pinned/unpinned to the main toolbar by any user via `UserInfoEngine`.
-   - When opened from the toolbar (or via the **"View all record comments in side rail"** button in the inline popover header), the side-rail drawer organizes all threads across the record into section groups (`Details`, `System Metadata`, `General Record Comments`, etc.) so comments across every tab and section can be reviewed in one place.
-   - Both the inline popover dialog (`.mj-record-comments-popover`) and the side-rail drawer (`.mj-record-comments-drawer`) are resizable—the popover provides an **Expand / Restore** header toggle button (`400px` ↔ `560px`) as well as native drag-resizing (`resize: both`), and the drawer includes a left-edge drag resize handle (`320px`–`720px`) whose width is persisted per user via `UserInfoEngine.Instance.SetSettingDebounced('MJ_CommentsPanel_Width', ...)`.
-   - The drawer supports filtering by `Open` / `Resolved` / `All` and by target anchor, displays `quotedValue` live-diff indicators when a field's value has changed since the comment was posted, displays an `FLS` shield badge when restricted fields are stamped on a thread, and jumps/expands/scrolls/pulses the target field or section when an anchor chip is clicked.
-   - Comment composers implement IME-safe `Enter`-to-submit (checking `event.isComposing`, `keyCode === 229`, and Safari's `compositionend` timestamp window), debounced server-side `@mention` autocomplete across `MJ: Users` and `MJ: AI Agents`, clean `@Name` composer chips (serialized to `@{"type":...,"id":...,"name":...}` wire tokens on submit), and interactive `@mention` pills in rendered messages that navigate directly to the mentioned `MJ: Users` or `MJ: AI Agents` record when clicked.
+1. **Per-Type Field Badges (`<mj-form-field>`)**:
+   - Fields with open plain notes show the note badge (`fa-solid fa-comment`, `.mj-forms-field__comment-pill`).
+   - Fields with pending `MJ: Field Suggestions` show a distinct suggestion badge (`fa-solid fa-wand-magic-sparkles`, `.mj-forms-field__comment-pill--suggestion`).
+   - Clicking either badge opens the anchored popover pre-filtered (`PreferredTypeFilter`) to `'COMMENT'` or `'FIELD_SUGGESTION'`. Fields with open notes or suggestions are never collapsed away as empty in read mode.
+2. **"Notes & suggestions" Drawer & Popover (`<mj-record-comments>`)**:
+   - Toolbar action (`RecordCommentsToolbarAction`, key `'comments'`) is labeled **Notes & suggestions** and displays the combined open thread + pending suggestion count.
+   - When the entity allows multiple comment types (`AvailableTypeFilterCodes.length > 1`), an accessible type filter pill bar (`role="group"` + `aria-pressed`) lets users filter between **All**, **Notes**, **Suggestions**, and any additional custom `MJ: Comment Types`, alongside **Open** / **Resolved** / **All** status filters.
+3. **Dynamic Card Rendering via `UIDriverClass` (`<mj-comment-card-driver-host>` & `FieldSuggestionCardComponent`)**:
+   - Plain comments (`UIDriverClass == null`) render with the standard threaded note card.
+   - When a comment's `MJ: Comment Types` row declares a `UIDriverClass` (such as `FieldSuggestionCardComponent`, registered via `@RegisterClass(EntitySubtypeUIDriverBase, 'FieldSuggestionCardComponent')`), `<mj-comment-card-driver-host>` instantiates that component dynamically via `MJGlobal.Instance.ClassFactory`.
+   - **`FieldSuggestionCardComponent`** displays:
+     - Source badge (`LLM`, `Integration`, `Agent`, `Person`) and confidence percentage pill
+     - Current field value vs. ghost **Suggested value** diff block (or outcome pill `Accepted` / `Rejected` / `Superseded` once closed)
+     - **Accept**, **Reject** (enabled only when `CanUserUpdateTargetField` is true), and **Discuss** (revealing and focusing the inline reply composer on demand; generic `Resolve` is suppressed on suggestion cards so resolution always flows through Accept/Reject/Supersede)
+   - Accepting a suggestion through `FormRecordCommentsCoordinatorService.AcceptFieldSuggestion` reloads the clean server record into the open form (`InnerLoad` + `FormRecordRefreshCoordinator.NotifyRemoteUpdate`), and saving the form directly reloads open suggestions so auto-superseded items update immediately on screen.

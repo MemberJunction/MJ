@@ -21,6 +21,10 @@ export type DecisionEvalLabel = (typeof DECISION_EVAL_LABELS)[number];
 /**
  * The decisions the harness knows how to build: conversation routing, and agent discovery (Sage's
  * pick of the agent for a request; its shapes are in `discovery-types.ts`).
+ *
+ * This gates only the generated eval suites and their scorecard. Fitting a calibration needs no
+ * entry here: `FitDecisionCalibrations` (`calibration-fit.ts`) fits any use and any model from
+ * labelled points.
  */
 export const DECISION_EVAL_DECISIONS = ['conversation-routing', 'agent-discovery'] as const;
 

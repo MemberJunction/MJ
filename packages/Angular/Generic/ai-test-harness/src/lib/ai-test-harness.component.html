@@ -154,8 +154,11 @@
                         [ParentTaskID]="WorkflowParentTaskID"
                         [WorkflowName]="entity?.Name || 'Workflow'"
                         [AllowBreakpointEditing]="true"
+                        [AllowRememberBreakpoints]="!!entity?.ID"
+                        [RememberedStepIDs]="RememberedBreakpointStepIDs"
                         [ShowChrome]="WorkflowDebuggerActive"
                         Height="100%"
+                        (RememberBreakpointToggled)="OnRememberBreakpointToggled($event)"
                         (Settled)="OnWorkflowCanvasSettled()">
                       </mj-task-graph-debugger>
                     </div>

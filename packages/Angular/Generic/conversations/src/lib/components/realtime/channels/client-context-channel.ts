@@ -29,10 +29,22 @@
  */
 import { RegisterClass } from '@memberjunction/global';
 import { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
-import { FormatAppContextNote, REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
+import {
+  DiffAppContextSnapshot,
+  FormatAppContextNote,
+  REALTIME_CHANNEL_CONTRACT_VERSION,
+  type AppContextSnapshot,
+  type RealtimeChannelDescriptor,
+} from '@memberjunction/ai-core-plus';
 import { Subscription } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
 import { BaseRealtimeChannelClient, type RealtimeContextActionResult } from '@memberjunction/realtime-runtime';
+
+/** Coalescing window (ms) that collapses synchronous/rapid navigation + dashboard hydration bursts into one wire note. */
+export const CLIENT_CONTEXT_COALESCE_MS = 250;
+
+/** Replaceable reconnect-memory state key for the active application screen context. */
+export const APP_CONTEXT_MEMORY_STATE_KEY = 'app-context';
 
 /** The stable name of the single proxy tool this channel registers with the realtime provider. */
 export const CONTEXT_TOOL_NAME = 'ContextTool';
@@ -81,6 +93,12 @@ const CONTEXT_TOOL_DEFINITION: RealtimeToolDefinition = {
 export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
   /** Subscription to the host app-context stream (perception); cleared on {@link Dispose}. */
   private appContextSub: Subscription | null = null;
+  /** Last snapshot known by the live model (seeded from initial BehaviorSubject value or last flushed update). */
+  private baselineSnapshot: AppContextSnapshot | null = null;
+  /** Latest snapshot buffered inside the active coalescing window. */
+  private pendingSnapshot: AppContextSnapshot | null = null;
+  /** Active burst-coalescing timer; cleared on flush or {@link Dispose}. */
+  private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Matches the seeded `MJ: AI Agent Channels` row's `Name`. */
   public get ChannelName(): string {
@@ -194,26 +212,65 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
   }
 
   /**
-   * Subscribes to the host's live app-context stream and streams each change to the model as a
-   * compact context note (the perception half). Null-safe — hosts that supply no `AppContext$`
-   * (custom apps) simply get no streaming, and the session-start prompt injection still applies.
+   * Subscribes to the host's live app-context stream and streams each coalesced delta to the model as a
+   * compact context note while keeping only the latest full snapshot in reconnect memory under
+   * `StateKey: 'app-context'`. Null-safe — hosts that supply no `AppContext$` (custom apps) simply get
+   * no streaming, and the session-start prompt injection still applies.
    */
   protected override OnInitialize(): void {
     const stream = this.Context?.AppContext$;
     if (!stream) {
       return;
     }
+    let subscribingSynchronously = true;
     this.appContextSub = stream
       .pipe(distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)))
       .subscribe((snapshot) => {
         if (!snapshot) {
           return;
         }
-        const note = FormatAppContextNote(snapshot);
-        if (note) {
-          this.Context?.SendContextNote(note);
+        if (subscribingSynchronously) {
+          // BehaviorSubject's current value was already injected into SystemPrompt at session mint:
+          // record it as the diff baseline without sending a duplicate t=0 wire note.
+          this.baselineSnapshot = snapshot;
+          return;
+        }
+        this.pendingSnapshot = snapshot;
+        if (this.coalesceTimer === null) {
+          this.coalesceTimer = setTimeout(() => this.FlushPending(), CLIENT_CONTEXT_COALESCE_MS);
         }
       });
+    subscribingSynchronously = false;
+  }
+
+  /**
+   * Immediately flushes any buffered `AppContext$` update, emitting a compact delta on the live wire
+   * and recording the full latest snapshot under `StateKey: 'app-context'` for reconnect continuity.
+   */
+  public FlushPending(): void {
+    if (this.coalesceTimer !== null) {
+      clearTimeout(this.coalesceTimer);
+      this.coalesceTimer = null;
+    }
+    const latest = this.pendingSnapshot;
+    this.pendingSnapshot = null;
+    if (!latest) {
+      return;
+    }
+    const delta = DiffAppContextSnapshot(this.baselineSnapshot, latest);
+    this.baselineSnapshot = latest;
+    if (!delta) {
+      return;
+    }
+    const wireNote = FormatAppContextNote(delta);
+    if (!wireNote) {
+      return;
+    }
+    const fullMemoryNote = FormatAppContextNote(latest);
+    this.Context?.SendContextNote(wireNote, {
+      StateKey: APP_CONTEXT_MEMORY_STATE_KEY,
+      ...(fullMemoryNote && fullMemoryNote !== wireNote ? { MemoryText: fullMemoryNote } : {}),
+    });
   }
 
   /** Tolerantly parses the `{ action, params, target? }` arguments. */
@@ -249,8 +306,14 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
     return instance ? { channel, instance } : { channel };
   }
 
-  /** Unsubscribes the app-context stream and tears down. */
+  /** Unsubscribes the app-context stream, cancels any pending coalescer timer, and tears down. */
   public override Dispose(): void {
+    if (this.coalesceTimer !== null) {
+      clearTimeout(this.coalesceTimer);
+      this.coalesceTimer = null;
+    }
+    this.pendingSnapshot = null;
+    this.baselineSnapshot = null;
     this.appContextSub?.unsubscribe();
     this.appContextSub = null;
     super.Dispose();

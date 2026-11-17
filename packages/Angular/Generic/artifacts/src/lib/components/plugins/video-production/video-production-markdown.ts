@@ -8,7 +8,7 @@ import type {
  * Escapes arbitrary user/LLM/data text so markdown characters (`|`, `` ` ``, `*`, `_`, `[`, `]`, `<`, `>`, `#`, `\`)
  * and line breaks cannot break surrounding markdown tables or lists.
  */
-export function EscapeMarkdown(value: unknown): string {
+export function EscapeMarkdown(value: string | number | boolean | object | null | undefined): string {
   if (value === null || value === undefined) {
     return '';
   }
@@ -259,7 +259,7 @@ function describeDataFormat(format?: VideoDataFormat): string {
   return parts.join(' ');
 }
 
-function formatScalarInlineValue(value: unknown): string {
+function formatScalarInlineValue(value: string | number | boolean | object | null | undefined): string {
   if (value === null || value === undefined) {
     return '—';
   }
@@ -292,7 +292,20 @@ export function BuildDataMarkdown(spec: VideoGenerationSpec): string {
         snapshot?.Inline &&
         Object.prototype.hasOwnProperty.call(snapshot.Inline, binding.Key)
       ) {
-        inlineVal = formatScalarInlineValue(snapshot.Inline[binding.Key]);
+        const rawInline = snapshot.Inline[binding.Key];
+        if (
+          rawInline === null ||
+          rawInline === undefined ||
+          typeof rawInline === 'string' ||
+          typeof rawInline === 'number' ||
+          typeof rawInline === 'boolean'
+        ) {
+          inlineVal = formatScalarInlineValue(rawInline);
+        } else if (typeof rawInline === 'object') {
+          inlineVal = formatScalarInlineValue(rawInline);
+        } else {
+          inlineVal = formatScalarInlineValue(String(rawInline));
+        }
       }
       lines.push(
         `| ${EscapeMarkdown(binding.Key)} | ${EscapeMarkdown(binding.Label ?? '—')} | ${EscapeMarkdown(sourceKind)} | ${EscapeMarkdown(sourceId)} | ${EscapeMarkdown(binding.Shape)} | ${EscapeMarkdown(formatText)} | ${inlineVal} |`,

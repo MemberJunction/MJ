@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.memberjunction.org/codegen-schema-info/v1.json",
+  "description": "Additional schema info consumed by `mj codegen` (CodeGenLib additionalSchemaInfo). Declares core IS-A (Table-Per-Type) inheritance relationships and SubtypeSelector attributes so CodeGen sets Entity.ParentID and Entity.SubtypeSelector, mirrors inherited fields as virtual fields on child entities, and JOINs parent tables in child base views.",
+  "ISARelationships": [
+    {
+      "_comment": "Comment IS-A Conversation (Table-Per-Type): Comment.ID PK is also an FK to Conversation.ID.",
+      "ChildEntity": "MJ: Comments",
+      "ParentEntity": "MJ: Conversations"
+    },
+    {
+      "_comment": "FieldSuggestion IS-A Comment (Table-Per-Type, 2-level IS-A chain under Conversation): FieldSuggestion.ID PK is also an FK to Comment.ID.",
+      "ChildEntity": "MJ: Field Suggestions",
+      "ParentEntity": "MJ: Comments"
+    }
+  ],
+  "Entities": [
+    {
+      "BaseTable": "Conversation",
+      "SchemaName": "__mj",
+      "SubtypeSelector": "{\"Path\": \"TypeID.ExtensionEntity\", \"UseForLoadedRecords\": true, \"AutoEnsureOnSave\": true, \"Driver\": {\"Path\": \"TypeID.DriverClass\", \"BaseClass\": \"ConversationTypeDriver\"}}"
+    },
+    {
+      "BaseTable": "Comment",
+      "SchemaName": "__mj",
+      "SubtypeSelector": "{\"Path\": \"CommentTypeID.ExtensionEntity\", \"UseForLoadedRecords\": true, \"AutoEnsureOnSave\": true, \"Driver\": {\"Path\": \"CommentTypeID.DriverClass\", \"BaseClass\": \"CommentTypeDriver\"}, \"UIDriver\": {\"Path\": \"CommentTypeID.UIDriverClass\"}}"
+    }
+  ]
+}

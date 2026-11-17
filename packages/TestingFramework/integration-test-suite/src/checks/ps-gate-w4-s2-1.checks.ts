@@ -13,7 +13,8 @@ export const PsGateW4S21Checks: NamedCheck[] = [
       const features = [...W_WORLD_FEATURES, 'PersonStatusNow'];
       const a = await h.Train(await h.CreatePipeline(PsGateSpecs.W(h, 'G0.8 W4 column-mode', w4, { Features: features, AsOf: { Mode: 'column', Column: 'StartDate' } })));
       const b = await h.Train(await h.CreatePipeline(PsGateSpecs.W(h, 'G0.8 W4 asOf-input', w4, { Features: features })), { AsOf: { Mode: 'column', Column: 'StartDate' } });
-      const refused = [a, b].filter((x) => ContainmentProbe.WasRefusedBeforeTraining(x, 'AS_OF_NO_EFFECT')).length;
+      // The column-mode pipeline has no Prediction Unit (UNIT_REQUIRED); the asOf input is refused by name (AS_OF_NO_EFFECT).
+      const refused = [ContainmentProbe.WasRefusedBeforeTraining(a, 'UNIT_REQUIRED'), ContainmentProbe.WasRefusedBeforeTraining(b, 'AS_OF_NO_EFFECT')].filter((x) => x).length;
       PsGate.Assert({
         Passed: refused === 2,
         Measured: { refused, columnModeCode: a.RefusalCode, asOfInputCode: b.RefusalCode, columnModeModel: a.ModelID, asOfInputModel: b.ModelID },

@@ -156,14 +156,8 @@ export class LinkedInCreateArticleAction extends LinkedInBaseAction {
         formatted = formatted.replace(/^## (.+)$/gm, '\n**$1**\n');
         formatted = formatted.replace(/^# (.+)$/gm, '\n**$1**\n');
 
-        // Convert markdown bold
-        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '**$1**');
-
         // Convert markdown italic
         formatted = formatted.replace(/\*(.+?)\*/g, '_$1_');
-
-        // Add line breaks for paragraphs
-        formatted = formatted.replace(/\n\n/g, '\n\n');
 
         // Truncate if too long (LinkedIn has character limits)
         const maxLength = 3000; // LinkedIn's limit for share commentary

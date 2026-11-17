@@ -19,7 +19,7 @@ export interface AgentArtifactVersionRow {
 export interface AgentArtifactRow {
     ID: string;
     Name: string;
-    Type: string;
+    Type: string | null;
 }
 
 /**
@@ -69,7 +69,7 @@ export function GroupVersionsByArtifact(
             summary = {
                 artifactId: version.ArtifactID,
                 artifactName: artifact.Name,
-                ArtifactType: artifact.Type,
+                ArtifactType: artifact.Type ?? '',
                 Versions: []
             };
             byArtifact.set(version.ArtifactID, summary);

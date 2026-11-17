@@ -7,6 +7,9 @@ import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
 import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
 import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
+import type { CompositeFilter } from '../generic/filters/compositeFilter';
+import type { CompositeFilterDescriptor } from '../generic/filters/filter.types';
+import { CanonicalCompositeFilterKey } from '../generic/filters/compositeFilterSQL';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -68,9 +71,27 @@ export const KEYSET_PAGINATION_ORDERABLE_PK_TYPES: ReadonlyArray<string> = [
  */
 export function IsKeysetPaginationOrderableType(sqlTypeName: string | null | undefined): boolean {
     if (!sqlTypeName) return false;
-    // Strip parameterization like "nvarchar(255)" or "decimal(10, 2)"
-    const normalized = sqlTypeName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(normalized);
+    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(SqlTypeBaseName(sqlTypeName));
+}
+
+/**
+ * A SQL type name without its trailing parameter list, trimmed and lower-cased:
+ * `NVARCHAR(255)` → `nvarchar`, `decimal(10, 2)` → `decimal`, `int` → `int`.
+ *
+ * Returns what `type.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()` returned, but by index:
+ * that regex retries from every `(`, which is quadratic on a value holding many of them.
+ */
+export function SqlTypeBaseName(sqlTypeName: string): string {
+    const trimmed = sqlTypeName.trimEnd();
+    const close = trimmed.length - 1;
+    if (close >= 0 && trimmed[close] === ')') {
+        // The regex's `\(` matched the first `(` after the last earlier `)`.
+        const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1);
+        if (open !== -1 && open < close) {
+            return trimmed.substring(0, open).trim().toLowerCase();
+        }
+    }
+    return trimmed.trim().toLowerCase();
 }
 
 /**
@@ -369,6 +390,12 @@ export class RunViewParams {
      * before the query is executed.
      */
     ExtraFilter?: string | PlatformSQL;
+    /**
+     * Structured filter, ANDed with {@link ExtraFilter} when both are set. Compiled to parameterized
+     * SQL by the provider; never interpolated. Field names are validated against the entity and its
+     * field-level security; an unknown or unreadable field is refused.
+     */
+    Filter?: CompositeFilterDescriptor | CompositeFilter;
     /**
      * Optional map of named bind parameters referenced as `@paramName` in {@link ExtraFilter}.
      * Keys omit the leading `@` (an optional `@` prefix is normalized).
@@ -807,6 +834,7 @@ export class RunViewParams {
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
         if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (CanonicalCompositeFilterKey(a.Filter) !== CanonicalCompositeFilterKey(b.Filter)) return false;
         if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;
         if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;

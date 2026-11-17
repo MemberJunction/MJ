@@ -6,10 +6,11 @@
  * error classification, and auth retry logic.
  */
 
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone, Optional } from '@angular/core';
 import { LogError, LogStatus, LogStatusEx, Metadata, RunView, IsTransportError as CoreIsTransportError, DescribeTransportError } from '@memberjunction/core';
 import { MJThemeEntity } from '@memberjunction/core-entities';
-import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { SetupAngularGraphQLClient } from '@memberjunction/ng-shared-generic';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ThemeService } from '@memberjunction/ng-shared';
@@ -34,7 +35,8 @@ export class WorkspaceInitializerService {
   constructor(
     private authBase: MJAuthBase,
     private startupValidationService: StartupValidationService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    @Optional() private ngZone?: NgZone
   ) { }
 
   /**
@@ -78,7 +80,7 @@ export class WorkspaceInitializerService {
         config.MJAPIURL = environment.MJAPI_URI;
       }
 
-      await setupGraphQLClient(config);
+      await SetupAngularGraphQLClient(config, this.ngZone);
       const end = Date.now();
       LogStatus(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
 

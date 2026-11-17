@@ -7,7 +7,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
       "Status": "Active",
-      "IconClass": "fa-solid fa-table-columns"
+      "IconClass": "fa-solid fa-table-columns",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -163,8 +166,8 @@
       "ID": "F4CBD4ED-C258-468B-8F50-F12E4C74A431"
     },
     "sync": {
-      "lastModified": "2026-04-20T17:37:59.189Z",
-      "checksum": "0857272837783b6ef7590b7c35f6e89bfdb6450b3f8caf7c12041dba23390147"
+      "lastModified": "2026-11-10T23:41:29.158Z",
+      "checksum": "eec3a1c4e197c0ba4147b32f5d1571f57f935a6db8ce92c287cc3d7dd3759987"
     }
   },
   {
@@ -175,7 +178,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
       "Status": "Active",
-      "IconClass": "fa-solid fa-table-list"
+      "IconClass": "fa-solid fa-table-list",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -331,8 +337,8 @@
       "ID": "667901A9-8E3C-498A-9BFA-D511130ED451"
     },
     "sync": {
-      "lastModified": "2026-04-20T17:37:59.218Z",
-      "checksum": "6eef114271fb5d67d7cc93c11483a9d9e52d5cd6cee650b58805a54b66a06013"
+      "lastModified": "2026-11-10T23:41:29.169Z",
+      "checksum": "d4e1ed7fa2c2c3a43fcb96d6e21745730cfa7dd291e3713b11a586b12f8864a6"
     }
   },
   {

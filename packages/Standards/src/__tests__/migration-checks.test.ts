@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { FindMigrations, HandWrittenLineCount, StripSqlComments } from '../lib/migrations.js';
 import { FindExistenceGuards, MigrationExistenceGuardsCheck } from '../checks/migration-existence-guards.js';
 import { FindCheckListValues, IsMachineStyle, ReadableForm, ReadableStatusValuesCheck } from '../checks/readable-status-values.js';
+import { FindUncollatedStringColumns, MigrationStringCollationCheck } from '../checks/migration-string-collation.js';
 
 const SEPARATOR = Array.from({ length: 50 }, () => '').join('\n');
 
@@ -97,6 +98,97 @@ describe('FindCheckListValues', () => {
 
     it('unescapes doubled quotes', () => {
         expect(FindCheckListValues(["CHECK (Reason IN ('Customer''s Request'))"]).map((v) => v.Value)).toEqual(["Customer's Request"]);
+    });
+});
+
+describe('FindUncollatedStringColumns', () => {
+    const lines = (sql: string): number[] => FindUncollatedStringColumns(sql.split('\n')).map((c) => c.Line);
+
+    it('flags an unpinned string column in CREATE TABLE and passes a pinned one', () => {
+        const sql = [
+            'CREATE TABLE [${flyway:defaultSchema}].[Persona] (',
+            '    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),',
+            '    Name NVARCHAR(255) NOT NULL,',
+            '    Code VARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,',
+            "    Kind NCHAR(1) NOT NULL DEFAULT 'a, b',",
+            '    Body NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,',
+            '    CONSTRAINT UQ_Persona_Name UNIQUE (Name)',
+            ');',
+        ].join('\n');
+        expect(FindUncollatedStringColumns(sql.split('\n'))).toEqual([
+            { Line: 3, Column: 'Name', Type: 'NVARCHAR' },
+            { Line: 5, Column: 'Kind', Type: 'NCHAR' },
+        ]);
+    });
+
+    it('reads bracketed names and types, and leaves non-string columns and computed columns alone', () => {
+        const sql = 'CREATE TABLE s.T ([Display Name] [nvarchar](50) NULL, Total DECIMAL(18,2), Label AS (CAST(Total AS NVARCHAR(20))), Charge INT);';
+        expect(FindUncollatedStringColumns([sql])).toEqual([{ Line: 1, Column: '[Display Name]', Type: 'NVARCHAR' }]);
+    });
+
+    it('flags ALTER TABLE … ADD columns, with and without a semicolon, and skips ADD CONSTRAINT', () => {
+        const sql = [
+            'ALTER TABLE [s].[A] ADD Note NVARCHAR(100) NULL, Pinned NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;',
+            'ALTER TABLE [s].[B] ADD',
+            '    Label VARCHAR(30) NULL',
+            'GO',
+            "ALTER TABLE [s].[B] ADD CONSTRAINT DF_B_Label DEFAULT 'x' FOR Label;",
+            'ALTER TABLE [s].[C] ADD Code CHAR(2) NULL',
+            "EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Code NVARCHAR text';",
+        ].join('\n');
+        expect(lines(sql)).toEqual([1, 3, 6]);
+    });
+
+    it('exempts table variables and #temp tables', () => {
+        const sql = [
+            'DECLARE @t TABLE (Name NVARCHAR(50));',
+            'CREATE TABLE #work (Name NVARCHAR(50));',
+            'CREATE TABLE ##shared (Name NVARCHAR(50));',
+            'ALTER TABLE #work ADD Extra NVARCHAR(10) NULL;',
+        ].join('\n');
+        expect(lines(sql)).toEqual([]);
+    });
+
+    it('does not mistake ALTER COLUMN or a CAST for a column definition', () => {
+        const sql = ['ALTER TABLE s.A ALTER COLUMN Name NVARCHAR(100) NOT NULL;', 'SELECT CAST(1 AS NVARCHAR(10));'].join('\n');
+        expect(lines(sql)).toEqual([]);
+    });
+
+    it('reads quoted and spaced multi-part names', () => {
+        const sql = ['CREATE TABLE "s"."Q" (Name NVARCHAR(10));', 'ALTER TABLE s . [R] ADD Code NCHAR(2) NULL;'].join('\n');
+        expect(lines(sql)).toEqual([1, 2]);
+    });
+
+    it('returns quickly on a long name that never closes the statement', () => {
+        const started = Date.now();
+        FindUncollatedStringColumns(['CREATE TABLE ' + '"!".'.repeat(20000), 'ALTER TABLE ' + '!.'.repeat(20000)]);
+        expect(Date.now() - started).toBeLessThan(2000);
+    });
+
+    it('ends an ALTER TABLE … ADD at a semicolon, so a later statement\'s COLLATE does not cover it', () => {
+        const sql = 'ALTER TABLE a ADD X NVARCHAR(10); ALTER TABLE b ADD Z NVARCHAR(10) COLLATE foo;';
+        expect(FindUncollatedStringColumns([sql]).map((c) => c.Column)).toEqual(['X']);
+    });
+
+    it('ends an ALTER TABLE … ADD at the next statement keyword when there is no semicolon', () => {
+        const sql = ['ALTER TABLE a ADD X NVARCHAR(10) NULL', 'ALTER TABLE b ADD Z NVARCHAR(10) COLLATE foo NULL'];
+        expect(FindUncollatedStringColumns(sql).map((c) => c.Column)).toEqual(['X']);
+    });
+
+    it('flags a COLLATE other than the expected collation when one is given, compared case-insensitively', () => {
+        const sql = [
+            'CREATE TABLE s.T (',
+            '    A NVARCHAR(10) COLLATE Latin1_General_100_CS_AS NULL,',
+            '    B NVARCHAR(10) COLLATE sql_latin1_general_cp1_ci_as NULL,',
+            '    C NVARCHAR(10) NULL',
+            ');',
+        ];
+        expect(FindUncollatedStringColumns(sql, 'SQL_Latin1_General_CP1_CI_AS')).toEqual([
+            { Line: 2, Column: 'A', Type: 'NVARCHAR', DeclaredCollation: 'Latin1_General_100_CS_AS' },
+            { Line: 4, Column: 'C', Type: 'NVARCHAR' },
+        ]);
+        // Without an expected collation any COLLATE clause passes.
+        expect(FindUncollatedStringColumns(sql).map((c) => c.Column)).toEqual(['C']);
     });
 });
 
@@ -195,5 +287,49 @@ describe('migration checks against a repo', () => {
         expect(result.Violations.map((v) => v.Line)).toEqual([2]);
         expect(result.Violations[0].Message).toMatch(/^'NotSpecified' is written for a machine\./);
         expect(result.Violations[0].Message).toContain("'Not Specified'");
+    });
+
+    it('flags unpinned string columns in migrations at or after FromVersion only, honoring the marker and the separator', async () => {
+        writeMigration('V202611010000__v6.2.x__Before.sql', 'CREATE TABLE [s].[Old] (Name NVARCHAR(50) NOT NULL);');
+        writeMigration(
+            'V202611030000__v6.2.x__Personas.sql',
+            [
+                'CREATE TABLE [s].[Persona] (',
+                '    Name NVARCHAR(255) NOT NULL,',
+                '    -- mj-standards-allow: collation (binary match on an external key)',
+                '    ExternalKey VARCHAR(64) NOT NULL',
+                ');',
+                SEPARATOR,
+                'ALTER TABLE [s].[Persona] ADD Generated NVARCHAR(10) NULL;',
+            ].join('\n'),
+        );
+        const result = await MigrationStringCollationCheck.Run({ RepoRoot: repo, Roots: ['migrations'], Options: { FromVersion: '202611020000' } });
+        expect(result.Violations.map((v) => [v.File, v.Line])).toEqual([[join('migrations', 'v6', 'V202611030000__v6.2.x__Personas.sql'), 2]]);
+        expect(result.Violations[0].Message).toContain('COLLATE SQL_Latin1_General_CP1_CI_AS');
+    });
+
+    it('skips only the migrations named in Exempt, and checks a later-merged migration with an older timestamp', async () => {
+        const unpinned = 'CREATE TABLE [s].[T] (Name NVARCHAR(50) NOT NULL);';
+        writeMigration('V202611030000__v6.2.x__Released.sql', unpinned);
+        writeMigration('V202611040751__v6.2.x__Document_Sequence_Counter.sql', unpinned);
+        // Dated before the exempt files (written on a branch earlier) but not exempt: still checked.
+        writeMigration('V202611020000__v6.3.x__Merged_Later.sql', unpinned);
+        writeMigration('V202611100000__v6.3.x__New.sql', 'CREATE TABLE [s].[N] (Name NVARCHAR(50) COLLATE Latin1_General_100_CS_AS NOT NULL);');
+        const result = await MigrationStringCollationCheck.Run({
+            RepoRoot: repo,
+            Roots: ['migrations'],
+            Options: {
+                FromVersion: '202610210000',
+                Collation: 'SQL_Latin1_General_CP1_CI_AS',
+                Exempt: ['V202611030000__v6.2.x__Released.sql', 'v202611040751__V6.2.X__document_sequence_counter.sql', 'V202601010000__Gone.sql'],
+            },
+        });
+        expect(result.Violations.map((v) => v.File)).toEqual([
+            join('migrations', 'v6', 'V202611020000__v6.3.x__Merged_Later.sql'),
+            join('migrations', 'v6', 'V202611100000__v6.3.x__New.sql'),
+        ]);
+        expect(result.Violations[1].Message).toContain('is COLLATE Latin1_General_100_CS_AS, not SQL_Latin1_General_CP1_CI_AS');
+        expect(result.Notes).toContain('2 migration(s) at or after 202610210000 read, 2 exempt.');
+        expect(result.Notes?.some((n) => n.includes('v202601010000__gone.sql'))).toBe(true);
     });
 });

@@ -1,5 +1,5 @@
 import { AIPromptParams, type AIModelRunResult } from '@memberjunction/ai-core-plus';
-import type { DecisionQuestion, DecisionAnswer, DecisionResult } from '@memberjunction/ai';
+import type { DecisionQuestion, DecisionAnswer, DecisionMedia, DecisionResult } from '@memberjunction/ai';
 
 /**
  * Parameters for `AIDecisionRunner.ExecuteDecision`. Extends `AIPromptParams` for the fields the
@@ -15,6 +15,13 @@ export class AIDecisionParams extends AIPromptParams {
 
   /** The typed questions, answered together in one call. Required. */
   public Questions: Record<string, DecisionQuestion> = {};
+
+  /**
+   * Media the questions are also asked about (an image, a recording, a PDF), read with the state as
+   * one input. Only models whose driver reads every item's type are tried; the others are skipped
+   * with failover. The run row records each item's type, MIME type and URI or size, never its data.
+   */
+  public Media?: DecisionMedia[];
 }
 
 /**

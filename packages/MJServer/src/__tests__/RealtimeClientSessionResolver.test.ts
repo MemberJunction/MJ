@@ -45,9 +45,20 @@ vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => ({
             get AgentChannels() {
                 return engineChannelsMock();
             },
+            get Agents() {
+                return agentsMock();
+            },
+            get AgentTypes() {
+                return agentTypesMock();
+            },
+            get Models() {
+                return [];
+            },
         })),
     },
 }));
+
+import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 
 // --- Mock AIEngine so the Realtime Co-Agent resolves without DB-backed config ---
 /** Minimal cached-agent shape the resolver's co-agent chain reads. */
@@ -83,6 +94,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 //     the channel-plugin host (SaveSessionChannelState's pre-persistence normalization hook) ---
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
+const refreshClientSessionCredentialMock = vi.fn();
 const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
 // Recording-store helpers (module-level exports of ai-agents) — mocked so the recording mutations'
 // identity threading is observable without touching MJStorage. vi.hoisted because the factory below
@@ -115,6 +127,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
         RealtimeClientSessionService: class {
             PrepareClientSession = prepareClientSessionMock;
             ExecuteRelayedTool = executeRelayedToolMock;
+            RefreshClientSessionCredential = refreshClientSessionCredentialMock;
             CancelInFlightDelegations = cancelInFlightMock;
             AppendPromptRunMessage = (...a: unknown[]) => realService.AppendPromptRunMessage(...a);
             AccumulatePromptRunUsage = (...a: unknown[]) => realService.AccumulatePromptRunUsage(...a);
@@ -168,6 +181,7 @@ import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessio
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
 import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
+import { RealtimeMintSnapshotRegistry } from '@memberjunction/ai-agents';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
 
@@ -304,6 +318,8 @@ beforeEach(() => {
     engineConfigMock.mockResolvedValue(undefined);
     prepareClientSessionMock.mockReset();
     executeRelayedToolMock.mockReset();
+    // Reset too, or one test's refresh calls count toward the next test's call-count assertions.
+    refreshClientSessionCredentialMock.mockReset();
     cancelInFlightMock.mockReset();
     cancelInFlightMock.mockReturnValue(0);
     onChannelStateSaveMock.mockReset();
@@ -382,6 +398,48 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(result.EphemeralToken).toBe('ek_abc');
         expect(result.ExpiresAt).toBe('2026-01-01T00:00:00Z');
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
+    });
+
+    it('rejects StartRealtimeClientSession when conversationId belongs to another user (P1-5 IDOR)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const foreignConversation = makeSessionEntity({ ID: 'conv-foreign', UserID: 'other-user-999' });
+        currentProvider = makeProvider((name) => {
+            if (name === 'MJ: Conversations') return foreignConversation;
+            return makeSessionEntity();
+        });
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-foreign'),
+        ).rejects.toThrow('Access denied: you do not have access to the requested conversation');
+        expect(foreignConversation.Load).toHaveBeenCalledWith('conv-foreign');
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects StartRealtimeClientSession when anonymous magic-link visitor ml_B attempts to start on magic-link:ml_A conversation (P0-P3-3 IDOR)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const anonUserB = {
+            ID: 'anon-shared-user',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'ml_B',
+        } as UserInfo;
+        const foreignAnonConversation = makeSessionEntity({
+            ID: 'conv-ml-a',
+            UserID: 'anon-shared-user',
+            ExternalID: 'magic-link:ml_A',
+        });
+        currentProvider = makeProvider((name) => {
+            if (name === 'MJ: Conversations') return foreignAnonConversation;
+            return makeSessionEntity();
+        });
+        const resolver = makeResolver();
+        Reflect.set(resolver, 'GetUserFromPayload', () => anonUserB);
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-ml-a'),
+        ).rejects.toThrow('Access denied: you do not have access to the requested conversation');
+        expect(foreignAnonConversation.Load).toHaveBeenCalledWith('conv-ml-a');
+        expect(createSessionMock).not.toHaveBeenCalled();
     });
 
     describe('recording consent at start (#6010)', () => {
@@ -1809,7 +1867,7 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         version: FakeSession;
         junction: FakeSession;
     } {
-        const artifact = opts.artifact ?? makeSessionEntity({ ID: 'artifact-1' });
+        const artifact = opts.artifact ?? makeSessionEntity({ ID: 'artifact-1', Delete: vi.fn(async () => true) });
         const version = opts.version ?? makeSessionEntity({ ID: 'version-1' });
         const junction = opts.junction ?? makeSessionEntity({ ID: 'junction-1' });
         const session = opts.session ?? makeSessionEntity();
@@ -2018,14 +2076,14 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         expect(version.Save).not.toHaveBeenCalled();
     });
 
-    it('returns a structured failure (carrying the orphaned ArtifactID) when the version save fails', async () => {
+    it('returns a structured failure and rolls back the orphaned Artifact when the version save fails', async () => {
         errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingVersion = makeSessionEntity({
             ID: 'version-fail',
             Save: vi.fn(async () => false),
             LatestResult: { CompleteMessage: 'too big' },
         });
-        const { provider, junction } = makeArtifactProvider({
+        const { provider, artifact, junction } = makeArtifactProvider({
             typeRows: [WHITEBOARD_TYPE_ROW],
             detailRows: [{ ID: 'detail-9' }],
             version: failingVersion,
@@ -2036,7 +2094,8 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
 
         expect(result.Success).toBe(false);
-        expect(result.ArtifactID).toBe('artifact-1');
+        expect(artifact.Delete).toHaveBeenCalledTimes(1);
+        expect(result.ArtifactID).toBeUndefined();
         expect(result.ArtifactVersionID).toBeUndefined();
         expect(result.ErrorMessage).toMatch(/artifact version save failed/i);
         expect(result.ErrorMessage).toContain('session session-1');
@@ -3740,7 +3799,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
 
     /** Provider routing the session (ownership) and the co-agent (recording storage resolution). */
     function makeRecordingProvider(): unknown {
-        const session = makeSessionEntity({ UserID: 'anon-1' });
+        const session = makeSessionEntity({ UserID: 'anon-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
         return {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
@@ -3850,7 +3909,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('a normal authenticated owner’s recording store runs as the SYSTEM user; ownership stays on the caller (#5195)', async () => {
         currentProvider = makeRecordingProvider();
         // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
-        const session = makeSessionEntity({ UserID: 'user-1' });
+        const session = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
@@ -4561,5 +4620,643 @@ describe('RealtimeClientSessionResolver — save endpoints honor the session\'s 
         const result = await makeResolver().SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('not in session');
+    });
+});
+
+/** A persisted mint snapshot with no known connection length, naming the target the session was minted for. */
+const MINT_SNAPSHOT_FOR_TARGET_1 = {
+    coAgentID: 'co-agent-1',
+    targetAgentID: 'target-1',
+    modelID: 'm-1',
+    driverClass: 'OpenAIRealtime',
+    credentialScope: 'Any',
+    sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+};
+
+describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () => {
+    it('enforces session ownership and active status before refreshing', async () => {
+        const closedSession = makeSessionEntity({ ID: 'session-closed-1', Status: 'Closed' });
+        currentProvider = makeProvider(() => closedSession);
+
+        await expect(
+            makeResolver().RefreshRealtimeClientSessionToken('session-closed-1', makeCtx()),
+        ).rejects.toThrow(/closed/i);
+
+        expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+    });
+
+    it('closes the session with TimeLimit and refuses refresh when maxSessionDeadlineIso has elapsed', async () => {
+        const pastIso = new Date(Date.now() - 5_000).toISOString();
+        const session = makeSessionEntity({
+            ID: '11111111-0000-4000-8000-000000000001',
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', maxSessionDeadlineIso: pastIso }),
+        });
+        currentProvider = makeProvider(() => session);
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(session.ID as string, makeCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('time limit');
+        expect(closeSessionMock).toHaveBeenCalledWith(session.ID, USER, currentProvider, 'TimeLimit');
+        expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+    });
+
+    it('re-checks CanRun on the minted target, forwards persisted mint snapshot, passes remaining seconds, and heartbeats on success', async () => {
+        const futureIso = new Date(Date.now() + 900_000).toISOString();
+        const sessionId = '22222222-0000-4000-8000-000000000002';
+        const mintSnapshot = {
+            coAgentID: 'co-agent-1',
+            targetAgentID: 'target-1',
+            modelID: 'm-1',
+            driverClass: 'OpenAIRealtime',
+            credentialScope: 'Any' as const,
+            sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+        };
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                coAgentRunID: CO_RUN_ID,
+                maxSessionDeadlineIso: futureIso,
+                realtimeMintSnapshot: mintSnapshot,
+            }),
+        });
+        currentProvider = makeProvider(() => session, sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID));
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            Kind: 'token',
+            EphemeralToken: 'ek_fresh_123',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+            SessionConfigJson: '{"voice":"alloy"}',
+        });
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-1', USER, 'run');
+        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(1);
+        const [refreshInput] = refreshClientSessionCredentialMock.mock.calls[0] as [
+            {
+                AgentSessionID: string;
+                CoAgentID: string;
+                PersistedMintSnapshot?: unknown;
+                RemainingSessionSeconds?: number;
+            },
+        ];
+        expect(refreshInput.AgentSessionID).toBe(sessionId);
+        expect(refreshInput.CoAgentID).toBe('co-agent-1');
+        expect(refreshInput.PersistedMintSnapshot).toEqual(mintSnapshot);
+        expect(refreshInput.RemainingSessionSeconds).toBeGreaterThan(800);
+        expect(heartbeatMock).toHaveBeenCalledWith(sessionId, USER, currentProvider);
+        expect(result).toEqual({
+            Success: true,
+            Kind: 'token',
+            EphemeralToken: 'ek_fresh_123',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+            SessionConfigJson: '{"voice":"alloy"}',
+        });
+    });
+
+    describe('authorizes against the target the session was minted for, not the owner-editable Config.targetAgentID', () => {
+        const MINTED_TARGET = 'aaaaaaaa-0000-4000-8000-00000000000a';
+        const OWNER_PICKED_TARGET = 'bbbbbbbb-0000-4000-8000-00000000000b';
+
+        // The owner lost CanRun on the minted target...
+        beforeEach(() => {
+            hasPermissionMock.mockImplementation(async (...args: unknown[]) => args[0] !== MINTED_TARGET);
+        });
+
+        /** ...and rewrote Config.targetAgentID to an agent they can still run. */
+        function tamperedSession(sessionId: string, persistedSnapshot?: object) {
+            return makeSessionEntity({
+                ID: sessionId,
+                AgentID: 'co-agent-1',
+                Config_: JSON.stringify({
+                    targetAgentID: OWNER_PICKED_TARGET,
+                    ...(persistedSnapshot ? { realtimeMintSnapshot: persistedSnapshot } : {}),
+                }),
+            });
+        }
+
+        it('refuses the refresh when the caller can no longer run the target in the persisted mint snapshot', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a1';
+            currentProvider = makeProvider(() => tamperedSession(sessionId, { ...MINT_SNAPSHOT_FOR_TARGET_1, targetAgentID: MINTED_TARGET }));
+
+            await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(/Not authorized/);
+
+            expect(hasPermissionMock).toHaveBeenCalledWith(MINTED_TARGET, USER, 'run');
+            expect(hasPermissionMock).not.toHaveBeenCalledWith(OWNER_PICKED_TARGET, expect.anything(), expect.anything());
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+
+        it('reads the target from this instance\'s mint snapshot first', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a2';
+            currentProvider = makeProvider(() => tamperedSession(sessionId));
+            RealtimeMintSnapshotRegistry.Instance.Set(sessionId, {
+                ...MINT_SNAPSHOT_FOR_TARGET_1,
+                credentialScope: 'Any',
+                targetAgentID: MINTED_TARGET,
+            });
+            try {
+                await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(/Not authorized/);
+            } finally {
+                RealtimeMintSnapshotRegistry.Instance.Delete(sessionId);
+            }
+
+            expect(hasPermissionMock).toHaveBeenCalledWith(MINTED_TARGET, USER, 'run');
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+
+        it('refuses the refresh when no server-written snapshot names a target', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a3';
+            currentProvider = makeProvider(() => tamperedSession(sessionId));
+
+            await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(
+                /no server-recorded target agent/,
+            );
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+    });
+
+    it('enforces the per-session rate limit (8 mints per 10m window with no known connection length, scaled upward for short ConnectionMaxSeconds)', async () => {
+        const sessionId = '33333333-0000-4000-8000-000000000003';
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', realtimeMintSnapshot: MINT_SNAPSHOT_FOR_TARGET_1 }),
+        });
+        currentProvider = makeProvider(() => session);
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            EphemeralToken: 'ek_rate',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+        });
+        const resolver = makeResolver();
+
+        for (let i = 0; i < 8; i++) {
+            const ok = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+            expect(ok.Success).toBe(true);
+        }
+
+        const ninth = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+        expect(ninth.Success).toBe(false);
+        expect(ninth.ErrorMessage).toMatch(/rate limit/i);
+        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(8);
+
+        // With a 45 s ConnectionMaxSeconds test override, 10 refreshes within 10 minutes are allowed (#10):
+        const shortSessionId = '33333333-0000-4000-8000-000000000045';
+        const shortSession = makeSessionEntity({
+            ID: shortSessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                realtimeMintSnapshot: { ...MINT_SNAPSHOT_FOR_TARGET_1, connectionMaxSeconds: 45 },
+            }),
+        });
+        currentProvider = makeProvider(() => shortSession);
+        for (let i = 0; i < 10; i++) {
+            const ok = await resolver.RefreshRealtimeClientSessionToken(shortSessionId, makeCtx());
+            expect(ok.Success).toBe(true);
+        }
+    });
+
+    describe('refresh rate limit sizing (F13)', () => {
+        /** A session whose mint snapshot carries `connectionMaxSeconds` (omitted when undefined). */
+        function sessionWithConnection(id: string, connectionMaxSeconds: number | undefined) {
+            return makeSessionEntity({
+                ID: id,
+                AgentID: 'co-agent-1',
+                Config_: JSON.stringify({
+                    targetAgentID: 'target-1',
+                    realtimeMintSnapshot: {
+                        ...MINT_SNAPSHOT_FOR_TARGET_1,
+                        ...(connectionMaxSeconds !== undefined ? { connectionMaxSeconds } : {}),
+                    },
+                }),
+            });
+        }
+
+        async function refreshTimes(sessionId: string, times: number): Promise<boolean[]> {
+            const resolver = makeResolver();
+            const results: boolean[] = [];
+            for (let i = 0; i < times; i++) {
+                results.push((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success);
+            }
+            return results;
+        }
+
+        it('allows every planned move of a short connection: a 45 s connection moves at its soft window (~every 29 s), 21 times in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1301';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 45));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // 20 soft-window moves (OpenAI/xAI mint a fresh token on each) plus one connection drop.
+            const results = await refreshTimes(sessionId, 21);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('allows several connection drops in 10 minutes on a long OpenAI/xAI connection (each drop mints a token)', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1302';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // One proactive refresh, one planned move, and six drops (more than one burst the client's rapid-reconnect breaker allows).
+            const results = await refreshTimes(sessionId, 8);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('does not spend the budget on failed refreshes: a refresh retried through a provider mint outage succeeds once the provider recovers', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1303';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            // An 85 s planned-move recovery window retries every 5 s: about 17 failed mints before the provider is back.
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (503)' });
+            const resolver = makeResolver();
+            for (let i = 0; i < 17; i++) {
+                const failed = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                expect(failed.ErrorMessage).toBe('provider mint failed (503)');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            const recovered = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+            expect(recovered.ErrorMessage).toBeUndefined();
+            expect(recovered.Success).toBe(true);
+        });
+
+        it('a refresh that throws does not spend the mint budget either', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1304';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            refreshClientSessionCredentialMock.mockRejectedValue(new Error('mint transport error'));
+            const resolver = makeResolver();
+            for (let i = 0; i < 12; i++) {
+                await expect(resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow('mint transport error');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            expect((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success).toBe(true);
+        });
+
+        it('still refuses a runaway client minting tokens in a loop', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1305';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            const firstRefusal = results.indexOf(false);
+            expect(firstRefusal).toBeGreaterThan(0);
+            expect(firstRefusal).toBeLessThan(15);
+            expect(results.slice(firstRefusal).every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(firstRefusal);
+        });
+
+        it('caps the mint limit for a very short catalog connection: a 1 s connection does not allow ~1200 mints in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1307';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 1));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 100);
+
+            // The cap is the limit of a 30 s connection: 40 planned moves plus the 8 drop allowance.
+            expect(results.indexOf(false)).toBe(48);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(48);
+        });
+
+        it('still refuses a runaway client whose refreshes keep failing, before it reaches the provider without bound', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1306';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const resolver = makeResolver();
+            let refusedAt = -1;
+            for (let i = 0; i < 200 && refusedAt < 0; i++) {
+                const result = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                if (result.ErrorMessage?.match(/rate limit/i)) {
+                    refusedAt = i;
+                }
+            }
+
+            expect(refusedAt).toBeGreaterThan(17);
+            expect(refusedAt).toBeLessThan(100);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(refusedAt);
+        });
+
+        it('bounds failed refreshes by the server-owned allowance: the mint limit (9 for a 2 h connection) plus 40 calls', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1308';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            expect(results.every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(49);
+        });
+    });
+
+    it('Caliber zero-change compatibility: preserves a single stable AgentSessionId across multiple token refreshes and transcript/tool relays', async () => {
+        const caliberSessionId = 'ca11be20-0000-4000-8000-000000000001';
+        const createdSession = makeSessionEntity({
+            ID: caliberSessionId,
+            AgentID: 'co-agent-1',
+            ConversationID: 'conv-caliber-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1' }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-caliber-1', UserID: USER.ID });
+        const detail = makeSessionEntity({ ID: 'detail-1' });
+        currentProvider = makeProvider((name: string) => {
+            if (name === 'MJ: Conversations') return conversation;
+            if (name === 'MJ: Conversation Details') return detail;
+            return createdSession;
+        });
+        createSessionMock.mockResolvedValue(createdSession);
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            CoAgentRunID: CO_RUN_ID,
+            PromptRunID: PROMPT_RUN_ID,
+            CoAgentRunStepID: 'c0c0c0c0-0000-4000-8000-0000000000a1',
+            ClientConfig: {
+                Provider: 'gemini-enterprise',
+                Model: 'gemini-live-2.5-flash-native-audio',
+                EphemeralToken: '',
+                ExpiresAt: '2026-12-01T00:15:00Z',
+                Transport: 'relay',
+                RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-caliber-1',
+                SessionConfig: { model: 'gemini-live-2.5-flash-native-audio', connectionMaxSeconds: 600 },
+            },
+            MintSnapshot: {
+                coAgentID: 'co-agent-1',
+                targetAgentID: 'target-1',
+                modelID: 'm-1',
+                driverClass: 'GeminiEnterpriseRealtime',
+                credentialScope: 'Any',
+                transport: 'relay',
+            },
+        });
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            EphemeralToken: '',
+            ExpiresAt: '2026-12-01T00:30:00Z',
+            RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-caliber-1',
+        });
+
+        const resolver = makeResolver();
+        const started = await resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-caliber-1');
+        expect(started.AgentSessionId).toBe(caliberSessionId);
+        expect(createSessionMock).toHaveBeenCalledTimes(1);
+
+        // Two mid-call reconnects refresh credentials against the SAME AgentSessionId:
+        const refresh1 = await resolver.RefreshRealtimeClientSessionToken(started.AgentSessionId, makeCtx());
+        const refresh2 = await resolver.RefreshRealtimeClientSessionToken(started.AgentSessionId, makeCtx());
+        expect(refresh1.Success).toBe(true);
+        expect(refresh2.Success).toBe(true);
+        expect(createSessionMock).toHaveBeenCalledTimes(1); // No new AIAgentSession rows created!
+
+        // Post-reconnect transcript relays still stamp the original AgentSessionId:
+        const relayed = await resolver.RelayRealtimeTranscript(
+            started.AgentSessionId,
+            'user',
+            'Answer after second reconnect',
+            makeCtx(),
+        );
+        expect(relayed).toBe(true);
+        expect(detail.AgentSessionID).toBe(caliberSessionId);
+    });
+});
+
+
+describe('RealtimeClientSessionResolver — catalog timing reaches the browser (F1)', () => {
+    const TIMING = { ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false };
+
+    it('returns the typed ClientConfig timing fields on the StartRealtimeClientSession result', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-f1', ConversationID: 'conv-f1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini', Model: 'gemini-live', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {}, ...TIMING,
+            },
+        });
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-f1');
+
+        expect(result.ConnectionMaxSeconds).toBe(45);
+        expect(result.SessionMaxSeconds).toBe(1200);
+        expect(result.ReconnectBufferSeconds).toBe(7);
+        expect(result.TrustNativeResumption).toBe(false);
+    });
+
+    it('returns the timing fields on the RefreshRealtimeClientSessionToken result', async () => {
+        const sessionId = 'f1f1f1f1-0000-4000-8000-0000000000f1';
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', realtimeMintSnapshot: MINT_SNAPSHOT_FOR_TARGET_1 }),
+        });
+        currentProvider = makeProvider(() => session);
+        hasPermissionMock.mockResolvedValue(true);
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true, Kind: 'token', EphemeralToken: 'ek2', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfigJson: '{}',
+            ...TIMING,
+        });
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+        expect(result).toMatchObject({ Success: true, ...TIMING });
+    });
+});
+
+describe('RealtimeClientSessionResolver — conversation artifact hydration', () => {
+    it('hydrates deduplicated latest ConversationArtifacts from branch details into PrepareClientSession', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-1',
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+        });
+        const runViewMock = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Conversation Details':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'cd-1', Role: 'User', Message: 'Write a Diffusion doc', HiddenToUser: false, AgentSessionID: null },
+                            { ID: 'cd-2', Role: 'AI', Message: 'Created doc v1 and v2', HiddenToUser: false, AgentSessionID: null },
+                        ],
+                    };
+                case 'MJ: Conversation Detail Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-1' },
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-2' },
+                        ],
+                    };
+                case 'MJ: Artifact Versions':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'ver-1', ArtifactID: 'art-1', VersionNumber: 1, Name: 'Diffusion Doc' },
+                            { ID: 'ver-2', ArtifactID: 'art-1', VersionNumber: 2, Name: 'Diffusion Doc' },
+                        ],
+                    };
+                case 'MJ: Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'art-1', Name: 'Diffusion Doc', Type: 'Markdown Document' },
+                        ],
+                    };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const runViewsMock = vi.fn(async (list: Array<{ EntityName?: string }>) => Promise.all(list.map((p) => runViewMock(p))));
+        currentProvider = makeProvider(() => makeSessionEntity(), { RunView: runViewMock, RunViews: runViewsMock });
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-art-1', ConversationID: 'conv-art-1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini',
+                Model: 'gemini-live',
+                EphemeralToken: 'ek',
+                ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+
+        try {
+            await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-art-1');
+
+            expect(prepareClientSessionMock).toHaveBeenCalledTimes(1);
+            const prepArg = prepareClientSessionMock.mock.calls[0][0] as {
+                ConversationMessages?: Array<{ role: string; content: string }>;
+                ConversationArtifacts?: Array<{
+                    ArtifactID: string;
+                    Name: string;
+                    Type?: string;
+                    LatestVersionID?: string;
+                    LatestVersionNumber?: number;
+                }>;
+            };
+            expect(prepArg.ConversationMessages).toHaveLength(2);
+            expect(prepArg.ConversationArtifacts).toEqual([
+                {
+                    ArtifactID: 'art-1',
+                    Name: 'Diffusion Doc',
+                    Type: 'Markdown Document',
+                    LatestVersionID: 'ver-2',
+                    LatestVersionNumber: 2,
+                },
+            ]);
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
+    it('P1-5: filters out ConversationArtifacts where ArtifactPermissionEngine denies CanRead', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, artId) => ({
+                ArtifactID: artId,
+                CanRead: artId === 'art-allow',
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: artId === 'art-allow' ? 'Owner' : 'None',
+            }),
+        );
+        const runViewMock = vi.fn(async (params: { EntityName?: string; ExtraFilter?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Conversation Details':
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'cd-1', Role: 'AI', Message: 'Artifacts created', HiddenToUser: false, AgentSessionID: null }],
+                    };
+                case 'MJ: Conversation Detail Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ConversationDetailID: 'cd-1', ArtifactVersionID: 'ver-allow' },
+                            { ConversationDetailID: 'cd-1', ArtifactVersionID: 'ver-deny' },
+                        ],
+                    };
+                case 'MJ: Artifact Versions':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'ver-allow', ArtifactID: 'art-allow', VersionNumber: 1, Name: 'Allowed Doc' },
+                            { ID: 'ver-deny', ArtifactID: 'art-deny', VersionNumber: 1, Name: 'Denied Doc' },
+                        ],
+                    };
+                case 'MJ: Artifacts': {
+                    const allArts = [
+                        { ID: 'art-allow', Name: 'Allowed Doc', Type: 'Markdown Document' },
+                        { ID: 'art-deny', Name: 'Denied Doc', Type: 'Markdown Document' },
+                    ];
+                    const filter = params.ExtraFilter ?? '';
+                    return {
+                        Success: true,
+                        Results: filter ? allArts.filter((a) => filter.includes(a.ID)) : allArts,
+                    };
+                }
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const runViewsMock = vi.fn(async (list: Array<{ EntityName?: string }>) => Promise.all(list.map((p) => runViewMock(p))));
+        currentProvider = makeProvider(() => makeSessionEntity(), { RunView: runViewMock, RunViews: runViewsMock });
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-art-acl', ConversationID: 'conv-acl' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini',
+                Model: 'gemini-live',
+                EphemeralToken: 'ek',
+                ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+        try {
+            await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-acl');
+            const prepArg = prepareClientSessionMock.mock.calls[0][0] as {
+                ConversationArtifacts?: Array<{ ArtifactID: string }>;
+            };
+            expect(prepArg.ConversationArtifacts).toHaveLength(1);
+            expect(prepArg.ConversationArtifacts?.[0]?.ArtifactID).toBe('art-allow');
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
+    it('P1-5: rejects UploadRealtimeRecording and UploadRealtimeRecordingSegment when RecordingStartedAt is null or MIME is disallowed', async () => {
+        const audioB64 = Buffer.from([1, 2, 3, 4]).toString('base64');
+        const noRecordingSession = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: null });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : noRecordingSession)),
+        };
+
+        const noStartUpload = await makeResolver().UploadRealtimeRecording('session-1', audioB64, 'audio/wav', makeCtx(), 1000, true);
+        expect(noStartUpload.Success).toBe(false);
+        expect(noStartUpload.ErrorMessage).toMatch(/not been started/i);
+
+        const noStartSeg = await makeResolver().UploadRealtimeRecordingSegment('session-1', 0, audioB64, 'audio/wav', makeCtx());
+        expect(noStartSeg).toBe(false);
+
+        const startedSession = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : startedSession)),
+        };
+        const badMimeUpload = await makeResolver().UploadRealtimeRecording('session-1', audioB64, 'text/html', makeCtx(), 1000, true);
+        expect(badMimeUpload.Success).toBe(false);
+        expect(badMimeUpload.ErrorMessage).toMatch(/unsupported recording mime/i);
     });
 });

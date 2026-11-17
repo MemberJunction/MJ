@@ -562,4 +562,21 @@ describe('RealtimeDiagLog', () => {
         expect(log).toHaveBeenCalledWith('[diag] turn boundary');
         log.mockRestore();
     });
+
+    it('logs on a single line when the message carries CR/LF (CWE-117)', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const previous = process.env.MJ_VERBOSE;
+        process.env.MJ_VERBOSE = 'true';
+        try {
+            RealtimeDiagLog('[diag] provider said: bye\r\n[diag] forged entry\u2028tail');
+        } finally {
+            if (previous === undefined) delete process.env.MJ_VERBOSE;
+            else process.env.MJ_VERBOSE = previous;
+        }
+        expect(log).toHaveBeenCalledTimes(1);
+        const line = String(log.mock.calls[0][0]);
+        expect(line).not.toMatch(/[\r\n\u2028\u2029]/);
+        expect(line).toBe('[diag] provider said: bye  [diag] forged entry tail');
+        log.mockRestore();
+    });
 });

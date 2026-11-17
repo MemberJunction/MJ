@@ -1,5 +1,247 @@
 # Change Log - @memberjunction/core
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 62eca59: AI model research, 2026-11-09 — four models added and one dated price cutover encoded in `metadata/ai-models/.ai-models.json`.
+
+  **Claude Mythos 5 and Claude Mythos 5.1 added.** Both were absent from MJ, because MJ's own Fable 5.1 description recorded a decision not to model limited-availability models — a decision the routine's standing decisions reversed on 2026-10-20. Each gets an Anthropic Model Developer row (`Active`), an Inference Provider row at `Status: "Preview"` so model selection never routes to it automatically, and an `Active` cost row at Anthropic's published $10.00/$50.00 per 1M. The cache-read rate differs between them: $1.00/1M on `claude-mythos-5`, $0.25/1M on `claude-mythos-5-1`. Both are 1M input / 128K output on `AnthropicLLM`, and both state `SupportsNativeToolCalling: true`. Read directly from Anthropic's own pricing and deprecation pages, where both are listed `Active` with retirements not sooner than 2027-06-09 and 2027-09-01.
+
+  **GPT Image 2.6 Sunburst and Flare added** (`gpt-image-2.6-sunburst`, `gpt-image-2.6-flare`, released 2026-11-04, `OpenAIImageGenerator`). Priced in OpenAI's own billing unit per the routine's standing decision on non-token media billing: `Tokens` / `Per 1M Tokens` with input = the $5.00 text-input rate and output = the $30.00 image-output rate, `CacheReadPricePerUnit` = the $2.00 cached-image rate, and the $8.00 image-input rate recorded in `Comments`. No representative per-image figure is derived. `MaxInputTokens` is left unset: the only context figure available was third-party and for one variant only.
+
+  **Gemini 3.8 Flash's introductory window now closes on its own.** The Google and Vertex AI introductory rows ($0.75/$3.75, $0.075 cached) keep `Status: "Active"` and gain `EndedAt: 2027-01-01`, and two new `Active` rows start at that instant with $1.50/$7.50 and $0.15 cached. `BaseAIEngine` selects on `Status='Active'` plus the `StartedAt`/`EndedAt` window, so the cutover needs no further edit; verified to select exactly one row either side of the boundary. This replaces a to-do that had been sitting in the row's own `Comments` since 2026-09-10.
+
+  No deprecation recipe was applied, no row was deleted, and no vendor row was added. Anthropic's full list price table was re-verified against MJ and matches on every model. One carried finding is retired as factually wrong: `OpenAIAudioGenerator` is registered, against both `BaseAudioGenerator` and `BaseSpeechToText`. The week's other findings — GPT-6 Cyber (no published API id), Gemini Omni 1.2 Flash (no registered Google video driver), Qwen 3.7 Plus's output price, and the blocked vendor-documentation hosts that prevented a route sweep for a second week — are flagged for review in `reports/ai-model-research/2026-11-09-weekly-report.md`.
+
+- 4d2c52d: `MJ: AI Agent Actions` rows can be saved with `ResultExpirationMode = 'Compact'` again. The generated validator for `CK_AIAgentAction_CompactSettingsOnlyWhenCompact` enforced the opposite of the constraint (compact settings had to be empty on a Compact row), so with the Compact-requires-CompactMode check every Compact row failed one or the other. A migration corrects the stored GeneratedCode row, and the regenerated `ValidateCompactSettingsOnlyWhenResultExpirationModeIsCompact` rejects compact settings only when the mode is not Compact (MJ#6421).
+- 0ebebfe: Component artifacts can be exported as PDF. The artifact viewer header offers **PDF – Portrait** and **PDF – Landscape**, backed by the new `MJReactComponent.CapturePDF(orientation, title)`: the component is laid out at the A4 page's printable width (so the PDF is the same whatever the viewer's size), inner scroll areas are expanded, Chart.js charts are re-rendered sharp, and page breaks keep charts, rows, table lead-ins and headings together, shrinking a page by up to 20% rather than leaving it mostly empty. The component is captured on the background it is shown on, so a dark theme stays readable. The host page is not changed during capture. Viewer plugins opt in through `SupportsPDFExport` / `ExportPDF(orientation)` on `BaseArtifactViewerPluginComponent`. ng-react adds `html-to-image`, loaded only when a PDF is exported, and writes the PDF itself (`BuildImagePdf`), with no PDF library.
+
+  Registry component metadata (`metadata/components`) changes, so the release needs a metadata migration: the new **ExportableData** wrapper (Generic/UI/Export) adds a CSV/Excel/PNG export icon to any data element; **DataGrid**, **EntityDataGrid** and **SimpleChart** export themselves (CSV and Excel, plus PNG for charts), with the record's primary key columns at the front of the file when the table does not show them; PNGs are drawn on the background the chart is shown on, so dark-theme labels stay readable; a SimpleChart date category exports as the day its axis shows; an EntityDataGrid export cut off at 100,000 records ends with a note row saying it is partial; **SimpleChart** rebuilds its chart only when what it draws changes, and without replaying the entry animation, so a click on one chart no longer re-animates charts whose inputs were only recreated; **DataExportPanel** is marked deprecated in its descriptions and stays Published so existing components keep working.
+
+- 9eb002d: Record unique keys as column sets and narrow `EntityField.IsUnique` (#4536). A new `EntityUniqueKey` table, kept in step with the catalog by CodeGen, holds every unique index or constraint as its key columns in order; `EntityInfo.UniqueKeySets` and `EntityInfo.IsUniqueFieldSet` expose them. `IsUnique` is now set only when a column alone is the key of an unfiltered unique index or is the sole primary key column; composite members, INCLUDE columns, filtered or partial indexes and composite primary key columns no longer count. Record cloning reads the key sets for collision checks, unique foreign keys and renames.
+- 1dd1af1: Add declarative entity lifecycle policies (`EntityLifecyclePolicyEngine` + `ServerOperationScopeManager` with state machines, per-state field-freeze rules, post-create immutability, and `'Standard' | 'AppendOnly' | 'ServerOperationOnly'` write authority), concurrency-safe scoped document auto-numbering (`DocumentNumberingEngine` + `DocumentSequenceCounter` table), batch/transaction-memoized cross-entity policies (`CrossEntityPolicyEngine` + `PreDelete` data hooks), and typed cross-app capabilities (`AppCapabilityRegistry` / `@RegisterAppCapability`).
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 5c3d369: The 12 Lists / Communications actions (Materialize List From View, Add View Results To List, Refresh List From Source, Compose Lists, Share List, Invite To List, Unshare List, Revoke List Invitation, Resolve Audience, Move List Members, Bulk Update List Item Status, Send To Audience) now declare their `MJ: Action Params` and `MJ: Action Result Codes`. They were seeded with none, so a Scheduled Job (which passes values by ActionParamID) could not supply ListID/Mode/ConfirmDrops, and agents and the action UI saw actions with no inputs. The declared params match what each action reads; credential and invitation-token values are marked not to be logged.
+- 2641e47: Open the 6.3 Edge stream: first Edge release of line 6.3 (6.3.0-edge.0). Written by ci/candidate-cut.mjs at the previous line's cut; without it the first patch-only merge would version Edge to a tuple the new line's patches own.
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+- 6fd9fb7: Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
+  as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+  saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+  (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
+  Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
+  signal), stores that decision with its reason on the run, and renders the trust verdict from it.
+
+  The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+  not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+  seeded-random holdout, so nothing deployed re-carves.
+
+  An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
+  An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+  - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
+    pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
+    `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate
+    record, the `gate` member of the `ps-run-results/v2` envelope). `TrustVerdicts.DeriveTrustVerdict` takes
+    `{ ValidationResults, Lineage }` and renders the stored gate decision; `TrustGrade`, `TrustModelInput`,
+    `MajorityBaselineFinding`, `TrustVerdicts.TrustDots` and the free functions `DeriveTrustVerdict`,
+    `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
+  - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
+    decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
+    and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+    `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+    renamed `trustTitle` / `headline`;
+    `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+    The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+    `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
+  - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
+    `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+    `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+    `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
+    the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
+    `buildImprovePrompt` are removed.
+  - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
+    (`test:gate-parity`, `test:gate-parity-refpipe`).
+  - `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+    Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+    values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+    and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+    baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+    before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+    minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
+  - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+    interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+    (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+    `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
+  - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
+
+  Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
+  version 1 of each, and the training path without them is removed.
+  - `@memberjunction/predictive-studio-core`: `ProtocolRows`, `ProtocolEdits`, `UnitEdits` (one owner of the unit and
+    protocol row writes, the next-version rules and the label version bump) and `LegacyPipelines` (the migration's
+    mapping from a pipeline's columns to a unit and a protocol, or the archive or hold reason). Stored rows whose date is
+    not a calendar day fail parse (`UtcDay.IsIsoDay`). `TrainRequest` and the `/train` contract are removed. New refusal
+    code `TIME_HOLDOUT_REQUIRED`.
+  - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
+    each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
+    (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+    legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
+    time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
+    after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
+    only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
+    assembly day only when no change history covers that day. A parent record hard-deleted after the decision date
+    is read from its Record Changes (its stored fields from its Delete row) and is uncovered from its Delete on; a
+    missing record with no Delete still refuses `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
+    `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
+    gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
+    `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
+    input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
+  - `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+    `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
+  - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+    Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+    protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+  - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+    its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+    row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+    setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+    a cloud provider.
+  - `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+    provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+    the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+    provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+    from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+    `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+    `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+    `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+    deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+    (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+    artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+    `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+    over its own storage. The local-disk model
+    artifact store and loader, and their active-provider lookup, are removed.
+  - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+    `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+    generated GraphQL schema, class registrations and record forms for the three new entities.
+  - `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+    `MJ: ML Evaluation Protocols` forms.
+  - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
+    protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
+    pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
+    aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
+    bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
+    PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+    `ChatEnvironmentId` from `PSResourceBase`.
+  - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+    `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+    key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
+  - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
+    pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
+    `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+    `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+    `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+    Provider on.
+  - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+  Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+  not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+  action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+  with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+  (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+  through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+  refused.
+  - Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`), a grouped non-forecast unit accepts only `cluster-bootstrap` intervals (`intervals-not-clustered`), and a migrated legacy pipeline bound to a grouped unit gets grouped folds (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error (`@memberjunction/predictive-studio`).
+  - Round 4 (2026-11-08): a grouped unit refuses any inner validation without its group key, `blocked-time` without a key included (`@memberjunction/predictive-studio-core`); the as-of history covers only the requested keys, a Delete in force wins on both readers before the created-after check, the not-updatable path included, an unreached history excludes under exclude-and-count on the stored-value reader as it already did on the replay reader, and a stored `__mj_CreatedAt` later than an earlier change row other than the history's opening Create dates a re-creation and is ignored (`@memberjunction/predictive-studio`); two standing matrix tests pin reader agreement on existence and which sidecar fold builders keep a group together (`@memberjunction/predictive-studio`, `@memberjunction/predictive-studio-sidecar`); a member × period unit naming no group key is grouped by its grain record, so it gets grouped folds and clustered intervals by default and refuses stratified folds (`@memberjunction/predictive-studio-core`), and a windowed aggregate counts a child hard-deleted after the decision day as its Delete row recorded it (`@memberjunction/predictive-studio`); change rows of one record at one instant are ordered by whether the record continues after that instant, which the next change row proves unless it is a Create and, at its last instant, a current row (a Delete ends the instant of a record that is gone, and precedes the Create of one that was re-created, so a record re-created at one instant and hard-deleted later reads its second incarnation between the two, and one created and deleted at one instant and re-created later reads deleted between the two), a windowed aggregate's child history is loaded once so coverage counts each child record once, and a child row or a join-key unit row deleted and re-created after the decision day is read from the Delete row that ended the incarnation standing then (`@memberjunction/predictive-studio`).
+
+- 70b5e38: Price a realtime run's audio tokens at their own rates. `Realtime.Pricing.AudioInput` / `AudioOutput` (per 1M tokens) in the model configuration price each direction's audio tokens on an `Audio` cost line, taken out of the default line; without an audio price the default line keeps today's figure and is marked `Blended`. The OpenAI-protocol and OpenAI Live browser clients now report the per-modality token split, through a shared `MapRealtimeUsageModalityDetail` in `@memberjunction/ai`. Cached input is priced at the cost row's cache-read rate: the record keeps `CachedAudioTokens` (OpenAI's `cached_tokens_details.audio_tokens`), the audio input line prices only the uncached audio, and an audio line never prices more tokens than left the default line.
+- 28cec7d: Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
+  - **4-Layer ModelConfiguration & Timing Cascade (`@memberjunction/ai`, `@memberjunction/ai-engine-base`, `@memberjunction/ai-agents`):** Add `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` to `RealtimeConfigurationSettings` (`IAIConfiguration.ts` and `modelConfiguration.ts`), propagate them through `REALTIME_SHARED_CONFIG_KEYS`, `ScrubRealtimeSharedConfigKeys`, `ExtractRealtimeTimingConfig`, `ResolveRealtimeTiming`, and `GetModelCatalogSessionSettings`, and seed realtime models (`Gemini 3.8 Live`, `Gemini 3.8 Live Extended Thinking`, `Gemini 3.1 Flash Live`, `Grok Voice` family, `GPT Realtime` family, `GPT-Live 1`, `ElevenLabs Agents`, `Eleven Realtime`) in `.ai-models.json`.
+  - **Shared Conversation Memory & Reconnect Controller (`@memberjunction/ai`):** Promote `RealtimeConversationMemory`, `RenderRealtimeMemorySeed`, `RenderRealtimeMemorySeedAsContextNote`, `RenderLateToolResultNote`, `ResumePreamble`, and the unified I/O-free `RealtimeReconnectController` into `@memberjunction/ai` so every server and browser realtime driver shares bounded FIFO turn/tool memory (`MaxSeedChars = 24,000`), soft/hard connection-duration timers, credential refresh scheduling, per-attempt abort signals, native-to-seed fallback, and rapid-reconnect circuit-breaking (`reconnect-loop-breaker`).
+  - **Server-Side Orchestration, Protected Session Snapshot & Relay Continuity (`@memberjunction/ai`, `@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/server`):** Add `CallDurationSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, `TrustsNativeResumption`, proactive timer orchestration, and `ReconnectSession` on `BaseRealtimeModel` / `BaseRealtimeSession`; persist `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` behind `RunWithTrustedSessionConfigWrites` (`PROTECTED_SESSION_CONFIG_KEYS`); add `RealtimeProxyRegistry.Instance.ExtendRelaySession` and timer rescheduling in `RealtimeRelayTunnel` so relayed calls survive past the 30-minute relay lease; seed `RealtimeSessionRunner`'s re-opened session from `RealtimeConversationMemory` (`InitialContext`); clear Gemini's uncompressed-video connection limit when the last bridged video source ends (`@memberjunction/ai-bridge-server`); add rate-limited `RefreshRealtimeClientSessionToken` in `RealtimeClientSessionResolver`.
+  - **Browser Runtime, Client Drivers & Continuous Recording (`@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`):** Add `ApplySessionConfigTiming`, proactive timer arming on `'listening'`, `ScheduleCredentialRefresh`, and `Reconnect(context)` across `BaseRealtimeClient` and all client/server drivers (`Gemini`, `Vertex`, `OpenAI`, `OpenAI Live`, `xAI`, `ElevenLabs`, `Eleven`, `AssemblyAI`, `Inworld`, `HuggingFace`); wire `SetTokenRefreshCallback` in `RealtimeSessionRuntime`; update `RealtimeAudioRecorder.AttachRemoteStream` so WebRTC reconnects rebind replacement remote audio streams into a single continuous recording file without gaps.
+
+- b68d388: Registry components: DataGrid takes an optional `headerStyle` prop (`{ background, color, borderColor }`) that colors its header row, and SimpleChart calls the current `onDataPointClick` handler instead of the first render's, and no longer logs an error when `entityName` is omitted.
+- 8c3c8a4: Restores two `MJ: AI Prompt Models` rows on **Sage - System Prompt** that the v5.38 Gemini 3.5 Flash migration deleted although its commit message says they were left untouched: Gemini 3.1 Flash-Lite through Google at priority 20 (`608B38EC`), and GPT-OSS-120B through Cerebras for the Sage Text configuration at priority 22 (`14AD0B61`). Without the first, an install with a Gemini API key but no Vertex AI or Cerebras key ran every Sage request on the OpenAI last resort, GPT 5.5 Instant. The rows keep their original IDs, and their `sync` blocks are dropped so the next push re-creates them.
+- 2b349b9: Entity metadata loads are much faster on large schemas. `vwEntities` and `vwEntityFields` no longer compute `CodeName`, `ClassName`, `BaseTableCodeName` and `FieldCodeName` per row with looping scalar functions, which forced a single-threaded plan and repeated each entity's names for every one of its fields. The names are now stored on `Entity` and `EntityField` and kept current by triggers whenever an entity's name, suffix, base table or schema, a field's name, or a schema's `EntityNamePrefix` / `CanonicalSchemaName` changes. Values are identical to before. On a 39,000-field schema the `MJ_Metadata` load drops from 11.5 s to 0.5 s of database time, and eight concurrent loads from 66–79 s each to 3.2 s.
+
+### Patch Changes
+
+- 7ed32af: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- 567d7b9: BaseEngine now finds a cached row by primary key through a per-array index when it applies a saved or remotely changed row, instead of scanning the whole cached array, so saves on large cached entities no longer cost one full scan per row.
+- c07f654: `LocalCacheManager` now tracks completed deep-freeze subtrees in a module-scoped `WeakSet` and traverses arrays/objects without allocating intermediate `Object.values()` arrays, making `ApplyDifferentialUpdate`, multi-fingerprint row upserts, and derived cache writes `O(1)` per already-frozen row while preserving shallow-freeze and partial-failure guarantees. Also includes `EntityUniqueKeys` in `ProviderBase.MetadataBuildItemCodes` following #6080 + #6316.
+- 9ec4dce: An in-place cache update (a saved or deleted row applied to a cached RunView slot) now deep-freezes only the changed rows instead of every row in the slot, so the freeze cost of one save no longer grows with the size of the cached result. Cached rows stay deeply frozen as before.
+- 03bb8b6: test: compliance scans assert they covered the whole packages/ tree
+
+  The PrimaryKey, MultiProvider and UUID compliance tests now fail when they scan fewer files than a
+  full `packages/` tree holds, so a misresolved scan root no longer passes with zero violations.
+  Test-only change; no runtime code or behavior changes.
+
+- 87ac205: Add parameterized `RunView` support via `RunViewParams.Parameters`:
+  - `@memberjunction/core`: Add `RunViewParameterScalar`, `RunViewParameterValue`, `RunViewParameters`, `RunViewParametersKey`, and `RunViewParams.Parameters`. Include canonicalized parameters in `RunViewParams.Equals` and `LocalCacheManager.GenerateRunViewFingerprint` (`prm:` segment when non-empty). Teach `FieldSecuritySQLGate` to recognize `@paramName` parameter tokens on both SQL Server and PostgreSQL dialects.
+  - `@memberjunction/generic-database-provider`: Add `BindExtraFilterParameters` using `SqlTokens.Lex` and `EditSet` to rewrite `@paramName` tokens in `ExtraFilter` to dialect-native bound placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and `NamedQueryParameter` bindings (with array expansion for `IN (@list)`). Thread bound parameters through `executeRunViewCore`, `RunViewsWithCacheCheck`, `getBatchedServerCacheStatus`, `getUpdatedRowsSince`, and `IsCoalescibleCountBatch`.
+  - `@memberjunction/sqlserver-dataprovider`: Support `NamedQueryParameter` and `TypedQueryParameter` lists in `ExecuteSQLBatch` and `ExecuteSQLBatchStatic` with parameter deduplication across shared `mssql.Request` batches, and forward `queryParameters` in `executeSQLForUserViewRunLogging` and `getBatchedServerCacheStatus`.
+  - `@memberjunction/postgresql-dataprovider`: Exclude `@paramName` and `$1` parameter tokens from column auto-quoting in `quoteFieldNamesInToken`.
+  - `@memberjunction/server`: Accept and validate `Parameters` (`GraphQLJSONObject`) on `RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`, and `RunViewsWithCacheCheck`.
+  - `@memberjunction/graphql-dataprovider`: Forward `RunViewParams.Parameters` in `InternalRunView`, `InternalRunViews`, and `RunViewsWithCacheCheck`.
+
+- 6049806: ActionEngine's execution-log saves no longer join the transaction they were queued from. With a durable submitter registered, an After\* `Durable` Entity Action runs inside the save's transaction (#6198), and ActionEngine queued its "Submitted for durable execution" log row from there. The queued save inherited the caller's transaction membership, reached SQL behind the save's COMMIT, and was rejected (`The ambient transaction ended before this query ran`), so the run left no Action Execution Log row (#6251, EA6). `BaseEntitySaveQueue` gains an opt-in `detachFromTransaction` option that runs each save through the new optional `IEntityDataProvider.RunOutsideAmbientTransaction` (implemented by `GenericDatabaseProvider`), so the write runs on the pool and commits on its own. Only ActionEngine's log queue turns it on; other queues (agent run steps, prompt runs, process run details) keep joining the caller's transaction, since their owners flush them before commit and their rows reference rows that transaction wrote.
+- abb285b: `ResponseParser` extracts fenced and bare JSON from model replies with linear `indexOf` scans instead of regexes that could backtrack on long malformed replies. `ResourceUrlsEquivalent` collects query keys into a null-prototype object, so `__proto__` and `constructor` are compared as ordinary keys.
+- 4884a47: Finish the Kendo removal: no Kendo references remain in shipped code, templates, package metadata, or live docs. One stylesheet is deliberately left alone: `explorer-app/src/lib/styles/_common.scss` keeps 12 dead `.k-*` rules because it also defines the legacy `.mj-btn` block, which `check:ui-buttons` grades the moment the file is touched; that block's removal is a separate migration.
+
+  Kendo was already gone from the dependency graph — zero `@progress/kendo*` entries in any `package.json`, zero TypeScript imports. What was left was residue, and some of it was not inert:
+
+  **Dead code and styles removed**
+  - 82 `.k-*` CSS rules across 21 files. Nothing has defined those classes since the removal, so every one of them was a no-op.
+  - `li.k-drawer-item.k-level-0` was still being queried in `MJExplorerAppComponent` and `InitializationService` to auto-select the first nav item when landing on `/`. The Kendo Drawer is long gone, so `querySelector` returned null and the branch did nothing — removing it is a runtime no-op. **If landing on `/` should select the first nav item, that behaviour needs reimplementing against the current shell nav; it has been silently absent since the removal.**
+  - `dialog.service.ts.bak` (dead backup importing `@progress/kendo-angular-dialog`) deleted.
+  - `kendo-ui-license.txt` dropped from `DistributionAssembler`'s Angular ignore list, and its now-meaningless assertion retargeted in the test.
+
+  **Broken templates fixed** — three components still applied Kendo utility classes that no longer resolve:
+  - `add-item.component` — `k-actions k-actions-end` was supplying the footer's flex row, so `.customBtn button { flex: 1 }` had no flex container. `.popup-actions` now provides it.
+  - `delete-item.component` — `k-m-7.5 k-text-center` were Kendo spacing/alignment utilities (30px margin, centered) whose theme CSS left with the removal, so the confirmation copy had been rendering unstyled. Replaced with a real `.confirm-message` class.
+  - `add-item` and `ng-data-context-dialog` each carried a `<div class="k-overlay">` backdrop. `mj-window` deliberately has no backdrop, so these are now unstyled empty divs — **deleted, which means both dialogs currently render with no backdrop.** Restoring one is a UX call, not a cleanup.
+
+  **Filter payload is MJ's own type**
+  `FilterOperator` / `FilterLogic` / `FilterDescriptor` / `CompositeFilterDescriptor` and their guards were already defined in `@memberjunction/core` (`generic/filters/filter.types.ts`) — `ng-filter-builder` carried a byte-equivalent duplicate set and re-exported it. The duplicate is gone; the builder and `ng-entity-viewer` import the shapes from core, and the builder exports only its own UI types.
+
+  **API surface change (`@memberjunction/ng-filter-builder`)**: `FilterOperator`, `FilterLogic`, `FilterDescriptor`, `CompositeFilterDescriptor`, `IsCompositeFilter` and `IsSimpleFilter` are no longer re-exported. Import them from `@memberjunction/core` instead. This aligns with the repo's no-cross-package-re-exports rule.
+
+  **Docs and comments** — 33 package READMEs listed `@progress/kendo-angular-*` packages as live dependencies (they aren't) and drew Kendo components in their mermaid diagrams; `packages/Angular/CLAUDE.md`, four guides, and ~55 source comments referenced Kendo as though it were still present. All rewritten to describe what the code actually uses.
+
+  Historical records are deliberately untouched: `plans/`, CHANGELOGs, and dated retrospectives (`FINAL_REPORT.md`, `PIXEL_PERFECT_COMPLETE.md`, `USER_MENU_PROPOSAL.md`, timeline `PRD.md` version history) still mention Kendo, because they are records of when it was there.
+
+- b2789ee: Metadata refresh reloads only what changed, and retries a failed refresh instead of escalating it to a full reload.
+  - **`@memberjunction/core`.** `ProviderBase.MetadataRefreshScope()` decides, from the local and remote timestamps, whether a refresh needs nothing, only the saved-query family, or everything (with a logged reason). It replaces `PartialRefreshItemCodes()`, which stays as a deprecated wrapper. A change to an MJ_Metadata item the metadata build never reads (`Dashboards`, `Dashboard_Categories`; see `ProviderBase.MetadataBuildItemCodes`) reloads nothing, and so does a write-event refresh whose timestamps show nothing changed. `RefreshAfterMetadataMemberChange`, `RefreshIfNeeded`, `Config`'s staleness check, `backgroundValidateAndRefresh` and `preValidateAndRefresh` all use it. The dataset item list is stored beside the metadata snapshot (`___MJCore_Metadata_DatasetItems`), so a process that starts from the snapshot can also reload only the saved-query family.
+  - **Retries (`@memberjunction/core`).** While metadata is loaded, a failed timestamp read, a failed scoped reload and a failed full reload keep that metadata and are retried after `ProviderBase.MetadataRefreshRetryDelaysMs` (15 s, 30 s, 60 s, 120 s, then every 5 min). A failed timestamp read never becomes a full reload. Only the third scoped failure in a row (`ProviderBase.MetadataScopedReloadAttempts`) runs the full reload. The retry shares the member-change timer, does not keep a Node process alive, and is cancelled by `CancelPendingMetadataMemberRefresh`. Every full reload logs `[Metadata] Full reload (<reason>) took <n> ms`. An explicit `Refresh()` is still a full reload, and a provider with no metadata loaded still loads everything.
+  - **`@memberjunction/generic-database-provider`.** `GetDatasetByName` answers an item whose ItemFilter is exactly `1=0` with an empty, successful result and runs no SQL for it. The scoped metadata reload sends `1=0` for every item it does not reload, and each of those items used to run its own empty `SELECT` on its own pool connection.
+
+- 100b9c2: BaseEngine: a remote invalidation without row data re-reads only the rows its events named (one keyed RunView per coalesced round, up to `BaseEngine.KeyedRefetchMaxKeys`, default 200) and applies them in place, instead of reloading the whole config. Configs with an `OrderBy`, datasets, composite keys, events without a key, and failed keyed reads still reload in full. A keyed read that finishes after a full reload began is discarded in favour of a reload, and rows are applied to a copy of the held array.
+- 6bd8271: Shared-cache incident fixes: the scheduler's timestamp-filtered reads (due routines, wake-gate deltas, action-log retention) bypass the cache instead of writing a never-read entry per tick; `InvalidateEntityCaches` skips the storage lookup and registry rewrite for a non-cacheable entity with nothing indexed, and rewrites the registry only when it removed something; the Redis provider applies `options` on the URL path too and answers a read that takes longer than `readTimeoutMs` (default 2000 ms; `cacheSettings.redisReadTimeoutMs` / `REDIS_READ_TIMEOUT_MS` in MJServer) as a cache miss. When the index-group read a save uses to find peer slots times out, the slots it returns are removed once Redis answers.
+- fbbc06a: A scoped metadata refresh (after a saved-query write, or from `RefreshIfNeeded()` when only the saved-query family is stale) now reads the metadata dataset status once instead of twice.
+- c889b72: Wave 4.1a core and engine performance improvements:
+  - Exclude transient `BaseEntityEvent` payloads from `MJGlobal`'s 100-slot replay buffer so entity graphs and per-request providers are not retained in memory and initialization events (`LoggedIn`) are not evicted, while keeping live delivery to all subscribers.
+  - Drain `ProviderBase` `RunViews` coalescing via microtasks (`ProviderBase.CoalesceUseMicrotask`) so concurrent engine loads still batch together while isolated queries avoid a 10–16ms timer sleep.
+  - Prevent wasted server-side narrow-`Fields` `SELECT *` widening on `ExternalDataSourceID` entities, ad-hoc `UserSearchString` queries, and active write-batch windows.
+  - Add `GetEntityObjectOptions` (`{ SkipNewRecord: true }`) for hydration paths (`TransformSimpleObjectToEntityObject`, `BaseEngine`) so entity instantiation skips throwaway UUID generation and preserves `BaseEntity`'s lazy `_raw` storage fast path.
+  - Memoize `EntityInfo.GetUserPermisions(user)` per `(EntityInfo, UserInfo)` and cache normalized role IDs / deny flags on `EntityPermissionInfo`.
+  - Fix `BaseEngine` generic `BaseEntity` primary-key extraction fallback (`row.Get(pk)`), skip cloning on in-place cached instance saves via `WeakSet` reference tracking, and reuse `DeltaRowKeyIndex` across consecutive external `row_delta` updates in `O(Δ)`.
+  - Prevent `UserInfoEngine.Config(false, contextUser)` on server `Database` providers from triggering an 8-table `forceRefresh` reload when called across different request users.
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

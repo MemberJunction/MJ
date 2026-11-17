@@ -1,5 +1,73 @@
 # @memberjunction/ng-realtime-widget
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 0ebebfe: Component artifacts can be exported as PDF. The artifact viewer header offers **PDF – Portrait** and **PDF – Landscape**, backed by the new `MJReactComponent.CapturePDF(orientation, title)`: the component is laid out at the A4 page's printable width (so the PDF is the same whatever the viewer's size), inner scroll areas are expanded, Chart.js charts are re-rendered sharp, and page breaks keep charts, rows, table lead-ins and headings together, shrinking a page by up to 20% rather than leaving it mostly empty. The component is captured on the background it is shown on, so a dark theme stays readable. The host page is not changed during capture. Viewer plugins opt in through `SupportsPDFExport` / `ExportPDF(orientation)` on `BaseArtifactViewerPluginComponent`. ng-react adds `html-to-image`, loaded only when a PDF is exported, and writes the PDF itself (`BuildImagePdf`), with no PDF library.
+
+  Registry component metadata (`metadata/components`) changes, so the release needs a metadata migration: the new **ExportableData** wrapper (Generic/UI/Export) adds a CSV/Excel/PNG export icon to any data element; **DataGrid**, **EntityDataGrid** and **SimpleChart** export themselves (CSV and Excel, plus PNG for charts), with the record's primary key columns at the front of the file when the table does not show them; PNGs are drawn on the background the chart is shown on, so dark-theme labels stay readable; a SimpleChart date category exports as the day its axis shows; an EntityDataGrid export cut off at 100,000 records ends with a note row saying it is partial; **SimpleChart** rebuilds its chart only when what it draws changes, and without replaying the entry animation, so a click on one chart no longer re-animates charts whose inputs were only recreated; **DataExportPanel** is marked deprecated in its descriptions and stays Published so existing components keep working.
+
+- b5df80e: Realtime long-call reconnect fixes found by a live smoke test of #6462: catalog timing reaches browser clients; bounded reconnect recovery window; OpenAI/xAI recover from a lost transport; Gemini token uses and token-expiry moves; input and answers survive a move; seed order on OpenAI; refresh rate limit sized from the real move cadence; tab close closes the agent session.
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [1b282a0]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [8230d04]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+- Updated dependencies [36ddd08]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/ng-conversations@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ng-ui-components@6.3.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/realtime-runtime@6.3.0-edge.0
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.0
+  - @memberjunction/ng-shared-generic@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

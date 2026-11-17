@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   PS_FEATURE_DOMINANCE_THRESHOLD,
   algoStyle,
-  BestIterationScore,
   BuildActivityFeed,
   BuildCompareMetricRows,
   CanonicalMetricKey,
@@ -17,11 +16,13 @@ import {
   MetricsToDisplay,
   OverfitGap,
   ParseFeatureImportance,
+  ParseSessionLeaderboard,
   ParseMetrics,
   PrimaryAuc,
   RelativeTime,
   ToDate,
   PSIterationRow,
+  PSRankedScore,
   PSModelRow,
   PSModelEventSource,
   PSProcessRunRow,
@@ -122,8 +123,8 @@ describe('primaryAuc', () => {
   it('prefers holdout AUC over training AUC', () => {
     expect(PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"AUC":0.85}' }))).toBe(0.85);
   });
-  it('falls back to training AUC when holdout absent', () => {
-    expect(PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: null }))).toBe(0.9);
+  it('never reads the training AUC: no holdout AUC means no holdout number', () => {
+    expect([PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: null })), PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"log-loss":0.42}' }))]).toEqual([null, null]);
   });
   it('returns null when neither present', () => {
     expect(PrimaryAuc(model({}))).toBeNull();
@@ -225,7 +226,7 @@ describe('algoStyle', () => {
 // experiments — kanban + leaderboard
 // ---------------------------------------------------------------------------
 
-describe('groupIterationsToKanban', () => {
+describe('GroupIterationsToKanban', () => {
   const rows: PSIterationRow[] = [
     iteration({ ID: 'a', Sequence: 1, Status: 'Completed', Score: 0.86, AlgorithmName: 'XGBoost' }),
     iteration({ ID: 'b', Sequence: 2, Status: 'Completed', Score: 0.84, AlgorithmName: 'LightGBM' }),
@@ -234,59 +235,58 @@ describe('groupIterationsToKanban', () => {
     iteration({ ID: 'e', Sequence: 5, Status: 'Pruned', Score: 0.7, AlgorithmName: 'XGBoost' }),
     iteration({ ID: 'f', Sequence: 6, Status: 'Failed', AlgorithmName: 'MLP' }),
   ];
+  const ranked = ParseSessionLeaderboard(JSON.stringify([
+    { IterationID: 'a', Metric: 0.86, ScoreMetric: 'auc', OnSuccessMetric: true },
+    { IterationID: 'b', Metric: 0.84, ScoreMetric: 'auc', OnSuccessMetric: true },
+    { IterationID: 'e', Metric: 0.7, ScoreMetric: 'auc', OnSuccessMetric: true },
+  ]), 'AUC');
 
   it('buckets by status; Pending→running, Failed→pruned', () => {
-    const k = GroupIterationsToKanban(rows);
+    const k = GroupIterationsToKanban(rows, ranked);
     expect(k.Running.length).toBe(2); // Running + Pending
     expect(k.Completed.length).toBe(2);
     expect(k.Pruned.length).toBe(2); // Pruned + Failed
   });
 
   it('badges the single best completed iteration', () => {
-    const k = GroupIterationsToKanban(rows);
+    const k = GroupIterationsToKanban(rows, ranked);
     const best = k.Completed.filter((c) => c.Status === 'Best');
     expect(best.length).toBe(1);
     expect(best[0].score).toBe(0.86);
   });
 
-  it('computes Δ-from-best for non-best completed', () => {
-    const k = GroupIterationsToKanban(rows);
+  it('says how far a non-top completed card is behind the top, on its metric, with no sign', () => {
+    const k = GroupIterationsToKanban(rows, ranked);
     const challenger = k.Completed.find((c) => c.score === 0.84);
-    expect(challenger?.ScoreDelta).toBe('Δ −0.020');
+    expect(challenger?.ScoreDelta).toBe('0.020 behind the top');
   });
 
   it('handles an empty set', () => {
-    expect(GroupIterationsToKanban([])).toEqual({ Running: [], Completed: [], Pruned: [] });
+    expect(GroupIterationsToKanban([], [])).toEqual({ Running: [], Completed: [], Pruned: [] });
   });
 });
 
-describe('bestIterationScore', () => {
-  it('returns the max completed score, null when none', () => {
-    expect(BestIterationScore([iteration({ Status: 'Completed', Score: 0.8 }), iteration({ Status: 'Completed', Score: 0.9 })])).toBe(0.9);
-    expect(BestIterationScore([iteration({ Status: 'Running', Score: 0.99 })])).toBeNull();
-    expect(BestIterationScore([])).toBeNull();
-  });
-});
-
-describe('deriveLeaderboard', () => {
-  it('ranks scored iterations desc, flags best + pruned, omits unscored', () => {
+describe('DeriveLeaderboard', () => {
+  it('ranks scored iterations in the stored order, flags best + pruned, omits unscored', () => {
     const rows = [
       iteration({ ID: 'a', Status: 'Completed', Score: 0.8, AlgorithmName: 'XGBoost', Label: 'engagement' }),
       iteration({ ID: 'b', Status: 'Completed', Score: 0.86, AlgorithmName: 'LightGBM' }),
       iteration({ ID: 'c', Status: 'Pruned', Score: 0.6, AlgorithmName: 'MLP' }),
       iteration({ ID: 'd', Status: 'Running', Score: null }),
     ];
-    const lb = DeriveLeaderboard(rows);
+    const ranked = ParseSessionLeaderboard(JSON.stringify([{ IterationID: 'b', Metric: 0.86 }, { IterationID: 'a', Metric: 0.8 }, { IterationID: 'c', Metric: 0.6 }]), 'AUC');
+    const lb = DeriveLeaderboard(rows, ranked);
     expect(lb.length).toBe(3);
-    expect(lb[0].auc).toBe(0.86);
+    expect([lb[0].Score, lb[0].ScoreMetric]).toEqual([0.86, 'auc']);
     expect(lb[0].best).toBe(true);
     expect(lb.find((e) => e.algorithm === 'MLP')?.pruned).toBe(true);
   });
 
   it('caps at topN and returns [] for no scores', () => {
-    expect(DeriveLeaderboard([], 5)).toEqual([]);
+    expect(DeriveLeaderboard([], [], 5)).toEqual([]);
     const many = Array.from({ length: 10 }, (_, i) => iteration({ ID: `i${i}`, Status: 'Completed', Score: i / 10 }));
-    expect(DeriveLeaderboard(many, 4).length).toBe(4);
+    const ranked = ParseSessionLeaderboard(JSON.stringify(many.map((m) => ({ IterationID: m.ID, Metric: m.Score }))), 'AUC');
+    expect(DeriveLeaderboard(many, ranked, 4).length).toBe(4);
   });
 });
 
@@ -396,22 +396,25 @@ describe('relativeTime', () => {
 // compare
 // ---------------------------------------------------------------------------
 
+const rankedOn = (...entries: [string, number][]): PSRankedScore[] =>
+  entries.map(([IterationID, Metric]) => ({ IterationID, Metric, ScoreMetric: 'auc', OnSuccessMetric: true }));
+
 describe('deriveCompareColumns', () => {
-  it('ranks scored iterations desc, caps at maxRuns, flags best', () => {
+  it('follows the stored ranking order, caps at maxRuns, flags best', () => {
     const rows = [
       iteration({ ID: 'a', Status: 'Completed', Score: 0.8, AlgorithmName: 'XGBoost', ComputeCost: 10 }),
       iteration({ ID: 'b', Status: 'Completed', Score: 0.86, AlgorithmName: 'LightGBM', ComputeCost: 5 }),
       iteration({ ID: 'c', Status: 'Completed', Score: 0.7, AlgorithmName: 'RF', ComputeCost: 2 }),
       iteration({ ID: 'd', Status: 'Running', Score: null }),
     ];
-    const cols = DeriveCompareColumns(rows, 2);
+    const cols = DeriveCompareColumns(rows, rankedOn(['b', 0.86], ['a', 0.8], ['c', 0.7]), 2);
     expect(cols.length).toBe(2);
     expect(cols[0].holdoutAuc).toBe(0.86);
     expect(cols[0].isBest).toBe(true);
     expect(cols[0].label).toBe('Run 1');
   });
-  it('returns [] when nothing scored', () => {
-    expect(DeriveCompareColumns([iteration({ Status: 'Running', Score: null })])).toEqual([]);
+  it('returns [] when nothing is ranked', () => {
+    expect(DeriveCompareColumns([iteration({ Status: 'Running', Score: null })], [])).toEqual([]);
   });
 });
 
@@ -420,17 +423,17 @@ describe('buildCompareMetricRows', () => {
     const cols = DeriveCompareColumns([
       iteration({ ID: 'a', Status: 'Completed', Score: 0.86, ComputeCost: 10 }),
       iteration({ ID: 'b', Status: 'Completed', Score: 0.8, ComputeCost: 3 }),
-    ]);
+    ], rankedOn(['a', 0.86], ['b', 0.8]));
     const rows = BuildCompareMetricRows(cols);
     const auc = rows.find((r) => r.label === 'Holdout score')!;
     const cost = rows.find((r) => r.label === 'Compute cost')!;
-    expect(auc.Values).toEqual(['0.860', '0.800']);
-    expect(auc.BestIndex).toBe(0); // higher AUC
+    expect(auc.Values).toEqual(['auc 0.860', 'auc 0.800']);
+    expect(auc.BestIndex).toBe(0); // first column is on the success metric
     expect(cost.BestIndex).toBe(1); // lower cost
   });
 
   it('formats missing values as — and yields no best index', () => {
-    const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })]);
+    const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })], rankedOn(['a', 0.8]));
     const rows = BuildCompareMetricRows(cols);
     expect(rows.find((r) => r.label === 'Compute cost')!.Values).toEqual(['—']);
     expect(rows.find((r) => r.label === 'Compute cost')!.BestIndex).toBe(-1);

@@ -118,6 +118,11 @@ interface MintExtensions {
   RelayTransport: boolean;
   /** That this host shows no agent video: the `showsAgentVideo` argument, sent only as `false`. */
   NoAgentVideo: boolean;
+  /**
+   * The session's catalog timing: the `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds` and
+   * `TrustNativeResumption` fields, which the client driver needs to reconnect before the provider drops the connection.
+   */
+  Timing: boolean;
 }
 
 /** What the launcher says, once, when the server rejects an extension of the mint. */
@@ -127,7 +132,24 @@ const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, stri
   RelayTransport: '[RealtimeSession] The server does not report the session transport — minting without it; every session connects directly.',
   NoAgentVideo:
     "[RealtimeSession] The server does not take showsAgentVideo — minting without it; it may ask for an avatar this app can't show (the call stays audio only).",
+  Timing: '[RealtimeSession] The server does not report the session timing — minting without it; the client driver uses its own connection limits.',
 };
+
+/** The mint's catalog-timing fields, asked for together under the `Timing` extension. */
+const TIMING_FIELDS = ['ConnectionMaxSeconds', 'SessionMaxSeconds', 'ReconnectBufferSeconds', 'TrustNativeResumption'] as const;
+
+/**
+ * Returns true when `error` is a GraphQL schema validation rejection for `fieldOrArgument`
+ * (e.g. `"Cannot query field \"<name>\"..."` or `"Unknown argument \"<name>\"..."`),
+ * used by rolling-upgrade fallbacks when a newer client talks to an older MJServer.
+ */
+export function IsUnsupportedGraphQLExtension(error: unknown, fieldOrArgument: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    (message.includes('Cannot query field') || message.includes('Unknown argument')) &&
+    message.includes(`"${fieldOrArgument}"`)
+  );
+}
 
 /**
  * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
@@ -137,19 +159,26 @@ const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, stri
  * rejection names one field at a time, so a server that predates several extensions is found out one step at a time.
  */
 function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
-  const message = error instanceof Error ? error.message : String(error);
-  if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
+  if (asked.NoAgentVideo && IsUnsupportedGraphQLExtension(error, 'showsAgentVideo')) {
     return 'NoAgentVideo';
   }
-  if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
+  if (asked.AvatarStatus && IsUnsupportedGraphQLExtension(error, 'AvatarStatusJson')) {
     return 'AvatarStatus';
   }
-  // The quoted field names, not the bare words: "Transport" alone could be any transport error, and "RelayUrl"
-  // any message that names the field.
-  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('field "RelayUrl"'))) {
+  if (
+    asked.RelayTransport &&
+    (IsUnsupportedGraphQLExtension(error, 'Transport') || IsUnsupportedGraphQLExtension(error, 'RelayUrl'))
+  ) {
     return 'RelayTransport';
   }
-  if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {
+  if (asked.Timing && TIMING_FIELDS.some((field) => IsUnsupportedGraphQLExtension(error, field))) {
+    return 'Timing';
+  }
+  if (
+    asked.ChannelScoping &&
+    (IsUnsupportedGraphQLExtension(error, 'channelCandidatesJson') ||
+      IsUnsupportedGraphQLExtension(error, 'ClientPolicyJson'))
+  ) {
     return 'ChannelScoping';
   }
   return null;
@@ -162,11 +191,12 @@ function unsupportedExtension(error: unknown, asked: MintExtensions): keyof Mint
  * When the session has channel candidates it asks the server to scope them (`channelCandidatesJson`)
  * and to return the resolved policy (`ClientPolicyJson`). It also asks for the session's live-avatar status
  * (`AvatarStatusJson`), which the call reads to say why it shows no avatar, and for how the browser reaches the
- * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with. A host that shows no agent
+ * provider (`Transport` and `RelayUrl`), which a relay session's client driver connects with, and for the session's
+ * catalog timing (`ConnectionMaxSeconds` and the other {@link TIMING_FIELDS}), which the client driver reconnects by. A host that shows no agent
  * video ({@link RealtimeSessionLaunchRequest.ShowsAgentVideo} `false`) says so (`showsAgentVideo: false`), so the
  * server asks the model for no avatar. A server that predates an extension rejects it at validation, in which case the
  * launcher mints without that extension alone (the runtime then resolves the channel scope locally, shows no avatar
- * notice, treats every session as direct, or leaves the avatar to the browser's audio-only fallback at connect) — a new
+ * notice, treats every session as direct, runs on the driver's own connection limits, or leaves the avatar to the browser's audio-only fallback at connect) — a new
  * client must keep working against an older server, and a failed mint over an optional extension would be the worst way
  * to find out they differ. Each fallback is remembered per launcher instance so a long-lived runtime asks once.
  */
@@ -219,6 +249,7 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
       AvatarStatus: !this.serverLacks.has('AvatarStatus'),
       RelayTransport: !this.serverLacks.has('RelayTransport'),
       NoAgentVideo: noAgentVideo && !this.serverLacks.has('NoAgentVideo'),
+      Timing: !this.serverLacks.has('Timing'),
     };
     for (;;) {
       try {
@@ -255,6 +286,7 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
       asked.AvatarStatus ? 'AvatarStatusJson' : '',
       asked.RelayTransport ? 'Transport' : '',
       asked.RelayTransport ? 'RelayUrl' : '',
+      ...(asked.Timing ? TIMING_FIELDS : []),
     ]
       .filter((field) => field.length > 0)
       .map((field) => `\n          ${field}`)

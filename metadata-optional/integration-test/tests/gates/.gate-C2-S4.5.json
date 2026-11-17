@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S4.5",
+    "Description": "Gate G2.8 (phase 2, dataset C2, criterion S4.5): dummy, one-feature and GLM baselines are stored with 95% intervals on C2, 3 of 3; the gate decision is `keep-simple-baseline`, and with shuffled labels `no-signal`, both as in the reference. A pytest node over the trainer (tests/gates/test_evaluation_score_gates.py::test_C2_S4_5_baselines_with_intervals_and_outcomes): the stored outcome equals the sidecar's here, because guards only demote model and a differing sidecar decision is refused; the shuffled-label variant exists only in-process. It fails when the sidecar's baselines return no interval (stored baselines with intervals < 3 of 3).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.8\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S4.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Three baselines scored with 95% intervals; keep-simple-baseline (the GLM, equal to the reference's), and no-signal on shuffled labels (1 of 1 pytest case)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s4-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "938156DF-E466-48F7-BFC8-334B98D0D747"
+  }
+}

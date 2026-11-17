@@ -109,6 +109,7 @@ import {
     InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     PartitionGatingOracles,
+    ResolveRunValidationCriteria,
     ClassifyFailure,
     IsSevereBrowserFault,
     ShouldCaptureArtifact,
@@ -314,8 +315,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             }
             // Rubric judging: thread the test's authored validation
             // criteria into the in-run judge so Done is derived per-criterion.
-            if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
-                runParams.ValidationCriteria = expected.judgeValidationCriteria;
+            // Weighted entries reach the judge as their texts; the weights apply when oracles score.
+            const validationCriteria = ResolveRunValidationCriteria(expected.judgeValidationCriteria);
+            if (validationCriteria) {
+                runParams.ValidationCriteria = validationCriteria;
             }
             // Checkpoint tour: map the test's declared sections to engine
             // checkpoints so the run is verified section-by-section, not on a single
@@ -1830,6 +1833,18 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     suggestion: 'Provide a valid JavaScript regular expression'
                 });
             }
+        }
+
+        // Validate judge criteria with the rules the judge oracles apply
+        try {
+            ResolveRunValidationCriteria(expected.judgeValidationCriteria);
+        } catch (error) {
+            errors.push({
+                category: 'expected-outcome',
+                message: (error as Error).message,
+                field: 'ExpectedOutcomes.judgeValidationCriteria',
+                suggestion: 'Write each criterion as a non-empty string, or as { "criterion": "...", "weight": 2 } with a weight of 0 or more'
+            });
         }
 
         // Validate confidence range

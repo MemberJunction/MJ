@@ -87,7 +87,7 @@ export interface EntityMapRow {
   Priority: number;
   DeleteBehavior: 'DoNothing' | 'HardDelete' | 'SoftDelete';
   Status: 'Active' | 'Inactive';
-  Entity: string;
+  Entity: string | null;
 }
 
 export interface FieldMapRow {

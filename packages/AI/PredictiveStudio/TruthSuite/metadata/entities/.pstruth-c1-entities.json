@@ -1,0 +1,114 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1Person"
+    },
+    "fields": {
+      "Name": "PS Truth: C1Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1OrderHeader"
+    },
+    "fields": {
+      "Name": "PS Truth: C1OrderHeader",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1DuesPeriod"
+    },
+    "fields": {
+      "Name": "PS Truth: C1DuesPeriod",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1NonduesLine"
+    },
+    "fields": {
+      "Name": "PS Truth: C1NonduesLine",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1EventAttendance"
+    },
+    "fields": {
+      "Name": "PS Truth: C1EventAttendance",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1CourseCompletion"
+    },
+    "fields": {
+      "Name": "PS Truth: C1CourseCompletion",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1Certification"
+    },
+    "fields": {
+      "Name": "PS Truth: C1Certification",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=C1CommitteeMembership"
+    },
+    "fields": {
+      "Name": "PS Truth: C1CommitteeMembership",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  }
+]

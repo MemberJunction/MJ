@@ -27,6 +27,8 @@ import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
 import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
+import { CreateRouteRateLimiter } from './routeRateLimit.js';
+import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
 interface FileBytesSource {
@@ -36,26 +38,43 @@ interface FileBytesSource {
   fileName: string;
 }
 
+/** Options for {@link CreateMediaStreamRouter}. */
+export interface MediaStreamRouterOptions {
+  /**
+   * Per-route limiter settings (normally `configInfo.rateLimiting.routes`). Omitted groups use the
+   * defaults in `routeRateLimitConfigUnits.ts`, which are on.
+   */
+  RateLimits?: {
+    Upload?: Partial<RouteRateLimitSettings>;
+    Read?: Partial<RouteRateLimitSettings>;
+  };
+}
+
 /**
  * Builds the Express router exposing:
  * - `GET /media/:fileId` and `GET /media/:fileId/:filename` (Range streaming)
  * - `POST /media/upload-stage` (Raw binary upload staging)
  */
-export function CreateMediaStreamRouter(): Router {
+export function CreateMediaStreamRouter(options?: MediaStreamRouterOptions): Router {
   const router = express.Router();
+  // Per-IP limiters (on by default; see routeRateLimit.ts). The upload route takes 100 MB bodies,
+  // so it has its own tighter budget, applied before the body is read.
+  const uploadLimiter = CreateRouteRateLimiter('mediaUpload', options?.RateLimits?.Upload);
+  const readLimiter = CreateRouteRateLimiter('mediaRead', options?.RateLimits?.Read);
 
   router.post(
     '/upload-stage',
+    ...uploadLimiter,
     express.raw({ type: () => true, limit: '100mb' }),
     async (req: Request, res: Response) => {
       await handleUploadStageRequest(req, res);
     }
   );
 
-  router.get('/:fileId', async (req: Request, res: Response) => {
+  router.get('/:fileId', ...readLimiter, async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
-  router.get('/:fileId/:filename', async (req: Request, res: Response) => {
+  router.get('/:fileId/:filename', ...readLimiter, async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
   return router;

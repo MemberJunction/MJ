@@ -10,6 +10,13 @@ import { query, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioProductionsResourceComponent } from './video-studio-productions-resource.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: reads against doubles with no attribute rows, no recent-access entity, no tab id and no GraphQL server. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/, /^\[GraphQL\] ExecuteGQL error caught:/, /^\{"name":"TypeError","message":"GraphQL Error \(Code: unknown\)"/, /^VSCopilotPanelComponent(\.ResolveVideoStudioAgent)?: ('Video Studio' agent not found|Video Studio isn't installed or you can't run it)/, /^Attribute query timed out/, /^RecentAccessService: Error logging access/, /^VideoStudioProductionsResourceComponent\.UpdateQueryParams: no tab id/, /^Error tracking artifact usage: TypeError: usage\.Save is not a function/],
+});
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
@@ -144,19 +151,21 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
           ],
         };
       }
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return {
+          Success: true,
+          Results: [
+            { ID: 'ver-2', ArtifactID: 'prod-2', VersionNumber: 4 },
+            { ID: 'ver-1', ArtifactID: 'prod-1', VersionNumber: 2 },
+          ],
+        };
+      }
       return { Success: true, Results: [] };
     });
 
     // Note: attribute rows intentionally omit ArtifactID and are returned in reverse artifact order
     // (ver-2 for prod-2 first, then ver-1 for prod-1; prod-3 has no version/attributes at all).
     const runViewsSpy = vi.fn().mockResolvedValue([
-      {
-        Success: true,
-        Results: [
-          { ID: 'ver-2', ArtifactID: 'prod-2', VersionNumber: 4 },
-          { ID: 'ver-1', ArtifactID: 'prod-1', VersionNumber: 2 },
-        ],
-      },
       {
         Success: true,
         Results: [
@@ -313,23 +322,27 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     } as unknown as BrandKitEngine;
     vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(fakeBrandKitEngine);
 
-    const runViewSpy = vi.fn().mockResolvedValue({
-      Success: true,
-      Results: [
-        {
-          ID: 'prod-cross-company',
-          Name: 'Beta Subsidiary Overview',
-          Description: 'Subsidiary launch clip',
-          __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
-        },
-      ],
+    const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return {
+          Success: true,
+          Results: [{ ID: 'ver-cross', ArtifactID: 'prod-cross-company', VersionNumber: 1 }],
+        };
+      }
+      return {
+        Success: true,
+        Results: [
+          {
+            ID: 'prod-cross-company',
+            Name: 'Beta Subsidiary Overview',
+            Description: 'Subsidiary launch clip',
+            __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
+          },
+        ],
+      };
     });
 
     const runViewsSpy = vi.fn().mockResolvedValue([
-      {
-        Success: true,
-        Results: [{ ID: 'ver-cross', ArtifactID: 'prod-cross-company', VersionNumber: 1 }],
-      },
       {
         Success: true,
         Results: [
@@ -396,23 +409,27 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     } as unknown as BrandKitEngine;
     vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(fakeBrandKitEngine);
 
-    const runViewSpy = vi.fn().mockResolvedValue({
-      Success: true,
-      Results: [
-        {
-          ID: 'prod-1',
-          Name: 'Q3 Revenue Recap',
-          Description: 'Summary',
-          __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
-        },
-      ],
+    const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return {
+          Success: true,
+          Results: [{ ID: 'ver-1', ArtifactID: 'prod-1', VersionNumber: 1 }],
+        };
+      }
+      return {
+        Success: true,
+        Results: [
+          {
+            ID: 'prod-1',
+            Name: 'Q3 Revenue Recap',
+            Description: 'Summary',
+            __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
+          },
+        ],
+      };
     });
 
     const runViewsSpy = vi.fn().mockResolvedValue([
-      {
-        Success: true,
-        Results: [{ ID: 'ver-1', ArtifactID: 'prod-1', VersionNumber: 1 }],
-      },
       {
         Success: false,
         ErrorMessage: 'Attribute query timed out',
@@ -519,6 +536,12 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
           ],
         };
       }
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        return {
+          Success: true,
+          Results: [{ ID: 'ver-iter-1', ArtifactID: 'prod-iter-1', VersionNumber: 3 }],
+        };
+      }
       if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
         return {
           Success: true,
@@ -537,11 +560,11 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     const runViewsSpy = vi.fn().mockResolvedValue([
       {
         Success: true,
-        Results: [{ ID: 'ver-iter-1', ArtifactID: 'prod-iter-1', VersionNumber: 3 }],
+        Results: [{ ArtifactVersionID: 'ver-iter-1', Name: 'status', Value: 'Reviewed' }],
       },
       {
         Success: true,
-        Results: [{ ArtifactVersionID: 'ver-iter-1', Name: 'status', Value: 'Reviewed' }],
+        Results: [],
       },
     ]);
 
@@ -688,8 +711,29 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
           ],
         };
       }
-      if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+      if (params.EntityName === 'MJ: Artifact Versions') {
         if (params.ExtraFilter?.includes('prod-a')) {
+          return {
+            Success: true,
+            Results: [{ ID: 'ver-a', ArtifactID: 'prod-a', VersionNumber: 1 }],
+          };
+        }
+        if (params.ExtraFilter?.includes('prod-b')) {
+          return {
+            Success: true,
+            Results: [{ ID: 'ver-b', ArtifactID: 'prod-b', VersionNumber: 2 }],
+          };
+        }
+        return {
+          Success: true,
+          Results: [
+            { ID: 'ver-a', ArtifactID: 'prod-a', VersionNumber: 1 },
+            { ID: 'ver-b', ArtifactID: 'prod-b', VersionNumber: 2 },
+          ],
+        };
+      }
+      if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+        if (params.ExtraFilter?.includes('ver-a')) {
           return new Promise((resolve) => {
             resolveFirstDetailArtifact = resolve;
           });
@@ -717,10 +761,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     const runViewsSpy = vi.fn().mockResolvedValue([
       {
         Success: true,
-        Results: [
-          { ID: 'ver-a', ArtifactID: 'prod-a', VersionNumber: 1 },
-          { ID: 'ver-b', ArtifactID: 'prod-b', VersionNumber: 2 },
-        ],
+        Results: [],
       },
       {
         Success: true,
@@ -1175,25 +1216,36 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     } as unknown as BrandKitEngine);
 
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunView: vi.fn().mockResolvedValue({
-        Success: true,
-        Results: [
-          {
-            ID: 'prod-retry-1',
-            Name: 'Retry Production',
-            Description: '',
-            __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
-          },
-        ],
+      RunView: vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          return {
+            Success: true,
+            Results: [{ ID: 'ver-retry-1', ArtifactID: 'prod-retry-1', VersionNumber: 2 }],
+          };
+        }
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: 'prod-retry-1',
+                Name: 'Retry Production',
+                Description: '',
+                __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
+              },
+            ],
+          };
+        }
+        return { Success: true, Results: [] };
       }),
       RunViews: vi.fn().mockResolvedValue([
         {
           Success: true,
-          Results: [{ ID: 'ver-retry-1', ArtifactID: 'prod-retry-1', VersionNumber: 2 }],
+          Results: [{ ArtifactVersionID: 'ver-retry-1', Name: 'status', Value: 'Delivered' }],
         },
         {
           Success: true,
-          Results: [{ ArtifactVersionID: 'ver-retry-1', Name: 'status', Value: 'Delivered' }],
+          Results: [],
         },
       ]),
     } as unknown as RunView);
@@ -1229,6 +1281,4 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 });
-
-
 

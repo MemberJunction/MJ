@@ -36,9 +36,13 @@
         "realtime": {
           "directActions": {
             "enabled": true,
-            "timeoutMs": 5000,
+            "timeoutMs": 30000,
             "actionNames": [
-              "Search Query Catalog"
+              "Search Query Catalog",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -201,6 +205,46 @@
           "sync": {
             "lastModified": "2026-03-14T01:24:29.545Z",
             "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "15021DF3-622A-448D-870B-C18CF259943E"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE99E194-B41F-47C0-B89E-BD5C4D79A787"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2A1A6613-4FC8-4CC0-A800-B12AB90EA9C9"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8477D452-C25E-481B-9D87-BB3BD5DE6C24"
           }
         }
       ],
@@ -397,6 +441,26 @@
                   "lastModified": "2026-03-14T01:24:29.735Z",
                   "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6907EC0-02D6-48B5-B11B-34FE13764621"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Explore Database Schema",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E066FBBC-4268-4845-9E70-E64370E880DB"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [
@@ -477,10 +541,6 @@
     },
     "primaryKey": {
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
-    },
-    "sync": {
-      "lastModified": "2026-09-12T15:03:57.291Z",
-      "checksum": "5bdf225512d5c5af2254f2917b31b38e5d871abe7236c10854755abafadc0fe0"
     }
   }
 ]

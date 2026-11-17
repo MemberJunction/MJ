@@ -12,7 +12,7 @@ import type { UserInfo } from '@memberjunction/core';
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag' | 'graph' | 'SemanticGraph';
 
 /**
  * Discriminator for how a search result should be rendered in the UI.
@@ -43,6 +43,8 @@ export interface SearchScoreBreakdown {
     Storage?: number;
     /** Score from tag-weighted search */
     Tag?: number;
+    /** Score from semantic graph expansion */
+    Graph?: number;
     /**
      * Re-rank score from the optional re-ranker stage (post-RRF, pre-dedup).
      * When present, the top-level `Score` has been replaced by this value.
@@ -403,6 +405,9 @@ export interface FusionWeightsByProvider {
     fulltext?: number;
     entity?: number;
     storage?: number;
+    tag?: number;
+    graph?: number;
+    SemanticGraph?: number;
     /** Catch-all for 3rd-party / custom providers keyed by `SourceType` string. */
     [key: string]: number | undefined;
 }
@@ -453,6 +458,13 @@ export interface ScopeConstraints {
      * provider-specific knobs (e.g., vector namespace, route key).
      */
     ScopeConfig?: Record<string, unknown>;
+    /**
+     * The search's audience beyond the caller (`SearchParams.Audience`), set by the engine on every
+     * provider call when the audience adds a reader. The engine itself keeps only results every reader
+     * may read; a provider that TRAVERSES (`GraphSearchProvider`) must also apply it while it walks, so
+     * a result reachable only through something a reader cannot see is never produced.
+     */
+    AudienceReaders?: readonly UserInfo[];
 }
 
 /**
@@ -625,7 +637,7 @@ export type SearchStreamEvent =
         /** Post-deduplication, post-permission, post-enrich result set — what Search() would have returned. */
         results: SearchResultItem[];
         /** Same shape as the synchronous SearchResult.SourceCounts. */
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
         /** Total wall-clock duration of the stream. */
         elapsedMs: number;
     }
@@ -659,6 +671,7 @@ export interface SearchResult {
         Entity: number;
         Storage: number;
         Tag?: number;
+        Graph?: number;
     };
     /** Metadata for all active search providers (for UI filter facets and labels) */
     Providers: SearchProviderInfo[];

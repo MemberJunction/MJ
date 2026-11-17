@@ -47,6 +47,7 @@ vi.mock('@memberjunction/ai', () => ({}));
 // @memberjunction/ai-core-plus, which imports a NAMED export from @memberjunction/core-entities —
 // stubbed empty just above — so loading it fails collection before a single test runs.
 vi.mock('@memberjunction/ai-prompts', () => ({
+  EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
   AIEmbeddingRunner: class {
     async RunEmbedding() {
       return { Success: true, Vectors: [] };

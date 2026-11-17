@@ -139,6 +139,8 @@ export interface DecisionPromptRunRow {
     Cost: number | null;
     /** The answers the run recorded, as JSON. */
     Result: string | null;
+    /** Driver-specific details, including `{"ResolvedModel":"..."}` for calibration lookup and fitting. */
+    ModelSpecificResponseDetails: string | null;
 }
 
 /** One prompt run row, read past every cache. */
@@ -146,7 +148,7 @@ export async function ReadDecisionPromptRun(ctx: IntegrationCheckContext, id: st
     const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<DecisionPromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID='${EscapeSQLString(id)}'`,
-        Fields: ['ID', 'PromptID', 'ModelID', 'VendorID', 'Success', 'ErrorMessage', 'TokensPrompt', 'Cost', 'Result'],
+        Fields: ['ID', 'PromptID', 'ModelID', 'VendorID', 'Success', 'ErrorMessage', 'TokensPrompt', 'Cost', 'Result', 'ModelSpecificResponseDetails'],
         ResultType: 'simple',
         BypassCache: true,
     }, ctx.User);
