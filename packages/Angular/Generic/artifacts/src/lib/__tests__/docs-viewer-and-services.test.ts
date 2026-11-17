@@ -1789,11 +1789,28 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         }
         return Object.create(null);
       },
+      RunView: async (q: RunViewParams): Promise<RunViewResult> => {
+        if (q.EntityName === 'MJ: Conversation Detail Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              { ID: 'cda-1', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-1' },
+              { ID: 'cda-2', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-2' },
+              { ID: 'cda-999', ConversationDetailID: 'detail-other-branch', ArtifactVersionID: 'ver-out-of-scope-999' },
+            ],
+            RowCount: 3,
+            TotalRowCount: 3,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+      },
       RunViews: async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
         executedBatches.push(queries);
         return queries.map((q) => {
-          // Scoped version list query (lightweight fields, no Content)
-          if (q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
+          // Version list query (lightweight fields, no Content)
+          if (q.EntityName === 'MJ: Artifact Versions' && q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
             const v2Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
             Object.defineProperties(v2Scoped, {
               ID: { value: 'ver-2', enumerable: true },
@@ -1810,28 +1827,30 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
               Name: { value: 'Version 1', enumerable: true },
               Description: { value: 'v1 in scope', enumerable: true },
             });
+            const v999Off = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v999Off, {
+              ID: { value: 'ver-out-of-scope-999', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 999, enumerable: true },
+              Name: { value: 'Off-branch 999', enumerable: true },
+              Description: { value: 'v999 sibling branch', enumerable: true },
+            });
             return {
               Success: true,
-              Results: [v2Scoped, v1Scoped],
-              RowCount: 2,
-              TotalRowCount: 2,
+              Results: [v999Off, v2Scoped, v1Scoped],
+              RowCount: 3,
+              TotalRowCount: 3,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
           }
-          // ID-only query for all versions of artifact
-          if (q.Fields && q.Fields.length === 1 && q.Fields[0] === 'ID') {
-            const v1Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v1Id, { ID: { value: 'ver-1', enumerable: true } });
-            const v2Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v2Id, { ID: { value: 'ver-2', enumerable: true } });
-            const v999Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v999Id, { ID: { value: 'ver-out-of-scope-999', enumerable: true } });
+          // Scoped Conversation Details IDs query
+          if (q.EntityName === 'MJ: Conversation Details') {
             return {
               Success: true,
-              Results: [v1Id, v2Id, v999Id],
-              RowCount: 3,
-              TotalRowCount: 3,
+              Results: [{ ID: 'detail-on-path' }],
+              RowCount: 1,
+              TotalRowCount: 1,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
@@ -1899,21 +1918,19 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     const batch = executedBatches[0];
     expect(batch).toHaveLength(3);
 
-    const [scopedListQuery, allIdsQuery, singleVerQuery] = batch;
+    const [listQuery, detailsQuery, singleVerQuery] = batch;
 
-    // (a) Scoped list query has conversation scope filter, simple result type, and lightweight fields without Content
-    expect(scopedListQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(scopedListQuery.ResultType).toBe('simple');
-    expect(scopedListQuery.ExtraFilter).toBe(
-      ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
-    );
-    expect(scopedListQuery.Fields).toBeDefined();
-    expect(scopedListQuery.Fields).not.toContain('Content');
+    // (a) Unscoped lightweight list query (never uses vwConversationDetails base-view subquery)
+    expect(listQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(listQuery.ResultType).toBe('simple');
+    expect(listQuery.ExtraFilter).toBe(`ArtifactID='${artifactId}'`);
+    expect(listQuery.Fields).toBeDefined();
+    expect(listQuery.Fields).not.toContain('Content');
 
-    // (b) ID query for maintaining artifactVersionIds
-    expect(allIdsQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(allIdsQuery.Fields).toEqual(['ID']);
-    expect(allIdsQuery.ResultType).toBe('simple');
+    // (b) First-class MJ: Conversation Details query for branch scoping
+    expect(detailsQuery.EntityName).toBe('MJ: Conversation Details');
+    expect(detailsQuery.Fields).toEqual(['ID']);
+    expect(detailsQuery.ExtraFilter).toBe(ConversationEngine.ScopeFilter(scope));
 
     // (c) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
     expect(singleVerQuery.EntityName).toBe('MJ: Artifact Versions');

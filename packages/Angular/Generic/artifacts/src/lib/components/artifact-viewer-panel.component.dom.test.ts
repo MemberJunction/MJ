@@ -195,8 +195,8 @@ function versionsProvider(
       Success: false, Results: [], RowCount: 0, TotalRowCount: 0,
       ErrorMessage: "Invalid ExtraFilter: entity 'MJ: Artifact Versions' is row-level-security filtered for you",
     });
-  const readsVersionsBaseView = (p: RunViewParams) => /vwArtifactVersions/i.test(String(p.ExtraFilter ?? ''));
-  const isIdOnlyRead = (p: RunViewParams) => p.Fields?.length === 1 && p.Fields[0] === 'ID';
+  const readsProtectedBaseView = (p: RunViewParams) =>
+    /vwArtifactVersions|vwConversationDetails/i.test(String(p.ExtraFilter ?? ''));
   const fakeProvider = Object.assign(Object.create(null) as IMetadataProvider, {
     CurrentUser: { ID: 'test-user-id' },
     Entities: [],
@@ -204,11 +204,11 @@ function versionsProvider(
     EntityByName: () => undefined,
     RunView: async (p: RunViewParams) => {
       singles.push(p);
-      return options.ScreenBaseViewReads && readsVersionsBaseView(p) ? refused() : toResult([]);
+      return options.ScreenBaseViewReads && readsProtectedBaseView(p) ? refused() : toResult([]);
     },
     RunViews: async (list: RunViewParams[]) => {
       batches.push(list);
-      if (options.ScreenBaseViewReads && list.some(readsVersionsBaseView)) {
+      if (options.ScreenBaseViewReads && list.some(readsProtectedBaseView)) {
         return list.map(refused);
       }
       if (options.ThrowOnChildBatch && list.some((p) => p.EntityName === 'MJ: Collection Artifacts')) {
@@ -216,7 +216,10 @@ function versionsProvider(
       }
       return list.map((p) => {
         if (p.EntityName === 'MJ: Artifact Versions') {
-          return toResult(isIdOnlyRead(p) ? options.EveryVersion ?? rows : rows);
+          return toResult(options.EveryVersion ?? rows);
+        }
+        if (p.EntityName === 'MJ: Conversation Details') {
+          return toResult([{ ID: 'detail-1' }]);
         }
         return toResult(p.EntityName === 'MJ: Conversation Detail Artifacts' ? links : []);
       });
@@ -270,25 +273,40 @@ function dropdownLabels(f: ReturnType<typeof renderComponentFixture<ArtifactView
 }
 
 describe('ArtifactViewerPanelComponent — versions in a conversation scope', () => {
-  it('reads the version list with ArtifactVersionScopeFilter when a scope is set', async () => {
-    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+  it('reads versions with ArtifactID and scopes via first-class MJ: Conversation Details RunView without base-view subqueries', async () => {
+    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [], {
+      ScreenBaseViewReads: true,
+    });
     expect(Batches[0][0].EntityName).toBe('MJ: Artifact Versions');
-    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].EntityName).toBe('MJ: Conversation Details');
+    expect(Batches[0][1].ExtraFilter).toBe(ConversationEngine.ScopeFilter(SCOPE));
+    expect(Batches[0][1].Fields).toEqual(['ID']);
   });
 
   it('reads every version of the artifact without a scope', async () => {
     const { Batches } = await renderLoaded([1, 2, 3], { viewContext: 'conversation' });
+    expect(Batches[0]).toHaveLength(1);
     expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
   });
 
-  it('reads the collection and link rows of every version of the artifact, not only those on the path', async () => {
-    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [], { EveryVersion: versionRows([1, 2, 3, 4]) });
-    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Artifact Versions']);
-    expect(Batches[0][1].ExtraFilter).toBe("ArtifactID='a1'");
-    expect(Batches[0][1].Fields).toEqual(['ID']);
+  it('reads the collection and link rows of every version of the artifact, and filters out sibling-branch versions in memory', async () => {
+    const offBranchLink: LinkRow = {
+      ID: 'cda-off',
+      ConversationDetailID: 'other-branch-detail',
+      ArtifactVersionID: 'ver-3',
+      Direction: 'Output',
+    };
+    const { f, Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [offBranchLink], {
+      EveryVersion: versionRows([1, 2, 3, 4]),
+    });
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Conversation Details']);
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].ExtraFilter).toBe(ConversationEngine.ScopeFilter(SCOPE));
     expect(Batches[1].map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
     expect(Batches[1][0].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
     expect(Batches[1][1].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
+    expect(f.componentInstance.AllVersions.map((v) => v.ID)).toEqual(['ver-4', 'ver-2', 'ver-1']);
   });
 
   it('labels a version that follows a gap with the visible version before it', async () => {
@@ -342,7 +360,8 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     // An attachment's version is linked to its message with Direction='Input' only; the scoped read returns it.
     const inputLink: LinkRow = { ID: 'cda-1', ConversationDetailID: 'detail-1', ArtifactVersionID: 'ver-1', Direction: 'Input' };
     const { f, Batches } = await renderLoaded([1], { Scope: SCOPE, viewContext: 'conversation' }, 1, [inputLink]);
-    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].EntityName).toBe('MJ: Conversation Details');
     expect(f.componentInstance.error).toBeNull();
     expect(f.componentInstance.ScopeNotice).toBeNull();
     expect(f.componentInstance.SelectedVersionNumber).toBe(1);
@@ -351,8 +370,14 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).not.toContain("Couldn't load artifact");
   });
 
-  it('reports that no version is on the current path when the scoped read is empty', async () => {
-    const { f } = await renderLoaded([], { Scope: SCOPE, viewContext: 'conversation' }, 3);
+  it('reports that no version is on the current path when all versions belong to sibling branches', async () => {
+    const offBranchLink: LinkRow = {
+      ID: 'cda-off',
+      ConversationDetailID: 'other-branch-detail',
+      ArtifactVersionID: 'ver-3',
+      Direction: 'Output',
+    };
+    const { f } = await renderLoaded([3], { Scope: SCOPE, viewContext: 'conversation' }, 3, [offBranchLink]);
     expect(f.componentInstance.error).toBe('No version of this artifact is on the current path.');
     expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).toContain("Couldn't load artifact");
   });
