@@ -2098,6 +2098,7 @@ export class BaseAgent {
         }
 
         const materialized: string[] = [...existing];
+        const unconsumed: string[] = [];
         for (const token of pending) {
             const callback = this._deferredActionSpillovers.get(token);
             if (callback) {
@@ -2107,11 +2108,17 @@ export class BaseAgent {
                         materialized.push(id);
                     }
                 }
+            } else {
+                unconsumed.push(token);
             }
         }
 
         if (message?.metadata) {
-            delete message.metadata.pendingSpilloverIds;
+            if (unconsumed.length > 0) {
+                message.metadata.pendingSpilloverIds = unconsumed;
+            } else {
+                delete message.metadata.pendingSpilloverIds;
+            }
             if (materialized.length > 0) {
                 message.metadata.artifactIds = materialized;
             }
@@ -15291,7 +15298,11 @@ The context is now within limits. Please retry your request with the recovered c
 
         // The parent's history minus its runtime-state messages (see the doc comment): every mode
         // slices THIS, so no fragment reaches the sub-agent and none spends a MaxMessages slot.
-        const history = params.conversationMessages.filter(m => (m as AgentChatMessage).metadata?.volatileState !== true);
+        // Shallow-clone each copied message and its metadata so sub-agent turn expiration/compaction
+        // never mutates parent message metadata by shared reference.
+        const history = params.conversationMessages
+            .filter(m => (m as AgentChatMessage).metadata?.volatileState !== true)
+            .map(m => this.cloneMessageForSubAgent(m));
 
         // Apply message mode
         switch (messageMode) {
@@ -15360,6 +15371,27 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return messages;
+    }
+
+    /**
+     * Clones a conversation message and its metadata object (and handle arrays) before passing it
+     * across a sub-agent boundary so sub-agent lifecycle mutations never leak back to the parent.
+     */
+    private cloneMessageForSubAgent(msg: ChatMessage): ChatMessage {
+        const agentMsg = msg as AgentChatMessage;
+        if (!agentMsg.metadata) {
+            return { ...msg };
+        }
+        const meta = agentMsg.metadata;
+        const clonedMeta: AgentChatMessageMetadata = {
+            ...meta,
+            ...(meta.artifactIds ? { artifactIds: [...meta.artifactIds] } : {}),
+            ...(meta.pendingSpilloverIds ? { pendingSpilloverIds: [...meta.pendingSpilloverIds] } : {}),
+        };
+        return {
+            ...agentMsg,
+            metadata: clonedMeta,
+        };
     }
 
     /**
@@ -22508,8 +22540,11 @@ The context is now within limits. Please retry your request with the recovered c
                 ?? ActionEngineBase.Instance?.Actions?.find(a => a.Name?.trim().toLowerCase() === actionName.trim().toLowerCase());
 
             if (matchedAction) {
-                const resolved = this.ResolveActionExpirationConfig(matchedAction, params.agent.ID);
-                if (resolved && resolved.ExpirationMode !== 'None') {
+                const resolved = this.ResolveActionExpirationConfig(matchedAction, params.agent.ID, params);
+                if (resolved) {
+                    if (resolved.ExpirationMode === 'None') {
+                        return baseMetadata;
+                    }
                     return {
                         ...baseMetadata,
                         expirationTurns: resolved.ExpirationTurns,
@@ -23912,9 +23947,18 @@ The context is now within limits. Please retry your request with the recovered c
                         || '';
 
                     if (msg.role === 'tool') {
+                        const toolsEnabled = this.AreArtifactToolsEnabled(params);
+                        const artifactIds = toolsEnabled ? this.MaterializeDeferredActionSpillover(msg) : [];
+                        const artifactHint = toolsEnabled && artifactIds.length > 0 && this._artifactToolManager.HasArtifacts()
+                            ? ` Full output remains queryable via artifact tools on Artifact ${artifactIds.join(', ')}.`
+                            : '';
                         const compactedTurn = CompactToolResultContent(
                             msg,
-                            (t) => (t.length > compactLength ? `${t.slice(0, compactLength)}… [compacted from ${t.length} chars]` : t)
+                            (t) => TruncatePreservingUntrustedEnvelope(
+                                t,
+                                compactLength,
+                                (len) => `[compacted from ${len} chars${artifactHint ? `.${artifactHint}` : ''}]`
+                            )
                         );
                         const saved = Math.max(0, this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content));
                         messages[i] = {
