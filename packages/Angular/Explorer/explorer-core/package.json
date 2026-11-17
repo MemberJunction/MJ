@@ -38,6 +38,7 @@
     "@auth0/auth0-angular": "^2.6.0",
     "@memberjunction/ai-core-plus": "6.3.0-edge.0",
     "@memberjunction/ai-engine-base": "6.3.0-edge.0",
+    "@memberjunction/ai-vectors-memory": "6.3.0-edge.0",
     "@memberjunction/communication-types": "6.3.0-edge.0",
     "@memberjunction/conversations-runtime": "6.3.0-edge.0",
     "@memberjunction/core": "6.3.0-edge.0",

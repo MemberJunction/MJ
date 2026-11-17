@@ -4,9 +4,7 @@ import {
   Output,
   EventEmitter,
   OnInit,
-  OnChanges,
   OnDestroy,
-  SimpleChanges,
   ChangeDetectorRef,
   inject
 } from '@angular/core';
@@ -14,6 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { UserInfo, RunView } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -2219,8 +2218,12 @@ export interface WorkflowCommandCenterKPIs {
     }
   `]
 })
-export class TasksFullViewComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
+export class TasksFullViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef, { optional: true });
+  private inputsInitialized = false;
+  private _baseFilter = '1=1';
+  private _baseFilterResolver: (() => Promise<string>) | null = null;
+  private _activeTaskId: string | undefined;
 
   @Input() EnvironmentId!: string;
 
@@ -2242,7 +2245,16 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   get currentUser(): UserInfo {
     return this.CurrentUser;
   }
-  @Input() BaseFilter: string = '1=1';
+  @Input() set BaseFilter(value: string) {
+    const prev = this._baseFilter;
+    this._baseFilter = value;
+    if (this.inputsInitialized && value !== prev) {
+      this.LoadTasks();
+    }
+  }
+  get BaseFilter(): string {
+    return this._baseFilter;
+  }
 
   /** @deprecated Use {@link BaseFilter}. */
   @Input() set baseFilter(value: string) {
@@ -2257,8 +2269,31 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
    * Builds the task filter each time the view loads or refreshes, so the list includes tasks
    * created since the last load. Replaces {@link BaseFilter} when set.
    */
-  @Input() BaseFilterResolver: (() => Promise<string>) | null = null;
-  @Input() ActiveTaskId?: string;
+  @Input() set BaseFilterResolver(value: (() => Promise<string>) | null) {
+    const prev = this._baseFilterResolver;
+    this._baseFilterResolver = value;
+    if (this.inputsInitialized && value !== prev) {
+      this.LoadTasks();
+    }
+  }
+  get BaseFilterResolver(): (() => Promise<string>) | null {
+    return this._baseFilterResolver;
+  }
+
+  @Input() set ActiveTaskId(value: string | undefined) {
+    const prev = this._activeTaskId;
+    this._activeTaskId = value;
+    if (this.inputsInitialized && value !== prev) {
+      if (value) {
+        this.selectTaskById(value, false);
+      } else if (prev || this.InspectedGroup || this.SelectedTask) {
+        this.BackToTaskList(false);
+      }
+    }
+  }
+  get ActiveTaskId(): string | undefined {
+    return this._activeTaskId;
+  }
 
   /** @deprecated Use {@link ActiveTaskId}. */
   @Input() set activeTaskId(value: string | undefined) {
@@ -2390,27 +2425,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   private isDestroyed = false;
 
   ngOnInit(): void {
+    this.inputsInitialized = true;
     this.LoadTasks();
     this.setupLiveTaskGraphSubscription();
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    const filterChanged = (key: string) => !!changes[key] && !changes[key].firstChange;
-    if (filterChanged('baseFilter') || filterChanged('BaseFilter') || filterChanged('BaseFilterResolver')) {
-      this.LoadTasks();
-    }
-
-    const activeTaskChange = changes['activeTaskId'] || changes['ActiveTaskId'];
-    if (activeTaskChange) {
-      if (this.ActiveTaskId) {
-        this.selectTaskById(this.ActiveTaskId, false);
-      } else if (
-        !activeTaskChange.firstChange &&
-        (activeTaskChange.previousValue || this.InspectedGroup || this.SelectedTask)
-      ) {
-        this.BackToTaskList(false);
-      }
-    }
   }
 
   ngOnDestroy(): void {
@@ -3070,14 +3087,22 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     return this.OnOpenEntityRecord(event);
   }
 
-  public CopyStepOutput(output: string): void {
+  public async CopyStepOutput(output: string): Promise<void> {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(output);
-      this.CopiedOutput = true;
-      setTimeout(() => {
-        this.CopiedOutput = false;
-        this.cdr?.markForCheck();
-      }, 1800);
+      try {
+        await navigator.clipboard.writeText(output);
+        this.CopiedOutput = true;
+        setTimeout(() => {
+          this.CopiedOutput = false;
+          this.cdr?.markForCheck();
+        }, 1800);
+      } catch {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Failed to copy output to clipboard.',
+          'error',
+          3000,
+        );
+      }
     }
   }
 

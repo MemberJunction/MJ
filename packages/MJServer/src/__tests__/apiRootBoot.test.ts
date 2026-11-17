@@ -45,6 +45,7 @@ vi.mock('../auth/AuthProviderCatalogRouter.js', () => ({ CreateAuthProviderCatal
 vi.mock('../auth/magicLink/index.js', () => ({
     CreateMagicLinkHandler: stubHandler,
     CreateMagicLinkJwksRouter: stubRouter,
+    MagicLinkService: { SetActiveInstance: () => undefined, GetActiveInstance: () => null },
     RegisterMagicLinkAuthProvider: () => undefined,
     MAGIC_LINK_MOUNT_PATH: '/magic-link',
 }));

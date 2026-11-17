@@ -1,4 +1,5 @@
 import * as vm from 'node:vm';
+import { MJGlobal } from '@memberjunction/global';
 import {
     GetSafeRegexBatchSandboxExecutor,
     GetSafeRegexSandboxExecutor,
@@ -48,6 +49,10 @@ function isVmTimeoutError(err: Error | { code?: string; message?: string } | str
 }
 
 export function EnsureNodeVmSafeRegexExecutorRegistered(): void {
+    // Minimal unit-test mocks of MJGlobal omit GetGlobalObjectStore; skip eager module-load registration there.
+    if (typeof MJGlobal.Instance?.GetGlobalObjectStore !== 'function') {
+        return;
+    }
     if (!GetSafeRegexSandboxExecutor()) {
         RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
             regex.lastIndex = 0;

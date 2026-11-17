@@ -1,17 +1,27 @@
 import { Injectable, inject } from '@angular/core';
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RemoteOpProgress, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  ArtifactPermissionEngine,
+  ArtifactSynthesisTargetKind,
+  BuildArtifactVersionConfigurationWithPreview,
+  ConnectedDriveLinkMetadata,
+  GetConnectedDriveLinkFromConfig,
+  MergeConnectedDriveLinkIntoConfig,
   MJArtifactEntity,
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
+  MJAuditLogEntity,
+  MJAuditLogTypeEntity,
   MJCollectionArtifactEntity,
   MJCollectionEntity,
   MJEnvironmentEntityExtended,
   SlideDeckEngine,
   SpreadsheetEngine,
+  SynthesizeArtifactFromSourcesInput,
+  SynthesizeArtifactFromSourcesOperation,
 } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { ArtifactFileService, DocumentImportExportService, SlideDeckExportService } from '@memberjunction/ng-artifacts';
 import { CollectionPermissionService } from './collection-permission.service';
@@ -47,6 +57,28 @@ export class RemoteDriveFileExistsError extends Error {
     super(`A file named "${fileName}" already exists at "${objectPath}".`);
     this.name = 'RemoteDriveFileExistsError';
     this.ObjectPath = objectPath;
+  }
+}
+
+/**
+ * Thrown by {@link LibraryCreationService.PushVersionToConnectedDrive} when the remote file ETag
+ * changed since the last sync and `ForceOverwrite` is false.
+ */
+export class RemoteDriveConflictError extends Error {
+  public readonly ObjectPath: string;
+  public readonly ExpectedETag?: string;
+  public readonly ActualETag?: string;
+
+  public constructor(objectPath: string, expectedETag?: string, actualETag?: string) {
+    super(
+      `Remote file "${objectPath}" has changed on Connected Drive since last sync` +
+        (expectedETag && actualETag ? ` (expected ETag "${expectedETag}", found "${actualETag}")` : '') +
+        '. Pull latest or confirm overwrite.',
+    );
+    this.name = 'RemoteDriveConflictError';
+    this.ObjectPath = objectPath;
+    this.ExpectedETag = expectedETag;
+    this.ActualETag = actualETag;
   }
 }
 
@@ -92,13 +124,69 @@ export interface ConvertRemoteDriveObjectOptions {
   AccountID: string;
   ObjectPath: string;
   FileName: string;
+  ProviderType?: string;
+  FolderID?: string;
+  WebUrl?: string;
+  ETag?: string;
+  RemoteModifiedAt?: string;
   Title?: string;
   CollectionID?: string | null;
   EnvironmentID?: string;
   CurrentUser: UserInfo;
   Provider?: IMetadataProvider;
-  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthDownloadUrl'>;
+  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthDownloadUrl'> &
+    Partial<Pick<GraphQLFileStorageClient, 'ListObjects'>>;
   FetchBytesOverride?: (url: string) => Promise<ArrayBuffer>;
+}
+
+export interface PushVersionToConnectedDriveOptions {
+  ArtifactID: string;
+  VersionID?: string | null;
+  AccountID?: string;
+  ObjectPath?: string;
+  Format?: LibraryDriveExportFormat;
+  ForceOverwrite?: boolean;
+  CurrentUser: UserInfo;
+  Provider?: IMetadataProvider;
+  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'> &
+    Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists' | 'SearchFiles'>>;
+  UploadBytesOverride?: (uploadUrl: string, bytes: Uint8Array, mimeType: string) => Promise<void>;
+  DownloadFileBytesOverride?: (params: {
+    ArtifactVersionID?: string | null;
+    FileID?: string | null;
+  }) => Promise<Uint8Array>;
+}
+
+export interface PushVersionToConnectedDriveResult {
+  ArtifactID: string;
+  VersionID: string;
+  VersionNumber: number;
+  ObjectPath: string;
+  ByteLength: number;
+  ETag?: string;
+  UpdatedConfiguration: string;
+}
+
+export interface PullConnectedDriveVersionOptions {
+  ArtifactID: string;
+  VersionID?: string | null;
+  AccountID?: string;
+  ObjectPath?: string;
+  CurrentUser: UserInfo;
+  Provider?: IMetadataProvider;
+  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthDownloadUrl'> &
+    Partial<Pick<GraphQLFileStorageClient, 'ListObjects'>>;
+  FetchBytesOverride?: (url: string) => Promise<ArrayBuffer>;
+}
+
+export interface PullConnectedDriveVersionResult {
+  ArtifactID: string;
+  PreviousVersionNumber: number;
+  NewVersionID: string;
+  NewVersionNumber: number;
+  ObjectPath: string;
+  ETag?: string;
+  UpdatedConfiguration: string;
 }
 
 export interface PublishToConnectedDriveOptions {
@@ -124,6 +212,34 @@ export interface PublishToConnectedDriveOptions {
     ArtifactVersionID?: string | null;
     FileID?: string | null;
   }) => Promise<Uint8Array>;
+}
+
+export interface SynthesizeArtifactFromSourcesOptions {
+  TargetKind: ArtifactSynthesisTargetKind;
+  Goal: string;
+  SourceArtifactIds: ReadonlyArray<string>;
+  CollectionID?: string | null;
+  Title?: string | null;
+  AgentHandle?: string | null;
+  LinkChartsAndRanges?: boolean;
+  CurrentUser: UserInfo;
+  Provider?: IMetadataProvider;
+  OnProgress?: (progress: RemoteOpProgress) => void;
+}
+
+export interface SynthesizeArtifactFromSourcesResult {
+  Success: boolean;
+  AccessDenied?: boolean;
+  ErrorMessage?: string;
+  ArtifactID: string;
+  VersionID: string;
+  VersionNumber: number;
+  Title: string;
+  ArtifactTypeName: string;
+  LinkedChartCount: number;
+  SourceCount: number;
+  Warnings: string[];
+  UsedFallback: boolean;
 }
 
 export interface CreatedLibraryArtifactResult {
@@ -274,8 +390,9 @@ export class LibraryCreationService {
           '-- Author your analytical SQL query below',
           'SELECT TOP 25',
           '    Name,',
+          '    SchemaName,',
           '    __mj_UpdatedAt',
-          'FROM [__mj].[vwArtifacts]',
+          'FROM [__mj].[vwEntities]',
           'ORDER BY __mj_UpdatedAt DESC;',
         ].join('\n');
 
@@ -363,6 +480,10 @@ export class LibraryCreationService {
     options: ImportLocalFileOptions,
   ): Promise<CreatedLibraryArtifactResult> {
     const md = options.Provider ?? Metadata.Provider;
+    if (options.CollectionID) {
+      await this.assertCanWriteCollection(options.CollectionID, options.CurrentUser, md);
+    }
+
     const types = await this.LoadEnabledArtifactTypes(options.CurrentUser, md);
     const ext = this.extractExtension(options.File.name);
     const defaultTitle = options.Title?.trim() || this.stripExtension(options.File.name) || 'Uploaded File';
@@ -387,10 +508,15 @@ export class LibraryCreationService {
       });
     }
 
+    const mimeType = options.File.type || this.inferMimeFromExtension(ext);
+    const fileType = this.resolveBinaryArtifactType(mimeType, ext, types);
+    if (!fileType) {
+      throw new Error(`No Artifact Type is available for MIME type "${mimeType}".`);
+    }
+
     // Binary file path: upload bytes to MJ Storage (creates governed MJ: Files record for Native Library)
     const buffer = await options.File.arrayBuffer();
     const base64Data = this.arrayBufferToBase64(buffer);
-    const mimeType = options.File.type || this.inferMimeFromExtension(ext);
     const store = this.blobStoreOverride ?? new GraphQLAttachmentBlobStore();
     const uploadResult = await store.Upload(
       {
@@ -404,11 +530,6 @@ export class LibraryCreationService {
 
     if (!uploadResult.Success || !uploadResult.FileID) {
       throw new Error(uploadResult.Error || `Failed to upload "${options.File.name}" to MJ Storage.`);
-    }
-
-    const fileType = this.resolveBinaryArtifactType(mimeType, ext, types);
-    if (!fileType) {
-      throw new Error(`No Artifact Type is available for MIME type "${mimeType}".`);
     }
 
     return this.persistArtifactAndVersion({
@@ -438,6 +559,9 @@ export class LibraryCreationService {
     options: ConvertRemoteDriveObjectOptions,
   ): Promise<CreatedLibraryArtifactResult> {
     const md = options.Provider ?? Metadata.Provider;
+    if (options.CollectionID) {
+      await this.assertCanWriteCollection(options.CollectionID, options.CurrentUser, md);
+    }
     const ext = this.extractExtension(options.FileName);
     if (!CONVERTIBLE_EXTENSIONS.has(ext)) {
       throw new Error(
@@ -464,6 +588,22 @@ export class LibraryCreationService {
     const cleanTitle = options.Title?.trim() || this.stripExtension(options.FileName) || 'Imported Copy';
     const converted = await this.convertBytesToNativeText(buffer, ext, cleanTitle, types);
 
+    const driveLinkMeta: ConnectedDriveLinkMetadata = {
+      ExternalFileID: options.ObjectPath,
+      ProviderType: options.ProviderType ?? 'ConnectedDrive',
+      ProviderIntegrationID: options.AccountID,
+      FolderID: options.FolderID,
+      FileName: options.FileName,
+      WebUrl: options.WebUrl,
+      MimeType: converted.ArtifactType.ContentType || this.inferMimeFromExtension(ext),
+      ETag: options.ETag,
+      RemoteModifiedAt: options.RemoteModifiedAt,
+      SyncedVersionNumber: 1,
+      LastSyncedAt: new Date().toISOString(),
+      LastSyncDirection: 'pull',
+      LastSyncedByUserID: options.CurrentUser.ID,
+    };
+
     return this.persistArtifactAndVersion({
       Title: cleanTitle,
       Description: `Editable copy imported from Connected Drive (${options.ObjectPath})`,
@@ -478,7 +618,328 @@ export class LibraryCreationService {
       EnvironmentID: options.EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID,
       CurrentUser: options.CurrentUser,
       Provider: md,
+      InitialConfigurationJson: MergeConnectedDriveLinkIntoConfig(null, driveLinkMeta),
     });
+  }
+
+  /**
+   * 1-Click Connected Drive Round-Trip Push (§6.1): serializes the current artifact version
+   * back to its linked Connected Drive path after verifying the remote ETag has not drifted
+   * (zero `MJ: Files` rows created).
+   */
+  public async PushVersionToConnectedDrive(
+    options: PushVersionToConnectedDriveOptions,
+  ): Promise<PushVersionToConnectedDriveResult> {
+    const md = options.Provider ?? Metadata.Provider;
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', options.CurrentUser);
+    if (!(await artifact.Load(options.ArtifactID))) {
+      throw new Error(`Artifact "${options.ArtifactID}" was not found.`);
+    }
+
+    const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      md,
+      artifact.ID,
+      options.CurrentUser,
+    );
+    if (!permissions.CanEdit) {
+      throw new Error(`Permission denied: you do not have Edit access to "${artifact.Name}".`);
+    }
+
+    const versions = await this.loadArtifactVersionsDesc(artifact.ID, options.CurrentUser, md);
+    const targetVersion =
+      (options.VersionID ? versions.find((v) => UUIDsEqual(v.ID, options.VersionID)) : undefined) ??
+      versions[0];
+    if (!targetVersion) {
+      throw new Error(`No versions found for artifact "${artifact.Name}".`);
+    }
+
+    const existingLink = GetConnectedDriveLinkFromConfig(targetVersion.Configuration);
+    const accountId = options.AccountID || existingLink?.ProviderIntegrationID;
+    const objectPath = options.ObjectPath || existingLink?.ExternalFileID;
+    if (!accountId || !objectPath) {
+      throw new Error('This artifact version is not linked to a Connected Drive destination.');
+    }
+
+    const storageClient =
+      options.StorageClientOverride ?? this.createGraphQLFileStorageClient(md);
+    const mustVerifyEtag = !options.ForceOverwrite && Boolean(existingLink?.ETag);
+    const remoteBefore = await this.findRemoteObjectMetadata(storageClient, accountId, objectPath, {
+      throwOnError: mustVerifyEtag,
+    });
+    if (
+      !options.ForceOverwrite &&
+      existingLink?.ETag &&
+      remoteBefore?.ETag &&
+      remoteBefore.ETag !== existingLink.ETag
+    ) {
+      throw new RemoteDriveConflictError(objectPath, existingLink.ETag, remoteBefore.ETag);
+    }
+
+    const { prefix, fileName } = this.splitObjectPath(objectPath);
+    const format =
+      options.Format ??
+      this.inferExportFormat(
+        fileName,
+        targetVersion.ContentMode,
+        targetVersion.Content,
+      );
+
+    const published = await this.PublishArtifactVersionToConnectedDrive({
+      ArtifactName: artifact.Name,
+      VersionContent: targetVersion.Content ?? '',
+      VersionConfiguration: targetVersion.Configuration ?? null,
+      VersionContentMode: targetVersion.ContentMode,
+      ArtifactVersionID: targetVersion.ID,
+      VersionFileID: targetVersion.FileID ?? null,
+      VersionMimeType: targetVersion.MimeType ?? null,
+      VersionFileName: targetVersion.FileName ?? fileName,
+      Format: format,
+      AccountID: accountId,
+      TargetFolderPrefix: prefix,
+      TargetFileName: fileName,
+      AllowOverwrite: true,
+      CurrentUser: options.CurrentUser,
+      Provider: md,
+      StorageClientOverride: storageClient,
+      UploadBytesOverride: options.UploadBytesOverride,
+      DownloadFileBytesOverride: options.DownloadFileBytesOverride,
+    });
+
+    const remoteAfter = await this.findRemoteObjectMetadata(storageClient, accountId, published.ObjectPath);
+    const nextETag = remoteAfter?.ETag ?? existingLink?.ETag;
+    const nextLink: ConnectedDriveLinkMetadata = {
+      ...(existingLink ?? {
+        ExternalFileID: published.ObjectPath,
+        ProviderType: 'ConnectedDrive',
+        ProviderIntegrationID: accountId,
+      }),
+      ExternalFileID: published.ObjectPath,
+      ProviderIntegrationID: accountId,
+      FileName: fileName,
+      MimeType: published.MimeType,
+      ETag: nextETag,
+      RemoteModifiedAt: remoteAfter?.LastModified ?? new Date().toISOString(),
+      SyncedVersionNumber: targetVersion.VersionNumber,
+      LastSyncedAt: new Date().toISOString(),
+      LastSyncDirection: 'push',
+      LastSyncedByUserID: options.CurrentUser.ID,
+    };
+
+    const updatedConfig = MergeConnectedDriveLinkIntoConfig(targetVersion.Configuration, nextLink);
+    targetVersion.Configuration = updatedConfig;
+    if (!(await targetVersion.Save())) {
+      throw new Error(targetVersion.LatestResult?.Message || 'Failed to update Connected Drive sync metadata.');
+    }
+
+    await this.recordConnectedDriveAuditLog({
+      Direction: 'push',
+      ArtifactID: artifact.ID,
+      VersionID: targetVersion.ID,
+      VersionNumber: targetVersion.VersionNumber,
+      ObjectPath: published.ObjectPath,
+      ETag: nextETag,
+      CurrentUser: options.CurrentUser,
+      Provider: md,
+    });
+
+    return {
+      ArtifactID: artifact.ID,
+      VersionID: targetVersion.ID,
+      VersionNumber: targetVersion.VersionNumber,
+      ObjectPath: published.ObjectPath,
+      ByteLength: published.ByteLength,
+      ETag: nextETag,
+      UpdatedConfiguration: updatedConfig,
+    };
+  }
+
+  /**
+   * 1-Click Connected Drive Round-Trip Pull (§6.1): downloads the latest remote bytes
+   * from a linked Connected Drive file and creates `vN+1` in MJ Library without creating
+   * any `MJ: Files` row, returning version numbers so the host can open the diff view.
+   */
+  public async PullLatestFromConnectedDriveAsNewVersion(
+    options: PullConnectedDriveVersionOptions,
+  ): Promise<PullConnectedDriveVersionResult> {
+    const md = options.Provider ?? Metadata.Provider;
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', options.CurrentUser);
+    if (!(await artifact.Load(options.ArtifactID))) {
+      throw new Error(`Artifact "${options.ArtifactID}" was not found.`);
+    }
+
+    const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      md,
+      artifact.ID,
+      options.CurrentUser,
+    );
+    if (!permissions.CanEdit) {
+      throw new Error(`Permission denied: you do not have Edit access to "${artifact.Name}".`);
+    }
+
+    const versions = await this.loadArtifactVersionsDesc(artifact.ID, options.CurrentUser, md);
+    const latestVersion = versions[0];
+    const requestedVersion =
+      (options.VersionID ? versions.find((v) => UUIDsEqual(v.ID, options.VersionID)) : undefined) ??
+      latestVersion;
+    if (!requestedVersion || !latestVersion) {
+      throw new Error(`No versions found for artifact "${artifact.Name}".`);
+    }
+
+    const existingLink = GetConnectedDriveLinkFromConfig(requestedVersion.Configuration);
+    const accountId = options.AccountID || existingLink?.ProviderIntegrationID;
+    const objectPath = options.ObjectPath || existingLink?.ExternalFileID;
+    if (!accountId || !objectPath) {
+      throw new Error('This artifact version is not linked to a Connected Drive source.');
+    }
+
+    const storageClient =
+      options.StorageClientOverride ?? this.createGraphQLFileStorageClient(md);
+    const remoteMeta = await this.findRemoteObjectMetadata(storageClient, accountId, objectPath);
+    const downloadUrl = await storageClient.CreatePreAuthDownloadUrl(accountId, objectPath);
+    const fetchBytes =
+      options.FetchBytesOverride ??
+      (async (url: string): Promise<ArrayBuffer> => {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          throw new Error(`Failed to read remote file (${resp.status} ${resp.statusText}).`);
+        }
+        return resp.arrayBuffer();
+      });
+
+    const buffer = await fetchBytes(downloadUrl);
+    const { fileName } = this.splitObjectPath(objectPath);
+    const effectiveFileName = existingLink?.FileName || fileName;
+    const ext = this.extractExtension(effectiveFileName);
+    if (!CONVERTIBLE_EXTENSIONS.has(ext)) {
+      throw new Error(
+        `Cannot pull "${effectiveFileName}" into an editable native version (unsupported extension ".${ext}").`,
+      );
+    }
+
+    const types = await this.LoadEnabledArtifactTypes(options.CurrentUser, md);
+    const converted = await this.convertBytesToNativeText(buffer, ext, artifact.Name, types);
+    const previousVersionNumber = requestedVersion.VersionNumber;
+    const nextVersionNumber = (latestVersion.VersionNumber ?? 0) + 1;
+
+    const nextLink: ConnectedDriveLinkMetadata = {
+      ...(existingLink ?? {
+        ExternalFileID: objectPath,
+        ProviderType: 'ConnectedDrive',
+        ProviderIntegrationID: accountId,
+      }),
+      ExternalFileID: objectPath,
+      ProviderIntegrationID: accountId,
+      FileName: effectiveFileName,
+      ETag: remoteMeta?.ETag ?? existingLink?.ETag,
+      RemoteModifiedAt: remoteMeta?.LastModified ?? new Date().toISOString(),
+      SyncedVersionNumber: nextVersionNumber,
+      LastSyncedAt: new Date().toISOString(),
+      LastSyncDirection: 'pull',
+      LastSyncedByUserID: options.CurrentUser.ID,
+    };
+
+    const baseConfig = MergeConnectedDriveLinkIntoConfig(requestedVersion.Configuration, nextLink);
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? types;
+    const nextConfig =
+      BuildArtifactVersionConfigurationWithPreview(
+        baseConfig,
+        converted.Content,
+        converted.ArtifactType.DriverClass ?? null,
+        artifact.Name,
+        {
+          ArtifactType: converted.ArtifactType,
+          AllArtifactTypes: allTypes,
+        },
+      ) ?? baseConfig;
+
+    const newVersion = await md.GetEntityObject<MJArtifactVersionEntity>(
+      'MJ: Artifact Versions',
+      options.CurrentUser,
+    );
+    newVersion.ArtifactID = artifact.ID;
+    newVersion.VersionNumber = nextVersionNumber;
+    newVersion.Name = artifact.Name;
+    newVersion.Description = `Pulled latest from Connected Drive (${objectPath})`;
+    newVersion.UserID = options.CurrentUser.ID;
+    newVersion.ContentMode = 'Text';
+    newVersion.Content = converted.Content;
+    newVersion.FileID = null;
+    newVersion.MimeType = converted.ArtifactType.ContentType || requestedVersion.MimeType || null;
+    newVersion.FileName = effectiveFileName;
+    newVersion.ContentSizeBytes = new TextEncoder().encode(converted.Content).byteLength;
+    newVersion.Configuration = nextConfig;
+
+    if (!(await newVersion.Save())) {
+      throw new Error(newVersion.LatestResult?.Message || 'Failed to save pulled Connected Drive version.');
+    }
+
+    await this.recordConnectedDriveAuditLog({
+      Direction: 'pull',
+      ArtifactID: artifact.ID,
+      VersionID: newVersion.ID,
+      VersionNumber: nextVersionNumber,
+      ObjectPath: objectPath,
+      ETag: nextLink.ETag,
+      CurrentUser: options.CurrentUser,
+      Provider: md,
+    });
+
+    return {
+      ArtifactID: artifact.ID,
+      PreviousVersionNumber: previousVersionNumber,
+      NewVersionID: newVersion.ID,
+      NewVersionNumber: nextVersionNumber,
+      ObjectPath: objectPath,
+      ETag: nextLink.ETag,
+      UpdatedConfiguration: nextConfig,
+    };
+  }
+
+  /**
+   * Executes the `Artifact.SynthesizeFromSources` remote operation (`SynthesizeArtifactFromSourcesOperation`)
+   * to read multiple governed artifacts, synthesize a brand-new `Presentation`, `Markdown Document`, or
+   * `Excel Spreadsheet` with live chart/range links, enforce `CanRead` / `CanEdit` permissions, stream
+   * progress updates, and save v1.
+   */
+  public async SynthesizeArtifactFromSources(
+    options: SynthesizeArtifactFromSourcesOptions,
+  ): Promise<SynthesizeArtifactFromSourcesResult> {
+    const op = new SynthesizeArtifactFromSourcesOperation();
+    const opInput: SynthesizeArtifactFromSourcesInput = {
+      TargetKind: options.TargetKind,
+      Goal: options.Goal,
+      SourceArtifactIds: Array.from(options.SourceArtifactIds),
+      CollectionId: options.CollectionID || null,
+      Title: options.Title?.trim() || null,
+      AgentHandle: options.AgentHandle?.trim() || null,
+      LinkChartsAndRanges: options.LinkChartsAndRanges !== false,
+    };
+
+    const result = await op.Execute(opInput, {
+      provider: options.Provider ?? GraphQLDataProvider.Instance,
+      mode: 'attached',
+      onProgress: options.OnProgress,
+    });
+
+    if (!result.Success || !result.Output?.ArtifactID) {
+      throw new Error(result.ErrorMessage || 'Artifact synthesis failed.');
+    }
+
+    const payload = result.Output;
+    return {
+      Success: true,
+      AccessDenied: result.ResultCode === 'ACCESS_DENIED' || result.ResultCode === 'FORBIDDEN',
+      ErrorMessage: result.ErrorMessage,
+      ArtifactID: payload.ArtifactID,
+      VersionID: payload.VersionID ?? '',
+      VersionNumber: payload.VersionNumber ?? 1,
+      Title: payload.Title ?? options.Title?.trim() ?? 'Synthesized Artifact',
+      ArtifactTypeName: payload.ArtifactTypeName ?? 'Presentation',
+      LinkedChartCount: payload.LinkedChartCount ?? 0,
+      SourceCount: payload.SourceCount ?? options.SourceArtifactIds.length,
+      Warnings: Array.isArray(payload.Warnings) ? payload.Warnings : [],
+      UsedFallback: Boolean(payload.UsedFallback),
+    };
   }
 
   /**
@@ -524,11 +985,22 @@ export class LibraryCreationService {
       options.TargetFileName?.trim() ||
       (isFileMode && options.VersionFileName ? this.stripExtension(options.VersionFileName) : '') ||
       this.sanitizeFileName(options.ArtifactName);
-    const baseFileName = extension
-      ? rawBaseName.replace(new RegExp(`\\.${extension}$`, 'i'), '')
-      : rawBaseName;
+    const cleanExt = extension ? `.${extension.toLowerCase()}` : '';
+    const baseFileName =
+      cleanExt && rawBaseName.toLowerCase().endsWith(cleanExt)
+        ? rawBaseName.slice(0, rawBaseName.length - cleanExt.length)
+        : rawBaseName;
     const finalFileName = extension ? `${baseFileName}.${extension}` : baseFileName;
-    const cleanPrefix = (options.TargetFolderPrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const rawPrefix = options.TargetFolderPrefix ?? '';
+    let prefixStart = 0;
+    while (prefixStart < rawPrefix.length && rawPrefix[prefixStart] === '/') {
+      prefixStart++;
+    }
+    let prefixEnd = rawPrefix.length;
+    while (prefixEnd > prefixStart && rawPrefix[prefixEnd - 1] === '/') {
+      prefixEnd--;
+    }
+    const cleanPrefix = rawPrefix.slice(prefixStart, prefixEnd);
     const objectPath = cleanPrefix ? `${cleanPrefix}/${finalFileName}` : finalFileName;
 
     const storageClient =
@@ -643,6 +1115,7 @@ export class LibraryCreationService {
     EnvironmentID: string;
     CurrentUser: UserInfo;
     Provider: IMetadataProvider;
+    InitialConfigurationJson?: string | null;
   }): Promise<CreatedLibraryArtifactResult> {
     const { Provider: md, CurrentUser: user } = params;
 
@@ -674,6 +1147,19 @@ export class LibraryCreationService {
     version.MimeType = params.MimeType;
     version.FileName = params.FileName;
     version.ContentSizeBytes = params.ContentSizeBytes;
+    const initialConfig = BuildArtifactVersionConfigurationWithPreview(
+      params.InitialConfigurationJson ?? null,
+      params.Content,
+      params.ArtifactType?.DriverClass ?? null,
+      params.Title,
+      {
+        ArtifactType: params.ArtifactType ?? null,
+        AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? [],
+      },
+    );
+    if (initialConfig) {
+      version.Configuration = initialConfig;
+    }
 
     const versionSaved = await version.Save();
     if (!versionSaved) {
@@ -1090,5 +1576,157 @@ export class LibraryCreationService {
       chunks.push(String.fromCharCode(...slice));
     }
     return btoa(chunks.join(''));
+  }
+
+  private async loadArtifactVersionsDesc(
+    artifactId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<MJArtifactVersionEntity[]> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const res = await rv.RunView<MJArtifactVersionEntity>(
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+        OrderBy: 'VersionNumber DESC',
+        ResultType: 'entity_object',
+      },
+      user,
+    );
+    return res.Success && res.Results ? res.Results : [];
+  }
+
+  private splitObjectPath(objectPath: string): { prefix: string; fileName: string } {
+    const normalized = objectPath.replace(/^\/+/, '');
+    const slash = normalized.lastIndexOf('/');
+    if (slash < 0) {
+      return { prefix: '', fileName: normalized };
+    }
+    return {
+      prefix: normalized.slice(0, slash),
+      fileName: normalized.slice(slash + 1),
+    };
+  }
+
+  private inferExportFormat(
+    fileName: string,
+    contentMode: MJArtifactVersionEntity['ContentMode'],
+    content: string | null | undefined,
+  ): LibraryDriveExportFormat {
+    const ext = this.extractExtension(fileName);
+    if (ext === 'docx' || ext === 'md' || ext === 'xlsx' || ext === 'csv' || ext === 'pptx' || ext === 'json' || ext === 'sql' || ext === 'txt') {
+      return ext;
+    }
+    if (contentMode === 'File') {
+      return 'original';
+    }
+    const trimmed = (content ?? '').trim();
+    if (trimmed.startsWith('{') && trimmed.includes('"sheets"')) {
+      return 'xlsx';
+    }
+    if (trimmed.startsWith('{') && trimmed.includes('"slides"')) {
+      return 'pptx';
+    }
+    return 'md';
+  }
+
+  private async findRemoteObjectMetadata(
+    storageClient: Partial<Pick<GraphQLFileStorageClient, 'ListObjects'>>,
+    accountId: string,
+    objectPath: string,
+    options?: { throwOnError?: boolean },
+  ): Promise<{ ETag?: string; LastModified?: string } | null> {
+    if (typeof storageClient.ListObjects !== 'function') {
+      return null;
+    }
+    const normalizedPath = objectPath.replace(/^\/+/, '');
+    const { prefix, fileName } = this.splitObjectPath(normalizedPath);
+    const folderPrefix = prefix ? `${prefix}/` : '';
+    const prefixesToProbe =
+      normalizedPath && normalizedPath !== folderPrefix
+        ? [normalizedPath, folderPrefix]
+        : [folderPrefix];
+
+    let lastError: Error | null = null;
+    let succeededOnce = false;
+    for (const probePrefix of prefixesToProbe) {
+      try {
+        const listing = await storageClient.ListObjects(accountId, probePrefix, '/');
+        succeededOnce = true;
+        const match = (listing.objects ?? []).find(
+          (obj) =>
+            !obj.isDirectory &&
+            (obj.fullPath.replace(/^\/+/, '').toLowerCase() === normalizedPath.toLowerCase() ||
+              obj.name.toLowerCase() === fileName.toLowerCase()),
+        );
+        if (match) {
+          return {
+            ETag: match.etag || undefined,
+            LastModified:
+              match.lastModified instanceof Date
+                ? match.lastModified.toISOString()
+                : typeof match.lastModified === 'string'
+                  ? match.lastModified
+                  : undefined,
+          };
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+
+    if (!succeededOnce && lastError && options?.throwOnError) {
+      throw lastError;
+    }
+    return null;
+  }
+
+  private async recordConnectedDriveAuditLog(params: {
+    Direction: 'push' | 'pull';
+    ArtifactID: string;
+    VersionID: string;
+    VersionNumber: number;
+    ObjectPath: string;
+    ETag?: string;
+    CurrentUser: UserInfo;
+    Provider: IMetadataProvider;
+  }): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(params.Provider);
+      const typeRes = await rv.RunView<MJAuditLogTypeEntity>(
+        {
+          EntityName: 'MJ: Audit Log Types',
+          ExtraFilter: `Name='Artifact Connected Drive Sync'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        params.CurrentUser,
+      );
+      const auditTypeId = typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
+      if (!auditTypeId) {
+        return;
+      }
+      const log = await params.Provider.GetEntityObject<MJAuditLogEntity>(
+        'MJ: Audit Logs',
+        params.CurrentUser,
+      );
+      log.AuditLogTypeID = auditTypeId;
+      log.UserID = params.CurrentUser.ID;
+      log.Status = 'Success';
+      log.Description = `${params.Direction === 'push' ? 'Pushed' : 'Pulled'} artifact version v${params.VersionNumber} (${params.ObjectPath})`;
+      log.Details = JSON.stringify({
+        Direction: params.Direction,
+        ArtifactID: params.ArtifactID,
+        VersionID: params.VersionID,
+        VersionNumber: params.VersionNumber,
+        ObjectPath: params.ObjectPath,
+        ETag: params.ETag ?? null,
+        Timestamp: new Date().toISOString(),
+      });
+      log.RecordID = params.ArtifactID;
+      await log.Save();
+    } catch {
+      // Best-effort client audit trail; never fails sync if client lacks audit table write rights.
+    }
   }
 }

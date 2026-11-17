@@ -14,6 +14,7 @@ import {
   type ConversationScope,
   SlideDeckEngine,
   SpreadsheetEngine,
+  UserInfoEngine,
   type DocumentBlockSpec,
   type FrozenBlockSnapshot,
 } from '@memberjunction/core-entities';
@@ -28,7 +29,12 @@ import {
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import { SlideDeckExportService } from '../services/slide-deck-export.service';
 import { ArtifactViewerPanelComponent } from '../components/artifact-viewer-panel.component';
-import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
+import {
+  DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS,
+  DOCS_TOOLBAR_PINS_SETTING_KEY,
+  DOCS_TOOLBAR_VISIBILITY_SETTING_KEY,
+  MarkdownArtifactViewerComponent,
+} from '../components/plugins/markdown-artifact-viewer.component';
 import { SlideDeckArtifactViewerComponent } from '../components/plugins/slide-deck-artifact-viewer.component';
 import { SpreadsheetArtifactViewerComponent } from '../components/plugins/spreadsheet-artifact-viewer.component';
 import type { MammothModuleShim } from '../components/previews/office-preview.logic';
@@ -643,6 +649,16 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
       VersionNumber: { value: 1, enumerable: true },
     });
     sheetViewer.artifactVersion = ver;
+    sheetViewer.readonly = false;
+    sheetViewer.Permissions = {
+      ArtifactID: '55555555-5555-4555-8555-555555555555',
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      CanDelete: true,
+      Source: 'Owner',
+      Reason: 'Owner',
+    };
 
     const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Governed Sheet');
     const liveTable = {
@@ -704,6 +720,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     });
 
     const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.readonly = false;
     viewer.HasEditPermission = true;
     const paragraph = 'First sentence. Target phrase here. Third sentence.';
     viewer.OnMarkdownChanged(paragraph, true);
@@ -1772,11 +1789,28 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         }
         return Object.create(null);
       },
+      RunView: async (q: RunViewParams): Promise<RunViewResult> => {
+        if (q.EntityName === 'MJ: Conversation Detail Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              { ID: 'cda-1', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-1' },
+              { ID: 'cda-2', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-2' },
+              { ID: 'cda-999', ConversationDetailID: 'detail-other-branch', ArtifactVersionID: 'ver-out-of-scope-999' },
+            ],
+            RowCount: 3,
+            TotalRowCount: 3,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+      },
       RunViews: async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
         executedBatches.push(queries);
         return queries.map((q) => {
-          // Scoped version list query (lightweight fields, no Content)
-          if (q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
+          // Version list query (lightweight fields, no Content)
+          if (q.EntityName === 'MJ: Artifact Versions' && q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
             const v2Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
             Object.defineProperties(v2Scoped, {
               ID: { value: 'ver-2', enumerable: true },
@@ -1793,28 +1827,30 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
               Name: { value: 'Version 1', enumerable: true },
               Description: { value: 'v1 in scope', enumerable: true },
             });
+            const v999Off = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v999Off, {
+              ID: { value: 'ver-out-of-scope-999', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 999, enumerable: true },
+              Name: { value: 'Off-branch 999', enumerable: true },
+              Description: { value: 'v999 sibling branch', enumerable: true },
+            });
             return {
               Success: true,
-              Results: [v2Scoped, v1Scoped],
-              RowCount: 2,
-              TotalRowCount: 2,
+              Results: [v999Off, v2Scoped, v1Scoped],
+              RowCount: 3,
+              TotalRowCount: 3,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
           }
-          // ID-only query for all versions of artifact
-          if (q.Fields && q.Fields.length === 1 && q.Fields[0] === 'ID') {
-            const v1Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v1Id, { ID: { value: 'ver-1', enumerable: true } });
-            const v2Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v2Id, { ID: { value: 'ver-2', enumerable: true } });
-            const v999Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v999Id, { ID: { value: 'ver-out-of-scope-999', enumerable: true } });
+          // Scoped Conversation Details IDs query
+          if (q.EntityName === 'MJ: Conversation Details') {
             return {
               Success: true,
-              Results: [v1Id, v2Id, v999Id],
-              RowCount: 3,
-              TotalRowCount: 3,
+              Results: [{ ID: 'detail-on-path' }],
+              RowCount: 1,
+              TotalRowCount: 1,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
@@ -1857,14 +1893,14 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     panel.canEdit = true;
     panel.Scope = scope;
     panel.ViewContext = 'conversation';
-    const artifactEntity = Object.create(MJArtifactEntity.prototype) as MJArtifactEntity;
+    const artifactEntity = Object.create(null) as MJArtifactEntity;
     Object.defineProperties(artifactEntity, {
       ID: { value: artifactId, enumerable: true },
       Name: { value: 'Scoped Test Artifact', enumerable: true },
     });
     panel.Artifact = artifactEntity;
 
-    const v1Initial = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    const v1Initial = Object.create(null) as MJArtifactVersionEntity;
     Object.defineProperties(v1Initial, {
       ID: { value: 'ver-1', enumerable: true },
       ArtifactID: { value: artifactId, enumerable: true },
@@ -1882,21 +1918,19 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     const batch = executedBatches[0];
     expect(batch).toHaveLength(3);
 
-    const [scopedListQuery, allIdsQuery, singleVerQuery] = batch;
+    const [listQuery, detailsQuery, singleVerQuery] = batch;
 
-    // (a) Scoped list query has conversation scope filter, simple result type, and lightweight fields without Content
-    expect(scopedListQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(scopedListQuery.ResultType).toBe('simple');
-    expect(scopedListQuery.ExtraFilter).toBe(
-      ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
-    );
-    expect(scopedListQuery.Fields).toBeDefined();
-    expect(scopedListQuery.Fields).not.toContain('Content');
+    // (a) Unscoped lightweight list query (never uses vwConversationDetails base-view subquery)
+    expect(listQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(listQuery.ResultType).toBe('simple');
+    expect(listQuery.ExtraFilter).toBe(`ArtifactID='${artifactId}'`);
+    expect(listQuery.Fields).toBeDefined();
+    expect(listQuery.Fields).not.toContain('Content');
 
-    // (b) ID query for maintaining artifactVersionIds
-    expect(allIdsQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(allIdsQuery.Fields).toEqual(['ID']);
-    expect(allIdsQuery.ResultType).toBe('simple');
+    // (b) First-class MJ: Conversation Details query for branch scoping
+    expect(detailsQuery.EntityName).toBe('MJ: Conversation Details');
+    expect(detailsQuery.Fields).toEqual(['ID']);
+    expect(detailsQuery.ExtraFilter).toBe(ConversationEngine.ScopeFilter(scope));
 
     // (c) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
     expect(singleVerQuery.EntityName).toBe('MJ: Artifact Versions');
@@ -1928,5 +1962,624 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     ).toBe(true);
   });
 });
+
+describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transitions (Horizon 1)', () => {
+  function createEditableDocsViewer(initialMarkdown: string): MarkdownArtifactViewerComponent {
+    const collabService = new DocumentCollaborationService();
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        {
+          provide: MJNotificationService,
+          useValue: {
+            CreateSimpleNotification: () => {},
+          },
+        },
+      ],
+    });
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.readonly = false;
+    viewer.HasEditPermission = true;
+    viewer.ViewMode = 'edit';
+    viewer.OnMarkdownChanged(initialMarkdown, true);
+    return viewer;
+  }
+
+  function makeMockEditableElement(
+    text: string,
+    selectionStart = text.length,
+    selectionEnd = selectionStart,
+  ): HTMLElement {
+    const mockEl: Partial<HTMLTextAreaElement> = {
+      textContent: text,
+      selectionStart,
+      selectionEnd,
+      focus: () => {},
+      contains: () => false,
+    };
+    return mockEl as HTMLTextAreaElement as HTMLElement;
+  }
+
+  function makeKeyEvent(
+    key: string,
+    target: HTMLElement,
+    mods: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
+  ): { event: KeyboardEvent; prevented: () => boolean } {
+    let defaultPrevented = false;
+    const mockEvent: Partial<KeyboardEvent> = {
+      key,
+      shiftKey: Boolean(mods.shiftKey),
+      metaKey: Boolean(mods.metaKey),
+      ctrlKey: Boolean(mods.ctrlKey),
+      altKey: Boolean(mods.altKey),
+      target,
+      preventDefault: () => {
+        defaultPrevented = true;
+      },
+    };
+    return { event: mockEvent as KeyboardEvent, prevented: () => defaultPrevented };
+  }
+
+  it('pressing Enter at the end of a heading commits the heading and creates a focused draft paragraph below', () => {
+    const viewer = createEditableDocsViewer('# Quarterly Executive Summary');
+    expect(viewer.DocumentSegments).toHaveLength(1);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+
+    const headingEl = makeMockEditableElement('Quarterly Executive Summary Updated');
+    const { event, prevented } = makeKeyEvent('Enter', headingEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], event);
+
+    expect(prevented()).toBe(true);
+    expect(viewer.MarkdownContent).toBe('# Quarterly Executive Summary Updated');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('pressing Enter mid-heading or mid-paragraph splits the block at the caret into two blocks', () => {
+    const viewer = createEditableDocsViewer('# Product Strategy Overview\n\nFirst sentence. Second sentence.');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+
+    // 1. Split heading at offset 7 ("Product" | " Strategy Overview")
+    const headingEl = makeMockEditableElement('Product Strategy Overview', 7, 7);
+    const headingKey = makeKeyEvent('Enter', headingEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], headingKey.event);
+
+    expect(headingKey.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(3);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('# Product');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('Strategy Overview');
+
+    // 2. Split second paragraph ("First sentence." | " Second sentence.") at offset 15
+    const paraSeg = viewer.DocumentSegments[2];
+    const paraEl = makeMockEditableElement('First sentence. Second sentence.', 15, 15);
+    const paraKey = makeKeyEvent('Enter', paraEl);
+    viewer.OnEditableBlockKeydown(paraSeg, paraKey.event);
+
+    expect(paraKey.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(4);
+    expect(viewer.DocumentSegments[2].RawMarkdown).toBe('First sentence.');
+    expect(viewer.DocumentSegments[3].RawMarkdown).toBe('Second sentence.');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[3].SegmentID);
+  });
+
+  it('auto-converts paragraph blocks in place when typing Markdown prefixes (# , - , 1. , [] , > )', () => {
+    const viewer = createEditableDocsViewer('Initial paragraph');
+
+    // 1. Turn paragraph into H2 heading via "## "
+    const para0 = viewer.DocumentSegments[0];
+    viewer.OnEditableBlockInput(para0, {
+      target: makeMockEditableElement('## Key Milestones'),
+    } as Partial<Event> as Event);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[0].HeadingLevel).toBe(2);
+    expect(viewer.DocumentSegments[0].HeadingText).toBe('Key Milestones');
+
+    // 2. Append trailing paragraph and turn into bullet list via "- "
+    viewer.AppendOrFocusTrailingParagraph();
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[1], {
+      target: makeMockEditableElement('- Ship fluid block flow'),
+    } as Partial<Event> as Event);
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('list');
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[1])).toEqual([
+      {
+        Index: 0,
+        IsTask: false,
+        Checked: false,
+        Text: 'Ship fluid block flow',
+      },
+    ]);
+
+    // 3. Append trailing paragraph and turn into task checklist via "[] "
+    viewer.AppendOrFocusTrailingParagraph();
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[2], {
+      target: makeMockEditableElement('[] Verify smoke tests'),
+    } as Partial<Event> as Event);
+    expect(viewer.DocumentSegments[2].BlockKind).toBe('list');
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].IsTask).toBe(true);
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].Text).toBe('Verify smoke tests');
+
+    // 4. Append trailing paragraph and turn into callout via "> "
+    viewer.AppendOrFocusTrailingParagraph();
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[3], {
+      target: makeMockEditableElement('> Important rollout note'),
+    } as Partial<Event> as Event);
+    expect(viewer.DocumentSegments[3].BlockKind).toBe('callout');
+    expect(viewer.GetParsedCallout(viewer.DocumentSegments[3])).toEqual({
+      CalloutType: 'NOTE',
+      BodyText: 'Important rollout note',
+    });
+  });
+
+  it('inserts clean empty list items on Enter and exits the list into a paragraph when pressing Enter on an empty item', () => {
+    const viewer = createEditableDocsViewer('- First bullet');
+    expect(viewer.DocumentSegments).toHaveLength(1);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('list');
+
+    // 1. Press Enter at end of "First bullet" -> adds empty 2nd bullet (not "New item")
+    const item0El = makeMockEditableElement('First bullet');
+    const enter1 = makeKeyEvent('Enter', item0El);
+    viewer.OnListItemKeydown(viewer.DocumentSegments[0], 0, enter1.event);
+    expect(enter1.prevented()).toBe(true);
+    const itemsAfterFirstEnter = viewer.GetParsedListItems(viewer.DocumentSegments[0]);
+    expect(itemsAfterFirstEnter).toHaveLength(2);
+    expect(itemsAfterFirstEnter[0].Text).toBe('First bullet');
+    expect(itemsAfterFirstEnter[1].Text).toBe('');
+
+    // 2. Press Enter on the empty 2nd bullet -> removes empty bullet and creates paragraph block below list
+    const item1El = makeMockEditableElement('');
+    const enter2 = makeKeyEvent('Enter', item1El);
+    viewer.OnListItemKeydown(viewer.DocumentSegments[0], 1, enter2.event);
+    expect(enter2.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[0])).toHaveLength(1);
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('supports Backspace at offset 0 to demote headings, delete empty paragraphs, and merge paragraphs across blocks', () => {
+    const viewer = createEditableDocsViewer('# Section Header\n\nFirst part.\n\nSecond part.');
+    expect(viewer.DocumentSegments).toHaveLength(3);
+
+    // 1. Backspace at offset 0 of "Second part." merges it into "First part."
+    const thirdSeg = viewer.DocumentSegments[2];
+    const thirdEl = makeMockEditableElement('Second part.', 0, 0);
+    const bsMerge = makeKeyEvent('Backspace', thirdEl);
+    viewer.OnEditableBlockKeydown(thirdSeg, bsMerge.event);
+    expect(bsMerge.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('First part. Second part.');
+
+    // 2. Backspace at offset 0 of "# Section Header" demotes it in-place to a paragraph
+    const firstSeg = viewer.DocumentSegments[0];
+    const firstEl = makeMockEditableElement('Section Header', 0, 0);
+    const bsDemote = makeKeyEvent('Backspace', firstEl);
+    viewer.OnEditableBlockKeydown(firstSeg, bsDemote.event);
+    expect(bsDemote.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Section Header');
+
+    // 3. Append empty trailing paragraph, then Backspace at offset 0 removes it and focuses previous block
+    viewer.AppendOrFocusTrailingParagraph();
+    expect(viewer.DocumentSegments).toHaveLength(3);
+    const draftSeg = viewer.DocumentSegments[2];
+    const draftEl = makeMockEditableElement('', 0, 0);
+    const bsDeleteEmpty = makeKeyEvent('Backspace', draftEl);
+    viewer.OnEditableBlockKeydown(draftSeg, bsDeleteEmpty.event);
+    expect(bsDeleteEmpty.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('navigates across adjacent blocks with ArrowDown at block end and ArrowUp at block start', () => {
+    const viewer = createEditableDocsViewer('# Title\n\nBody paragraph one.\n\nBody paragraph two.');
+    expect(viewer.DocumentSegments).toHaveLength(3);
+
+    // ArrowDown at end of Title moves selection to Body paragraph one
+    const titleEl = makeMockEditableElement('Title', 5, 5);
+    const downEvt = makeKeyEvent('ArrowDown', titleEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], downEvt.event);
+    expect(downEvt.prevented()).toBe(true);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+
+    // ArrowUp at start (offset 0) of Body paragraph two moves selection back to Body paragraph one
+    const para2El = makeMockEditableElement('Body paragraph two.', 0, 0);
+    const upEvt = makeKeyEvent('ArrowUp', para2El);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[2], upEvt.event);
+    expect(upEvt.prevented()).toBe(true);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('automatically transitions persisted documents from Read (preview) to Write (edit) mode once permissions and collaboration sync resolve, and supports double-clicking any block in Read mode to enter Write mode', async () => {
+    const collabService = new DocumentCollaborationService();
+    vi.spyOn(collabService, 'ResolvePermissionsFromServer').mockResolvedValue({
+      ArtifactID: '99999999-9999-4999-8999-999999999991',
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: true,
+      CanShare: true,
+      Source: 'Owner',
+      Reason: 'Artifact owner',
+    });
+
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+      ],
+    });
+
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    const mockUser = Object.create(null) as UserInfo;
+    Object.assign(mockUser, {
+      ID: '11111111-2222-4333-8444-555555555555',
+      Name: 'Alice Author',
+      Email: 'alice@example.com',
+    });
+    const mockProvider = Object.create(null) as IMetadataProvider;
+    Object.assign(mockProvider, {
+      CurrentUser: mockUser,
+      Entities: [],
+      EntityByName: () => undefined,
+    });
+    viewer.Provider = mockProvider;
+    viewer.readonly = false;
+
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1', enumerable: true },
+      ArtifactID: { value: '99999999-9999-4999-8999-999999999991', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      Content: { value: '# Persisted Document\n\nReady to edit.', enumerable: true },
+    });
+    viewer.artifactVersion = ver;
+    viewer.ngOnInit();
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(viewer.HasEditPermission).toBe(true);
+    expect(viewer.CanUserEdit).toBe(true);
+    expect(viewer.ViewMode).toBe('edit');
+    expect(viewer.IsInteractiveCanvasMode).toBe(true);
+
+    // Explicitly switch to Read ('preview') mode, then double-click a block to jump back to Write ('edit') mode
+    viewer.SetViewMode('preview');
+    expect(viewer.ViewMode).toBe('preview');
+    viewer.OnPreviewBlockDoubleClick(viewer.DocumentSegments[1]);
+    expect(viewer.ViewMode).toBe('edit');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+    viewer.ngOnDestroy();
+  });
+
+  it('defaults to Simple Note Mode (EditingStyle === "simple"), supports switching to Advanced Block Mode ("blocks"), and always inserts new sections/blocks BELOW the active segment', () => {
+    const viewer = createEditableDocsViewer('# Amith Demo\n\nFirst section body.\n\n## Key Notes\n\nSecond section body.');
+    expect(viewer.EditingStyle).toBe('simple');
+    expect(viewer.IsSimpleNoteMode).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(4);
+
+    // Focus the first heading ("# Amith Demo") and press Enter even with caret at offset 0 -> creates paragraph BELOW (index 1), never above
+    const firstSeg = viewer.DocumentSegments[0];
+    viewer.OnSegmentFocusIn(firstSeg);
+    const headingAtZero = makeMockEditableElement('Amith Demo', 0, 0);
+    const enterAtZero = makeKeyEvent('Enter', headingAtZero);
+    viewer.OnEditableBlockKeydown(firstSeg, enterAtZero.event);
+    expect(enterAtZero.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('# Amith Demo');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+
+    // Focus "## Key Notes" (now index 3) and click "+ Section" (InsertSectionHeadingBelow) -> inserts new H2 BELOW "## Key Notes", never above
+    const keyNotesSeg = viewer.DocumentSegments.find((s) => s.RawMarkdown.includes('## Key Notes'))!;
+    const keyNotesIdx = viewer.DocumentSegments.findIndex((s) => s.SegmentID === keyNotesSeg.SegmentID);
+    viewer.OnSegmentFocusIn(keyNotesSeg);
+    viewer.InsertSectionHeadingBelow(2);
+    expect(viewer.DocumentSegments[keyNotesIdx].RawMarkdown).toBe('## Key Notes');
+    expect(viewer.DocumentSegments[keyNotesIdx + 1].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[keyNotesIdx + 1].HeadingLevel).toBe(2);
+
+    // Toggle to Advanced Block Studio mode and back
+    viewer.SetEditingStyle('blocks');
+    expect(viewer.EditingStyle).toBe('blocks');
+    expect(viewer.IsSimpleNoteMode).toBe(false);
+    viewer.SetEditingStyle('simple');
+    expect(viewer.IsSimpleNoteMode).toBe(true);
+  });
+
+  it('wraps selected text in-place for Bold/Italic toolbar buttons and Cmd/Ctrl+B/I shortcuts instead of inserting a new block below, and converts active blocks in-place for Format Ribbon block buttons', () => {
+    // 1. Selecting text in a paragraph wraps it in-place and toggles off on second click
+    const viewer = createEditableDocsViewer('Hello world\n\nSecond paragraph');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    const para0 = viewer.DocumentSegments[0];
+    viewer.OnSegmentSurfaceFocus(para0);
+    viewer.CaptureSelectionSnapshot({
+      segmentId: para0.SegmentID,
+      start: 6,
+      end: 11,
+    });
+
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Hello **world**');
+
+    // Toggle Bold off on the now-wrapped selection (snapshot was automatically updated to offsets 8..13)
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Hello world');
+
+    // 2. Selecting text inside a list item (matching user screenshot) formats that item in-place without adding a '**text**' block below
+    const listViewer = createEditableDocsViewer(
+      '## Key Notes\n\n- Collaborative real-time editing powered by Yjs CRDTs\n- Viewer-scoped Row-Level and Field-Level Security on live blocks',
+    );
+    expect(listViewer.DocumentSegments).toHaveLength(2);
+    const listSeg = listViewer.DocumentSegments[1];
+    expect(listSeg.BlockKind).toBe('list');
+    listViewer.OnListItemFocus(listSeg, 0);
+    // Select 'ative' in 'Collaborative' (offsets 8..13)
+    listViewer.CaptureSelectionSnapshot({
+      segmentId: listSeg.SegmentID,
+      listItemIndex: 0,
+      start: 8,
+      end: 13,
+    });
+
+    listViewer.InsertFormattingSnippet('**', '**');
+    expect(listViewer.DocumentSegments).toHaveLength(2);
+    const updatedItems = listViewer.GetParsedListItems(listViewer.DocumentSegments[1]);
+    expect(updatedItems[0].Text).toBe('Collabor**ative** real-time editing powered by Yjs CRDTs');
+
+    // 3. Keyboard shortcuts Cmd+I / Ctrl+B work in-place on editable paragraph and list item elements
+    const paraEl = makeMockEditableElement('Quick emphasis test', 6, 14); // 'emphasis'
+    const italicShortcut = makeKeyEvent('i', paraEl, { metaKey: true });
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], italicShortcut.event);
+    expect(italicShortcut.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Quick *emphasis* test');
+
+    const listEl = makeMockEditableElement('First bullet item', 6, 12); // 'bullet'
+    const boldShortcut = makeKeyEvent('b', listEl, { ctrlKey: true });
+    listViewer.OnListItemKeydown(listViewer.DocumentSegments[1], 1, boldShortcut.event);
+    expect(boldShortcut.prevented()).toBe(true);
+    expect(listViewer.GetParsedListItems(listViewer.DocumentSegments[1])[1].Text).toBe('First **bullet** item');
+
+    // 4. Block-level Format Ribbon buttons (H2, List, Checklist, Callout) convert the active block in-place while preserving text
+    const blockViewer = createEditableDocsViewer('Release Readiness Notes');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    blockViewer.OnSegmentSurfaceFocus(blockViewer.DocumentSegments[0]);
+
+    blockViewer.InsertFormattingSnippet('## ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('## Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('- [ ] ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('list');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('- [ ] Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('- ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('- Release Readiness Notes');
+
+    // Second click on Bullet List returns single-item bullet list to a plain paragraph
+    blockViewer.InsertFormattingSnippet('- ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('paragraph');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('> [!NOTE]\n> ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('callout');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('> [!NOTE]\n> Release Readiness Notes');
+  });
+
+  it('renders WYSIWYG inline HTML (<strong>, <em>, <code>) for editable blocks and serializes DOM formatting back to Markdown while preserving visible selection offsets', () => {
+    const viewer = createEditableDocsViewer('Collabor**ative** and *italic* and `code`');
+
+    // 1. RenderInlineEditableHtml produces true WYSIWYG HTML tags without literal ** or *
+    const rendered = viewer.RenderInlineEditableHtml('Collabor**ative** and *italic* and `code`');
+    expect(rendered).toBe('Collabor<strong>ative</strong> and <em>italic</em> and <code>code</code>');
+
+    // 2. RenderInlineEditableHtml escapes raw HTML entities safely while preserving inline formatting
+    expect(viewer.RenderInlineEditableHtml('<script> & **bold** & ***both***')).toBe(
+      '&lt;script&gt; &amp; <strong>bold</strong> &amp; <strong><em>both</em></strong>',
+    );
+
+    // 3. Toggling Italic on already-bold text creates ***both*** and toggles back cleanly using visible offsets
+    const seg0 = viewer.DocumentSegments[0];
+    viewer.OnSegmentSurfaceFocus(seg0);
+    // Visible string is "Collaborative and italic and code"; "ative" is visible offsets 8..13
+    viewer.CaptureSelectionSnapshot({
+      segmentId: seg0.SegmentID,
+      start: 8,
+      end: 13,
+    });
+    viewer.InsertFormattingSnippet('*', '*');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collabor***ative*** and *italic* and `code`');
+    expect(viewer.RenderInlineEditableHtml(viewer.DocumentSegments[0].RawMarkdown)).toBe(
+      'Collabor<strong><em>ative</em></strong> and <em>italic</em> and <code>code</code>',
+    );
+
+    // Toggling Bold off on ***ative*** leaves *ative* (italic only)
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collabor*ative* and *italic* and `code`');
+
+    // Toggling Italic off on *ative* leaves plain text
+    viewer.InsertFormattingSnippet('*', '*');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collaborative and *italic* and `code`');
+  });
+
+  it('creates new bullets and paragraphs below current text on Enter and avoids poisoning real DOM nodes with selectionStart', () => {
+    // 1. Pressing Enter at the end of a bullet item appends the new bullet below
+    const listViewer = createEditableDocsViewer('- First item\n- Second item');
+    const listSeg = listViewer.DocumentSegments[0];
+    const atEnd = makeMockEditableElement('Second item', 'Second item'.length);
+    const enterAtEnd = makeKeyEvent('Enter', atEnd);
+    listViewer.OnListItemKeydown(listSeg, 1, enterAtEnd.event);
+    expect(enterAtEnd.prevented()).toBe(true);
+    expect(listViewer.DocumentSegments[0].RawMarkdown).toBe('- First item\n- Second item\n- ');
+
+    // Safeguard: even if a non-empty bullet target reports selectionStart=0 on Enter,
+    // it appends the new bullet below instead of pushing the existing item down.
+    const safeViewer = createEditableDocsViewer('- First\n- Bullet text');
+    const safeSeg = safeViewer.DocumentSegments[0];
+    const staleZeroTarget = makeMockEditableElement('Bullet text', 0, 0);
+    const enterWithStaleZero = makeKeyEvent('Enter', staleZeroTarget);
+    safeViewer.OnListItemKeydown(safeSeg, 1, enterWithStaleZero.event);
+    expect(enterWithStaleZero.prevented()).toBe(true);
+    expect(safeViewer.DocumentSegments[0].RawMarkdown).toBe('- First\n- Bullet text\n- ');
+
+    // 2. Pressing Enter at the end of a paragraph creates an empty draft paragraph below,
+    //    and subsequent CommitEditableHeading / CommitEditableParagraph blur commits preserve it.
+    const docViewer = createEditableDocsViewer('## Heading\n\nBody paragraph');
+    const bodyEl = makeMockEditableElement('Body paragraph', 'Body paragraph'.length);
+    const enterPara = makeKeyEvent('Enter', bodyEl);
+    docViewer.OnEditableBlockKeydown(docViewer.DocumentSegments[1], enterPara.event);
+    expect(enterPara.prevented()).toBe(true);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[2].BlockKind).toBe('paragraph');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+    expect(docViewer.DocumentSegments[2].SegmentID.startsWith('paragraph-draft-')).toBe(true);
+
+    docViewer.CommitEditableHeading(docViewer.DocumentSegments[0], {
+      target: makeMockEditableElement('Heading Renamed'),
+    } as Partial<Event> as Event);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[0].RawMarkdown).toBe('## Heading Renamed');
+    expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body paragraph');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+
+    docViewer.CommitEditableParagraph(docViewer.DocumentSegments[1], {
+      target: makeMockEditableElement('Body edited'),
+    } as Partial<Event> as Event);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body edited');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+
+    // 3. Real DOM nodes (instanceof Node) must have stale selectionStart/selectionEnd expandos
+    //    stripped on focus so window.getSelection() is never shadowed by a frozen 0 offset.
+    const originalNode: typeof Node | undefined = Reflect.get(globalThis, 'Node');
+    class FakeDomNode {
+      public textContent = 'Focused bullet';
+      public selectionStart: number | undefined = 0;
+      public selectionEnd: number | undefined = 0;
+      public focused = false;
+      public focus(): void {
+        this.focused = true;
+      }
+    }
+    const originalHostElement: object | undefined = Reflect.get(listViewer, 'hostElement');
+    try {
+      Reflect.set(globalThis, 'Node', FakeDomNode);
+      const domNode = new FakeDomNode();
+      const targetSegId = listViewer.DocumentSegments[0].SegmentID;
+      Reflect.set(listViewer, 'hostElement', {
+        nativeElement: {
+          querySelector: (selector: string): HTMLElement | null =>
+            selector === `[data-testid="list-item-text-${targetSegId}-0"]`
+              ? (domNode as Partial<HTMLElement> as HTMLElement)
+              : null,
+          querySelectorAll: (): HTMLElement[] => [],
+        },
+      });
+      listViewer.FocusEditableSegment(targetSegId, 'start', 0);
+      expect(domNode.focused).toBe(true);
+      expect('selectionStart' in domNode).toBe(false);
+      expect('selectionEnd' in domNode).toBe(false);
+    } finally {
+      Reflect.set(globalThis, 'Node', originalNode);
+      Reflect.set(listViewer, 'hostElement', originalHostElement);
+    }
+  });
+
+  it('supports progressive disclosure toolbar pins, 6-pin cap, formatting ribbon pin, and UserInfoEngine persistence', async () => {
+    const store = new Map<string, string>();
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
+      store.set(key, value);
+      return Promise.resolve();
+    });
+
+    const viewer = createEditableDocsViewer('# Progressive Toolbar\n\nBody paragraph.');
+    try {
+      expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'insert-block', 'outline']);
+      expect(viewer.PinnedRightToolbarItems.map((i) => i.Key)).toEqual(['comments']);
+      expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(false);
+      expect(viewer.HasCustomToolbarSettings).toBe(false);
+
+      // Pin + Section and confirm persistence to UserInfoEngine
+      viewer.ToggleToolbarItemPin('add-section');
+      expect(viewer.PinnedToolbarKeys).toContain('add-section');
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual([
+        'format',
+        'insert-block',
+        'add-section',
+        'outline',
+      ]);
+      expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(true);
+      expect(viewer.HasCustomToolbarSettings).toBe(true);
+      expect(setSpy).toHaveBeenCalledWith(
+        DOCS_TOOLBAR_PINS_SETTING_KEY,
+        expect.stringContaining('"add-section"'),
+      );
+
+      // Hit the 6-pin cap: pin 'suggest-mode' (6th pin), then try a 7th ('blocks-mode')
+      viewer.ToggleToolbarItemPin('suggest-mode');
+      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.CanPinMoreToolbarItems).toBe(false);
+      expect(viewer.IsToolbarItemPinnedOverCap('blocks-mode')).toBe(true);
+      viewer.ToggleToolbarItemPin('blocks-mode');
+      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.IsToolbarItemPinned('blocks-mode')).toBe(false);
+
+      // Visibility preferences: pin formatting ribbon, toggle Block Studio, toggle Outline Rail
+      viewer.ToggleFormattingRibbonPinned();
+      expect(viewer.FormattingRibbonPinned).toBe(true);
+      expect(viewer.ShowFormattingRibbon).toBe(true);
+      viewer.SetEditingStyle('blocks');
+      expect(viewer.EditingStyle).toBe('blocks');
+      viewer.ToggleOutlineRail();
+      expect(viewer.ShowOutlineRail).toBe(false);
+
+      expect(setSpy).toHaveBeenCalledWith(
+        DOCS_TOOLBAR_VISIBILITY_SETTING_KEY,
+        expect.stringContaining('"FormattingRibbonPinned":true'),
+      );
+
+      // Reload preferences on a fresh viewer instance from the persisted UserInfoEngine store via ngOnInit
+      const restoredViewer = createEditableDocsViewer('# Restored Doc\n\nHello.');
+      restoredViewer.markdownContent = '# Restored Doc\n\nHello.';
+      restoredViewer.ngOnInit();
+      expect(restoredViewer.PinnedToolbarKeys).toContain('add-section');
+      expect(restoredViewer.PinnedToolbarItemsCount).toBe(6);
+      expect(restoredViewer.FormattingRibbonPinned).toBe(true);
+      expect(restoredViewer.ShowFormattingRibbon).toBe(true);
+      expect(restoredViewer.EditingStyle).toBe('blocks');
+      expect(restoredViewer.ShowOutlineRail).toBe(false);
+      restoredViewer.ngOnDestroy();
+
+      // Reset restores calm defaults
+      viewer.ResetToolbarCustomizations();
+      expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
+      expect(viewer.FormattingRibbonPinned).toBe(false);
+      expect(viewer.EditingStyle).toBe('simple');
+      expect(viewer.ShowOutlineRail).toBe(true);
+      expect(viewer.HasCustomToolbarSettings).toBe(false);
+      expect(getSpy).toHaveBeenCalled();
+    } finally {
+      viewer.ngOnDestroy();
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 
 

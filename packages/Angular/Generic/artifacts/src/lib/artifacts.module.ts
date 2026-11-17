@@ -56,6 +56,7 @@ import { VideoArtifactPreviewComponent } from './components/previews/video-artif
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
 import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
+import { RegisterClientArtifactFileBytesLoader } from './services/artifact-file.service';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
@@ -64,6 +65,9 @@ import { ArtifactTypePluginViewerComponent } from './components/artifact-type-pl
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
+import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
+import { MjContextMenuComponent } from './components/context-menu/mj-context-menu.component';
 
 // Git-style Version History & Diff components (standalone)
 import { ArtifactVersionCompareComponent } from './components/version-diff/artifact-version-compare.component';
@@ -90,6 +94,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
 
     // Plugin components
     JsonArtifactViewerComponent,
@@ -155,6 +160,8 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     SpreadsheetVersionDiffComponent,
     ComponentVersionDiffComponent,
     QueryVersionDiffComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -164,6 +171,9 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
     ArtifactVersionCompareComponent,
     GitDiffLinesViewComponent,
     DocsVersionDiffComponent,
@@ -242,6 +252,9 @@ export class ArtifactsModule {
       AudioArtifactPreviewComponent,
       VideoProductionArtifactPreviewComponent,
     ];
+
+    // Ensure the client-side file-bytes loader is wired before live blocks inspect File-backed embeds
+    RegisterClientArtifactFileBytesLoader();
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
     // componentType / previewComponentType. `componentType` is required by the interface (so this is

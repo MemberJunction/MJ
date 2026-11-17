@@ -94,8 +94,9 @@ describe('ngsw-config.json shape', () => {
             expect(g.updateMode).toBe('prefetch');
         });
 
-        it('captures Angular emitted chunks (chunk-*.js)', () => {
+        it('captures Angular emitted chunks (chunk-*.js) and worker bundles (worker-*.js)', () => {
             expect(g.resources.files).toContain('/chunk-*.js');
+            expect(g.resources.files).toContain('/worker-*.js');
         });
     });
 

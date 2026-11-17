@@ -260,5 +260,32 @@ describe('AgentRunStepSaveQueue', () => {
         expect(persistedSourceStepId).toBeNull();
         expect(dependentStep.Save).toHaveBeenCalledTimes(1);
     });
+
+    it('Settled(step) resolves only after the step INSERT lands, so a row with a foreign key to it can follow', async () => {
+        const q = new AgentRunStepSaveQueue();
+        let landInsert: (ok: boolean) => void = () => undefined;
+        const step = {
+            ID: 'step-in-flight',
+            LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(() => new Promise<boolean>((resolve) => { landInsert = resolve; })),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        q.Insert(step);
+        let settled = false;
+        const waiting = q.Settled(step).then(() => { settled = true; });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(step.Save).toHaveBeenCalledTimes(1);
+        expect(settled).toBe(false);
+
+        landInsert(true);
+        await waiting;
+        expect(settled).toBe(true);
+    });
+
+    it('Settled(step) resolves at once for a step with nothing queued', async () => {
+        const q = new AgentRunStepSaveQueue();
+        await expect(q.Settled(fakeStep())).resolves.toBeUndefined();
+    });
 });
 

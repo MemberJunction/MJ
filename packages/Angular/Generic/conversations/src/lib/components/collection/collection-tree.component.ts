@@ -5,6 +5,7 @@ import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 interface TreeNode {
   collection: MJCollectionEntity;
@@ -27,7 +28,7 @@ interface DragData {
         <h3>Collections</h3>
         @if (canCreateAtRoot()) {
           <button class="btn-new" (click)="onCreateCollection(null)" title="New Collection">
-            <i class="fas fa-plus"></i>
+            <i class="fa-solid fa-plus"></i>
           </button>
         }
       </div>
@@ -59,17 +60,17 @@ interface DragData {
                   (click)="toggleNode(node, $event)">
                 </i>
               }
-              <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
+              <i class="fa-solid fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
               <span class="collection-name">{{ node.collection.Name }}</span>
               <div class="node-actions" (click)="$event.stopPropagation()">
                 @if (canEdit(node.collection)) {
                   <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
-                    <i class="fas fa-plus"></i>
+                    <i class="fa-solid fa-plus"></i>
                   </button>
                 }
                 @if (canDelete(node.collection)) {
                   <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
-                    <i class="fas fa-trash"></i>
+                    <i class="fa-solid fa-trash"></i>
                   </button>
                 }
               </div>
@@ -107,17 +108,17 @@ interface DragData {
               (click)="toggleNode(node, $event)">
             </i>
           }
-          <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
+          <i class="fa-solid fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
           <span class="collection-name">{{ node.collection.Name }}</span>
           <div class="node-actions" (click)="$event.stopPropagation()">
             @if (canEdit(node.collection)) {
               <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
-                <i class="fas fa-plus"></i>
+                <i class="fa-solid fa-plus"></i>
               </button>
             }
             @if (canDelete(node.collection)) {
               <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
-                <i class="fas fa-trash"></i>
+                <i class="fa-solid fa-trash"></i>
               </button>
             }
           </div>
@@ -367,7 +368,11 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
           );
 
           if (!permission?.canEdit) {
-            alert('You do not have Edit permission to create a sub-collection.');
+            MJNotificationService.Instance.CreateSimpleNotification(
+              'You do not have Edit permission to create a sub-collection.',
+              'warning',
+              4000
+            );
             return;
           }
         }
@@ -401,7 +406,7 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       }
     } catch (error) {
       console.error('Error creating collection:', error);
-      alert('Failed to create collection');
+      MJNotificationService.Instance.CreateSimpleNotification('Failed to create collection', 'error', 4000);
     }
   }
 
@@ -420,7 +425,11 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       );
 
       if (!permission?.canDelete) {
-        alert('You do not have Delete permission for this collection.');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'You do not have Delete permission for this collection.',
+          'warning',
+          4000
+        );
         return;
       }
     }
@@ -435,7 +444,7 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       }
     } catch (error) {
       console.error('Error deleting collection:', error);
-      alert('Failed to delete collection');
+      MJNotificationService.Instance.CreateSimpleNotification('Failed to delete collection', 'error', 4000);
     }
   }
 
@@ -524,7 +533,11 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
 
     // Check if trying to drop into a descendant
     if (this.isDescendant(targetNode, this.DraggedNode)) {
-      alert('Cannot move a collection into its own descendant');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Cannot move a collection into its own descendant',
+        'warning',
+        4000
+      );
       this.DragOverNodeId = null;
       return;
     }
@@ -541,11 +554,11 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
         // Reload the tree to reflect changes
         await this.loadCollections();
       } else {
-        alert('Failed to move collection');
+        MJNotificationService.Instance.CreateSimpleNotification('Failed to move collection', 'error', 4000);
       }
     } catch (error) {
       LogError(error);
-      alert('Error moving collection');
+      MJNotificationService.Instance.CreateSimpleNotification('Error moving collection', 'error', 4000);
     } finally {
       this.DragOverNodeId = null;
     }
@@ -591,11 +604,11 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       if (saved) {
         await this.loadCollections();
       } else {
-        alert('Failed to move collection to root');
+        MJNotificationService.Instance.CreateSimpleNotification('Failed to move collection to root', 'error', 4000);
       }
     } catch (error) {
       LogError(error);
-      alert('Error moving collection to root');
+      MJNotificationService.Instance.CreateSimpleNotification('Error moving collection to root', 'error', 4000);
     } finally {
       this.DragOverNodeId = null;
     }

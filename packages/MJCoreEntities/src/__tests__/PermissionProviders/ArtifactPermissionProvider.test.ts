@@ -4,9 +4,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
+import type { PermissionRowRecord } from './_mockPermissionProviderBase';
+
 interface MockRunViewResponse {
     Success: boolean;
-    Results: object[];
+    Results: PermissionRowRecord[];
     ErrorMessage?: string;
 }
 
@@ -18,10 +20,10 @@ const {
     mockGetSystemUser,
 } = vi.hoisted(() => ({
     sharedGlobalStore: {} as Record<string, object>,
-    runViewQueue: [] as Array<{ Success: boolean; Results: object[]; ErrorMessage?: string }>,
+    runViewQueue: [] as Array<{ Success: boolean; Results: PermissionRowRecord[]; ErrorMessage?: string }>,
     runViewCalls: [] as Array<{ EntityName: string; ExtraFilter?: string }>,
     runViewState: {
-        customHandler: null as ((args: { EntityName: string; ExtraFilter?: string }) => Promise<{ Success: boolean; Results: object[]; ErrorMessage?: string }>) | null,
+        customHandler: null as ((args: { EntityName: string; ExtraFilter?: string }) => Promise<{ Success: boolean; Results: PermissionRowRecord[]; ErrorMessage?: string }>) | null,
     },
     mockGetSystemUser: vi.fn<() => Promise<UserInfo | null>>(async () => null),
 }));
@@ -61,7 +63,11 @@ vi.mock('@memberjunction/core', async () => {
         PermissionProviderBase: buildPermissionProviderBase(MockRunView),
         LogError: vi.fn(),
         LogStatus: vi.fn(),
-        UserInfo: class {},
+        UserInfo: class MockUserInfo {
+            ID = '';
+            Name = '';
+            UserRoles: Array<{ RoleID: string; Role: string }> = [];
+        },
         Metadata: class {
             static Provider = { ProviderType: 'Database' as const, Entities: [] };
         },
@@ -81,10 +87,25 @@ vi.mock('@memberjunction/core', async () => {
 
 import { ArtifactPermissionProvider } from '../../custom/PermissionProviders/ArtifactPermissionProvider';
 import { ArtifactPermissionEngine } from '../../custom/ArtifactPermissionDelegate';
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 
-const USER_A = { ID: 'AAA', Name: 'User A', UserRoles: [] } as unknown as UserInfo;
-const USER_B = { ID: 'BBB', Name: 'User B', UserRoles: [] } as unknown as UserInfo;
+const UUID_USER_A = 'aaaa0000-0000-4000-8000-000000000001';
+const UUID_USER_B = 'bbbb0000-0000-4000-8000-000000000002';
+const UUID_USER_C = 'cccc0000-0000-4000-8000-000000000003';
+const UUID_ART_1 = 'a1000000-0000-4000-8000-000000000001';
+const UUID_ART_2 = 'a2000000-0000-4000-8000-000000000002';
+const UUID_PERM_1 = 'd1000000-0000-4000-8000-000000000001';
+const UUID_PERM_2 = 'd2000000-0000-4000-8000-000000000002';
+
+function makeMockUser(id: string, name: string): UserInfo {
+    const user = new UserInfo();
+    user.ID = id;
+    user.Name = name;
+    return user;
+}
+
+const USER_A = makeMockUser(UUID_USER_A, 'User A');
+const USER_B = makeMockUser(UUID_USER_B, 'User B');
 
 beforeEach(() => {
     runViewQueue.length = 0;
@@ -105,21 +126,27 @@ describe('ArtifactPermissionProvider', () => {
             expect(result.Reason).toContain('require a specific artifact ID');
         });
 
+        it('rejects non-UUID / SQL injection IDs without executing RunView', async () => {
+            const badRes = await provider.CheckPermission(USER_A, 'Artifacts', `' OR 1=1--`, 'Read');
+            expect(badRes.Allowed).toBe(false);
+            expect(runViewCalls).toHaveLength(0);
+        });
+
         it('grants the requested action when the row has it', async () => {
             runViewQueue.push({
                 Success: true,
-                Results: [{ ID: 'P1', ArtifactID: 'A1', UserID: 'AAA', CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }],
+                Results: [{ ID: UUID_PERM_1, ArtifactID: UUID_ART_1, UserID: UUID_USER_A, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }],
             });
-            const result = await provider.CheckPermission(USER_A, 'Artifacts', 'A1', 'Read');
+            const result = await provider.CheckPermission(USER_A, 'Artifacts', UUID_ART_1, 'Read');
             expect(result.Allowed).toBe(true);
         });
 
         it('denies actions the row does not include', async () => {
             runViewQueue.push({
                 Success: true,
-                Results: [{ ID: 'P1', ArtifactID: 'A1', UserID: 'AAA', CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }],
+                Results: [{ ID: UUID_PERM_1, ArtifactID: UUID_ART_1, UserID: UUID_USER_A, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }],
             });
-            const result = await provider.CheckPermission(USER_A, 'Artifacts', 'A1', 'Share');
+            const result = await provider.CheckPermission(USER_A, 'Artifacts', UUID_ART_1, 'Share');
             expect(result.Allowed).toBe(false);
         });
     });
@@ -129,21 +156,21 @@ describe('ArtifactPermissionProvider', () => {
             runViewQueue.push({
                 Success: true,
                 Results: [
-                    { ID: 'P1', ArtifactID: 'A1', UserID: 'BBB', User: 'User B', SharedByUserID: 'AAA',
+                    { ID: UUID_PERM_1, ArtifactID: UUID_ART_1, UserID: UUID_USER_B, User: 'User B', SharedByUserID: UUID_USER_A,
                       CanRead: true, CanEdit: false, CanDelete: false, CanShare: false },
                 ],
             });
-            // Second call: fetchArtifactNames for ['A1']
-            runViewQueue.push({ Success: true, Results: [{ ID: 'A1', Name: 'My Artifact' }] });
+            // Second call: fetchArtifactNames for [UUID_ART_1]
+            runViewQueue.push({ Success: true, Results: [{ ID: UUID_ART_1, Name: 'My Artifact' }] });
 
             const result = await provider.GetPermissionsSharedWithUser(USER_B);
             expect(result).toHaveLength(1);
-            expect(result[0].ResourceID).toBe('A1');
+            expect(result[0].ResourceID).toBe(UUID_ART_1);
             expect(result[0].ResourceName).toBe('My Artifact');
-            expect(result[0].SourceRecordID).toBe('P1');
-            expect(runViewCalls[0].ExtraFilter).toContain("UserID='BBB'");
+            expect(result[0].SourceRecordID).toBe(UUID_PERM_1);
+            expect(runViewCalls[0].ExtraFilter).toContain(`UserID='${UUID_USER_B}'`);
             expect(runViewCalls[0].ExtraFilter).toContain('SharedByUserID IS NULL');
-            expect(runViewCalls[0].ExtraFilter).toContain("SharedByUserID <> 'BBB'");
+            expect(runViewCalls[0].ExtraFilter).toContain(`SharedByUserID <> '${UUID_USER_B}'`);
         });
 
         it('returns empty when no rows exist', async () => {
@@ -158,9 +185,9 @@ describe('ArtifactPermissionProvider', () => {
             runViewQueue.push({
                 Success: true,
                 Results: [
-                    { ID: 'P1', ArtifactID: 'A1', UserID: 'BBB', User: 'User B', SharedByUserID: 'AAA',
+                    { ID: UUID_PERM_1, ArtifactID: UUID_ART_1, UserID: UUID_USER_B, User: 'User B', SharedByUserID: UUID_USER_A,
                       CanRead: true, CanEdit: true, CanDelete: false, CanShare: false },
-                    { ID: 'P2', ArtifactID: 'A2', UserID: 'CCC', User: 'User C', SharedByUserID: 'AAA',
+                    { ID: UUID_PERM_2, ArtifactID: UUID_ART_2, UserID: UUID_USER_C, User: 'User C', SharedByUserID: UUID_USER_A,
                       CanRead: true, CanEdit: false, CanDelete: false, CanShare: true },
                 ],
             });
@@ -168,15 +195,15 @@ describe('ArtifactPermissionProvider', () => {
             runViewQueue.push({
                 Success: true,
                 Results: [
-                    { ID: 'A1', Name: 'Artifact 1' },
-                    { ID: 'A2', Name: 'Artifact 2' },
+                    { ID: UUID_ART_1, Name: 'Artifact 1' },
+                    { ID: UUID_ART_2, Name: 'Artifact 2' },
                 ],
             });
 
             const result = await provider.GetPermissionsGrantedByUser(USER_A);
             expect(result).toHaveLength(2);
-            expect(runViewCalls[0].ExtraFilter).toBe(`SharedByUserID='AAA'`);
-            expect(result.map((r) => r.GranteeID).sort()).toEqual(['BBB', 'CCC']);
+            expect(runViewCalls[0].ExtraFilter).toBe(`SharedByUserID='${UUID_USER_A}'`);
+            expect(result.map((r) => r.GranteeID).sort()).toEqual([UUID_USER_B, UUID_USER_C].sort());
         });
 
         it('returns empty when RunView fails', async () => {

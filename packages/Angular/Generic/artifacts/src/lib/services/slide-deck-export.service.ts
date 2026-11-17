@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   SlideDeckEngine,
+  SpreadsheetEngine,
   type SlideDeckSpec,
   type SlideSpec,
   type SlideRegionSpec,
@@ -8,6 +9,27 @@ import {
   type DocumentBlockSpec,
 } from '@memberjunction/core-entities';
 import { EscapeHtml } from '../components/previews/office-preview.logic';
+import { IsVisualDiagramOrChartBlock, RasterizeBlockDiagramToPng } from '../utils/diagram-png-encoder';
+import { PrintHtmlInSandboxedIframe } from '../utils/html-sandbox.util';
+
+/** Optional configuration passed to {@link SlideDeckExportService.ExportToPptxPackage}. */
+export interface PptxExportOptions {
+  /** Pre-rendered PNG bytes keyed by `DocumentBlockSpec.BlockID` for Charts/Whiteboards (`§ 3.4`). */
+  RasterizedImagesByBlockId?: ReadonlyMap<string, Uint8Array>;
+  /** When `true`, includes slides marked `Hidden: true` with OpenXML `show="0"`; defaults to `false` (skips hidden slides). */
+  IncludeHiddenSlides?: boolean;
+  /**
+   * Optional set of already-authenticated block/region IDs (`BlockID`, `RegionID`, or
+   * `${SlideID}:${RegionID}`) passed through to {@link SlideDeckEngine.ExportDeckToPptxBytes}.
+   */
+  VerifiedBlockIds?: ReadonlySet<string>;
+}
+
+interface SlideMediaImageRef {
+  RelId: string;
+  MediaFileName: string;
+  Bytes: Uint8Array;
+}
 
 /**
  * Result of generating an OpenXML `.pptx` presentation archive (`§ 5.3`, `Accept #2`, `Accept #5`).
@@ -49,7 +71,17 @@ export class SlideDeckExportService {
     deck: SlideDeckSpec,
     blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
     user?: { ID: string; Name: string } | null,
+    options?: PptxExportOptions,
   ): PptxExportPackage {
+    const originalBlocksById = new Map<string, DocumentBlockSpec>();
+    for (const origSlide of deck.Slides) {
+      for (const origRegion of origSlide.Regions) {
+        const origBlock = SlideDeckEngine.Instance.ExtractRegionBlockSpec(origRegion);
+        if (origBlock?.BlockID) {
+          originalBlocksById.set(origBlock.BlockID, origBlock);
+        }
+      }
+    }
     const frozenDeck = SlideDeckEngine.Instance.FreezeDeckLiveBlocksForPresentation(
       deck,
       blockResultsByBlockId,
@@ -57,46 +89,56 @@ export class SlideDeckExportService {
     );
 
     let frozenBlockCount = 0;
+    const verifiedBlockIds = new Set<string>(options?.VerifiedBlockIds ?? []);
     for (const slide of frozenDeck.Slides) {
       for (const region of slide.Regions) {
         const block = SlideDeckEngine.Instance.ExtractRegionBlockSpec(region);
         if (block && block.Mode === 'Frozen' && block.FrozenSnapshot) {
           frozenBlockCount++;
+          const origBlock = originalBlocksById.get(block.BlockID);
+          const blockResult = blockResultsByBlockId.get(block.BlockID);
+          const wasOriginallyLive = origBlock?.Mode !== 'Frozen';
+          const isFreshlyFrozenLiveResult =
+            wasOriginallyLive &&
+            blockResult?.Success === true &&
+            blockResult.Mode === 'Live' &&
+            blockResult.FrozenSnapshot?.SnapshotVerified !== false &&
+            blockResult.FrozenMetadata?.SnapshotVerified !== false;
+          const isVerifiedFrozenResult =
+            blockResult?.FrozenSnapshot?.SnapshotVerified === true ||
+            blockResult?.FrozenMetadata?.SnapshotVerified === true;
+          const isSnapshotVerified = isFreshlyFrozenLiveResult || isVerifiedFrozenResult;
+          if (isSnapshotVerified) {
+            verifiedBlockIds.add(block.BlockID);
+            if (region.RegionID) {
+              verifiedBlockIds.add(region.RegionID);
+              if (slide.SlideID) {
+                verifiedBlockIds.add(`${slide.SlideID}:${region.RegionID}`);
+              }
+            }
+          }
         }
       }
     }
 
-    const entries = new Map<string, string>();
-    const slides = frozenDeck.Slides;
+    const includeHidden = Boolean(options?.IncludeHiddenSlides);
+    const slides = includeHidden ? frozenDeck.Slides : frozenDeck.Slides.filter((s) => !s.Hidden);
 
-    entries.set('[Content_Types].xml', this.buildContentTypesXml(slides.length));
-    entries.set('_rels/.rels', this.buildRootRelsXml());
-    entries.set('ppt/presentation.xml', this.buildPresentationXml(frozenDeck));
-    entries.set('ppt/_rels/presentation.xml.rels', this.buildPresentationRelsXml(slides.length));
-    entries.set('ppt/theme/theme1.xml', this.buildThemeXml(frozenDeck));
-    entries.set('ppt/slideMasters/slideMaster1.xml', this.buildSlideMasterXml(frozenDeck));
-    entries.set('ppt/slideMasters/_rels/slideMaster1.xml.rels', this.buildSlideMasterRelsXml());
-    entries.set('ppt/slideLayouts/slideLayout1.xml', this.buildSlideLayoutXml());
-    entries.set('ppt/slideLayouts/_rels/slideLayout1.xml.rels', this.buildSlideLayoutRelsXml());
-
-    slides.forEach((slide, index) => {
-      const slideNum = index + 1;
-      entries.set(
-        `ppt/slides/slide${slideNum}.xml`,
-        this.buildSlideXml(slide, slideNum, slides.length, frozenDeck),
-      );
-      entries.set(`ppt/slides/_rels/slide${slideNum}.xml.rels`, this.buildSlideRelsXml(slideNum));
-      entries.set(
-        `ppt/notesSlides/notesSlide${slideNum}.xml`,
-        this.buildNotesSlideXml(slide, slideNum),
-      );
-      entries.set(
-        `ppt/notesSlides/_rels/notesSlide${slideNum}.xml.rels`,
-        this.buildNotesSlideRelsXml(slideNum),
-      );
+    // Delegate OpenXML generation (including native DrawingML ppt/charts/chartN.xml vector charts)
+    // to SlideDeckEngine / SlideDeckPptxEngine, keeping untrusted/tampered snapshots failed closed.
+    const engineBytes = SlideDeckEngine.Instance.ExportDeckToPptxBytes(frozenDeck, {
+      IncludeHiddenSlides: includeHidden,
+      VerifiedBlockIds: verifiedBlockIds,
     });
 
-    const bytes = this.packZipArchive(entries);
+    const bytes = this.augmentEnginePptxWithRasterMedia(
+      engineBytes,
+      slides,
+      frozenDeck,
+      blockResultsByBlockId,
+      options,
+    );
+
     return {
       Bytes: bytes,
       FrozenDeck: frozenDeck,
@@ -113,8 +155,9 @@ export class SlideDeckExportService {
     blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
     fileName = 'presentation.pptx',
     user?: { ID: string; Name: string } | null,
+    options?: PptxExportOptions,
   ): PptxExportPackage {
-    const pkg = this.ExportToPptxPackage(deck, blockResultsByBlockId, user);
+    const pkg = this.ExportToPptxPackage(deck, blockResultsByBlockId, user, options);
     const normalizedName = fileName.toLowerCase().endsWith('.pptx') ? fileName : `${fileName}.pptx`;
     const arrayBuffer = pkg.Bytes.buffer.slice(
       pkg.Bytes.byteOffset,
@@ -128,39 +171,203 @@ export class SlideDeckExportService {
   }
 
   /**
+   * Augments the engine-generated `.pptx` archive with raster PNG `<p:pic>` parts for
+   * inline Whiteboards/diagrams, explicit `RasterizedImagesByBlockId`, or inline base64 PNGs.
+   * Chart blocks with tabular data remain native DrawingML charts (`ppt/charts/chartN.xml`).
+   */
+  private augmentEnginePptxWithRasterMedia(
+    engineBytes: Uint8Array,
+    slides: ReadonlyArray<SlideSpec>,
+    frozenDeck: SlideDeckSpec,
+    blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
+    options?: PptxExportOptions,
+  ): Uint8Array {
+    const mediaPlacements: Array<{
+      slideNum: number;
+      name: string;
+      bytes: Uint8Array;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }> = [];
+
+    const marginX = 609600;
+    const slideW = frozenDeck.AspectRatio === '4:3' ? 9144000 : 12192000;
+    const contentW = slideW - marginX * 2;
+
+    slides.forEach((slide, slideIdx) => {
+      const slideNum = slideIdx + 1;
+      const regionCount = Math.max(slide.Regions.length, 1);
+      const regionWidth = Math.floor(contentW / regionCount);
+
+      slide.Regions.forEach((region, rIdx) => {
+        const x = marginX + rIdx * regionWidth;
+        const y = 1752600;
+        const w = Math.max(regionWidth - 152400, 457200);
+        const h = 4419600;
+
+        const block = SlideDeckEngine.Instance.ExtractRegionBlockSpec(region);
+        if (block) {
+          const explicitBytes = options?.RasterizedImagesByBlockId?.get(block.BlockID);
+          if (explicitBytes && explicitBytes.byteLength > 0) {
+            mediaPlacements.push({
+              slideNum,
+              name: block.Title || region.Label,
+              bytes: explicitBytes,
+              x,
+              y,
+              w,
+              h,
+            });
+            return;
+          }
+          const isChartBlock =
+            block.DisplayMode === 'chart' ||
+            Boolean(block.ChartType) ||
+            Boolean(block.SheetChartID);
+          if (!isChartBlock && IsVisualDiagramOrChartBlock(block)) {
+            const liveResult = blockResultsByBlockId.get(block.BlockID);
+            const pngBytes = RasterizeBlockDiagramToPng(
+              block,
+              {
+                Primary: frozenDeck.Theme?.PrimaryColor,
+                Accent: frozenDeck.Theme?.AccentColor,
+              },
+              liveResult,
+            );
+            mediaPlacements.push({
+              slideNum,
+              name: block.Title || region.Label,
+              bytes: pngBytes,
+              x,
+              y,
+              w,
+              h,
+            });
+          }
+          return;
+        }
+
+        if (region.Kind === 'image' && region.ImageUrl) {
+          const pngMatch = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/i.exec(region.ImageUrl.trim());
+          if (pngMatch) {
+            const rawStr =
+              typeof atob === 'function'
+                ? atob(pngMatch[1])
+                : Buffer.from(pngMatch[1], 'base64').toString('binary');
+            const pngBytes = new Uint8Array(rawStr.length);
+            for (let i = 0; i < rawStr.length; i++) {
+              pngBytes[i] = rawStr.charCodeAt(i);
+            }
+            mediaPlacements.push({
+              slideNum,
+              name: region.ImageAlt || region.Label,
+              bytes: pngBytes,
+              x,
+              y,
+              w,
+              h,
+            });
+          }
+        }
+      });
+    });
+
+    if (mediaPlacements.length === 0) {
+      return engineBytes;
+    }
+
+    const binEntries = this.InspectPptxArchiveBinaryEntries(engineBytes);
+    const mutableEntries = new Map<string, string | Uint8Array>();
+    const decoder = new TextDecoder('utf-8');
+    binEntries.forEach((value, key) => {
+      mutableEntries.set(key, value);
+    });
+
+    let nextImageIndex = 1;
+    let nextShapeId = 500;
+    const picXmlBySlide = new Map<number, string[]>();
+    const relXmlBySlide = new Map<number, string[]>();
+
+    for (const item of mediaPlacements) {
+      const mediaFileName = `image${nextImageIndex++}.png`;
+      const relId = `rIdImg${item.slideNum}_${nextImageIndex - 1}`;
+      mutableEntries.set(`ppt/media/${mediaFileName}`, item.bytes);
+
+      const pics = picXmlBySlide.get(item.slideNum) ?? [];
+      pics.push(this.buildPictureXml(nextShapeId++, item.name, relId, item.x, item.y, item.w, item.h));
+      picXmlBySlide.set(item.slideNum, pics);
+
+      const rels = relXmlBySlide.get(item.slideNum) ?? [];
+      rels.push(
+        `  <Relationship Id="${this.escapeXml(relId)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${this.escapeXml(mediaFileName)}"/>`,
+      );
+      relXmlBySlide.set(item.slideNum, rels);
+    }
+
+    picXmlBySlide.forEach((pics, slideNum) => {
+      const slidePath = `ppt/slides/slide${slideNum}.xml`;
+      const rawSlide = mutableEntries.get(slidePath);
+      if (rawSlide instanceof Uint8Array) {
+        const slideXml = decoder
+          .decode(rawSlide)
+          .replace('</p:spTree>', () => `${pics.join('\n')}\n    </p:spTree>`);
+        mutableEntries.set(slidePath, slideXml);
+      }
+
+      const relsPath = `ppt/slides/_rels/slide${slideNum}.xml.rels`;
+      const relLines = relXmlBySlide.get(slideNum) ?? [];
+      const rawRels = mutableEntries.get(relsPath);
+      if (rawRels instanceof Uint8Array) {
+        const relsXml = decoder
+          .decode(rawRels)
+          .replace('</Relationships>', () => `${relLines.join('\n')}\n</Relationships>`);
+        mutableEntries.set(relsPath, relsXml);
+      }
+    });
+
+    const rawContentTypes = mutableEntries.get('[Content_Types].xml');
+    if (rawContentTypes instanceof Uint8Array) {
+      const ctXml = decoder.decode(rawContentTypes);
+      if (!ctXml.includes('Extension="png"')) {
+        mutableEntries.set(
+          '[Content_Types].xml',
+          ctXml.replace(
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n  <Default Extension="png" ContentType="image/png"/>',
+          ),
+        );
+      }
+    }
+
+    const encoder = new TextEncoder();
+    const archiveEntries: Array<{ Name: string; Data: Uint8Array }> = [];
+    mutableEntries.forEach((value, name) => {
+      archiveEntries.push({
+        Name: name,
+        Data: value instanceof Uint8Array ? value : encoder.encode(value),
+      });
+    });
+    return SpreadsheetEngine.Instance.BuildZipArchive(archiveEntries);
+  }
+
+  /**
    * Parses a `.pptx` PKZIP byte buffer generated by {@link ExportToPptxPackage} into a map of
    * `filePath -> utf8XmlString` for deterministic inspection in unit and E2E tests.
    */
   public InspectPptxArchiveEntries(pptxBytes: Uint8Array): Map<string, string> {
+    const binEntries = this.InspectPptxArchiveBinaryEntries(pptxBytes);
     const entries = new Map<string, string>();
-    const view = new DataView(pptxBytes.buffer, pptxBytes.byteOffset, pptxBytes.byteLength);
     const decoder = new TextDecoder('utf-8');
-
-    let offset = 0;
-    while (offset + 30 <= pptxBytes.byteLength) {
-      const signature = view.getUint32(offset, true);
-      if (signature !== 0x04034b50) {
-        break;
-      }
-      const compressedSize = view.getUint32(offset + 18, true);
-      const fileNameLen = view.getUint16(offset + 26, true);
-      const extraLen = view.getUint16(offset + 28, true);
-      const nameStart = offset + 30;
-      const nameBytes = pptxBytes.subarray(nameStart, nameStart + fileNameLen);
-      const fileName = decoder.decode(nameBytes);
-
-      const dataStart = nameStart + fileNameLen + extraLen;
-      const dataBytes = pptxBytes.subarray(dataStart, dataStart + compressedSize);
+    binEntries.forEach((dataBytes, fileName) => {
       entries.set(fileName, decoder.decode(dataBytes));
-
-      offset = dataStart + compressedSize;
-    }
-
+    });
     return entries;
   }
 
   /**
-   * Builds a 16:9 widescreen printable HTML document for `.pdf` export (`§ 5.3`).
+   * Builds a 16:9 or 4:3 printable HTML document for `.pdf` export (`§ 5.3`).
    */
   public BuildPrintableDeckHtml(
     deck: SlideDeckSpec,
@@ -168,6 +375,28 @@ export class SlideDeckExportService {
     includeSpeakerNotes = true,
     user?: { ID: string; Name: string } | null,
   ): string {
+    const parts = this.buildPrintableDeckParts(deck, blockResultsByBlockId, includeSpeakerNotes, user);
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${EscapeHtml(parts.title)}</title>
+  <style>
+${parts.css}
+  </style>
+</head>
+<body>
+${parts.bodyHtml}
+</body>
+</html>`;
+  }
+
+  private buildPrintableDeckParts(
+    deck: SlideDeckSpec,
+    blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
+    includeSpeakerNotes: boolean,
+    user?: { ID: string; Name: string } | null,
+  ): { title: string; css: string; bodyHtml: string } {
     const frozenDeck = SlideDeckEngine.Instance.FreezeDeckLiveBlocksForPresentation(
       deck,
       blockResultsByBlockId,
@@ -185,9 +414,11 @@ export class SlideDeckExportService {
       HeadingFont: engine.SanitizeCssValue(rawTheme?.HeadingFont, 'Inter, system-ui, sans-serif'),
       BodyFont: engine.SanitizeCssValue(rawTheme?.BodyFont, 'Inter, system-ui, sans-serif'),
     };
-    const total = frozenDeck.Slides.length;
+    const visibleSlides = frozenDeck.Slides.filter((s) => !s.Hidden);
+    const total = visibleSlides.length;
+    const isFourByThree = frozenDeck.AspectRatio === '4:3';
 
-    const slideSections = frozenDeck.Slides.filter((s) => !s.Hidden).map((slide, idx) => {
+    const slideSections = visibleSlides.map((slide, idx) => {
       const regionsHtml = slide.Regions.map((r) => this.renderPrintableRegionHtml(r)).join('\n');
       const notesHtml =
         includeSpeakerNotes && slide.SpeakerNotes
@@ -215,13 +446,7 @@ export class SlideDeckExportService {
 </section>`;
     });
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${EscapeHtml(frozenDeck.Title)}</title>
-  <style>
-    @page { size: 16in 9in; margin: 0; }
+    const css = `    @page { size: ${isFourByThree ? '10in 7.5in' : '16in 9in'}; margin: 0; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -276,6 +501,12 @@ export class SlideDeckExportService {
       border-radius: 8px;
       padding: 16px;
     }
+    .print-region-card img {
+      max-width: 100%;
+      max-height: 360px;
+      object-fit: contain;
+      display: block;
+    }
     .print-big-number {
       font-size: 54px;
       font-weight: 800;
@@ -298,26 +529,28 @@ export class SlideDeckExportService {
       font-size: 13px;
       background: ${this.sanitizeStyleDeclarationValue(theme.SurfaceColor)};
       border-left: 4px solid ${this.sanitizeStyleDeclarationValue(theme.AccentColor)};
-    }
-  </style>
-</head>
-<body>
-${slideSections.join('\n')}
-</body>
-</html>`;
+    }`;
+
+    return {
+      title: frozenDeck.Title,
+      css,
+      bodyHtml: slideSections.join('\n'),
+    };
   }
 
   /**
-   * Keeps valid single/double quotes for CSS font-family declarations intact inside `<style>`
-   * (where HTML entities like `&#39;` are not decoded) while guaranteeing `<`, `>`, and `</style`
-   * can never appear.
+   * Sanitizes CSS declaration values emitted into printable HTML `<style>` blocks so
+   * `<style>` breakout and `url(...)`/`expression(...)`/statement-injection payloads are rejected.
    */
   private sanitizeStyleDeclarationValue(value: string): string {
-    return (value || '').replace(/<\/style/gi, '').replace(/[<>]/g, '');
+    return SlideDeckEngine.Instance.SanitizeCssValue(value, '')
+      .replace(/<\/style/gi, '')
+      .replace(/[<>;{}]/g, '');
   }
 
   /**
-   * Opens a browser print window for 16:9 PDF export of the presentation.
+   * Prints the deck via a sandboxed, CSP-isolated hidden iframe (no `window.open` / `document.write`)
+   * and returns the printable HTML markup.
    */
   public ExportPrintablePdf(
     deck: SlideDeckSpec,
@@ -325,17 +558,12 @@ ${slideSections.join('\n')}
     includeSpeakerNotes = true,
     user?: { ID: string; Name: string } | null,
   ): string {
-    const html = this.BuildPrintableDeckHtml(deck, blockResultsByBlockId, includeSpeakerNotes, user);
-    if (typeof window !== 'undefined' && typeof window.open === 'function') {
-      const printWin = window.open('', '_blank', 'width=1280,height=720');
-      if (printWin) {
-        printWin.document.write(html);
-        printWin.document.close();
-        printWin.focus();
-        printWin.print();
-      }
-    }
-    return html;
+    const parts = this.buildPrintableDeckParts(deck, blockResultsByBlockId, includeSpeakerNotes, user);
+    PrintHtmlInSandboxedIframe(parts.bodyHtml, {
+      Title: parts.title,
+      TrustedPrintCss: parts.css,
+    });
+    return this.BuildPrintableDeckHtml(deck, blockResultsByBlockId, includeSpeakerNotes, user);
   }
 
   private renderPrintableRegionHtml(region: SlideRegionSpec): string {
@@ -348,8 +576,12 @@ ${slideSections.join('\n')}
           const tds = cols.map((c) => `<td>${EscapeHtml(String(row[c.Name] ?? ''))}</td>`).join('');
           return `<tr>${tds}</tr>`;
         }).join('');
+        const chartNote =
+          block.DisplayMode === 'chart' || Boolean(block.SheetChartID)
+            ? ` · ${EscapeHtml(block.ChartType || 'bar')} chart`
+            : '';
         return `<div class="print-region-card">
-          <h4>${EscapeHtml(block.Title || region.Label)} (Frozen Snapshot)</h4>
+          <h4>${EscapeHtml(block.Title || region.Label)} (Frozen Snapshot${chartNote})</h4>
           <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
         </div>`;
       }
@@ -374,6 +606,27 @@ ${slideSections.join('\n')}
       </div>`;
     }
 
+    if (region.Kind === 'image') {
+      const safeSrc = SlideDeckEngine.Instance.SanitizeImageUrl(region.ImageUrl ?? '');
+      if (safeSrc) {
+        return `<div class="print-region-card">
+          <img src="${EscapeHtml(safeSrc)}" alt="${EscapeHtml(region.ImageAlt || region.Label)}" />
+        </div>`;
+      }
+      return `<div class="print-region-card"><p>${EscapeHtml(region.ImageAlt || region.Label)}</p></div>`;
+    }
+
+    if (region.Kind === 'table') {
+      const parsedTable = this.parseMarkdownPipeTable(region.MarkdownContent);
+      if (parsedTable) {
+        const ths = parsedTable.Headers.map((h) => `<th>${EscapeHtml(h)}</th>`).join('');
+        const trs = parsedTable.Rows.map(
+          (row) => `<tr>${row.map((cell) => `<td>${EscapeHtml(cell)}</td>`).join('')}</tr>`,
+        ).join('');
+        return `<div class="print-region-card"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+      }
+    }
+
     const lines = (region.MarkdownContent || '')
       .split('\n')
       .map((l) => `<p>${EscapeHtml(l)}</p>`)
@@ -381,7 +634,38 @@ ${slideSections.join('\n')}
     return `<div class="print-region-card">${lines}</div>`;
   }
 
-  private buildContentTypesXml(slideCount: number): string {
+  private parseMarkdownPipeTable(markdown: string): { Headers: string[]; Rows: string[][] } | null {
+    const rawLines = (markdown || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.includes('|'));
+    if (rawLines.length < 2) {
+      return null;
+    }
+    const splitRow = (line: string): string[] =>
+      line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((cell) => cell.trim());
+    const headers = splitRow(rawLines[0]);
+    if (headers.length === 0) {
+      return null;
+    }
+    const startIdx = /^[-|:\s]+$/.test(rawLines[1]) ? 2 : 1;
+    const rows = rawLines.slice(startIdx).map(splitRow);
+    return { Headers: headers, Rows: rows };
+  }
+
+  /**
+   * Parses a `.pptx` PKZIP byte buffer into raw `filePath -> Uint8Array` binary entries
+   * so tests and exporters can inspect embedded PNG assets (`ppt/media/image*.png`).
+   */
+  public InspectPptxArchiveBinaryEntries(pptxBytes: Uint8Array): Map<string, Uint8Array> {
+    return SpreadsheetEngine.Instance.ExtractZipArchive(pptxBytes);
+  }
+
+  private buildContentTypesXml(slideCount: number, hasPngMedia = false): string {
     const slideOverrides: string[] = [];
     for (let i = 1; i <= slideCount; i++) {
       slideOverrides.push(
@@ -395,7 +679,9 @@ ${slideSections.join('\n')}
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>${
+    hasPngMedia ? '\n  <Default Extension="png" ContentType="image/png"/>' : ''
+  }
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -411,10 +697,13 @@ ${slideOverrides.join('\n')}
 </Relationships>`;
   }
 
-  private buildPresentationXml(deck: SlideDeckSpec): string {
-    const sldIds = deck.Slides.map(
+  private buildPresentationXml(deck: SlideDeckSpec, slides: SlideSpec[] = deck.Slides): string {
+    const sldIds = slides.map(
       (_, idx) => `    <p:sldId id="${256 + idx}" r:id="rIdSlide${idx + 1}"/>`,
     ).join('\n');
+    const isFourByThree = deck.AspectRatio === '4:3';
+    const cx = isFourByThree ? 9144000 : 12192000;
+    const cy = 6858000;
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -426,7 +715,7 @@ ${slideOverrides.join('\n')}
   <p:sldIdLst>
 ${sldIds}
   </p:sldIdLst>
-  <p:sldSz cx="12192000" cy="6858000"/>
+  <p:sldSz cx="${cx}" cy="${cy}"${isFourByThree ? ' type="screen4x3"' : ' type="screen16x9"'}/>
   <p:notesSz cx="6858000" cy="9144000"/>
 </p:presentation>`;
   }
@@ -480,7 +769,28 @@ ${rels.join('\n')}
       <a:majorFont><a:latin typeface="${this.escapeXml(deck.Theme.HeadingFont || 'Inter')}"/></a:majorFont>
       <a:minorFont><a:latin typeface="${this.escapeXml(deck.Theme.BodyFont || 'Inter')}"/></a:minorFont>
     </a:fontScheme>
-    <a:fmtScheme name="MJFormat"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme>
+    <a:fmtScheme name="MJFormat">
+      <a:fillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+        <a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:tint val="50000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="50000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill>
+        <a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:tint val="80000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="30000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill>
+      </a:fillStyleLst>
+      <a:lnStyleLst>
+        <a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+        <a:ln w="25400" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+        <a:ln w="38100" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+      </a:lnStyleLst>
+      <a:effectStyleLst>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+      </a:effectStyleLst>
+      <a:bgFillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+        <a:solidFill><a:schemeClr val="phClr"><a:tint val="95000"/></a:schemeClr></a:solidFill>
+        <a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:tint val="40000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="60000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill>
+      </a:bgFillStyleLst>
+    </a:fmtScheme>
   </a:themeElements>
 </a:theme>`;
   }
@@ -543,9 +853,18 @@ ${rels.join('\n')}
     slideNumber: number,
     totalSlides: number,
     deck: SlideDeckSpec,
+    mediaContext?: {
+      allocateImage: (bytes: Uint8Array) => string;
+      rasterizedImagesByBlockId?: ReadonlyMap<string, Uint8Array>;
+      blockResultsByBlockId?: ReadonlyMap<string, DocumentBlockExecutionResult>;
+    },
   ): string {
     const shapes: string[] = [];
     let nextShapeId = 2;
+    const isFourByThree = deck.AspectRatio === '4:3';
+    const slideCx = isFourByThree ? 9144000 : 12192000;
+    const marginX = 609600;
+    const contentW = slideCx - marginX * 2;
 
     // 1. Title & Subtitle Shape
     const headerLines = [slide.Title];
@@ -553,23 +872,71 @@ ${rels.join('\n')}
       headerLines.push(slide.Subtitle);
     }
     shapes.push(
-      this.buildTextShapeXml(nextShapeId++, 'SlideTitle', 609600, 457200, 10972800, 1143000, headerLines),
+      this.buildTextShapeXml(nextShapeId++, 'SlideTitle', marginX, 457200, contentW, 1143000, headerLines),
     );
 
-    // 2. Slide Regions (RichText, Callouts, BigNumbers, Quotes, Frozen MJ Data Tables, OLE Whiteboards)
+    // 2. Slide Regions (RichText, Callouts, BigNumbers, Quotes, Frozen MJ Data Tables, Charts/Whiteboards)
     const regionCount = Math.max(slide.Regions.length, 1);
-    const regionWidth = Math.floor(10972800 / regionCount);
+    const regionWidth = Math.floor(contentW / regionCount);
 
     slide.Regions.forEach((region, rIdx) => {
-      const x = 609600 + rIdx * regionWidth;
+      const x = marginX + rIdx * regionWidth;
       const y = 1752600;
-      const w = regionWidth - 152400;
+      const w = Math.max(regionWidth - 152400, 457200);
       const h = 4419600;
 
       const block = SlideDeckEngine.Instance.ExtractRegionBlockSpec(region);
       if (block) {
+        if (IsVisualDiagramOrChartBlock(block) && mediaContext) {
+          const customBytes = mediaContext.rasterizedImagesByBlockId?.get(block.BlockID);
+          const liveResult = mediaContext.blockResultsByBlockId?.get(block.BlockID);
+          const pngBytes =
+            customBytes && customBytes.byteLength > 0
+              ? customBytes
+              : RasterizeBlockDiagramToPng(
+                  block,
+                  {
+                    Primary: deck.Theme?.PrimaryColor,
+                    Accent: deck.Theme?.AccentColor,
+                  },
+                  liveResult,
+                );
+          const relId = mediaContext.allocateImage(pngBytes);
+          const imgHeight = block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0 ? Math.floor(h * 0.52) : h;
+          shapes.push(
+            this.buildPictureXml(nextShapeId++, block.Title || region.Label, relId, x, y, w, imgHeight),
+          );
+          if (block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0) {
+            shapes.push(
+              this.buildBlockRegionXml(
+                nextShapeId++,
+                block,
+                region,
+                x,
+                y + imgHeight + 91440,
+                w,
+                Math.max(h - imgHeight - 91440, 457200),
+              ),
+            );
+          }
+          return;
+        }
         shapes.push(this.buildBlockRegionXml(nextShapeId++, block, region, x, y, w, h));
         return;
+      }
+
+      if (region.Kind === 'image' && region.ImageUrl && mediaContext) {
+        const pngMatch = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/i.exec(region.ImageUrl.trim());
+        if (pngMatch) {
+          const rawStr = typeof atob === 'function' ? atob(pngMatch[1]) : Buffer.from(pngMatch[1], 'base64').toString('binary');
+          const bytes = new Uint8Array(rawStr.length);
+          for (let i = 0; i < rawStr.length; i++) {
+            bytes[i] = rawStr.charCodeAt(i);
+          }
+          const relId = mediaContext.allocateImage(bytes);
+          shapes.push(this.buildPictureXml(nextShapeId++, region.ImageAlt || region.Label, relId, x, y, w, h));
+          return;
+        }
       }
 
       if (region.Kind === 'big-number') {
@@ -615,19 +982,20 @@ ${rels.join('\n')}
         this.buildTextShapeXml(
           nextShapeId++,
           'SlideFooterNumber',
-          609600,
+          marginX,
           6324600,
-          10972800,
+          contentW,
           381000,
           [`${deck.Master.FooterText || deck.Title} · Slide ${slideNumber} / ${totalSlides}`],
         ),
       );
     }
 
+    const showAttr = slide.Hidden ? ' show="0"' : '';
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"${showAttr}>
   <p:cSld name="${this.escapeXml(slide.Title)}">
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
@@ -650,7 +1018,7 @@ ${shapes.join('\n')}
     if (block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0) {
       const cols = block.FrozenSnapshot.Columns;
       const rows = block.FrozenSnapshot.Rows;
-      const colWidth = Math.max(Math.floor(w / cols.length), 914400);
+      const colWidth = Math.max(1, Math.floor(w / cols.length));
 
       const gridCols = cols.map(() => `            <a:gridCol w="${colWidth}"/>`).join('\n');
       const headerCells = cols
@@ -746,11 +1114,45 @@ ${pXml}
       </p:sp>`;
   }
 
-  private buildSlideRelsXml(slideNumber: number): string {
+  private buildPictureXml(
+    id: number,
+    name: string,
+    relId: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): string {
+    return `      <p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="${id}" name="${this.escapeXml(name)}"/>
+          <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="${this.escapeXml(relId)}"/>
+          <a:stretch><a:fillRect/></a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:pic>`;
+  }
+
+  private buildSlideRelsXml(slideNumber: number, imageRefs: ReadonlyArray<SlideMediaImageRef> = []): string {
+    const imageRelLines = imageRefs
+      .map(
+        (img) =>
+          `  <Relationship Id="${this.escapeXml(img.RelId)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${this.escapeXml(img.MediaFileName)}"/>`,
+      )
+      .join('\n');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rIdLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-  <Relationship Id="rIdNotes1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide${slideNumber}.xml"/>
+  <Relationship Id="rIdNotes1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide${slideNumber}.xml"/>${
+    imageRelLines ? `\n${imageRelLines}` : ''
+  }
 </Relationships>`;
   }
 
@@ -783,6 +1185,7 @@ ${this.buildTextShapeXml(2, 'SpeakerNotesBody', 685800, 4572000, 5486400, 365760
 
   private escapeXml(value: string): string {
     return (value ?? '')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
       .replace(/&/g, () => '&amp;')
       .replace(/</g, () => '&lt;')
       .replace(/>/g, () => '&gt;')
@@ -793,7 +1196,7 @@ ${this.buildTextShapeXml(2, 'SpeakerNotesBody', 685800, 4572000, 5486400, 365760
   /**
    * Packs a map of `path -> utf8Content` into a valid uncompressed PKZIP archive (`Uint8Array`).
    */
-  private packZipArchive(entries: ReadonlyMap<string, string>): Uint8Array {
+  private packZipArchive(entries: ReadonlyMap<string, string | Uint8Array>): Uint8Array {
     const encoder = new TextEncoder();
     const localHeadersAndData: Uint8Array[] = [];
     const centralHeaders: Uint8Array[] = [];
@@ -801,7 +1204,7 @@ ${this.buildTextShapeXml(2, 'SpeakerNotesBody', 685800, 4572000, 5486400, 365760
 
     entries.forEach((content, filePath) => {
       const nameBytes = encoder.encode(filePath);
-      const dataBytes = encoder.encode(content);
+      const dataBytes = content instanceof Uint8Array ? content : encoder.encode(content);
       const crc = this.computeCrc32(dataBytes);
 
       const localHeader = new Uint8Array(30 + nameBytes.byteLength);

@@ -1,6 +1,6 @@
-import { Component, Input, OnChanges, OnInit, SimpleChanges, Type } from '@angular/core';
+import { Component, Input, OnInit, Type } from '@angular/core';
 import { DataSnapshot, LogError } from '@memberjunction/core';
-import { BrandKitEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MediaTrack } from '@memberjunction/ng-media-player';
 import {
@@ -45,7 +45,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 @RegisterClass(BaseArtifactViewerPluginComponent, 'VideoProductionViewerPlugin')
 export class VideoProductionViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, OnChanges
+  implements OnInit
 {
   public static readonly PreviewComponentType: Type<IArtifactPreviewComponent> =
     VideoProductionArtifactPreviewComponent;
@@ -76,8 +76,12 @@ export class VideoProductionViewerComponent
     this.parseSpec();
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
+  protected override onArtifactVersionChanged(
+    _previous: MJArtifactVersionEntity | undefined,
+    _current: MJArtifactVersionEntity,
+    isFirstChange: boolean,
+  ): void {
+    if (!isFirstChange) {
       this.parseSpec();
     }
   }
@@ -384,7 +388,7 @@ export class VideoProductionViewerComponent
     return snap;
   }
 
-  private cleanStatValue(value: unknown): string | null {
+  private cleanStatValue(value: string | number | boolean | object | null | undefined): string | null {
     if (typeof value !== 'string') {
       return null;
     }

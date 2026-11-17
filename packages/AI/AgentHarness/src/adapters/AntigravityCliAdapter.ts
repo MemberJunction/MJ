@@ -134,8 +134,17 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
 
         const args: string[] = ['-p', effectivePrompt, '--output-format', 'stream-json'];
 
+        const seenDirs = new Set<string>();
         if (this.config?.WorkspacePath && !this.config.WorkspacePath.startsWith('cloud://')) {
+            seenDirs.add(this.config.WorkspacePath);
             args.push('--add-dir', this.config.WorkspacePath);
+        }
+        for (const extraDir of this.config?.AdditionalDirectories ?? []) {
+            const trimmed = extraDir.trim();
+            if (trimmed && !trimmed.startsWith('cloud://') && !seenDirs.has(trimmed)) {
+                seenDirs.add(trimmed);
+                args.push('--add-dir', trimmed);
+            }
         }
 
         if (this.sessionId && (!isFirstTurn || this.didResume)) {
@@ -170,7 +179,9 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             this.sessionId = conversationId;
         }
 
-        const topLevelModel = this.readString(raw, 'model');
+        const topLevelModel =
+            this.readString(raw, 'model') ??
+            this.readString(this.readObject(raw, 'init') ?? {}, 'model');
         if (topLevelModel) {
             this.reportedModel = topLevelModel;
         }
@@ -178,6 +189,57 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
         const eventType = this.readString(raw, 'type') ?? this.readString(raw, 'event');
 
         switch (eventType) {
+            case 'init': {
+                return null;
+            }
+            case 'step_update': {
+                const stepUpdate = this.readObject(raw, 'step_update');
+                if (!stepUpdate) {
+                    return null;
+                }
+                const stepConvId = this.readString(stepUpdate, 'conversation_id');
+                if (stepConvId) {
+                    this.sessionId = stepConvId;
+                }
+                const stepType = this.readString(stepUpdate, 'step_type');
+                const state = this.readString(stepUpdate, 'state');
+                const stepIndex = this.readNumber(stepUpdate, 'step_index') ?? 0;
+                const textDelta =
+                    this.readString(stepUpdate, 'text_delta') ??
+                    this.readString(stepUpdate, 'text') ??
+                    this.readString(stepUpdate, 'content');
+                if (stepType === 'agent_response' && textDelta) {
+                    return { Type: 'assistant-text', Text: textDelta };
+                }
+                if (stepType === 'tool') {
+                    const toolInfo = this.readObject(stepUpdate, 'tool_info');
+                    const toolName =
+                        this.readString(stepUpdate, 'tool_name') ??
+                        (toolInfo ? this.readString(toolInfo, 'name') : undefined) ??
+                        'tool';
+                    const toolCallId = `step-${stepIndex}-${toolName}`;
+                    if (state === 'ACTIVE') {
+                        const paramsObj = toolInfo ? this.readObject(toolInfo, 'parameters') : undefined;
+                        return {
+                            Type: 'tool-use-start',
+                            ToolCallId: toolCallId,
+                            ToolName: toolName,
+                            ArgumentsJson: paramsObj ? JSON.stringify(paramsObj) : undefined,
+                        };
+                    }
+                    if (state === 'DONE' || state === 'ERROR') {
+                        const output = toolInfo ? this.readString(toolInfo, 'output') ?? '' : '';
+                        return {
+                            Type: 'tool-result',
+                            ToolCallId: toolCallId,
+                            ToolName: toolName,
+                            Output: output,
+                            IsError: state === 'ERROR',
+                        };
+                    }
+                }
+                return null;
+            }
             case 'assistant':
             case 'text':
             case 'text_delta':
@@ -256,12 +318,19 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             case 'turn_complete':
             case 'complete':
             case 'done': {
+                const resultObj = this.readObject(raw, 'result');
+                const resultConvId = resultObj ? this.readString(resultObj, 'conversation_id') : undefined;
+                if (resultConvId) {
+                    this.sessionId = resultConvId;
+                }
                 const usageObj =
-                    this.readObject(raw, 'usage_metadata') ?? this.readObject(raw, 'usage');
-                const terminal = this.buildTerminalFromResult(raw);
+                    this.readObject(raw, 'usage_metadata') ??
+                    this.readObject(raw, 'usage') ??
+                    (resultObj ? this.readObject(resultObj, 'usage_metadata') ?? this.readObject(resultObj, 'usage') : undefined);
+                const terminal = this.buildTerminalFromResult(raw, resultObj);
                 if (usageObj) {
                     this.pendingTerminal = terminal;
-                    return this.mapUsageObject(usageObj, raw);
+                    return this.mapUsageObject(usageObj, resultObj ?? raw);
                 }
                 return terminal;
             }
@@ -296,11 +365,22 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
     }
 
     protected override async *readEvents(proc: HarnessProcess): AsyncIterable<HarnessTurnEvent> {
+        let accumulatedAssistantText = '';
         for await (const event of super.readEvents(proc)) {
+            if (event.Type === 'assistant-text' && event.Text) {
+                accumulatedAssistantText += event.Text;
+            } else if (event.Type === 'turn-complete') {
+                if (!event.RawText.trim()) {
+                    event.RawText = accumulatedAssistantText.trim() || 'Turn completed successfully.';
+                }
+            }
             yield event;
             if (this.pendingTerminal) {
                 const terminal = this.pendingTerminal;
                 this.pendingTerminal = null;
+                if (terminal.Type === 'turn-complete' && !terminal.RawText.trim()) {
+                    terminal.RawText = accumulatedAssistantText.trim() || 'Turn completed successfully.';
+                }
                 yield terminal;
             }
         }
@@ -334,13 +414,26 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
         };
     }
 
-    private buildTerminalFromResult(raw: HarnessCliRawEvent): HarnessTurnEvent {
+    private buildTerminalFromResult(
+        raw: HarnessCliRawEvent,
+        resultObj?: HarnessCliRawEvent,
+    ): HarnessTurnEvent {
+        const rawResponse = resultObj
+            ? this.readString(resultObj, 'response') ?? this.readString(resultObj, 'text')
+            : undefined;
         const text =
+            (rawResponse && rawResponse.trim() ? rawResponse : undefined) ??
             this.readString(raw, 'result') ??
             this.readString(raw, 'response') ??
             this.readString(raw, 'text') ??
             '';
-        if (raw['is_error'] === true) {
+        const status = resultObj ? this.readString(resultObj, 'status') : undefined;
+        const trimmedText = text.trim();
+        const looksLikeJsonDecision = trimmedText.startsWith('{') && trimmedText.endsWith('}');
+        if (
+            !looksLikeJsonDecision &&
+            (raw['is_error'] === true || (status && status.toUpperCase() === 'ERROR'))
+        ) {
             return {
                 Type: 'session-error',
                 Error: text || 'Antigravity CLI reported a failed turn',

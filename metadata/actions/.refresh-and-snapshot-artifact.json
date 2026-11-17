@@ -1,0 +1,373 @@
+[
+  {
+    "fields": {
+      "Name": "Refresh and Snapshot Artifact",
+      "Description": "Refreshes an artifact's live blocks (LiveTables, =MJ.QUERY, =MJ.VIEW, =MJ.IMPORTRANGE, :::mj-block) under the triggering user's permissions, saves a new version when changes are detected, computes a diff summary, and optionally posts a summary card to a Conversation.",
+      "DriverClass": "__RefreshAndSnapshotArtifact",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rotate",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MJ: Artifacts record to refresh and snapshot",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000002"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FreezeRefreshedBlocks",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, freezes live blocks into static point-in-time snapshots in vN+1",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000003"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConversationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: Conversations UUID to post a summary card and artifact link when updated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000004"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ForceSaveIfUnchanged",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, saves a new version even if the refreshed digest matches the latest version",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000005"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionComments",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional version comment stored on vN+1",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000006"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ForceRefreshFrozen",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, refreshes live blocks even if they are currently frozen (default false)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "41E37F99-DB03-4D14-A0A4-969AB90F0FA5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostToConversation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true (defaults to true when ConversationID is provided), posts the snapshot summary back to the conversation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "50667ECC-FA21-43C1-BEA8-5B0D15797A6D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Changed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True when refreshed live data differed from the prior version",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000007"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the previous artifact version before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "19136719-6D85-4372-9DB4-421B298A0367"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version number before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA7F3B42-A61D-4EC0-9AFA-0504F62894F1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the newly created (or unchanged existing) artifact version",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000008"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewVersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version number after refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000009"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiffSummary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable summary of changed lines/values between versions",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-10000000000A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostedConversationDetailID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created MJ: Conversation Details summary post when ConversationID was supplied",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-10000000000B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolved latest MJ: Artifact Versions ID (new version ID if Changed is true, otherwise existing version ID)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BFDC963E-436A-4B24-8EA5-5FB91513B0AB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Display name of the refreshed MJ: Artifacts record",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CA3FD38E-DF01-44A0-9DB6-FD5074143397"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactTypeName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact type name of the refreshed artifact (for example Presentation, Markdown Document, Excel Spreadsheet, or Whiteboard)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E4A7D2BE-5F90-4984-B529-EFC4BA570D7B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriverClass",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Viewer plugin DriverClass resolved from the artifact's MJ: Artifact Types record",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2000BF9F-2ED6-4780-991E-C7F3F5486839"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Artifact refreshed and new version saved",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000010"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_CHANGES",
+            "Description": "Artifact live blocks refreshed cleanly with no detected changes",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000011"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "Description": "Triggering user lacks CanEdit permission on the target artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000012"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "Description": "ContextUser is required to refresh an artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "2BAD400E-5EB3-4515-A164-9130BF95E6D5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ARTIFACT_ID",
+            "Description": "ArtifactID parameter is required",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "CED00463-C096-4EBF-AF61-FA81148AD481"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_NOT_FOUND",
+            "Description": "Target artifact record was not found",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "55176662-7241-4EEB-9505-E8812C47C932"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VERSION_NOT_FOUND",
+            "Description": "No artifact versions exist for the target artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "422D0C07-8FBE-49FC-91B5-BE53D5DB980D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_VERSION_FAILED",
+            "Description": "Failed to save the refreshed artifact version record",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "0512A291-B1EF-4F62-A7F9-B32E24AE9757"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "Description": "Unexpected error while refreshing and snapshotting the artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "89A36105-E241-4239-8C0B-A647FB38464E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000001"
+    }
+  }
+]

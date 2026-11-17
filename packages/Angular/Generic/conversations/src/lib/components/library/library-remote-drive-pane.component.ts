@@ -3,11 +3,9 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
   OnDestroy,
   OnInit,
   Output,
-  SimpleChanges,
   inject,
 } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -635,9 +633,36 @@ const MAX_TEXT_PREVIEW_READ_BYTES = 102_400;
     `,
   ],
 })
-export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
-  @Input() Account!: StorageAccountWithProvider;
-  @Input() CurrentPrefix = '';
+export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  private _account!: StorageAccountWithProvider;
+  private _currentPrefix = '';
+  private isInitialized = false;
+
+  @Input()
+  public set Account(value: StorageAccountWithProvider) {
+    const changed = this._account !== value;
+    this._account = value;
+    if (this.isInitialized && changed) {
+      this.onAccountOrPrefixChanged();
+    }
+  }
+  public get Account(): StorageAccountWithProvider {
+    return this._account;
+  }
+
+  @Input()
+  public set CurrentPrefix(value: string) {
+    const next = value ?? '';
+    const changed = this._currentPrefix !== next;
+    this._currentPrefix = next;
+    if (this.isInitialized && changed) {
+      this.onAccountOrPrefixChanged();
+    }
+  }
+  public get CurrentPrefix(): string {
+    return this._currentPrefix;
+  }
+
   @Input() CurrentUser!: UserInfo;
   @Input() EnvironmentId = '';
   @Input() Collections: LibraryCollectionNode[] = [];
@@ -674,6 +699,7 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   private readonly notifications = inject(MJNotificationService);
 
   public ngOnInit(): void {
+    this.isInitialized = true;
     void this.ReloadListing();
   }
 
@@ -681,12 +707,10 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
     this.abortActivePreviewStream();
   }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if ((changes['Account'] && !changes['Account'].firstChange) || (changes['CurrentPrefix'] && !changes['CurrentPrefix'].firstChange)) {
-      this.ClosePreview();
-      this.RemoteSearchResults = null;
-      void this.ReloadListing();
-    }
+  private onAccountOrPrefixChanged(): void {
+    this.ClosePreview();
+    this.RemoteSearchResults = null;
+    void this.ReloadListing();
   }
 
   public get ProviderIcon(): string {
@@ -704,7 +728,16 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   }
 
   public get Breadcrumbs(): FolderEntry[] {
-    const clean = (this.CurrentPrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const rawPrefix = this.CurrentPrefix ?? '';
+    let start = 0;
+    while (start < rawPrefix.length && rawPrefix[start] === '/') {
+      start++;
+    }
+    let end = rawPrefix.length;
+    while (end > start && rawPrefix[end - 1] === '/') {
+      end--;
+    }
+    const clean = rawPrefix.slice(start, end);
     if (!clean) return [];
     const segments = clean.split('/').filter((s) => s.length > 0);
     const crumbs: FolderEntry[] = [];
@@ -852,10 +885,17 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
       if (requestId !== this.previewRequestSeq) {
         return;
       }
-      this.PreviewUrl = signedUrl;
+      const safeUrl = this.parseSafeHttpUrl(signedUrl);
+      if (!safeUrl) {
+        this.PreviewUrl = null;
+        this.SafePreviewUrl = null;
+        this.PreviewError = 'Invalid or unsupported download URL returned by storage provider.';
+        return;
+      }
+      this.PreviewUrl = safeUrl;
 
       if (this.PreviewKind === 'pdf') {
-        this.SafePreviewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(signedUrl);
+        this.SafePreviewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(safeUrl);
       } else if (this.PreviewKind === 'text') {
         if (Number.isFinite(file.size) && file.size > MAX_TEXT_PREVIEW_METADATA_BYTES) {
           this.PreviewTextContent = `File is large (${this.FormatBytes(file.size)}) — click Download to view.`;
@@ -974,8 +1014,24 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   }
 
   public DownloadSelectedObject(): void {
-    if (!this.PreviewUrl) return;
-    window.open(this.PreviewUrl, '_blank', 'noopener');
+    const safeUrl = this.parseSafeHttpUrl(this.PreviewUrl);
+    if (!safeUrl) return;
+    window.open(safeUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  private parseSafeHttpUrl(rawUrl: string | null | undefined): string | null {
+    if (!rawUrl || !rawUrl.trim()) {
+      return null;
+    }
+    try {
+      const parsed = new URL(rawUrl.trim());
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        return parsed.toString();
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   public async ConvertCopyToNativeLibrary(): Promise<void> {
@@ -987,6 +1043,14 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
         AccountID: this.Account.account.ID,
         ObjectPath: this.SelectedObject.fullPath,
         FileName: this.SelectedObject.name,
+        ProviderType: this.Account.provider?.Name ?? this.Account.account?.Name ?? 'ConnectedDrive',
+        ETag: this.SelectedObject.etag || undefined,
+        RemoteModifiedAt:
+          this.SelectedObject.lastModified instanceof Date
+            ? this.SelectedObject.lastModified.toISOString()
+            : typeof this.SelectedObject.lastModified === 'string'
+              ? this.SelectedObject.lastModified
+              : undefined,
         EnvironmentID: this.EnvironmentId,
         CurrentUser: this.CurrentUser,
         Provider: this.ProviderToUse,
