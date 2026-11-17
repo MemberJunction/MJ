@@ -27,9 +27,12 @@ import {
     InterpretRoutingAnswers,
     KeptContinuityOutcome,
     NoAgentOutcome,
+    ROUTING_CONTINUES_CALIBRATION_KEY,
+    RoutingAnsweredBy,
     type RoutingDecisionInput,
     type RoutingDecisionOutcome
 } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { AgentReplyMode } from '../models/agent-turn.model';
@@ -83,6 +86,9 @@ export function ShouldRunRoutingDecision(gate: RoutingDecisionGate): boolean {
  * @param input What to decide. Check it with `CanAskRoutingDecision` first.
  * @param runDecision Runs the decision on the server.
  * @param timeoutMs How long to wait. Defaults to `DECISION_ROUTING_TIMEOUT_MS`.
+ *
+ * The thread Likelihood is calibrated with the answering model's fit, from
+ * `AIEngineBase.Instance.FindDecisionCalibration`.
  */
 export async function RunRoutingDecision(
     input: RoutingDecisionInput,
@@ -96,7 +102,8 @@ export async function RunRoutingDecision(
     };
     const result = await runWithDeadline(() => runDecision(params), timeoutMs);
     if (result) {
-        return InterpretRoutingAnswers(input, result);
+        const calibration = AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result));
+        return InterpretRoutingAnswers(input, result, calibration);
     }
     const reason = `no answer within ${timeoutMs} ms`;
     return input.AllowNoAgentOption ? NoAgentOutcome(reason) : KeptContinuityOutcome(reason);

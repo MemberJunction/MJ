@@ -1343,7 +1343,7 @@ export class MemoryManagerAgent extends BaseAgent {
             return;
         }
         MemoryManagerAgent._uncalibratedGateModelsLogged.add(described);
-        LogStatus(`Memory Manager: ${described} has no memory-note calibration (MEMORY_NOTE_DECISION_CALIBRATION), so the decision gate falls back to the confidence filter for its batches`);
+        LogStatus(`Memory Manager: ${described} has no memory-note calibration (use 'memory-note-gate' in its ModelConfiguration.Decision.Calibrations), so the decision gate falls back to the confidence filter for its batches`);
     }
 
     /**

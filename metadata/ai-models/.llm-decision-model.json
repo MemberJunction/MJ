@@ -8,7 +8,45 @@
       "IsActive": true,
       "SpeedRank": 0,
       "CostRank": 0,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "Calibrations": [
+            {
+              "Use": "conversation-routing",
+              "Question": "continues",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 1.6508,
+              "B": -2.911,
+              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29, via Cerebras: 301 scored points, 5 repeats. Out of fold: balanced accuracy 0.796 raw → 0.861 calibrated, ECE 0.195 → 0.081. Fitted at the corpus mix (42% continue)."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "agent",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 1.4301,
+              "B": -0.0755,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats (GPT-OSS-120B answered all 774 runs). At a calibrated 0.85: at least 16.0% coverage at 92.6% precision."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "anyApplies",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 0.7114,
+              "B": 0.9073,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats; Likelihood against whether the request was meant for an agent."
+            },
+            {
+              "Use": "duplicate-detection",
+              "Question": "duplicate",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 0.9918,
+              "B": -1.4843,
+              "FittedOn": "Duplicate-check measurement, 2026-09-29: 160 labelled new MJ: Actions records; the stored runs don't record the resolved model, this is the LLM Decision prompt's first binding that day."
+            }
+          ]
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
