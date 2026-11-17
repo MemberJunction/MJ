@@ -1837,16 +1837,17 @@ export function resolveSubpathExports(packageDir: string): Map<string, Set<strin
 }
 
 /**
- * Count the subpath exports that resolution is actually *expected* to satisfy: non-`.` entries
- * carrying a `types` field.
+ * Count declared subpath exports whose `.d.ts` target is missing on disk: non-`.` entries
+ * carrying a `types` field where the resolved `.d.ts` file does not exist.
  *
  * This is deliberately narrower than {@link hasSubpathExports}, which answers "is there any key
  * besides `.`" and therefore counts entries that were never code subpaths at all. A built Angular
  * package publishes `"./package.json": { "default": "./package.json" }`, which has no `types` and
- * which `resolveSubpathExportsDetailed()` skips by design. Treating that as a declared-but-missing
- * subpath would flag every ng-packagr output as unbuilt.
+ * which `resolveSubpathExportsDetailed()` skips by design. Likewise, a built subpath whose
+ * `.d.ts` exists on disk but declares no classes (e.g., `./schemas` exporting Zod schemas)
+ * is genuinely built and must not be flagged as unbuilt/missing.
  */
-function countTypedSubpathExports(packageDir: string): number {
+function countMissingTypedSubpathExports(packageDir: string): number {
     const pkgPath = path.join(packageDir, 'package.json');
     if (!fs.existsSync(pkgPath)) return 0;
 
@@ -1864,7 +1865,9 @@ function countTypedSubpathExports(packageDir: string): number {
     for (const [subpath, entry] of Object.entries(exports)) {
         if (subpath === '.') continue;
         const typesField = typeof entry === 'object' && entry !== null ? entry.types : undefined;
-        if (typesField) count++;
+        if (typesField && !fs.existsSync(path.resolve(packageDir, typesField))) {
+            count++;
+        }
     }
     return count;
 }
@@ -1888,16 +1891,16 @@ function countTypedSubpathExports(packageDir: string): number {
  * So refuse. A missing build is recoverable in one command; a silently de-optimised bundle
  * shipped to production is not.
  *
- * @throws when `packageDir` declares typed subpath exports but none of them resolve.
+ * @throws when `packageDir` declares typed subpath exports whose `.d.ts` target does not exist on disk.
  */
 export function ResolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
     const subpaths = resolveSubpathExportsDetailed(packageDir);
     if (subpaths.size === 0) {
-        const declared = countTypedSubpathExports(packageDir);
-        if (declared > 0) {
+        const missing = countMissingTypedSubpathExports(packageDir);
+        if (missing > 0) {
             throw new Error(
-                `Cannot resolve the subpath exports of '${packageName}'. Its package.json declares ${declared} ` +
-                `subpath export(s) with a "types" target, but none of those targets exist under ${packageDir} — ` +
+                `Cannot resolve the subpath exports of '${packageName}'. Its package.json declares ${missing} ` +
+                `subpath export(s) with a "types" target that do not exist under ${packageDir} — ` +
                 `the package has not been built.\n\n` +
                 `Build the workspace before generating the manifest. Emitting a manifest from here would ` +
                 `silently collapse this package's per-subpath lazy chunks into one eager import, removing ` +
@@ -2160,43 +2163,36 @@ function groupClassesIntoChunks(
         const subpaths = packagesWithLazyClasses.has(depName)
             ? ResolveLazySubpathExports(depName, depDir)
             : resolveSubpathExportsDetailed(depDir);
-        if (subpaths.size > 0) {
-            packageSubpaths.set(depName, subpaths);
-        }
+        packageSubpaths.set(depName, subpaths);
     }
 
     // Map: "packageName::subpath" -> LazyChunk
     const chunks = new Map<string, LazyChunk>();
     const keysSeen = new Map<string, string>(); // key -> chunkKey (collision detection)
+    const keysInChunk = new Map<string, Set<string>>(); // chunkKey -> Set<compoundKey>
 
     for (const cls of lazyClasses) {
         if (!cls.key) continue;
 
         const subpaths = packageSubpaths.get(cls.packageName);
-
-        let chunkKey: string;
-        let importPath: string;
-        let subpath: string;
-
-        if (subpaths) {
-            // Package has subpath exports — find which one contains this class
-            // Use file path matching to disambiguate classes with the same name
-            const packageDir = lazyPackages.get(cls.packageName)!;
-            const foundSubpath = findClassSubpathByFile(cls, subpaths, packageDir);
-            if (!foundSubpath) {
-                log(`  Warning: ${cls.key} (${cls.className}) not found in any subpath of ${cls.packageName}, skipping`);
-                continue;
-            }
-            subpath = foundSubpath;
-            const subpathClean = foundSubpath.replace(/^\.\//, '');
-            importPath = `${cls.packageName}/${subpathClean}`;
-            chunkKey = `${cls.packageName}::${foundSubpath}`;
-        } else {
-            // No subpath exports — whole package is one chunk
-            subpath = '.';
-            importPath = cls.packageName;
-            chunkKey = `${cls.packageName}::.`;
+        if (!subpaths || subpaths.size === 0) {
+            // Non-class subpath exports (e.g. Zod `./schemas` or `./package.json`) belong to
+            // eager root packages, not lazy chunk splitting — never collapse into a `'.'` chunk.
+            continue;
         }
+
+        // Package has class-bearing subpath exports — find which one contains this class
+        // Use file path matching to disambiguate classes with the same name
+        const packageDir = lazyPackages.get(cls.packageName)!;
+        const foundSubpath = findClassSubpathByFile(cls, subpaths, packageDir);
+        if (!foundSubpath) {
+            log(`  Warning: ${cls.key} (${cls.className}) not found in any subpath of ${cls.packageName}, skipping`);
+            continue;
+        }
+        const subpath = foundSubpath;
+        const subpathClean = foundSubpath.replace(/^\.\//, '');
+        const importPath = `${cls.packageName}/${subpathClean}`;
+        const chunkKey = `${cls.packageName}::${foundSubpath}`;
 
         // Build compound key for collision detection: 'BaseClassName::Key'
         const compoundKey = `${cls.baseClassName || 'Unknown'}::${cls.key}`;
@@ -2219,7 +2215,16 @@ function groupClassesIntoChunks(
                 chunkVarName: buildChunkVarName(cls.packageName, subpath),
                 entries: []
             });
+            keysInChunk.set(chunkKey, new Set<string>());
         }
+
+        const chunkKeySet = keysInChunk.get(chunkKey)!;
+        if (chunkKeySet.has(compoundKey)) {
+            // Skip duplicate priority overrides within the same chunk so emitted object literals
+            // never repeat property keys (TS1117).
+            continue;
+        }
+        chunkKeySet.add(compoundKey);
 
         chunks.get(chunkKey)!.entries.push({
             key: cls.key,

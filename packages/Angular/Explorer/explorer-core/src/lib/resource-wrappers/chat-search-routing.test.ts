@@ -66,18 +66,18 @@ describe('ResolveChatSearchRoute', () => {
     });
   });
 
-  it('opens a collection result on the Collections nav item', () => {
+  it('opens a collection result on the Library nav item', () => {
     expect(ResolveChatSearchRoute(result({ id: 'COL1', type: 'collection' }))).toEqual({
       Kind: 'nav-item',
-      NavItemName: 'Collections',
+      NavItemName: 'Library',
       Configuration: { collectionId: 'COL1' },
     });
   });
 
-  it('opens a task result on the Tasks nav item', () => {
+  it('opens a task result on the Agent Activity nav item', () => {
     expect(ResolveChatSearchRoute(result({ id: 'T1', type: 'task' }))).toEqual({
       Kind: 'nav-item',
-      NavItemName: 'Tasks',
+      NavItemName: 'Agent Activity',
       Configuration: { taskId: 'T1' },
     });
   });

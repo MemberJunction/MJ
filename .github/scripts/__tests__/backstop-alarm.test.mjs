@@ -302,10 +302,19 @@ describe('alarmFor — one alarm per workflow', () => {
     });
 
     it('gives different workflows different labels', () => {
-        const labels = ['Build all packages for testing', 'Integration Tier', 'Test migrations', 'PostgreSQL migration validation']
-            .map((w) => alarmFor(w).label);
+        const labels = [
+            'Build all packages for testing',
+            'Integration Tier',
+            'Integration Tier (Nightly)',
+            'Integration Tier (Weekly)',
+            'Test migrations',
+            'PostgreSQL migration validation',
+        ].map((w) => alarmFor(w).label);
         expect(new Set(labels).size).toBe(labels.length);
         expect(labels).not.toContain(ALARM_LABEL);
+        for (const label of labels) {
+            expect(label.length).toBeLessThanOrEqual(50);
+        }
     });
 
     it('keeps labels and label descriptions inside GitHub limits', () => {

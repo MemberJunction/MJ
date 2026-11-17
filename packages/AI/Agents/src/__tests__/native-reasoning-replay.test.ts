@@ -7,14 +7,14 @@
  * calls. A turn demoted to prose loses its reasoning with its calls: the signatures were minted
  * for the turn as it was.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
 import { BaseAgent } from '../base-agent';
 import { BuildAssistantToolCallTurn } from '../native-tools/tool-result-turns';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import type { ChatMessage, ChatReasoningBlock, ChatResult } from '@memberjunction/ai';
-import type { AIPromptRunResult, AgentChatMessage, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { AIPromptRunResult, AgentChatMessage, BaseAgentNextStep, ExecuteAgentParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 const reasoning: ChatReasoningBlock[] = [
     { provider: 'anthropic', kind: 'thinking', text: 'Search first.', signature: 'sig-1' },
@@ -34,6 +34,14 @@ class AgentProbe extends BaseAgent {
     public Window(messages: ChatMessage[]): ChatMessage[] {
         return this.makeToolTurnsSelfConsistent(messages);
     }
+}
+
+interface DropReasoningAccess {
+    _nativeToolBindings: ReadonlyMap<string, NativeToolBinding> | undefined;
+    _lastModelSelectionInfo: { ModelSelected?: { DriverClass?: string }; vendorSelected?: { DriverClass?: string } } | undefined;
+    _lastSentFingerprints: string[] | undefined;
+    DriverRequiresStableReasoningPrefix: () => boolean;
+    dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptRunResult['prompt'] extends MJAIPromptEntityExtended ? Record<string, unknown> : Record<string, unknown>): ChatMessage[];
 }
 
 const bindings = new Map<string, NativeToolBinding>([['search_web', {
@@ -82,5 +90,79 @@ describe('native reasoning — from the chat result to the replayed call turn', 
         expect(kept[0]).not.toHaveProperty('toolCalls');
         expect(kept[0]).not.toHaveProperty('reasoning');
         expect(kept[0].content).toBe('Looking it up.');
+    });
+});
+
+describe('dropReasoningBehindChangedHistory — fingerprint short-circuit', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('skips messageFingerprint completely on envelope runs without native tool bindings', () => {
+        const probe = new AgentProbe() as unknown as DropReasoningAccess;
+        const fpSpy = vi.spyOn(BaseAgent as unknown as { messageFingerprint(m: ChatMessage): string }, 'messageFingerprint');
+        const msg: ChatMessage = { role: 'user', content: 'hello' };
+        const params = { conversationMessages: [msg] } as unknown as ExecuteAgentParams;
+
+        probe._nativeToolBindings = undefined;
+        probe._lastSentFingerprints = ['stale'];
+
+        const out = probe.dropReasoningBehindChangedHistory(params, [msg], {});
+
+        expect(out).toEqual([msg]);
+        expect(fpSpy).not.toHaveBeenCalled();
+        expect(probe._lastSentFingerprints).toBeUndefined();
+    });
+
+    it('skips Turn 2+ fingerprinting on non-prefix-bound native runs when no message has reasoning', () => {
+        const probe = new AgentProbe() as unknown as DropReasoningAccess;
+        const fpSpy = vi.spyOn(BaseAgent as unknown as { messageFingerprint(m: ChatMessage): string }, 'messageFingerprint');
+        const msg1: ChatMessage = { role: 'user', content: 'turn 1' };
+        const msg2: ChatMessage = { role: 'assistant', content: 'reply 1' };
+        const params = { conversationMessages: [msg1, msg2] } as unknown as ExecuteAgentParams;
+
+        probe._nativeToolBindings = bindings;
+        probe.DriverRequiresStableReasoningPrefix = () => false;
+
+        // Turn 1: selection not known yet -> records baseline fingerprints.
+        probe.dropReasoningBehindChangedHistory(params, [msg1], {});
+        expect(fpSpy).toHaveBeenCalledTimes(1);
+        expect(probe._lastSentFingerprints).toHaveLength(1);
+
+        // Turn 2: non-prefix-bound model selected and no reasoning present -> skips hashing.
+        fpSpy.mockClear();
+        probe._lastModelSelectionInfo = { ModelSelected: { DriverClass: 'OpenAILLM' } };
+        probe.dropReasoningBehindChangedHistory(params, [msg1, msg2], {});
+        expect(fpSpy).not.toHaveBeenCalled();
+        expect(probe._lastSentFingerprints).toBeUndefined();
+    });
+
+    it('still hashes and drops stale reasoning when DriverRequiresStableReasoningPrefix is true', () => {
+        const probe = new AgentProbe() as unknown as DropReasoningAccess;
+        const turn1: AgentChatMessage = {
+            role: 'user',
+            content: 'original user prompt',
+        };
+        const callTurn = BuildAssistantToolCallTurn({
+            text: '',
+            toolCalls: [{ id: 'toolu_1', name: 'search_web', arguments: {} }],
+            reasoning,
+        }) as AgentChatMessage;
+        const params = { conversationMessages: [turn1, callTurn] } as unknown as ExecuteAgentParams;
+
+        probe._nativeToolBindings = bindings;
+        probe.DriverRequiresStableReasoningPrefix = () => true;
+        probe._lastModelSelectionInfo = { ModelSelected: { DriverClass: 'AnthropicLLM' } };
+
+        probe.dropReasoningBehindChangedHistory(params, [turn1, callTurn], {});
+        expect(probe._lastSentFingerprints).toHaveLength(2);
+
+        // Mutate the earlier user turn (simulating compaction/expansion); reasoning after it must drop.
+        const rewrittenUser: ChatMessage = { role: 'user', content: 'rewritten user prompt' };
+        params.conversationMessages = [rewrittenUser, callTurn];
+        const out = probe.dropReasoningBehindChangedHistory(params, [rewrittenUser, callTurn], {});
+
+        expect((out[1] as AgentChatMessage).reasoning).toBeUndefined();
+        expect((params.conversationMessages[1] as AgentChatMessage).reasoning).toBeUndefined();
     });
 });

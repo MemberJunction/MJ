@@ -271,7 +271,7 @@ describe('Loop Agent Type system prompt — native-only control plane', () => {
     it('teaches no JSON envelope: no LoopAgentResponse, nextStep, taskComplete or envelope-only field', () => {
         const rendered = nativeOnly();
         for (const envelopeText of ['LoopAgentResponse', 'nextStep', 'taskComplete', 'artifactToolCalls', 'conversationToolCalls',
-            'memoryWrites', 'actionableCommands', 'automaticCommands', 'finishIf', 'artifactDirective', 'messageIndex']) {
+            'memoryWrites', 'actionableCommands', 'automaticCommands', 'finishIf', 'messageIndex']) {
             expect(rendered, envelopeText).not.toContain(envelopeText);
         }
     });

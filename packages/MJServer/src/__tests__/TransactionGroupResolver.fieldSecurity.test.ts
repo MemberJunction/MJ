@@ -176,6 +176,19 @@ describe('ExecuteTransactionGroup: client input is gated for a restricted caller
             .rejects.toThrow(RefusalFor('Salary'));
     });
 
+    it.each([
+        ['a denied field', 'Salary'],
+        ['a key that names no field', 'Bogus'],
+    ])('REGRESSION: refuses an update whose OldValues name %s (they are compared with the stored row)', async (_label, key) => {
+        const entity = new FullWidthEntity(EmployeeEntity(), NARROW_ROW);
+        const input = group(TransactionOperationType.Update, { ID: 'emp-1', Notes: 'edited' });
+        input.Items[0].OldValues = [{ Key: 'ID', Value: 'emp-1' }, { Key: key, Value: '1' }];
+
+        await expect(new TransactionResolver().ExecuteTransactionGroup(input, buildContext([entity], Intern())))
+            .rejects.toThrow(RefusalFor(key));
+        expect(entity.SetManyCalls).toHaveLength(0);
+    });
+
     it('accepts the keys a well-behaved client sends, plus transport keys', async () => {
         const entity = new FullWidthEntity(EmployeeEntity(), NARROW_ROW);
         const result = await new TransactionResolver().ExecuteTransactionGroup(

@@ -349,4 +349,23 @@ describe('AgentMemoryContextBuilder examples reranking', () => {
         );
         expect(ids(result.examples)).toEqual(['e3', 'e2']);
     });
+
+    it('skips RerankerService when 0 or 1 semantic candidates match for notes and examples', async () => {
+        const rerankNotesSpy = spyOnRerankNotes();
+        const rerankExamplesSpy = spyOnRerankExamples();
+        const cfg = rerankerConfig({ rerankExamples: true });
+
+        h.noteCandidates = [];
+        h.candidates = [];
+        expect(await getNotes(cfg)).toEqual([]);
+        expect(await getExamples(cfg)).toEqual([]);
+
+        h.noteCandidates = [noteMatch('solo-note', 0.92)];
+        h.candidates = [exampleMatch('solo-ex', 0.91)];
+        expect(ids(await getNotes(cfg))).toEqual(['solo-note']);
+        expect(ids(await getExamples(cfg))).toEqual(['solo-ex']);
+
+        expect(rerankNotesSpy).not.toHaveBeenCalled();
+        expect(rerankExamplesSpy).not.toHaveBeenCalled();
+    });
 });

@@ -25,6 +25,18 @@ export class TransactionItem {
     private _operationType: 'Create' | 'Update' | 'Delete';
     public PrepareBeforeSubmit?: () => Promise<void>;
     public RevertAfterRollback?: () => void;
+    /**
+     * Optional check that runs inside the group's database transaction, after every item's
+     * {@link PrepareBeforeSubmit} and before any item's statement executes. Returning `false`
+     * rejects the whole group: nothing is written, the transaction rolls back, and
+     * {@link TransactionGroupBase.Submit} returns `false`. The check reports its own reason on the
+     * item's entity result before returning `false`.
+     *
+     * Database providers set this on an update queued with field-level concurrency checking on
+     * (`ConcurrencyCheck` of `'log'` or `'enforce'`), so the stored row is read under a lock that
+     * the group's transaction holds until it commits or rolls back.
+     */
+    public CheckBeforeSubmit?: () => Promise<boolean>;
 
     public get Vars(): any {
         return this._vars;
@@ -384,6 +396,12 @@ export abstract class TransactionGroupBase {
                 await this.BeginGroupTransaction();
                 await this.preparePendingTransactions();
 
+                if (!(await this.checkPendingTransactions())) {
+                    await rollbackGroupOnce();
+                    await this.failRejectedGroup();
+                    return false;
+                }
+
                 // subclass handles the actual submit implementation whatever that does
                 const results: TransactionResult[] = await this.HandleSubmit();
 
@@ -546,6 +564,50 @@ export abstract class TransactionGroupBase {
             if (pending.PrepareBeforeSubmit) {
                 await pending.PrepareBeforeSubmit();
             }
+        }
+    }
+
+    /**
+     * Runs every item's {@link TransactionItem.CheckBeforeSubmit} inside the open group transaction.
+     * Every check runs even after one returns `false`, so each rejected item reports its own reason.
+     * A check that throws stops here: the error (for example a lost connection or a deadlock during
+     * the locked read) usually leaves the transaction unusable, so it goes to `Submit()`'s failure
+     * path, which rolls back and fails every item with that error.
+     *
+     * @returns `true` when every check passed (or no item has one)
+     */
+    private async checkPendingTransactions(): Promise<boolean> {
+        let allPassed = true;
+        for (const pending of this._pendingTransactions) {
+            if (pending.CheckBeforeSubmit && !(await pending.CheckBeforeSubmit())) {
+                allPassed = false;
+            }
+        }
+        return allPassed;
+    }
+
+    /**
+     * Fails every item of a group that a {@link TransactionItem.CheckBeforeSubmit} rejected before
+     * any statement ran. Items whose check failed keep the reason the check recorded; the others
+     * are told the group was rolled back because of another item.
+     *
+     * Each callback is called exactly once: one that throws is logged and the rest still run, so
+     * the error never reaches `Submit()`'s outer failure path, which would call them all again.
+     */
+    private async failRejectedGroup(): Promise<void> {
+        const reason = new Error('The transaction group was rolled back because another item in the group failed its pre-submit check.');
+        const results = this._pendingTransactions.map((pending) => new TransactionResult(pending, reason, false));
+        try {
+            for (const result of results) {
+                try {
+                    await result.Transaction.CallBack(result.Result, false);
+                } catch (callbackError) {
+                    LogError(callbackError);
+                }
+            }
+            this.notifyTransactionStatus(false, results);
+        } finally {
+            this._status = 'Failed';
         }
     }
 

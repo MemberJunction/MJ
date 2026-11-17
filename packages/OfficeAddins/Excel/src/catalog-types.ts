@@ -17,6 +17,7 @@ export const EXCEL_ADDIN_OPERATION_KEYS = {
     GetCatalog: 'ExcelAddin.GetCatalog',
     GetEntityViews: 'ExcelAddin.GetEntityViews',
     ResolveSource: 'ExcelAddin.ResolveSource',
+    EvaluateCustomFunction: 'ExcelAddin.EvaluateCustomFunction',
 } as const;
 
 /** One sheet to put in a workbook or resolve inside the Excel task pane. */

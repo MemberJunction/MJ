@@ -23,6 +23,7 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import { CONVERSATION_DELETE_REFUSED_REASON, ConversationDeleteAllowed } from "../custom/ConversationWriteAccess";
 import {
     ConversationAnchorMetadata,
     ConversationAnchorType,
@@ -1456,6 +1457,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
         return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
+     * True when the user may delete the conversation for everyone: they own it, hold an
+     * Owner-level grant on it, or are in the Developer or Integration role. An Edit grant
+     * is not enough. Mirrors the server's delete gate in `MJConversationEntityServer`, so
+     * the UI never offers a delete the server would refuse.
+     */
+    public CanDeleteConversation(conversation: MJConversationEntity, user: UserInfo): boolean {
+        return ConversationDeleteAllowed(conversation.UserID, user, this.GetSharedByInfo(conversation.ID)?.Level ?? null);
     }
 
     /**
@@ -3251,7 +3262,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param id - The conversation ID to delete
      * @param contextUser - The current user context
      * @returns true if successful
-     * @throws Error if conversation not found or delete fails
+     * @throws Error if conversation not found, the user may not delete it ({@link CanDeleteConversation}), or delete fails
      */
     public async DeleteConversation(id: string, contextUser: UserInfo): Promise<boolean> {
         // Try to use the cached entity object first to avoid a DB round-trip
@@ -3264,6 +3275,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (!loaded) {
                 throw new Error('Conversation not found');
             }
+        }
+
+        // Refuse before the optimistic removal below, so a refused conversation never leaves the list.
+        if (!this.CanDeleteConversation(conversation, contextUser)) {
+            throw new Error(CONVERSATION_DELETE_REFUSED_REASON);
         }
 
         // Remove from the list and cache BEFORE calling Delete(), because
@@ -3400,6 +3416,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Deletes multiple conversations in a batch operation with per-item error tracking.
+     * Conversations the user may not delete ({@link CanDeleteConversation}) are reported
+     * as failed, by name, without a delete.
      *
      * @param ids - Array of conversation IDs to delete
      * @param contextUser - The current user context
@@ -3452,6 +3470,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             for (const entity of entitiesToDelete) {
                 const name = entity.Name || 'Unknown';
+                if (!this.CanDeleteConversation(entity, contextUser)) {
+                    failed.push({ ID: entity.ID, Name: name, Error: CONVERSATION_DELETE_REFUSED_REASON });
+                    continue;
+                }
                 try {
                     // Use DeleteConversation which handles Load + Delete properly
                     // and removes from list/cache on success
@@ -4706,9 +4728,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Client-safe query descriptor loading `MJ: Conversation Details.ID` values visible in `scope`,
+     * optionally narrowed to `candidateDetailIds`. Runs directly against `MJ: Conversation Details`
+     * so server `PostRunView` security hooks apply and `ClientClauseScreen` never rejects a base-view subquery.
+     */
+    public static BuildScopedDetailIdsQuery(
+        scope: ConversationScope,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): RunViewParams {
+        let filter = ConversationEngine.ScopeFilter(scope);
+        if (candidateDetailIds && candidateDetailIds.length > 0) {
+            const uniqueEscaped = [...new Set(candidateDetailIds.map((id) => id.trim()).filter(Boolean))]
+                .map((id) => `'${EscapeSQLString(id)}'`);
+            if (uniqueEscaped.length > 0) {
+                filter = `(${filter}) AND [ID] IN (${uniqueEscaped.join(',')})`;
+            }
+        }
+        return {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
+        };
+    }
+
+    /**
+     * Loads lowercased `MJ: Conversation Details.ID` values visible in `scope` via `RunView`, returning
+     * `null` if the read fails so callers can fail closed. Avoids emitting `[__mj].[vwConversationDetails]`
+     * subqueries from GraphQL client filters.
+     */
+    public static async LoadScopedDetailIds(
+        scope: ConversationScope,
+        provider: IMetadataProvider,
+        contextUser?: UserInfo,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): Promise<Set<string> | null> {
+        if (candidateDetailIds) {
+            const unique = candidateDetailIds.map((id) => id.trim()).filter(Boolean);
+            if (unique.length === 0) {
+                return new Set<string>();
+            }
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string }>(
+            ConversationEngine.BuildScopedDetailIdsQuery(scope, candidateDetailIds),
+            contextUser
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            return null;
+        }
+        const ids = new Set<string>();
+        for (const row of res.Results) {
+            const id = typeof row.ID === 'string' ? row.ID.trim().toLowerCase() : '';
+            if (id) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Filters artifact versions to those visible in `scope` (`{@link ArtifactVersionScopeFilter}` semantics):
+     * keeps versions linked in any direction to a detail in `scopedDetailIds`, plus versions that have
+     * no `MJ: Conversation Detail Artifacts` link at all.
+     */
+    public static FilterArtifactVersionsByScope<T extends { ID: string }>(
+        versions: readonly T[],
+        links: ReadonlyArray<{ ConversationDetailID?: string | null; ArtifactVersionID?: string | null }>,
+        scopedDetailIds: ReadonlySet<string>
+    ): T[] {
+        const allLinkedVersionIds = new Set<string>();
+        const scopedLinkedVersionIds = new Set<string>();
+        for (const link of links) {
+            const versionId = typeof link.ArtifactVersionID === 'string' ? link.ArtifactVersionID.trim().toLowerCase() : '';
+            if (!versionId) continue;
+            allLinkedVersionIds.add(versionId);
+            const detailId = typeof link.ConversationDetailID === 'string' ? link.ConversationDetailID.trim().toLowerCase() : '';
+            if (detailId && scopedDetailIds.has(detailId)) {
+                scopedLinkedVersionIds.add(versionId);
+            }
+        }
+        return versions.filter((v) => {
+            const id = typeof v.ID === 'string' ? v.ID.trim().toLowerCase() : '';
+            return id ? (!allLinkedVersionIds.has(id) || scopedLinkedVersionIds.has(id)) : false;
+        });
+    }
+
+    /**
      * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
      * linked (in any direction) from a message on the path, and versions with no conversation link
      * at all.
+     *
+     * Note: server/internal callers only — GraphQL clients must use {@link BuildScopedDetailIdsQuery} +
+     * {@link FilterArtifactVersionsByScope} because `ClientClauseScreen` blocks `[__mj].[vwConversationDetails]`
+     * subqueries in client-supplied `ExtraFilter`s.
      */
     public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
         const path = ConversationEngine.ScopeFilter(scope);

@@ -423,6 +423,33 @@ export interface MemorySnapshot {
 }
 
 /**
+ * Lifecycle phase an {@link TelemetryEventCallback} is notified for: `'start'` when an event is
+ * created (via {@link TelemetryManager.StartEvent}), `'end'` when it completes (via
+ * {@link TelemetryManager.EndEvent} or {@link TelemetryManager.RecordEvent}).
+ */
+export type TelemetryEventLifecycleType = 'start' | 'end';
+
+/**
+ * Configuration options for {@link TelemetryManager.OnEvent}.
+ */
+export interface TelemetryOnEventOptions {
+    /**
+     * Which lifecycle phases to receive. Defaults to:
+     * - `['start', 'end']` when `listener.length >= 2`
+     * - `['end']` when `listener.length < 2`
+     */
+    Phases?: readonly TelemetryEventLifecycleType[];
+}
+
+/**
+ * Callback signature for {@link TelemetryManager.OnEvent}. Invoked synchronously; must never throw
+ * in a way that should disrupt the producer — `OnEvent` already catches and swallows exceptions,
+ * but implementations should still avoid relying on that as a substitute for their own error
+ * handling.
+ */
+export type TelemetryEventCallback = (event: TelemetryEvent, type: TelemetryEventLifecycleType) => void;
+
+/**
  * A single telemetry event
  */
 export interface TelemetryEvent<T extends TelemetryParamsUnion = TelemetryParamsUnion> {
@@ -897,18 +924,39 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
 
 const SENSITIVE_TELEMETRY_KEYS = /(?:token|password|secret|authorization|apikey|api_key|connectionstring|connection_string)/i;
 
+const SAFE_NUMERIC_TOKEN_KEYS: ReadonlySet<string> = new Set([
+    'inputTokens',
+    'outputTokens',
+    'promptTokens',
+    'completionTokens',
+    'totalTokens',
+    'cachedInputTokens',
+]);
+
+type TelemetryParamValue = string | number | boolean | object | null | undefined;
+
+/**
+ * Sanitizes telemetry params by redacting values whose key looks sensitive (credentials, secrets,
+ * auth tokens, connection strings). Finite numeric values for allowlisted token keys
+ * ({@link SAFE_NUMERIC_TOKEN_KEYS}) are preserved untouched so `mj.ai.tokens` OTel counters and
+ * cost-tracking analyzers keep working. All other matching sensitive keys (including non-allowlisted
+ * numeric secrets, NaN/Infinity token values, objects, and strings) are redacted to `'[REDACTED]'`.
+ */
 function sanitizeTelemetryParams<T extends TelemetryParamsUnion>(params: T): T {
     if (!params || typeof params !== 'object') {
         return params;
     }
-    let cloned: Record<string, unknown> | null = null;
-    const record = params as unknown as Record<string, unknown>;
-    for (const key of Object.keys(record)) {
-        if (SENSITIVE_TELEMETRY_KEYS.test(key) && record[key] != null) {
-            if (!cloned) {
-                cloned = { ...record };
+    let cloned: Record<string, TelemetryParamValue> | null = null;
+    const record = params as Record<string, TelemetryParamValue>;
+    for (const [key, val] of Object.entries(record)) {
+        if (SENSITIVE_TELEMETRY_KEYS.test(key) && val !== undefined && val !== null) {
+            const isSafeNumericToken = SAFE_NUMERIC_TOKEN_KEYS.has(key) && typeof val === 'number' && Number.isFinite(val);
+            if (!isSafeNumericToken) {
+                if (!cloned) {
+                    cloned = { ...record };
+                }
+                cloned[key] = '[REDACTED]';
             }
-            cloned[key] = '[REDACTED]';
         }
     }
     return (cloned ?? params) as T;
@@ -944,15 +992,36 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
-    private _listeners: Set<(event: TelemetryEvent) => void> = new Set();
+    private _listeners: Map<TelemetryEventCallback, ReadonlySet<TelemetryEventLifecycleType>> = new Map();
 
     /**
-     * Subscribe to completed telemetry events in real time (zero-polling flight recorder hook).
-     * @returns Unsubscribe function.
+     * Subscribe to telemetry events as they start and complete (zero-polling flight recorder /
+     * OpenTelemetry span-bridge hook).
+     *
+     * - **2-arg listeners** `(event, type) => ...`: receive balanced `'start'` and `'end'` notifications
+     *   from both `StartEvent`+`EndEvent` and `RecordEvent` (which fires both in immediate succession).
+     * - **1-arg listeners** `(event) => ...`: fire **only once** on `'end'` (when `elapsedMs` is populated)
+     *   for both `StartEvent`+`EndEvent` and `RecordEvent`.
+     * - Listeners can explicitly select phases by passing `{ Phases: ['start', 'end'] }` (or `['start']`, `['end']`).
+     *
+     * Exceptions thrown by `listener` are caught and swallowed — an observer must never disrupt
+     * the producer it is observing. Notification is skipped entirely while diagnostic capture is
+     * suppressed ({@link IsDiagnosticCaptureSuppressed}).
+     *
+     * @returns An idempotent unsubscribe function.
      */
-    public OnEvent(listener: (event: TelemetryEvent) => void): () => void {
-        this._listeners.add(listener);
+    public OnEvent(listener: TelemetryEventCallback, options?: TelemetryOnEventOptions): () => void {
+        const phases: ReadonlySet<TelemetryEventLifecycleType> = options?.Phases
+            ? new Set(options.Phases)
+            : listener.length >= 2
+                ? new Set(['start', 'end'])
+                : new Set(['end']);
+
+        this._listeners.set(listener, phases);
+        let unsubscribed = false;
         return () => {
+            if (unsubscribed) return;
+            unsubscribed = true;
             this._listeners.delete(listener);
         };
     }
@@ -968,13 +1037,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return 0;
     }
 
-    private notifyEventListeners(event: TelemetryEvent): void {
+    private notifyEventListeners(event: TelemetryEvent, type: TelemetryEventLifecycleType): void {
         if (this._listeners.size === 0 || IsDiagnosticCaptureSuppressed()) {
             return;
         }
-        for (const listener of this._listeners) {
+        for (const [listener, phases] of this._listeners) {
+            if (!phases.has(type)) {
+                continue;
+            }
             try {
-                listener(event);
+                listener(event, type);
             } catch {
                 // Listeners must never disrupt telemetry recording
             }
@@ -1175,11 +1247,18 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         if (this._settings.autoTrim.enabled && maxActive > 0 && this._activeEvents.size >= maxActive) {
             const oldestKey = this._activeEvents.keys().next().value;
             if (oldestKey !== undefined) {
+                const evicted = this._activeEvents.get(oldestKey);
                 this._activeEvents.delete(oldestKey);
+                if (evicted) {
+                    evicted.endTime = this.getTimestamp();
+                    evicted.elapsedMs = evicted.endTime - evicted.startTime;
+                    this.notifyEventListeners(evicted, 'end');
+                }
             }
         }
 
         this._activeEvents.set(event.id, event);
+        this.notifyEventListeners(event, 'start');
         return event.id;
     }
 
@@ -1218,7 +1297,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
-        this.notifyEventListeners(event);
+        this.notifyEventListeners(event, 'end');
 
         return event;
     }
@@ -1349,7 +1428,11 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
-        this.notifyEventListeners(event);
+        // RecordEvent has no real "start" moment (the event is already complete), but both
+        // lifecycle phases fire in immediate succession so OTel-style span bridges that track
+        // open spans by event id see a balanced start/end pair rather than an orphaned 'end'.
+        this.notifyEventListeners(event, 'start');
+        this.notifyEventListeners(event, 'end');
     }
 
     // ========== PATTERN DETECTION ==========

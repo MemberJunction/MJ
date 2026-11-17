@@ -10,7 +10,7 @@ import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, 
 import { AIModelRunner } from './AIModelRunner';
 import { RecordSentPrefixFingerprint, ReplayedReasoningPrefixFingerprint, WithoutReplayedReasoning } from './replayedReasoningPrefix';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo, TelemetryManager } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -303,6 +303,7 @@ export class AIPromptRunner extends BaseModelRunner {
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
     const promptRun: MJAIPromptRunEntityExtended | null = null;
+    let telemetryEventId: string | null = null;
 
     // AIEngineBase is registered as deferred — its initial load runs in the background
     // after server boot. Make sure the cached metadata (Models, Vendors, ModelVendors,
@@ -336,6 +337,13 @@ export class AIPromptRunner extends BaseModelRunner {
       if (prompt.Status !== 'Active') {
         throw new Error(`Prompt ${prompt.Name} is not active (Status: ${prompt.Status})`);
       }
+
+      telemetryEventId = TelemetryManager.Instance.StartEvent('AI', `ExecutePrompt:${prompt.Name}`, {
+        promptID: prompt.ID,
+        promptName: prompt.Name,
+        modelID: params.override?.modelId,
+        operationType: 'chat',
+      });
 
       let renderedPromptText: string = '';
 
@@ -474,9 +482,28 @@ export class AIPromptRunner extends BaseModelRunner {
       // Note: With template composition, we only execute once so no rollup calculations needed
       // The final composed prompt is executed as a single operation
 
+      if (telemetryEventId) {
+        const inputTokens = result.promptRun?.TokensPrompt ?? result.chatResult?.data?.usage?.promptTokens ?? 0;
+        const outputTokens = result.promptRun?.TokensCompletion ?? result.chatResult?.data?.usage?.completionTokens ?? 0;
+        TelemetryManager.Instance.EndEvent(telemetryEventId, {
+          inputTokens,
+          outputTokens,
+          modelID: selection?.model?.ID,
+          modelName: selection?.model?.Name,
+          success: result.success,
+          errorMessage: result.errorMessage,
+        });
+      }
+
       // Model selection info is now included in the result from both execution methods
       return result;
     } catch (error) {
+      if (telemetryEventId) {
+        TelemetryManager.Instance.EndEvent(telemetryEventId, {
+          success: false,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
       if (this.isCancellation(error, params)) {
         this.logStatus(`⏹️ Prompt "${params.prompt?.Name}" was cancelled: ${error.message}`, false, params);
       } else {
