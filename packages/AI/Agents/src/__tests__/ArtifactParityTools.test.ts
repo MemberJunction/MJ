@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { ArtifactToolExecutionContext } from '@memberjunction/ai-core-plus';
 import {
+    ArtifactPermissionEngine,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     SlideDeckEngine,
@@ -16,7 +17,49 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
     const VALID_WB_UUID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const VALID_SHEET_UUID = '11111111-2222-4333-8444-555555555555';
     const VALID_VERSION_UUID = '99999999-8888-4777-8666-555555555555';
+    const testUser = { ID: 'test-user-parity', Name: 'Test User' } as UserInfo;
+    let lastArtifactId = VALID_WB_UUID;
+    const mockEmbedProvider = {
+        RunView: async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [{ ID: VALID_VERSION_UUID, ArtifactID: lastArtifactId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            const id = String(params.ExtraFilter ?? '').includes(VALID_WB_UUID) ? VALID_WB_UUID : VALID_SHEET_UUID;
+            lastArtifactId = id;
+            return {
+                Success: true,
+                Results: [{ ID: id, TypeID: '' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        }
+    } as unknown as IMetadataProvider & IRunViewProvider;
+    beforeEach(() => {
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: VALID_WB_UUID,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Test'
+        });
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
     const shortIdContext = {
+        contextUser: testUser,
+        provider: mockEmbedProvider,
         resolveArtifactId: (ref: string): string | null => {
             if (ref === 'D') return VALID_WB_UUID;
             if (ref === 'S') return VALID_SHEET_UUID;
@@ -53,16 +96,32 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
             expect(updatedContent).toContain('Revenue $100M & Margin $& Plan');
         });
 
-        it('does not expose deferred propose_suggestion tool', async () => {
+        it('exposes NW-3 propose_suggestion and comment/suggestion workflow tools', async () => {
             const lib = new DocumentToolLibrary();
-            expect(lib.GetToolList().some((t) => t.name === 'propose_suggestion')).toBe(false);
+            expect(lib.GetToolList().some((t) => t.name === 'propose_suggestion')).toBe(true);
+            const blocks = lib.ParseLogicalBlocks('# Title');
             const res = await lib.InvokeTool(
                 'propose_suggestion',
-                { targetBlockId: 'blk-1', proposedMarkdown: 'New', rationale: 'Test' },
-                '# Title'
+                {
+                    anchor: { blockId: blocks[0].blockId },
+                    originalSlice: '# Title',
+                    proposedReplacement: '# New Title',
+                    rationale: 'Test',
+                },
+                '# Title',
+                {
+                    artifactId: 'art-1',
+                    versionNumber: 1,
+                    contextUser: { ID: 'user-1', Name: 'Reviewer' } as UserInfo,
+                },
             );
-            expect(res.success).toBe(false);
-            expect(res.errorMessage).toContain('Unknown tool');
+            expect(res.success).toBe(true);
+            const data = res.data as {
+                suggestion?: { SuggestionID: string; Status: string };
+                configurationPatch?: { suggestions?: Array<{ Status: string }> };
+            };
+            expect(data.suggestion?.Status).toBe('Pending');
+            expect(data.configurationPatch?.suggestions?.length).toBe(1);
         });
 
         it('supports upsert_table alignments, expanded insert_live_block, embed_artifact_block (replaceBlockId + sheet fields), move_block, and duplicate_block', async () => {

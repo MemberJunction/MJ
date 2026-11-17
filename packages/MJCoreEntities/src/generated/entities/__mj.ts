@@ -105,6 +105,7 @@ import type {
   MJArchiveConfigurationEntityType,
   MJArchiveRunDetailEntityType,
   MJArchiveRunEntityType,
+  MJArtifactGuestShareLinkEntityType,
   MJArtifactPermissionEntityType,
   MJArtifactTypeEntityType,
   MJArtifactUseEntityType,
@@ -6455,11 +6456,12 @@ export interface MJAIAgentRubricEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -6479,6 +6481,16 @@ export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJAIAgentRubricEntity_JsonValue>;
 }
@@ -17768,12 +17780,42 @@ export interface MJAIModelTypeEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelTypeEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelTypeEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -17784,6 +17826,11 @@ export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelTypeEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -18530,12 +18577,42 @@ export interface MJAIModelVendorEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelVendorEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelVendorEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -18546,6 +18623,11 @@ export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelVendorEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -19484,12 +19566,42 @@ export interface MJAIModelEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -19500,6 +19612,11 @@ export interface MJAIModelEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -21164,12 +21281,42 @@ export interface MJAIPromptModelEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIPromptModelEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIPromptModelEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -21180,6 +21327,11 @@ export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIPromptModelEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -24065,12 +24217,42 @@ export interface MJAIPromptEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIPromptEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIPromptEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIPromptEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -24081,6 +24263,11 @@ export interface MJAIPromptEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIPromptEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -27562,12 +27749,42 @@ export interface MJAIVendorEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIVendorEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIVendorEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIVendorEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -27578,6 +27795,11 @@ export interface MJAIVendorEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIVendorEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -33625,6 +33847,192 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
 
 
 /**
+ * MJ: Artifact Guest Share Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactGuestShareLink
+ * * Base View: vwArtifactGuestShareLinks
+ * * @description Links an anonymous resource-share MagicLinkInvite to an immutable Frozen ArtifactVersion and optional recipient label for external guest sharing.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Guest Share Links')
+export class MJArtifactGuestShareLinkEntity extends BaseEntity<MJArtifactGuestShareLinkEntityType> {
+    /**
+    * Loads the MJ: Artifact Guest Share Links record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Guest Share Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Artifact Guest Share Links - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @throws {Error} - Save is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Artifact Guest Share Links - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @throws {Error} - Delete is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key of the artifact guest share link binding record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MagicLinkInviteID
+    * * Display Name: Magic Link Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit.
+    */
+    get MagicLinkInviteID(): string {
+        return this.Get('MagicLinkInviteID');
+    }
+    set MagicLinkInviteID(value: string) {
+        this.Set('MagicLinkInviteID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    * * Description: Foreign key to the shared Artifact record. Cascades on artifact deletion.
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Foreign key to the specific pinned ArtifactVersion snapshot exposed by this guest link.
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who created this external guest share link.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional human-readable label identifying the external recipient or review purpose.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string | null {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
  * MJ: Artifact Permissions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactPermission
@@ -34481,6 +34889,120 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
 
 
 /**
+ * Structured preview metadata stored inside `MJ: Artifact Versions.Configuration.previewSnapshot`
+ * so Library cards can render live miniature previews without fetching full `Content` blobs.
+ */
+export type MJArtifactVersionEntity_IArtifactPreviewSnapshot =
+  | {
+      Kind: 'doc';
+      Heading: string;
+      Excerpt: string;
+      Callout?: string;
+    }
+  | {
+      Kind: 'sheet';
+      Headers: string[];
+      Rows: string[][];
+    }
+  | {
+      Kind: 'slides';
+      SlideTitle: string;
+      LeftMetric?: string;
+      RightMetric?: string;
+      ThemeAccent?: string;
+    }
+  | {
+      Kind: 'whiteboard';
+      Nodes: string[];
+    };
+
+/**
+ * Persistent link between an MJ Artifact version and a remote Connected Drive file.
+ * Stored inside `MJ: Artifact Versions.Configuration` without creating redundant `MJ: Files` rows.
+ */
+export type MJArtifactVersionEntity_IConnectedDriveLinkMetadata = {
+  /** Remote file / document identifier (SharePoint/OneDrive ItemID or Google Drive FileID). */
+  ExternalFileID: string;
+  /** Connected provider key (`'OneDrive' | 'SharePoint' | 'GoogleDrive' | string`). */
+  ProviderType: string;
+  /** Optional provider integration ID. */
+  ProviderIntegrationID?: string;
+  /** Optional remote parent folder / library identifier. */
+  FolderID?: string;
+  /** Display filename on the connected drive. */
+  FileName?: string;
+  /** Remote web URL to inspect or edit on the provider. */
+  WebUrl?: string;
+  /** MIME type synced with the connected drive. */
+  MimeType?: string;
+  /** Last observed remote ETag / version tag for optimistic concurrency checks. */
+  ETag?: string;
+  /** Remote last-modified timestamp (ISO 8601) if reported by the provider. */
+  RemoteModifiedAt?: string;
+  /** Artifact `VersionNumber` associated with the latest sync. */
+  SyncedVersionNumber?: number;
+  /** ISO 8601 timestamp of the most recent push or pull sync. */
+  LastSyncedAt: string;
+  /** Direction of the most recent sync operation. */
+  LastSyncDirection: 'push' | 'pull';
+  /** User ID that executed the most recent sync. */
+  LastSyncedByUserID?: string;
+};
+
+/**
+ * Frozen-only expiring read-only external guest share link entry stored inside
+ * `MJ: Artifact Versions.Configuration.guestShareLinks`.
+ */
+export type MJArtifactVersionEntity_IGuestShareLinkRecord = {
+  /** Unique link / token identifier (`jti`). */
+  LinkID: string;
+  /** Target `MJ: Artifacts.ID`. */
+  ArtifactID: string;
+  /** Target pinned `MJ: Artifact Versions.ID`. */
+  VersionID: string;
+  /** Target artifact version number. */
+  VersionNumber: number;
+  /** External guest links strictly permit only `'Frozen'` mode so no live RLS/FLS queries run externally. */
+  ShareMode: 'Frozen';
+  /** ISO 8601 creation timestamp. */
+  CreatedAt: string;
+  /** Creator `UserInfo.ID`. */
+  CreatedByUserID: string;
+  /** Optional human-readable label for audit & management UI. */
+  Label?: string;
+  /** ISO 8601 expiration timestamp. */
+  ExpiresAt: string;
+  /** True when explicitly revoked prior to expiration. */
+  Revoked?: boolean;
+  /** ISO 8601 revocation timestamp. */
+  RevokedAt?: string;
+  /** User ID that revoked this link. */
+  RevokedByUserID?: string;
+};
+
+/**
+ * Typed JSON shape for `MJ: Artifact Versions.Configuration`.
+ * CodeGen emits a typed `ConfigurationObject` accessor on `MJArtifactVersionEntity` returning
+ * `MJArtifactVersionEntity_IArtifactVersionConfiguration | null`.
+ */
+export type MJArtifactVersionEntity_ArtifactVersionConfigurationValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | MJArtifactVersionEntity_ArtifactVersionConfigurationValue[]
+  | { [key: string]: MJArtifactVersionEntity_ArtifactVersionConfigurationValue };
+
+export interface MJArtifactVersionEntity_IArtifactVersionConfiguration {
+  previewSnapshot?: MJArtifactVersionEntity_IArtifactPreviewSnapshot;
+  thumbnailDataUrl?: string;
+  connectedDriveLink?: MJArtifactVersionEntity_IConnectedDriveLinkMetadata;
+  guestShareLinks?: MJArtifactVersionEntity_IGuestShareLinkRecord[];
+  [key: string]: MJArtifactVersionEntity_ArtifactVersionConfigurationValue;
+}
+
+/**
  * MJ: Artifact Versions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactVersion
@@ -34566,6 +35088,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJArtifactVersionEntity_IArtifactVersionConfiguration
     * * Description: JSON configuration for this version
     */
     get Configuration(): string | null {
@@ -34573,6 +35096,21 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJArtifactVersionEntity_IArtifactVersionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJArtifactVersionEntity_IArtifactVersionConfiguration | null {
+        return this.GetJSONFieldObject<MJArtifactVersionEntity_IArtifactVersionConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJArtifactVersionEntity_IArtifactVersionConfiguration | null) {
+        this.SetJSONFieldObject<MJArtifactVersionEntity_IArtifactVersionConfiguration>('Configuration', value);
     }
 
     /**
@@ -38066,6 +38604,13 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
 
 /**
+ * Single `Conversation.AnchorType` string entry permitted in
+ * `MJ: Comment Types.AllowedAnchorTypes` (for example `'Field'`, `'DocBlock'`,
+ * `'SlideRegion'`, `'SheetRange'`).
+ */
+export type MJCommentTypeEntity_CommentTypeAllowedAnchorType = string;
+
+/**
  * MJ: Comment Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CommentType
@@ -38190,6 +38735,7 @@ export class MJCommentTypeEntity extends BaseEntity<MJCommentTypeEntityType> {
     * * Field Name: AllowedAnchorTypes
     * * Display Name: Allowed Anchor Types
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>
     * * Description: Optional JSON array of Conversation.AnchorType values permitted for this comment type (for example ["Field"] for Field Suggestion). NULL allows all anchor types.
     */
     get AllowedAnchorTypes(): string | null {
@@ -38197,6 +38743,21 @@ export class MJCommentTypeEntity extends BaseEntity<MJCommentTypeEntityType> {
     }
     set AllowedAnchorTypes(value: string | null) {
         this.Set('AllowedAnchorTypes', value);
+    }
+
+    /**
+    * Typed accessor for AllowedAnchorTypes — a live view of the parsed JSON as Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying AllowedAnchorTypes field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AllowedAnchorTypesObject(): Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType> | null {
+        return this.GetJSONFieldObject<Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>>('AllowedAnchorTypes');
+    }
+    set AllowedAnchorTypesObject(value: Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType> | null) {
+        this.SetJSONFieldObject<Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>>('AllowedAnchorTypes', value);
     }
 
     /**
@@ -88922,11 +89483,12 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
  * * Schema: __mj
  * * Base Table: PublicLink
  * * Base View: vwPublicLinks
- * * @description Shareable links for external access to artifacts and other resources. Supports password protection and expiration.
+ * * @description DEPRECATED: dormant v2 schema table never wired to server or UI runtime. Use MJ: Magic Link Invites (Kind='resource-share', IdentityMode='anonymous') paired with MJ: Artifact Guest Share Links for Frozen external guest sharing, or MJ: Artifact Permissions / MJ: Collection Permissions / MJ: Access Control Rules for authenticated sharing.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Public Links')
 export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
@@ -97328,11 +97890,12 @@ export interface MJRubricCriterionEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -97352,6 +97915,16 @@ export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricCriterionEntity_JsonValue>;
 }
@@ -98120,11 +98693,12 @@ export interface MJRubricEvaluationScoreEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -98144,6 +98718,16 @@ export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricEvaluationScoreEntity_JsonValue>;
 }
@@ -98753,11 +99337,12 @@ export interface MJRubricEvaluationEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -98777,6 +99362,16 @@ export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricEvaluationEntity_JsonValue>;
 }
@@ -100084,11 +100679,12 @@ export interface MJRubricVersionEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -100108,6 +100704,16 @@ export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricVersionEntity_JsonValue>;
 }

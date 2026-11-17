@@ -7,6 +7,7 @@ import {
     IMetadataProvider,
     QueryEntityInfo,
     QueryInfo,
+    RegisterPostRunViewProtectedEntity,
     RowLevelSecurityFilterInfo,
     UserInfo,
 } from '@memberjunction/core';
@@ -1004,5 +1005,46 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         >;
         expect(pgRecords).toHaveLength(1);
         expect(pgRecords[0]['Salary']).toBeUndefined();
+    });
+
+    it('blocks raw SQL reads on entities registered via RegisterPostRunViewProtectedEntity', async () => {
+        const user = makeUser();
+        const protectedEntityName = 'PostRunView Protected Test Entity';
+        RegisterPostRunViewProtectedEntity(protectedEntityName);
+        const { provider } = makeProvider();
+        const protectedEntity = makeEntityInfo(
+            '99999999-0000-4000-8000-000000000077',
+            protectedEntityName,
+            '__mj',
+            'ProtectedSqlTest',
+            'vwProtectedSqlTests',
+            [makeField('ID', true, true), makeField('Name')]
+        );
+        (provider as { Entities: EntityInfo[] }).Entities.push(protectedEntity);
+        (mockReadOnlyProvider as { Entities: EntityInfo[] }).Entities.push(protectedEntity);
+
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                DefaultDataAccessMode: 'AllowListOnly',
+                EntityAccessRulesObject: [
+                    {
+                        entityPattern: protectedEntityName,
+                        access: 'Full',
+                    },
+                ],
+            })
+        );
+
+        const res = await invokeAction(new RunAdhocQueryAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [{ Name: 'Query', Type: 'Input', Value: 'SELECT * FROM __mj.vwProtectedSqlTests' }],
+        });
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('PERMISSION_DENIED');
+        expect(res.Message).toContain('PostRunView row-level security');
     });
 });

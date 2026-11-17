@@ -152,5 +152,15 @@
       "lastModified": "2026-11-01T22:54:28.653Z",
       "checksum": "9f321d4f98b9e6fdfdc7c5e731d983714303f3f5ebc1bcfa3952a4cfb79f2e67"
     }
+  },
+  {
+    "fields": {
+      "Name": "Artifacts",
+      "Description": "Governed collaborative artifact operations (synthesis, spreadsheet AI formulas, compliance auditing, and Frozen-only external guest share links).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "6EF20000-A2CF-4516-8003-7CEF32803326"
+    }
   }
 ]

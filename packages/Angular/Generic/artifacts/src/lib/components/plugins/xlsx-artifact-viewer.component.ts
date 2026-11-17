@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
@@ -28,12 +28,12 @@ import { FetchArrayBuffer, type SheetData } from '../previews/office-preview.log
 
       @if (!ArrayBuffer && !errorMessage) {
         <div class="xlsx-viewer__state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <i class="fa-solid fa-spinner fa-spin"></i>
           <span>Loading workbook…</span>
         </div>
       } @else if (errorMessage) {
         <div class="xlsx-viewer__state xlsx-viewer__state--error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="fa-solid fa-triangle-exclamation"></i>
           <span>{{ errorMessage }}</span>
         </div>
       } @else {
@@ -76,7 +76,7 @@ import { FetchArrayBuffer, type SheetData } from '../previews/office-preview.log
   ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'XlsxArtifactViewerPlugin')
-export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
+export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
   public IsDownloading = false;
 
   /** @deprecated Use {@link IsDownloading}. */
@@ -120,6 +120,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   private downloadUrl = '';
+  private isObjectUrl = false;
   /** The workbook's bytes, handed to the shared preview once downloaded. */
   public ArrayBuffer: ArrayBuffer | null = null;
 
@@ -145,6 +146,17 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   async ngOnInit(): Promise<void> {
     await this.loadWorkbook();
+  }
+
+  ngOnDestroy(): void {
+    this.revokeObjectUrl();
+  }
+
+  private revokeObjectUrl(): void {
+    if (this.isObjectUrl && this.downloadUrl) {
+      URL.revokeObjectURL(this.downloadUrl);
+    }
+    this.isObjectUrl = false;
   }
 
   public async OnDownload(): Promise<void> {
@@ -177,9 +189,10 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     try {
       let arrayBuffer: ArrayBuffer;
 
+      this.revokeObjectUrl();
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
-        this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+        this.downloadUrl = await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.Provider);
         arrayBuffer = await FetchArrayBuffer(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
@@ -188,12 +201,13 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           this.ShowError('Artifact has no content.');
           return;
         }
-        arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
+        arrayBuffer = this.fileService.DataUrlToArrayBuffer(content);
         // Create an object URL for download support
-        this.downloadUrl = this.fileService.dataUrlToObjectUrl(
+        this.downloadUrl = this.fileService.DataUrlToObjectUrl(
           content,
           this.artifactVersion.MimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         );
+        this.isObjectUrl = true;
       }
 
       this.ArrayBuffer = arrayBuffer;

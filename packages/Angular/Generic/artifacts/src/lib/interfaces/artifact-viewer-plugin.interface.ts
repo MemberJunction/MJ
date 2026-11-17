@@ -72,7 +72,7 @@ export interface ArtifactMetadata {
   title?: string;
   icon?: string;
   description?: string;
-  additionalInfo?: Record<string, any>;
+  additionalInfo?: Record<string, string | number | boolean | object | null | undefined>;
 }
 
 /**

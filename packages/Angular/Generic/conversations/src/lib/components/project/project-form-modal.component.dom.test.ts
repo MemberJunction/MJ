@@ -6,6 +6,7 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJProjectEntity } from '@memberjunction/core-entities';
 import type { MJDialogRef } from '@memberjunction/ng-ui-components';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { ProjectFormModalComponent } from './project-form-modal.component';
 
@@ -68,15 +69,25 @@ const render = (project: MJProjectEntity) => {
   return { f, close };
 };
 
+function createNotificationSpy() {
+  const notifySpy = vi.fn();
+  const fakeNotif = Object.assign(
+    Object.create(MJNotificationService.prototype) as MJNotificationService,
+    { CreateSimpleNotification: notifySpy },
+  );
+  vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue(fakeNotif);
+  return notifySpy;
+}
+
 describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
-  let alertSpy: ReturnType<typeof vi.spyOn>;
+  let notifySpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    notifySpy = createNotificationSpy();
   });
 
   afterEach(() => {
-    alertSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
   it('shows the reason the save was refused, not a generic message', async () => {
@@ -84,8 +95,8 @@ describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
 
     await f.componentInstance.onSave();
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(String(alertSpy.mock.calls[0][0])).toContain('does NOT have permission to Create');
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(String(notifySpy.mock.calls[0][0])).toContain('does NOT have permission to Create');
   });
 
   it('keeps the dialog open and emits nothing when the save fails', async () => {
@@ -101,25 +112,25 @@ describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
 
   it('still reports something when the entity carries no reason at all', async () => {
     const project = failingProject('');
-    (project as unknown as { LatestResult: unknown }).LatestResult = null;
+    (project as { LatestResult: typeof project.LatestResult | null }).LatestResult = null;
     const { f } = render(project);
 
     await f.componentInstance.onSave();
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(String(alertSpy.mock.calls[0][0]).length).toBeGreaterThan(0);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(String(notifySpy.mock.calls[0][0]).length).toBeGreaterThan(0);
   });
 });
 
 describe('ProjectFormModalComponent (DOM) — folder sharing failure reporting', () => {
-  let alertSpy: ReturnType<typeof vi.spyOn>;
+  let notifySpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    notifySpy = createNotificationSpy();
   });
 
   afterEach(() => {
-    alertSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
   it('keeps the dialog open and shows the reason when a folder grant is refused', async () => {
@@ -148,8 +159,8 @@ describe('ProjectFormModalComponent (DOM) — folder sharing failure reporting',
     await f.componentInstance.onSave();
 
     expect(refusedGrant.Save).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(String(alertSpy.mock.calls[0][0])).toContain('RoleID or UserID is required');
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(String(notifySpy.mock.calls[0][0])).toContain('RoleID or UserID is required');
     expect(saved).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });

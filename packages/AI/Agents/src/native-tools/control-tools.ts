@@ -143,12 +143,43 @@ function completeTaskPayloadParameter(form: CompleteTaskPayloadForm): ParamValue
     };
 }
 
+/** Schema for the optional `artifactDirective` argument on `complete_task`. */
+function completeTaskArtifactDirectiveParameter(): ParamValueSchema {
+    return {
+        type: 'object',
+        description:
+            'Optional. Controls how the run creates or versions a standalone payload artifact on completion: ' +
+            '{"behavior": "suppress" | "create-new" | "version-source", "targetArtifactId"?: string, "name"?: string, "description"?: string}.',
+        properties: {
+            behavior: {
+                type: 'string',
+                enum: ['suppress', 'create-new', 'version-source'],
+                description: 'Whether to suppress payload artifact creation, create a new artifact, or version an existing target artifact.'
+            },
+            targetArtifactId: {
+                type: 'string',
+                description: 'Target artifact UUID or alpha ID when behavior is "version-source".'
+            },
+            name: {
+                type: 'string',
+                description: 'Optional display title for a newly created artifact.'
+            },
+            description: {
+                type: 'string',
+                description: 'Optional description for a newly created artifact.'
+            }
+        }
+    };
+}
+
 /** How {@link BuildCompleteTaskTool} declares the tool. */
 export interface CompleteTaskToolOptions {
     /** Whether the tool carries a final payload change at all. Default true. */
     IncludePayloadChange?: boolean;
     /** The form of that parameter. Default `'string'`. */
     PayloadForm?: CompleteTaskPayloadForm;
+    /** When true, exposes `artifactDirective` on `complete_task` (for native-only agents with artifact support). */
+    IncludeArtifactDirective?: boolean;
 }
 
 /**
@@ -163,9 +194,11 @@ export interface CompleteTaskToolOptions {
  */
 export function BuildCompleteTaskTool(options: CompleteTaskToolOptions = {}): ChatTool {
     const includePayload = options.IncludePayloadChange !== false;
+    const includeArtifactDirective = options.IncludeArtifactDirective === true;
     const properties: Record<string, ParamValueSchema> = {
         message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
-        ...(includePayload ? { payloadChangeRequest: completeTaskPayloadParameter(options.PayloadForm ?? 'string') } : {})
+        ...(includePayload ? { payloadChangeRequest: completeTaskPayloadParameter(options.PayloadForm ?? 'string') } : {}),
+        ...(includeArtifactDirective ? { artifactDirective: completeTaskArtifactDirectiveParameter() } : {})
     };
     const writes = includePayload
         ? 'put any final writes to the shared payload in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied '
@@ -232,7 +265,13 @@ export function buildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubA
  */
 export type SubAgentOptionsResolver = (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined;
 
-function buildControlBindings(control: NativeControlConfig): NativeToolBinding[] {
+/** Options controlling optional control-tool parameters when building a native tool set. */
+export interface NativeToolSetBuildOptions {
+    /** When true, includes `artifactDirective` on `complete_task`. */
+    IncludeArtifactDirective?: boolean;
+}
+
+function buildControlBindings(control: NativeControlConfig, options?: NativeToolSetBuildOptions): NativeToolBinding[] {
     const bindings: NativeToolBinding[] = [];
     if (control.PayloadChangeTool) {
         const payload = BuildPayloadChangeTool();
@@ -243,7 +282,11 @@ function buildControlBindings(control: NativeControlConfig): NativeToolBinding[]
         bindings.push({ kind: 'askUser', toolName: ask.name, tool: ask });
     }
     if (control.Terminal === 'tool') {
-        const complete = BuildCompleteTaskTool({ IncludePayloadChange: control.PayloadChangeTool, PayloadForm: control.CompleteTaskPayload });
+        const complete = BuildCompleteTaskTool({
+            IncludePayloadChange: control.PayloadChangeTool,
+            PayloadForm: control.CompleteTaskPayload,
+            IncludeArtifactDirective: options?.IncludeArtifactDirective,
+        });
         bindings.push({ kind: 'complete', toolName: complete.name, tool: complete });
     }
     return bindings;
@@ -288,7 +331,8 @@ export function BuildNativeToolSet(
     controlOrSubAgentOptions: NativeControlConfig | SubAgentOptionsResolver = DEFAULT_NATIVE_CONTROL_CONFIG,
     agentTools: readonly AgentToolDefinition[] = [],
     frameworkTools: readonly AgentToolDefinition[] = [],
-    subAgentOptions?: SubAgentOptionsResolver
+    subAgentOptions?: SubAgentOptionsResolver,
+    buildOptions?: NativeToolSetBuildOptions
 ): NativeToolSet {
     const control = typeof controlOrSubAgentOptions === 'function' ? DEFAULT_NATIVE_CONTROL_CONFIG : controlOrSubAgentOptions;
     const resolveSubAgentOptions = typeof controlOrSubAgentOptions === 'function' ? controlOrSubAgentOptions : subAgentOptions;
@@ -321,7 +365,7 @@ export function BuildNativeToolSet(
         const tool: ChatTool = { name: definition.Name, description: definition.Description, inputSchema: definition.InputSchema };
         addBinding(set, { kind: 'agentTool', toolName: tool.name, tool, definition }, true);
     }
-    for (const binding of buildControlBindings(control)) {
+    for (const binding of buildControlBindings(control, buildOptions)) {
         addBinding(set, binding, true);
     }
     return set;

@@ -28,7 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const KNOWN_JS_PREFIXES = ['main-', 'polyfills-', 'chunk-', 'styles-'];
+const KNOWN_JS_PREFIXES = ['main-', 'polyfills-', 'chunk-', 'worker-', 'styles-'];
 const KNOWN_CSS_PREFIXES = ['styles-'];
 
 // SW-infrastructure files that the SW itself manages — NOT application assets.

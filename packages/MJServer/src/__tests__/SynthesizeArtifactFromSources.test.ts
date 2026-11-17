@@ -28,7 +28,7 @@ vi.mock('@memberjunction/ai-agents', () => ({
 }));
 
 import { BaseLLM, ChatResult } from '@memberjunction/ai';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIAgentPermissionHelper, AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     BaseEntity,
     DispatchRemoteOperationInProcess,
@@ -316,9 +316,11 @@ describe('SynthesizeArtifactFromSourcesServerOperation', () => {
             return undefined;
         });
 
-        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
-        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([]);
-        vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([]);
+        vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Models: [],
+            Agents: [],
+        } as unknown as AIEngineBase);
 
         vi.spyOn(RemoteOperationEngineBase.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(RemoteOperationEngineBase.Instance, 'IsInvokable').mockReturnValue({ Invokable: true });
@@ -379,15 +381,19 @@ describe('SynthesizeArtifactFromSourcesServerOperation', () => {
     it('synthesizes via direct LLM, emits progress stages, preserves chart embeds, and saves artifact + collection link', async () => {
         const provider = buildMockProvider();
         getAIApiKeySpy.mockReturnValue('test-openai-key');
-        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([
-            {
-                ID: 'mod-1',
-                AIModelType: 'LLM',
-                IsActive: true,
-                DriverClass: 'OpenAILLM',
-                APIName: 'gpt-4o',
-            } as unknown as (typeof AIEngine.Instance.Models)[number],
-        ]);
+        vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Models: [
+                {
+                    ID: 'mod-1',
+                    AIModelType: 'LLM',
+                    IsActive: true,
+                    DriverClass: 'OpenAILLM',
+                    APIName: 'gpt-4o',
+                },
+            ],
+            Agents: [],
+        } as unknown as AIEngineBase);
 
         const fakeLlm: Pick<BaseLLM, 'ChatCompletion'> = {
             ChatCompletion: vi.fn(async () => ({
@@ -517,14 +523,18 @@ describe('SynthesizeArtifactFromSourcesServerOperation', () => {
 
     it('routes synthesis through a named AI agent when AgentHandle is specified', async () => {
         const provider = buildMockProvider();
-        vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([
-            {
-                ID: AGENT_SAGE_ID,
-                Name: 'Sage',
-                Status: 'Active',
-            } as unknown as (typeof AIEngine.Instance.Agents)[number],
-        ]);
-        vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+        vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Models: [],
+            Agents: [
+                {
+                    ID: AGENT_SAGE_ID,
+                    Name: 'Sage',
+                    Status: 'Active',
+                },
+            ],
+        } as unknown as AIEngineBase);
+        vi.spyOn(AIAgentPermissionHelper, 'HasPermission').mockResolvedValue(true);
 
         agentRunSpy.mockResolvedValue({
             success: true,

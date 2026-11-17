@@ -472,7 +472,12 @@ export function ProviderDecisionService(provider: unknown, user: unknown, execut
                 if (answer.Kind !== 'Score') throw new Error(`The decision answered ${key} with a ${answer.Kind}, not a score.`);
                 answers[key] = answer;
             }
-            return { Answers: answers, PromptRunID: result.promptRun?.ID ?? null };
+            return {
+                Answers: answers,
+                PromptRunID: result.promptRun?.ID ?? null,
+                ModelName: result.modelInfo?.modelName ?? null,
+                ResolvedModel: result.DecisionResult?.ResolvedModel ?? null,
+            };
         },
     };
 }

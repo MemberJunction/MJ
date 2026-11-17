@@ -118,7 +118,14 @@ export type SheetsContextMenuCommand =
   | (ContextMenuCommandBase & { readonly Type: 'open-embedded-artifact'; readonly EmbedID: string })
   | (ContextMenuCommandBase & { readonly Type: 'select-embedded-anchor'; readonly EmbedID: string })
   | (ContextMenuCommandBase & { readonly Type: 'refresh-embedded-artifact'; readonly EmbedID: string })
-  | (ContextMenuCommandBase & { readonly Type: 'delete-embedded-artifact'; readonly EmbedID: string });
+  | (ContextMenuCommandBase & { readonly Type: 'delete-embedded-artifact'; readonly EmbedID: string })
+  | (ContextMenuCommandBase & { readonly Type: 'merge-cells'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'unmerge-cells'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'open-validation-drawer'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'open-conditional-format-drawer'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'open-named-range-modal'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'toggle-range-protection'; readonly RangeA1: string })
+  | (ContextMenuCommandBase & { readonly Type: 'propose-suggestion'; readonly RangeA1: string });
 
 export interface SheetsCellContextTarget {
   readonly Kind: 'cell';
@@ -144,6 +151,9 @@ export interface SheetsCellContextTarget {
   readonly BackgroundColor: string | null;
   readonly ProtectedReason: string | null;
   readonly RangeThreadCount: number;
+  readonly HasMergedCells?: boolean;
+  readonly IsRangeProtected?: boolean;
+  readonly CanUnlockRange?: boolean;
 }
 
 export interface SheetsRowHeaderContextTarget {
@@ -211,6 +221,7 @@ export interface SheetsLiveTableContextTarget {
   readonly Title: string;
   readonly Mode: SheetsLiveTableMode;
   readonly RangeA1: string;
+  readonly ProtectedReason?: string | null;
 }
 
 export interface SheetsEmbeddedArtifactContextTarget {
@@ -239,6 +250,7 @@ export interface SheetsContextMenuSnapshot {
   readonly HasClipboardData: boolean;
   readonly ClipboardSourceRangeA1: string | null;
   readonly IsMac?: boolean;
+  readonly CanManageDocumentLocks?: boolean;
 }
 
 export interface SheetsColorSwatchToken {
@@ -709,13 +721,82 @@ function buildCellOrRangeMenu(
     );
 
     items.push({ Kind: 'separator', ID: 'sheets-sep-viz' });
-    items.push({
-      Kind: 'action',
-      ID: 'sheets-create-chart',
-      Label: 'Create Chart from Selection',
-      Icon: 'fa-solid fa-chart-column',
-      Command: { Type: 'create-chart-from-selection', RangeA1: target.RangeA1 },
-    });
+    const canMerge = !isProtected && !target.IntersectsLiveOrChartBlock && (rowCount > 1 || colCount > 1);
+    const hasMerged = Boolean(target.HasMergedCells);
+    items.push(
+      {
+        Kind: 'action',
+        ID: 'sheets-merge-cells',
+        Label: 'Merge Cells',
+        Icon: 'fa-solid fa-object-group',
+        Disabled: !canMerge,
+        DisabledReason: isProtected
+          ? protectedReason
+          : target.IntersectsLiveOrChartBlock
+            ? 'Cannot merge inside live table or chart'
+            : rowCount === 1 && colCount === 1
+              ? 'Select 2 or more cells to merge'
+              : undefined,
+        Command: { Type: 'merge-cells', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-unmerge-cells',
+        Label: 'Unmerge Cells',
+        Icon: 'fa-solid fa-object-ungroup',
+        Disabled: isProtected || !hasMerged,
+        DisabledReason: isProtected ? protectedReason : !hasMerged ? 'No merged cells in selection' : undefined,
+        Command: { Type: 'unmerge-cells', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-data-validation',
+        Label: 'Data Validation...',
+        Icon: 'fa-solid fa-list-check',
+        Disabled: isProtected,
+        DisabledReason: protectedReason,
+        Command: { Type: 'open-validation-drawer', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-conditional-format',
+        Label: 'Conditional Formatting...',
+        Icon: 'fa-solid fa-wand-sparkles',
+        Disabled: isProtected,
+        DisabledReason: protectedReason,
+        Command: { Type: 'open-conditional-format-drawer', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-define-named-range',
+        Label: 'Define Named Range...',
+        Icon: 'fa-solid fa-tag',
+        Command: { Type: 'open-named-range-modal', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-toggle-range-protection',
+        Label: target.IsRangeProtected || isProtected ? 'Unprotect Range' : 'Protect Range',
+        Icon: 'fa-solid fa-lock',
+        Disabled:
+          ctx.CanManageDocumentLocks === false ||
+          ((target.IsRangeProtected || isProtected) && target.CanUnlockRange === false),
+        DisabledReason:
+          ctx.CanManageDocumentLocks === false
+            ? 'Document lock permissions required'
+            : (target.IsRangeProtected || isProtected) && target.CanUnlockRange === false
+              ? protectedReason ?? 'Only the owner or lock creator can unlock this range'
+              : undefined,
+        Command: { Type: 'toggle-range-protection', RangeA1: target.RangeA1 },
+      },
+      {
+        Kind: 'action',
+        ID: 'sheets-create-chart',
+        Label: 'Create Chart from Selection',
+        Icon: 'fa-solid fa-chart-column',
+        Command: { Type: 'create-chart-from-selection', RangeA1: target.RangeA1 },
+      }
+    );
   }
 
   if (target.HasMjFormula || target.SpilledFromA1) {
@@ -748,9 +829,18 @@ function buildCellOrRangeMenu(
   }
 
   const commentItems = buildCommentItems(target.RangeA1, target.RangeThreadCount, ctx.CanComment);
-  if (commentItems.length > 0) {
+  if (commentItems.length > 0 || ctx.CanComment) {
     items.push({ Kind: 'separator', ID: 'sheets-sep-comments' });
     items.push(...commentItems);
+    if (ctx.CanComment) {
+      items.push({
+        Kind: 'action',
+        ID: 'sheets-propose-suggestion',
+        Label: `Suggest Edit on ${target.RangeA1}...`,
+        Icon: 'fa-solid fa-code-pull-request',
+        Command: { Type: 'propose-suggestion', RangeA1: target.RangeA1 },
+      });
+    }
   }
 
   if (!ctx.CanEdit) {
@@ -1363,12 +1453,18 @@ function buildLiveTableMenu(
     },
   ];
 
+  const tableProtected = Boolean(target.ProtectedReason);
+  const tableProtectedReason = target.ProtectedReason ?? undefined;
+  const locksRestricted = ctx.CanManageDocumentLocks === false;
+
   if (ctx.CanEdit && target.Mode !== 'Frozen') {
     items.push({
       Kind: 'action',
       ID: 'sheets-live-table-refresh',
       Label: 'Refresh Live Data',
       Icon: 'fa-solid fa-arrows-rotate',
+      Disabled: tableProtected,
+      DisabledReason: tableProtectedReason,
       Command: { Type: 'refresh-live-table', TableID: target.TableID },
     });
   }
@@ -1398,6 +1494,12 @@ function buildLiveTableMenu(
         ID: 'sheets-live-table-toggle-mode',
         Label: target.Mode === 'Live' ? 'Freeze Snapshot' : 'Reconnect as Live',
         Icon: target.Mode === 'Live' ? 'fa-solid fa-snowflake' : 'fa-solid fa-bolt',
+        Disabled: tableProtected || locksRestricted,
+        DisabledReason: tableProtected
+          ? tableProtectedReason
+          : locksRestricted
+            ? 'Document lock permissions required'
+            : undefined,
         Command: { Type: 'toggle-live-table-mode', TableID: target.TableID },
       },
       {
@@ -1405,6 +1507,8 @@ function buildLiveTableMenu(
         ID: 'sheets-live-table-edit',
         Label: 'Configure Live Table...',
         Icon: 'fa-solid fa-sliders',
+        Disabled: tableProtected,
+        DisabledReason: tableProtectedReason,
         Command: { Type: 'open-live-table-editor', TableID: target.TableID },
       },
       { Kind: 'separator', ID: 'sheets-live-table-sep-delete' },
@@ -1414,6 +1518,8 @@ function buildLiveTableMenu(
         Label: 'Remove Live Table',
         Icon: 'fa-regular fa-trash-can',
         Destructive: true,
+        Disabled: tableProtected,
+        DisabledReason: tableProtectedReason,
         Command: { Type: 'delete-live-table', TableID: target.TableID },
       }
     );

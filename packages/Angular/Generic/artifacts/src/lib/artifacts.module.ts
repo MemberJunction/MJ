@@ -56,6 +56,7 @@ import { VideoArtifactPreviewComponent } from './components/previews/video-artif
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
 import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
+import { RegisterClientArtifactFileBytesLoader } from './services/artifact-file.service';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
@@ -251,6 +252,9 @@ export class ArtifactsModule {
       AudioArtifactPreviewComponent,
       VideoProductionArtifactPreviewComponent,
     ];
+
+    // Ensure the client-side file-bytes loader is wired before live blocks inspect File-backed embeds
+    RegisterClientArtifactFileBytesLoader();
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
     // componentType / previewComponentType. `componentType` is required by the interface (so this is

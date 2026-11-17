@@ -300,7 +300,7 @@ export class GitHubRestClient {
             const cleanPath = rawPath.replace(/^\/+/, '');
             const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
             const query = `?ref=${encodeURIComponent(effectiveRef)}`;
-            const fileData = await this.RequestJson<{
+            let fileMeta: {
                 path?: string;
                 sha?: string;
                 size?: number;
@@ -308,20 +308,84 @@ export class GitHubRestClient {
                 encoding?: string;
                 html_url?: string;
                 type?: string;
-            }>('GET', `/repos/${encOwner}/${encRepo}/contents/${encodedPath}${query}`);
+            } | null = null;
 
-            if (fileData.type && fileData.type !== 'file') {
+            try {
+                fileMeta = await this.RequestJson<{
+                    path?: string;
+                    sha?: string;
+                    size?: number;
+                    content?: string;
+                    encoding?: string;
+                    html_url?: string;
+                    type?: string;
+                }>('GET', `/repos/${encOwner}/${encRepo}/contents/${encodedPath}${query}`);
+            } catch (err) {
+                const isTooLarge =
+                    err instanceof GitHubRequestError &&
+                    err.StatusCode === 403 &&
+                    (err.ResponseBody?.includes('too_large') || err.message.includes('too_large'));
+                if (!isTooLarge) {
+                    throw err;
+                }
+            }
+
+            if (fileMeta?.type && fileMeta.type !== 'file') {
                 throw new GitHubRequestError(
-                    `Path '${cleanPath}' is a '${fileData.type}', not a file. Use ListTree to inspect directories.`,
+                    `Path '${cleanPath}' is a '${fileMeta.type}', not a file. Use ListTree to inspect directories.`,
                     400,
                     `/repos/${encOwner}/${encRepo}/contents/${encodedPath}`
                 );
             }
 
-            const fullText =
-                fileData.encoding === 'base64' && typeof fileData.content === 'string'
-                    ? Buffer.from(fileData.content.replace(/\s+/g, ''), 'base64').toString('utf8')
-                    : String(fileData.content ?? '');
+            let blobSha = fileMeta?.sha ?? '';
+            let rawSize = fileMeta?.size;
+            let fullText = '';
+
+            if (fileMeta && fileMeta.encoding === 'base64' && typeof fileMeta.content === 'string') {
+                fullText = Buffer.from(fileMeta.content.replace(/\s+/g, ''), 'base64').toString('utf8');
+            } else {
+                if (!blobSha) {
+                    const lastSlash = cleanPath.lastIndexOf('/');
+                    const parentDir = lastSlash >= 0 ? cleanPath.slice(0, lastSlash) : '';
+                    const baseName = lastSlash >= 0 ? cleanPath.slice(lastSlash + 1) : cleanPath;
+                    const encParent = parentDir ? parentDir.split('/').map(encodeURIComponent).join('/') : '';
+                    const dirEndpoint = encParent
+                        ? `/repos/${encOwner}/${encRepo}/contents/${encParent}${query}`
+                        : `/repos/${encOwner}/${encRepo}/contents${query}`;
+                    const dirEntries = await this.RequestJson<
+                        Array<{ name?: string; path?: string; sha?: string; size?: number; html_url?: string; type?: string }>
+                    >('GET', dirEndpoint);
+                    const match = Array.isArray(dirEntries)
+                        ? dirEntries.find((e) => e.path === cleanPath || e.name === baseName)
+                        : undefined;
+                    if (!match?.sha) {
+                        throw new GitHubRequestError(
+                            `Unable to locate Git blob SHA for oversized file '${cleanPath}' at ref '${effectiveRef}'.`,
+                            404,
+                            `/repos/${encOwner}/${encRepo}/contents/${encodedPath}`
+                        );
+                    }
+                    blobSha = match.sha;
+                    rawSize = match.size ?? rawSize;
+                    fileMeta = {
+                        path: match.path ?? cleanPath,
+                        sha: match.sha,
+                        size: match.size,
+                        html_url: match.html_url ?? undefined,
+                        type: match.type,
+                    };
+                }
+                const blob = await this.RequestJson<{ content?: string; encoding?: string; size?: number }>(
+                    'GET',
+                    `/repos/${encOwner}/${encRepo}/git/blobs/${encodeURIComponent(blobSha)}`
+                );
+                fullText =
+                    blob.encoding === 'base64' && typeof blob.content === 'string'
+                        ? Buffer.from(blob.content.replace(/\s+/g, ''), 'base64').toString('utf8')
+                        : String(blob.content ?? '');
+                rawSize = blob.size ?? rawSize;
+            }
 
             const lines = fullText.split(/\r?\n/);
             const totalLines = lines.length;
@@ -330,15 +394,15 @@ export class GitHubRestClient {
             const slicedContent = lines.slice(sLine - 1, eLine).join('\n');
 
             results.push({
-                Path: fileData.path ?? cleanPath,
+                Path: fileMeta?.path ?? cleanPath,
                 Ref: effectiveRef,
-                Sha: String(fileData.sha ?? ''),
-                Size: Number(fileData.size ?? Buffer.byteLength(fullText, 'utf8')),
+                Sha: blobSha,
+                Size: Number(rawSize ?? Buffer.byteLength(fullText, 'utf8')),
                 TotalLines: totalLines,
                 StartLine: sLine,
                 EndLine: eLine,
                 Content: slicedContent,
-                HtmlUrl: fileData.html_url ?? null,
+                HtmlUrl: fileMeta?.html_url ?? null,
             });
         }
 
@@ -763,11 +827,26 @@ export class GitHubRestClient {
         );
         const summary = MapPullRequestSummary(prData);
 
+        const fetchAllPrFiles = async (): Promise<Array<Record<string, unknown>>> => {
+            const all: Array<Record<string, unknown>> = [];
+            for (let page = 1; page <= 5; page++) {
+                const batch = await this.RequestJson<Array<Record<string, unknown>>>(
+                    'GET',
+                    `/repos/${encOwner}/${encRepo}/pulls/${pullNumber}/files?per_page=100&page=${page}`
+                ).catch(() => []);
+                if (!Array.isArray(batch) || batch.length === 0) {
+                    break;
+                }
+                all.push(...batch);
+                if (batch.length < 100) {
+                    break;
+                }
+            }
+            return all;
+        };
+
         const [filesData, reviewsData, commentsData, checksData] = await Promise.all([
-            this.RequestJson<Array<Record<string, unknown>>>(
-                'GET',
-                `/repos/${encOwner}/${encRepo}/pulls/${pullNumber}/files?per_page=100`
-            ).catch(() => []),
+            fetchAllPrFiles(),
             this.RequestJson<Array<Record<string, unknown>>>(
                 'GET',
                 `/repos/${encOwner}/${encRepo}/pulls/${pullNumber}/reviews?per_page=100`
