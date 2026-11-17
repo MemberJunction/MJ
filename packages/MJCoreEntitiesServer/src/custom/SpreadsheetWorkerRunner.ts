@@ -85,7 +85,7 @@ function executeInIsolatedWorker(
             void worker.terminate();
             finish({
                 ok: false,
-                err: new Error(`Spreadsheet worker timed out after ${timeoutMs}ms (op='${request.op}').`)
+                err: new Error(`Spreadsheet worker timed out after ${timeoutMs}ms (op='${request.Op}').`)
             });
         }, timeoutMs);
         timer.unref?.();
@@ -101,7 +101,7 @@ function executeInIsolatedWorker(
                 finish({
                     ok: false,
                     err: new Error(
-                        `Spreadsheet worker exited unexpectedly (code=${code}, op='${request.op}').`
+                        `Spreadsheet worker exited unexpectedly (code=${code}, op='${request.Op}').`
                     )
                 });
             }
@@ -119,16 +119,16 @@ export async function RunSpreadsheetImportInWorker(
     options?: SpreadsheetWorkerExecutionOptions
 ): Promise<WorkbookSpec> {
     const reply = await executeInIsolatedWorker(
-        { op: 'import', bytes, configurationJson: configurationJson ?? null },
+        { Op: 'import', Bytes: bytes, ConfigurationJson: configurationJson ?? null },
         options
     );
-    if (!reply.ok) {
-        throw new Error('error' in reply ? reply.error : 'Spreadsheet worker failed to import.');
+    if (!reply.Ok) {
+        throw new Error('Error' in reply ? reply.Error : 'Spreadsheet worker failed to import.');
     }
-    if (!reply.workbook) {
+    if (!reply.Workbook) {
         throw new Error('Spreadsheet worker returned empty workbook.');
     }
-    return reply.workbook;
+    return reply.Workbook;
 }
 
 /**
@@ -140,14 +140,14 @@ export async function RunSpreadsheetPatchInWorker(
     workbook: WorkbookSpec,
     options?: SpreadsheetWorkerExecutionOptions
 ): Promise<Uint8Array> {
-    const reply = await executeInIsolatedWorker({ op: 'patch', originalBytes, workbook }, options);
-    if (!reply.ok) {
-        throw new Error('error' in reply ? reply.error : 'Spreadsheet worker failed to patch.');
+    const reply = await executeInIsolatedWorker({ Op: 'patch', OriginalBytes: originalBytes, Workbook: workbook }, options);
+    if (!reply.Ok) {
+        throw new Error('Error' in reply ? reply.Error : 'Spreadsheet worker failed to patch.');
     }
-    if (!reply.bytes) {
+    if (!reply.Bytes) {
         throw new Error('Spreadsheet worker returned empty bytes.');
     }
-    return reply.bytes instanceof Uint8Array ? reply.bytes : new Uint8Array(reply.bytes);
+    return reply.Bytes instanceof Uint8Array ? reply.Bytes : new Uint8Array(reply.Bytes);
 }
 
 /**
@@ -159,16 +159,16 @@ export async function RunSpreadsheetEvaluateInWorker(
     editContext?: SpreadsheetCellEditContext,
     options?: SpreadsheetWorkerExecutionOptions
 ): Promise<{ Workbook: WorkbookSpec; EvaluatedFormulaCount: number }> {
-    const reply = await executeInIsolatedWorker({ op: 'evaluate', workbook, editContext }, options);
-    if (!reply.ok) {
-        throw new Error('error' in reply ? reply.error : 'Spreadsheet worker failed to evaluate.');
+    const reply = await executeInIsolatedWorker({ Op: 'evaluate', Workbook: workbook, EditContext: editContext }, options);
+    if (!reply.Ok) {
+        throw new Error('Error' in reply ? reply.Error : 'Spreadsheet worker failed to evaluate.');
     }
-    if (!reply.workbook) {
+    if (!reply.Workbook) {
         throw new Error('Spreadsheet worker returned empty evaluation result.');
     }
     return {
-        Workbook: reply.workbook,
-        EvaluatedFormulaCount: reply.evaluatedFormulaCount ?? 0
+        Workbook: reply.Workbook,
+        EvaluatedFormulaCount: reply.EvaluatedFormulaCount ?? 0
     };
 }
 

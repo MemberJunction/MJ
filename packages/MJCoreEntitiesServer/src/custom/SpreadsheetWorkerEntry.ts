@@ -7,58 +7,58 @@ import {
 
 export type SpreadsheetWorkerRequest =
     | {
-          op: 'import';
-          bytes: Uint8Array;
-          configurationJson?: string | null;
+          Op: 'import';
+          Bytes: Uint8Array;
+          ConfigurationJson?: string | null;
       }
     | {
-          op: 'patch';
-          originalBytes: Uint8Array;
-          workbook: WorkbookSpec;
+          Op: 'patch';
+          OriginalBytes: Uint8Array;
+          Workbook: WorkbookSpec;
       }
     | {
-          op: 'evaluate';
-          workbook: WorkbookSpec;
-          editContext?: SpreadsheetCellEditContext;
+          Op: 'evaluate';
+          Workbook: WorkbookSpec;
+          EditContext?: SpreadsheetCellEditContext;
       };
 
 export type SpreadsheetWorkerReply =
     | {
-          ok: true;
-          workbook?: WorkbookSpec;
-          bytes?: Uint8Array;
-          evaluatedFormulaCount?: number;
+          Ok: true;
+          Workbook?: WorkbookSpec;
+          Bytes?: Uint8Array;
+          EvaluatedFormulaCount?: number;
       }
     | {
-          ok: false;
-          error: string;
+          Ok: false;
+          Error: string;
       };
 
 function runWorkerRequest(req: SpreadsheetWorkerRequest): SpreadsheetWorkerReply {
     try {
         const engine = SpreadsheetEngine.Instance;
-        switch (req.op) {
+        switch (req.Op) {
             case 'import': {
-                const workbook = engine.ImportFromXlsxBytes(req.bytes, req.configurationJson);
-                return { ok: true, workbook };
+                const workbook = engine.ImportFromXlsxBytes(req.Bytes, req.ConfigurationJson);
+                return { Ok: true, Workbook: workbook };
             }
             case 'patch': {
-                const bytes = engine.PatchXlsxBytes(req.originalBytes, req.workbook);
-                return { ok: true, bytes };
+                const bytes = engine.PatchXlsxBytes(req.OriginalBytes, req.Workbook);
+                return { Ok: true, Bytes: bytes };
             }
             case 'evaluate': {
-                engine.EvaluateWorkbook(req.workbook, req.editContext);
+                engine.EvaluateWorkbook(req.Workbook, req.EditContext);
                 return {
-                    ok: true,
-                    workbook: req.workbook,
-                    evaluatedFormulaCount: engine.LastEvaluatedFormulaCount
+                    Ok: true,
+                    Workbook: req.Workbook,
+                    EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount
                 };
             }
         }
     } catch (err) {
         return {
-            ok: false,
-            error: err instanceof Error ? err.message : String(err)
+            Ok: false,
+            Error: err instanceof Error ? err.message : String(err)
         };
     }
 }
