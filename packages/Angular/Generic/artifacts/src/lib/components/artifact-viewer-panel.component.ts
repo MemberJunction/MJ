@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, inject, Type } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, RunView, RunViewParams, RunViewResult, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
+import { UserInfo, RunView, RunViewParams, RunViewResult, IRunViewProvider, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { PrintHtmlInSandboxedIframe } from '../utils/html-sandbox.util';
 import { EscapeSQLString, ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
@@ -113,6 +113,18 @@ function buildVersionIdFilter(versionIds: readonly string[]): string | null {
 /** The IDs of the rows of a version read, without any that came back empty. */
 function versionIdsOf(rows: readonly Pick<MJArtifactVersionEntity, 'ID'>[]): string[] {
   return rows.map(row => row.ID).filter(id => !!id);
+}
+
+/** Normalizes query rows carrying `ID` into a lowercase ID set for branch-scope checks. */
+function toLowerIdSet(rows: ReadonlyArray<{ ID?: string }>): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const id = typeof row.ID === 'string' ? row.ID.trim().toLowerCase() : '';
+    if (id) {
+      ids.add(id);
+    }
+  }
+  return ids;
 }
 
 /**
@@ -967,18 +979,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.ViewContext === 'collection' ? null : this.Scope;
   }
 
-  /** Batch query [0]: metadata of the versions the viewer lists, newest first. */
-  private buildVersionListQuery(artifactId: string, scope: ConversationScope | null): RunViewParams {
-    if (scope) {
-      return {
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
-        OrderBy: 'VersionNumber DESC',
-        Fields: VERSION_LIST_FIELDS,
-        ResultType: 'simple'
-      };
-    }
-    // conversation-scope: collection and direct open show every version
+  /** Unscoped metadata query listing all versions of an artifact, newest first (scoped filtering runs in-memory via RunView on MJ: Conversation Details). */
+  private buildVersionListQuery(artifactId: string): RunViewParams {
     return {
       EntityName: 'MJ: Artifact Versions',
       ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
@@ -986,6 +988,57 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       Fields: VERSION_LIST_FIELDS,
       ResultType: 'simple'
     };
+  }
+
+  /**
+   * Resolves both the full version list and the subset visible in `scope` using first-class `RunView`
+   * reads on `MJ: Artifact Versions`, `MJ: Conversation Details`, and `MJ: Conversation Detail Artifacts`,
+   * avoiding `[__mj].[vwConversationDetails]` subqueries blocked by `ClientClauseScreen`.
+   */
+  private async loadScopedVersionSnapshot(
+    artifactId: string,
+    scope: ConversationScope | null,
+    additionalQueries: RunViewParams[] = [],
+  ): Promise<{
+    allVersions: MJArtifactVersionEntity[];
+    visibleVersions: MJArtifactVersionEntity[];
+    extraResults: RunViewResult<MJArtifactVersionEntity>[];
+  }> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const batch: RunViewParams[] = [this.buildVersionListQuery(artifactId)];
+    if (scope) {
+      batch.push(ConversationEngine.BuildScopedDetailIdsQuery(scope));
+    }
+    const extraStartIdx = batch.length;
+    batch.push(...additionalQueries);
+
+    const providerWithViews = this.ProviderToUse as Partial<IRunViewProvider>;
+    const batchRes = typeof providerWithViews.RunViews === 'function'
+      ? await rv.RunViews<MJArtifactVersionEntity>(batch, this.CurrentUser)
+      : await Promise.all(batch.map((q) => rv.RunView<MJArtifactVersionEntity>(q, this.CurrentUser)));
+    const versionsRes = batchRes?.[0];
+    const scopedDetailsRes = scope ? batchRes?.[1] : undefined;
+    const extraResults = (batchRes?.slice(extraStartIdx) ?? []) as RunViewResult<MJArtifactVersionEntity>[];
+    const allVersions = (versionsRes?.Success && versionsRes.Results ? versionsRes.Results : []) as MJArtifactVersionEntity[];
+    if (!scope || allVersions.length === 0) {
+      return { allVersions, visibleVersions: allVersions, extraResults };
+    }
+    if (!scopedDetailsRes?.Success) {
+      return { allVersions, visibleVersions: [], extraResults };
+    }
+    const linkQuery = this.buildConversationLinkQuery(versionIdsOf(allVersions));
+    const linkRes = linkQuery
+      ? await rv.RunView<ConversationLinkRow>(linkQuery, this.CurrentUser)
+      : undefined;
+    if (linkQuery && !linkRes?.Success) {
+      return { allVersions, visibleVersions: [], extraResults };
+    }
+    const visibleVersions = ConversationEngine.FilterArtifactVersionsByScope(
+      allVersions,
+      linkRes?.Results ?? [],
+      toLowerIdSet(scopedDetailsRes.Results ?? []),
+    );
+    return { allVersions, visibleVersions, extraResults };
   }
 
   /** The collection rows of the given versions, or null when there are no versions to ask about. */
@@ -1119,40 +1172,60 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       // Version metadata first (lightweight — no Content field; loaded on-demand for the selected
-      // version). With a scope the list holds only the versions on the path, so the IDs of every
-      // version of the artifact ride along in the same batch: collections and links cover them all.
+      // version). With a scope, batch-load scoped MJ: Conversation Details IDs via first-class RunView
+      // in the same round trip so scope filtering never emits a vwConversationDetails subquery.
       const scope = this.activeScope;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const versionQueries: RunViewParams[] = [this.buildVersionListQuery(artifactId, scope)];
+      const versionQueries: RunViewParams[] = [this.buildVersionListQuery(artifactId)];
       if (scope) {
-        versionQueries.push({ EntityName: 'MJ: Artifact Versions', ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`, Fields: ['ID'], ResultType: 'simple' });
+        versionQueries.push(ConversationEngine.BuildScopedDetailIdsQuery(scope));
       }
-      const [versionsResult, everyVersionResult] = await rv.RunViews<ArtifactVersionListRow>(versionQueries, this.CurrentUser);
+      const [versionsResult, scopedDetailsResult] = await rv.RunViews<ArtifactVersionListRow>(versionQueries, this.CurrentUser);
       if (!isCurrentLoad()) {
         return;
       }
 
       if (!versionsResult.Success || !versionsResult.Results || versionsResult.Results.length === 0) {
-        this.error = scope && versionsResult.Success
-          ? 'No version of this artifact is on the current path.'
-          : 'No artifact version found';
+        this.error = 'No artifact version found';
         return;
       }
 
-      this.Artifact = artifactEntity;
-      this.AllVersions = versionsResult.Results as MJArtifactVersionEntity[];
-      this.artifactVersionIds = versionIdsOf(everyVersionResult?.Success && everyVersionResult.Results ? everyVersionResult.Results : versionsResult.Results);
-      this.applyVersionScope(scope);
+      const allVersions = versionsResult.Results;
+      const allVersionIds = versionIdsOf(allVersions);
 
       // PERF: Resolve the artifact type and batch-load the collection associations and conversation
       // links of the artifact's versions in parallel (by version IDs, never a base-view subquery).
       const [, [collectionsResult, convDetailResult]] = await Promise.all([
         this.loadArtifactType(artifactEntity.Type, artifactId, loadToken),
-        this.loadVersionChildRows(this.artifactVersionIds)
+        this.loadVersionChildRows(allVersionIds)
       ]);
       if (!isCurrentLoad()) {
         return;
       }
+
+      let visibleVersions: ArtifactVersionListRow[];
+      if (scope) {
+        if (!scopedDetailsResult?.Success || !convDetailResult?.Success) {
+          visibleVersions = [];
+        } else {
+          visibleVersions = ConversationEngine.FilterArtifactVersionsByScope(
+            allVersions,
+            convDetailResult.Results,
+            toLowerIdSet(scopedDetailsResult.Results ?? []),
+          );
+        }
+        if (visibleVersions.length === 0) {
+          this.error = 'No version of this artifact is on the current path.';
+          return;
+        }
+      } else {
+        visibleVersions = allVersions;
+      }
+
+      this.Artifact = artifactEntity;
+      this.AllVersions = visibleVersions as MJArtifactVersionEntity[];
+      this.artifactVersionIds = allVersionIds;
+      this.applyVersionScope(scope);
 
       const messageLinkedVersionIds = new Set<string>(
         ((convDetailResult?.Success && convDetailResult.Results) ? (convDetailResult.Results as ConversationLinkRow[]) : [])
@@ -1163,7 +1236,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // The requested version, or the latest (first in DESC order)
       const versionToLoad = this.pickVersionToShow(
-        versionsResult.Results,
+        visibleVersions,
         targetVersionNumber,
         scope,
         messageLinkedVersionIds
@@ -1614,13 +1687,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const currentMaxVersion = this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0);
+      const scope = this.activeScope;
 
-      // Check whether the plugin itself already saved the new version row in the database
-      const [latestCheck, unscopedMaxCheck] = await Promise.all([
-        rv.RunView<MJArtifactVersionEntity>(
-          this.buildVersionListQuery(this.Artifact.ID, this.activeScope),
-          this.CurrentUser,
-        ),
+      // Check whether the plugin itself already saved the new version row in the database, plus
+      // the unscoped MAX(VersionNumber) so nextVersionNum never collides with another branch's version.
+      const [{ visibleVersions }, unscopedMaxCheck] = await Promise.all([
+        this.loadScopedVersionSnapshot(this.Artifact.ID, scope),
         rv.RunView<{ ID: string; VersionNumber: number }>(
           {
             EntityName: 'MJ: Artifact Versions',
@@ -1641,10 +1713,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           : 0,
       );
 
-      if (latestCheck.Success && latestCheck.Results && latestCheck.Results.length > 0) {
-        const newestInDb = latestCheck.Results[0];
+      if (visibleVersions.length > 0) {
+        const newestInDb = visibleVersions[0];
         if ((newestInDb.VersionNumber || 0) > currentMaxVersion) {
-          this.AllVersions = latestCheck.Results;
+          this.AllVersions = visibleVersions;
           this.applyVersionScope(this.activeScope);
           const fullNewest = newestInDb.ID ? await this.loadVersionContent(newestInDb.ID) : null;
           const activeVer = fullNewest ?? newestInDb;
@@ -2210,17 +2282,6 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
                 `ArtifactViewerPanelComponent: server restored version '${serverRestore.VersionID}' (v${serverRestore.VersionNumber ?? '?'}) could not be loaded.`,
               );
               const scope = this.activeScope;
-              const rv = RunView.FromMetadataProvider(md);
-              const versionQueries: RunViewParams[] = [this.buildVersionListQuery(this.Artifact.ID, scope)];
-              if (scope) {
-                versionQueries.push({
-                  EntityName: 'MJ: Artifact Versions',
-                  ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}'`,
-                  Fields: ['ID'],
-                  ResultType: 'simple',
-                });
-              }
-
               const singleVerFilter = serverRestore.VersionID
                 ? `ArtifactID='${EscapeSQLString(this.Artifact.ID)}' AND ID='${EscapeSQLString(serverRestore.VersionID)}'`
                 : `ArtifactID='${EscapeSQLString(this.Artifact.ID)}' AND VersionNumber=${Math.floor(serverRestore.VersionNumber!)}`;
@@ -2230,28 +2291,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
                 MaxRows: 1,
                 ResultType: 'entity_object',
               };
-              versionQueries.push(singleVerQuery);
-
-              const batchResults = await rv.RunViews<MJArtifactVersionEntity | ArtifactVersionListRow>(
-                versionQueries,
-                this.CurrentUser,
+              const { allVersions, visibleVersions, extraResults } = await this.loadScopedVersionSnapshot(
+                this.Artifact.ID,
+                scope,
+                [singleVerQuery],
               );
-
-              const listRes = batchResults?.[0];
-              const everyVersionResult = scope ? batchResults?.[1] : undefined;
-              const singleVerRes = (scope ? batchResults?.[2] : batchResults?.[1]) as
-                | RunViewResult<MJArtifactVersionEntity>
-                | undefined;
+              const singleVerRes = extraResults[0];
 
               if (singleVerRes?.Success && singleVerRes.Results && singleVerRes.Results.length > 0) {
                 const matched = singleVerRes.Results[0] as MJArtifactVersionEntity;
-                const baseList = (listRes?.Success && listRes.Results ? listRes.Results : this.AllVersions) as MJArtifactVersionEntity[];
+                const baseList = visibleVersions.length > 0 ? visibleVersions : this.AllVersions;
                 this.AllVersions = [matched, ...baseList.filter(v => !UUIDsEqual(v.ID, matched.ID))];
-                this.artifactVersionIds = versionIdsOf(
-                  everyVersionResult?.Success && everyVersionResult.Results
-                    ? everyVersionResult.Results
-                    : (listRes?.Success && listRes.Results ? listRes.Results : this.AllVersions)
-                );
+                this.artifactVersionIds = versionIdsOf(allVersions.length > 0 ? allVersions : this.AllVersions);
                 if (matched.ID && !this.artifactVersionIds.some(id => UUIDsEqual(id, matched.ID))) {
                   this.artifactVersionIds.unshift(matched.ID);
                 }
