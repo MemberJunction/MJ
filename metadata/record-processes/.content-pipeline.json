@@ -73,7 +73,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "(ExtractionStatus IS NULL OR ExtractionStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "ScopeFilter": "(ExtractionStatus IS NULL OR ExtractionStatus = 'Pending') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -98,8 +98,8 @@
       "ID": "95A91363-74BB-4532-A109-4E6F45EEC100"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.120Z",
-      "checksum": "bde067a1204364eb53e2c3532eddb35336a6e05ddc409f638d159416b0cfce7e"
+      "lastModified": "2026-11-16T14:55:30.735Z",
+      "checksum": "a34dd8bbd8805e1051442f544fe70095e9d70c821810480aa868661d4eb19ecb"
     }
   },
   {
@@ -110,7 +110,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "(TaggingStatus IS NULL OR TaggingStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "ScopeFilter": "(TaggingStatus IS NULL OR TaggingStatus = 'Pending') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -128,8 +128,8 @@
       "ID": "60BE8612-B278-4C06-A06C-CF9365D9C1B2"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.137Z",
-      "checksum": "6e46edaaf243b512dd581c8b46eac9bec7c6940724ca68845915bddfdc11ceca"
+      "lastModified": "2026-11-16T14:55:30.743Z",
+      "checksum": "ee554e9a9f037088d887422138ae209e78a9c76bf5de8b82f84eecacd68b4f03"
     }
   },
   {
@@ -140,7 +140,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "(SegmentationStatus IS NULL OR SegmentationStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "ScopeFilter": "(SegmentationStatus IS NULL OR SegmentationStatus = 'Pending') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -158,8 +158,8 @@
       "ID": "88F8296E-6300-4938-817C-E3FF2D85DE4E"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.155Z",
-      "checksum": "7a230dd9aa522965ce2548f10d4cec05b99cf16eaea6d0457651cd7af866e3b9"
+      "lastModified": "2026-11-16T14:55:30.750Z",
+      "checksum": "61c89c12c06e44f9407094b2d0dbf4ecea9fdc72bc6d1ca2f1970741996b16ee"
     }
   },
   {
@@ -170,7 +170,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly')) AND (DeleteStatus IS NULL)",
+      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly')) AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -188,8 +188,34 @@
       "ID": "9A90F785-8D21-403E-9810-6FFEB75FEFBD"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.176Z",
-      "checksum": "65cce0bb8e7f53098a44db5ea924cac9a8f3a4360b8c5860f9f1aeaa3eaa176a"
+      "lastModified": "2026-11-16T14:55:30.757Z",
+      "checksum": "b4919a3db45c2bd64fb58c6db4115c2419be789e24ea85bd675a5757396367c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Content Pipeline — Settle Item Embedding",
+      "Description": "Sets a Content Item's EmbeddingStatus from its chunks for an item the Embed run did not settle (the process stopped between committing the chunks and settling the item). Selects items that were cut into chunks, are not yet settled and whose live chunks have all settled; the item becomes Failed if any chunk failed, Skipped if every chunk was skipped, and Complete otherwise. Items waiting on a retry are left until the wait is over and the retrying stage has settled them.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')) AND (SegmentationStatus = 'Complete') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL) AND ID IN (SELECT [ContentItemID] FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL) AND ID NOT IN (SELECT [ContentItemID] FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL AND (EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')))",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 50,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "SettleItemEmbedding"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "01E943AE-970A-4E00-AF08-BBF5AA6B560D"
     }
   },
   {
@@ -230,7 +256,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "DeleteStatus = 'Pending'",
+      "ScopeFilter": "(DeleteStatus = 'Pending') AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -248,8 +274,8 @@
       "ID": "13FF9508-4BDB-4BF3-A938-AA36EDD2ED46"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.192Z",
-      "checksum": "68da1c520fc8e25bede55c8a8e56faf75842a593f4be067f5be53183529bfe69"
+      "lastModified": "2026-11-16T14:55:30.765Z",
+      "checksum": "773d95ef9caffedad11570eece6d5659b0f150559ec31d577b6f14b757afbfcc"
     }
   },
   {
@@ -260,7 +286,7 @@
       "Status": "Active",
       "WorkType": "Pipeline Stage",
       "ScopeType": "Filter",
-      "ScopeFilter": "DeleteStatus = 'Pending'",
+      "ScopeFilter": "(DeleteStatus = 'Pending') AND (RetryAfter IS NULL OR RetryAfter <= GETUTCDATE())",
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
@@ -278,8 +304,8 @@
       "ID": "3A7E3C40-89A1-4D0D-8FF1-EF7C53EAE00E"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:36:10.209Z",
-      "checksum": "2786af7786e9d70911573af9b535170e23ab42d7aa09a4ccd50b1e4f0632bf85"
+      "lastModified": "2026-11-16T14:55:30.772Z",
+      "checksum": "64f6f4f92efb9f1d2a51c347e71fe5f9191c033d6d2ac0d811af25a49cb9608d"
     }
   },
   {

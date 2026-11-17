@@ -11,7 +11,10 @@ import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
 } from '../lib/components/realtime/remote-browser/remote-browser-channel';
 import {
-  MapToViewportCoords, RemoteBrowserHumanInputEvent, RemoteBrowserSurfaceComponent
+  MapToViewportCoords,
+  RemoteBrowserHumanInputEvent,
+  RemoteBrowserSurfaceComponent,
+  RemoteBrowserViewportSize,
 } from '../lib/components/realtime/remote-browser/remote-browser-surface.component';
 import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES,
@@ -488,9 +491,10 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     log = { Notes: [], Calls: [] };
   });
 
-  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection. */
+  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection + ViewportResize. */
   function makeSurface(): RemoteBrowserSurfaceComponent & {
     HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+    ViewportResize: EventEmitter<RemoteBrowserViewportSize>;
     FetchSelection: (() => Promise<string>) | null;
   } {
     const surface = {
@@ -499,6 +503,7 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       AudioAvailable: false,
       AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
+      ViewportResize: new EventEmitter<RemoteBrowserViewportSize>(),
       AudioMutedChange: new EventEmitter<boolean>(),
       // BindSurface sets this to the channel's copy-out fetcher; captured so a test can call it.
       FetchSelection: null as (() => Promise<string>) | null,
@@ -507,6 +512,7 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     };
     return surface as unknown as RemoteBrowserSurfaceComponent & {
       HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+      ViewportResize: EventEmitter<RemoteBrowserViewportSize>;
       FetchSelection: (() => Promise<string>) | null;
     };
   }
@@ -639,6 +645,26 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     surface.HumanInput.emit({ kind: 'pointer-move', x: 1, y: 2 });
 
     expect(log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'))).toBeUndefined();
+  });
+
+  it('relays surface ViewportResize events to the ResizeRemoteBrowserViewport mutation and tears down on UnbindSurface', () => {
+    channel.Initialize(makeContext(log, { ResizeRemoteBrowserViewport: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.ViewportResize.emit({ Width: 540, Height: 760 });
+
+    const resizeCall = log.Calls.find(c => c.Query.includes('ResizeRemoteBrowserViewport'));
+    expect(resizeCall).toBeTruthy();
+    expect(resizeCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1',
+      width: 540,
+      height: 760,
+    });
+
+    channel.UnbindSurface();
+    surface.ViewportResize.emit({ Width: 1440, Height: 820 });
+    expect(log.Calls.filter(c => c.Query.includes('ResizeRemoteBrowserViewport'))).toHaveLength(1);
   });
 });
 
