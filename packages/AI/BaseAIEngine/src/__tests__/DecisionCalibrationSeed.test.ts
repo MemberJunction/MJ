@@ -28,7 +28,7 @@ const GPT_OSS = 'GPT-OSS-120B';
 describe('decision calibrations seeded on the AI models', () => {
     it('Jev carries the fits for routing, discovery, the memory note gate and duplicate detection', () => {
         expect(calibrationsOf('.jev-models.json', 'Jev')).toEqual([
-            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: JEV, A: 1.7757, B: -3.3506 },
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: JEV, A: 1.7757, B: -0.8385 },
             { Use: 'agent-discovery', Question: 'agent', ResolvedModel: JEV, A: 0.4412, B: 0.4571 },
             { Use: 'agent-discovery', Question: 'anyApplies', ResolvedModel: JEV, A: 1.2469, B: 1.77 },
             { Use: 'memory-note-gate', Question: 'note', ResolvedModel: JEV, A: 3.6391, B: -5.7059 },
@@ -38,7 +38,7 @@ describe('decision calibrations seeded on the AI models', () => {
 
     it('LLM Decision carries every fit but the memory note gate, which it did not beat the proxy on', () => {
         expect(calibrationsOf('.llm-decision-model.json', 'LLM Decision')).toEqual([
-            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: GPT_OSS, A: 1.6508, B: -2.911 },
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: GPT_OSS, A: 1.6508, B: -0.3989 },
             { Use: 'agent-discovery', Question: 'agent', ResolvedModel: GPT_OSS, A: 1.4301, B: -0.0755 },
             { Use: 'agent-discovery', Question: 'anyApplies', ResolvedModel: GPT_OSS, A: 0.7114, B: 0.9073 },
             { Use: 'duplicate-detection', Question: 'duplicate', ResolvedModel: GPT_OSS, A: 0.9918, B: -1.4843 },

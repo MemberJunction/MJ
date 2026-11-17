@@ -36,7 +36,7 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase, ResolveConversationAgentPreset } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
 import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -604,8 +604,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * answer it, instead of always going back to the last agent that answered. The same call can
    * name the artifact version the message modifies. The answer replaces continuity only when it
    * is confident and arrives in time; an error, a slow or unsure answer keeps today's routing, and
-   * a tagged message or a form response makes no call (see `decision-routing.ts`). False (the
-   * default) changes nothing: no call, and today's routing.
+   * a tagged message or a form response makes no call (see `decision-routing.ts`). On by default:
+   * the routing calibration is fitted for a chat's mix, so the decision leaves the last agent only
+   * when it is at least 70% likely the person moved on. False makes no call and keeps today's
+   * routing.
    *
    * What goes to the model: each qualifying message sends these to the model behind the
    * `Default Decision` prompt, which can be a different vendor from the agents' own: the first
@@ -613,7 +615,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * name, description and last reply, and the names of their artifact versions. Each call writes an
    * `MJ: AI Prompt Runs` row, even when the answer comes too late to be used.
    */
-  @Input() EnableDecisionRouting: boolean = false;
+  @Input() EnableDecisionRouting: boolean = true;
 
   /** The send slot was clicked in `stop` mode; the chat area stops the run(s). */
   @Output() StopClicked = new EventEmitter<void>();
@@ -2746,14 +2748,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * more predictable and eliminates a common source of confusion where the intent check
    * incorrectly rerouted messages away from the active agent.
    *
-   * The checkContinuityIntent() method and the underlying checkAgentContinuityIntent() service
-   * method are preserved (not deleted) so we can reintroduce intent checking in the future
-   * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
-   * user. See PR #2309 for the full discussion.
-   *
-   * With {@link EnableDecisionRouting} on, a typed routing decision runs before routing instead
-   * ({@link decideAgentRouting}); the prompt-based check stays unused. A confident answer from it
-   * may name the artifact version this agent should continue from.
+   * Intent checking came back as a typed routing decision rather than an LLM call: with
+   * {@link EnableDecisionRouting} on (the default), {@link decideAgentRouting} runs before routing,
+   * in a few hundred milliseconds, and a confident answer may send the message to another agent or
+   * name the artifact version this agent should continue from. The old prompt-based check is gone
+   * from this component; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
    *
    * @param branchId The turn's branch (null is Main).
    * @param targetArtifactVersionId The artifact version the routing decision named, or null.
@@ -2984,52 +2983,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** Fires {@link AfterAgentTurn} for a turn that succeeded. */
   private emitAfterAgentTurn(conversationId: string, result: ExecuteAgentResult, agentRunId?: string): void {
     this.AfterAgentTurn.emit(new AfterAgentTurnEventArgs(conversationId, agentRunId ?? result.agentRun?.ID ?? '', result));
-  }
-
-  /**
-   * Checks if message should continue with the previous agent, reading the path of `branchId`
-   * (null is Main). Emits events to show temporary intent checking message in conversation
-   */
-  private async checkContinuityIntent(agentId: string, message: string, branchId: string | null) {
-    // FAST PATH: If message contains form response syntax, skip the intent check entirely
-    // Form responses always continue with the agent that requested the form
-    // Don't show "Analyzing intent..." message for this obvious case
-    if (ConversationUtility.ContainsFormResponse(message)) {
-      LogStatusEx({ message: '✅ Form response detected, skipping intent check UI (fast path)', verboseOnly: true });
-      return {
-        decision: 'YES' as const,
-        reasoning: 'User submitted a form response to the previous agent'
-      };
-    }
-
-    // Emit event to show temporary "Analyzing intent..." message in conversation
-    this.IntentCheckStarted.emit({ conversationId: this.ConversationId });
-
-    try {
-      // The pre-loaded artifact/agent-run maps are no longer passed: they are scoped to the
-      // loaded transcript window, and the service now queries for this agent's artifacts so
-      // the classifier reasons over the whole conversation. A conversation id is what it
-      // needs instead, and without one there is nothing to query.
-      if (!this.ConversationId) {
-        console.warn('⚠️ No conversation id available for intent check');
-        return { decision: 'UNSURE' as const, reasoning: 'Conversation not available' };
-      }
-
-      const intent = await this.agentService.checkAgentContinuityIntent(
-        this.ConversationId,
-        agentId,
-        message,
-        this.ConversationHistory,
-        branchId
-      );
-      return intent;
-    } catch (error) {
-      console.error('❌ Intent check failed, defaulting to UNSURE:', error);
-      return { decision: 'UNSURE' as const, reasoning: 'Intent check failed with error' };
-    } finally {
-      // Emit event to remove temporary intent checking message
-      this.IntentCheckCompleted.emit({ conversationId: this.ConversationId });
-    }
   }
 
   /**

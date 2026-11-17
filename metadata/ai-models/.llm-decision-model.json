@@ -17,8 +17,8 @@
               "Question": "continues",
               "ResolvedModel": "GPT-OSS-120B",
               "A": 1.6508,
-              "B": -2.911,
-              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29, via Cerebras: 301 scored points, 5 repeats. Out of fold: balanced accuracy 0.796 raw → 0.861 calibrated, ECE 0.195 → 0.081. Fitted at the corpus mix (42% continue)."
+              "B": -0.3989,
+              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29, via Cerebras: 301 scored points, 5 repeats. Out of fold: balanced accuracy 0.796 raw → 0.861 calibrated, ECE 0.195 → 0.081. Fitted at the corpus mix (42% continue), then B shifted by logit(0.9) − logit(127/301) = +2.5121 to a chat's 90%-continue mix (B at the corpus mix: -2.911)."
             },
             {
               "Use": "agent-discovery",

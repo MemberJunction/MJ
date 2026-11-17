@@ -1,7 +1,7 @@
 # Decision Models in Agents
 
 A decision model answers typed questions (a probability, a choice from a list, a score) in one fast
-call. Agents can use one in six places on their own. Each place has its own setting, and one master
+call. Agents can use one in seven places on their own. Each place has its own setting, and one master
 switch sits above all of them.
 
 ## The master switch: `decisionsEnabled`
@@ -19,10 +19,13 @@ runtime refuses the call as well.
 | Decision discovery | `decisionDiscovery` (`false`) | Does not run. |
 | Payload change check | `payloadFeedbackCheck` (`false`) | Does not run. |
 | Catalog narrowing | `maxActionsInPrompt`, `maxSubAgentsInPrompt` (`-1`, off) | Does not run. The prompt describes every action, skill and sub-agent, as it did before narrowing existed. |
-| Memory Manager note gate | run `data.enableDecisionGate` (`false`) | Does not run. Notes keep the self-reported confidence filter. |
+| Memory Manager note gate | run `data.enableDecisionGate` (`true`) | Does not run. Notes keep the self-reported confidence filter. |
+| Memory Manager dedupe and contradictions | run `data.memoryDecisionMode` (`'Shadow'`) | Treated as `'Prompt'`: the LLM prompts answer and no decision is asked. |
 
-With `decisionsEnabled: true`, each setting works as documented, and each is still off by default.
-So turning a use on takes two settings: the switch, and the use's own setting.
+With `decisionsEnabled: true`, each setting works as documented. The agent's own uses are still off
+by default, so turning one on takes two settings: the switch, and the use's own setting. The Memory
+Manager's two are the exception: both are on once its switch is, because both were measured or run
+only beside the prompt they may replace (see below).
 
 ### Setting it
 
@@ -45,8 +48,16 @@ Turn it on for an agent and pick the uses it needs:
 A run can turn it on or off with `data.__agentTypePromptParams.decisionsEnabled`. The sub-agents
 the run starts inherit its `data`, so the override reaches them too.
 
-The Memory Manager is a Loop agent too. Its note gate needs `decisionsEnabled: true` in its own
-`AgentTypePromptParams` or in the run's `__agentTypePromptParams`, as well as `enableDecisionGate`.
+The Memory Manager is a Loop agent too. Its decision uses read `decisionsEnabled` from its own
+`AgentTypePromptParams` or the run's `__agentTypePromptParams`, and its metadata ships it `true`. A run
+turns the note gate off with `data.enableDecisionGate: false`.
+
+Two shipped agents set the switch in metadata (`metadata/agents`):
+
+| Agent | `AgentTypePromptParams` | Why |
+|---|---|---|
+| Memory Manager | `decisionsEnabled: true` | The note gate was measured at 96.1% precision and 95.4% recall on Jev; the dedupe and contradiction decisions run in `Shadow`. |
+| Sage | `decisionsEnabled: true`, `decisionDiscovery: true` | Discovery was measured at 95.3% precision for the agents it names; a model without a discovery calibration is unsure and adds nothing. |
 
 ### What the switch does not cover
 
@@ -65,7 +76,12 @@ the service. In code, `BaseAgent.DecisionsEnabled(promptParams)` is the one reso
 automatic use calls it before it asks.
 
 Client-side conversation routing (`EnableDecisionRouting` on the conversation components) is a
-setting of the Angular chat UI, not of an agent, and is off by default. The switch does not affect it.
+setting of the Angular chat UI, not of an agent. The switch does not affect it.
+
+The realtime turn moderator is not an agent run either. Its decision is set per room, on the Realtime
+agent type's `turnTaking.moderator` block: `decisionMode` (`'Prompt'`, `'Shadow'` or `'Decision'`,
+default `'Shadow'`) and `decisionPromptName` (default `Default Decision`). See
+[Realtime turn moderator](#realtime-turn-moderator).
 
 ## The uses
 
@@ -106,13 +122,46 @@ those. Every permitted item can still be used, and a failed decision shows them 
 
 ### Memory Manager note gate
 
-With `enableDecisionGate` on a Memory Manager run, the notes it extracts from a conversation are
-judged by a decision model, against that conversation, instead of by the extraction model's own
-confidence.
+With the switch on, the notes a Memory Manager run extracts from a conversation are judged by a
+decision model, against that conversation, instead of by the extraction model's own confidence. A
+note answered by a model with no `memory-note-gate` calibration keeps the confidence filter.
+`data.enableDecisionGate: false` turns the gate off for a run.
 
-The agent's own uses ask with the prompt named by `decisionPromptName` (default `Default Decision`);
-the Memory Manager's gate always uses `Default Decision`. Each call is recorded as a run step, and its
-prompt run counts toward the run's cost and tokens.
+Every decision call, the Memory Manager's included, asks with the prompt named by
+`decisionPromptName` (default `Default Decision`) and runs on the run's execution scope: its
+configuration, runtime API keys and credential scope. Each gate call is recorded as a run step, and
+its prompt run counts toward the run's cost and tokens.
+
+### Memory Manager dedupe and contradictions
+
+The Memory Manager makes three closed-set LLM calls besides the gate: whether a candidate note
+duplicates its similar stored notes (`Memory Manager - Deduplicate Note`, also used when hardening a
+provisional note), whether a candidate example duplicates stored examples (`… - Deduplicate
+Example`), and whether two stored notes contradict each other (`… - Detect Contradictions`). Each
+can be asked as one Likelihood instead (`memory-decision-uses.ts`), through `RunDecisionUse`, in the
+run's `data.memoryDecisionMode`:
+
+| Mode | What answers |
+|---|---|
+| `Prompt` | The LLM prompt only. |
+| `Shadow` (default) | The LLM prompt. The decision runs beside it, in parallel, and its prompt run is tagged `Shadow: <use>` with the comparison in `Comments`: the prompt's verdict as the label, the raw and calibrated probabilities. |
+| `Decision` | The decision, read in calibrated bands: at or above 0.7 yes, at or below 0.3 no, between them unsure. The prompt answers when the decision is unsure, fails, or the answering model has no calibration for the use. |
+
+None of the three has a fit yet, so `Decision` mode behaves as `Prompt` plus one decision call until
+one ships. The contradiction decision asks only whether the notes conflict: which note wins follows
+the prompt's own stated rule (more than seven days newer, then higher importance, then higher access
+count, a tie keeping both), applied in code. Every path fails as the prompt does: a dedupe failure
+never adds a note, and a contradiction failure skips the pair.
+
+### Realtime turn moderator
+
+In a multi-agent voice room the moderator decides who speaks next with the `Realtime: Turn Moderator`
+prompt, inside an 800 ms budget. It can also ask one Likelihood per roster agent (use
+`realtime-turn-moderator`, question `speaks`), through `RunDecisionUse`, in the room's
+`turnTaking.moderator.decisionMode`. In `Shadow` (the default) the prompt picks and the decision is
+recorded beside it, adding no latency. In `Decision` the agents at or over a calibrated 0.6 speak,
+most likely first, and the prompt answers when the answering model has no calibration. The
+`onError` policy still applies when both fail or the budget runs out.
 
 ## Calibration
 
@@ -133,6 +182,9 @@ Fits are model metadata, not code. Each is an entry in the answering AI model's
 | `memory-note-gate` | `note` | Jev 1.13 |
 | `conversation-routing` | `continues` | Jev 1.13, LLM Decision on GPT-OSS-120B |
 | `duplicate-detection` | `duplicate` | Jev 1.13, LLM Decision on GPT-OSS-120B |
+| `memory-note-dedupe`, `memory-example-dedupe` | `duplicate` | Not yet: `Shadow` runs collect the labels |
+| `memory-contradiction` | `contradicts` | Not yet: `Shadow` runs collect the labels |
+| `realtime-turn-moderator` | `speaks` | Not yet: `Shadow` runs collect the labels |
 
 An answer from any other model, including Jev at another version or a decision model with no entry
 for the use, is treated as unsure, and the use falls back as documented above. Fitting a new model,
