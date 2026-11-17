@@ -403,7 +403,7 @@ function extractSpreadsheetLocation(
     let workbook: WorkbookSpec | null = null;
     if (contentStr.trim().startsWith('{')) {
         try {
-            workbook = SpreadsheetEngine.Instance.ParseWorkbook(contentStr);
+            workbook = SpreadsheetEngine.Instance.ParseWorkbook(contentStr, undefined, { SkipEvaluate: true });
         } catch {
             workbook = null;
         }

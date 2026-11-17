@@ -29,6 +29,7 @@ import {
     BuildSqlArtifactVersionIdReadablePredicateAsync,
     BuildSqlCollectionReadablePredicateAsync,
     EmptyPostRunViewResult,
+    ExtractSingleUuidFieldFromFilter,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
@@ -360,8 +361,12 @@ export const CollectionArtifactPreRunViewHook: PreRunViewHook = async (
             InternalParams: getInternalCollectionArtifactQueryParamsSet(),
             OriginalFieldsMap: getOriginalCollectionArtifactFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS),
-            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
-                BuildSqlArtifactVersionIdReadablePredicateAsync(
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) => {
+                const singleCollectionScopeId = ExtractSingleUuidFieldFromFilter(
+                    runViewParams?.ExtraFilter,
+                    'CollectionID'
+                );
+                return BuildSqlArtifactVersionIdReadablePredicateAsync(
                     await QualifyOuterEntityColumnAsync(
                         entityInfo,
                         'vwCollectionArtifacts',
@@ -372,11 +377,20 @@ export const CollectionArtifactPreRunViewHook: PreRunViewHook = async (
                     ),
                     prov,
                     user,
-                    { precomputedCollectionCache: collectionCache }
-                ),
+                    { precomputedCollectionCache: collectionCache, singleCollectionScopeId }
+                );
+            },
             ExtraPredicates: [
                 {
                     IdColumnName: 'CollectionID',
+                    CheckSingleIdReadable: async (prov, collectionId, user) => {
+                        const perms = await ArtifactPermissionEngine.Instance.ResolveCollectionAncestryPermissions(
+                            prov,
+                            collectionId,
+                            user
+                        );
+                        return perms.CanRead;
+                    },
                     BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
                         BuildSqlCollectionReadablePredicateAsync(
                             await QualifyOuterEntityColumnAsync(

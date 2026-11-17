@@ -524,4 +524,32 @@ describe('ArtifactPermissionEngine Defer Fallback, >500 Items, Collection Ancest
         expect(readable.has(deniedOwnedArt)).toBe(false);
         expect(readable.size).toBe(3);
     });
+
+    it('TryBuildReadableArtifactIdSet returns null when any sub-query fails (R7-4)', async () => {
+        const user: UserInfo = {
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Test User',
+            Email: 'test@example.com'
+        } as UserInfo;
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifact Permissions') {
+                    return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'Transient DB timeout' };
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+            })
+        } as Pick<RunView, 'RunView'> as RunView);
+
+        const provider: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+
+        const result = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(
+            provider as IMetadataProvider,
+            user
+        );
+        expect(result).toBeNull();
+    });
 });

@@ -2167,6 +2167,24 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             superSaveSpy.mockResolvedValueOnce(true);
             expect(await ownerSave.ent.Save()).toBe(true);
             expect(corruptDeser).not.toHaveBeenCalled();
+
+            // 4. R7-1: Oversized JSON workbook (> 128 sheets) is rejected cleanly on Save even for the artifact owner
+            const oversizedWorkbookSave = makeSave();
+            Object.defineProperty(oversizedWorkbookSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+            const oversizedJson = JSON.stringify({
+                WorkbookID: 'save-bomb',
+                Title: 'Too Many Sheets',
+                Worksheets: Array.from({ length: 129 }, (_, idx) => ({
+                    SheetID: `s-${idx + 1}`,
+                    Name: `Sheet ${idx + 1}`,
+                    Rows: [],
+                    Columns: [],
+                    Cells: {}
+                }))
+            });
+            Object.defineProperty(oversizedWorkbookSave.ent, 'Content', { value: oversizedJson, writable: true });
+            expect(await oversizedWorkbookSave.ent.Save()).toBe(false);
+            expect(oversizedWorkbookSave.hist[0]?.Message).toMatch(/maximum sheet limit/i);
         } finally {
             RegisterWorkingStateContentDeserializer(null);
             superSaveSpy.mockRestore();

@@ -1020,7 +1020,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             const engine = SpreadsheetEngine.Instance;
             let workbook: WorkbookSpec;
             try {
-                workbook = this.loadWorkbookFromContent(artifactContent);
+                workbook = await this.loadWorkbookFromContentIsolated(artifactContent);
             } catch (err) {
                 return this.errorResult(`Failed to parse spreadsheet content: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -1135,7 +1135,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private loadWorkbookFromContent(artifactContent: string | Buffer): WorkbookSpec {
+    private async loadWorkbookFromContentIsolated(artifactContent: string | Buffer): Promise<WorkbookSpec> {
         const engine = SpreadsheetEngine.Instance;
         if (Buffer.isBuffer(artifactContent)) {
             if (
@@ -1143,20 +1143,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 artifactContent[0] === 0x50 &&
                 artifactContent[1] === 0x4b
             ) {
-                return engine.ImportFromXlsxBytes(new Uint8Array(artifactContent));
+                return await engine.ImportFromXlsxBytesIsolated(new Uint8Array(artifactContent));
             }
-            return engine.ParseWorkbook(artifactContent.toString('utf-8'));
+            return await engine.ParseWorkbookIsolated(artifactContent.toString('utf-8'));
         }
-        return engine.ParseWorkbook(artifactContent);
+        return await engine.ParseWorkbookIsolated(artifactContent);
     }
 
     /**
      * Evaluates a workbook and computes its revision hash (`R9-9`).
      */
     public ComputeRevisionHash(content: string | Buffer): string {
-        const workbook = this.loadWorkbookFromContent(content);
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
-        return SpreadsheetEngine.Instance.ComputeRevisionHash(workbook);
+        const engine = SpreadsheetEngine.Instance;
+        const workbook = Buffer.isBuffer(content)
+            ? content.length > 4 && content[0] === 0x50 && content[1] === 0x4b
+                ? engine.ImportFromXlsxBytes(new Uint8Array(content))
+                : engine.ParseWorkbook(content.toString('utf-8'), undefined, { SkipEvaluate: true })
+            : engine.ParseWorkbook(content, undefined, { SkipEvaluate: true });
+        return engine.ComputeRevisionHash(workbook);
     }
 
     private resolveSheet(workbook: WorkbookSpec, sheetArg: ArtifactJsonValue | undefined): WorksheetSpec | null {
@@ -1171,16 +1175,19 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         );
     }
 
-    private buildMutationSuccess(
+    private async buildMutationSuccess(
         workbook: WorkbookSpec,
-        extra: object
-    ): ArtifactToolResult {
+        extra: object,
+        options?: { skipEvaluate?: boolean }
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
-        engine.EvaluateWorkbook(workbook);
+        if (!options?.skipEvaluate) {
+            await engine.EvaluateWorkbookIsolated(workbook);
+        }
         const serializedJson = engine.SerializeWorkbook(workbook);
         const originalXlsxBytes = this.activeOriginalXlsxStorage.getStore() ?? null;
         const xlsxBytes = originalXlsxBytes
-            ? engine.PatchXlsxBytes(originalXlsxBytes, workbook)
+            ? await engine.PatchXlsxBytesIsolated(originalXlsxBytes, workbook)
             : engine.ExportToXlsxBytes(workbook);
         const xlsxBase64 = Buffer.from(xlsxBytes).toString('base64');
         const revisionHash = engine.ComputeRevisionHash(workbook);
@@ -1196,7 +1203,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         revisionHash: string
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         return this.successResult({
             workbookId: workbook.WorkbookID,
             title: workbook.Title,
@@ -1230,7 +1236,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         revisionHash: string
     ): ArtifactToolResult {
         const engine = SpreadsheetEngine.Instance;
-        engine.EvaluateWorkbook(workbook);
         const sheet = this.resolveSheet(workbook, input.sheet ?? input.sheetName);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? input.sheetName ?? '')}' not found.`);
@@ -1474,33 +1479,37 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
 
-        engine.EvaluateWorkbook(workbook);
+        await engine.EvaluateWorkbookIsolated(workbook);
         const updatedCells: SpreadsheetCellSpec[] = updatedAddresses
             .map((a) => sheet.Cells[a])
             .filter((c): c is SpreadsheetCellSpec => Boolean(c));
 
-        return this.buildMutationSuccess(workbook, {
-            sheetId: sheet.SheetID,
-            sheetName: sheet.Name,
-            updatedCells: updatedCells.map((c) => ({
-                address: c.Address,
-                rowId: c.RowID,
-                columnId: c.ColumnID,
-                rawValue: c.RawValue,
-                formula: c.Formula ?? null,
-                formulaStable: c.FormulaStable ?? null,
-                computedValue: c.ComputedValue ?? null,
-                displayValue: c.DisplayValue ?? ''
-            })),
-            ...(spilledRanges.length > 0 ? { spilledRanges } : {})
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                sheetId: sheet.SheetID,
+                sheetName: sheet.Name,
+                updatedCells: updatedCells.map((c) => ({
+                    address: c.Address,
+                    rowId: c.RowID,
+                    columnId: c.ColumnID,
+                    rawValue: c.RawValue,
+                    formula: c.Formula ?? null,
+                    formulaStable: c.FormulaStable ?? null,
+                    computedValue: c.ComputedValue ?? null,
+                    displayValue: c.DisplayValue ?? ''
+                })),
+                ...(spilledRanges.length > 0 ? { spilledRanges } : {})
+            },
+            { skipEvaluate: true }
+        );
     }
 
-    private handleFormatRange(
+    private async handleFormatRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -1554,11 +1563,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleClearRange(
+    private async handleClearRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -1651,11 +1660,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleInsertRows(
+    private async handleInsertRows(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1686,11 +1695,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteRows(
+    private async handleDeleteRows(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1727,11 +1736,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleInsertColumns(
+    private async handleInsertColumns(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1762,11 +1771,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteColumns(
+    private async handleDeleteColumns(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1803,10 +1812,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleAddSheet(
+    private async handleAddSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const name = typeof input.name === 'string' ? input.name.trim() : '';
         if (!name) {
             return this.errorResult('Parameter "name" is required.');
@@ -1826,10 +1835,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleRenameSheet(
+    private async handleRenameSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1850,10 +1859,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDuplicateSheet(
+    private async handleDuplicateSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sourceSheet = this.resolveSheet(workbook, input.sheet);
         if (!sourceSheet) {
@@ -2001,10 +2010,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleReorderSheets(
+    private async handleReorderSheets(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const rawIds = Array.isArray(input.sheetIds) ? input.sheetIds : [];
         const requestedIds = rawIds.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim());
         if (requestedIds.length === 0) {
@@ -2035,11 +2044,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteSheet(
+    private async handleDeleteSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         if (workbook.Worksheets.length <= 1) {
             return this.errorResult('Cannot delete the only worksheet in the workbook.');
         }
@@ -2066,11 +2075,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleSetSheetLayout(
+    private async handleSetSheetLayout(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2354,7 +2363,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 HostArtifactID: context.artifactId,
                 BypassCache: true
             });
-            engine.EvaluateWorkbook(workbook);
+            await engine.EvaluateWorkbookIsolated(workbook);
             materializedSummary = this.summarizeMaterializedLiveTable(sheet, spec, refreshResults[spec.TableID]);
         }
 
@@ -2465,7 +2474,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             HostArtifactID: context.artifactId,
             BypassCache: true
         });
-        engine.EvaluateWorkbook(workbook);
+        await engine.EvaluateWorkbookIsolated(workbook);
 
         const tables: Array<ArtifactToolArgs> = [];
         for (const ws of workbook.Worksheets) {
@@ -2481,17 +2490,21 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
 
-        return this.buildMutationSuccess(workbook, {
-            refreshedCount: tables.length,
-            tables
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                refreshedCount: tables.length,
+                tables
+            },
+            { skipEvaluate: true }
+        );
     }
 
-    private handleDeleteLiveTable(
+    private async handleDeleteLiveTable(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2655,10 +2668,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpsertChart(
+    private async handleUpsertChart(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2739,10 +2752,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteChart(
+    private async handleDeleteChart(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2846,10 +2859,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteEmbeddedArtifact(
+    private async handleDeleteEmbeddedArtifact(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2920,11 +2933,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleSortAndFilter(
+    private async handleSortAndFilter(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -2979,7 +2992,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private handleGetSheets(workbook: WorkbookSpec): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheets = workbook.Worksheets.map((ws) => {
             const bounds = this.getPopulatedBounds(ws);
             return {
@@ -2996,7 +3008,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const ws = this.resolveSheet(workbook, sheetArg);
         if (!ws) {
@@ -3046,7 +3057,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     ): ArtifactToolResult {
         EnsureNodeVmSafeRegexExecutorRegistered();
         const engine = SpreadsheetEngine.Instance;
-        engine.EvaluateWorkbook(workbook);
         const query = typeof input.query === 'string' ? input.query : '';
         if (!query) {
             return this.errorResult('Parameter "query" is required.');
@@ -3302,7 +3312,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const columnName = typeof input.column === 'string' ? input.column.trim() : '';
         const operation = typeof input.operation === 'string' ? input.operation.trim().toLowerCase() : '';
@@ -3375,7 +3384,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const ws = this.resolveSheet(workbook, sheetArg);
         if (!ws) {
@@ -3428,11 +3436,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         return { maxRow, maxCol };
     }
 
-    private handleMergeCells(
+    private async handleMergeCells(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3459,11 +3467,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleUnmergeCells(
+    private async handleUnmergeCells(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3490,11 +3498,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleUpsertConditionalFormat(
+    private async handleUpsertConditionalFormat(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3551,11 +3559,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteConditionalFormat(
+    private async handleDeleteConditionalFormat(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3588,11 +3596,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleUpsertValidationRule(
+    private async handleUpsertValidationRule(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3633,11 +3641,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteValidationRule(
+    private async handleDeleteValidationRule(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3670,11 +3678,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleUpsertNamedRange(
+    private async handleUpsertNamedRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3710,11 +3718,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteNamedRange(
+    private async handleDeleteNamedRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const name = typeof input.name === 'string' ? input.name.trim() : '';
         if (!name) {
             return this.errorResult('Parameter "name" is required.');
@@ -3743,11 +3751,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleSetLock(
+    private async handleSetLock(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3785,11 +3793,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleReleaseLock(
+    private async handleReleaseLock(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -3905,7 +3913,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     false,
                     editCtx
                 );
-                const mutation = this.buildMutationSuccess(workbook, {
+                const mutation = await this.buildMutationSuccess(workbook, {
                     sheetId: sheet.SheetID,
                     appliedCell: anchorAddr
                 });

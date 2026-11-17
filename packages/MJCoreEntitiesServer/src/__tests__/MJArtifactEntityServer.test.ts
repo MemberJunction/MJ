@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BaseEntityResult, EntityDeleteOptions, EntityInfo, EntitySaveOptions, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     ArtifactDelegateContext,
@@ -1153,12 +1156,13 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         expect(sharePred.clause).toContain('22222222-0000-4000-8000-000000000000');
         expect(sharePred.clause).not.toContain('11111111-0000-4000-8000-000000000001');
 
-        // R5-4 & R6-3 matrix: <=500 / >500 collections x <=5000 / >5000 / null artifacts x requireShareOrDelete false/true
+        // R5-4, R6-3 & R7-4 matrix: <=500 / >500 collections x <=5000 / 5001 (set-based!) / >50000 / null artifacts x requireShareOrDelete false/true
         const countTables = (sql: string): number => (sql.match(/\[vw[A-Za-z]+\]/g) ?? []).length;
         const cases: Array<{
             cols: Set<string> | null;
-            arts: Set<string>;
+            arts: Set<string> | null;
             expectedExact: boolean;
+            expectedClauseFragment?: string;
             expectedErrorPattern?: RegExp;
         }> = [
             { cols: makeUuids(10, 'aaaaaaaa'), arts: makeUuids(5, 'bbbbbbbb'), expectedExact: true },
@@ -1166,8 +1170,20 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             {
                 cols: makeUuids(501, 'eeeeeeee'),
                 arts: makeUuids(5001, 'ffffffff'),
+                expectedExact: true,
+                expectedClauseFragment: 'STRING_SPLIT'
+            },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: makeUuids(50001, 'ffffffff'),
                 expectedExact: false,
                 expectedErrorPattern: /exceeded SQL readability scope cap/i
+            },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: null,
+                expectedExact: false,
+                expectedErrorPattern: /unable to resolve readable artifacts/i
             },
             {
                 cols: null,
@@ -1181,7 +1197,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             for (const requireShareOrDelete of [false, true]) {
                 tryColsSpy.mockResolvedValue(c.cols);
                 const artSpy = vi
-                    .spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet')
+                    .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet')
                     .mockResolvedValue(c.arts);
 
                 if (c.expectedErrorPattern) {
@@ -1209,6 +1225,9 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                     );
                     expect(countTables(res.clause)).toBeLessThan(260);
                     expect(res.isExact).toBe(c.expectedExact);
+                    if (c.expectedClauseFragment) {
+                        expect(res.clause).toContain(c.expectedClauseFragment);
+                    }
 
                     const guestParams = await ArtifactGuestShareLinkPreRunViewHook(
                         { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
@@ -1229,6 +1248,35 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             }
         }
 
+        // R7-4: Heavy user (> 500 collections & > 50,000 artifacts) filtering MJ: Collection Artifacts by CollectionID
+        // uses single-ID shortcut and succeeds without triggering workspace cap.
+        const heavyCols = makeUuids(505, '66666666');
+        const targetColId = Array.from(heavyCols)[0];
+        tryColsSpy.mockResolvedValue(heavyCols);
+        const capArtSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet')
+            .mockResolvedValue(makeUuids(50001, '12121212'));
+        const colAncSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions')
+            .mockResolvedValue({ CanRead: true, CanEdit: false, CanDelete: false, CanShare: false });
+        try {
+            const scopedColArtParams = await CollectionArtifactPreRunViewHook(
+                {
+                    EntityName: 'MJ: Collection Artifacts',
+                    ExtraFilter: `CollectionID='${targetColId}'`,
+                    ResultType: 'simple'
+                },
+                sharedEditorUser,
+                b5Provider as unknown as IMetadataProvider
+            );
+            expect(String(scopedColArtParams.ExtraFilter)).toContain(targetColId);
+            expect(String(scopedColArtParams.ExtraFilter)).not.toContain('vwCollections');
+            expect(countTables(String(scopedColArtParams.ExtraFilter))).toBeLessThan(260);
+        } finally {
+            colAncSpy.mockRestore();
+            capArtSpy.mockRestore();
+        }
+
         // R6-3: > 5,000 collections on collection-scoped reads uses the bounded 17-table SQL predicate (never empty workspace!)
         tryColsSpy.mockResolvedValue(makeUuids(5001, '77777777'));
         const largeColPred = await BuildSqlCollectionReadablePredicateAsync(
@@ -1242,7 +1290,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         tryColsSpy.mockRestore();
     });
 
-    it('R6-1: isolates server-side spreadsheet import, evaluation, and patching in bounded worker_threads', async () => {
+    it('R6-1 & R7-3: isolates server-side spreadsheet ops with timeout, missing-entry, heap-OOM, and bounded concurrency pool', async () => {
         const engine = SpreadsheetEngine.Instance;
         const wb = engine.CreateEmptyWorkbook('Worker Isolated', ['Sheet1'], 5, 5);
         const ws = wb.Worksheets[0];
@@ -1263,7 +1311,53 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         const reimported = await RunSpreadsheetImportInWorker(patchedBytes);
         expect(reimported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(100);
 
-        // Extremely tight wall-clock timeout terminates the worker cleanly rather than hanging
+        // 1. Timeout + worker termination
         await expect(RunSpreadsheetEvaluateInWorker(wb, undefined, { TimeoutMs: 1 })).rejects.toThrow(/timed out/i);
+
+        // 2. Missing worker entry path fails fast
+        await expect(
+            RunSpreadsheetEvaluateInWorker(wb, undefined, { WorkerEntryPath: '/nonexistent/spreadsheet-worker-missing.js' })
+        ).rejects.toThrow(/does not exist/i);
+
+        // 3 & 4. Heap OOM isolation & bounded concurrency cap + queue overflow rejection
+        const tmpDir = mkdtempSync(join(tmpdir(), 'mj-sheet-worker-test-'));
+        try {
+            const oomScript = join(tmpDir, 'oom.mjs');
+            writeFileSync(
+                oomScript,
+                "const a = []; while (true) { a.push(Buffer.alloc(1024 * 1024, 1)); }\n",
+                'utf8'
+            );
+            await expect(
+                RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                    WorkerEntryPath: oomScript,
+                    ResourceLimits: { maxOldGenerationSizeMb: 4, maxYoungGenerationSizeMb: 2 },
+                    TimeoutMs: 5000
+                })
+            ).rejects.toThrow();
+
+            const slowOkScript = join(tmpDir, 'slow-ok.mjs');
+            writeFileSync(
+                slowOkScript,
+                "import { parentPort, workerData } from 'node:worker_threads';\n" +
+                    "setTimeout(() => parentPort?.postMessage({ Ok: true, Workbook: workerData.Workbook, EvaluatedFormulaCount: 1 }), 100);\n",
+                'utf8'
+            );
+            const poolOpts = {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 1,
+                TimeoutMs: 5000
+            };
+            const p1 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            const p2 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            const p3 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            await expect(p3).rejects.toThrow(/queue is full/i);
+            const [r1, r2] = await Promise.all([p1, p2]);
+            expect(r1.EvaluatedFormulaCount).toBe(1);
+            expect(r2.EvaluatedFormulaCount).toBe(1);
+        } finally {
+            rmSync(tmpDir, { recursive: true, force: true });
+        }
     });
 });

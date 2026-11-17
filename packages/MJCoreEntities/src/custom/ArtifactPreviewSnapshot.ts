@@ -563,7 +563,7 @@ function hasLiveDataContent(content: string | null | undefined, driverClass?: st
 
 function sheetContainsLiveData(rawContent: string): boolean {
   try {
-    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent);
+    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, undefined, { SkipEvaluate: true });
     return wb.Worksheets.some(
       (ws) =>
         (ws.LiveTables ?? []).some((t) => t.Mode !== 'Frozen') ||
@@ -688,7 +688,7 @@ function isLiveSheetCellMasked(
 
 function extractSheetSnapshot(rawContent: string, maskLiveDataBlocks = true): ArtifactPreviewSnapshot | null {
   try {
-    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent);
+    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, undefined, { SkipEvaluate: true });
     const sheet = wb.Worksheets.find((w) => w.SheetID === wb.ActiveSheetID) ?? wb.Worksheets[0];
     if (!sheet) return null;
 
@@ -696,7 +696,7 @@ function extractSheetSnapshot(rawContent: string, maskLiveDataBlocks = true): Ar
     if (maskLiveDataBlocks) {
       try {
         const strippedJson = SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
-        const cleanWb = SpreadsheetEngine.Instance.ParseWorkbook(strippedJson);
+        const cleanWb = SpreadsheetEngine.Instance.ParseWorkbook(strippedJson, undefined, { SkipEvaluate: true });
         cleanSheet =
           cleanWb.Worksheets.find((w) => w.SheetID === sheet.SheetID) ??
           cleanWb.Worksheets[0] ??

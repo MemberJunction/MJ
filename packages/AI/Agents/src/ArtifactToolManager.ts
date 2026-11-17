@@ -1167,7 +1167,9 @@ export class ArtifactToolManager {
             xlsxBase64 = Buffer.from(targetEntry.originalXlsxBytes).toString('base64');
           } else if (hasUpdatedContentString) {
             try {
-              const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
+              const parsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(updatedContent, undefined, {
+                SkipEvaluate: true,
+              });
               const patchedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(
                 targetEntry.originalXlsxBytes,
                 parsedWorkbook,
@@ -1258,7 +1260,9 @@ export class ArtifactToolManager {
 
         if (effectiveContent !== updatedContent && previousOriginalXlsxBytes) {
           try {
-            const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
+            const mergedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(effectiveContent, undefined, {
+              SkipEvaluate: true,
+            });
             const mergedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(previousOriginalXlsxBytes, mergedWorkbook);
             targetEntry.originalXlsxBytes = mergedBytes;
             xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
@@ -1376,7 +1380,9 @@ export class ArtifactToolManager {
                   targetEntry.content = effectiveContent;
                   if (previousOriginalXlsxBytes) {
                     try {
-                      const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
+                      const mergedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(effectiveContent, undefined, {
+              SkipEvaluate: true,
+            });
                       const mergedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(previousOriginalXlsxBytes, mergedWorkbook);
                       targetEntry.originalXlsxBytes = mergedBytes;
                       xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
@@ -1977,7 +1983,9 @@ export class ArtifactToolManager {
         effectiveXlsxBase64 = Buffer.from(entry.originalXlsxBytes).toString('base64');
       } else {
         try {
-          const workbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
+          const workbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(updatedContent, undefined, {
+            SkipEvaluate: true,
+          });
           const bytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(entry.originalXlsxBytes, workbook);
           entry.originalXlsxBytes = bytes;
           effectiveXlsxBase64 = Buffer.from(bytes).toString('base64');
@@ -2805,7 +2813,7 @@ export class ArtifactToolManager {
     }
 
     // In-memory test fallback when no database provider/user is bound
-    const built = GovernedArtifactService.Instance.BuildInitialContent(
+    const built = await GovernedArtifactService.Instance.BuildInitialContentIsolated(
       normalizedTypeName,
       title,
       providedContent,

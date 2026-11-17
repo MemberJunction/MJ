@@ -2763,6 +2763,57 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             expect(savedCompactions[0].Configuration).toContain('locked-cfg');
             expect(peerRoom.PreserveLiveConfiguration).toBe(false);
             expect(peerRoom.RejectedOobVersionNumber).toBeUndefined();
+
+            // R7-1: Hydrating a room whose latest version contains an oversized JSON workbook (> 128 sheets)
+            // rejects cleanly without caching a poisoned room.
+            const oversizedArtId = '56565656-5656-4565-8565-565656565656';
+            const oversizedWorkbookJson = JSON.stringify({
+                WorkbookID: 'hydrate-bomb',
+                Title: 'Too Many Sheets',
+                Worksheets: Array.from({ length: 129 }, (_, idx) => ({
+                    SheetID: `s-${idx + 1}`,
+                    Name: `Sheet ${idx + 1}`,
+                    Rows: [],
+                    Columns: [],
+                    Cells: {},
+                })),
+            });
+            const oversizedProvider = {
+                ProviderType: 'Database',
+                RunView: vi.fn(async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        return { Success: true, Results: [] };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: '67676767-6767-4676-8676-676767676767',
+                                    VersionNumber: 1,
+                                    Content: oversizedWorkbookJson,
+                                    Configuration: null,
+                                    UserID: ownerUser.ID,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return { Success: true, Results: [{ ID: oversizedArtId, UserID: ownerUser.ID }] };
+                    }
+                    return { Success: true, Results: [] };
+                }),
+                RunViews: vi.fn(async (paramsList: RunViewParams[]) =>
+                    Promise.all(
+                        paramsList.map((p) =>
+                            (oversizedProvider.RunView as (arg: RunViewParams) => Promise<{ Success: boolean; Results: unknown[] }>)(p),
+                        ),
+                    ),
+                ),
+            };
+            await expect(
+                nodeB.GetOrCreateRoom(oversizedArtId, ownerUser, oversizedProvider as unknown as IMetadataProvider),
+            ).rejects.toThrow(/maximum sheet limit/i);
         } finally {
             await nodeA.Shutdown();
             await nodeB.Shutdown();

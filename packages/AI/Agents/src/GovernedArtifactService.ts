@@ -992,6 +992,40 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
   }
 
   /**
+   * Worker-isolated async variant of {@link BuildInitialContent} (`R7-1`) for server callers.
+   */
+  public async BuildInitialContentIsolated(
+    normalizedTypeName: string,
+    title: string,
+    providedContent?: string | ArtifactToolArgs,
+    sheetNames?: string[],
+  ): Promise<{ content: string; mimeType: string }> {
+    if (normalizedTypeName === 'Excel Spreadsheet') {
+      if (typeof providedContent === 'string' && providedContent.trim()) {
+        const parsed = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(providedContent);
+        return {
+          content: SpreadsheetEngine.Instance.SerializeWorkbook(parsed),
+          mimeType: SPREADSHEET_JSON_MIME_TYPE,
+        };
+      }
+      if (providedContent && typeof providedContent === 'object') {
+        const parsed = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(JSON.stringify(providedContent));
+        return {
+          content: SpreadsheetEngine.Instance.SerializeWorkbook(parsed),
+          mimeType: SPREADSHEET_JSON_MIME_TYPE,
+        };
+      }
+      const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook(title, sheetNames);
+      await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(wb);
+      return {
+        content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
+        mimeType: SPREADSHEET_JSON_MIME_TYPE,
+      };
+    }
+    return this.BuildInitialContent(normalizedTypeName, title, providedContent, sheetNames);
+  }
+
+  /**
    * Creates and persists a new governed artifact + version 1 (`MJ: Artifacts`, `MJ: Artifact Versions`),
    * optionally linking into a collection and recording/emitting run metadata and live presence.
    */
@@ -1017,7 +1051,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       };
     }
 
-    const built = this.BuildInitialContent(artifactType.Name, title, params.content, params.sheetNames);
+    const built = await this.BuildInitialContentIsolated(artifactType.Name, title, params.content, params.sheetNames);
     let finalContent = built.content;
     let initialConfigPatch: ArtifactToolArgs | undefined;
     const initialResults: Array<{ tool: string; data: ArtifactToolResult['data'] }> = [];
@@ -1417,7 +1451,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     workingXlsxBytes: Uint8Array | undefined,
   ): Promise<{ xlsxBytes?: Uint8Array; xlsxBase64?: string }> {
     try {
-      const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(contentStr);
+      const parsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(contentStr, undefined, {
+        SkipEvaluate: true,
+      });
       const patched = workingXlsxBytes
         ? await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(workingXlsxBytes, parsedWorkbook)
         : SpreadsheetEngine.Instance.ExportToXlsxBytes(parsedWorkbook);
@@ -2573,7 +2609,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       (rawContent.trim().startsWith('{') && rawContent.includes('"Worksheets"'));
     if (isSheet) {
       try {
-        const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, rawConfiguration);
+        const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, rawConfiguration, { SkipEvaluate: true });
         const fullCellEntries = this.buildSpreadsheetCellDigestEntries(wb);
         return this.computeFullPayloadDigestHash(
           JSON.stringify({ updatedContent: this.canonicalizeWorkbookForDigest(wb), fullCellEntries }),
@@ -2642,7 +2678,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       (input.rawContent.trim().startsWith('{') && input.rawContent.includes('"Worksheets"'));
     if (isSheet) {
       const engine = SpreadsheetEngine.Instance;
-      const wb = engine.ParseWorkbook(input.rawContent, input.rawConfiguration);
+      const wb = await engine.ParseWorkbookIsolated(input.rawContent, input.rawConfiguration, { SkipEvaluate: true });
       const tableResults = await engine.RefreshLiveTables(wb, input.contextUser, input.provider, {
         ForceRefreshFrozen: input.freezeBlocks || input.forceRefreshFrozen,
       });
@@ -2879,185 +2915,211 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     };
     let readableIdsInMemoryFilter: Set<string> | null = null;
 
-    if (collectionId) {
-      const colCheck = await this.CheckCollectionPermission(params.provider, params.contextUser, collectionId, 'read');
-      if (!colCheck.allowed) {
-        return { success: false, artifacts: [], errorMessage: colCheck.reason };
-      }
-      const colArtRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
-        {
-          EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
-          Fields: ['ArtifactVersionID'],
-          IgnoreMaxRows: true,
-          SkipTotalRowCount: true,
-          ResultType: 'simple',
-        },
-        params.contextUser,
-      );
-      const versionIds = Array.from(
-        new Set(
-          (colArtRes.Success && colArtRes.Results ? colArtRes.Results : [])
-            .map((r) => (r.ArtifactVersionID ?? '').trim())
-            .filter((id) => IsValidUUID(id)),
-        ),
-      );
-      if (versionIds.length === 0) {
-        return { success: true, artifacts: [] };
-      }
-      const colArtifactIdSet = new Set<string>();
-      const colArtifactIds: string[] = [];
-      for (let i = 0; i < versionIds.length; i += ID_IN_CHUNK_SIZE) {
-        const verSlice = versionIds.slice(i, i + ID_IN_CHUNK_SIZE);
-        const verInList = verSlice.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-        const verLookup = await rv.RunView<{ ArtifactID?: string | null }>(
+    try {
+      if (collectionId) {
+        const colCheck = await this.CheckCollectionPermission(params.provider, params.contextUser, collectionId, 'read');
+        if (!colCheck.allowed) {
+          return { success: false, artifacts: [], errorMessage: colCheck.reason };
+        }
+        const colArtRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
           {
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN (${verInList})`,
-            Fields: ['ArtifactID'],
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
+            Fields: ['ArtifactVersionID'],
             IgnoreMaxRows: true,
             SkipTotalRowCount: true,
             ResultType: 'simple',
           },
           params.contextUser,
         );
-        for (const row of verLookup.Success && verLookup.Results ? verLookup.Results : []) {
-          const aid = (row.ArtifactID ?? '').trim();
-          if (IsValidUUID(aid)) {
-            const norm = NormalizeUUID(aid);
-            if (!colArtifactIdSet.has(norm)) {
-              colArtifactIdSet.add(norm);
-              colArtifactIds.push(aid);
+        if (!colArtRes.Success) {
+          const errMsg = colArtRes.ErrorMessage || `Failed querying collection '${collectionId}' artifacts.`;
+          LogError(`GovernedArtifactService.ListWorkspaceArtifacts: ${errMsg}`);
+          return { success: false, artifacts: [], errorMessage: errMsg };
+        }
+        const versionIds = Array.from(
+          new Set(
+            (colArtRes.Results ?? [])
+              .map((r) => (r.ArtifactVersionID ?? '').trim())
+              .filter((id) => IsValidUUID(id)),
+          ),
+        );
+        if (versionIds.length === 0) {
+          return { success: true, artifacts: [] };
+        }
+        const colArtifactIdSet = new Set<string>();
+        const colArtifactIds: string[] = [];
+        for (let i = 0; i < versionIds.length; i += ID_IN_CHUNK_SIZE) {
+          const verSlice = versionIds.slice(i, i + ID_IN_CHUNK_SIZE);
+          const verInList = verSlice.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+          const verLookup = await rv.RunView<{ ArtifactID?: string | null }>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ID IN (${verInList})`,
+              Fields: ['ArtifactID'],
+              IgnoreMaxRows: true,
+              SkipTotalRowCount: true,
+              ResultType: 'simple',
+            },
+            params.contextUser,
+          );
+          if (!verLookup.Success) {
+            const errMsg = verLookup.ErrorMessage || `Failed querying version headers for collection '${collectionId}'.`;
+            LogError(`GovernedArtifactService.ListWorkspaceArtifacts: ${errMsg}`);
+            return { success: false, artifacts: [], errorMessage: errMsg };
+          }
+          for (const row of verLookup.Results ?? []) {
+            const aid = (row.ArtifactID ?? '').trim();
+            if (IsValidUUID(aid)) {
+              const norm = NormalizeUUID(aid);
+              if (!colArtifactIdSet.has(norm)) {
+                colArtifactIdSet.add(norm);
+                colArtifactIds.push(aid);
+              }
             }
           }
         }
-      }
-      if (colArtifactIds.length === 0) {
-        return { success: true, artifacts: [] };
-      }
-      if (!appendChunkedIdInFilter(colArtifactIds)) {
-        readableIdsInMemoryFilter = colArtifactIdSet;
-      }
-    } else {
-      const readableIds = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
-        params.provider,
-        params.contextUser,
-      );
-      if (readableIds.size === 0) {
-        return { success: true, artifacts: [] };
-      }
-      if (!appendChunkedIdInFilter(Array.from(readableIds))) {
-        // Above MAX_DIRECT_IN_IDS, rely on ArtifactPreRunViewHook SQL EXISTS scoping + in-memory check (`S-g`).
-        readableIdsInMemoryFilter = readableIds;
-      }
-    }
-
-    if (search) {
-      sqlFilters.push(`Name LIKE '%${EscapeSQLString(this.escapeSqlLike(search))}%'`);
-    }
-    if (typeFilter) {
-      const canonicalName = this.NormalizeArtifactTypeName(params.typeFilter);
-      const types = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
-      const matchedTypeNames = types
-        .filter(
-          (t) =>
-            t.Name.toLowerCase().includes(typeFilter) ||
-            t.Name.toLowerCase() === normalizedTypeFilter,
-        )
-        .map((t) => t.Name);
-      if (matchedTypeNames.length > 0) {
-        sqlFilters.push(
-          `Type IN (${Array.from(new Set(matchedTypeNames))
-            .map((n) => `'${EscapeSQLString(n)}'`)
-            .join(',')})`,
-        );
+        if (colArtifactIds.length === 0) {
+          return { success: true, artifacts: [] };
+        }
+        if (!appendChunkedIdInFilter(colArtifactIds)) {
+          readableIdsInMemoryFilter = colArtifactIdSet;
+        }
       } else {
-        const escapedLike = EscapeSQLString(this.escapeSqlLike(typeFilter));
-        if (canonicalName.toLowerCase() !== typeFilter) {
-          sqlFilters.push(`(Type LIKE '%${escapedLike}%' OR Type='${EscapeSQLString(canonicalName)}')`);
-        } else {
-          sqlFilters.push(`Type LIKE '%${escapedLike}%'`);
+        const readableIds = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(
+          params.provider,
+          params.contextUser,
+        );
+        if (!readableIds) {
+          const errMsg = `Failed resolving readable workspace artifacts for user '${params.contextUser.ID}'.`;
+          LogError(`GovernedArtifactService.ListWorkspaceArtifacts: ${errMsg}`);
+          return { success: false, artifacts: [], errorMessage: errMsg };
+        }
+        if (readableIds.size === 0) {
+          return { success: true, artifacts: [] };
+        }
+        if (!appendChunkedIdInFilter(Array.from(readableIds))) {
+          // Above MAX_DIRECT_IN_IDS, rely on ArtifactPreRunViewHook SQL EXISTS scoping + in-memory check (`S-g`).
+          readableIdsInMemoryFilter = readableIds;
         }
       }
-    }
 
-    type ArtifactListRow = {
-      ID: string;
-      Name?: string | null;
-      Description?: string | null;
-      Type?: string | null;
-      TypeID?: string | null;
-      UserID?: string | null;
-      __mj_UpdatedAt?: Date | string | null;
-    };
-    const fetchLimit = Math.min(Math.max((offset + maxResults) * 2, maxResults), 500);
-    const allArtResults: ArtifactListRow[] = [];
-
-    if (collectionId && readableIdsInMemoryFilter && readableIdsInMemoryFilter.size > MAX_DIRECT_IN_IDS) {
-      // Collection exceeds single-query 2,500-ID cap (`N8`): query by 2,500-ID batches so items aren't silently truncated.
-      const colIds = Array.from(readableIdsInMemoryFilter);
-      const baseFilter = sqlFilters.length > 0 ? sqlFilters.join(' AND ') : '';
-      for (let i = 0; i < colIds.length; i += MAX_DIRECT_IN_IDS) {
-        const batch = colIds.slice(i, i + MAX_DIRECT_IN_IDS);
-        const batchOrChunks: string[] = [];
-        for (let j = 0; j < batch.length; j += ID_IN_CHUNK_SIZE) {
-          const slice = batch.slice(j, j + ID_IN_CHUNK_SIZE);
-          batchOrChunks.push(`ID IN (${slice.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+      if (search) {
+        sqlFilters.push(`Name LIKE '%${EscapeSQLString(this.escapeSqlLike(search))}%'`);
+      }
+      if (typeFilter) {
+        const canonicalName = this.NormalizeArtifactTypeName(params.typeFilter);
+        const types = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+        const matchedTypeNames = types
+          .filter(
+            (t) =>
+              t.Name.toLowerCase().includes(typeFilter) ||
+              t.Name.toLowerCase() === normalizedTypeFilter,
+          )
+          .map((t) => t.Name);
+        if (matchedTypeNames.length > 0) {
+          sqlFilters.push(
+            `Type IN (${Array.from(new Set(matchedTypeNames))
+              .map((n) => `'${EscapeSQLString(n)}'`)
+              .join(',')})`,
+          );
+        } else {
+          const escapedLike = EscapeSQLString(this.escapeSqlLike(typeFilter));
+          if (canonicalName.toLowerCase() !== typeFilter) {
+            sqlFilters.push(`(Type LIKE '%${escapedLike}%' OR Type='${EscapeSQLString(canonicalName)}')`);
+          } else {
+            sqlFilters.push(`Type LIKE '%${escapedLike}%'`);
+          }
         }
-        const batchIdClause = batchOrChunks.length === 1 ? batchOrChunks[0] : `(${batchOrChunks.join(' OR ')})`;
-        const batchFilter = baseFilter ? `(${baseFilter}) AND ${batchIdClause}` : batchIdClause;
-        const batchRes = await rv.RunView<ArtifactListRow>(
+      }
+
+      type ArtifactListRow = {
+        ID: string;
+        Name?: string | null;
+        Description?: string | null;
+        Type?: string | null;
+        TypeID?: string | null;
+        UserID?: string | null;
+        __mj_UpdatedAt?: Date | string | null;
+      };
+      const fetchLimit = Math.min(Math.max((offset + maxResults) * 2, maxResults), 500);
+      const allArtResults: ArtifactListRow[] = [];
+
+      if (collectionId && readableIdsInMemoryFilter && readableIdsInMemoryFilter.size > MAX_DIRECT_IN_IDS) {
+        // Collection exceeds single-query 2,500-ID cap (`N8`): query by 2,500-ID batches so items aren't silently truncated.
+        const colIds = Array.from(readableIdsInMemoryFilter);
+        const baseFilter = sqlFilters.length > 0 ? sqlFilters.join(' AND ') : '';
+        for (let i = 0; i < colIds.length; i += MAX_DIRECT_IN_IDS) {
+          const batch = colIds.slice(i, i + MAX_DIRECT_IN_IDS);
+          const batchOrChunks: string[] = [];
+          for (let j = 0; j < batch.length; j += ID_IN_CHUNK_SIZE) {
+            const slice = batch.slice(j, j + ID_IN_CHUNK_SIZE);
+            batchOrChunks.push(`ID IN (${slice.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+          }
+          const batchIdClause = batchOrChunks.length === 1 ? batchOrChunks[0] : `(${batchOrChunks.join(' OR ')})`;
+          const batchFilter = baseFilter ? `(${baseFilter}) AND ${batchIdClause}` : batchIdClause;
+          const batchRes = await rv.RunView<ArtifactListRow>(
+            {
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: batchFilter,
+              OrderBy: '__mj_UpdatedAt DESC',
+              Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID', '__mj_UpdatedAt'],
+              IgnoreMaxRows: true,
+              SkipTotalRowCount: true,
+              ResultType: 'simple',
+            },
+            params.contextUser,
+          );
+          if (!batchRes.Success) {
+            const errMsg = batchRes.ErrorMessage || 'Failed querying workspace artifacts batch.';
+            LogError(`GovernedArtifactService.ListWorkspaceArtifacts: ${errMsg}`);
+            return { success: false, artifacts: [], errorMessage: errMsg };
+          }
+          if (batchRes.Results) {
+            allArtResults.push(...batchRes.Results);
+          }
+        }
+        allArtResults.sort((a, b) => {
+          const ta = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+          const tb = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+          return tb - ta;
+        });
+      } else {
+        const artRes = await rv.RunView<ArtifactListRow>(
           {
             EntityName: 'MJ: Artifacts',
-            ExtraFilter: batchFilter,
+            ExtraFilter: sqlFilters.join(' AND '),
             OrderBy: '__mj_UpdatedAt DESC',
-            Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID', '__mj_UpdatedAt'],
-            IgnoreMaxRows: true,
+            Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID'],
+            MaxRows: fetchLimit,
             SkipTotalRowCount: true,
             ResultType: 'simple',
           },
           params.contextUser,
         );
-        if (batchRes.Success && batchRes.Results) {
-          allArtResults.push(...batchRes.Results);
+        if (!artRes.Success) {
+          const errMsg = artRes.ErrorMessage || 'Failed querying workspace artifacts.';
+          LogError(`GovernedArtifactService.ListWorkspaceArtifacts: ${errMsg}`);
+          return { success: false, artifacts: [], errorMessage: errMsg };
+        }
+        if (artRes.Results) {
+          allArtResults.push(...artRes.Results);
         }
       }
-      allArtResults.sort((a, b) => {
-        const ta = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
-        const tb = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
-        return tb - ta;
-      });
-    } else {
-      const artRes = await rv.RunView<ArtifactListRow>(
-        {
-          EntityName: 'MJ: Artifacts',
-          ExtraFilter: sqlFilters.join(' AND '),
-          OrderBy: '__mj_UpdatedAt DESC',
-          Fields: ['ID', 'Name', 'Description', 'Type', 'TypeID', 'UserID'],
-          MaxRows: fetchLimit,
-          SkipTotalRowCount: true,
-          ResultType: 'simple',
-        },
-        params.contextUser,
-      );
-      if (artRes.Success && artRes.Results) {
-        allArtResults.push(...artRes.Results);
-      }
-    }
 
-    const candidateArts: ArtifactListRow[] = [];
-    const seen = new Set<string>();
-    for (const row of allArtResults) {
-      const id = (row.ID ?? '').trim();
-      const norm = NormalizeUUID(id);
-      if (readableIdsInMemoryFilter && !readableIdsInMemoryFilter.has(norm)) {
-        continue;
+      const candidateArts: ArtifactListRow[] = [];
+      const seen = new Set<string>();
+      for (const row of allArtResults) {
+        const id = (row.ID ?? '').trim();
+        const norm = NormalizeUUID(id);
+        if (readableIdsInMemoryFilter && !readableIdsInMemoryFilter.has(norm)) {
+          continue;
+        }
+        if (id && !seen.has(norm)) {
+          seen.add(norm);
+          candidateArts.push(row);
+        }
       }
-      if (id && !seen.has(norm)) {
-        seen.add(norm);
-        candidateArts.push(row);
-      }
-    }
     if (candidateArts.length === 0) {
       return { success: true, artifacts: [] };
     }
@@ -3248,7 +3310,12 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       });
     }
 
-    return { success: true, artifacts: items };
+      return { success: true, artifacts: items };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      LogError(`GovernedArtifactService.ListWorkspaceArtifacts error: ${errMsg}`);
+      return { success: false, artifacts: [], errorMessage: errMsg };
+    }
   }
 
   private resolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {

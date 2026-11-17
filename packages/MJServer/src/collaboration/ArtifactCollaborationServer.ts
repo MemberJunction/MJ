@@ -30,6 +30,8 @@ import {
     BuildArtifactVersionConfigurationWithPreview,
     DocumentLiveBlockEngine,
     IsValidThumbnailDataUrl,
+    MAX_IMPORT_SHEETS,
+    MAX_IMPORT_WORKBOOK_CELLS,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
@@ -2793,7 +2795,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (room && room.Connections.size === 0 && !this._shuttingDown) {
             this.scheduleIdleRoomDisposal(room);
         }
-        return room ? this.extractRoomSerializedContent(room.Doc) : '';
+        return room ? await this.extractRoomSerializedContentIsolated(room.Doc) : '';
     }
 
     /**
@@ -3934,7 +3936,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     suggestions
                 );
                 return {
-                    Content: this.extractRoomSerializedContent(room.Doc),
+                    Content: await this.extractRoomSerializedContentIsolated(room.Doc),
                     VersionNumber: room.BaseVersionNumber,
                     VersionID: room.BaseVersionID,
                     ...(mergedConfig ? { Configuration: mergedConfig } : {}),
@@ -5906,41 +5908,44 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 // so multi-instance cold opens produce identical Yjs CRDT item IDs (clientID, clock)
                 // and merge without duplicating text (Blocker 2, Path 2).
                 const seedDoc = new Y.Doc();
-                seedDoc.clientID = this.deterministicClientIdFromSeed(versionRow?.ID || room.ArtifactID);
-                const nextEpoch = `epoch-${versionRow?.ID ?? room.ArtifactID}`;
-                room.RoomEpoch = nextEpoch;
-                seedDoc.transact(() => {
-                    if (versionTargetText) {
-                        seedDoc.getText('content').insert(0, versionTargetText);
-                    }
-                    this.syncSlideDeckStructuresIfPresent(seedDoc, versionTargetText);
-                    this.syncSpreadsheetStructuresIfPresent(
-                        seedDoc,
-                        versionRow?.Content ?? '',
-                        versionRow?.Configuration ?? null
-                    );
-                    if (versionSuggestions.length > 0) {
-                        this.syncSuggestionsIntoDoc(
+                try {
+                    seedDoc.clientID = this.deterministicClientIdFromSeed(versionRow?.ID || room.ArtifactID);
+                    const nextEpoch = `epoch-${versionRow?.ID ?? room.ArtifactID}`;
+                    room.RoomEpoch = nextEpoch;
+                    seedDoc.transact(() => {
+                        if (versionTargetText) {
+                            seedDoc.getText('content').insert(0, versionTargetText);
+                        }
+                        this.syncSlideDeckStructuresIfPresent(seedDoc, versionTargetText);
+                        this.syncSpreadsheetStructuresIfPresent(
                             seedDoc,
-                            this.parseSuggestionArray(versionSuggestions),
-                            { replace: true }
+                            versionRow?.Content ?? '',
+                            versionRow?.Configuration ?? null
                         );
-                    }
-                    const seedMeta = seedDoc.getMap('meta');
-                    if (versionRow) {
-                        seedMeta.set('versionNumber', versionRow.VersionNumber);
-                        seedMeta.set('versionId', versionRow.ID);
-                        seedMeta.set('baseVersionNumber', versionRow.VersionNumber);
-                        seedMeta.set('baseVersionId', versionRow.ID);
-                    } else {
-                        seedMeta.set('baseContent', '');
-                    }
-                    seedMeta.set('roomEpoch', nextEpoch);
-                }, 'seed');
-                const seedBytes = Y.encodeStateAsUpdate(seedDoc);
-                seedDoc.destroy();
-                Y.applyUpdate(room.Doc, seedBytes, 'hydrate');
-                seededOrUpdatedWorkingState = true;
+                        if (versionSuggestions.length > 0) {
+                            this.syncSuggestionsIntoDoc(
+                                seedDoc,
+                                this.parseSuggestionArray(versionSuggestions),
+                                { replace: true }
+                            );
+                        }
+                        const seedMeta = seedDoc.getMap('meta');
+                        if (versionRow) {
+                            seedMeta.set('versionNumber', versionRow.VersionNumber);
+                            seedMeta.set('versionId', versionRow.ID);
+                            seedMeta.set('baseVersionNumber', versionRow.VersionNumber);
+                            seedMeta.set('baseVersionId', versionRow.ID);
+                        } else {
+                            seedMeta.set('baseContent', '');
+                        }
+                        seedMeta.set('roomEpoch', nextEpoch);
+                    }, 'seed');
+                    const seedBytes = Y.encodeStateAsUpdate(seedDoc);
+                    Y.applyUpdate(room.Doc, seedBytes, 'hydrate');
+                    seededOrUpdatedWorkingState = true;
+                } finally {
+                    seedDoc.destroy();
+                }
             } else if (!appliedWorkingState && yText.length === 0) {
                 const nextEpoch = `epoch-${versionRow?.ID ?? room.ArtifactID}`;
                 room.RoomEpoch = nextEpoch;
@@ -9443,11 +9448,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         doc: Y.Doc,
         rawContent: string,
         rawConfiguration?: string | null,
-        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
+        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string; preparsedWorkbook?: WorkbookSpec }
     ): void {
         const trimmedContent = (rawContent ?? '').trim();
         const trimmedConfig = (rawConfiguration ?? '').trim();
-        if (!trimmedContent && !trimmedConfig) return;
+        if (!trimmedContent && !trimmedConfig && !options?.preparsedWorkbook) return;
         const looksLikeJsonWorkbook =
             (trimmedContent.startsWith('{') && trimmedContent.includes('"Worksheets"')) ||
             (trimmedConfig.startsWith('{') && trimmedConfig.includes('"Worksheets"'));
@@ -9456,11 +9461,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             trimmedContent.startsWith('UEsDB') ||
             trimmedConfig.startsWith('data:') ||
             trimmedConfig.startsWith('UEsDB');
-        if (!looksLikeJsonWorkbook && !looksLikeXlsx) {
+        if (!options?.preparsedWorkbook && !looksLikeJsonWorkbook && !looksLikeXlsx) {
             return;
         }
         try {
-            const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, rawConfiguration);
+            const wb =
+                options?.preparsedWorkbook ??
+                SpreadsheetEngine.Instance.ParseWorkbook(rawContent, rawConfiguration, { SkipEvaluate: true });
             if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
                 return;
             }
@@ -9485,7 +9492,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const baselineColIdsBySheet = new Map<string, Set<string>>();
             if (options?.baselineContent && options.baselineContent.trim().length > 0) {
                 try {
-                    const baseWb = SpreadsheetEngine.Instance.ParseWorkbook(options.baselineContent);
+                    const baseWb = SpreadsheetEngine.Instance.ParseWorkbook(options.baselineContent, undefined, {
+                        SkipEvaluate: true
+                    });
                     if (baseWb && Array.isArray(baseWb.Worksheets)) {
                         baselineSheetIds = new Set<string>();
                         baselineCoordKeys = new Set<string>();
@@ -9644,7 +9653,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
                 sheetOrder.insert(0, targetOrder);
             }
-        } catch {
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : '';
+            if (msg.startsWith('Spreadsheet ')) {
+                throw err;
+            }
             // Non-Spreadsheet content
         }
     }
@@ -9909,7 +9922,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return null;
         }
         try {
-            const wb = SpreadsheetEngine.Instance.ParseWorkbook(content);
+            const wb = SpreadsheetEngine.Instance.ParseWorkbook(content, undefined, { SkipEvaluate: true });
             if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
                 return null;
             }
@@ -9953,9 +9966,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (worksheetsById.size === 0) {
             return null;
         }
+        if (worksheetsById.size > MAX_IMPORT_SHEETS) {
+            throw new Error(
+                `Spreadsheet rejected: workbook exceeds maximum sheet limit (${MAX_IMPORT_SHEETS}).`
+            );
+        }
         const sheetOrder = doc.getArray<string>('sheetOrder');
         const workbookMeta = doc.getMap<string>('workbookMeta');
         const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
+        if (sheetCellsByCoord.size > MAX_IMPORT_WORKBOOK_CELLS) {
+            throw new Error(
+                `Spreadsheet rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+            );
+        }
 
         const orderedSheetIds = sheetOrder.toArray();
         const placedSheetIds = new Set<string>();
@@ -10050,7 +10073,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (worksheetsById.size > 0) {
             try {
                 const wb = this.buildRoomWorkbookFromDoc(doc)!;
-                if (!options?.skipEvaluate) {
+                if (options?.skipEvaluate === false) {
                     SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
                 }
                 return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });

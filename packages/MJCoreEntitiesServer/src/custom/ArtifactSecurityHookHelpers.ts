@@ -135,6 +135,7 @@ export function ResolveMetadataProvider(
 const GLOBAL_KEY_INTERNAL_HELPER_PARAMS = '__MJ_ARTIFACT_HOOK_HELPER_INTERNAL_PARAMS__';
 const GLOBAL_KEY_PRE_RESOLVED_IDS = '__MJ_ARTIFACT_PRE_RESOLVED_IDS_BY_PARAMS__';
 const MAX_SQL_SCOPED_IN_IDS = 5000;
+const MAX_SQL_SET_BASED_IDS = 50_000;
 const SQL_IN_CHUNK_SIZE = 500;
 
 function getPreResolvedIdsWeakMap(): WeakMap<RunViewParams, Map<string, boolean>> {
@@ -424,25 +425,42 @@ export function AppendSqlAndFilter(
     };
 }
 
-export function BuildUuidInScopeClause(columnName: string, ids: ReadonlySet<string>): string | null {
-    const validIds: string[] = [];
+export function BuildUuidInScopeClause(
+    columnName: string,
+    ids: ReadonlySet<string>,
+    provider?: IMetadataProvider | null
+): string | null {
+    const validRawIds: string[] = [];
+    const quotedIds: string[] = [];
     for (const id of ids) {
         const trimmed = id.trim();
         if (IsValidUUID(trimmed)) {
-            validIds.push(`'${EscapeSQLString(trimmed)}'`);
+            validRawIds.push(trimmed);
+            quotedIds.push(`'${EscapeSQLString(trimmed)}'`);
         }
     }
-    if (validIds.length === 0) {
+    if (quotedIds.length === 0) {
         return '1 = 0';
     }
-    if (validIds.length > MAX_SQL_SCOPED_IN_IDS) {
+    if (quotedIds.length <= MAX_SQL_SCOPED_IN_IDS) {
+        const chunks = ChunkUuidList(quotedIds, SQL_IN_CHUNK_SIZE);
+        if (chunks.length === 1) {
+            return `${columnName} IN (${chunks[0].join(',')})`;
+        }
+        return `(${chunks.map((c) => `${columnName} IN (${c.join(',')})`).join(' OR ')})`;
+    }
+    if (quotedIds.length > MAX_SQL_SET_BASED_IDS) {
         return null;
     }
-    const chunks = ChunkUuidList(validIds, SQL_IN_CHUNK_SIZE);
-    if (chunks.length === 1) {
-        return `${columnName} IN (${chunks[0].join(',')})`;
+    // Set-based predicate for large workspaces (5,001..50,000 IDs) avoiding SQL Server 8623 literal-list overflow (`R7-4`)
+    const { isPg } = sqlPlatformHelpers(provider);
+    if (isPg) {
+        const normalizedLower = validRawIds.map((id) => id.toLowerCase());
+        const jsonPayload = EscapeSQLString(JSON.stringify(normalizedLower));
+        return `LOWER(CAST(${columnName} AS TEXT)) IN (SELECT elem FROM jsonb_array_elements_text('${jsonPayload}'::jsonb) AS elem)`;
     }
-    return `(${chunks.map((c) => `${columnName} IN (${c.join(',')})`).join(' OR ')})`;
+    const csvPayload = EscapeSQLString(validRawIds.join(','));
+    return `${columnName} IN (SELECT [value] FROM STRING_SPLIT(CAST('${csvPayload}' AS NVARCHAR(MAX)), N','))`;
 }
 
 export type CollectionIdSetCache = Map<'readable' | 'shareOrDelete', Promise<Set<string> | null>>;
@@ -1011,6 +1029,7 @@ export async function BuildSqlArtifactReadablePredicateAsync(
         requireShareOrDelete?: boolean;
         aliasPrefix?: string;
         precomputedCollectionCache?: CollectionIdSetCache;
+        singleCollectionScopeId?: string | null;
     }
 ): Promise<{ clause: string; isExact: boolean }> {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
@@ -1030,19 +1049,32 @@ export async function BuildSqlArtifactReadablePredicateAsync(
             LogError(`BuildSqlArtifactReadablePredicateAsync: ${errMsg}`);
             throw new Error(errMsg);
         }
-        if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
+        const singleCol = options?.singleCollectionScopeId?.trim();
+        if (singleCol && IsValidUUID(singleCol)) {
+            const normCol = NormalizeUUID(singleCol);
+            if (!resolvedCols.has(normCol)) {
+                return { clause: '1 = 0', isExact: true };
+            }
+            precomputedCollectionIds = new Set<string>([singleCol]);
+        } else if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
             precomputedCollectionIds = resolvedCols;
         } else {
             // Avoid emitting 9x >500 literal lists (~45k literals, SQL Server 8623) or 260+ tables (`B5`, `N6`, `R5-4`)
             const { isExact } = resolveRegisteredDelegateSqlScope(provider);
-            const readableArtifacts = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+            const readableArtifacts = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(
                 provider,
                 user,
                 requireShareOrDelete ? (p) => p.CanShare || p.CanDelete : undefined
             );
-            if (readableArtifacts.size <= MAX_SQL_SCOPED_IN_IDS) {
+            if (!readableArtifacts) {
+                const errMsg = `Permission check failed for user '${user.ID}': unable to resolve readable artifacts.`;
+                LogError(`BuildSqlArtifactReadablePredicateAsync: ${errMsg}`);
+                throw new Error(errMsg);
+            }
+            const scopeClause = BuildUuidInScopeClause(artifactIdExpr, readableArtifacts, provider);
+            if (scopeClause) {
                 return {
-                    clause: BuildUuidInScopeClause(artifactIdExpr, readableArtifacts) ?? '1 = 0',
+                    clause: scopeClause,
                     isExact
                 };
             }
@@ -1087,7 +1119,11 @@ export async function BuildSqlArtifactVersionIdReadablePredicateAsync(
     artifactVersionIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { aliasPrefix?: string; precomputedCollectionCache?: CollectionIdSetCache }
+    options?: {
+        aliasPrefix?: string;
+        precomputedCollectionCache?: CollectionIdSetCache;
+        singleCollectionScopeId?: string | null;
+    }
 ): Promise<{ clause: string; isExact: boolean }> {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
         return { clause: '1 = 0', isExact: true };
@@ -1097,7 +1133,8 @@ export async function BuildSqlArtifactVersionIdReadablePredicateAsync(
     const verAlias = q(`${prefix}_ver`);
     const innerArt = await BuildSqlArtifactReadablePredicateAsync(`${verAlias}.${q('ArtifactID')}`, provider, user, {
         aliasPrefix: `${prefix}_a`,
-        precomputedCollectionCache: options?.precomputedCollectionCache
+        precomputedCollectionCache: options?.precomputedCollectionCache,
+        singleCollectionScopeId: options?.singleCollectionScopeId
     });
     if (innerArt.clause === '1 = 0') {
         return { clause: '1 = 0', isExact: innerArt.isExact };
@@ -1489,18 +1526,92 @@ export function ExtractSingleUuidFieldFromFilter(
     if (typeof extraFilter !== 'string' || !extraFilter.trim()) {
         return null;
     }
-    const trimmed = extraFilter.trim().replace(/^\((.*)\)$/, '$1').trim();
-    const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(
-        `^(?:\\[?${escapedCol}\\]?)\\s*=\\s*'([^']+)'$`,
-        'i'
-    );
-    const match = trimmed.match(pattern);
-    if (!match || !match[1]) {
-        return null;
+    const stripOuterParens = (input: string): string => {
+        let cur = input.trim();
+        while (cur.startsWith('(') && cur.endsWith(')')) {
+            let depth = 0;
+            let inQuote = false;
+            let wrapsAll = true;
+            for (let i = 0; i < cur.length; i++) {
+                const ch = cur[i];
+                if (ch === "'") {
+                    if (inQuote && cur[i + 1] === "'") {
+                        i++;
+                        continue;
+                    }
+                    inQuote = !inQuote;
+                    continue;
+                }
+                if (inQuote) continue;
+                if (ch === '(') depth++;
+                else if (ch === ')') {
+                    depth--;
+                    if (depth === 0 && i < cur.length - 1) {
+                        wrapsAll = false;
+                        break;
+                    }
+                }
+            }
+            if (!wrapsAll || depth !== 0) break;
+            cur = cur.slice(1, -1).trim();
+        }
+        return cur;
+    };
+
+    const trimmed = stripOuterParens(extraFilter);
+    // Split strictly on top-level AND outside string literals/parens; refuse any top-level OR/NOT
+    const parts: string[] = [];
+    let start = 0;
+    let depth = 0;
+    let inQuote = false;
+    for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+        if (ch === "'") {
+            if (inQuote && trimmed[i + 1] === "'") {
+                i++;
+                continue;
+            }
+            inQuote = !inQuote;
+            continue;
+        }
+        if (inQuote) continue;
+        if (ch === '(') {
+            depth++;
+            continue;
+        }
+        if (ch === ')') {
+            depth--;
+            continue;
+        }
+        if (depth === 0) {
+            const rest = trimmed.slice(i);
+            const orNotMatch = /^(?:OR|NOT)(?=\s|\()/i.exec(rest);
+            if (orNotMatch && (i === 0 || /[\s)]/.test(trimmed[i - 1]))) {
+                return null;
+            }
+            const andMatch = /^AND(?=\s|\()/i.exec(rest);
+            if (andMatch && i > 0 && /[\s)]/.test(trimmed[i - 1])) {
+                parts.push(trimmed.slice(start, i).trim());
+                i += 2; // advance past 'AND' (-1 for loop i++)
+                start = i + 1;
+            }
+        }
     }
-    const candidate = match[1].trim();
-    return IsValidUUID(candidate) ? candidate : null;
+    parts.push(trimmed.slice(start).trim());
+
+    const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^(?:\\[?${escapedCol}\\]?)\\s*=\\s*N?'([^']+)'$`, 'i');
+    for (const part of parts) {
+        const unwrapped = stripOuterParens(part);
+        const match = pattern.exec(unwrapped);
+        if (match && match[1]) {
+            const candidate = match[1].trim();
+            if (IsValidUUID(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return null;
 }
 
 export function ChunkUuidList(values: readonly string[], size: number): string[][] {
@@ -1629,10 +1740,15 @@ export async function ResolveReadableArtifactVersionIdsForUser(
     provider: IMetadataProvider,
     user: UserInfo
 ): Promise<Set<string>> {
-    const readableArtifacts = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+    const readableArtifacts = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(
         provider,
         user
     );
+    if (!readableArtifacts) {
+        const errMsg = `Permission check failed for user '${user.ID}': unable to resolve readable artifacts.`;
+        LogError(`ResolveReadableArtifactVersionIdsForUser: ${errMsg}`);
+        throw new Error(errMsg);
+    }
     const versionIds = new Set<string>();
     if (readableArtifacts.size === 0 || typeof (provider as { RunView?: unknown }).RunView !== 'function') {
         return versionIds;
@@ -1655,7 +1771,12 @@ export async function ResolveReadableArtifactVersionIdsForUser(
         internalSet.add(verParams);
         ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
         const res = await rv.RunView<{ ID?: string }>(verParams, queryActor);
-        if (res.Success && res.Results) {
+        if (!res.Success) {
+            const errMsg = res.ErrorMessage || `Permission check failed querying artifact versions for user '${user.ID}'.`;
+            LogError(`ResolveReadableArtifactVersionIdsForUser: ${errMsg}`);
+            throw new Error(errMsg);
+        }
+        if (res.Results) {
             for (const row of res.Results) {
                 if (row.ID && IsValidUUID(row.ID)) {
                     versionIds.add(NormalizeUUID(row.ID));

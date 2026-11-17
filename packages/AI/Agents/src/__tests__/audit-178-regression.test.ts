@@ -401,7 +401,7 @@ describe('Audit 178 & Live Voice Bug Regressions', () => {
             expect(denied.reason).toContain('Permission denied');
 
             const readableSpy = vi
-                .spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet')
+                .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet')
                 .mockResolvedValue(new Set([ART_ID.toLowerCase()]));
 
             const listRes = await service.ListWorkspaceArtifacts({
@@ -414,6 +414,17 @@ describe('Audit 178 & Live Voice Bug Regressions', () => {
             expect(readableSpy).toHaveBeenCalledWith(provider, user);
             expect(listRes.artifacts).toHaveLength(1);
             expect(listRes.artifacts[0].artifactId).toBe(ART_ID);
+
+            // R7-4 + S7-5: Failed TryBuildReadableArtifactIdSet returns { success: false } cleanly
+            readableSpy.mockResolvedValueOnce(null);
+            const failedListRes = await service.ListWorkspaceArtifacts({
+                provider,
+                contextUser: user,
+                environmentId: ENV_ID,
+                limit: 10,
+            });
+            expect(failedListRes.success).toBe(false);
+            expect(failedListRes.artifacts).toHaveLength(0);
         });
     });
 

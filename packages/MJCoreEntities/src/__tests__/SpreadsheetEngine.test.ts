@@ -14,6 +14,7 @@ import {
     ParseRangeAddress,
     RegisterSafeRegexBatchSandboxExecutor,
     RegisterSafeRegexSandboxExecutor,
+    RegisterSpreadsheetWorkerRunner,
     SafeRegexSearchBatchDetailed,
     SafeRegexSearchDetailed,
     SafeRegexTest,
@@ -22,6 +23,7 @@ import {
     ValidateExtraFilter,
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
+import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
 import {
     ComputeFrozenSnapshotHash,
@@ -4256,7 +4258,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         }
         expect(() => engine.EvaluateWorkbook(smallFloodWb)).toThrow(/exceeded maximum edge limit/i);
 
-        // 8. R6-2: Wide-range edge truncation (running total =SUM(B$2:B{r}) down 1,100 rows > 250,000 wide edges) still recalculates accurately after edits!
+        // 8. R6-2: Wide-range running total =SUM(B$2:B{r}) down 1,100 rows (< 750,000 wide edges) still recalculates accurately after edits
         const runningWb = engine.CreateEmptyWorkbook('Running Total', ['Sheet1'], 1_200, 5);
         const runWs = runningWb.Worksheets[0];
         runWs.Cells['A1'] = { Address: 'A1', RowID: 'rr-1', ColumnID: 'rc-1', RawValue: 10 };
@@ -4286,5 +4288,163 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(runWs.Cells['C1049']?.ComputedValue).toBe(1058);
         expect(runWs.Cells['C1050']?.ComputedValue).toBe(1258);
         expect(runWs.Cells['C1100']?.ComputedValue).toBe(1308);
+    });
+
+    it('Round 7 (R7-1, R7-2, S7-1..S7-4): enforces JSON workbook limits, rejects wide-edge overflow, clears DAG cache on isolated eval, bounds comments/merges/validation checks, and ignores stale ComputedValue in lock diff', async () => {
+        const engine = SpreadsheetEngine.Instance;
+
+        // 1. R7-1: Oversized JSON workbook (> 128 sheets) throws cleanly from ParseWorkbook / NormalizeWorkbook (not swallowed!)
+        const manySheetsJson = JSON.stringify({
+            WorkbookID: 'json-bomb',
+            Title: 'Many Sheets',
+            Worksheets: Array.from({ length: 129 }, (_, idx) => ({
+                SheetID: `s-${idx + 1}`,
+                Name: `Sheet ${idx + 1}`,
+                Rows: [],
+                Columns: [],
+                Cells: {},
+            })),
+        });
+        expect(() => engine.ParseWorkbook(manySheetsJson)).toThrow(/maximum sheet limit/i);
+
+        // 2. R7-1 + S7-3: > 5,000 validation rules in JSON workbook throws cleanly instead of silently trimming
+        const tooManyRulesJson = JSON.stringify({
+            WorkbookID: 'rules-bomb',
+            Title: 'Rules',
+            Worksheets: [
+                {
+                    SheetID: 's-1',
+                    Name: 'Sheet 1',
+                    Rows: [],
+                    Columns: [],
+                    Cells: {},
+                    ValidationRules: Array.from({ length: 5_001 }, (_, i) => ({
+                        RuleID: `r-${i}`,
+                        Range: 'A1',
+                        RuleType: 'notEmpty',
+                    })),
+                },
+            ],
+        });
+        expect(() => engine.ParseWorkbook(tooManyRulesJson)).toThrow(/maximum validation rule limit/i);
+
+        // 3. S7-3: Global validation check budget enforces across byCol rules (1,000 tall rules x 2,500 cells = 2,500,000 > 2,000,000)
+        const valCheckWb = engine.CreateEmptyWorkbook('Val Check Budget', ['Sheet1'], 2_600, 3);
+        const valWs = valCheckWb.Worksheets[0];
+        for (let r = 1; r <= 2_500; r++) {
+            valWs.Cells[`A${r}`] = { Address: `A${r}`, RowID: `vr-${r}`, ColumnID: 'vc-1', RawValue: r };
+        }
+        for (let i = 0; i < 1_000; i++) {
+            valWs.ValidationRules.push({
+                RuleID: `col-rule-${i}`,
+                Range: 'A1:A2500',
+                RuleType: 'numberRange',
+                MinValue: 0,
+            });
+        }
+        expect(() => engine.EvaluateWorkbook(valCheckWb)).toThrow(/validation rules exceed workbook check budget/i);
+
+        // 4. R7-2: Watcher-overflow workbook (1,500 x 1,500 > 750,000 wide edges) rejects immediately instead of quadratic fallback
+        const wideOverflowWb = engine.CreateEmptyWorkbook('Wide Edge Overflow', ['Sheet1'], 1_600, 4);
+        const wideWs = wideOverflowWb.Worksheets[0];
+        for (let r = 1; r <= 1_500; r++) {
+            wideWs.Cells[`A${r}`] = { Address: `A${r}`, RowID: `wr-${r}`, ColumnID: 'wc-1', RawValue: null, Formula: '=1' };
+            wideWs.Cells[`B${r}`] = {
+                Address: `B${r}`,
+                RowID: `wr-${r}`,
+                ColumnID: 'wc-2',
+                RawValue: null,
+                Formula: '=SUM(A$1:A$1500)',
+            };
+        }
+        expect(() => engine.EvaluateWorkbook(wideOverflowWb)).toThrow(/wide-range edge limit/i);
+
+        // 5. S7-1: EvaluateWorkbookIsolated invalidates workbookDagCache so subsequent SetCell updates cross-sheet dependents
+        const isoWb = engine.CreateEmptyWorkbook('Cross Sheet Iso', ['Inputs', 'Summary'], 5, 5);
+        isoWb.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 10 };
+        isoWb.Worksheets[1].Cells['B1'] = {
+            Address: 'B1',
+            RowID: 'r1',
+            ColumnID: 'c1',
+            RawValue: null,
+            Formula: '=Inputs!A1*3',
+        };
+        engine.EvaluateWorkbook(isoWb);
+        expect(isoWb.Worksheets[1].Cells['B1']?.ComputedValue).toBe(30);
+
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c) => engine.ImportFromXlsxBytes(b, c),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                // Deep-clone like structuredClone in worker_threads so `Worksheets` object references are replaced!
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            },
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(isoWb);
+            engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A1', { Value: 25 });
+            expect(isoWb.Worksheets[1].Cells['B1']?.ComputedValue).toBe(75);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 6. S7-2: Malicious OOXML <comment> / <mergeCells> bombs exceeding workbook limits are rejected
+        const fakeCommentsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><comments><commentList>' +
+            Array.from({ length: 50 }, (_, i) => `<comment ref="Z${i + 1}"><text><t>note</t></text></comment>`).join('') +
+            '</commentList></comments>';
+        // Build minimal zip with 50,001 mergeCells in sheet1.xml
+        const tooManyMergesXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/>' +
+            '<mergeCells count="50001">' +
+            Array.from({ length: 50_001 }, (_, i) => `<mergeCell ref="A${i + 1}:B${i + 1}"/>`).join('') +
+            '</mergeCells></worksheet>';
+        const mergeBombZip = engine.BuildZipArchive([
+            {
+                Name: 'xl/workbook.xml',
+                Data: EncodeUtf8Fallback('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+            },
+            {
+                Name: 'xl/_rels/workbook.xml.rels',
+                Data: EncodeUtf8Fallback('<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+            },
+            { Name: 'xl/worksheets/sheet1.xml', Data: EncodeUtf8Fallback(tooManyMergesXml) },
+            { Name: 'xl/comments1.xml', Data: EncodeUtf8Fallback(fakeCommentsXml) },
+        ]);
+        expect(() => engine.ImportFromXlsxBytes(mergeBombZip)).toThrow(/maximum merge range limit/i);
+
+        // 7. S7-4: Lock validation ignores stale ComputedValue / DisplayValue differences on locked formula cells
+        const lockWbBase = engine.CreateEmptyWorkbook('Lock Stale Eval', ['Sheet1'], 5, 5);
+        const lockWs = lockWbBase.Worksheets[0];
+        lockWs.Cells['A1'] = { Address: 'A1', RowID: 'lr1', ColumnID: 'lc1', RawValue: 10, ComputedValue: 10, DisplayValue: '10' };
+        lockWs.Cells['B1'] = {
+            Address: 'B1',
+            RowID: 'lr1',
+            ColumnID: 'lc2',
+            RawValue: null,
+            Formula: '=A1*2',
+            ComputedValue: 20,
+            DisplayValue: '20',
+        };
+        lockWs.Cells['C1'] = { Address: 'C1', RowID: 'lr1', ColumnID: 'lc3', RawValue: 'unlocked', ComputedValue: 'unlocked', DisplayValue: 'unlocked' };
+        lockWs.ProtectedRanges = [
+            { RangeID: 'pr-1', Range: 'A1:B1', LockedByUserID: '11111111-1111-1111-1111-111111111111' },
+        ];
+        const prevJson = engine.SerializeWorkbook(lockWbBase);
+        const nextWb = engine.ParseWorkbook(prevJson);
+        // Simulate stale ComputedValue/DisplayValue on locked formula cell B1 while non-owner edits unlocked C1
+        nextWb.Worksheets[0].Cells['B1'].ComputedValue = 999;
+        nextWb.Worksheets[0].Cells['B1'].DisplayValue = '999';
+        nextWb.Worksheets[0].Cells['C1'].RawValue = 'editor-updated';
+        const nextJson = JSON.stringify(nextWb);
+        const lockRes = ValidateArtifactContentMutationAgainstLocks(
+            prevJson,
+            nextJson,
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(lockRes.Allowed).toBe(true);
     });
 });

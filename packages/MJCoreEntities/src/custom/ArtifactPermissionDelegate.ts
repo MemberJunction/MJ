@@ -1183,6 +1183,29 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo | null | undefined,
         predicate?: (perms: ResolvedArtifactPermissions) => boolean
     ): Promise<Set<string>> {
+        const result = await this.buildReadableArtifactIdSetInternal(provider, user, predicate, false);
+        return result ?? new Set<string>();
+    }
+
+    /**
+     * Same as {@link BuildReadableArtifactIdSet}, except returns `null` if ANY underlying query or
+     * permission resolution fails so fail-closed SQL callers throw instead of treating partial errors
+     * as an empty/truncated workspace (`R7-4`).
+     */
+    public async TryBuildReadableArtifactIdSet(
+        provider: IMetadataProvider | null | undefined,
+        user: UserInfo | null | undefined,
+        predicate?: (perms: ResolvedArtifactPermissions) => boolean
+    ): Promise<Set<string> | null> {
+        return this.buildReadableArtifactIdSetInternal(provider, user, predicate, true);
+    }
+
+    private async buildReadableArtifactIdSetInternal(
+        provider: IMetadataProvider | null | undefined,
+        user: UserInfo | null | undefined,
+        predicate: ((perms: ResolvedArtifactPermissions) => boolean) | undefined,
+        throwOnQueryFailure: boolean
+    ): Promise<Set<string> | null> {
         const readable = new Set<string>();
         if (!provider || !user?.ID || !IsValidUUID(user.ID)) {
             return readable;
@@ -1194,7 +1217,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         try {
             const queryActor = await this.resolvePermissionQueryActor(provider, user, 'BuildReadableArtifactIdSet');
             if (!queryActor) {
-                return readable;
+                return throwOnQueryFailure ? null : readable;
             }
 
             const rv = RunView.FromMetadataProvider(provider);
@@ -1220,6 +1243,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(ownedParams);
             const ownedRes = await rv.RunView<ArtifactOwnerRowProjection>(ownedParams, queryActor);
+            if (!ownedRes.Success && throwOnQueryFailure) {
+                throw new Error(ownedRes.ErrorMessage || 'Failed querying owned artifacts.');
+            }
             if (ownedRes.Success && ownedRes.Results) {
                 for (const row of ownedRes.Results) {
                     addCandidate(row.ID);
@@ -1237,6 +1263,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(directParams);
             const directRes = await rv.RunView<ArtifactPermissionRowProjection>(directParams, queryActor);
+            if (!directRes.Success && throwOnQueryFailure) {
+                throw new Error(directRes.ErrorMessage || 'Failed querying direct artifact permissions.');
+            }
             if (directRes.Success && directRes.Results) {
                 for (const row of directRes.Results) {
                     addCandidate(row.ArtifactID);
@@ -1244,7 +1273,12 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             }
 
             // 3. Owned collections + shared collections + descendant collections (depth 16, cycle-guarded)
-            const seedCollectionIds = await this.collectReadableCollectionIds(rv, queryActor, user.ID);
+            const seedCollectionIds = await this.collectReadableCollectionIds(
+                rv,
+                queryActor,
+                user.ID,
+                throwOnQueryFailure
+            );
 
             if (seedCollectionIds.length > 0) {
                 const versionIdSet = new Set<string>();
@@ -1260,6 +1294,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     };
                     ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(colArtParams);
                     const colArtRes = await rv.RunView<CollectionVersionRowProjection>(colArtParams, queryActor);
+                    if (!colArtRes.Success && throwOnQueryFailure) {
+                        throw new Error(colArtRes.ErrorMessage || 'Failed querying collection artifact memberships.');
+                    }
                     if (colArtRes.Success && colArtRes.Results) {
                         for (const row of colArtRes.Results) {
                             const vid = row.ArtifactVersionID;
@@ -1285,6 +1322,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     };
                     ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
                     const verRes = await rv.RunView<ArtifactVersionArtifactProjection>(verParams, queryActor);
+                    if (!verRes.Success && throwOnQueryFailure) {
+                        throw new Error(verRes.ErrorMessage || 'Failed querying collection artifact versions.');
+                    }
                     if (verRes.Success && verRes.Results) {
                         for (const row of verRes.Results) {
                             addCandidate(row.ArtifactID);
@@ -1311,6 +1351,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         };
                         ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(childArtParams);
                         const childArtRes = await rv.RunView<ArtifactOwnerRowProjection>(childArtParams, queryActor);
+                        if (!childArtRes.Success && throwOnQueryFailure) {
+                            throw new Error(childArtRes.ErrorMessage || 'Failed querying parent-delegated artifacts.');
+                        }
                         if (childArtRes.Success && childArtRes.Results) {
                             for (const row of childArtRes.Results) {
                                 if (row.ID && IsValidUUID(row.ID)) {
@@ -1354,6 +1397,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     };
                     ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(customDelegParams);
                     const customDelegRes = await rv.RunView<ArtifactOwnerRowProjection>(customDelegParams, queryActor);
+                    if (!customDelegRes.Success && throwOnQueryFailure) {
+                        throw new Error(customDelegRes.ErrorMessage || 'Failed querying custom-delegated artifacts.');
+                    }
                     if (customDelegRes.Success && customDelegRes.Results) {
                         for (const row of customDelegRes.Results) {
                             addCandidate(row.ID);
@@ -1387,7 +1433,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     err instanceof Error ? err.message : String(err)
                 }`
             );
-            return readable;
+            return throwOnQueryFailure ? null : readable;
         }
     }
 

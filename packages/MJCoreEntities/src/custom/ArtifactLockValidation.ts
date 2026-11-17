@@ -152,7 +152,7 @@ function validateNewLocksOnEmptyContent(
             return { Allowed: true };
         }
         if (isWorkbookPayload) {
-            const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+            const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, undefined, { SkipEvaluate: true });
             const dupSheetId = findDuplicateNonEmptyId(nextWb.Worksheets.map((w) => w.SheetID));
             if (dupSheetId) {
                 return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
@@ -177,7 +177,11 @@ function validateNewLocksOnEmptyContent(
             }
             return { Allowed: true };
         }
-    } catch {
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.startsWith('Spreadsheet ')) {
+            return { Allowed: false, Reason: msg };
+        }
         return {
             Allowed: false,
             Reason: 'Write rejected: malformed update to structured document.'
@@ -311,6 +315,16 @@ function validateSlideDeckLockTransition(
         }
     }
     return { Allowed: true };
+}
+
+function serializeSheetCellForLockDiff(
+    cell: WorkbookSpec['Worksheets'][number]['Cells'][string] | undefined
+): string {
+    if (!cell) {
+        return 'null';
+    }
+    const { ComputedValue: _cv, DisplayValue: _dv, ...structuralCell } = cell;
+    return JSON.stringify(structuralCell);
 }
 
 function validateWorkbookLockTransition(
@@ -504,7 +518,7 @@ function validateWorkbookLockTransition(
         for (const addr of allAddresses) {
             const prevCell = prevSheet.Cells?.[addr];
             const nextCell = nextSheet.Cells?.[addr];
-            if (JSON.stringify(prevCell ?? null) === JSON.stringify(nextCell ?? null)) {
+            if (serializeSheetCellForLockDiff(prevCell) === serializeSheetCellForLockDiff(nextCell)) {
                 continue;
             }
             const perm = checkSheetCellMostRestrictive(prevSheet, addr, editCtx);
@@ -680,8 +694,12 @@ export function ValidateArtifactContentMutationAgainstLocks(
     if (isWorkbookInvolved) {
         try {
             if (hasCurrentWorkbook) {
-                const prevEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent, currentConfig);
-                const nextEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, nextConfig);
+                const prevEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent, currentConfig, {
+                    SkipEvaluate: true
+                });
+                const nextEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, nextConfig, {
+                    SkipEvaluate: true
+                });
                 const effectiveRes = validateWorkbookLockTransition(
                     prevEffectiveWb,
                     nextEffectiveWb,
@@ -716,8 +734,8 @@ export function ValidateArtifactContentMutationAgainstLocks(
                 currentContent !== nextContent
             ) {
                 const contentRes = validateWorkbookLockTransition(
-                    SpreadsheetEngine.Instance.ParseWorkbook(currentContent, null),
-                    SpreadsheetEngine.Instance.ParseWorkbook(nextContent, null),
+                    SpreadsheetEngine.Instance.ParseWorkbook(currentContent, null, { SkipEvaluate: true }),
+                    SpreadsheetEngine.Instance.ParseWorkbook(nextContent, null, { SkipEvaluate: true }),
                     actorUserId,
                     isOwner
                 );
@@ -727,8 +745,8 @@ export function ValidateArtifactContentMutationAgainstLocks(
             }
             if (currentConfigKind === 'workbook' && nextConfigKind === 'workbook' && currentConfig !== nextConfig) {
                 const configRes = validateWorkbookLockTransition(
-                    SpreadsheetEngine.Instance.ParseWorkbook(null, currentConfig),
-                    SpreadsheetEngine.Instance.ParseWorkbook(null, nextConfig),
+                    SpreadsheetEngine.Instance.ParseWorkbook(null, currentConfig, { SkipEvaluate: true }),
+                    SpreadsheetEngine.Instance.ParseWorkbook(null, nextConfig, { SkipEvaluate: true }),
                     actorUserId,
                     isOwner
                 );
@@ -736,7 +754,11 @@ export function ValidateArtifactContentMutationAgainstLocks(
                     return configRes;
                 }
             }
-        } catch {
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : '';
+            if (msg.startsWith('Spreadsheet ')) {
+                return { Allowed: false, Reason: msg };
+            }
             return {
                 Allowed: false,
                 Reason: 'Write rejected: malformed update to structured workbook with protected ranges.'

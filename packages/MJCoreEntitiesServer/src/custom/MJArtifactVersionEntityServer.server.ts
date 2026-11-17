@@ -25,6 +25,7 @@ import {
     MJArtifactTypeEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
+    SpreadsheetEngine,
     ValidateArtifactContentMutationAgainstLocks,
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
@@ -947,10 +948,38 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             }
 
             const contentField = this.safeGetField('Content');
+            const configurationField = this.safeGetField('Configuration');
             const previousContentValue =
                 typeof contentField?.OldValue === 'string' ? contentField.OldValue : null;
             const contentDirty = this.IsSaved === false || contentField?.Dirty;
+            const configDirty = this.IsSaved === false || configurationField?.Dirty;
             const currentContentMode = this.hasInitializedFields() ? this.ContentMode : null;
+
+            if ((contentDirty || configDirty) && currentContentMode !== 'File') {
+                const effectiveContent = this.safeReadStringProp('Content') ?? '';
+                const effectiveConfig = this.safeReadStringProp('Configuration');
+                const looksLikeSpreadsheet = (raw: string | null | undefined): boolean => {
+                    if (!raw || typeof raw !== 'string') return false;
+                    const trimmed = raw.trim();
+                    return (
+                        (trimmed.startsWith('{') && trimmed.includes('"Worksheets"')) ||
+                        trimmed.startsWith('data:') ||
+                        trimmed.startsWith('UEsDB')
+                    );
+                };
+                if (looksLikeSpreadsheet(effectiveContent) || looksLikeSpreadsheet(effectiveConfig)) {
+                    try {
+                        await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                            looksLikeSpreadsheet(effectiveContent) ? effectiveContent : null,
+                            looksLikeSpreadsheet(effectiveConfig) ? effectiveConfig : null,
+                            { SkipEvaluate: true }
+                        );
+                    } catch (err) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        return this.recordPermissionFailure(saveType, msg);
+                    }
+                }
+            }
 
             if (contentDirty && currentContentMode !== 'File') {
                 const effectiveContent = this.safeReadStringProp('Content') ?? '';
