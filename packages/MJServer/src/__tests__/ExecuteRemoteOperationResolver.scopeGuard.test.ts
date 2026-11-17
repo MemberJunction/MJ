@@ -7,6 +7,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('../config.js', () => ({
+    configInfo: {},
+}));
+
 // As in RunDecisionResolver.test.ts: vitest's esbuild transform does not apply
 // `emitDecoratorMetadata`, so the decorators are no-ops and the resolver runs as a plain class.
 vi.mock('type-graphql', () => {
