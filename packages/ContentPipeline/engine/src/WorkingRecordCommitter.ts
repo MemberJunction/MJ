@@ -110,6 +110,7 @@ export class WorkingRecordCommitter {
         written.push(...this.applyColumns(record, entityObject));
         if (succeeded) {
             written.push(...this.applyColumns(record, entityObject, 'completionColumns'));
+            written.push(...this.clearColumns(record, entityObject, 'completionClears'));
         }
         const resetConfidence = await this.reconcileExtractedContent(
             record,
@@ -650,6 +651,14 @@ export class WorkingRecordCommitter {
             }
         }
         return written;
+    }
+
+    /** Set to null each listed column this entity has and that holds a value (`Pipeline.completionClears`). */
+    private clearColumns(record: WorkingRecord, entityObject: BaseEntity, extension: 'completionClears'): string[] {
+        const columns = record.GetExtension<string[]>('Pipeline', extension) ?? [];
+        const cleared = columns.filter((column) => this.hasField(entityObject, column) && this.readColumn(entityObject, column) != null);
+        cleared.forEach((column) => this.writeColumn(entityObject, column, null));
+        return cleared;
     }
 
     /** Set each non-null value whose column this entity has; returns the columns written. */

@@ -33,17 +33,25 @@ export interface PipelineTuning {
     RetryBackoffBaseMs?: number;
     /** The longest a record waits between retries, in ms. Default 3600000 (1 hour). */
     RetryBackoffMaxMs?: number;
+    /**
+     * How long one Discover walk may run, in ms, before the driver is asked to stop and return a resume token
+     * (`DiscoverRequest.Deadline`); the next walk carries on from it. Unset means no deadline.
+     */
+    DiscoverWalkBudgetMs?: number;
 }
 
 /** A run's tuning with defaults applied; knobs without a default are null when unset. */
-export type ResolvedPipelineTuning = Required<Omit<PipelineTuning, 'MaxBlockCharacters' | 'MaxArchiveMembers' | 'MaxArchiveBytes'>> & {
+export type ResolvedPipelineTuning = Required<
+    Omit<PipelineTuning, 'MaxBlockCharacters' | 'MaxArchiveMembers' | 'MaxArchiveBytes' | 'DiscoverWalkBudgetMs'>
+> & {
     MaxBlockCharacters: number | null;
     MaxArchiveMembers: number | null;
     MaxArchiveBytes: number | null;
+    DiscoverWalkBudgetMs: number | null;
 };
 
 /** Defaults for the knobs that have one. */
-export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes'> = {
+export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes' | 'DiscoverWalkBudgetMs'> = {
     ProgressEveryItems: 25,
     MinimumPrintableRatio: 0.85,
     MaxBlockCharacters: null,
@@ -82,6 +90,7 @@ export function ResolveTuning(...configurations: (Readonly<Record<string, unknow
         ClockSkewOverlapMs: nonNegativeInteger(raw.ClockSkewOverlapMs) ?? DefaultPipelineTuning.ClockSkewOverlapMs,
         RetryBackoffBaseMs: positiveInteger(raw.RetryBackoffBaseMs) ?? DefaultPipelineTuning.RetryBackoffBaseMs,
         RetryBackoffMaxMs: positiveInteger(raw.RetryBackoffMaxMs) ?? DefaultPipelineTuning.RetryBackoffMaxMs,
+        DiscoverWalkBudgetMs: positiveInteger(raw.DiscoverWalkBudgetMs),
     };
 }
 

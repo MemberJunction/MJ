@@ -16092,6 +16092,12 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
         * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
+    DiscoverState: z.any().nullable().describe(`
+        * * Field Name: DiscoverState
+        * * Display Name: Discover State
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentSourceEntity_IContentSourceDiscoverState
+        * * Description: Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress.`),
     ContentType: z.string().nullable().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -89408,6 +89414,23 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
  */
 export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
     /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
+
+    /**
      * The entity items of every source of this type are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
      * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
      * writes both rows under one ID, so no item exists without its extension row; an existing item that
@@ -89766,6 +89789,23 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+
+    /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
     /**
      * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
      * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
@@ -89878,6 +89918,12 @@ export interface MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig {
      * SQL numeric column types store as numbers automatically without setting this.
      */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**
@@ -89913,6 +89959,20 @@ export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+    /**
+     * Seed the crawl from the site's sitemaps: those in {@link SitemapURLs}, else the ones robots.txt
+     * names, else `/sitemap.xml`. Each in-scope page a sitemap lists is found (unless its `lastmod` is
+     * older than the walk's `Since`) and its links are followed like any other page's. Default false.
+     */
+    UseSitemaps?: boolean;
+    /** Sitemaps to read instead of looking in robots.txt. A sitemap index is followed. */
+    SitemapURLs?: string[];
+    /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
+    CrawlDelayMs?: number;
+    /** The most pages whose links one walk reads (across all its parts). Unset: no limit. */
+    MaxPages?: number;
+    /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
+    RenderTimeoutMs?: number;
 }
 
 /**
@@ -89970,6 +90030,27 @@ export interface MJContentSourceEntity_IContentCleaningOptions {
     ReplaceDefaultExcludes?: boolean;
     /** Html cleaner: keep `alt` text from images as content. */
     IncludeImageAltText?: boolean;
+}
+
+/**
+ * Where an unfinished Discover or Sync walk of a content source stopped (`ContentSource.DiscoverState`).
+ *
+ * Written by the content pipeline's Discover stage when a source's driver returns a resume token (the walk
+ * ran past `Options.Tuning.DiscoverWalkBudgetMs`), read by the next walk, which carries on from it, and
+ * cleared when a walk finishes. Not configuration: nothing but the pipeline should write it.
+ */
+export interface MJContentSourceEntity_IContentSourceDiscoverState {
+    /** The driver's token: where the walk stopped. Opaque to everything but the driver that wrote it. */
+    ResumeToken: string;
+    /**
+     * When the walk's first part started (ISO 8601). `LastDiscoveredAt` (or `LastSyncedAt`) takes it once the
+     * walk finishes, so a page changed while the walk was in progress is still seen as changed by the next walk.
+     */
+    WalkStartedAt: string;
+    /** The mode the walk was started in. A walk resumes only in that mode; a walk of the other mode starts afresh. */
+    Mode: 'Discover' | 'Sync';
+    /** Items the walk's earlier parts found. */
+    ItemsFound: number;
 }
 
 /**
@@ -90292,6 +90373,35 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: DiscoverState
+    * * Display Name: Discover State
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentSourceEntity_IContentSourceDiscoverState
+    * * Description: Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress.
+    */
+    get DiscoverState(): string | null {
+        return this.Get('DiscoverState');
+    }
+    set DiscoverState(value: string | null) {
+        this.Set('DiscoverState', value);
+    }
+
+    /**
+    * Typed accessor for DiscoverState — a live view of the parsed JSON as MJContentSourceEntity_IContentSourceDiscoverState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DiscoverState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DiscoverStateObject(): MJContentSourceEntity_IContentSourceDiscoverState | null {
+        return this.GetJSONFieldObject<MJContentSourceEntity_IContentSourceDiscoverState>('DiscoverState');
+    }
+    set DiscoverStateObject(value: MJContentSourceEntity_IContentSourceDiscoverState | null) {
+        this.SetJSONFieldObject<MJContentSourceEntity_IContentSourceDiscoverState>('DiscoverState', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -90583,6 +90693,12 @@ export interface MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig {
     TruncationLimit?: number;
     /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**

@@ -58,6 +58,9 @@ import {
     BaseAccessDriver,
     ConfidenceScale,
     DiscoverRequest,
+    DiscoverWalkEnd,
+    LocatorBatchFetchRequest,
+    LocatorBatchFetchResult,
     DiscoveredItem,
     LocatorFetchRequest,
     LocatorFetchResponse,
@@ -220,18 +223,28 @@ export class RecordingVectorDB extends VectorDBBase {
     }
 }
 
+/**
+ * How the test driver walks and fetches, beyond listing everything at once. Off unless a check turns it on:
+ * `PageSize` walks in parts (a resume token per page), `Gone` reports locators removed, `Batch` fetches a page
+ * of items in one call (each call's URLs recorded in `BatchCalls`).
+ */
+const DriverMode: { PageSize: number; Gone: string[]; Batch: boolean; BatchCalls: string[][] } = { PageSize: 0, Gone: [], Batch: false, BatchCalls: [] };
+
 /** A source serving {@link Documents}: the walk lists them, the fetch reads them back. */
 @RegisterClass(AutotagBase, DRIVER_KEY)
 export class InMemorySourceDriver extends AutotagBase {
     public override readonly SupportsExhaustiveWalk = true;
 
-    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+    public async *Discover(request: DiscoverRequest): AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined> {
         AccessLog.DiscoverAccess.push(request.Access ?? null);
         const confidence = request.Confidence ?? ConfidenceScale;
-        for (const [url, doc] of Documents) {
-            if (request.Since && doc.ModifiedAt <= request.Since) {
-                continue;
-            }
+        const listed = [...Documents].filter(([, doc]) => !request.Since || doc.ModifiedAt > request.Since);
+        const start = DriverMode.PageSize > 0 && request.ResumeToken ? Number(request.ResumeToken) : 0;
+        const end = DriverMode.PageSize > 0 ? start + DriverMode.PageSize : listed.length;
+        for (const url of start === 0 ? DriverMode.Gone : []) {
+            yield { URL: url, Removed: true };
+        }
+        for (const [url, doc] of listed.slice(start, end)) {
             yield {
                 URL: url,
                 Columns: doc.Columns,
@@ -245,6 +258,18 @@ export class InMemorySourceDriver extends AutotagBase {
                 ],
             };
         }
+        return end < listed.length ? { ResumeToken: String(end) } : undefined;
+    }
+    public async FetchBatch(request: LocatorBatchFetchRequest): Promise<LocatorBatchFetchResult[]> {
+        if (!DriverMode.Batch) {
+            return []; // each item is then fetched alone
+        }
+        AccessLog.FetchAccess.push(request.Access ?? null);
+        DriverMode.BatchCalls.push([...request.URLs]);
+        return request.URLs.filter((url) => Documents.has(url)).map((url) => {
+            const doc = Documents.get(url)!;
+            return { URL: url, Response: { Content: doc.Bytes ?? new TextEncoder().encode(doc.Text ?? ''), ResolvedURL: url } };
+        });
     }
     public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
         AccessLog.FetchAccess.push(request.Access ?? null);
@@ -279,6 +304,8 @@ const URL_C = 'it-pipeline://docs/c.txt';
 const URL_OLD = 'it-pipeline://docs/old.txt';
 const URL_ARCHIVE = 'it-pipeline://docs/nested.txt.gz.gz';
 const URL_PAGE = 'it-pipeline://docs/page.html';
+const URL_MANIFEST = 'it-pipeline://docs/manifest.csv';
+const URL_LINKED = 'it-pipeline://docs/linked.txt';
 
 /** Skips the running check (SkipCheck) when bundle Setup could not provision its fixtures. */
 function guardSkip(): void {
@@ -815,6 +842,68 @@ export const ContentPipelineChecks: NamedCheck[] = [
         },
     },
     {
+        Id: 'content-pipeline.CP19',
+        Name: 'CP19: a manifest expands into child items with ParentID: text rows are complete, a link row is fetched by its own Extract, and a row dropped from the manifest is retired',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const manifest = (rows: string[]) => ['Link,Body,Title', ...rows].join('\n');
+            const linkRow = `${URL_LINKED},,Linked document`;
+            const textRow = `,"${SENTENCE.trim()}",Inline policy`;
+            const extract = {
+                ExtractorKey: 'Manifest',
+                ExtractorOptions: { Manifest: { LinkColumn: 'Link', TextColumn: 'Body', TitleColumn: 'Title' } },
+                Tuning: { MaxArchiveMembers: 100 },
+            };
+            Documents.set(URL_MANIFEST, { Text: manifest([linkRow, textRow]), ModifiedAt: new Date() });
+
+            let manifestID: string | undefined;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                manifestID = (await itemByURL(ctx, URL_MANIFEST)).ID;
+                // The linked document is reachable at its link, but is not one of the source's own listings.
+                Documents.set(URL_LINKED, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                await run(ctx, ['Extract'], [manifestID], extract);
+
+                const children = await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ParentID='${manifestID}' AND DeleteStatus IS NULL`, 'URL');
+                AssertEqual(children.length, 2, 'one child item per manifest row');
+                const linked = children.find((c) => c.URL === URL_LINKED);
+                const inline = children.find((c) => c.URL === `${URL_MANIFEST}#row-2`);
+                Assert(!!linked && !!inline, `children are at the row's link, or the manifest's URL for a text row (got ${children.map((c) => c.URL).join(', ')})`);
+                AssertEqual(inline!.ExtractionStatus, 'Complete', 'a row with text is complete as listed');
+                AssertEqual(inline!.Name, 'Inline policy', "the row's title column");
+                AssertEqual(linked!.ExtractionStatus, 'Pending', 'a link row waits for its own Extract');
+
+                await run(ctx, ['Extract'], [linked!.ID]);
+                const fetched = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${linked!.ID}'`))[0];
+                AssertEqual(fetched.ExtractionStatus, 'Complete', 'the link row is fetched and read by its own Extract');
+                Assert((fetched.Text ?? '').startsWith(SENTENCE.trim().split(' ')[0]), 'with the text served at its link');
+                AssertEqual(fetched.Name, 'Linked document', "keeping the manifest's title");
+
+                Documents.set(URL_MANIFEST, { Text: manifest([textRow]), ModifiedAt: new Date() });
+                await run(ctx, ['Extract'], [manifestID], extract);
+                const retired = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${linked!.ID}'`))[0];
+                AssertEqual(retired.DeleteStatus, 'Pending', 'a row dropped from the manifest is marked for deletion');
+                console.log('      → CP19: manifest expanded into 2 children, link row fetched, dropped row retired');
+            } finally {
+                Documents.delete(URL_MANIFEST);
+                Documents.delete(URL_LINKED);
+                if (manifestID) {
+                    for (const child of await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ParentID='${manifestID}'`)) {
+                        for (const chunk of await chunksOf(ctx, child.ID)) {
+                            await chunk.Delete();
+                        }
+                        await child.Delete();
+                    }
+                    const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${manifestID}'`))[0];
+                    if (reloaded) {
+                        await reloaded.Delete();
+                    }
+                }
+            }
+        },
+    },
+    {
         Id: 'content-pipeline.CP17',
         Name: "CP17: Extract stores an HTML page as served, and Segment cleans it with the configured selectors before splitting, so chunks hold the article and none of the page's chrome",
         RequiresMutation: true,
@@ -985,6 +1074,126 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 'SessionApplies strips session headers on cross-origin requests',
             );
             console.log('      → CP15: Access session reached Discover + Extract and stripped on cross-origin URLs');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP20',
+        Name: "CP20: a Discover walk in parts keeps its state on the source and stays due until it finishes, then stamps the first part's start; a locator the driver reports gone is marked for deletion",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = ['it-pipeline://docs/part-1.txt', 'it-pipeline://docs/part-2.txt', 'it-pipeline://docs/part-3.txt'];
+            await new Promise((r) => setTimeout(r, 5));
+            for (const url of urls) {
+                Documents.set(url, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+            }
+            const source = async () => (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const before = await source();
+            DriverMode.PageSize = 1;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const afterFirst = await source();
+                const state = afterFirst.DiscoverStateObject;
+                Assert(!!state?.ResumeToken, 'an unfinished walk keeps its resume token on the source');
+                AssertEqual(state!.Mode, 'Discover', 'and the mode it runs in');
+                AssertEqual(String(afterFirst.LastDiscoveredAt), String(before.LastDiscoveredAt), 'LastDiscoveredAt waits for the walk to finish');
+
+                let parts = 1;
+                while ((await source()).DiscoverState && parts < 10) {
+                    await run(ctx, ['Discover'], [S.SourceID]);
+                    parts++;
+                }
+                const finished = await source();
+                AssertEqual(finished.DiscoverState, null, 'a finished walk clears its state');
+                Assert(parts >= 3, `the walk took one part per page (${parts})`);
+                AssertEqual(new Date(finished.LastDiscoveredAt!).toISOString(), state!.WalkStartedAt, "LastDiscoveredAt takes the first part's start");
+                const found = (await items(ctx)).filter((i) => urls.includes(i.URL ?? ''));
+                AssertEqual(found.length, 3, 'every page of the walk was found across its parts');
+
+                DriverMode.PageSize = 0;
+                DriverMode.Gone = [urls[0]];
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const gone = (await items(ctx)).find((i) => i.URL === urls[0]);
+                AssertEqual(gone?.DeleteStatus, 'Pending', 'the item the driver reported gone is marked for deletion');
+                console.log(`      → CP20: walk in ${parts} parts, state cleared, LastDiscoveredAt = first part's start, reported removal marked`);
+            } finally {
+                DriverMode.PageSize = 0;
+                DriverMode.Gone = [];
+                urls.forEach((u) => Documents.delete(u));
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP21',
+        Name: "CP21: Extract fetches a page of a source's items in one driver call when the driver can",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = ['it-pipeline://docs/batch-1.txt', 'it-pipeline://docs/batch-2.txt'];
+            await new Promise((r) => setTimeout(r, 5));
+            urls.forEach((u, i) => Documents.set(u, { Text: `${SENTENCE.repeat(2)} batch ${i}`, ModifiedAt: new Date() }));
+            DriverMode.Batch = true;
+            DriverMode.BatchCalls.length = 0;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const ids = (await items(ctx)).filter((i) => urls.includes(i.URL ?? '')).map((i) => i.ID);
+                AssertEqual(ids.length, 2, 'precondition: both items discovered');
+                await run(ctx, ['Extract'], ids);
+                AssertEqual(DriverMode.BatchCalls.length, 1, 'one batch call for the page');
+                AssertSameList([...DriverMode.BatchCalls[0]].sort(), [...urls].sort(), 'with both items in it');
+                for (const url of urls) {
+                    const item = await itemByURL(ctx, url);
+                    AssertEqual(item.ExtractionStatus, 'Complete', `${url} was read from the batch`);
+                    Assert((item.Text ?? '').includes('batch'), 'with the text the batch returned');
+                }
+                console.log('      → CP21: 2 items fetched in 1 driver call');
+            } finally {
+                DriverMode.Batch = false;
+                urls.forEach((u) => Documents.delete(u));
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP22',
+        Name: 'CP22: a vector metadata field can be written under its own key and added to the curated default (Date as ContentDate, epoch seconds)',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const url = 'it-pipeline://docs/dated.txt';
+            const published = new Date('2026-03-01T00:00:00.000Z');
+            await new Promise((r) => setTimeout(r, 5));
+            Documents.set(url, { Text: SENTENCE.repeat(3), ModifiedAt: new Date() });
+            const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const original = source.Configuration;
+            source.Configuration = JSON.stringify({
+                ...(original ? JSON.parse(original) : {}),
+                VectorMetadata: { Fields: { Date: { Included: true, StoreAs: 'epochSeconds', MetadataKey: 'ContentDate' } } },
+            });
+            await save(source, 'source with a metadata key');
+            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const item = await itemByURL(ctx, url);
+                item.Date = published;
+                await save(item, 'dated item');
+                await run(ctx, ['Extract'], [item.ID]);
+                await run(ctx, ['Segment'], [item.ID]);
+                const chunks = await liveChunks(ctx, item.ID);
+                resetStore();
+                await run(ctx, ['Embed'], chunks.map((c) => c.ID));
+                Assert(Store.Upserts.length > 0, 'the item was embedded');
+                for (const upsert of Store.Upserts) {
+                    AssertEqual(upsert.metadata['ContentDate'], Math.floor(published.getTime() / 1000), 'the date is written as ContentDate, in epoch seconds');
+                    AssertEqual(upsert.metadata['Date'], undefined, 'and not under its own name');
+                    Assert(typeof upsert.metadata['Title'] === 'string', 'the curated set is still there');
+                }
+                console.log(`      → CP22: ContentDate on ${Store.Upserts.length} vectors`);
+            } finally {
+                source.Configuration = original;
+                await save(source, 'restore source Configuration');
+                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+                Documents.delete(url);
+            }
         },
     },
 ];

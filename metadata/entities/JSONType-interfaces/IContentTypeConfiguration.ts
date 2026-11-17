@@ -92,6 +92,12 @@ export interface IContentTypeVectorMetadataFieldConfig {
     TruncationLimit?: number;
     /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**

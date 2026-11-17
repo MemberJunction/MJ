@@ -39788,6 +39788,9 @@ export class MJContentSource_ {
     @MaxLength(36)
     GraphID?: string;
         
+    @Field({nullable: true, description: "Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress."}) 
+    DiscoverState?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentType?: string;
@@ -39891,6 +39894,9 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     GraphID: string | null;
 
+    @Field({ nullable: true })
+    DiscoverState: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -39957,6 +39963,9 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     GraphID?: string | null;
+
+    @Field({ nullable: true })
+    DiscoverState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

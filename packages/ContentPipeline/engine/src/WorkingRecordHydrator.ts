@@ -29,6 +29,7 @@ const PIPELINE_COLUMN_EXTENSIONS: readonly (readonly [string, string])[] = [
     ['ExtractorKey', 'extractorKey'],
     ['ExtractorKeyOverride', 'extractorKeyOverride'],
     ['VectorRecordID', 'vectorRecordID'], // the receipt Delete and a re-embed need
+    ['DiscoverState', 'discoverState'], // where an unfinished walk of a source stopped
 ];
 
 /** Builds working records from persisted rows. */

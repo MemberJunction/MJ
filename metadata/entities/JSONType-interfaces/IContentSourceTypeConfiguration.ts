@@ -12,6 +12,23 @@
  */
 export interface IContentSourceTypeConfiguration {
     /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
+
+    /**
      * The entity items of every source of this type are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
      * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
      * writes both rows under one ID, so no item exists without its extension row; an existing item that

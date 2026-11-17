@@ -8,6 +8,7 @@ export * from './WorkingRecordHydrator.js';
 export * from './WorkingRecordCommitter.js';
 export * from './ItemEmbeddingRollup.js';
 export * from './ItemEntityResolver.js';
+export * from './HeadlessPageRenderer.js';
 export * from './PipelineProcessor.js';
 export * from './ContentSourceConfigurationResolver.js';
 export * from './AccessResolver.js';

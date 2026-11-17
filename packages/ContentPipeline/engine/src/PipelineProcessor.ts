@@ -31,7 +31,7 @@ import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
 import { DISCOVER_STAGE, IsSyncMode } from './stages/DiscoverStage.js';
-import { WhereEqual } from './Filters.js';
+import { WhereAnyOf, WhereEqual } from './Filters.js';
 import { ItemEmbeddingRollup } from './ItemEmbeddingRollup.js';
 import { OwningItemID } from './VectorRouting.js';
 
@@ -104,7 +104,7 @@ export class PipelineProcessor implements IRecordProcessor {
         }
         const tuning = ResolveTuning(this.config.Configuration);
         this.retryBackoff = { RetryBackoffBaseMs: tuning.RetryBackoffBaseMs, RetryBackoffMaxMs: tuning.RetryBackoffMaxMs };
-        if (typeof this.lastStage.Finalize === 'function') {
+        if (typeof this.lastStage.Finalize === 'function' || typeof this.stages[0].Prepare === 'function') {
             this.ProcessBatch = (records, context) => this.processBatch(records, context);
         }
     }
@@ -121,11 +121,21 @@ export class PipelineProcessor implements IRecordProcessor {
     /** Hydrate, run the stages, commit children then the record (unless a test), return the outcome. */
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const started = Date.now();
+        let working: WorkingRecord;
         try {
-            const working = await this.storage.Hydrator(context.Provider, context.ContextUser).Hydrate(this.stages[0].Entity, record.RecordID);
-            if (this.isPendingDelete(working)) {
-                return this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null);
-            }
+            working = await this.storage.Hydrator(context.Provider, context.ContextUser).Hydrate(this.stages[0].Entity, record.RecordID);
+        } catch (error) {
+            return this.toRecordResult(this.classify(error), started, null);
+        }
+        if (this.isPendingDelete(working)) {
+            return this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null);
+        }
+        return this.processHydrated(working, record, context, started);
+    }
+
+    /** Run the stages over a hydrated record, commit children then the record (unless a test), return the outcome. */
+    private async processHydrated(working: WorkingRecord, record: RecordRef, context: RecordProcessorContext, started: number): Promise<RecordResult> {
+        try {
             let outcome = await this.runStages(working, context, record.RecordID);
             let syncOrphans: Orphan[] = [];
             if (outcome.Status === 'Complete' && working.Entity === 'Content Source' && IsSyncMode(this.config.Configuration)) {
@@ -147,8 +157,9 @@ export class PipelineProcessor implements IRecordProcessor {
                     outcome = Outcome.Retry(
                         `${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed${detail}`,
                     );
-                } else if (syncOrphans.length > 0 && !this.config.IsTest) {
+                } else if (!this.config.IsTest) {
                     await this.markOrphansForDeletion(syncOrphans, context);
+                    await this.markReportedRemovals(working, context);
                 }
             } else if (outcome.Status === 'Skipped') {
                 await this.sweepOrphans(working, context);
@@ -161,23 +172,31 @@ export class PipelineProcessor implements IRecordProcessor {
         }
     }
 
-    /** Run the page per record, then hand the completed records to the last stage's `Finalize` in one call. */
+    /**
+     * Hydrate the page, let the first stage prepare it in bulk, then run it per record. With a last stage that
+     * has a `Finalize`, the completed records go to it in one call; otherwise each record is finished on its own,
+     * exactly as {@link ProcessRecord} does.
+     */
     private async processBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
         const results = new Map<string, RecordResult>();
+        const page = await this.hydratePage(records, context, results);
+        await this.preparePage(page.map((p) => p.Working), context);
+        if (typeof this.lastStage.Finalize !== 'function') {
+            for (const { Record, Working, Started } of page) {
+                if (context.Signal?.aborted) {
+                    break; // the rest are left out of the results, unreached and still ready
+                }
+                results.set(Record.RecordID, await this.processHydrated(Working, Record, context, Started));
+            }
+            return results;
+        }
         const ready = new UUIDMap<{ RecordID: string; Working: WorkingRecord }>();
-        const hydrator = this.storage.Hydrator(context.Provider, context.ContextUser);
         const worked: WorkingRecord[] = [];
-        for (const record of records) {
+        for (const { Record: record, Working: working, Started: started } of page) {
             if (context.Signal?.aborted) {
                 break; // the rest are left out of the results, unreached and still ready
             }
-            const started = Date.now();
             try {
-                const working = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
-                if (this.isPendingDelete(working)) {
-                    results.set(record.RecordID, this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null));
-                    continue;
-                }
                 const outcome = await this.runStages(working, context, record.RecordID);
                 worked.push(working);
                 if (outcome.Status === 'Complete') {
@@ -197,6 +216,49 @@ export class PipelineProcessor implements IRecordProcessor {
         }
         await this.settleOwningItems(worked, context);
         return results;
+    }
+
+    /** Hydrate each record of a page; a record that cannot be hydrated, or is pending delete, gets its result here. */
+    private async hydratePage(
+        records: RecordRef[],
+        context: RecordProcessorContext,
+        results: Map<string, RecordResult>,
+    ): Promise<{ Record: RecordRef; Working: WorkingRecord; Started: number }[]> {
+        const hydrator = this.storage.Hydrator(context.Provider, context.ContextUser);
+        const page: { Record: RecordRef; Working: WorkingRecord; Started: number }[] = [];
+        for (const record of records) {
+            if (context.Signal?.aborted) {
+                break; // the rest are left out of the results, unreached and still ready
+            }
+            const started = Date.now();
+            try {
+                const working = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
+                if (this.isPendingDelete(working)) {
+                    results.set(record.RecordID, this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null));
+                    continue;
+                }
+                page.push({ Record: record, Working: working, Started: started });
+            } catch (error) {
+                results.set(record.RecordID, this.toRecordResult(this.classify(error), started, null));
+            }
+        }
+        return page;
+    }
+
+    /** The first stage's bulk step over the page. Best effort: a record it could not help runs as usual. */
+    private async preparePage(workings: WorkingRecord[], context: RecordProcessorContext): Promise<void> {
+        const first = this.stages[0];
+        if (typeof first.Prepare !== 'function' || workings.length === 0 || context.Signal?.aborted) {
+            return;
+        }
+        const budget = this.startBudget(context.Signal);
+        try {
+            await first.Prepare(workings, this.buildContext(first, context, 'batch', budget.Signal));
+        } catch (error) {
+            LogError(`PipelineProcessor: ${first.Name} could not prepare a page of ${workings.length}; each record runs on its own: ${messageOf(error)}`);
+        } finally {
+            budget.Dispose();
+        }
     }
 
     private async finalizeBatch(
@@ -429,6 +491,13 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest || !working.Identity.RecordID) {
             return { Orphans: [] };
         }
+        if (working.GetExtension<boolean>(DISCOVER_STAGE, 'incomplete') || working.GetExtension<boolean>(DISCOVER_STAGE, 'resumed')) {
+            // A walk in parts saw only part of the source in this run, so what it did not see says nothing
+            // about what is gone. A source whose Sync cannot finish in one run relies on its driver reporting
+            // removals instead (DiscoveredItem.Removed).
+            LogStatus(`PipelineProcessor: Sync of '${working.Identity.RecordID}' ran in parts; no item is marked for deletion by absence`);
+            return { Orphans: [] };
+        }
         const live = await RunView.FromMetadataProvider(context.Provider).RunView<{
             ID: string;
             URL: string;
@@ -492,6 +561,32 @@ export class PipelineProcessor implements IRecordProcessor {
             };
         }
         return { Orphans: missing.map((r) => ({ Entity: 'MJ: Content Items' as const, ID: r.ID })) };
+    }
+
+    /**
+     * Mark for deletion the source's top-level items at the locators its driver reported gone. A child item (an
+     * archive member, a manifest row) goes with its parent, never on its own, as with Sync.
+     */
+    private async markReportedRemovals(working: WorkingRecord, context: RecordProcessorContext): Promise<void> {
+        const removed = working.GetExtension<string[]>(DISCOVER_STAGE, 'removed') ?? [];
+        if (removed.length === 0 || working.Entity !== 'Content Source' || !working.Identity.RecordID) {
+            return;
+        }
+        const items = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `${WhereEqual({ ContentSourceID: working.Identity.RecordID, ParentID: null, DeleteStatus: null })} AND (${WhereAnyOf('URL', removed)})`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!items.Success) {
+            LogError(`PipelineProcessor: could not find the items reported gone from '${working.Identity.RecordID}': ${items.ErrorMessage}`);
+            return;
+        }
+        await this.markOrphansForDeletion(items.Results.map((r) => ({ Entity: 'MJ: Content Items' as const, ID: r.ID })), context);
     }
 
     private async markOrphansForDeletion(orphans: readonly Orphan[], context: RecordProcessorContext): Promise<void> {
