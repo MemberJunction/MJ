@@ -13,4 +13,4 @@ Walks in parts. A source too large to walk in one run had to finish in one go or
 
 Removals. A driver can yield `{ URL, Removed: true }` for a locator it knows is gone; once the walk's items have committed, the source's top-level item at that URL is marked `DeleteStatus = 'Pending'` for the Delete stage, without waiting for a Sync. Child items go with their parent, as with Sync.
 
-Migration `V202611161607__v6.3.x__ContentPipeline_Discover_State` adds the column with its regenerated view, procedures, GraphQL type and form field.
+Migration `V202611170732__v6.3.x__ContentPipeline_Discover_State` adds the column with its regenerated view, procedures, GraphQL type and form field.
