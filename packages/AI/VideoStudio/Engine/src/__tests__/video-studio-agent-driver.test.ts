@@ -1051,7 +1051,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
             FinalPayloadObject: undefined,
         };
-        const storyboardStepResult = await agent.executeNextStep(
+        const storyboardStepResult = await agent.executeNextStep<Partial<VideoGenerationSpec>>(
             storyboardParams,
             dummyConfig,
             {

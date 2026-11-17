@@ -132,10 +132,11 @@ jobs:
             -f packages/AI/VideoStudio/RenderWorker/Dockerfile \
             -t mj-video-render-worker:local \
             .
-          docker run -d --rm --name vs-render-health -p 18080:8080 mj-video-render-worker:local
+          HEALTH_TOKEN="ci-health-check-token"
+          docker run -d --name vs-render-health -p 18080:8080 -e "VIDEO_STUDIO_RENDER_TOKEN=$HEALTH_TOKEN" mj-video-render-worker:local
           HEALTH_OK=0
           for _ in $(seq 1 30); do
-            if HEALTH_JSON="$(curl -fsS http://127.0.0.1:18080/health 2>/dev/null)"; then
+            if HEALTH_JSON="$(curl -fsS -H "Authorization: Bearer $HEALTH_TOKEN" http://127.0.0.1:18080/health 2>/dev/null)"; then
               echo "Worker /health response: $HEALTH_JSON"
               node -e '
                 const h = JSON.parse(process.argv[1]);
@@ -150,7 +151,10 @@ jobs:
             fi
             sleep 1
           done
-          docker stop vs-render-health || true
+          if [ "$HEALTH_OK" != "1" ]; then
+            docker logs vs-render-health || true
+          fi
+          docker rm -f vs-render-health >/dev/null 2>&1 || true
           if [ "$HEALTH_OK" != "1" ]; then
             echo "::error::RenderWorker container failed /health verification"
             exit 1
