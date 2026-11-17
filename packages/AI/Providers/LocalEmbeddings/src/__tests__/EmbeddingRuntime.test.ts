@@ -60,7 +60,17 @@ beforeEach(async () => {
 
 /** A callable fake ONNX model whose `dispose` is observable. */
 function fakeModel(dispose: () => Promise<void> = async () => undefined) {
-  return Object.assign(async (inputs: FakeBatch) => ({ last_hidden_state: inputs }), { dispose: vi.fn(dispose) });
+  let released = false;
+  const model = async (inputs: FakeBatch) => {
+    if (released) throw new Error('session released');
+    return { last_hidden_state: inputs };
+  };
+  return Object.assign(model, {
+    dispose: vi.fn(async () => {
+      released = true;
+      await dispose();
+    }),
+  });
 }
 
 describe('EmbedTextsWithModel', () => {
@@ -197,11 +207,35 @@ describe('ClearEmbeddingPipelines', () => {
     const cleared = ClearEmbeddingPipelines();
     finishLoad(late);
     await cleared;
-    await embedding;
+    // The embed that started the load still gets its vectors; the clear released the model after it.
+    expect((await embedding).Vectors).toHaveLength(1);
 
     expect(late.dispose).toHaveBeenCalledOnce();
     await EmbedTextsWithModel(MODEL, ['x']);
     expect(fake.modelFromPretrained).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases a model only after the embeds running on it finish', async () => {
+    fake.lengthOf = () => 5000; // one text per batch: 3 batches
+    const model = fakeModel();
+    const events: string[] = [];
+    let batches = 0;
+    let clearDuringEmbed: Promise<void> | undefined;
+    const real = model;
+    const guarded = Object.assign(async (inputs: FakeBatch) => {
+      events.push('batch');
+      if (++batches === 2) {
+        clearDuringEmbed = ClearEmbeddingPipelines().then(() => { events.push('cleared'); });
+      }
+      return real(inputs);
+    }, { dispose: vi.fn(async () => { events.push('disposed'); await real.dispose(); }) });
+    fake.modelFromPretrained.mockImplementationOnce(async () => guarded);
+
+    const { Vectors } = await EmbedTextsWithModel(MODEL, ['a', 'b', 'c']);
+    await clearDuringEmbed;
+
+    expect(Vectors).toHaveLength(3);
+    expect(events).toEqual(['batch', 'batch', 'batch', 'disposed', 'cleared']);
   });
 
   it('rejects with the model ID when a release fails, and still empties the cache', async () => {

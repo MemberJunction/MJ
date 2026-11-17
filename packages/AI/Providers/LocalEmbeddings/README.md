@@ -147,7 +147,7 @@ Measured on Linux arm64 with 4 CPUs, replaying the nightly sync's calls (MJ #668
 
 | | Peak | Held after the sync | Time per pass |
 |---|---|---|---|
-| Arena on | | 1245 MB | 68 s |
+| Arena on | 1245 MB | 1245 MB | 68 s |
 | Arena off (default) | 433 MB | 433 MB | 71 s (about 4% slower) |
 
 To keep the arena on a dedicated inference host that can spare the memory, set

@@ -26,6 +26,10 @@ type TransformersModule = typeof import('@huggingface/transformers');
 interface LoadedModel {
   tokenizer: PreTrainedTokenizer;
   model: PreTrainedModel;
+  /** Calls running on `model` right now; its sessions may be released only when this is 0. */
+  activeCalls: number;
+  /** Set by a clear that is waiting for the last active call to finish, so it can release the model. */
+  onIdle: (() => void) | null;
 }
 
 /** The part of a feature-extraction model's output this driver reads. */
@@ -121,7 +125,27 @@ export async function EmbedTextsWithModel(modelName: string, texts: string[], ma
   if (texts.length === 0) {
     return { Vectors: [], Tokens: 0 };
   }
-  const { tokenizer, model } = await getModel(modelName);
+  return withModel(modelName, (loaded) => embedBatches(loaded, texts, maxInputTokens));
+}
+
+/**
+ * Runs `work` on a model and counts it as an active call, so a clear that arrives mid-call defers
+ * releasing the model's ONNX sessions until `work` is done (a released session fails the call).
+ */
+async function withModel<T>(modelName: string, work: (loaded: LoadedModel) => Promise<T>): Promise<T> {
+  const loaded = await getModel(modelName);
+  loaded.activeCalls++;
+  try {
+    return await work(loaded);
+  } finally {
+    loaded.activeCalls--;
+    if (loaded.activeCalls === 0) {
+      loaded.onIdle?.();
+    }
+  }
+}
+
+async function embedBatches({ tokenizer, model }: LoadedModel, texts: string[], maxInputTokens?: number): Promise<EmbeddedTexts> {
   const { mean_pooling } = await loadTransformers();
   const vectors: Float32Array[] = [];
   let tokens = 0;
@@ -161,7 +185,8 @@ export async function PreloadEmbeddingModel(modelName: string): Promise<void> {
  * Drops every loaded model and releases its ONNX sessions, which is what frees the native memory:
  * forgetting the JS object alone leaves the session (weights and arena) alive until a GC that may
  * never run it. A load still in flight is released when it finishes; its cache entry is already
- * gone, so no call can reuse it. Rejects, naming the model IDs, when a release fails; the cache is
+ * gone, so no call can reuse it. A model with calls running is released when the last one finishes.
+ * Rejects, naming the model IDs, when a release fails; the cache is
  * emptied either way.
  */
 export async function ClearEmbeddingPipelines(): Promise<void> {
@@ -182,6 +207,10 @@ async function releaseModel(modelId: string, loading: Promise<LoadedModel>): Pro
   } catch {
     // The load failed, so there is nothing to release; the callers that awaited it saw the error.
     return null;
+  }
+  if (loaded.activeCalls > 0) {
+    // The model is already out of the cache, so no new call can start on it; wait for the running ones.
+    await new Promise<void>((resolve) => { loaded.onIdle = resolve; });
   }
   try {
     await loaded.model.dispose();
@@ -249,7 +278,7 @@ function textOnly(config: PretrainedConfig): PretrainedConfig {
  *
  * Arena: ONNX Runtime's CPU arena and memory pattern keep every buffer they ever grew to for the
  * life of the session, so a sync's long inputs left the process holding the peak. Measured on Linux
- * arm64 with 4 CPUs, replaying the nightly sync's calls: arena on keeps 1245 MB after the sync;
+ * arm64 with 4 CPUs, replaying the nightly sync's calls: arena on peaks and holds 1245 MB;
  * arena off peaks at 433 MB and holds it, for ~4% more time (68 s to 71 s per pass). MJ #6689.
  * Off by default; MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true opts back in.
  */
@@ -310,7 +339,7 @@ async function loadModel(modelId: string): Promise<LoadedModel> {
       } else if (isVerbose()) {
         console.log(`Model ${modelId} loaded successfully`);
       }
-      return { tokenizer, model };
+      return { tokenizer, model, activeCalls: 0, onIdle: null };
     } catch (error) {
       lastError = error;
       if (IsTransientNetworkError(error) && attempt < DEFAULT_MAX_RETRIES - 1) {
