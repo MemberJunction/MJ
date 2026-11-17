@@ -538,4 +538,28 @@ describe('EdgePreDiscoveryHint — server guard of truth & security sanitization
         const sysMsgs = runner.MessagesAtCall[0].filter((m) => typeof m.content === 'string' && m.content.includes('<suggested_agent>'));
         expect(sysMsgs).toHaveLength(0);
     });
+
+    it('EvaluateEdgePreDiscoveryHint enforces metadata/override Platt calibration when TopLogit is supplied', () => {
+        const options = [
+            { ID: BILLING.ID, Name: BILLING.Name, Description: BILLING.Description ?? '' },
+            { ID: RESEARCH.ID, Name: RESEARCH.Name, Description: RESEARCH.Description ?? '' },
+            { ID: MARKETING.ID, Name: MARKETING.Name, Description: MARKETING.Description ?? '' },
+        ];
+        const borderlineHint = {
+            CandidateAgentIds: [BILLING.ID, RESEARCH.ID, MARKETING.ID],
+            SuggestedAgentId: BILLING.ID,
+            TopLogit: -2.0,
+            Confidence: 0.99, // forged/stale high confidence
+        };
+
+        // Default PoC fit ({ A: 1.0, B: 3.8 }): logit -2.0 -> 0.8581 >= 0.85
+        const defaultEval = EvaluateEdgePreDiscoveryHint(borderlineHint, options);
+        expect(defaultEval.DirectOutcome?.Injected).toBe(true);
+        expect(defaultEval.DirectOutcome?.Answer?.Confidence).toBeCloseTo(0.8581, 4);
+
+        // Stricter metadata fit ({ A: 1.0, B: 2.0 }): logit -2.0 -> 0.5 < 0.85 -> refuses fast-path despite high raw Confidence
+        const strictEval = EvaluateEdgePreDiscoveryHint(borderlineHint, options, { A: 1.0, B: 2.0 });
+        expect(strictEval.DirectOutcome).toBeNull();
+        expect(strictEval.SanitizedHint?.CandidateAgentIds).toEqual([BILLING.ID, RESEARCH.ID, MARKETING.ID]);
+    });
 });
