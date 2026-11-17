@@ -7,7 +7,9 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalCacheManager } from '../generic/localCacheManager';
+import { CompositeKey, KeyValuePair } from '../generic/compositeKey';
 import { GetGlobalObjectStore } from '@memberjunction/global';
+import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 function resetLocalCacheManager() {
     const g = GetGlobalObjectStore();
@@ -141,5 +143,55 @@ describe('LocalCacheManager.estimateResultsSize', () => {
         // Homogeneous rows → estimate ≈ perRow * n * 2; allow generous sampling tolerance.
         expect(est).toBeGreaterThan(perRow * n * 2 * 0.8);
         expect(est).toBeLessThan(perRow * n * 2 * 1.2);
+    });
+});
+
+describe('LocalCacheManager size-estimate sample cap', () => {
+    beforeEach(() => resetLocalCacheManager());
+
+    const counter = { serialized: 0 };
+    /** Builds a row whose serialization increments the shared counter. */
+    const makeRow = (i: number, name: string) => ({
+        ID: `row-${i}`,
+        Name: name,
+        __mj_UpdatedAt: '2026-01-01T00:00:00.000Z',
+        toJSON() {
+            counter.serialized++;
+            return { ID: this.ID, Name: this.Name };
+        },
+    });
+
+    it('serializes at most 10 rows to estimate a 1,000-row set', () => {
+        const cm = LocalCacheManager.Instance;
+        const rows = Array.from({ length: 1000 }, (_, i) => makeRow(i, `Row ${i}`));
+        counter.serialized = 0;
+
+        const est = asInternal(cm).estimateResultsSize(rows);
+
+        expect(est).toBeGreaterThan(0);
+        expect(counter.serialized).toBeGreaterThan(0);
+        expect(counter.serialized).toBeLessThanOrEqual(10);
+    });
+
+    it('an upsert into a cached 1,000-row slot serializes at most 10 rows for its size estimate', async () => {
+        const cm = LocalCacheManager.Instance;
+        await cm.Initialize(new MockCacheStorageProvider(), {
+            enabled: true,
+            maxSizeBytes: 50 * 1024 * 1024,
+            defaultTTLMs: 5 * 60 * 1000,
+            evictionPolicy: 'lru',
+        });
+        const fingerprint = 'Test Entity|||||||';
+        const rows = Array.from({ length: 1000 }, (_, i) => makeRow(i, `Row ${i}`));
+        await cm.SetRunViewResult(fingerprint, { EntityName: 'Test Entity' }, rows, '2026-01-04T00:00:00.000Z');
+        counter.serialized = 0;
+
+        const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 'row-1')]);
+        const upserted = { ID: 'row-1', Name: 'Renamed', __mj_UpdatedAt: '2026-01-01T00:00:00.000Z' };
+        const ok = await cm.UpsertSingleEntity(fingerprint, upserted, key, '2026-02-01T00:00:00.000Z');
+
+        expect(ok).toBe(true);
+        expect(counter.serialized).toBeGreaterThan(0);
+        expect(counter.serialized).toBeLessThanOrEqual(10);
     });
 });
