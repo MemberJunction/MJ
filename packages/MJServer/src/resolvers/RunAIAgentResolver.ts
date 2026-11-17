@@ -1,10 +1,29 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
+import {
+    AgentRunner,
+    ArtifactToolManager,
+    CanAgentOwnSubAgentConsults,
+    DecisionDiscoveryCatalog,
+    DecisionDiscoveryRunnableAgents,
+    HostAllowedAgentIDs,
+    KeepHostAllowedAgents,
+    LoadOpenSubAgentConsults,
+} from '@memberjunction/ai-agents';
+import {
+    AttachmentData,
+    ContinuationAnnouncementText,
+    ConversationUtility,
+    EDGE_PRE_DISCOVERY_DATA_KEY,
+    ExecuteAgentResult,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    SanitizeEdgePreDiscoveryHint,
+    BuildTaskGraphStartDebug,
+} from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -288,6 +307,34 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * Strips or sanitizes untrusted `EdgePreDiscoveryHint` entries from incoming GraphQL `data`
+     * against the user's server-verified runnable & directly-discoverable agents (and optional
+     * host allow-list) so forged or unauthorized agent IDs never propagate past the resolver.
+     */
+    private async sanitizeEdgePreDiscoveryInData(
+        parsedData: Record<string, unknown> | undefined,
+        runningAgentId: string,
+        currentUser: UserInfo
+    ): Promise<Record<string, unknown> | undefined> {
+        if (!parsedData || !(EDGE_PRE_DISCOVERY_DATA_KEY in parsedData)) {
+            return parsedData;
+        }
+        const runnable = await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, currentUser);
+        const catalog = KeepHostAllowedAgents(
+            DecisionDiscoveryCatalog(runnable, runningAgentId),
+            HostAllowedAgentIDs(parsedData)
+        );
+        const sanitized = SanitizeEdgePreDiscoveryHint(parsedData[EDGE_PRE_DISCOVERY_DATA_KEY], catalog);
+        const nextData: Record<string, unknown> = { ...parsedData };
+        if (sanitized) {
+            nextData[EDGE_PRE_DISCOVERY_DATA_KEY] = sanitized;
+        } else {
+            delete nextData[EDGE_PRE_DISCOVERY_DATA_KEY];
+        }
+        return nextData;
+    }
+
+    /**
      * Internal method that handles the core AI agent execution logic.
      * This method is called by both the regular and system user resolvers.
      * @private
@@ -345,6 +392,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
         // The publisher owns every status message, including the failure completion the catch below sends.
         const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
+        let currentPublisher = statusPublisher;
 
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
@@ -359,7 +407,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const userMessage = this.extractUserMessage(parsedMessages);
 
             // Parse data contexts
-            const parsedData = this.parseJsonInput(data, 'data');
+            const rawParsedData = this.parseJsonInput(data, 'data');
             const parsedTemplateData = this.parseJsonInput(templateData, 'templateData');
 
             // Get and validate current user
@@ -371,6 +419,10 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
+            // Server remains guard of truth: strip/sanitize any untrusted client EdgePreDiscoveryHint
+            // at the GraphQL ingress boundary before passing data into AgentRunner / BaseAgent.
+            const parsedData = await this.sanitizeEdgePreDiscoveryInData(rawParsedData, agentEntity.ID, currentUser);
+
             // Create AI agent runner with the per-request isolated provider so all agent DB operations
             // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
@@ -381,7 +433,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // The publisher owns every status message. The resolver still copies the run into
             // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
             const sourcePublisher = statusPublisher;
-            let currentPublisher = sourcePublisher;
 
             // A widget- or guest-hosted run must not get a handoffChain unless the host also passes an
             // allow-list under trusted run data.
@@ -595,6 +646,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        } finally {
+            currentPublisher.Dispose();
+            if (currentPublisher !== statusPublisher) {
+                statusPublisher.Dispose();
+            }
         }
     }
 
@@ -1912,7 +1968,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Batch load input artifact versions for conversation details.
      * Returns a map of ConversationDetailID -> ArtifactVersion[]
      */
-    private async loadInputArtifactsBatch(
+    protected async loadInputArtifactsBatch(
         conversationDetailIds: string[],
         contextUser: UserInfo,
         provider: IMetadataProvider
@@ -1944,15 +2000,38 @@ export class RunAIAgentResolver extends ResolverBase {
 
         if (!versionsResult.Success || !versionsResult.Results) return map;
 
-        // Build a lookup of version ID -> version entity
+        // Enforce artifact read ACL via ArtifactPermissionEngine so conversation context loading never bypasses permissions (D3)
+        const canReadByArtifactId = new Map<string, boolean>();
+        for (const v of versionsResult.Results) {
+            const artId = (v.ArtifactID ?? '').trim();
+            if (!artId) {
+                continue;
+            }
+            const lowerArtId = artId.toLowerCase();
+            if (!canReadByArtifactId.has(lowerArtId)) {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    artId,
+                    contextUser
+                );
+                canReadByArtifactId.set(lowerArtId, perms.CanRead === true);
+            }
+        }
+
+        // Build a lookup of version ID -> readable version entity (keyed lowercase for case-insensitive UUID matching)
         const versionMap = new Map<string, MJArtifactVersionEntity>();
         for (const v of versionsResult.Results) {
-            versionMap.set(v.ID, v);
+            const lowerArtId = (v.ArtifactID ?? '').trim().toLowerCase();
+            if (lowerArtId && canReadByArtifactId.get(lowerArtId) === true) {
+                versionMap.set(v.ID.toLowerCase(), v);
+            }
         }
 
         // Group by conversation detail ID
         for (const link of linksResult.Results) {
-            const version = versionMap.get(link.ArtifactVersionID);
+            const version = link.ArtifactVersionID
+                ? versionMap.get(link.ArtifactVersionID.toLowerCase())
+                : undefined;
             if (version) {
                 const existing = map.get(link.ConversationDetailID) || [];
                 existing.push(version);

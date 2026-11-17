@@ -158,6 +158,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
         if (this.config?.Model) {
             args.push('--model', this.config.Model);
         }
+        const seenDirs = new Set<string>([this.config?.WorkspacePath ?? ''].filter(Boolean));
+        for (const extraDir of this.config?.AdditionalDirectories ?? []) {
+            const trimmed = extraDir.trim();
+            if (trimmed && !seenDirs.has(trimmed)) {
+                seenDirs.add(trimmed);
+                args.push('--add-dir', trimmed);
+            }
+        }
         // Per-invocation, not per-session: the process is new every turn, so a policy applied only
         // at session start would silently lapse from turn 2 onward.
         args.push(...this.permissionArgs);

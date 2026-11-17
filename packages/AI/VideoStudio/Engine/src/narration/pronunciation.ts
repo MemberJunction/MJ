@@ -72,11 +72,34 @@ export const DEFAULT_PRONUNCIATION_RULES: readonly PronunciationRule[] = Object.
     { Pattern: '&', Replacement: 'and' },
 ]);
 
-const RULE_ARROW = /\s*(?:=>|->|→)\s*/;
-const LEADING_PUNCT = /^[("'“‘[]+/;
-const TRAILING_PUNCT = /[.,;:!?)"'”’\]]+$/;
+const RULE_ARROWS = ['=>', '->', '→'] as const;
+const LEADING_PUNCT_CHARS = new Set(['(', '"', "'", '“', '‘', '[']);
+const TRAILING_PUNCT_CHARS = new Set(['.', ',', ';', ':', '!', '?', ')', '"', "'", '”', '’', ']']);
 const POSSESSIVE = /['’]s$/i;
 const DOTTED_ACRONYM_CORE = /^(?:[A-Z]\.)+[A-Z]$/;
+
+function splitOnRuleArrows(line: string): string[] {
+    const parts: string[] = [];
+    let cursor = 0;
+    while (cursor <= line.length) {
+        let nextIdx = -1;
+        let nextLen = 0;
+        for (const arrow of RULE_ARROWS) {
+            const idx = line.indexOf(arrow, cursor);
+            if (idx !== -1 && (nextIdx === -1 || idx < nextIdx)) {
+                nextIdx = idx;
+                nextLen = arrow.length;
+            }
+        }
+        if (nextIdx === -1) {
+            parts.push(line.slice(cursor).trim());
+            break;
+        }
+        parts.push(line.slice(cursor, nextIdx).trim());
+        cursor = nextIdx + nextLen;
+    }
+    return parts;
+}
 
 /**
  * Parses `IBrandVoice.PronunciationNotes` into rules (see the module documentation for the format).
@@ -89,9 +112,9 @@ export function ParsePronunciationNotes(notes?: string | null): ParsedPronunciat
         if (!line) {
             continue;
         }
-        const parts = line.startsWith('#') ? [] : line.split(RULE_ARROW);
-        const pattern = parts[0]?.trim() ?? '';
-        const replacement = parts.slice(1).join(' ').trim();
+        const parts = line.startsWith('#') ? [] : splitOnRuleArrows(line);
+        const pattern = parts[0] ?? '';
+        const replacement = parts.slice(1).join(' ');
         if (parts.length === 2 && pattern && replacement) {
             rules.push({ Pattern: pattern, Replacement: replacement });
         } else {
@@ -108,10 +131,19 @@ interface TokenParts {
 }
 
 function splitToken(token: string): TokenParts {
-    const lead = LEADING_PUNCT.exec(token)?.[0] ?? '';
-    const rest = token.slice(lead.length);
-    const trail = TRAILING_PUNCT.exec(rest)?.[0] ?? '';
-    return { Lead: lead, Core: rest.slice(0, rest.length - trail.length), Trail: trail };
+    let leadEnd = 0;
+    while (leadEnd < token.length && LEADING_PUNCT_CHARS.has(token[leadEnd])) {
+        leadEnd++;
+    }
+    let coreEnd = token.length;
+    while (coreEnd > leadEnd && TRAILING_PUNCT_CHARS.has(token[coreEnd - 1])) {
+        coreEnd--;
+    }
+    return {
+        Lead: token.slice(0, leadEnd),
+        Core: token.slice(leadEnd, coreEnd),
+        Trail: token.slice(coreEnd),
+    };
 }
 
 function patternWords(pattern: string): string[] {

@@ -25,13 +25,25 @@ export const MJ_NARRATION_CUES_SCRIPT_TAG = `<script src="${MJ_NARRATION_CUES_PA
  * words kept), whitespace collapsed. `'Data,'` and `'data'` match; `"AI's"` stays `"ai's"`.
  */
 export function NormalizeCueWord(word: string): string {
-    return (word ?? '')
+    const cleaned = (word ?? '')
         .toLowerCase()
         .replace(/[‘’]/g, "'")
-        .replace(/[^\p{L}\p{N}'\s-]+/gu, ' ')
-        .replace(/(^|\s)['-]+|['-]+(?=\s|$)/g, '$1')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[^\p{L}\p{N}'\s-]+/gu, ' ');
+    const out: string[] = [];
+    for (const token of cleaned.split(/\s+/)) {
+        let start = 0;
+        let end = token.length;
+        while (start < end && (token[start] === "'" || token[start] === '-')) {
+            start++;
+        }
+        while (end > start && (token[end - 1] === "'" || token[end - 1] === '-')) {
+            end--;
+        }
+        if (end > start) {
+            out.push(token.slice(start, end));
+        }
+    }
+    return out.join(' ');
 }
 
 /**
@@ -72,14 +84,27 @@ function roundCueSeconds(value: number): number {
  */
 export function CreateMJNarrationCues(table: NarrationCueTable): MJNarrationCues {
     const lines = table && table.Lines ? table.Lines : {};
-    const normalize = (text: string): string =>
-        String(text ?? '')
+    const normalize = (text: string): string => {
+        const cleaned = String(text ?? '')
             .toLowerCase()
             .replace(/[‘’]/g, "'")
-            .replace(/[^\p{L}\p{N}'\s-]+/gu, ' ')
-            .replace(/(^|\s)['-]+|['-]+(?=\s|$)/g, '$1')
-            .replace(/\s+/g, ' ')
-            .trim();
+            .replace(/[^\p{L}\p{N}'\s-]+/gu, ' ');
+        const out: string[] = [];
+        for (const token of cleaned.split(/\s+/)) {
+            let start = 0;
+            let end = token.length;
+            while (start < end && (token[start] === "'" || token[start] === '-')) {
+                start++;
+            }
+            while (end > start && (token[end - 1] === "'" || token[end - 1] === '-')) {
+                end--;
+            }
+            if (end > start) {
+                out.push(token.slice(start, end));
+            }
+        }
+        return out.join(' ');
+    };
     const findSpan = (lineKey: string, phrase: string, nth?: number): { Start: number; End: number } | null => {
         const line = lines[lineKey];
         if (!line) {
@@ -181,13 +206,40 @@ export function WithNarrationCues(
     return { ...bundle, Files: files, Assets: (bundle.Assets ?? []).map((asset) => ({ ...asset })) };
 }
 
+function hasScriptWithSrc(html: string, targetPath: string): boolean {
+    const lower = html.toLowerCase();
+    const target = targetPath.toLowerCase();
+    let idx = 0;
+    while ((idx = lower.indexOf('<script', idx)) !== -1) {
+        const afterTag = lower[idx + 7];
+        if (afterTag !== undefined && afterTag !== '>' && afterTag !== '/' && !/\s/.test(afterTag)) {
+            idx += 7;
+            continue;
+        }
+        const close = lower.indexOf('>', idx + 7);
+        if (close === -1) {
+            break;
+        }
+        const attrs = html.slice(idx + 7, close);
+        const match = /(?:^|\s)src\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
+        if (match) {
+            const rawSrc = (match[1] ?? match[2] ?? '').toLowerCase();
+            if (rawSrc === target || rawSrc === `./${target}` || rawSrc === `/${target}`) {
+                return true;
+            }
+        }
+        idx = close + 1;
+    }
+    return false;
+}
+
 /**
  * Inserts `MJ_NARRATION_CUES_SCRIPT_TAG` into `html` without adding a line: right after the opening
  * `<head>` tag, else immediately before the first `<script`, else at the start. Returns `html`
  * unchanged when it already loads the script.
  */
 export function InjectNarrationCuesScriptTag(html: string): string {
-    if (new RegExp(`<script\\b[^>]*\\bsrc\\s*=\\s*["']\\.?/?${MJ_NARRATION_CUES_PATH.replace(/[.]/g, '\\.')}["']`, 'i').test(html)) {
+    if (hasScriptWithSrc(html, MJ_NARRATION_CUES_PATH)) {
         return html;
     }
     const head = /<head\b[^>]*>/i.exec(html);

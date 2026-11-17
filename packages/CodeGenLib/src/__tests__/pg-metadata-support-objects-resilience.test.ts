@@ -208,7 +208,8 @@ describe('Fix 1 — pg_get_expr cannot abort the run on a retired OID', () => {
     it('the view still produces BOTH DefaultValue and ComputedColumnDefinition through the wrapper', () => {
         const view = columnsView();
         // the guard must not blank out legitimate defaults: both columns still render an expression
-        expect(view).toContain('__mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) AS "DefaultValue"');
+        // (a generated column reports NULL as its default, #6511; every other column goes through the wrapper)
+        expect(view).toContain('ELSE __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) END AS "DefaultValue"');
         expect(view).toMatch(
             /THEN __mj\."fnSafePGGetExpr"\(ad\.adbin, ad\.adrelid\) ELSE NULL END AS "ComputedColumnDefinition"/
         );

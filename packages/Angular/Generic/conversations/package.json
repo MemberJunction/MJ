@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:types": "tsc --noEmit -p tsconfig.spec.json",
-    "build": "ngc",
+    "build": "ngc && node scripts/build-edge-worker.mjs",
     "test:watch": "vitest"
   },
   "keywords": [],
@@ -21,6 +21,7 @@
     "@angular/compiler-cli": "21.2.22",
     "@fortawesome/fontawesome-free": "6.7.2",
     "@memberjunction/ng-test-utils": "6.3.0-edge.0",
+    "esbuild": "0.28.1",
     "sass": "^1.97.3",
     "vitest": "^4.0.18"
   },
@@ -38,6 +39,7 @@
     "@memberjunction/ai-core-plus": "6.3.0-edge.0",
     "@memberjunction/ai-engine-base": "6.3.0-edge.0",
     "@memberjunction/ai-realtime-client": "6.3.0-edge.0",
+    "@memberjunction/ai-vectors-memory": "6.3.0-edge.0",
     "@memberjunction/conversations-runtime": "6.3.0-edge.0",
     "@memberjunction/core": "6.3.0-edge.0",
     "@memberjunction/core-entities": "6.3.0-edge.0",
@@ -70,6 +72,9 @@
     "angular-split": "^20.0.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.3.1"
   },
   "sideEffects": false,
   "repository": {

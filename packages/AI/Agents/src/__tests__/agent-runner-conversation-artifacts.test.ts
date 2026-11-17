@@ -21,34 +21,51 @@ import type { ExecuteAgentParams, InputArtifact } from '@memberjunction/ai-core-
 const runViewCalls: Array<{ EntityName?: string; ExtraFilter?: string }> = [];
 let junctionVersionIds: string[] = [];
 let branchRows: Array<Record<string, unknown>> = [];
+let omitQueryArtifactId = false;
+let latestVersionRows: Array<{ ID: string; ArtifactID: string; VersionNumber: number }> = [];
 const runQueryCalls: Array<{ QueryName?: string }> = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class MockRunView {
+        public static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
+        async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
+            runViewCalls.push(params);
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return { Success: true, Results: branchRows };
+            }
+            if (params.EntityName === 'MJ: Conversation Details') {
+                return { Success: true, Results: [{ ID: 'detail-1' }] };
+            }
+            if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+                return { Success: true, Results: junctionVersionIds.map((v, i) => ({ ID: `j-${i}`, ArtifactVersionID: v })) };
+            }
+            if (params.EntityName === 'MJ: Artifacts') {
+                return { Success: true, Results: [{ ID: '00000000-0000-4000-8000-000000000001', UserID: '11111111-0001-4000-8000-000000000001' }] };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return { Success: true, Results: latestVersionRows };
+            }
+            return { Success: true, Results: [] };
+        }
+    }
     return {
         ...actual,
-        RunView: class {
-            async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
-                runViewCalls.push(params);
-                if (params.EntityName === 'MJ: Conversation Branches') {
-                    return { Success: true, Results: branchRows };
-                }
-                if (params.EntityName === 'MJ: Conversation Details') {
-                    return { Success: true, Results: [{ ID: 'detail-1' }] };
-                }
-                if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
-                    return { Success: true, Results: junctionVersionIds.map((v, i) => ({ ID: `j-${i}`, ArtifactVersionID: v })) };
-                }
-                return { Success: true, Results: [] };
-            }
-        },
+        RunView: MockRunView,
         RunQuery: class {
-            async RunQuery(params: { QueryName?: string }) {
+            async RunQuery(params: { QueryName?: string; Parameters?: { versionIds?: string[] } }) {
                 runQueryCalls.push(params);
+                const versionIds =
+                    Array.isArray(params.Parameters?.versionIds) && params.Parameters.versionIds.length > 0
+                        ? params.Parameters.versionIds
+                        : junctionVersionIds;
                 return {
                     Success: true,
-                    Results: junctionVersionIds.map((v) => ({
+                    Results: versionIds.map((v) => ({
                         VersionID: v,
+                        ...(omitQueryArtifactId ? {} : { ArtifactID: '00000000-0000-4000-8000-000000000001' }),
                         VersionName: `Artifact ${v}`,
                         ContentMode: 'Text',
                         FileID: null,
@@ -59,6 +76,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
                         TypeName: 'JSON',
                         ToolLibraryClass: null,
                         DefaultDeliveryMode: 'ToolsOnly',
+                        DefaultDeliveryMode_Fallback: 'ToolsOnly',
+                        VersionNumber: v === 'ver-3' ? 3 : 1,
                     })),
                 };
             }
@@ -77,7 +96,7 @@ interface HydrationBridge {
     hydrateConversationArtifacts(params: ExecuteAgentParams): Promise<ExecuteAgentParams>;
 }
 
-const USER = { ID: 'user-1', Email: 'it@example.com' } as unknown as UserInfo;
+const USER = { ID: '11111111-0001-4000-8000-000000000001', Email: 'it@example.com' } as unknown as UserInfo;
 
 /** Provider whose ConversationDetail load yields a fixed ConversationID. */
 function makeProvider(loadSucceeds = true): { provider: IMetadataProvider; loads: string[] } {
@@ -110,6 +129,7 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         runQueryCalls.length = 0;
         junctionVersionIds = ['ver-1'];
         branchRows = [];
+        omitQueryArtifactId = false;
     });
 
     it('hydrates inputArtifacts from conversationDetailId alone', async () => {
@@ -202,5 +222,30 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
 
         const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
         expect(detailScan?.ExtraFilter?.endsWith('AND [ReplacedAt] IS NULL')).toBe(true);
+    });
+
+    it('skips query rows that lack ArtifactID instead of bypassing CanRead (D3)', async () => {
+        omitQueryArtifactId = true;
+        const { provider } = makeProvider();
+        const result = await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        expect(result.inputArtifacts).toBeUndefined();
+    });
+
+    it('[P0-17] resolves latest MJ: Artifact Versions row for an ArtifactID even when conversation detail pins stale v1', async () => {
+        const artifactUuid = '00000000-0000-4000-8000-000000000001';
+        junctionVersionIds = ['ver-1'];
+        latestVersionRows = [{ ID: 'ver-3', ArtifactID: artifactUuid, VersionNumber: 3 }];
+        try {
+            const { provider } = makeProvider();
+            const result = await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+            const artifacts = result.inputArtifacts as InputArtifact[];
+            expect(artifacts).toHaveLength(1);
+            expect(artifacts[0].artifactId).toBe(artifactUuid);
+            expect(artifacts[0].versionId).toBe('ver-3');
+            expect(artifacts[0].versionNumber).toBe(3);
+        } finally {
+            latestVersionRows = [];
+        }
     });
 });

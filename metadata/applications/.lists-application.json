@@ -19,6 +19,13 @@
         "isDefault": true
       },
       {
+        "Label": "Refreshes",
+        "Icon": "fa-solid fa-rotate",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsRefreshesResource",
+        "isDefault": false
+      },
+      {
         "Label": "Operations",
         "Icon": "fa-solid fa-diagram-project",
         "ResourceType": "Custom",

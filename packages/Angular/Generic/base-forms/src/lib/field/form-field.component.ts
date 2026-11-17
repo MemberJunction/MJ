@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2, HostBinding} from '@angular/core';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly, DocumentNumberingEngine } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -930,9 +930,20 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     );
   }
 
-  /** Whether this field is required (not nullable) */
+  /**
+   * Whether this field is required (not nullable). A field an AutoNumber policy fills (#4001, the
+   * document numbering added in #6203) is not required on a new record: the number is assigned
+   * during Save(), and `BaseEntity.Validate()` already accepts it blank until then.
+   */
   get IsRequired(): boolean {
-    return this.FieldInfo?.AllowsNull === false;
+    if (this.FieldInfo?.AllowsNull !== false) return false;
+    return !this.IsAutoNumberedOnCreate;
+  }
+
+  /** True on a new (unsaved) record when an AutoNumber policy assigns this field during Save(). */
+  get IsAutoNumberedOnCreate(): boolean {
+    if (!this.Record || this.Record.IsSaved || !this.FieldName) return false;
+    return DocumentNumberingEngine.Instance.WillAutoPopulateOnCreate(this.Record.EntityInfo, this.FieldName);
   }
 
   /**

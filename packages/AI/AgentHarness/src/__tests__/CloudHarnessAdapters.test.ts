@@ -495,6 +495,53 @@ describe('AntigravityCliAdapter', () => {
             expect(exec.Runs[1]?.Spec.Args).toContain('--dangerously-skip-permissions');
         })();
     });
+
+    it('accumulates assistant-text chunks into turn-complete when result envelope has empty response', async () => {
+        const turnLines = [
+            JSON.stringify({ event: 'init', init: { model: 'gemini-4-hydrogen' } }),
+            JSON.stringify({
+                event: 'step_update',
+                step_update: {
+                    step_type: 'agent_response',
+                    state: 'ACTIVE',
+                    text_delta: 'Implemented feature waves and opened PR.',
+                },
+            }),
+            JSON.stringify({
+                event: 'step_update',
+                step_update: {
+                    step_type: 'agent_response',
+                    state: 'DONE',
+                    text_delta: ' PR link: https://github.com/MemberJunction/bizapps-planning/pull/5',
+                },
+            }),
+            JSON.stringify({
+                event: 'result',
+                result: {
+                    status: 'SUCCESS',
+                    response: '',
+                    usage: { input_tokens: 1500, output_tokens: 250 },
+                },
+            }),
+        ];
+
+        const exec = new MockCliSandboxExecutor([turnLines]);
+        const adapter = new AntigravityCliAdapter();
+        await adapter.StartSession({
+            Executor: exec,
+            WorkspacePath: '/ws',
+            Environment: { GEMINI_API_KEY: 'test-key' },
+        });
+
+        const events = await collectEvents(adapter.RunTurn('build epic'));
+        const turnComplete = events.find((e) => e.Type === 'turn-complete');
+        expect(turnComplete).toBeDefined();
+        if (turnComplete && turnComplete.Type === 'turn-complete') {
+            expect(turnComplete.RawText).toBe(
+                'Implemented feature waves and opened PR. PR link: https://github.com/MemberJunction/bizapps-planning/pull/5',
+            );
+        }
+    });
 });
 
 describe('AntigravityCloudAdapter — bounded-poll, adaptive-wake handoff & resume', () => {
@@ -604,7 +651,7 @@ describe('AntigravityCloudAdapter — bounded-poll, adaptive-wake handoff & resu
         expect(postReq.Headers['x-goog-api-key']).toBe('goog-key-123');
         const postBody = ParseCloudJsonObject(postReq.Body ?? '')!;
         expect(postBody.background).toBe(true);
-        expect(postBody.model).toBe('gemini-3.1-pro-preview');
+        expect(postBody.model).toBe('gemini-4-hydrogen-high');
         expect(postBody.system_instruction).toBe('Emit MJ Loop JSON.');
         expect(postBody.workspace).toEqual({
             repository_url: 'https://github.com/MemberJunction/MJ',

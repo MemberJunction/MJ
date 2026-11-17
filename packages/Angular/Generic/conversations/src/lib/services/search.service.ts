@@ -10,7 +10,8 @@ import {
   MJTaskEntity,
   MJArtifactEntity,
   MJArtifactVersionEntity,
-  ConversationEngine
+  ConversationEngine,
+  UserInfoEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -528,14 +529,28 @@ export class SearchService {
     const lowerQuery = query.toLowerCase();
 
     const ownerFilter = `OwnerID='${currentUser.ID}'`;
-    const permissionSubquery = `ID IN (
-      SELECT CollectionID
-      FROM [__mj].[vwCollectionPermissions]
-      WHERE UserID='${currentUser.ID}'
-    )`;
+    const permRes = await rv.RunView<{ CollectionID?: string | null }>(
+      {
+        EntityName: 'MJ: Collection Permissions',
+        ExtraFilter: `UserID='${currentUser.ID}'`,
+        Fields: ['CollectionID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+    const sharedIds = Array.from(
+      new Set(
+        (permRes.Success && permRes.Results ? permRes.Results : [])
+          .map((row) => (row.CollectionID ?? '').trim())
+          .filter((id) => id.length > 0)
+      )
+    );
+    const permissionClause = sharedIds.length > 0
+      ? ` OR ID IN (${sharedIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
+      : '';
 
     let filter = `EnvironmentID='${environmentId}'`;
-    filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    filter += ` AND (OwnerID IS NULL OR ${ownerFilter}${permissionClause})`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -577,8 +592,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // The same tasks the conversation workspace's tasks view shows.
-    let filter = await BuildConversationTasksFilter(this.Provider, currentUser);
+    // The same tasks the conversation workspace's tasks view shows (bypassing the 30s polling cache for explicit user searches).
+    let filter = await BuildConversationTasksFilter(this.Provider, currentUser, { bypassCache: true });
 
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
@@ -890,11 +905,11 @@ export class SearchService {
   }
 
   /**
-   * Load recent searches from localStorage
+   * Load recent searches from server-backed UserInfoEngine
    */
   private loadRecentSearches(): void {
     try {
-      const stored = localStorage.getItem('mj-recent-searches');
+      const stored = UserInfoEngine.Instance.GetSetting('mj-recent-searches');
       if (stored) {
         this.recentSearches = JSON.parse(stored);
       }
@@ -905,11 +920,11 @@ export class SearchService {
   }
 
   /**
-   * Save recent searches to localStorage
+   * Save recent searches via UserInfoEngine
    */
   private saveRecentSearches(): void {
     try {
-      localStorage.setItem('mj-recent-searches', JSON.stringify(this.recentSearches));
+      UserInfoEngine.Instance.SetSettingDebounced('mj-recent-searches', JSON.stringify(this.recentSearches));
     } catch (error) {
       console.error('Failed to save recent searches:', error);
     }

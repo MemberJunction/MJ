@@ -119,6 +119,9 @@ vi.mock('@memberjunction/ai', () => {
     GeneratedImage: MockGeneratedImage,
     BaseRealtimeModel: MockBaseRealtimeModel,
     BaseEmbeddings: class {},
+    // GeminiDecision (re-exported from ../index) extends these; this suite never calls them.
+    BaseDecision: class {},
+    BaseHostedSystemOneDecision: class {},
     NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
   };
 });

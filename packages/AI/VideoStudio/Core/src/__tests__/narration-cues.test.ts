@@ -93,12 +93,23 @@ describe('BuildNarrationCuesScript', () => {
 });
 
 describe('InjectNarrationCuesScriptTag / WithNarrationCues', () => {
-    it('injects after <head> without adding a line', () => {
+    it('injects after <head> without adding a line and skips existing ./ or / script tags', () => {
         const html = '<!doctype html>\n<html><head><title>t</title></head>\n<body></body></html>';
         const out = InjectNarrationCuesScriptTag(html);
         expect(out).toContain(`<head>${MJ_NARRATION_CUES_SCRIPT_TAG}<title>`);
         expect(out.split('\n').length).toBe(html.split('\n').length);
         expect(InjectNarrationCuesScriptTag(out)).toBe(out);
+        expect(InjectNarrationCuesScriptTag(`<html><head><script src="./${MJ_NARRATION_CUES_PATH}"></script></head></html>`))
+            .toBe(`<html><head><script src="./${MJ_NARRATION_CUES_PATH}"></script></head></html>`);
+        expect(InjectNarrationCuesScriptTag(`<html><head><SCRIPT type="module" src="/${MJ_NARRATION_CUES_PATH}"></SCRIPT></head></html>`))
+            .toBe(`<html><head><SCRIPT type="module" src="/${MJ_NARRATION_CUES_PATH}"></SCRIPT></head></html>`);
+    });
+
+    it('normalizes long apostrophe/hyphen runs in linear time without backtracking', () => {
+        const prefix = "'".repeat(50_000);
+        expect(NormalizeCueWord(`${prefix}hello-${prefix}`)).toBe("hello");
+        const cues = CreateMJNarrationCues(BuildNarrationCueTable(LINES));
+        expect(cues.Cue('line-1', `${prefix}future${prefix}`)).toBe(1.7);
     });
 
     it('injects before the first script when there is no head', () => {

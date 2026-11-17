@@ -497,8 +497,10 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   get ChildChain(): BaseEntity[] {
     if (!this.Record) return [];
     const chain: BaseEntity[] = [];
+    const visited = new Set<BaseEntity>([this.Record]);
     let current = this.Record.ISAChild;
-    while (current) {
+    while (current && !visited.has(current)) {
+      visited.add(current);
       chain.push(current);
       current = current.ISAChild;
     }

@@ -87,6 +87,7 @@ import {
     IsDiagnosticCaptureSuppressed,
     PostCommitTask,
     PostCommitToken,
+    PostCommitCoalesceMode,
     StripStopWords,
     DatabasePlatform,
     QueryExecutionSpec,
@@ -108,9 +109,11 @@ import {
     ServerOperationScopeManager,
     NormalizeRunViewParameters,
     CompositeFilterSQLCompiler,
+    IsPostRunViewProtectedEntity,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -204,6 +207,10 @@ interface PostCommitEntry {
     Description: string;
     /** Transaction frame that owns the entry (1 = outermost). */
     Depth: number;
+    /** Optional coalescing key deduplicated at outermost commit. */
+    CoalesceKey?: string;
+    /** Deduplication policy when multiple entries share `CoalesceKey`. */
+    CoalesceMode?: PostCommitCoalesceMode;
 }
 
 /** How one dataset item reads for the caller, or why it is refused. */
@@ -231,6 +238,15 @@ interface QueryResultCacheSlot {
     readonly Key: string;
     /** The slot of one page of it. */
     PageKey(params: RunQueryParams): string;
+}
+
+/**
+ * The values a field-level concurrency check compares, keyed by field name: what the caller
+ * believes the database holds for each changed field, and what the save writes.
+ */
+interface ConcurrencyCheckValues {
+    baselineValues: Record<string, unknown>;
+    newValues: Record<string, unknown>;
 }
 
 /** The output columns a run must drop for its caller, and the description they were chosen from. */
@@ -1200,8 +1216,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
             return true;
         }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        return this.runLockedConcurrencyCheck(entity, user, this.getEffectiveConcurrencyCheckMode(options), values, entityResult);
+    }
 
-        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+    protected override PrepareQueuedUpdateConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return null;
+        }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        if (Object.keys(values.baselineValues).length === 0) {
+            return null;
+        }
+        const mode = this.getEffectiveConcurrencyCheckMode(options);
+        return () => this.runLockedConcurrencyCheck(entity, user, mode, values, entityResult);
+    }
+
+    /**
+     * Collects, for each field the save changes, the value the caller believes the database holds
+     * (the `ConcurrencyBaseline` entry when one is supplied, otherwise the field's `OldValue`) and the
+     * value the save writes.
+     */
+    private collectConcurrencyCheckValues(entity: BaseEntity, options: EntitySaveOptions): ConcurrencyCheckValues {
         const baselineValues: Record<string, unknown> = {};
         const newValues: Record<string, unknown> = {};
 
@@ -1235,7 +1276,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 newValues[f.Name] = entityField.Value;
             }
         }
+        return { baselineValues, newValues };
+    }
 
+    /**
+     * Reads the stored values of the changed columns under a row lock held by the current
+     * transaction, and compares them with the caller's baseline. A conflict is logged; in
+     * `'enforce'` mode it also fails `entityResult` and returns `false`.
+     */
+    private async runLockedConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        effectiveMode: ConcurrencyCheckMode,
+        values: ConcurrencyCheckValues,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        const { baselineValues, newValues } = values;
         const columnsToRead = Object.keys(baselineValues);
         if (columnsToRead.length === 0) {
             return true;
@@ -1467,7 +1523,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: 'MJ: Record Geo Codes',
-            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
+            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${EscapeSQLString(recordId)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -2407,6 +2463,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.RestoreContext,
                 "'",
                 entity.CloneContext,
+                snapshotFromRow,
             );
             if (payload) {
                 // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
@@ -2692,7 +2749,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return false;
         }
 
-        const tokens = GenericDatabaseProvider.extractWhereIdentifierTokens(trimmed);
+        const tokens = GenericDatabaseProvider.extractWhereTokens(trimmed);
         if (tokens === null) {
             return false;
         }
@@ -2702,17 +2759,101 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 .filter(f => !f.IsVirtual)
                 .map(f => f.Name.toLowerCase())
         );
+        const virtualColumns = new Set(
+            entityInfo.Fields
+                .filter(f => f.IsVirtual)
+                .map(f => f.Name.toLowerCase())
+        );
+        const schemaLower = (entityInfo.SchemaName ?? '').trim().toLowerCase();
+        const baseTableLower = entityInfo.BaseTable.trim().toLowerCase();
+        const baseViewLower = (entityInfo.BaseView ?? '').trim().toLowerCase();
 
-        for (const token of tokens) {
-            if (GenericDatabaseProvider._forbiddenCountKeywords.has(token)) {
-                return false;
+        let parenDepth = 0;
+        const subqueryStartDepths: number[] = [];
+
+        for (let idx = 0; idx < tokens.length; idx++) {
+            const t = tokens[idx];
+            if (t.kind === 'lparen') {
+                parenDepth++;
+                const next = tokens[idx + 1];
+                if (next && next.kind === 'ident' && (next.value === 'select' || next.value === 'with')) {
+                    subqueryStartDepths.push(parenDepth);
+                }
+                continue;
             }
-            if (!GenericDatabaseProvider._allowedCountKeywords.has(token) && !physicalColumns.has(token)) {
+            if (t.kind === 'rparen') {
+                if (parenDepth === 0) {
+                    return false;
+                }
+                if (subqueryStartDepths.length > 0 && subqueryStartDepths[subqueryStartDepths.length - 1] === parenDepth) {
+                    subqueryStartDepths.pop();
+                }
+                parenDepth--;
+                continue;
+            }
+            if (t.kind !== 'ident' && t.kind !== 'quoted') {
+                continue;
+            }
+
+            const inSubquery = subqueryStartDepths.length > 0;
+            const prev = tokens[idx - 1];
+            const next = tokens[idx + 1];
+            const isAfterDot = prev?.kind === 'dot';
+            const isBeforeDot = next?.kind === 'dot';
+
+            if (inSubquery) {
+                if (baseViewLower && t.value === baseViewLower) {
+                    return false;
+                }
+                if (!isAfterDot && !isBeforeDot && next?.kind !== 'lparen' &&
+                    virtualColumns.has(t.value) && !physicalColumns.has(t.value)) {
+                    return false;
+                }
+                continue;
+            }
+
+            // Outer WHERE level: forbid joins/set-ops/bare SELECT; allow EXISTS (SELECT ...)
+            if (t.kind === 'ident') {
+                if (t.value === 'exists') {
+                    const afterParen = tokens[idx + 2];
+                    if (next?.kind === 'lparen' && afterParen?.kind === 'ident' &&
+                        (afterParen.value === 'select' || afterParen.value === 'with')) {
+                        continue;
+                    }
+                    return false;
+                }
+                if (GenericDatabaseProvider._forbiddenCountKeywords.has(t.value)) {
+                    return false;
+                }
+            }
+
+            if (isBeforeDot) {
+                const isBaseTableQualifier = t.value === baseTableLower;
+                const isSchemaForBaseTable = Boolean(schemaLower) && t.value === schemaLower &&
+                    (tokens[idx + 2]?.kind === 'ident' || tokens[idx + 2]?.kind === 'quoted') &&
+                    tokens[idx + 2].value === baseTableLower;
+                if (!isBaseTableQualifier && !isSchemaForBaseTable) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (isAfterDot) {
+                if (t.value !== baseTableLower && !physicalColumns.has(t.value)) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (t.kind === 'ident' && GenericDatabaseProvider._allowedCountKeywords.has(t.value)) {
+                continue;
+            }
+            if (!physicalColumns.has(t.value)) {
                 return false;
             }
         }
 
-        return true;
+        return parenDepth === 0;
     }
 
     private static readonly _forbiddenCountKeywords = new Set([
@@ -2724,22 +2865,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         'true', 'false', 'asc', 'desc', 'cast', 'convert', 'coalesce', 'isnull', 'nullif',
         'lower', 'upper', 'ltrim', 'rtrim', 'trim', 'len', 'length',
         'getdate', 'getutcdate', 'sysdatetime', 'sysutcdatetime', 'now', 'current_timestamp', 'current_date',
-        'dateadd', 'datediff', 'year', 'month', 'day',
+        'dateadd', 'datediff', 'year', 'month', 'day', 'hour', 'minute', 'second',
+        'at', 'time', 'zone', 'interval', 'extract', 'date_trunc', 'date_part', 'epoch',
         'as', 'case', 'when', 'then', 'else', 'end', 'where',
         'int', 'integer', 'bigint', 'smallint', 'tinyint',
         'varchar', 'nvarchar', 'char', 'nchar', 'text',
-        'date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'decimal', 'numeric',
+        'date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'timestamptz', 'decimal', 'numeric',
         'float', 'real', 'bit', 'boolean', 'uuid', 'uniqueidentifier', 'max',
     ]);
 
     /**
      * Linear O(N) character scanner (zero regexes — immune to ReDoS) that strips single-quoted
-     * SQL string literals and `@p` / `$n` parameter placeholders, extracts all bracketed `[Col]`,
-     * double-quoted `"Col"`, and bare identifier tokens (lowercased), and returns `null` if an
+     * SQL string literals and `@p` / `$n` parameter placeholders, tokenizes bracketed `[Col]`,
+     * double-quoted `"Col"`, bare identifiers, parentheses, and dots, and returns `null` if an
      * unclosed quote/bracket or comment token (`--`, `/*`) is encountered.
      */
-    private static extractWhereIdentifierTokens(sql: string): string[] | null {
-        const tokens: string[] = [];
+    private static extractWhereTokens(
+        sql: string,
+    ): Array<{ kind: 'ident' | 'quoted' | 'lparen' | 'rparen' | 'dot' | 'other'; value: string }> | null {
+        const tokens: Array<{ kind: 'ident' | 'quoted' | 'lparen' | 'rparen' | 'dot' | 'other'; value: string }> = [];
         const len = sql.length;
         let i = 0;
 
@@ -2775,6 +2919,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     i++;
                 }
                 if (!closed) return null;
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2795,6 +2940,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     i++;
                 }
                 if (!closed) return null;
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2804,6 +2950,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isIdentPart(sql.charCodeAt(i))) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2813,6 +2960,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isDigit(sql.charCodeAt(i))) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2823,7 +2971,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (end === -1) return null;
                 const ident = sql.slice(start, end).trim().toLowerCase();
                 if (ident.length > 0) {
-                    tokens.push(ident);
+                    tokens.push({ kind: 'quoted', value: ident });
                 }
                 i = end + 1;
                 continue;
@@ -2836,7 +2984,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (end === -1) return null;
                 const ident = sql.slice(start, end).trim().toLowerCase();
                 if (ident.length > 0) {
-                    tokens.push(ident);
+                    tokens.push({ kind: 'quoted', value: ident });
                 }
                 i = end + 1;
                 continue;
@@ -2848,6 +2996,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && (isIdentPart(sql.charCodeAt(i)) || sql.charCodeAt(i) === 46)) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2858,8 +3007,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isIdentPart(sql.charCodeAt(i))) {
                     i++;
                 }
-                tokens.push(sql.slice(start, i).toLowerCase());
+                tokens.push({ kind: 'ident', value: sql.slice(start, i).toLowerCase() });
                 continue;
+            }
+
+            if (code === 40) {
+                tokens.push({ kind: 'lparen', value: '(' });
+            } else if (code === 41) {
+                tokens.push({ kind: 'rparen', value: ')' });
+            } else if (code === 46) {
+                tokens.push({ kind: 'dot', value: '.' });
+            } else if (code > 32) {
+                tokens.push({ kind: 'other', value: sql[i] });
             }
 
             i++;
@@ -3734,10 +3893,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             } else {
                 entityInfo = this.EntityByID(viewEntity!.EntityID) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
+                if (typeof params.EntityName === 'string' && params.EntityName.trim().length > 0) {
+                    const requestedEntity = this.EntityByName(params.EntityName.trim());
+                    if (!requestedEntity || !UUIDsEqual(requestedEntity.ID, entityInfo.ID)) {
+                        throw new Error(
+                            `EntityName '${params.EntityName}' does not match view '${viewEntity.Name ?? viewEntity.ID}' target entity '${entityInfo.Name}'.`
+                        );
+                    }
+                }
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
             resolvedEntity = entityInfo;
+
+            if (
+                params.Aggregates &&
+                params.Aggregates.length > 0 &&
+                this.IsPostRunViewProtectedEntity(entityInfo.Name) &&
+                !this.isSystemCaller(user)
+            ) {
+                throw new Error(
+                    `Access denied: aggregate queries are not allowed on PostRunView-protected entity '${entityInfo.Name}' because PostRunView hooks cannot filter SQL aggregates.`
+                );
+            }
 
             // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
             const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
@@ -4275,6 +4453,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ErrorMessage: e instanceof Error ? e.message : String(e),
             } as RunViewResult<T>;
         }
+    }
+
+    /** Returns true when `entityName` is registered as requiring PostRunView row-level ACL hooks. */
+    protected IsPostRunViewProtectedEntity(entityName: string): boolean {
+        return IsPostRunViewProtectedEntity(entityName);
+    }
+
+    /** Returns true when `user` represents the trusted internal server system identity. */
+    protected isSystemCaller(user?: UserInfo): boolean {
+        if (!user) {
+            return false;
+        }
+        return IsSystemUser(user) || WellKnownUserSource.Instance.IsSystemUser(user);
     }
 
     /** The stored view a run names (ViewEntity, else ViewID, else ViewName), or null for an entity run. */
@@ -5272,7 +5463,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: gateRejection });
                     continue;
                 }
-                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
+                const entityInfo = item.params.EntityName
+                    ? this.EntityByName(item.params.EntityName)
+                    : (item.params.ViewEntity && (item.params.ViewEntity as MJUserViewEntityExtended).EntityID
+                        ? this.EntityByID((item.params.ViewEntity as MJUserViewEntityExtended).EntityID)
+                        : undefined);
                 // Read-permission gate for EVERY item whose entity is known, before any leg can answer:
                 // an item with no cache status, and an external entity, are served from the server cache
                 // on a hit WITHOUT re-entering InternalRunView, so a CanRead check that lived only on the
@@ -5281,6 +5476,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     const permissionError = this.readPermissionError(entityInfo, user);
                     if (permissionError !== null) {
                         errorResults.push({ viewIndex: i, status: 'error', errorMessage: permissionError });
+                        continue;
+                    }
+                    if (
+                        item.params.Aggregates &&
+                        item.params.Aggregates.length > 0 &&
+                        this.IsPostRunViewProtectedEntity(entityInfo.Name) &&
+                        !this.isSystemCaller(user)
+                    ) {
+                        errorResults.push({
+                            viewIndex: i,
+                            status: 'error',
+                            errorMessage: `Access denied: aggregate queries are not allowed on PostRunView-protected entity '${entityInfo.Name}' because PostRunView hooks cannot filter SQL aggregates.`,
+                        });
                         continue;
                     }
                 }
@@ -5307,12 +5515,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
+                // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView
+                // hooks driven by sibling permission tables (e.g., ArtifactPermission / CollectionPermission).
+                // Global COUNT(*)/MAX(__mj_UpdatedAt) checks cannot detect ACL revocations on sibling tables,
+                // so never return status: 'current'; always run the full query + PostRunView hook.
+                if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
                 itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits when within freshness window)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
             const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
+            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
             const serverCacheMissItems: Array<{
                 index: number;
                 item: RunViewWithCacheCheckParams;
@@ -5335,6 +5553,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             serverCached: resolved.serverCached,
                             fingerprint: resolved.fingerprint,
                         });
+                    } else if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                        // PostRunView-protected entities bypass differential / cached delta transport and run full query + PostRunView.
+                        staleItemsNoTracking.push({ index, params: item.params });
                     } else if (entityInfo.TrackRecordChanges) {
                         // The client's copy is older and the entity tracks record changes: Phase 2 reads
                         // the DB status and sends only the changed rows, not the full cached copy.
@@ -5355,7 +5576,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 clientMaxUpdatedAt: string; clientRowCount: number;
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
-            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
             /** Queues a differential reply: the rows changed since the client's copy, and the deleted IDs. */
             const queueDifferential = (
                 index: number,
@@ -5423,9 +5643,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         if (this.isCacheCurrent(cachedSlotStatus, serverStatus)) {
                             // Server cache slot is confirmed current against SQL — refresh its verification timestamp in O(1)
                             LocalCacheManager.Instance.TouchRunViewResultVerifiedAt(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
+                            } else if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                                staleItemsNoTracking.push({ index, params: item.params });
                             } else if (entityInfo.TrackRecordChanges) {
                                 queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                             } else {
@@ -5438,7 +5660,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             // Evict the stale server slot and refresh from DB so LocalCacheManager and the client self-heal.
                             LogStatusEx({ message: `    ♻️ [SmartCache RECONCILE-EVICT] "${entityLabel}" — server cache slot disagreed with DB status; invalidating and refreshing from DB`, verboseOnly: true });
                             await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 currentResults.push({ viewIndex: index, status: 'current' });
                             } else {
                                 staleItemsNoTracking.push({ index, params: item.params });
@@ -5447,13 +5669,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         }
                     }
 
-                    if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                    if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
-                    } else if (entityInfo.TrackRecordChanges) {
+                    } else if (entityInfo.TrackRecordChanges && !this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
                         queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                     } else {
-                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
+                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking or PostRunView-protected)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
                     }
                 }
@@ -5593,6 +5815,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 );
                 if (hooked && Array.isArray(hooked.Results)) {
                     rowBearing.results = hooked.Results as T[];
+                    if (typeof hooked.TotalRowCount === 'number') {
+                        rowBearing.rowCount = hooked.TotalRowCount;
+                    } else {
+                        rowBearing.rowCount = hooked.Results.length;
+                    }
                 }
             }
 
@@ -6026,6 +6253,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         | null
     > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
+        if (item.params.EntityName && this.IsPostRunViewProtectedEntity(item.params.EntityName)) {
+            return null;
+        }
         if (!this.runViewCacheEligible(item.params) || this.cacheDeniedForViewOnlyRequest(item.params, contextUser)) {
             return null;
         }
@@ -6103,7 +6333,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             true,
         );
         const results = callerFields
-            ? ProjectRowsToFields(materialized, callerFields)
+            ? ProjectRowsToFields(materialized, callerFields, { PreserveFrozen: true })
             : materialized;
         return {
             viewIndex,
@@ -6137,6 +6367,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         queryParameters?: NamedQueryParameter[],
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
+            if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                return await this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
+            }
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
                 // Unparseable client timestamp — can't trust the differential math; fall
@@ -6577,9 +6810,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   refusal echoes it and nothing else. The query's ID when omitted.
      * @throws Error if the user does not have permission to run the query
      */
+    private static readonly RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS = new Set<string>([
+        '34d2d4d2-c727-4366-996f-3aaf87fc103e', // GetArtifactVersionsByID
+        '8f84dfb4-c38e-4b8d-80e7-9ccf30039e77', // GetConversationComplete
+        'ee272535-9d1d-4e4b-8613-1332cb564501', // GetConversationArtifactsMap
+        'a1b2c3d4-e5f6-4789-abcd-123456789abc', // GetConversationArtifactsForAgent
+    ]);
+
+    private static isMagicLinkRestrictedArtifactQuery(query: MJQueryEntityExtended, user: UserInfo | undefined): boolean {
+        if (!user || (!user.IsMagicLinkAnonymous && !user.MagicLinkScope)) {
+            return false;
+        }
+        if (query.ID && GenericDatabaseProvider.RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS.has(NormalizeUUID(query.ID))) {
+            return true;
+        }
+        const normalized = (query.Name ?? '').trim().toLowerCase();
+        return (
+            normalized === 'getartifactversionsbyid' ||
+            normalized === 'getconversationcomplete' ||
+            normalized === 'getconversationartifactsmap' ||
+            normalized === 'getconversationartifactsforagent'
+        );
+    }
+
     protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo, requestedLabel: string = query.ID): void {
         const user = contextUser || this.CurrentUser;
         if (user) {
+            if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+                this.logQueryRunRefusal(query, user, { deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] });
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
+            }
             const result = query.UserCanRun(user);
             if (!result.canRun) {
                 // This gate, not the rendered-SQL one, is where a role-list denial lands: it
@@ -6800,6 +7060,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         logRefusal = true,
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string; needsColumnFiltering?: boolean } {
+        if (GenericDatabaseProvider.isMagicLinkRestrictedArtifactQuery(query, user)) {
+            const refusal = { canRun: false, deniedEntities: ['MJ: Artifacts', 'MJ: Conversations'] };
+            if (logRefusal) {
+                this.logQueryRunRefusal(query, user, refusal);
+            }
+            return refusal;
+        }
         const base = query.UserCanRun(user);
         if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
             // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has
@@ -8330,10 +8597,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${this.RenderPrimaryKeyLiteral(pk, val.Value, entityInfo.Name)}`;
         }).join(' AND ');
+    }
+
+    /**
+     * A primary key value as a SQL literal: quoted with embedded quotes escaped, or a plain number
+     * for a key that takes no quotes. These statements are built as text, and a key value can come
+     * from the client, so an unquoted value that isn't a number throws.
+     */
+    protected RenderPrimaryKeyLiteral(field: EntityFieldInfo | undefined, value: unknown, entityName: string): string {
+        return this.RenderKeyLiteral(value, field?.NeedsQuotes ?? false, field?.Name, entityName);
+    }
+
+    /**
+     * {@link RenderPrimaryKeyLiteral} for a caller that has the key's quoting rule but not its field.
+     */
+    protected RenderKeyLiteral(value: unknown, needsQuotes: boolean, fieldName: string | undefined, entityName: string): string {
+        if (needsQuotes) {
+            return `'${String(value).replace(/'/g, "''")}'`;
+        }
+        const raw = String(value);
+        if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+            throw new Error(`Invalid non-numeric value provided for numeric key field ${fieldName} on entity ${entityName}`);
+        }
+        return raw;
     }
 
     /**
@@ -8493,9 +8781,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (user && !relEntityInfo.GetUserPermisions(user)?.CanRead) {
             return null;
         }
-        const quotes = pkNeedsQuotes ? "'" : '';
-        const safeValue = pkNeedsQuotes ? String(pkValue).replace(/'/g, "''") : String(pkValue);
-        const keyLiteral = `${quotes}${safeValue}${quotes}`;
+        const keyLiteral = this.RenderKeyLiteral(pkValue, pkNeedsQuotes, relInfo.RelatedEntityJoinField, relEntityInfo.Name);
         const rowFilter = user ? relEntityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '') : '';
         const relatedView = this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView);
 
@@ -8533,14 +8819,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
-            const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes, mirroring the Load()-by-PK path above. The PK
-            // value can be CLIENT-SUPPLIED here (the update resolver loads OldValues from the
-            // client for entities without record tracking), and this method's only job is an
-            // authorization decision — an unescaped quote lets a crafted PK make the COUNT(*)
-            // pass RLS on rows the caller cannot see.
-            const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
-            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
+            // Rendered as on the Load()-by-PK path above. The PK value can be CLIENT-SUPPLIED here
+            // (the update resolver loads OldValues from the client for entities without record
+            // tracking), and this method's only job is an authorization decision — a crafted PK
+            // must not make the COUNT(*) pass RLS on rows the caller cannot see.
+            return `${this.QuoteIdentifier(pk.Name)}=${this.RenderPrimaryKeyLiteral(fieldInfo, pk.Value, entityInfo.Name)}`;
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
@@ -10095,6 +10378,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Savepoint- and token-aware coalesced post-commit scheduling.
+     *
+     * Entries recorded inside an open transaction retain their owning depth so savepoint rollbacks
+     * drop rolled-back registrations without touching earlier frames' registrations under the same
+     * key; surviving entries deduplicate once at outermost commit (`'last-wins'` or `'first-wins'`).
+     */
+    public override ScheduleAfterCommit(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string = 'post-commit task',
+        token?: PostCommitToken,
+        mode: PostCommitCoalesceMode = 'last-wins',
+    ): void {
+        if (!coalesceKey) {
+            this.RunAfterCommit(task, description, token);
+            return;
+        }
+        if (token) {
+            this.registerPostCommitTaskWithToken(task, description, token, coalesceKey, mode);
+            return;
+        }
+        if (!this.IsCallerInAmbientTransaction()) {
+            this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, mode);
+            return;
+        }
+        this._postCommitTasks.push({
+            Task: task,
+            Description: description,
+            Depth: this._transactionDepth,
+            CoalesceKey: coalesceKey,
+            CoalesceMode: mode,
+        });
+    }
+
+    protected override ExecuteDetachedPostCommitTask(task: PostCommitTask, description: string): void {
+        this.runDetachedTask(task, description);
+    }
+
+    /**
      * Snapshot of the caller's transaction frames. Synchronous, and never `undefined` on this
      * provider: outside a transaction it returns a token whose epoch is `null`, which says the work
      * is already durable rather than saying nothing. See
@@ -10109,14 +10431,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return this._frameTracker.Capture();
     }
 
-    private registerPostCommitTaskWithToken(task: PostCommitTask, description: string, token: PostCommitToken): void {
+    private registerPostCommitTaskWithToken(
+        task: PostCommitTask,
+        description: string,
+        token: PostCommitToken,
+        coalesceKey?: string,
+        coalesceMode?: PostCommitCoalesceMode,
+    ): void {
         const resolution = this._frameTracker.Resolve(token, this._doomed);
         switch (resolution.Kind) {
             case 'run':
-                this.runDetachedTask(task, description);
+                if (coalesceKey) {
+                    this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, coalesceMode ?? 'last-wins');
+                } else {
+                    this.runDetachedTask(task, description);
+                }
                 return;
             case 'queue':
-                this._postCommitTasks.push({ Task: task, Description: description, Depth: resolution.Depth });
+                this._postCommitTasks.push({
+                    Task: task,
+                    Description: description,
+                    Depth: resolution.Depth,
+                    ...(coalesceKey ? { CoalesceKey: coalesceKey, CoalesceMode: coalesceMode ?? 'last-wins' } : {}),
+                });
                 return;
             case 'drop':
                 if (resolution.Unknown) {
@@ -10156,14 +10493,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
     private async runPostCommitTasks(tasks: PostCommitEntry[]): Promise<void> {
-        if (tasks.length === 0) {
+        const effectiveTasks = this.coalescePostCommitTasks(tasks);
+        if (effectiveTasks.length === 0) {
             return;
         }
-        LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
-        for (const entry of tasks) {
+        LogStatus(`Running ${effectiveTasks.length} post-commit task(s) after transaction commit`);
+        for (const entry of effectiveTasks) {
             // Detached from the committer's (now stale) membership explicitly, not merely by epoch mismatch.
             await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
+    }
+
+    /** Deduplicates entries sharing a `CoalesceKey` after savepoint rollbacks have already been pruned. */
+    private coalescePostCommitTasks(tasks: PostCommitEntry[]): PostCommitEntry[] {
+        let hasCoalesced = false;
+        const winnerIndex = new Map<string, number>();
+        for (let i = 0; i < tasks.length; i++) {
+            const entry = tasks[i];
+            if (!entry.CoalesceKey) {
+                continue;
+            }
+            hasCoalesced = true;
+            if ((entry.CoalesceMode ?? 'last-wins') === 'first-wins') {
+                if (!winnerIndex.has(entry.CoalesceKey)) {
+                    winnerIndex.set(entry.CoalesceKey, i);
+                }
+            } else {
+                winnerIndex.set(entry.CoalesceKey, i);
+            }
+        }
+        if (!hasCoalesced) {
+            return tasks;
+        }
+        return tasks.filter((entry, idx) => !entry.CoalesceKey || winnerIndex.get(entry.CoalesceKey) === idx);
     }
 
     /** Detach the whole queue (outermost commit succeeded). */

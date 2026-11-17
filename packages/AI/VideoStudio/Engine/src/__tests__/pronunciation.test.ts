@@ -19,6 +19,15 @@ describe('ParsePronunciationNotes', () => {
         expect(parsed.IgnoredLines).toEqual(['# comment', 'Say "Skip" with a short i.', '=> nothing']);
         expect(ParsePronunciationNotes(undefined)).toEqual({ Rules: [], IgnoredLines: [] });
     });
+
+    it('ignores multi-arrow lines and handles long whitespace/punctuation runs linearly', () => {
+        const spaces = ' '.repeat(50_000);
+        const punct = '!'.repeat(50_000);
+        const parsed = ParsePronunciationNotes(`A => B => C\nfoo${spaces}\n`);
+        expect(parsed.Rules).toEqual([]);
+        expect(parsed.IgnoredLines).toEqual(['A => B => C', 'foo']);
+        expect(NormalizeNarrationText(`word${punct}`).SpokenText).toBe(`word${punct}`);
+    });
 });
 
 describe('NormalizeNarrationText', () => {

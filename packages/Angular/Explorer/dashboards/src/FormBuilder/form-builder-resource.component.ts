@@ -1583,10 +1583,30 @@ export class FormBuilderResourceComponent
      * (the cockpit is form-authoring focused, not the right surface to
      * render arbitrary artifacts inline).
      */
-    public OnChatArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): void {
-        const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-        const paramKey = event.type === 'conversation' ? 'conversationId' : 'collectionId';
-        void this.navigationService.OpenNavItemByName(navItemName, { [paramKey]: event.id });
+    public async OnChatArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): Promise<void> {
+        if (event.type === 'conversation') {
+            await this.navigationService.OpenNavItemByName(
+                'Conversations',
+                { conversationId: event.id },
+                undefined,
+                { queryParams: { conversationId: event.id } }
+            );
+            return;
+        }
+        const opened = await this.navigationService.OpenNavItemByName(
+            'Library',
+            { collectionId: event.id },
+            undefined,
+            { queryParams: { collectionId: event.id } }
+        );
+        if (!opened) {
+            await this.navigationService.OpenNavItemByName(
+                'Collections',
+                { collectionId: event.id },
+                undefined,
+                { queryParams: { collectionId: event.id } }
+            );
+        }
     }
 
     /** Chat-area emitted `conversationRenamed` — purely informational for the cockpit (no convo list to animate). */

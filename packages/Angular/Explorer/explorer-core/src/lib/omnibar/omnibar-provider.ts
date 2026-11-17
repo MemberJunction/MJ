@@ -19,7 +19,8 @@ export type OmnibarNavPayload =
     | { kind: 'entity-list'; entityName: string }
     | { kind: 'agent'; agentName: string }
     | { kind: 'file'; fileName: string; rawMetadata?: string }
-    | { kind: 'dashboard'; dashboardId: string; dashboardName: string };
+    | { kind: 'dashboard'; dashboardId: string; dashboardName: string }
+    | { kind: 'view'; viewId: string; viewName: string };
 
 /** Key under which the nav payload rides in `MentionSuggestion.data`. */
 export const OMNIBAR_NAV_KEY = 'nav';
@@ -41,6 +42,8 @@ export interface OmnibarContext {
     Apps?: ApplicationManager;
     PaletteService?: CommandPaletteService;
     Navigation?: NavigationService;
+    /** When true, providers run local/offline search only with zero PreviewSearch GraphQL calls. */
+    OfflineOnly?: boolean;
 }
 
 /**

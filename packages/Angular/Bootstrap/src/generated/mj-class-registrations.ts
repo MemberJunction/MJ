@@ -36,20 +36,24 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (500 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -156,12 +160,14 @@ import {
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
@@ -525,11 +531,13 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -623,7 +631,7 @@ import {
     FieldSuggestionCardComponent,
 } from '@memberjunction/ng-base-forms';
 
-// @memberjunction/ng-artifacts (15 classes)
+// @memberjunction/ng-artifacts (17 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -636,15 +644,18 @@ import {
     MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-conversations (13 classes)
+// @memberjunction/ng-conversations (14 classes)
 import {
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -771,7 +782,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (120 classes)
+// @memberjunction/ng-dashboards (122 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -827,6 +838,7 @@ import {
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
+    HealthObservatoryComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -836,6 +848,7 @@ import {
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
+    ListsRefreshesResource,
     ListsSharedWithMeResource,
     LoginStudioResourceComponent,
     MCPDashboardComponent,
@@ -895,13 +908,15 @@ import {
     WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (14 classes)
+// @memberjunction/ng-explorer-core (16 classes)
 import {
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -940,13 +955,17 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -1053,12 +1072,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
@@ -1116,16 +1137,16 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationBranchEntity,
     MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
@@ -1320,16 +1341,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
@@ -1430,11 +1451,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -1485,11 +1508,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1519,6 +1545,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SqlLoggingComponent,
     UserManagementComponent,
     RubricEngineBase,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
@@ -1530,10 +1560,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
     ConversationHeaderPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ConversationOverviewPanel,
     DashboardCategoryHierarchyPanel,
     EmployeeHeaderPanel,
@@ -1652,6 +1678,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
+    HealthObservatoryComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -1661,6 +1688,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
+    ListsRefreshesResource,
     ListsSharedWithMeResource,
     LoginStudioResourceComponent,
     MCPDashboardComponent,
@@ -1719,10 +1747,16 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1740,13 +1774,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ...CLASS_REGISTRATIONS_1,
     ...CLASS_REGISTRATIONS_2,
     ...CLASS_REGISTRATIONS_3,
+    ...CLASS_REGISTRATIONS_4,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 798;
+export const CLASS_REGISTRATIONS_COUNT = 813;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

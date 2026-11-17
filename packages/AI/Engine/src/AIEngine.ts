@@ -9,7 +9,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          EmbeddingInputType,
          ApplyEmbeddingInputPrefix} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
-import { AIModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, DecisionCalibrationEntry, PlattCalibration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
@@ -37,7 +37,7 @@ import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@member
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, type DecisionAnsweringModel, type DecisionCalibrationKey } from "@memberjunction/ai-core-plus";
 
 
 /**
@@ -360,6 +360,30 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
         return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
+
+    /**
+     * Every Platt calibration declared for a decision model. See
+     * {@link AIEngineBase.GetDecisionCalibrations}.
+     */
+    public GetDecisionCalibrations(modelName: string): readonly DecisionCalibrationEntry[] {
+        return this.Base.GetDecisionCalibrations(modelName);
+    }
+
+    /**
+     * The calibration fitted for this use and question on the exact model that answered, or null. See
+     * {@link AIEngineBase.FindDecisionCalibration}.
+     */
+    public FindDecisionCalibration(key: DecisionCalibrationKey, answeredBy: DecisionAnsweringModel): PlattCalibration | null {
+        return this.Base.FindDecisionCalibration(key, answeredBy);
+    }
+
+    /**
+     * A raw probability calibrated for the model that answered, or null. See
+     * {@link AIEngineBase.CalibrateDecisionProbability}.
+     */
+    public CalibrateDecisionProbability(key: DecisionCalibrationKey, probability: number, answeredBy: DecisionAnsweringModel): number | null {
+        return this.Base.CalibrateDecisionProbability(key, probability, answeredBy);
     }
 
     // Modality helper methods - delegated from AIEngineBase
@@ -1344,6 +1368,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
 
     /**
+     * Checks whether `service` holds at least one candidate matching `filter` before running
+     * an embedding model call. Fails open (`true`) for minimal test doubles that omit `HasMatching`.
+     */
+    private hasMatchingVectorCandidate<TMetadata>(
+        service: SimpleVectorService<TMetadata>,
+        filter: (metadata: TMetadata) => boolean
+    ): boolean {
+        if (typeof service.HasMatching === 'function') {
+            return service.HasMatching(filter);
+        }
+        return true;
+    }
+
+    /**
      * Find notes similar to query text using semantic search.
      * Falls back to returning notes from cache if vector service is unavailable.
      */
@@ -1366,13 +1404,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
+        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
+        if (!this.hasMatchingVectorCandidate(this._noteVectorService, composedFilter)) {
+            return [];
+        }
+
         const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
-
-        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
         // Async: on a server the scan runs off the event loop (worker pool / native backend)
         const results = await this._noteVectorService.FindNearestAsync(
@@ -1480,13 +1521,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
+        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
+        if (!this.hasMatchingVectorCandidate(this._exampleVectorService, composedFilter)) {
+            return [];
+        }
+
         const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
-
-        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
         const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
