@@ -8210,6 +8210,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.resetArtifactPaneSizing();
     void this.remoteBrowser?.Close();
     this.standbyPreparedConversationId = null;
+    this.prepareStandbyRemoteBrowser(this.ConversationId);
     this.cdr.detectChanges();
   }
 

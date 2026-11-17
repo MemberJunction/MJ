@@ -116,6 +116,7 @@ describe('chat area: conversation browser lifecycle', () => {
     open['resetArtifactPaneSizing'] = vi.fn();
 
     const serverCalls: Array<{ query: string; variables: Record<string, unknown> }> = [];
+    component['prepareStandbyRemoteBrowser'](component.ConversationId);
     const controller = (
       component as unknown as {
         ensureRemoteBrowser(): {
