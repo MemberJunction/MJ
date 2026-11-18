@@ -138,16 +138,11 @@ graph LR
 
 ## Public Pages
 
-Open Apps can ship pages that visitors open before sign-in, at `/p/<slug>` (see [`@memberjunction/ng-public-host`](../Angular/Explorer/public-host/README.md)). `npm run build` makes two builds:
+Open Apps can ship pages that visitors open before sign-in, at `/p/<slug>` (see [`@memberjunction/ng-public-host`](../Angular/Explorer/public-host/README.md)). `src/main.ts` checks the address first: for a `/p/` address it starts the small public host, not Explorer.
 
-| Build | Output | What it serves |
-|---|---|---|
-| Explorer (`MJExplorer` project) | `dist/MJExplorer/browser/` | Explorer. Its `main.ts` also shows a public page when it receives a `/p/` address |
-| Public (`MJPublicPages` project, `src-public/`) | `dist/MJExplorer/browser/public-host/` | Only public pages: no Explorer code, no zone.js, no files from other sites |
+After `ng build`, `npm run build` runs `mj codegen public-page-html`. It writes `public-pages/<slug>.html` into `dist/MJExplorer/browser/` for each page in `publicPages` of `mj.config.cjs`. Each file is a copy of `index.html` with the page's title and link preview tags, from `title` and `description` in the app's `mj-app.json`. It also adds a rewrite for each page to the copy of `staticwebapp.config.json` in `dist/` (Azure Static Web Apps).
 
-After the two builds, `mj codegen public-page-html` writes `public-host/pages/<slug>.html` for each page in `publicPages` of `mj.config.cjs`. Each file has the page's title and link preview tags, from `title` and `description` in the app's `mj-app.json`.
-
-Deploy the `browser/` folder as one site. To serve public pages from the public build, the web host sends `/p/<slug>` to `/public-host/pages/<slug>.html` when that file exists, and every other `/p/*` address to `/public-host/index.html`. `src/staticwebapp.config.json` (Azure Static Web Apps) has the `/p/*` rule, and the build adds a rule for each page to its copy in `dist/`. `docker/regression/nginx.conf` has both rules. A web host without the rules still works: Explorer's `main.ts` shows the page, but with Explorer's title and no link preview.
+The web host sends `/p/<slug>` to `/public-pages/<slug>.html`. `docker/regression/nginx.conf` has the nginx rule. A web host without the rule still works: `index.html` answers, and the page has Explorer's title and no link preview.
 
 ## Class Registration Manifests
 
@@ -168,8 +163,7 @@ packages/MJExplorer/
       demo/                 # Demo/example components
     environments/           # Environment-specific configs
     assets/                 # Static assets
-  src-public/               # The separate public build (public pages at /p/<slug>)
-  angular.json              # Angular build configuration (projects MJExplorer and MJPublicPages)
+  angular.json              # Angular build configuration
   package.json
   tsconfig.json
 ```

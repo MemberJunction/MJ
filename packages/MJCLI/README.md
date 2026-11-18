@@ -265,8 +265,8 @@ mj codegen
 mj codegen manifest
 mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/manifest.ts
 
-# Write one HTML file per public page (title and link preview) into the public build
-mj codegen public-page-html --dir dist/MJExplorer/browser/public-host --static-web-app-config dist/MJExplorer/browser/staticwebapp.config.json
+# Write one HTML file per public page (title and link preview) into MJ Explorer's build
+mj codegen public-page-html --dir dist/MJExplorer/browser
 ```
 
 #### v5.0 Entity Name Migration Commands
