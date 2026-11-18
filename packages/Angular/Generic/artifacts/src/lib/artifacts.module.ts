@@ -30,6 +30,7 @@ import { ComponentArtifactViewerComponent } from './components/plugins/component
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
 import { MLExperimentResultsViewerComponent } from './components/plugins/ml-experiment-results-viewer.component';
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
+import { SaveAsListDialogComponent } from './components/plugins/save-as-list-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
 
@@ -144,6 +145,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     NgTreesModule,
     BaseFormsModule,
     ComponentFeedbackPanelComponent,
+    SaveAsListDialogComponent,
     MJMediaPlayerComponent,
     MJStorageMediaPlayerComponent,
     AgGridModule,
