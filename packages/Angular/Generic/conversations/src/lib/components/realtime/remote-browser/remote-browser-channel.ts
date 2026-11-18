@@ -1,7 +1,7 @@
 import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
@@ -907,6 +907,15 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     return snapshot;
   }
 
+  /** Returns a compact summary of the active remote browser URL and navigation history for surface notes and peek calls. */
+  public override GetState(): JSONObject {
+    return {
+      currentUrl: this.lastNotedUrl ?? null,
+      historyCount: this.visitedHistory.length,
+      recentUrls: this.visitedHistory.slice(-5).map((h) => h.Url),
+    };
+  }
+
   /** Serializes the visited page history and latest bounded screenshot for review / resume. */
   public override SerializeState(): string | null {
     if (!this.lastNotedUrl && this.visitedHistory.length === 0 && !this.lastScreenshotDataUrl) {
@@ -1037,6 +1046,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     // A change seen WHILE the agent is driving is the agent's own, whichever feed spotted it first.
     const byAgent = cause === 'agent' || this.agentDrivingDepth > 0;
+    this.RecordChange({ Author: byAgent ? 'agent' : 'user', Perceive: false });
     this.Context?.SendContextNote(
       byAgent || firstSighting
         ? `[browser] current page: ${next}`

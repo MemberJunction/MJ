@@ -2499,7 +2499,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     }
   });
 
-  it('supports progressive disclosure toolbar pins, 6-pin cap, formatting ribbon pin, and UserInfoEngine persistence', async () => {
+  it('supports calm Option A progressive disclosure toolbar pins, 4-pin cap, formatting ribbon pin, Cmd+K palette, and UserInfoEngine persistence', async () => {
     const store = new Map<string, string>();
     const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
     const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
@@ -2510,7 +2510,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     const viewer = createEditableDocsViewer('# Progressive Toolbar\n\nBody paragraph.');
     try {
       expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
-      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'insert-block', 'outline']);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format']);
       expect(viewer.PinnedRightToolbarItems.map((i) => i.Key)).toEqual(['comments']);
       expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(false);
       expect(viewer.HasCustomToolbarSettings).toBe(false);
@@ -2518,12 +2518,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       // Pin + Section and confirm persistence to UserInfoEngine
       viewer.ToggleToolbarItemPin('add-section');
       expect(viewer.PinnedToolbarKeys).toContain('add-section');
-      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual([
-        'format',
-        'insert-block',
-        'add-section',
-        'outline',
-      ]);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'add-section']);
       expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(true);
       expect(viewer.HasCustomToolbarSettings).toBe(true);
       expect(setSpy).toHaveBeenCalledWith(
@@ -2531,14 +2526,21 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
         expect.stringContaining('"add-section"'),
       );
 
-      // Hit the 6-pin cap: pin 'suggest-mode' (6th pin), then try a 7th ('blocks-mode')
+      // Hit the 4-pin cap: pin 'suggest-mode' (4th pin), then try a 5th ('blocks-mode')
       viewer.ToggleToolbarItemPin('suggest-mode');
-      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.PinnedToolbarItemsCount).toBe(4);
       expect(viewer.CanPinMoreToolbarItems).toBe(false);
       expect(viewer.IsToolbarItemPinnedOverCap('blocks-mode')).toBe(true);
       viewer.ToggleToolbarItemPin('blocks-mode');
-      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.PinnedToolbarItemsCount).toBe(4);
       expect(viewer.IsToolbarItemPinned('blocks-mode')).toBe(false);
+
+      // Cmd+K palette exposes mode switches and overflow commands
+      viewer.OpenCommandPalette();
+      expect(viewer.ShowCommandPalette).toBe(true);
+      expect(viewer.DocsCommandPaletteItems.some((c) => c.Id === 'mode:preview')).toBe(true);
+      viewer.ExecuteDocsPaletteCommand('mode:preview');
+      expect(viewer.ViewMode).toBe('preview');
 
       // Visibility preferences: pin formatting ribbon, toggle Block Studio, toggle Outline Rail
       viewer.ToggleFormattingRibbonPinned();
@@ -2559,7 +2561,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       restoredViewer.markdownContent = '# Restored Doc\n\nHello.';
       restoredViewer.ngOnInit();
       expect(restoredViewer.PinnedToolbarKeys).toContain('add-section');
-      expect(restoredViewer.PinnedToolbarItemsCount).toBe(6);
+      expect(restoredViewer.PinnedToolbarItemsCount).toBe(4);
       expect(restoredViewer.FormattingRibbonPinned).toBe(true);
       expect(restoredViewer.ShowFormattingRibbon).toBe(true);
       expect(restoredViewer.EditingStyle).toBe('blocks');

@@ -13,7 +13,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 import { RecordsHubPillComponent } from './components/record-open/records-hub-pill.component';
 import { RecordBarComponent } from './components/record-open/record-bar.component';
 import { RecordSwitcherSheetComponent } from './components/record-open/record-switcher-sheet.component';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { UserSettingsModule } from '@memberjunction/ng-explorer-settings/user-settings.module';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJDropdownComponent, MJClickableDirective, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SearchModule } from '@memberjunction/ng-search';
@@ -38,7 +38,7 @@ import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
     MJClickableDirective,
     MJButtonDirective,
     MJEmptyStateComponent,
-    ExplorerSettingsModule,
+    UserSettingsModule,
     SharedGenericModule,
     SearchModule,
     MJDiagnosticsModule,

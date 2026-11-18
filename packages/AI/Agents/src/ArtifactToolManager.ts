@@ -25,7 +25,9 @@ import {
   BaseArtifactToolLibrary,
   GovernedRunArtifactSummary,
   InputArtifact,
+  JsonSchemaSubset,
   NativeFileInput,
+  ValidateJsonAgainstSchemaSubset,
 } from '@memberjunction/ai-core-plus';
 import {
   ARTIFACT_LIVE_MUTATION_EVENT_CODE,
@@ -923,6 +925,30 @@ export class ArtifactToolManager {
     return this.withArtifactLock(lockKey, async () => {
       const isMutatingTool = ArtifactToolManager.MUTATING_TOOL_NAMES.has(call.tool);
       const sanitizedInput = this.sanitizeToolInput(call.input);
+      const toolDef = targetEntry.library.GetToolList().find((def) => def.name === call.tool);
+      if (toolDef?.inputSchema) {
+        const schemaErrors = ValidateJsonAgainstSchemaSubset(
+          sanitizedInput,
+          toolDef.inputSchema as JsonSchemaSubset,
+          '$'
+        );
+        if (schemaErrors.length > 0) {
+          const validationStored: StoredToolResult = {
+            artifactId: call.artifactId,
+            tool: call.tool,
+            input: sanitizedInput,
+            result: {
+              success: false,
+              data: { validationErrors: schemaErrors },
+              errorMessage: `Invalid parameters for tool '${call.tool}': ${schemaErrors.join('; ')}`,
+            },
+            timestamp: new Date(),
+            durationMs: Date.now() - startedAt,
+          };
+          this.toolResults.push(validationStored);
+          return validationStored;
+        }
+      }
       let resolvedPerms:
         | Awaited<ReturnType<typeof ArtifactPermissionEngine.Instance.ResolvePermissions>>
         | undefined;

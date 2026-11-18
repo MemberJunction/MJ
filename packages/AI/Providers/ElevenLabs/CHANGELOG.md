@@ -1,5 +1,28 @@
 # @memberjunction/ai-elevenlabs
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 1351528: ElevenLabs text-to-speech sends all five voice settings in the SDK's camelCase shape, so `similarity_boost` and `use_speaker_boost` are no longer dropped (#4863), and reports its usage as the input text's characters (#4865). New price unit type `Per 1K Characters` (`Linear`, Characters, 1,000 per billing unit). ElevenLabs cost rows are not added yet: the rate depends on the account's plan.
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

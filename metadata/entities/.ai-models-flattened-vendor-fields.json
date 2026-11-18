@@ -18,6 +18,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=APIName"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.972Z",
+            "checksum": "664947d513b743a5b8bf0c944b254b6fb9049468d145bc582d97cf4ac790deb9"
           }
         },
         {
@@ -27,6 +31,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=DriverClass"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.982Z",
+            "checksum": "45dd57ca96c5b6280b1c63b20657d298823c9e25d8f0e223af542ffd317e1510"
           }
         },
         {
@@ -36,6 +44,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=DriverImportPath"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.992Z",
+            "checksum": "26a960d1a9a10d60e9241872f38432b4b6d737ec393645b191a95340d99693a2"
           }
         }
       ]

@@ -448,11 +448,70 @@ check("guarded INSERT + extprop in one IF body → DO block with INSERT and COMM
       must_not_contain=["sp_addextendedproperty"])
 
 # --- UPDATE…FROM join semantics ------------------------------------------------
-check("UPDATE…FROM LEFT JOIN anti-join → unhandled (inner-join rewrite would update 0 rows)",
+check("UPDATE…FROM LEFT JOIN anti-join → ctid self-join keeps outer-join semantics (#6538 item 2)",
       "UPDATE t SET t.Flag = 1 FROM ${flyway:defaultSchema}.Target AS t "
       "LEFT JOIN ${flyway:defaultSchema}.Other o ON o.TargetID = t.ID WHERE o.ID IS NULL;",
+      must_contain=['UPDATE ${flyway:defaultSchema}."Target" AS "t" SET "Flag" = 1',
+                    'FROM ${flyway:defaultSchema}."Target" AS "t_mj"',
+                    'LEFT JOIN ${flyway:defaultSchema}."Other" AS "o"',
+                    'ON "o"."TargetID" = "t_mj"."ID"',
+                    '"t"."ctid" = "t_mj"."ctid" AND "o"."ID" IS NULL'],
+      expect_unhandled=0)
+check("UPDATE…FROM RIGHT JOIN on a self-aliased target stays a reported gap",
+      "UPDATE t SET t.Flag = o.F FROM ${flyway:defaultSchema}.Target AS t "
+      "RIGHT JOIN ${flyway:defaultSchema}.Other o ON o.TargetID = t.ID;",
       must_not_contain=["UPDATE"],
       expect_unhandled=1)
+
+# --- #6348 / #6538 item 3: DATEDIFF(day), user function names, HASHBYTES + CONVERT style --------
+check("DATEDIFF(day, s, e) → date subtraction, not epoch arithmetic",
+      "SELECT DATEDIFF(day, c.StartDate, c.EndDate) AS Days FROM ${flyway:defaultSchema}.Contract c;",
+      must_contain=['(CAST("c"."EndDate" AS DATE) - CAST("c"."StartDate" AS DATE))'],
+      must_not_contain=["epoch"])
+check("DATEDIFF(hour, …) keeps the epoch form",
+      "SELECT DATEDIFF(hour, c.StartDate, c.EndDate) AS H FROM ${flyway:defaultSchema}.Contract c;",
+      must_contain=["epoch", "/ 3600"])
+check("a mixed-case user function keeps its name, quoted",
+      "SELECT ${flyway:defaultSchema}.fnBusinessToday() AS a, fnBusinessToday() AS b FROM ${flyway:defaultSchema}.T;",
+      must_contain=['${flyway:defaultSchema}."fnBusinessToday"()', '"fnBusinessToday"() AS "b"'],
+      must_not_contain=["FNBUSINESSTODAY"])
+check("HASHBYTES SHA2_256 + CONVERT style 2 → upper hex of sha256 over UTF-8 bytes",
+      "SELECT CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', t.Body), 2) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["UPPER(ENCODE(SHA256(CONVERT_TO(\"t\".\"Body\", 'UTF8')), 'hex'))"],
+      must_not_contain=["TO_CHAR", "YY.MM.DD"])
+check("HASHBYTES SHA2_512 + CONVERT style 1 → 0x-prefixed upper hex",
+      "SELECT CONVERT(VARCHAR(130), HASHBYTES('SHA2_512', t.Body), 1) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["'0x' || UPPER(ENCODE(SHA512(CONVERT_TO("],
+      must_not_contain=["TO_CHAR"])
+check("HASHBYTES MD5 → bytea of md5",
+      "SELECT HASHBYTES('MD5', t.Body) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["DECODE(MD5(\"t\".\"Body\"), 'hex')"])
+check("CONVERT of a binary value with another style stays a reported gap",
+      "SELECT CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', t.Body), 0) AS H FROM ${flyway:defaultSchema}.T t;",
+      expect_unhandled=1)
+check("CONVERT style 1 on a non-binary value keeps the date format",
+      "SELECT CONVERT(VARCHAR(20), t.D, 1) AS X FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["TO_CHAR"])
+
+# --- #5194: unique indexes and constraints keep SQL Server NULL semantics ------------------------
+check("CREATE UNIQUE INDEX gets NULLS NOT DISTINCT before WHERE",
+      "CREATE UNIQUE INDEX UQ_T_A ON ${flyway:defaultSchema}.T (A, B) INCLUDE (C) WHERE A IS NOT NULL;",
+      must_contain=['("A", "B") INCLUDE ("C") NULLS NOT DISTINCT WHERE'])
+check("a non-unique index is unchanged",
+      "CREATE INDEX IX_T_A ON ${flyway:defaultSchema}.T (A);",
+      must_not_contain=["NULLS NOT DISTINCT"])
+
+# --- #3345 item 3: DROP COLUMN drops dependent views first ---------------------------------------
+check("ALTER TABLE … DROP COLUMN is preceded by the dependent-view drop block",
+      "ALTER TABLE ${flyway:defaultSchema}.T DROP COLUMN OldCol;",
+      must_contain=["DO $$", "WHERE tc.relname = 'T' AND a.attname = 'OldCol'",
+                    'ALTER TABLE ${flyway:defaultSchema}."T" DROP COLUMN "OldCol"'])
+
+# --- #4385: CodeGen's apply-time EntityField Sequence expression survives conversion --------------
+check("EntityField INSERT keeps the COALESCE(MAX(Sequence), 0) + 1 expression",
+      "INSERT INTO ${flyway:defaultSchema}.EntityField (ID, EntityID, Name, Sequence) "
+      "SELECT 'f1', 'e1', 'Col', COALESCE(MAX(Sequence), 0) + 1 FROM ${flyway:defaultSchema}.EntityField WHERE EntityID = 'e1';",
+      must_contain=['COALESCE(MAX("Sequence"), 0) + 1'])
 
 check("UPDATE…FROM with two INNER joins: extra join's ON moves to WHERE once (not duplicated)",
       "UPDATE uv SET uv.X = b.Y FROM ${flyway:defaultSchema}.UserView AS uv "
@@ -535,6 +594,43 @@ check("TINYINT → SMALLINT in CREATE TABLE, ADD COLUMN and CAST",
       "SELECT CAST(1 AS TINYINT);",
       must_contain=['"Flags" SMALLINT NOT NULL', 'ADD COLUMN "Level" SMALLINT NULL', 'CAST(1 AS SMALLINT)'],
       must_not_contain=["TINYINT"])
+
+# --- DROP INDEX … ON table (issues #5955, #3166) -----------------------------------
+# PostgreSQL has no `DROP INDEX … ON <table>`; the index is dropped by schema-qualified name.
+check("DROP INDEX [ix] ON [schema].[table] → DROP INDEX IF EXISTS schema.ix",
+      "DROP INDEX [IX_Foo_Name] ON [${flyway:defaultSchema}].[Foo];",
+      must_contain=['DROP INDEX IF EXISTS ${flyway:defaultSchema}."IX_Foo_Name"'],
+      must_not_contain=[" ON "])
+check("DROP INDEX IF EXISTS ix ON schema.table → PG form",
+      "DROP INDEX IF EXISTS IX_Foo_Name ON __mj.Foo;",
+      must_contain=['DROP INDEX IF EXISTS "__mj"."IX_Foo_Name"'],
+      must_not_contain=[" ON "])
+check("guarded DROP INDEX (sys.indexes probe) → pg_indexes probe + PG drop",
+      "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Foo_Name' "
+      "AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Foo]'))\n"
+      "BEGIN\n  DROP INDEX [IX_Foo_Name] ON [${flyway:defaultSchema}].[Foo];\nEND",
+      must_contain=["pg_indexes", 'DROP INDEX IF EXISTS ${flyway:defaultSchema}."IX_Foo_Name"'],
+      must_not_contain=[" ON ${flyway"])
+
+# --- DELETE through a CTE (issue #3166) -------------------------------------------
+# PG cannot DELETE FROM a CTE. The single-table ROW_NUMBER dedup form deletes from the base
+# table by ctid; a CTE over a join has no one-to-one row mapping and is reported.
+check("WITH c AS (… ROW_NUMBER …) DELETE FROM c → ctid delete on the base table",
+      ";WITH d AS (SELECT ID, ROW_NUMBER() OVER (PARTITION BY Name ORDER BY ID) AS rn "
+      "FROM [${flyway:defaultSchema}].[Foo]) DELETE FROM d WHERE rn > 1;",
+      must_contain=['"ctid" AS "mj_ctid"', 'DELETE FROM ${flyway:defaultSchema}."Foo"',
+                    '"ctid" IN (SELECT "mj_ctid" FROM "d" WHERE "rn" > 1)'],
+      must_not_contain=['DELETE FROM "d"'])
+check("aliased CTE source qualifies ctid with the alias",
+      "WITH d AS (SELECT f.ID, ROW_NUMBER() OVER (PARTITION BY f.Name ORDER BY f.ID) AS rn "
+      "FROM [__mj].[Foo] f) DELETE FROM d WHERE rn > 1;",
+      must_contain=['"f"."ctid" AS "mj_ctid"', 'DELETE FROM "__mj"."Foo"'])
+check("DELETE FROM a CTE over a join → DELETE-FROM-CTE gap",
+      "WITH d AS (SELECT f.ID FROM __mj.Foo f JOIN __mj.Bar b ON b.ID = f.BarID) DELETE FROM d;",
+      expect_unhandled=1)
+check("a plain DELETE that only reads a CTE is unchanged",
+      "WITH d AS (SELECT ID FROM __mj.Bar) DELETE FROM __mj.Foo WHERE ID IN (SELECT ID FROM d);",
+      must_contain=['DELETE FROM "__mj"."Foo"'], must_not_contain=["ctid"])
 
 # --- BIT registry survives a poison statement in the same batch -------------------
 check("poison statement doesn't wipe BIT registration for other tables in its batch",
@@ -892,12 +988,12 @@ check("PK NONCLUSTERED in ALTER ADD folds to plain PRIMARY KEY (valid PG)",
       expect_unhandled=0)
 check("UNIQUE CLUSTERED in CREATE TABLE folds to plain UNIQUE (valid PG)",
       "CREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL, CONSTRAINT UQ_T UNIQUE CLUSTERED (ID));",
-      must_contain=['UNIQUE ("ID")'],
+      must_contain=['UNIQUE NULLS NOT DISTINCT ("ID")'],
       must_not_contain=['CLUSTERED'],
       expect_unhandled=0)
 check("UNIQUE CLUSTERED in ALTER ADD folds to plain UNIQUE (valid PG)",
       "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT UQ_T UNIQUE CLUSTERED (ID);",
-      must_contain=['UNIQUE ("ID")'],
+      must_contain=['UNIQUE NULLS NOT DISTINCT ("ID")'],
       must_not_contain=['CLUSTERED'],
       expect_unhandled=0)
 
@@ -1154,6 +1250,46 @@ def check_exp_attribute_references():
     else:
         print(f"ok   exp.* attribute references exist in the running sqlglot ({len(referenced)} names checked)")
 
+
+# --- Core metadata-refresh EXECs in a hand region (issue #5919, decision pg.2) ----------------
+for _proc in ("spUpdateExistingEntitiesFromSchema", "spUpdateExistingEntityFieldsFromSchema",
+              "spSetDefaultColumnWidthWhereNeeded", "spUpdateSchemaInfoFromDatabase",
+              "spDeleteUnneededEntityFields"):
+    check(f"EXEC [core].[{_proc}] @ExcludedSchemaNames → SELECT core.{_proc}(excluded)",
+          f"EXEC [${{mjSchema}}].[{_proc}] @ExcludedSchemaNames='sys,staging';",
+          must_contain=[f'SELECT ${{mjSchema}}."{_proc}"(\'sys,staging\')'])
+    check(f"EXEC core.{_proc} bare, with @IncludedSchemaNames → DO block excluding the rest",
+          f"EXEC ${{mjSchema}}.{_proc} @ExcludedSchemaNames=N'sys,staging', @IncludedSchemaNames=N'${{flyway:defaultSchema}}';",
+          must_contain=["DO $mj_refresh$",
+                        "NULLIF('sys,staging', '')",
+                        "string_to_array(lower(replace('${flyway:defaultSchema}', ' ', '')), ',')",
+                        f'PERFORM ${{mjSchema}}."{_proc}"(v_excluded);'],
+          must_not_contain=["EXEC", "@IncludedSchemaNames"])
+for _proc in ("spUpdateExistingEntityFieldsFromSchema", "spDeleteUnneededEntityFields"):
+    check(f"core refresh EXEC passes @EntityIDs to {_proc} as its second argument",
+          f"EXEC [${{mjSchema}}].[{_proc}] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
+          must_contain=[f'SELECT ${{mjSchema}}."{_proc}"(\'sys\', \'a,b\')'])
+check("core refresh EXEC with @EntityIDs and @IncludedSchemaNames passes both through the DO block",
+      "EXEC [${mjSchema}].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys', @IncludedSchemaNames='app', @EntityIDs='a,b';",
+      must_contain=["DO $mj_refresh$", 'PERFORM ${mjSchema}."spDeleteUnneededEntityFields"(v_excluded, \'a,b\');'])
+check("core refresh EXEC with @EntityIDs on a proc that has no such parameter stays a reported gap",
+      "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
+      expect_unhandled=1)
+check("core refresh EXEC with an unknown argument stays a reported gap",
+      "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @Mode='x';",
+      expect_unhandled=1)
+check("a non-refresh core EXEC is still a reported gap",
+      "EXEC [${mjSchema}].[spDoSomethingElse] @ExcludedSchemaNames='x';",
+      expect_unhandled=1)
+
+# --- sp_refreshview (issue #5649, decision pg.5): accounted as dropped, never emitted -----------
+_rv = mj_transpile("EXEC sp_refreshview '${flyway:defaultSchema}.vwFoo';")
+if _rv["sql"] or _rv["unhandled"] or [d["kind"] for d in _rv["dropped"]] != ["SP-REFRESHVIEW"] \
+        or _rv["dropped"][0]["snippet"] != "${flyway:defaultSchema}.vwFoo":
+    _failures += 1
+    print(f"FAIL sp_refreshview is accounted as an SP-REFRESHVIEW drop naming the view: {_rv}")
+else:
+    print("ok   sp_refreshview is accounted as an SP-REFRESHVIEW drop naming the view")
 
 check_exp_attribute_references()
 

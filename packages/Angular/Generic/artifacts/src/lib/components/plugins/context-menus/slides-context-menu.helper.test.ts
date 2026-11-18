@@ -206,9 +206,10 @@ describe('slides-context-menu.helper', () => {
       expect(findAction(items, 'change-layout-Title')?.Checked).toBe(false);
 
       const transSub = findSubmenu(items, 'slide-transition');
-      expect(transSub?.Children.length).toBe(3);
+      expect(transSub?.Children.length).toBe(4);
       expect(findAction(items, 'transition-slide')?.Checked).toBe(true);
       expect(findAction(items, 'transition-fade')?.Checked).toBe(false);
+      expect(findAction(items, 'transition-zoom')?.Checked).toBe(false);
 
       const hideItem = findAction(items, 'toggle-slide-hidden');
       expect(hideItem?.Role).toBe('menuitemcheckbox');
