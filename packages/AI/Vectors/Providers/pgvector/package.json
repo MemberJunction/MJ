@@ -19,7 +19,6 @@
     "@memberjunction/ai-vectordb": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
-    "@memberjunction/postgresql-dataprovider": "6.3.0-edge.1",
     "dotenv": "^17.2.4",
     "pg": "^8.16.0"
   },
