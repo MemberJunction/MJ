@@ -31,13 +31,13 @@
         [ReviewClosedAt]="ReviewClosedAt"
         [ReviewCloseReason]="ReviewCloseReason"
         [ShowGear]="!IsReviewing && Ui.showGear"
-        [ShowDensityPicker]="Ui.showDensityPicker"
+        [ShowDetails]="ShowDetailsControl"
+        [DetailsOn]="DetailsPeek"
         [ShowMinimize]="!IsReviewing && Ui.showMinimize"
         [ShowStartLive]="AllowStartLive"
-        [Density]="Disclosure.Milestones.Density"
         (OpenSessionRequested)="OnOpenSessionRequested($event)"
         (DevModeToggled)="OnDevModeToggled($event)"
-        (DensityChanged)="OnDensityChanged($event)"
+        (DetailsToggled)="OnDetailsToggled()"
         (MinimizeRequested)="OnMinimize()"
         (StartLiveRequested)="OnStartLive()"
         (CloseRequested)="OnReviewClose()">
@@ -161,14 +161,9 @@
                                        (SourcePicked)="OnVideoSourcePicked($event)">
           </mj-realtime-perception-chip>
 
-          <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
-               The strip component self-hides when there are no active channels. -->
-          @if (ChannelStripVisible) {
-            <mj-realtime-channel-strip></mj-realtime-channel-strip>
-          }
-
-          <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
-               two-way toggle (Type opens, hide closes), never level-forced. -->
+          <!-- The BOTTOM DOCK: one bar at every width (mute with its device menu, camera, captions, More, End) ⇄ the
+               fused minis+composer — the user's own two-way toggle (Type opens, hide closes), never level-forced.
+               Details lives in the header beside the gear, since it opens a panel instead of controlling the call. -->
           <mj-realtime-composer
             [Open]="ComposerOpen"
             [Compact]="Ui.chrome === 'orb' || Ui.compact"
@@ -190,10 +185,7 @@
             (ShareRequested)="OnShareRequested($event)"
             (StopShareRequested)="OnStopShareRequested()"
             (DeviceSelected)="OnDeviceSelected($event)"
-            [ShowDetails]="ShowDetailsControl"
-            [DetailsOn]="DetailsPeek"
             (CaptionsToggled)="OnCaptionsToggled($event)"
-            (DetailsToggled)="OnDetailsToggled()"
             (MuteChanged)="OnComposerMuteChanged($event)"
             (EndRequested)="OnEndCall()">
           </mj-realtime-composer>

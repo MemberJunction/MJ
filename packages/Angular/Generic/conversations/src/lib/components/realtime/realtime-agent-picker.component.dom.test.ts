@@ -55,12 +55,21 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
         }
     },
 }));
+vi.mock('../../services/realtime-pairing', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../services/realtime-pairing')>()),
+    LoadCoAgentPairings: async () => [],
+}));
 vi.mock('../../services/user-authorization', () => ({
     REALTIME_ADVANCED_SESSION_CONTROLS: 'Realtime: Advanced Session Controls',
     UserHoldsAuthorization: () => h.authorized,
 }));
 
 import { RealtimeAgentPickerComponent, type RealtimeAgentPick } from './realtime-agent-picker.component';
+
+const CO_AGENTS = [
+    { ID: 'co-1', Name: 'Voice Host' },
+    { ID: 'co-2', Name: 'Night Desk' },
+];
 
 const AGENTS = [
     { ID: 'agent-1', Name: 'Research Assistant', IconClass: 'fa-solid fa-magnifying-glass', Description: 'Finds sources' },
@@ -74,16 +83,39 @@ const settle = async (): Promise<void> => {
     }
 };
 
-async function renderPicker(modelId: string | null = 'model-a'): Promise<ComponentFixture<RealtimeAgentPickerComponent>> {
+interface RenderOptions {
+    /** Expand the "Voice and avatar" section after rendering (default true, so the voice list is reachable). */
+    open?: boolean;
+    /** Co-agent candidates; two or more show the co-agent select. */
+    coAgents?: typeof CO_AGENTS;
+}
+
+async function renderPicker(
+    modelId: string | null = 'model-a',
+    options: RenderOptions = {},
+): Promise<ComponentFixture<RealtimeAgentPickerComponent>> {
     const f = RenderComponentFixture(RealtimeAgentPickerComponent, {
-        inputs: { Provider: CreateFakeProvider({ currentUser: { ID: 'user-1', Name: 'Test User' } }), Agents: AGENTS, DefaultAgentId: 'agent-1' },
+        inputs: {
+            Provider: CreateFakeProvider({ currentUser: { ID: 'user-1', Name: 'Test User' } }),
+            Agents: AGENTS,
+            DefaultAgentId: 'agent-1',
+            CoAgents: options.coAgents ?? [],
+        },
     });
     await settle();
     if (modelId) {
         f.componentInstance.OnModelChange(modelId);
     }
     await redraw(f);
+    if ((options.open ?? true) && settingsToggle(f)) {
+        settingsToggle(f)?.click();
+        await redraw(f);
+    }
     return f;
+}
+
+function settingsToggle(f: ComponentFixture<RealtimeAgentPickerComponent>): HTMLButtonElement | null {
+    return Query(f, '.mj-voice-picker__settings-toggle') as HTMLButtonElement | null;
 }
 
 async function redraw(f: ComponentFixture<RealtimeAgentPickerComponent>): Promise<void> {
@@ -270,5 +302,83 @@ describe('RealtimeAgentPickerComponent voice list (DOM)', () => {
         // A click anywhere else outside the picker still dismisses it.
         document.body.click();
         expect(cancels).toHaveLength(1);
+    });
+});
+
+describe('RealtimeAgentPickerComponent "Voice and avatar" row (DOM)', () => {
+    it('renders collapsed by default and hides the selects', async () => {
+        const f = await renderPicker('model-a', { open: false, coAgents: CO_AGENTS });
+        const toggle = settingsToggle(f) as HTMLButtonElement;
+        expect(toggle.getAttribute('type')).toBe('button');
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(toggle.getAttribute('aria-controls')).toBe('mjRealtimeVoiceSettings');
+        expect(Text(f, '.mj-voice-picker__settings-action')).toBe('Change');
+        expect(Query(f, '#mjRealtimeCoAgentSelect')).toBeNull();
+        expect(Query(f, '#mjRealtimeModelSelect')).toBeNull();
+        expect(Query(f, 'mj-dropdown')).toBeNull();
+    });
+
+    it('a click shows the selects and flips the label to Done', async () => {
+        const f = await renderPicker('model-a', { open: false, coAgents: CO_AGENTS });
+        settingsToggle(f)?.click();
+        await redraw(f);
+        expect(settingsToggle(f)?.getAttribute('aria-expanded')).toBe('true');
+        expect(Text(f, '.mj-voice-picker__settings-action')).toBe('Done');
+        expect(Query(f, '#mjRealtimeCoAgentSelect')).not.toBeNull();
+        expect(Query(f, '#mjRealtimeModelSelect')).not.toBeNull();
+        expect(Query(f, '.mj-voice-picker__voice-row mj-dropdown')).not.toBeNull();
+
+        settingsToggle(f)?.click();
+        await redraw(f);
+        expect(Text(f, '.mj-voice-picker__settings-action')).toBe('Change');
+        expect(Query(f, '#mjRealtimeModelSelect')).toBeNull();
+    });
+
+    it('summarizes no picks as "Default voice" and "Auto voice model", with the fallback icon', async () => {
+        const f = await renderPicker(null, { open: false });
+        expect(Text(f, '.mj-voice-picker__settings-title')).toBe('Default voice');
+        expect(Text(f, '.mj-voice-picker__settings-subtitle')).toBe('Auto voice model');
+        expect(Query(f, '.mj-voice-picker__settings-icon .fa-wave-square')).not.toBeNull();
+        expect(Query(f, '.mj-voice-picker__settings-image')).toBeNull();
+    });
+
+    it('summarizes a voice with an avatar, with its preview image and model', async () => {
+        const f = await renderPicker();
+        await pickVoice(f, 'Avery');
+        expect(Text(f, '.mj-voice-picker__settings-title')).toBe('Avery · with avatar');
+        expect(Text(f, '.mj-voice-picker__settings-subtitle')).toBe('Live Voice Model');
+        expect(Query(f, '.mj-voice-picker__settings-image')?.getAttribute('src')).toBe('https://img.example.test/avery.png');
+    });
+
+    it('summarizes a voice without an avatar as voice only', async () => {
+        const f = await renderPicker();
+        await pickVoice(f, 'Robin');
+        expect(Text(f, '.mj-voice-picker__settings-title')).toBe('Robin · voice only');
+        expect(Query(f, '.mj-voice-picker__settings-image')).toBeNull();
+        expect(Query(f, '.mj-voice-picker__settings-icon')).not.toBeNull();
+    });
+
+    it("adds a picked co-agent's name to the second line", async () => {
+        const f = await renderPicker(null, { coAgents: CO_AGENTS });
+        const select = Query(f, '#mjRealtimeCoAgentSelect') as HTMLSelectElement;
+        select.value = 'co-2';
+        select.dispatchEvent(new Event('change'));
+        await redraw(f);
+        expect(Text(f, '.mj-voice-picker__settings-subtitle')).toBe('Auto voice model · Night Desk');
+    });
+
+    it('is absent when neither the co-agent nor the model controls would show', async () => {
+        h.authorized = false;
+        const f = await renderPicker(null, { coAgents: [CO_AGENTS[0]] });
+        expect(settingsToggle(f)).toBeNull();
+        expect(Query(f, '#mjRealtimeVoiceSettings')).toBeNull();
+    });
+
+    it('keeps "Record this call" on one line, with the storage note in the switch title', async () => {
+        const f = await renderPicker(null, { open: false });
+        expect(Text(f, '.mj-voice-picker__record-label')).toBe('Record this call');
+        expect(Query(f, '.mj-voice-picker__record-row small')).toBeNull();
+        expect(Query(f, '.mj-voice-picker__switch')?.getAttribute('title')).toBe('Audio stored securely');
+        expect(Query(f, '.mj-voice-picker__switch input')?.getAttribute('aria-label')).toBe('Record this call (audio stored securely)');
     });
 });

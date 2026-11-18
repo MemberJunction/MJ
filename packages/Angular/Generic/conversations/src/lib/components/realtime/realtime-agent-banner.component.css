@@ -1,12 +1,9 @@
 :host {
   display: block;
-  --sage: var(--mj-color-violet-400, #a78bfa);
-  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 14%, transparent);
-  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 45%, transparent);
 }
 
-/* The UNIFIED APP-BAR (Redesign A): orb · name · Co-Agent pill · "speaking as" ·
-   state pill · disclosure-gated action cluster (captions / gear / minimize / End). */
+/* The UNIFIED APP-BAR (Redesign A): orb · name · state pill · disclosure-gated action
+   cluster (Details / gear / Minimize). */
 .banner {
   position: relative; /* anchors the gear popover */
   display: flex;
@@ -41,20 +38,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 5; /* gives way before the name/pill, after the model suffix */
+  flex-shrink: 5; /* gives way before the name/pill */
 }
 .banner__for b {
   color: var(--mj-text-secondary);
-}
-/* Subtle realtime-model suffix (e.g. "· GPT Realtime 2") in the identity line. */
-.banner__model {
-  font-size: 11px;
-  color: var(--mj-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 10; /* first to give way when the banner narrows */
-  min-width: 0;
 }
 
 .banner__state {
@@ -188,11 +175,6 @@
   line-height: 1.4;
 }
 .pill i { font-size: 10px; }
-.pill--sage {
-  background: var(--sage-bg);
-  color: var(--mj-color-violet-300, var(--mj-text-secondary));
-  border-color: var(--sage-border);
-}
 
 /* ---------- Session review variant ---------- */
 .banner--review {
@@ -335,7 +317,7 @@
   filter: brightness(1.05);
 }
 
-/* ---------- Gear popover: density escape hatch + developer links ---------- */
+/* ---------- Gear popover: this call's details + developer links ---------- */
 .gear-pop {
   position: absolute;
   top: calc(100% + 8px);
@@ -361,47 +343,30 @@
   color: var(--mj-text-muted);
   margin-bottom: 9px;
 }
-.gp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.gp-facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
 }
-.gp-l {
+.gp-fact {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.gp-fact dt {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+}
+.gp-fact dd {
+  margin: 0;
   font-size: 12px;
   font-weight: 600;
-  color: var(--mj-text-secondary);
-}
-.gp-seg {
-  display: inline-flex;
-  flex: 1;
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md, 8px);
-  background: var(--mj-bg-surface);
-  padding: 2px;
-  gap: 2px;
-}
-.gp-seg button {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  color: var(--mj-text-muted);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-.gp-seg button.on {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse, #fff);
-}
-.gp-note {
-  font-size: 10.5px;
-  color: var(--mj-text-muted);
-  line-height: 1.45;
-  margin-top: 8px;
+  color: var(--mj-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gp-div {
   height: 1px;
@@ -437,8 +402,8 @@
 }
 
 /* ============================================================= COMPACT (Calm Orb · overlay)
-   A tiny identity + state row only — the body owns the big orb + name + state, and the lean
-   dock owns the actions. No duplicate orb / state pill / headphones / gear / expand here. */
+   A tiny identity + state row plus Details / gear / Minimize — the body owns the big orb +
+   name + state, and the lean dock owns the call actions. */
 .banner--compact {
   gap: 10px;
   padding: 12px 14px;
@@ -511,9 +476,11 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--mj-status-warning) 70%, transparent);
 }
 @keyframes compact-dot-blink { 50% { opacity: 0.35; } }
-/* Minimize is the only control left in the compact bar — render it round + de-emphasized. */
-.banner__minimize--compact {
-  flex-shrink: 0;
+/* Compact actions (Details / gear / Minimize): round + de-emphasized until pressed or hovered. */
+.bar-actions--compact {
+  gap: 4px;
+}
+.bar-actions--compact .iconb {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -521,7 +488,12 @@
   border-color: transparent;
   color: var(--mj-text-muted);
 }
-.banner__minimize--compact:hover {
+.bar-actions--compact .iconb:hover {
   background: var(--mj-bg-surface-hover);
   border-color: var(--mj-border-default);
+}
+.bar-actions--compact .iconb--on {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
 }

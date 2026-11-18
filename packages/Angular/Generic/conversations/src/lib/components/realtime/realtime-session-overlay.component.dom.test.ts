@@ -447,9 +447,9 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     const activeTab = (f: Awaited<ReturnType<typeof renderWithBoard>>['f']): string | null | undefined =>
       query(f, '.s-tab--active')?.getAttribute('title');
 
-    /** The composer's Details control, which peeks at the panel and hides it. */
-    const details = (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], title: 'Peek at the session panels' | 'Hide the session panels') =>
-      click(f, `mj-realtime-composer button[title="${title}"]`);
+    /** The header's Details control, which shows the panel and hides it. */
+    const details = (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], title: 'Show the session panels' | 'Hide the session panels') =>
+      click(f, `mj-realtime-agent-banner button[title="${title}"]`);
 
     it('comes back expanded at its width, with its tabs and the board, after the Details control hides and shows it', async () => {
       const { f } = await renderWithBoard();
@@ -461,7 +461,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       details(f, 'Hide the session panels');
       await settle();
       expect(panel(f)).toBeNull();
-      details(f, 'Peek at the session panels');
+      details(f, 'Show the session panels');
       await settle();
       expect(panel(f)).toEqual(expanded);
       expect(isShown(f)).toBe(true);
@@ -522,7 +522,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       await resizeCall(f, 1000);
       expect(panel(f)).toBeNull();
-      details(f, 'Peek at the session panels');
+      details(f, 'Show the session panels');
       await settle();
       expect(panel(f)).toEqual(expanded);
       expect(isShown(f)).toBe(true);
@@ -560,7 +560,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       f.componentRef.setInput('ReviewData', null);
       await settle();
       expect(panel(f)).toBeNull();
-      details(f, 'Peek at the session panels');
+      details(f, 'Show the session panels');
       await settle();
       expect(panel(f)).toEqual(normal);
     });
@@ -579,7 +579,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       channels$.next([]);
       await settle();
-      details(f, 'Peek at the session panels');
+      details(f, 'Show the session panels');
       await settle();
       expect(activeTab(f)).toBe('Activity');
       expect(panel(f)).toEqual({ width: '308px', shows: 'tabs', resizable: true });
@@ -615,7 +615,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       f.componentRef.setInput('ReviewData', null);
       await settle();
       expect(panel(f)).toBeNull();
-      details(f, 'Peek at the session panels');
+      details(f, 'Show the session panels');
       await settle();
       expect(activeTab(f)).toBeUndefined();
       expect(panel(f)).toEqual({ width: '308px', shows: 'tabs', resizable: true });
@@ -796,7 +796,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(place(cameraBox(f))).toEqual([624, 424, 320, 200]);
       expect(covers(cameraBox(f), WIDE_BESIDE_PANEL.Controls)).toBe(false);
 
-      click(f, 'mj-realtime-composer button[title="Hide the session panels"]');
+      click(f, 'mj-realtime-agent-banner button[title="Hide the session panels"]');
       await settle();
       await controlsResized(f);
       expect(query(f, '.call-panel')).toBeNull();
@@ -852,18 +852,18 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(calls).toEqual(['StartCamera', 'StopCamera']);
     });
 
-    it('asks the session to share, with the kind picked in the menu first, and to stop', async () => {
+    it('asks the session to share from the More menu, and to stop from the bar while sharing', async () => {
       const { f, offers$, captures$, calls } = await renderWithBoard();
       offers$.next({ Camera: false, Screen: true });
       await settle();
-      composerButton(f, 'Share screen')?.click();
-      (query(f, 'mj-realtime-composer mj-media-controls button[title="Choose what to share"]') as HTMLButtonElement).click();
+      expect(composerButton(f, 'Share screen')).toBeNull();
+      (query(f, 'mj-realtime-composer button[title="More controls"]') as HTMLButtonElement).click();
       await settle();
-      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Browser tab')?.click();
+      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Share your screen')?.click();
       captures$.next({ ...REALTIME_CAPTURES_OFF, Screen: { Status: 'on' } });
       await settle();
       composerButton(f, 'Stop sharing')?.click();
-      expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
+      expect(calls).toEqual(['StartScreenShare:any', 'StopScreenShare']);
     });
   });
 
@@ -1127,17 +1127,17 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     const menuItem = (menu: string, label: string): HTMLElement | undefined =>
       (overlayQueryAll(`${menu} mj-menu-item`) as HTMLElement[]).find((item) => item.textContent?.trim() === label);
 
-    /** Opens the composer's Share menu, offering a share as the call does. */
+    /** Opens the composer's More menu, which holds the share choices, offering a share as the call does. */
     const openShareMenu = async (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], offers$: Awaited<ReturnType<typeof renderWithBoard>>['offers$']) => {
       offers$.next({ Camera: false, Screen: true });
       await settle();
-      (query(f, 'mj-realtime-composer mj-media-controls button[title="Choose what to share"]') as HTMLButtonElement).click();
+      (query(f, 'mj-realtime-composer button[title="More controls"]') as HTMLButtonElement).click();
       await settle();
     };
 
-    /** Opens "This panel" in the open Share menu and picks a panel. */
+    /** Opens "Share a panel" in the open More menu and picks a panel. */
     const pickPanel = async (label: string): Promise<void> => {
-      menuItem('mj-menu', 'This panel')?.click();
+      menuItem('mj-menu', 'Share a panel')?.click();
       await settle();
       menuItem('mj-menu[aria-label="This panel"]', label)?.click();
       await settle();
@@ -1152,7 +1152,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       registry.Register(document.body, 'Main content');
       await openShareMenu(f, offers$);
 
-      menuItem('mj-menu', 'This panel')?.click();
+      menuItem('mj-menu', 'Share a panel')?.click();
       await settle();
       expect(menuLabels('mj-menu[aria-label="This panel"]')).toEqual(['Sample dashboard', 'Whiteboard']);
       menuItem('mj-menu[aria-label="This panel"]', 'Whiteboard')?.click();
@@ -1206,13 +1206,13 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       stubPanelShareSupport();
       const { f, offers$ } = await renderWithBoard();
       await openShareMenu(f, offers$);
-      expect(menuLabels('mj-menu')).toEqual(['Entire screen', 'Window', 'Browser tab']);
+      expect(menuLabels('mj-menu')).toEqual(['Share your screen', 'Type a message']);
     });
 
     it('offers no This panel where the browser cannot share a single panel', async () => {
       const { f, offers$ } = await renderWithBoard(undefined, new ShareableWhiteboardChannel());
       await openShareMenu(f, offers$);
-      expect(menuLabels('mj-menu')).toEqual(['Entire screen', 'Window', 'Browser tab']);
+      expect(menuLabels('mj-menu')).toEqual(['Share your screen', 'Type a message']);
     });
   });
 
@@ -1816,7 +1816,8 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       return { f, ...session };
     };
     type Fixture = Awaited<ReturnType<typeof renderCall>>['f'];
-    const TYPE_BUTTON = '[aria-label="Open the typed-input composer"]';
+    // Type a message lives in the composer's More menu; with no share offered (as here) More exists only while typing is allowed.
+    const TYPE_BUTTON = 'mj-realtime-composer button[title="More controls"]';
     const keydown = (f: Fixture, key: string): void => {
       f.componentInstance.OnDocumentKeydown(new KeyboardEvent('keydown', { key, bubbles: true }));
       f.detectChanges();
@@ -1844,16 +1845,23 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(f.componentInstance.ComposerOpen).toBe(false);
     });
 
-    it('ShowSurfacePanel=false removes the Details control from the call strip (#6120)', async () => {
+    it('ShowSurfacePanel=false removes the Details control from the header (#6120)', async () => {
       const { f } = await renderCall('console', { ShowSurfacePanel: false });
-      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
-      expect(queryAll(f, '[title="Peek at the session panels"]')).toHaveLength(0);
+      expect(query(f, 'mj-realtime-agent-banner')).not.toBeNull();
+      expect(queryAll(f, '[title="Show the session panels"]')).toHaveLength(0);
+      expect(queryAll(f, 'mj-realtime-composer [title="Show the session panels"], mj-realtime-composer [title="Peek at the session panels"]')).toHaveLength(0);
     });
 
-    it('the lean dock drops its "more" menu when typing, the surface panel, camera and share are all off (#6120)', async () => {
+    it('Details sits in the header, beside the gear, and not in the call bar', async () => {
+      const { f } = await renderCall('console');
+      expect(queryAll(f, 'mj-realtime-agent-banner [title="Show the session panels"]')).toHaveLength(1);
+      expect(queryAll(f, 'mj-realtime-composer [title="Show the session panels"], mj-realtime-composer [title="Peek at the session panels"]')).toHaveLength(0);
+    });
+
+    it('the bar drops its More menu when typing is off and there is nothing to share (#6120)', async () => {
       const { f } = await renderCall('orb', { AllowTyping: false, ShowSurfacePanel: false });
       expect(query(f, 'mj-realtime-composer')).not.toBeNull();
-      expect(query(f, '.lean-more')).toBeNull();
+      expect(query(f, 'mj-realtime-composer button[title="More controls"]')).toBeNull();
     });
 
     it('an open dock closes when the host turns typing off, and the draft survives', async () => {

@@ -152,10 +152,9 @@ describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () =>
     expect(ResolveRealtimeUi({ chrome: 'auto', showSurfacePanel: false }, narrowPeek).SurfacePanelWaitsForRoom).toBe(false);
   });
 
-  it('channel focus hides the surface panel and channel strip', () => {
+  it('channel focus hides the surface panel', () => {
     const focused = { ...consoleSig, hasChannels: true, channelFocus: true };
     expect(ResolveRealtimeUi(undefined, focused).showSurfacePanel).toBe(false);
-    expect(ResolveRealtimeUi(undefined, focused).showChannelStrip).toBe(false);
   });
 
   it('activity tab needs activity (or review) and a console', () => {
@@ -181,11 +180,9 @@ describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () =>
     expect(ResolveRealtimeUi(undefined, { ...consoleSig, IsReviewing: true }).showMinimize).toBe(false);
   });
 
-  it('density picker requires the flag and a visible gear', () => {
-    expect(ResolveRealtimeUi(undefined, consoleSig).showDensityPicker).toBe(true);
-    expect(ResolveRealtimeUi({ showDensityPicker: false }, consoleSig).showDensityPicker).toBe(false);
-    // orb with no gear permission → no picker
-    expect(ResolveRealtimeUi({ chrome: 'orb' }, signals({ DisclosureShowGear: false })).showDensityPicker).toBe(false);
+  it('offers no density picker: the call has one layout', () => {
+    expect(Object.keys(ResolveRealtimeUi(undefined, consoleSig))).not.toContain('showDensityPicker');
+    expect(Object.keys(ResolveRealtimeUi({ showDensityPicker: true }, consoleSig))).not.toContain('showDensityPicker');
   });
 });
 
@@ -217,14 +214,14 @@ describe('resolveRealtimeUi — typing and text', () => {
     expect(r.showThread).toBe(true);
     expect(r.showHero).toBe(false);
   });
-  it('the gear hides when it would be empty', () => {
-    expect(ResolveRealtimeUi({ showDensityPicker: false, showDevLinks: false }, consoleSig).showGear).toBe(false);
-    expect(ResolveRealtimeUi({ showDensityPicker: false }, consoleSig).showGear).toBe(true);
+  it('the gear shows in every live call, from the first, since it holds the call details', () => {
+    expect(ResolveRealtimeUi({ chrome: 'orb' }, signals({ DisclosureShowGear: false })).showGear).toBe(true);
     expect(ResolveRealtimeUi({ showDevLinks: false }, consoleSig).showGear).toBe(true);
+    expect(ResolveRealtimeUi(undefined, signals({ IsReviewing: true })).showGear).toBe(false);
   });
   it('the resolved view-model carries no dead outputs', () => {
     const keys = Object.keys(ResolveRealtimeUi(undefined, consoleSig));
-    for (const dead of ['showComposer', 'connecting', 'autoHideControls', 'allowResize']) {
+    for (const dead of ['showComposer', 'connecting', 'autoHideControls', 'allowResize', 'showDensityPicker', 'showChannelStrip']) {
       expect(keys).not.toContain(dead);
     }
   });

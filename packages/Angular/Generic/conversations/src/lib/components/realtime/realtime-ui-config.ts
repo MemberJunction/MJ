@@ -151,7 +151,9 @@ export interface RealtimeUiInputs {
 
   /** Show the captions toggle. Default `true`. */
   showCaptionsControl?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** Show the density picker inside the gear menu. Default `true`. */
+  /**
+   * @deprecated The call has one layout: there is no density setting, so this no longer has any effect.
+   */
   showDensityPicker?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the minimize control (collapse the call without ending it). Default `true`. */
   showMinimize?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -163,7 +165,10 @@ export interface RealtimeUiInputs {
    * is actually earned.
    */
   showSurfacePanel?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** Show the channel strip (active interactive channels). Default `true`. */
+  /**
+   * @deprecated The channel strip was removed: the surface panel's tabs already list the live channels, so this no
+   * longer has any effect.
+   */
   showChannels?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the Activity rail/tab (delegations, artifacts timeline). Default `true`. */
   showActivityRail?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -190,7 +195,7 @@ export const DEFAULT_REALTIME_UI_INPUTS: Required<RealtimeUiInputs> = {
   allowTextReveal: true,
   allowTyping: true,
   showCaptionsControl: true,
-  showDensityPicker: true,
+  showDensityPicker: false,
   showMinimize: true,
   showEnd: true,
   showSurfacePanel: true,
@@ -263,13 +268,9 @@ export interface ResolvedRealtimeUi {
   SurfacePanelWaitsForRoom: boolean;
   /** The Activity tab/rail is available. */
   showActivityTab: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** The channel strip is visible. */
-  showChannelStrip: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The captions toggle is available. */
   showCaptionsControl: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** The density picker is available (inside the gear). */
-  showDensityPicker: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The gear/settings affordance is available. */
   showGear: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Developer links/panels are available. */
@@ -407,10 +408,9 @@ export function ResolveRealtimeUi(
 
   const showActivityTab = cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
 
-  const showChannelStrip = cfg.showChannels && signals.hasChannels && isConsole && !signals.channelFocus;
-
-  // An empty gear menu is not worth an affordance: it needs at least one entry (density picker or dev links).
-  const showGear = (signals.DisclosureShowGear || isConsole) && (cfg.showDensityPicker || cfg.showDevLinks);
+  // The gear always holds the call's details (agent, voice, model, session record), so it shows in every live call,
+  // from the first one: the call no longer earns chrome over time.
+  const showGear = !signals.IsReviewing;
 
   return {
     chrome,
@@ -420,9 +420,7 @@ export function ResolveRealtimeUi(
     showSurfacePanel,
     SurfacePanelWaitsForRoom: surfacePanelWanted && !roomForSurfacePanel,
     showActivityTab,
-    showChannelStrip,
     showCaptionsControl: cfg.showCaptionsControl && allowTextReveal,
-    showDensityPicker: cfg.showDensityPicker && showGear,
     showGear,
     showDevLinks: cfg.showDevLinks && signals.DevMode,
     showMinimize: cfg.showMinimize && !signals.IsReviewing,
