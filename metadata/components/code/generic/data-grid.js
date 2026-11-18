@@ -15,6 +15,7 @@ function DataGrid({
   longTextDisplay = 'expand', // Options: 'truncate', 'expand', 'tooltip', 'wrap', 'none'
   longTextThreshold = 100, // Characters before truncation
   autoFitColumns = true, // Auto-fit columns to container width vs fixed widths with scroll
+  headerStyle, // Optional header row colors: { background, color, borderColor }. Unset keeps the theme's header.
   onSelectionChanged,
   onPageChanged,
   onSortChanged,
@@ -392,6 +393,17 @@ function DataGrid({
   }, [normalizedColumns]);
   
   // Build table columns from column definitions with metadata-aware formatting
+  // Header row colors supplied by the caller, e.g. an organization's branding. Only
+  // the fields given are applied, so an unset field keeps the theme's header styling.
+  const headerCellStyle = React.useMemo(() => {
+    if (!headerStyle) return null;
+    const style = {};
+    if (headerStyle.background) style.background = headerStyle.background;
+    if (headerStyle.color) style.color = headerStyle.color;
+    if (headerStyle.borderColor) style.borderBottom = `2px solid ${headerStyle.borderColor}`;
+    return Object.keys(style).length > 0 ? style : null;
+  }, [headerStyle?.background, headerStyle?.color, headerStyle?.borderColor]);
+
   const tableColumns = React.useMemo(() => {
     return normalizedColumns.map(colDef => {
       const fieldName = colDef.field;
@@ -483,6 +495,7 @@ function DataGrid({
         align: align,
         width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
+        onHeaderCell: headerCellStyle ? () => ({ style: headerCellStyle }) : undefined,
         sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
           const valA = a[fieldName];
           const valB = b[fieldName];
@@ -680,7 +693,7 @@ function DataGrid({
 
       return columnDef;
     });
-  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles, headerCellStyle]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults

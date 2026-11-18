@@ -87,6 +87,12 @@ Array of 50 distinct colors (purple, magenta, teal, indigo, vermillion, brown, e
 4. Ensures consistent colors per value across dataset
 5. Unknown values: Check `statusColorMap` first, then hash-based fallback index
 
+## Header Styling
+- `headerStyle` ({ background, color, borderColor }, all optional) colors the header row through each column's antd `onHeaderCell`; `borderColor` draws a 2px bottom border
+- Memoized into `headerCellStyle` from its three fields, so a new object with the same values does not rebuild the columns
+- Unset, or with no fields set, the header keeps the antd theme the host derives from the viewer's theme
+- Callers that brand their tables pass the colors here, e.g. `headerStyle={{ background: '#1F3A5F', color: '#FFFFFF', borderColor: '#0F2440' }}`
+
 ## Filter Debouncing (useEffect)
 - `setTimeout` with `filterDebounceTime` (300ms default)
 - Updates `debouncedFilter` after delay
