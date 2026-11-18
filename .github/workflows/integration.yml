@@ -54,7 +54,7 @@ on:
   # here than on next. The trigger lives on next so every candidate cut inherits it;
   # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next, 'lts/**']
+    branches: [next, 'lts/**', 'ci-test/tier-verify-base']
     paths:
       - 'pnpm-lock.yaml'
       - 'packages/**'
