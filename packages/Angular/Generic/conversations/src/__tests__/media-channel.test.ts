@@ -66,8 +66,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
 
   // --- Tool contract: source is url OR fileId, at least one required -----------
 
-  it('Media_ShowMedia accepts a fileId WITHOUT a url (MJStorage file)', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia accepts a fileId WITHOUT a url (MJStorage file)', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'image', fileId: 'FILE-A', displayName: 'Chart',
     })));
     expect(result.success).toBe(true);
@@ -79,8 +79,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(channel.State.ActiveItemId).toBe(item.Id);
   });
 
-  it('Media_ShowMedia still accepts a url WITHOUT a fileId (external/public asset)', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia still accepts a url WITHOUT a fileId (external/public asset)', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'web', url: 'https://example.com', displayName: 'Site',
     })));
     expect(result.success).toBe(true);
@@ -89,8 +89,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(item.FileID).toBeUndefined();
   });
 
-  it('Media_ShowMedia REJECTS when neither url nor fileId is given', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia REJECTS when neither url nor fileId is given', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       mediaType: 'image', displayName: 'No source',
     })));
     expect(result.success).toBe(false);
@@ -98,8 +98,8 @@ describe('RealtimeMediaChannel — MJStorage file support', () => {
     expect(channel.State.Items).toHaveLength(0);
   });
 
-  it('Media_ShowMedia still rejects a missing/invalid mediaType even with a fileId', () => {
-    const result = parseResult(channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
+  it('Media_ShowMedia still rejects a missing/invalid mediaType even with a fileId', async () => {
+    const result = parseResult(await channel.ApplyAgentTool(MEDIA_TOOL_NAMES.ShowMedia, JSON.stringify({
       fileId: 'FILE-A', displayName: 'X',
     })));
     expect(result.success).toBe(false);
@@ -217,7 +217,7 @@ describe('RouteForMediaItem — surface render routing (pure)', () => {
 });
 
 describe('Realtime media URL scheme screening (PR #6034)', () => {
-  it('Media_ShowMedia rejects javascript:, data:, blob:, relative, and scheme-relative URLs', () => {
+  it('Media_ShowMedia rejects javascript:, data:, blob:, relative, and scheme-relative URLs', async () => {
     const channel = new RealtimeMediaChannel();
     channel.Initialize(makeContext({ Notes: [], Saves: [] }));
 
@@ -233,7 +233,7 @@ describe('Realtime media URL scheme screening (PR #6034)', () => {
 
     for (const badUrl of blockedUrls) {
       const result = parseResult(
-        channel.ApplyAgentTool(
+        await channel.ApplyAgentTool(
           MEDIA_TOOL_NAMES.ShowMedia,
           JSON.stringify({ mediaType: 'web', url: badUrl, displayName: 'Untrusted' }),
         ),

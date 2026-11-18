@@ -2638,22 +2638,61 @@ function normalizedSlidesRegions(regions: SlideRegionSpec[]): SlideRegionSpec[] 
     return regions.map((r) => ({ ...r }));
 }
 
+/** Normalizes bullet markers and bolds `"Label: value"` lead-ins using linear string scanning. */
 function polishMarkdownBullets(markdown: string): string {
     return markdown
         .split('\n')
         .map((rawLine) => {
-            const trimmedEnd = rawLine.replace(/\s+$/, '');
-            const bulletMatch = /^(\s*)[*+]\s+(.+)$/.exec(trimmedEnd);
-            const normalized = bulletMatch ? `${bulletMatch[1]}- ${bulletMatch[2]}` : trimmedEnd;
-            // Emphasize "Label: value" lead-ins on plain list items when not already bolded
-            const leadInMatch = /^(\s*-\s+)(?!\*\*)([A-Z0-9][^:*\n]{1,36}):\s+(.+)$/.exec(normalized);
-            if (leadInMatch) {
-                return `${leadInMatch[1]}**${leadInMatch[2].trim()}:** ${leadInMatch[3]}`;
+            const trimmedEnd = rawLine.trimEnd();
+            const trimmedStart = trimmedEnd.trimStart();
+            const indent = trimmedEnd.slice(0, trimmedEnd.length - trimmedStart.length);
+            let normalized = trimmedEnd;
+            if (trimmedStart.length >= 3 && (trimmedStart[0] === '*' || trimmedStart[0] === '+')) {
+                const afterMarkerRaw = trimmedStart.slice(1);
+                const afterMarker = afterMarkerRaw.trimStart();
+                if (afterMarker.length < afterMarkerRaw.length && afterMarker.length > 0) {
+                    normalized = `${indent}- ${afterMarker}`;
+                }
             }
-            return normalized;
+            return boldLeadInLabel(normalized);
         })
         .join('\n')
         .trim();
+}
+
+/** Bolds plain `"Label: value"` bullet lead-ins without regular expression backtracking. */
+function boldLeadInLabel(line: string): string {
+    const trimmedStart = line.trimStart();
+    if (!trimmedStart.startsWith('-')) {
+        return line;
+    }
+    const afterDashRaw = trimmedStart.slice(1);
+    const afterDash = afterDashRaw.trimStart();
+    const dashSpaceLen = afterDashRaw.length - afterDash.length;
+    if (dashSpaceLen === 0 || afterDash.length < 3 || afterDash.startsWith('**')) {
+        return line;
+    }
+    const first = afterDash[0];
+    const isUpperOrDigit = (first >= 'A' && first <= 'Z') || (first >= '0' && first <= '9');
+    if (!isUpperOrDigit) {
+        return line;
+    }
+    const colonIdx = afterDash.indexOf(':');
+    if (colonIdx < 2 || colonIdx > 37) {
+        return line;
+    }
+    const label = afterDash.slice(0, colonIdx);
+    if (label.includes('*')) {
+        return line;
+    }
+    const afterColonRaw = afterDash.slice(colonIdx + 1);
+    const value = afterColonRaw.trimStart();
+    if (value.length === 0 || value.length === afterColonRaw.length) {
+        return line;
+    }
+    const indent = line.slice(0, line.length - trimmedStart.length);
+    const dashPrefix = `-${afterDashRaw.slice(0, dashSpaceLen)}`;
+    return `${indent}${dashPrefix}**${label.trim()}:** ${value}`;
 }
 
 function tryExtractThreeKpiCards(

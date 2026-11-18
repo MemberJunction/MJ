@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
+import type { JSONObject } from '@memberjunction/ai';
 import {
   RealtimeConversationMemory,
   RenderRealtimeMemorySeed,
@@ -415,7 +416,7 @@ describe('ClientContextChannel — channel-addressed ContextTool calls (target)'
     ch.Initialize(
       makeContext({
         ExecuteClientTool: exec,
-        GetSurfaceSnapshot: () => ({
+        GetSurfaceSnapshot: (): JSONObject => ({
           ActiveSurface: 'whiteboard',
           ActiveChannels: [
             { ChannelKey: 'whiteboard', Title: 'Whiteboard', Exposure: 'pixels', IsFocused: true, State: { nodeCount: 3 } },

@@ -7962,10 +7962,8 @@ export class SpreadsheetArtifactViewerComponent
 
   public ApplyFormulaAutocomplete(item: SpreadsheetFormulaSuggestion): void {
     const current = this.FormulaBarInput ?? '';
-    const replaced = current.replace(
-      /(MJ\.[A-Za-z0-9_]*|[A-Za-z][A-Za-z0-9_.]*)$/i,
-      () => `${item.Name}(`,
-    );
+    const tokenStart = findTrailingFormulaIdentifierStart(current);
+    const replaced = tokenStart >= 0 ? `${current.slice(0, tokenStart)}${item.Name}(` : current;
     this.FormulaBarInput = replaced.startsWith('=') ? replaced : `=${item.Name}(`;
     this.ShowFormulaAutocomplete = false;
     this.FormulaAutocompleteSuggestions = [];
@@ -14553,3 +14551,23 @@ export const SPREADSHEET_FORMULA_CATALOG: readonly SpreadsheetFormulaSuggestion[
   { Name: 'MJ.IMPORTRANGE', Signature: 'MJ.IMPORTRANGE(artifactId, "Sheet!A1:D10")', Summary: 'Live cross-workbook range import' },
   { Name: 'MJ.AI', Signature: 'MJ.AI(prompt, range_context)', Summary: 'Opt-in AI evaluation over cell context' },
 ];
+
+function isAsciiLetter(ch: string): boolean {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+}
+
+function isFormulaIdentifierChar(ch: string): boolean {
+  return isAsciiLetter(ch) || (ch >= '0' && ch <= '9') || ch === '_' || ch === '.';
+}
+
+/** Finds the start index of a trailing formula identifier token using a linear scan. */
+function findTrailingFormulaIdentifierStart(input: string): number {
+  let runStart = input.length;
+  while (runStart > 0 && isFormulaIdentifierChar(input[runStart - 1])) {
+    runStart--;
+  }
+  while (runStart < input.length && !isAsciiLetter(input[runStart])) {
+    runStart++;
+  }
+  return runStart < input.length ? runStart : -1;
+}

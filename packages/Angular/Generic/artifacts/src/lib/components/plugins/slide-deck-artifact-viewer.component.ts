@@ -4835,10 +4835,7 @@ export class SlideDeckArtifactViewerComponent
     this.popoutAudienceWindow = win;
     this.HasPopoutAudienceWindow = true;
     try {
-      const doc = win.document;
-      doc.open();
-      doc.write(buildAudienceWindowShellHtml(channelName));
-      doc.close();
+      initializeAudienceWindowDom(win.document);
     } catch {
       // Cross-origin or sandboxed window open guard
     }
@@ -10745,7 +10742,8 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private broadcastPresentationState(): void {
-    if (!this.audienceChannel) {
+    const hasOpenPopout = Boolean(this.popoutAudienceWindow && !this.popoutAudienceWindow.closed);
+    if (!this.audienceChannel && !hasOpenPopout) {
       return;
     }
     const slide = this.DisplayedSlide;
@@ -10753,7 +10751,7 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const theme = this.SafeTheme;
-    const payload = {
+    const payload: AudienceStagePayload = {
       type: 'state',
       presenting: this.IsPresentationActive,
       slideNumber: this.ActiveSlideIndex + 1,
@@ -10781,10 +10779,19 @@ export class SlideDeckArtifactViewerComponent
         RevealStep: r.RevealStep ?? 0,
       })),
     };
-    try {
-      this.audienceChannel.postMessage(payload);
-    } catch {
-      // Channel may have closed externally
+    if (this.audienceChannel) {
+      try {
+        this.audienceChannel.postMessage(payload);
+      } catch {
+        // Channel may have closed externally
+      }
+    }
+    if (hasOpenPopout && this.popoutAudienceWindow) {
+      try {
+        renderAudienceWindowState(this.popoutAudienceWindow.document, payload);
+      } catch {
+        // Cross-origin or closed popout guard
+      }
     }
   }
 
@@ -10863,44 +10870,161 @@ export class SlideDeckArtifactViewerComponent
   }
 }
 
-function buildAudienceWindowShellHtml(channelName: string): string {
-  const safeChannelJson = JSON.stringify(channelName);
-  return [
-    '<!DOCTYPE html>',
-    '<html lang="en"><head><meta charset="utf-8"/><title>MJ Slides — Audience Stage</title>',
-    '<style>',
-    '*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#05070c;color:#f8fafc;font-family:Inter,system-ui,sans-serif;overflow:hidden}',
-    'body{display:flex;align-items:center;justify-content:center;padding:24px}',
-    '#stage{width:100%;max-width:1440px;aspect-ratio:16/9;background:var(--bg,#fff);color:var(--text,#0f172a);border-radius:16px;padding:36px 48px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 28px 80px rgba(0,0,0,.6);position:relative;overflow:hidden}',
-    '#title{margin:0;font-size:38px;font-weight:800;color:var(--primary,#4f46e5)}',
-    '#subtitle{margin:8px 0 0;font-size:18px;color:var(--muted,#475569)}',
-    '#regions{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:20px 0;align-content:stretch}',
-    '.card{background:var(--surface,#f8fafc);border-radius:14px;padding:18px 22px;border:1px solid rgba(148,163,184,.28);display:flex;flex-direction:column;gap:8px;transition:opacity .25s ease}',
-    '.card.hidden-step{opacity:.06}',
-    '.kpi-val{font-size:48px;font-weight:800;color:var(--accent,#0ea5e9);line-height:1.1}',
-    '.kpi-lbl{font-size:16px;font-weight:600}',
-    '.kpi-delta{font-size:13px;color:var(--primary,#4f46e5);font-weight:600}',
-    '#footer{display:flex;justify-content:space-between;font-size:13px;color:var(--muted,#475569);border-top:1px solid rgba(148,163,184,.25);padding-top:10px}',
-    '#overlay{position:fixed;inset:0;display:none;z-index:20}',
-    '#laser{position:fixed;width:16px;height:16px;border-radius:50%;background:#ef4444;box-shadow:0 0 18px 4px rgba(239,68,68,.75);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:30}',
-    '</style></head><body>',
-    '<div id="stage"><div><h1 id="title">Waiting for presenter…</h1><p id="subtitle"></p></div><div id="regions"></div><div id="footer"><span id="f-left"></span><span id="f-right"></span></div></div>',
-    '<div id="overlay"></div><div id="laser"></div>',
-    '<script>',
-    `const ch = new BroadcastChannel(${safeChannelJson});`,
-    'const stage=document.getElementById("stage"),titleEl=document.getElementById("title"),subEl=document.getElementById("subtitle"),regEl=document.getElementById("regions"),fLeft=document.getElementById("f-left"),fRight=document.getElementById("f-right"),ov=document.getElementById("overlay"),laser=document.getElementById("laser");',
-    'ch.onmessage=(ev)=>{const d=ev.data;if(!d||d.type!=="state")return;',
-    'const t=d.theme||{};stage.style.setProperty("--bg",t.BackgroundColor||"#fff");stage.style.setProperty("--surface",t.SurfaceColor||"#f8fafc");stage.style.setProperty("--primary",t.PrimaryColor||"#4f46e5");stage.style.setProperty("--accent",t.AccentColor||"#0ea5e9");stage.style.setProperty("--text",t.TextColor||"#0f172a");stage.style.setProperty("--muted",t.MutedTextColor||"#475569");',
-    'titleEl.textContent=d.title||"";subEl.textContent=d.subtitle||"";fLeft.textContent=d.footerText||"";fRight.textContent=d.slideNumber+" / "+d.slideCount;',
-    'ov.style.display=d.overlayMode&&d.overlayMode!=="none"?"block":"none";ov.style.background=d.overlayMode==="whiteout"?"#fff":"#000";',
-    'laser.style.display=d.laserActive?"block":"none";laser.style.left=(d.laserX||50)+"%";laser.style.top=(d.laserY||50)+"%";',
-    'regEl.replaceChildren();const maxStep=d.maxRevealStep||0;const curStep=d.revealStep||0;',
-    'for(const r of (d.regions||[])){const c=document.createElement("div");const revealed=!maxStep||!r.RevealStep||curStep>=r.RevealStep;c.className="card"+(revealed?"":" hidden-step");',
-    'if(r.Kind==="big-number"){const v=document.createElement("div");v.className="kpi-val";v.textContent=r.BigNumberValue||"—";const l=document.createElement("div");l.className="kpi-lbl";l.textContent=r.BigNumberLabel||r.Label||"";const dl=document.createElement("div");dl.className="kpi-delta";dl.textContent=r.BigNumberDelta||"";c.append(v,l,dl);}else{const p=document.createElement("div");p.style.whiteSpace="pre-wrap";p.textContent=r.MarkdownContent||r.Label||"";c.append(p);}',
-    'regEl.appendChild(c);}};',
-    'ch.postMessage({type:"audience-ready"});',
-    '</script></body></html>',
-  ].join('');
+interface AudienceStagePayload {
+  type: 'state';
+  presenting: boolean;
+  slideNumber: number;
+  slideCount: number;
+  layout: string;
+  title: string;
+  subtitle: string;
+  overlayMode: string;
+  revealStep: number;
+  maxRevealStep: number;
+  laserActive: boolean;
+  laserX: number;
+  laserY: number;
+  footerText: string;
+  theme: Pick<
+    SlideDeckThemeSpec,
+    'BackgroundColor' | 'SurfaceColor' | 'PrimaryColor' | 'AccentColor' | 'TextColor' | 'MutedTextColor'
+  >;
+  regions: Array<{
+    RegionID: string;
+    Label?: string;
+    Kind: string;
+    MarkdownContent: string;
+    BigNumberValue: string;
+    BigNumberLabel: string;
+    BigNumberDelta: string;
+    QuoteAttribution: string;
+    RevealStep: number;
+  }>;
+}
+
+const AUDIENCE_STAGE_STYLES = [
+  '*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#05070c;color:#f8fafc;font-family:Inter,system-ui,sans-serif;overflow:hidden}',
+  'body{display:flex;align-items:center;justify-content:center;padding:24px}',
+  '#stage{width:100%;max-width:1440px;aspect-ratio:16/9;background:var(--bg,#fff);color:var(--text,#0f172a);border-radius:16px;padding:36px 48px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 28px 80px rgba(0,0,0,.6);position:relative;overflow:hidden}',
+  '#title{margin:0;font-size:38px;font-weight:800;color:var(--primary,#4f46e5)}',
+  '#subtitle{margin:8px 0 0;font-size:18px;color:var(--muted,#475569)}',
+  '#regions{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:20px 0;align-content:stretch}',
+  '.card{background:var(--surface,#f8fafc);border-radius:14px;padding:18px 22px;border:1px solid rgba(148,163,184,.28);display:flex;flex-direction:column;gap:8px;transition:opacity .25s ease}',
+  '.card.hidden-step{opacity:.06}',
+  '.kpi-val{font-size:48px;font-weight:800;color:var(--accent,#0ea5e9);line-height:1.1}',
+  '.kpi-lbl{font-size:16px;font-weight:600}',
+  '.kpi-delta{font-size:13px;color:var(--primary,#4f46e5);font-weight:600}',
+  '#footer{display:flex;justify-content:space-between;font-size:13px;color:var(--muted,#475569);border-top:1px solid rgba(148,163,184,.25);padding-top:10px}',
+  '#overlay{position:fixed;inset:0;display:none;z-index:20}',
+  '#laser{position:fixed;width:16px;height:16px;border-radius:50%;background:#ef4444;box-shadow:0 0 18px 4px rgba(239,68,68,.75);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:30}',
+].join('');
+
+/** Builds the audience stage popup DOM directly via DOM APIs without document.write or HTML strings. */
+function initializeAudienceWindowDom(doc: Document): void {
+  doc.title = 'MJ Slides — Audience Stage';
+  if (doc.head) {
+    const meta = doc.createElement('meta');
+    meta.setAttribute('charset', 'utf-8');
+    const style = doc.createElement('style');
+    style.textContent = AUDIENCE_STAGE_STYLES;
+    doc.head.replaceChildren(meta, style);
+  }
+  if (!doc.body) {
+    return;
+  }
+
+  const header = doc.createElement('div');
+  const titleEl = doc.createElement('h1');
+  titleEl.id = 'title';
+  titleEl.textContent = 'Waiting for presenter…';
+  const subtitleEl = doc.createElement('p');
+  subtitleEl.id = 'subtitle';
+  header.append(titleEl, subtitleEl);
+
+  const regionsEl = doc.createElement('div');
+  regionsEl.id = 'regions';
+
+  const footer = doc.createElement('div');
+  footer.id = 'footer';
+  const footerLeft = doc.createElement('span');
+  footerLeft.id = 'f-left';
+  const footerRight = doc.createElement('span');
+  footerRight.id = 'f-right';
+  footer.append(footerLeft, footerRight);
+
+  const stage = doc.createElement('div');
+  stage.id = 'stage';
+  stage.append(header, regionsEl, footer);
+
+  const overlay = doc.createElement('div');
+  overlay.id = 'overlay';
+  const laser = doc.createElement('div');
+  laser.id = 'laser';
+
+  doc.body.replaceChildren(stage, overlay, laser);
+}
+
+/** Renders presenter state into the audience window document using safe textContent and style updates. */
+function renderAudienceWindowState(doc: Document, payload: AudienceStagePayload): void {
+  const stage = doc.getElementById('stage');
+  const titleEl = doc.getElementById('title');
+  const subEl = doc.getElementById('subtitle');
+  const regEl = doc.getElementById('regions');
+  const fLeft = doc.getElementById('f-left');
+  const fRight = doc.getElementById('f-right');
+  const overlay = doc.getElementById('overlay');
+  const laser = doc.getElementById('laser');
+  if (!stage || !titleEl || !subEl || !regEl || !fLeft || !fRight || !overlay || !laser) {
+    return;
+  }
+
+  const theme = payload.theme;
+  stage.style.setProperty('--bg', theme.BackgroundColor || '#fff');
+  stage.style.setProperty('--surface', theme.SurfaceColor || '#f8fafc');
+  stage.style.setProperty('--primary', theme.PrimaryColor || '#4f46e5');
+  stage.style.setProperty('--accent', theme.AccentColor || '#0ea5e9');
+  stage.style.setProperty('--text', theme.TextColor || '#0f172a');
+  stage.style.setProperty('--muted', theme.MutedTextColor || '#475569');
+
+  titleEl.textContent = payload.title || '';
+  subEl.textContent = payload.subtitle || '';
+  fLeft.textContent = payload.footerText || '';
+  fRight.textContent = `${payload.slideNumber} / ${payload.slideCount}`;
+
+  overlay.style.display = payload.overlayMode && payload.overlayMode !== 'none' ? 'block' : 'none';
+  overlay.style.background = payload.overlayMode === 'whiteout' ? '#fff' : '#000';
+
+  laser.style.display = payload.laserActive ? 'block' : 'none';
+  laser.style.left = `${payload.laserX || 50}%`;
+  laser.style.top = `${payload.laserY || 50}%`;
+
+  const maxStep = payload.maxRevealStep || 0;
+  const curStep = payload.revealStep || 0;
+  const cards: HTMLElement[] = [];
+  for (const r of payload.regions) {
+    const card = doc.createElement('div');
+    const revealed = !maxStep || !r.RevealStep || curStep >= r.RevealStep;
+    card.className = revealed ? 'card' : 'card hidden-step';
+    if (r.Kind === 'big-number') {
+      const valEl = doc.createElement('div');
+      valEl.className = 'kpi-val';
+      valEl.textContent = r.BigNumberValue || '—';
+      const lblEl = doc.createElement('div');
+      lblEl.className = 'kpi-lbl';
+      lblEl.textContent = r.BigNumberLabel || r.Label || '';
+      const deltaEl = doc.createElement('div');
+      deltaEl.className = 'kpi-delta';
+      deltaEl.textContent = r.BigNumberDelta || '';
+      card.append(valEl, lblEl, deltaEl);
+    } else {
+      const bodyEl = doc.createElement('div');
+      bodyEl.style.whiteSpace = 'pre-wrap';
+      bodyEl.textContent = r.MarkdownContent || r.Label || '';
+      card.append(bodyEl);
+    }
+    cards.push(card);
+  }
+  regEl.replaceChildren(...cards);
 }
 
 function generateSlideBlockUuid(): string {
