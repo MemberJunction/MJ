@@ -18,7 +18,7 @@ import { vi } from 'vitest';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
 import { ScoringBindings } from '../../scoring/scoring-binding';
 import type { ScoringContext } from '../../scoring/scoring-context';
-import type { IChallengerSource, IScoringModelRuntime, IScoringPreparedModel, ScoringAssembly, ScoringValueStore } from '../../scoring/scoring-seams';
+import type { ChallengerSelection, IChallengerSource, IScoringModelRuntime, IScoringPreparedModel, ScoringAssembly, ScoringValueStore } from '../../scoring/scoring-seams';
 import type { ISidecarPredictor, LoadedModel } from '../../scoring/types';
 import { SnapshotFiles } from '../../snapshot/snapshot-serialization';
 import { SnapshotHash } from '../../snapshot/snapshot-hash';
@@ -118,6 +118,9 @@ class ScoringTestProvider extends GateTestProvider {
   constructor(store: GateTestStore, target: TargetTable) {
     super(store);
     this.RunView = vi.fn().mockImplementation(async (params: RunViewParams, user?: UserInfo) => (params.EntityName === MEMBERSHIPS ? target.View(params) : store.RunViewRows(params, user)));
+  }
+  public override EntityByID(entityId: string): EntityInfo | undefined {
+    return UUIDsEqual(entityId, MEMBERSHIPS_ID) ? membershipsInfo : undefined;
   }
   public override EntityByName(entityName: string): EntityInfo | undefined {
     if (entityName === MEMBERSHIPS) return membershipsInfo;
@@ -220,6 +223,8 @@ export class RuntimeDouble implements IScoringModelRuntime {
   public readonly AsOfs: ('unit-rule' | Date)[] = [];
   public readonly Units = new Map<string, UnitRows['kind'] | null>();
   public readonly Renamed = new Map<string, { readonly From: string; readonly To: string }>();
+  /** The provider each assembly read through (its caller's context), in call order. */
+  public readonly AssemblyProviders: IMetadataProvider[] = [];
   /** Every assembly's as-of argument, in call order. */
   public AsOfArguments(): ('unit-rule' | Date)[] {
     return [...this.AsOfs];
@@ -234,7 +239,7 @@ export class RuntimeDouble implements IScoringModelRuntime {
       unit: unitKind === null ? null : { Spec: RuntimeDouble.unit(unitKind), Features: [], RowEntity: MEMBERSHIPS, CategoryLevels: new Map() },
     };
     const renamed = this.Renamed.get(model.ID);
-    return { Loaded: loaded, Assemble: async (ids, _key, asOf) => this.assemble(loaded, renamed, ids, asOf) };
+    return { Loaded: loaded, Assemble: async (ids, _key, asOf, _entity, ctx) => { this.AssemblyProviders.push(ctx.Provider); return this.assemble(loaded, renamed, ids, asOf); } };
   }
   private assemble(loaded: LoadedModel, renamed: { readonly From: string; readonly To: string } | undefined, ids: readonly string[], asOf: 'unit-rule' | Date): ScoringAssembly {
     this.AsOfs.push(asOf);
@@ -263,13 +268,13 @@ export class RuntimeDouble implements IScoringModelRuntime {
 
 /** The challenger source double. */
 export class ChallengersDouble implements IChallengerSource {
-  private readonly named = new Map<string, string>();
-  /** The binding's monitoring names `challenger`. */
-  public NameChallenger(binding: Pick<MJMLModelScoringBindingEntity, 'ID'>, challenger: Pick<MJMLModelEntity, 'ID'>): void {
-    this.named.set(binding.ID.toLowerCase(), challenger.ID);
+  private readonly named = new Map<string, ChallengerSelection>();
+  /** The binding's runs mirror to `challenger`, for the records `sampled` takes (every record when omitted). */
+  public NameChallenger(binding: Pick<MJMLModelScoringBindingEntity, 'ID'>, challenger: Pick<MJMLModelEntity, 'ID'>, sampled: (recordId: string) => boolean = () => true): void {
+    this.named.set(binding.ID.toLowerCase(), { ModelID: challenger.ID, Sampled: sampled });
   }
   /** @inheritdoc */
-  public async ChallengerModelID(binding: MJMLModelScoringBindingEntity): Promise<string | null> {
+  public async Challenger(binding: MJMLModelScoringBindingEntity): Promise<ChallengerSelection | null> {
     return this.named.get(binding.ID.toLowerCase()) || null;
   }
 }

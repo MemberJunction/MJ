@@ -4,6 +4,7 @@ import {
   type MJProcessRunEntity,
   PredictiveStudioCreateScoringProcessOperation,
   PredictiveStudioScoreRecordSetOperation,
+  type PredictiveStudioScoreRecordSetOutput,
   RecordProcessRunNowOperation,
   type RecordProcessRunNowOutput,
 } from '@memberjunction/core-entities';
@@ -36,41 +37,38 @@ export class HarnessScoring {
   /** Execute `PredictiveStudio.ScoreRecordSet` and return a `ScoreAttempt` (never throws for a product refusal). */
   public static async Score(ctx: RunContext, modelId: string, req: ScoreRequest): Promise<ScoreAttempt> {
     const t0 = Date.now();
-    const r = await new PredictiveStudioScoreRecordSetOperation().Execute(
-      { modelId, ...req },
-      { provider: ctx.Provider, user: ctx.User },
-    );
-    const durationMs = Date.now() - t0;
-    if (!r.Success || !r.Output) {
+    const r = await new PredictiveStudioScoreRecordSetOperation().Execute({ modelId, ...req }, { provider: ctx.Provider, user: ctx.User });
+    return HarnessScoring.AttemptOf(r, Date.now() - t0);
+  }
+
+  /**
+   * The attempt of one operation result. A completed run is the output; a refused or failed run is read from its code
+   * and message (the operation returns no output then): the scoring run it names and, for a failed run, its counts.
+   */
+  public static AttemptOf(r: RemoteOpResult<PredictiveStudioScoreRecordSetOutput>, durationMs: number): ScoreAttempt {
+    if (r.Success && r.Output) {
+      const out = r.Output;
       return {
-        Ok: false,
-        ErrorMessage: r.ErrorMessage || null,
-        RefusalCode: PredictiveStudioRefusalCodes.IsRefusal(r.ResultCode) ? r.ResultCode : null,
-        Scored: 0,
-        Failed: 0,
-        Skipped: 0,
-        WroteBack: false,
-        Predictions: [],
+        Ok: true, ErrorMessage: null, RefusalCode: null, ScoringRunID: out.scoringRunId, Status: out.status, Total: out.total, Written: out.written, Failed: 0,
+        Predictions: (out.predictions || []).map((p) => ({ RecordID: HarnessScoring.bareId(p.recordId), Score: p.score, Class: p.class || null })),
         DurationMs: durationMs,
       };
     }
-    const out = r.Output;
+    const message = r.ErrorMessage || '';
+    const refusalCode = PredictiveStudioRefusalCodes.IsRefusal(r.ResultCode) ? r.ResultCode : null;
+    const runId = HarnessScoring.RUN_IN_MESSAGE.exec(message)?.[1] || null;
+    const counts = HarnessScoring.FAILED_COUNTS.exec(message);
     return {
-      Ok: true,
-      ErrorMessage: null,
-      RefusalCode: null,
-      Scored: out.scored,
-      Failed: out.failed,
-      Skipped: out.skipped,
-      WroteBack: out.wroteBack,
-      Predictions: (out.predictions || []).map((p) => ({
-        RecordID: HarnessScoring.bareId(p.recordId || ''),
-        Score: p.score,
-        Class: p.class ?? null,
-      })),
-      DurationMs: durationMs,
+      Ok: false, ErrorMessage: message || null, RefusalCode: refusalCode, ScoringRunID: runId,
+      Status: runId === null ? null : refusalCode === 'SCORING_RUN_FAILED' ? 'failed' : 'refused',
+      Total: counts ? Number(counts[2]) : 0, Written: 0, Failed: counts ? Number(counts[1]) : 0, Predictions: [], DurationMs: durationMs,
     };
   }
+
+  /** The scoring run a refusal's message names (`… (scoring run <id>…`). */
+  private static readonly RUN_IN_MESSAGE = /scoring run ([0-9A-Fa-f-]{36})/;
+  /** A failed run's counts in its message (`<failed> of <total> records failed`). */
+  private static readonly FAILED_COUNTS = /(\d+) of (\d+) records failed/;
 
   /** Create an on-demand scoring Record Process, run it now, and read back all `MJ: Process Run Details` rows. */
   public static async ScoreViaRecordProcess(

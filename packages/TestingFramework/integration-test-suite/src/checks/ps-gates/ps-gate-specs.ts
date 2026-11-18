@@ -6,7 +6,6 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { UUIDMap } from '@memberjunction/global';
-import type { PredictiveStudioWriteBackDirective } from '@memberjunction/core-entities';
 import type { OutcomeModelLike, RunDetailLike } from '@memberjunction/predictive-studio-core';
 import {
   DatasetCatalog,
@@ -40,12 +39,6 @@ export class PsGateSpecs {
 
   /** The four classification algorithms the agent-run gates offer the builder. */
   public static readonly Algorithms: readonly AlgorithmKey[] = ['logistic_regression', 'xgboost', 'lightgbm', 'random_forest'];
-
-  /**
-   * The write-back mapping G0.7 scores with (the score lands in the dataset's `TruthScore` column), typed as the
-   * ScoreRecordSet operation's write-back input (the explicit `OutputMapping` form).
-   */
-  public static readonly WriteBack: Exclude<PredictiveStudioWriteBackDirective, boolean> = { OutputMapping: { fields: { TruthScore: '$.score' } } };
 
   /** The W1 record-process scoring of the run `RunID`, shared by G0.4 and G0.5; cleared when the scoring fails. */
   private static w1RecordProcess: { RunID: string; Scoring: Promise<W1RecordProcessScoring> } | null = null;

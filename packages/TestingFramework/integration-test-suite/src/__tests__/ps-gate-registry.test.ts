@@ -4,7 +4,7 @@ import { PredictionDigest } from '../checks/ps-gates/ps-gate-registry';
 
 /** A successful attempt with the given predictions. */
 function attempt(predictions: ScoreAttempt['Predictions']): ScoreAttempt {
-  return { Ok: true, ErrorMessage: null, RefusalCode: null, Scored: predictions.length, Failed: 0, Skipped: 0, WroteBack: false, Predictions: predictions, DurationMs: 1 };
+  return { Ok: true, ErrorMessage: null, RefusalCode: null, ScoringRunID: 'run-1', Status: 'completed', Total: predictions.length, Written: 0, Failed: 0, Predictions: predictions, DurationMs: 1 };
 }
 
 const A = 'aaaaaaaa-0000-0000-0000-000000000001';

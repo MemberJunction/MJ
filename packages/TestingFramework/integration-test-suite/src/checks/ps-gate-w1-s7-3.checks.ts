@@ -1,23 +1,23 @@
 /**
- * Gate G0.7 "W1 → S7.3": scoring with write-back on a Draft and on an Archived W1-signal s42 model is refused with
- * MODEL_NOT_SCORABLE and writes 0 rows, 2 of 2; a dry run on a published model succeeds, scores rows and writes 0 rows.
- * A dry run that crashes, returns a GraphQL error or times out scores nothing, so it fails the gate (spec §2).
+ * Gate G0.7 "W1 → S7.3": scoring a Draft and an Archived W1-signal s42 model is refused with MODEL_NOT_PUBLISHED and
+ * leaves the column unwritten, 2 of 2; a dry run on a published model succeeds, scores rows and writes 0 rows. A dry run
+ * that crashes, returns a GraphQL error or times out scores nothing, so it fails the gate (spec §2). Score Record Set
+ * writes only through a binding (no write-back directive), so the column count proves nothing else wrote it.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { ContainmentProbe, RunFixtures, type LoadedDataset, type ScoreAttempt, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
-import { PsGateSpecs } from './ps-gates/ps-gate-specs';
 
-/** One scoring attempt with write-back and the rows it left written. */
+/** One scoring attempt and the rows of the column it left written. */
 interface WriteBackAttempt { Attempt: ScoreAttempt; Written: number }
 
 /** The scoring attempts and fixture model of G0.7. */
 class ScoringRefusalSteps {
-  /** Score `modelId` with write-back over NA 2024 after clearing the column; reads back how many rows were written. */
+  /** Score `modelId` over NA 2024 after clearing the column; reads back how many rows of the column were written. */
   public static async ScoreWithWriteBack(h: TruthHarness, w1: LoadedDataset, modelId: string, dryRun: boolean): Promise<WriteBackAttempt> {
     const scope = { filter: { entityName: w1.Entity.Name, extraFilter: "Region = 'NA' AND [Year] = 2024", maxRows: 5000 } };
     await h.ResetColumn(w1, 'TruthScore');
-    const a = await h.Score(modelId, { scope, writeBack: PsGateSpecs.WriteBack, dryRun });
+    const a = await h.Score(modelId, { scope, dryRun });
     return { Attempt: a, Written: await h.CountNonNull(w1, 'TruthScore') };
   }
 
@@ -39,14 +39,14 @@ export const PsGateW1S73Checks: NamedCheck[] = [
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-      const draft = await RunFixtures.W1S42Model(h); // a trained Draft: the inference processor's status switch scores only Validated and Published
+      const draft = await RunFixtures.W1S42Model(h); // a trained Draft: only a Published model scores (check 1)
       const archivedId = await ScoringRefusalSteps.ArchivedModel(h, w1);
       const validatedId = (await RunFixtures.W1S42PublishedModel(h)).ModelID; // scorable: published through the gate
       const d = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, draft.ModelID, false);
       const ar = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, archivedId, false);
       const dry = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, validatedId, true);
-      const refused = [d, ar].filter((x) => x.Written === 0 && ContainmentProbe.WasScoringRefused(x.Attempt, 'MODEL_NOT_SCORABLE')).length;
-      const dryRunClean = dry.Attempt.Ok && dry.Attempt.Scored > 0 && dry.Written === 0;
+      const refused = [d, ar].filter((x) => x.Written === 0 && ContainmentProbe.WasScoringRefused(x.Attempt, 'MODEL_NOT_PUBLISHED')).length;
+      const dryRunClean = dry.Attempt.Ok && dry.Attempt.Total > 0 && dry.Written === 0;
       PsGate.Assert({
         Passed: refused === 2 && dryRunClean,
         Measured: {
@@ -55,13 +55,13 @@ export const PsGateW1S73Checks: NamedCheck[] = [
           archivedWritten: ar.Written,
           archivedRefusalCode: ar.Attempt.RefusalCode,
           dryRunOk: dry.Attempt.Ok,
-          dryRunScored: dry.Attempt.Scored,
+          dryRunScored: dry.Attempt.Total,
           dryRunRefusalCode: dry.Attempt.RefusalCode,
           dryRunWritten: dry.Written,
         },
         Detail:
-          `Draft/Archived refused with MODEL_NOT_SCORABLE and 0 rows written: ${refused} of 2; ` +
-          `dry run ok=${dry.Attempt.Ok}, scored ${dry.Attempt.Scored} rows, wrote ${dry.Written} rows`,
+          `Draft/Archived refused with MODEL_NOT_PUBLISHED and 0 rows written: ${refused} of 2; ` +
+          `dry run ok=${dry.Attempt.Ok}, scored ${dry.Attempt.Total} rows, wrote ${dry.Written} rows`,
       });
     },
   },

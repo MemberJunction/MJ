@@ -202,6 +202,24 @@ describe('ScoringService.Score — writes', () => {
     expect(runs.All().map((r) => r['Status'])).toEqual(['completed', 'completed']);
   });
 
+  it('the live mirror scores only the sampled records of each batch: a batch with none writes no Challenger rows, and the challenger run counts what it wrote', async () => {
+    const challenger = world.Model({ Status: 'Validated' }, published.PipelineID);
+    const sampledIds = new Set(['m2', `m${BATCH + 1}`]);   // one record of batch 1, one of batch 2, none of batch 3
+    world.Challengers.NameChallenger(binding, challenger, (id) => sampledIds.has(id));
+    expect(await new ScoringService(ctx()).Score(binding, ThreeBatches(), asOf, false)).toMatchObject({ Status: 'completed', Written: 3 * BATCH });
+    expect(world.Values.Calls().map((c) => [c.Role, c.Rows.map((r) => r.RecordID)])).toEqual([
+      ['Champion', ['m1', 'm2', 'm3']], ['Challenger', ['m2']], ['Champion', ['m4', 'm5', 'm6']], ['Challenger', ['m4']], ['Champion', ['m7', 'm8', 'm9']],
+    ]);
+    expect(runs.All().map((r) => [r['ModelID'], r['Status'], r['Written']])).toEqual([[published.ID, 'completed', 3 * BATCH], [challenger.ID, 'completed', 2]]);
+  });
+
+  it('a challenger whose sample draws no record of the run opens no run row and writes no Challenger rows', async () => {
+    const challenger = world.Model({ Status: 'Validated' }, published.PipelineID);
+    world.Challengers.NameChallenger(binding, challenger, () => false);
+    await new ScoringService(ctx()).Score(binding, Records('r1', 'r2'), asOf, false);
+    expect([runs.All().map((r) => r['ModelID']), world.Values.Calls().map((c) => c.Role)]).toEqual([[published.ID], ['Champion']]);
+  });
+
   it('a challenger whose feature schema does not match the assembled columns gets a refused run and writes no Challenger rows', async () => {
     const mismatched = world.Model({ Status: 'Validated', FeatureSchemaHash: 'deadbeef'.repeat(8) }, published.PipelineID);
     world.Challengers.NameChallenger(binding, mismatched);

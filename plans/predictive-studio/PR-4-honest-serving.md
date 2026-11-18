@@ -340,6 +340,10 @@ packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts
 # M5.4: its line 220 asserts ModeBadgeClass('Materialized'), the case M5.4 removes
 packages/Angular/Explorer/dashboards/src/__tests__/production-distribution.test.ts
 packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/ps-operate-mapping.test.ts
+packages/RecordSetProcessor/base/src/interfaces.ts
+packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts
+packages/RecordSetProcessor/engine/src/__tests__/RecordSetProcessor*.test.ts
 # M4.3: its lines 25, 29, 35, 63, 111, 149 read the four @deprecated grid aliases M4.3 deletes
 packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-grid-record-names.test.ts
 # M4.4: its BusinessPredictionInput literals gain the RunID that M4.4's traced trust line requires (D-082, D4-118)
@@ -6547,7 +6551,7 @@ harness's `ScoreAttempt.RefusalCode`, G5.1, G5.2, G5.5, the operate dialog — r
 structured refusal is stored on the `MJ: ML Scoring Runs` row; changing that helper would break its rule of keeping the
 base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   it('with a BindingID it writes Model Feature Values and returns the run id', async () => {
     const out = await op.ExecuteServer({ modelId: published.ID, bindingId: binding.ID, scope: Records('r1', 'r2') }, context);
@@ -6578,9 +6582,9 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
     expect(dataAccess.Reads().some((r) => r.Entity === R1_TRAINING_ENTITY)).toBe(false);
   });
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions src/operations src/scoring` → the new
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions src/operations src/scoring` → the new
   cases fail; the old write-back cases fail on the removed output fields.
-- [ ] Step 3: Implement as **Files** says; `ProductionScoreRecordSetRunner.run(request: ScoreRecordSetRequest):
+- [x] Step 3: Implement as **Files** says; `ProductionScoreRecordSetRunner.run(request: ScoreRecordSetRequest):
   Promise<ScoringResult>` (every arm carries `scoringRunId`); `PredictiveStudioScoreRecordSetServerOperation`'s
   `protected async InternalExecute(input: PredictiveStudioScoreRecordSetInput, provider: IMetadataProvider, user:
   UserInfo, context: RemoteOpServerContext): Promise<PredictiveStudioScoreRecordSetOutput>`, called by the op's own
@@ -6620,8 +6624,8 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
   → 0 (on `origin/next`: 18 — `score-record-set.action.ts:171`, `:172`, `:173`, `:174`, `:215`, `:219`,
   `model-scoring-action-generator.ts:363`, `:373`, `:380`, `:387`, `:394`, `score-record-set.action.test.ts:123`, `:124`,
   `:199`, `:206`, `:207`, `:217`, `model-scoring-action-generator.test.ts:239`). The `@deprecated` aliases of each modified PS file go (§2.5).
-- [ ] Step 4: Step 2's command → passes; Engine and TruthSuite `pnpm test` → 0 failed; dashboards `pnpm test` → 0 failed.
-- [ ] Step 5: Runtime on MJAPI :4041 (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`): 20
+- [x] Step 4: Step 2's command → passes; Engine and TruthSuite `pnpm test` → 0 failed; dashboards `pnpm test` → 0 failed.
+- [x] Step 5: Runtime on MJAPI :4041 (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`): 20
   Score Record Set calls with a `BindingID` on the R1 model →
   `SELECT COUNT(*) FROM __mj.MLScoringRun WHERE ModelID = @r1` → 20, and the §4.1 single join
   `SELECT COUNT(*) FROM __mj.FeatureValue fv JOIN __mj.MLScoringRun r ON r.ID = fv.MLScoringRunID JOIN __mj.MLModel m ON m.ID = fv.MLModelID WHERE fv.Source = 'Model' AND r.ModelID = @r1 AND r.ArtifactSha256 = m.ArtifactSha256 AND fv.EffectiveAsOf IS NOT NULL`
@@ -6787,20 +6791,20 @@ become `Source = 'Model'`; the drift-action half is M6's) · Kept unchanged: the
 added the same four), #6180's `InferProcessor` prompt challenger (`FeaturePipelinesEngine/src/processors/InferProcessor.ts`,
 outside the allowlist; its `Source = 'Pipeline', Role = 'Challenger'` rows are what the Champion filters exclude)
 
-- [ ] Step 1: **#6180 is merged** (`git log --oneline origin/next --grep "Merge pull request #6180"` → `fa33e94dbe Merge pull request #6180 from MemberJunction/docs/plan-next-gen-ai-agents-durable-graphs` (recorded at the M1 merge-of-next pass, D4-79)):
+- [x] Step 1: **#6180 is merged** (`git log --oneline origin/next --grep "Merge pull request #6180"` → `fa33e94dbe Merge pull request #6180 from MemberJunction/docs/plan-next-gen-ai-agents-durable-graphs` (recorded at the M1 merge-of-next pass, D4-79)):
   re-point its champion and challenger rows to `Source = 'Model'` rows of a scoring run, keep its
   `Role = 'Champion'` filters, and rewrite the conditional allowlist files of §2.6 that read them.
-- [ ] Step 2: The failing test: `shadow-scoring.test.ts › a sampled record's champion and challenger rows are Model rows of two scoring runs`
+- [x] Step 2: The failing test: `shadow-scoring.test.ts › a sampled record's champion and challenger rows are Model rows of two scoring runs`
   (`expect(values.Calls().map((c) => [c.Source, c.Role])).toEqual([['Model', 'Champion'], ['Model', 'Challenger']])`)
   and `git grep -n "Source: 'Pipeline'" -- packages/AI/PredictiveStudio/Engine/src/scoring` → expected 0, at the merge
   ≥ 1; `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/shadow-scoring.test.ts` → fails.
-- [ ] Step 3: Implement: `ShadowScoringCoordinator` keeps sampling (`ShouldSample`) and dispatch, and hands the sampled
+- [x] Step 3: Implement: `ShadowScoringCoordinator` keeps sampling (`ShouldSample`) and dispatch, and hands the sampled
   batch to `ScoringService`'s mirror step; its champion `RecordFeatureValues` call and its `IShadowScoreAuditSink` rows
   are deleted; IT166's check asserts `Source = 'Model'` rows with `MLScoringRunID` set for both roles.
-- [ ] Step 4: Step 2's command → passes; `git grep -n "Source: 'Pipeline'" -- packages/AI/PredictiveStudio/Engine/src/scoring`
+- [x] Step 4: Step 2's command → passes; `git grep -n "Source: 'Pipeline'" -- packages/AI/PredictiveStudio/Engine/src/scoring`
   → 0; Engine `pnpm test` → 0 failed; `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT166 - Predictive Shadow Scoring and Drift"`
   (its name in next's `metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json`) → 0 failed.
-- [ ] Step 5: Runtime: a bound process with a `ChallengerConfiguration` run-now on MJAPI →
+- [x] Step 5: Runtime: a bound process with a `ChallengerConfiguration` run-now on MJAPI →
   `SELECT Source, Role, COUNT(*) FROM __mj.FeatureValue WHERE MLModelScoringBindingID = @b GROUP BY Source, Role` →
   `Model | Champion` and `Model | Challenger`, no `Pipeline` row for the process's target variable.
 
@@ -10211,6 +10215,65 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   reason; `Compare` of an empty sample is `Sampled: 0, Passed: false`. `Recompute` groups by model and `EffectiveAsOf`
   and keeps each refusal in `Results`. Each recomputation writes one `MJ: ML Scoring Runs` row on the `parity` path;
   M6's job user must hold the binding's view authorization once M5b attaches the view gate.
+- **D4-158 · M5.6 as built** (M5.6 report). Score Record Set resolves its wire scope to C6's `ScoringScope` of bare keys
+  (a records scope without a binding is read against the model's unit row entity, else its lineage or pipeline target
+  entity) and calls `ScoringService.Score` with a `bindingId` (the model named must be of the binding's pipeline, else
+  `INVALID_INPUT`) or `Predict` without one. A run that does not complete throws `ScoringRefusedError` carrying the
+  result; `PredictiveStudioRefusals.CodeOf` maps every refusal kind (exhaustive switch) and `failed` →
+  `SCORING_RUN_FAILED`; `REFUSAL_CODES` gains 12 codes. The runner returns the completed arm plus the predictions (no
+  binding, or a dry run), so the op's `Output` is the completed run (`status`, `scoringRunId`, `modelId`,
+  `modelVersion`, `artifactSha256`, `total`, `written`, `dryRun`, `predictions?`). A bound `'ML Model'` Record Process
+  admits its binding in Preflight (`ScoringService.Admit`: a refusal writes a refused run row and fails the run with the
+  refusal as its error), scores each batch with one `Score` call (one run row per batch), stops scoring after a batch
+  that did not complete, keeps the refusal on each Process Run Detail, prepares its model once per run
+  (`MemoizedScoringRuntime`), and declares `FailRunOnRecordError`. No scoring process carries an `OutputMapping`: the
+  creators stop writing it and the processor's `PrepareOutputMapping` returns an empty mapping, so an older process is
+  never wrapped in a write-back. A process no binding names scores only a Published model (G0.7; Validated is refused
+  `MODEL_NOT_SCORABLE`). A model without a Prediction Unit reads its scope's rows from the scope's own entity; a feature
+  column those rows lack is refused `feature-schema-mismatch` naming it, and the scoring assembly never re-reads a
+  column from the training entity (`hydrateMissingFeatureColumns` serves train and materialize only;
+  `MissingFeatureColumnsError`). `ScoringService.ReadScope` reads a view or filter scope past the entity's row cap. The
+  Engine's two legacy `ScoringScope`s are gone: the Action's is `ScoreRecordSetScope`, the process builders'
+  `ScoringProcessScope`. The harness's `ScoreAttempt` reads `ScoringRunID`, `Status`, `Total`, `Written`, `Failed`,
+  `Predictions` (a refusal's run ID and a failed run's counts from the message); no-binding gate checks read `Total`.
+- **D4-159 · F-L3-4 closed by parallel batches** (owner ruling 2026-11-18; D4-54 addendum; M5.6 rulings rounds and the
+  M5.6+M5.11 review fix round). `RecordProcess.RunNow` stays synchronous. A bound `'ML Model'` Record Process on a
+  provider that makes independent instances declares `MaxConcurrentBatches = 4` (`BOUND_SCORING_BATCH_CONCURRENCY`); any
+  other run, including a provider whose `CreateIndependentInstance` is not overridden, scores one batch at a time, so
+  concurrent transactions never share a provider instance. Record Set Processing reads up to 4 consecutive batches,
+  scores them at once, waits for every batch of the wave to settle (`Promise.allSettled`) before a rejection fails the
+  run, so no batch writes after the run closes, and checkpoints, budget-gates and runs the breaker after the wave. Each
+  batch is one `ScoringService.Score` call on its own provider instance: its own transaction and its own `MJ: ML Scoring
+  Runs` row (D4-53). The model is prepared once per run (`MemoizedScoringRuntime`); each batch's assembly reads through
+  that batch's own context and provider. A batch that does not complete writes nothing; the batches in flight beside it
+  finish and keep their rows; no later batch is scored: its records fail naming the stopping run (their Process Run
+  Details are written), and the run ends Failed. Resume granularity is a wave. The batch's watermark writes run 8 at a
+  time (`BATCH_WATERMARK_WRITE_CONCURRENCY`). No audit row is dropped: a bound run without a challenger writes 2.00
+  Record Changes per scored record (its Feature Value and its watermark); each sampled record adds one for its
+  Challenger row. Measured on the W1-signal s42 process (16,776 rows, BatchSize 100): RunNow over HTTP returns
+  `Completed` in 194 s (467 s serial; 365 s with the watermark concurrency alone); re-measured with a challenger at the
+  M5 exit on a quiet host.
+- **D4-160 · M5.11 as built** (owner rulings 2026-11-18). #6180's shadow path is gone: no model writes a `Source =
+  'Pipeline'` row, and an unbound `'ML Model'` process writes Process Run Details only. `ShadowScoringCoordinator` is
+  `ScoringService`'s challenger source (`IChallengerSource.Challenger(binding, asOf, ctx)` → `{ ModelID,
+  Sampled(recordId) }`, the production default): it reads the binding's Record Process `ChallengerConfiguration` and
+  samples **per record** by #6180's rule (enabled, `'ML Model'`, a finite numeric `SampleRate` > 0 and a
+  `ChallengerModelID`; a rate ≥ 1 takes every record, otherwise a draw in [0, 1) below the rate), the draw being the
+  first 32 bits of SHA-256(binding ID | record ID | as-of UTC date) — a pure function, so parallel batches share no
+  sampling state and a same-day re-run samples, and replaces, the same records. The live mirror scores only a batch's
+  sampled rows, on the champion's assembled features, under the challenger's own run row (opened only when the run
+  samples a record; its `Total`/`Written` count the sampled records). `MaxLatencyMs` and `MaxInFlight` have no meaning
+  on the in-transaction mirror: `MaxInFlight` is deleted with the coordinator's options; `MaxLatencyMs` is optional and
+  read only by the `'Infer'` prompt challenger, and a stored `'ML Model'` configuration carrying either is read without
+  error and ignored (the interface's doc). A process re-run scores only changed records (watermarks), so a challenger
+  added later mirrors changed records only. `FeatureValueCacheService`'s `mlModelID`/`valueText` and the key's
+  `MLModelID` went with their only caller. Step 4's grep is `git grep -nE
+  "(\.Source[[:space:]]*=[[:space:]]*|[Ss]ource:[[:space:]]*)'Pipeline'" -- 'packages/AI/PredictiveStudio/Engine/src'
+  ':!packages/AI/PredictiveStudio/Engine/src/**/__tests__/**'` → 0. Measured (W1-signal s42, 16,776 rows, SampleRate
+  0.25): 16,776 Champion and 4,116 Challenger `Model` rows (0.245), the draw's exact records, 168 run rows per role, 0
+  Pipeline rows. IT166's PSD1 runs again (D4-94's skip removed). The draw's as-of date is read once per run, so a run
+  that crosses midnight keeps one sample and a backfill `asOf` reproduces its sample; the sample rotates daily (a fresh
+  cohort per day), which M6 monitoring reads as such (M5.6+M5.11 review, Nit).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -12118,6 +12181,24 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - Review: Spec ✅ / Quality Approved (`task-M5.4-review.md`). Minor M1–M4 go to the M5 exit batch (M1: a create on a
   `Withdrawn` binding's model and feature reuses it; M5.5's `ScoringService` refuses it, so the op must refuse or
   reactivate explicitly).
+
+### 2026-11-18 — Tasks M5.5 – M5.8 + M5.11 (ScoringService; every caller on it; sidecar refusals; parity; champion/challenger rows) — Claude (Opus 5.5)
+
+- M5.5 committed `06bea1b5aa` (D4-156): binding path, model path, column copy, live mirror. M5.7 committed `e17ef368e7`
+  (D4-154, D4-155): `/predict` refuses a schema or stored-preprocessing mismatch with a 400; pytest 516, mypy clean.
+  M5.8 committed `dc5962c440` (D4-157): `ParityCheck` sample, recompute, compare; 17 tests.
+- M5.6 + M5.11 (D4-158, D4-159, D4-160): every scoring caller on `ScoringService`; F-L3-4 closed by parallel batches
+  (owner ruling: up to 4 in flight, each its own provider instance, transaction and run row; RunNow synchronous) —
+  W1-signal s42 RunNow 194 s Completed, 2.00 Record Changes per scored record; #6180's shadow path absorbed (16,776
+  Champion / 4,116 Challenger Model rows at SampleRate 0.25, 0 Pipeline rows). Root build 351/351; Engine 1756 (the two
+  `no-status-writes` cases timed out under host load in the full run and pass alone, 4/4); RSP engine 182; TruthSuite
+  157; DB lane 89/89; IT166 2/0/0; `check:guards` pass; Deterministic (PR-lane, round 3) 129 / 1 / 26, the failure
+  next's PB7/PB18 (OF4-36). Census back to baseline.
+- Review: M5.6+M5.11 combined, Spec ❌ on the allowlist only (I1, closed: four RecordSetProcessor/ops-mapping paths
+  added), Quality Approved; fix round (M1 `allSettled`, M2 concurrency 1 without independent instances, M3 assembly on
+  the batch's own provider, M4, M5) re-reviewed Spec ✅ / Quality Approved (`task-M5.6-11-rereview.md`). Minor R1 (M2's
+  test does not build four batches on one shared provider) and the parked Minors go to the M5 exit batch. The challenger
+  run's timing (866 s on a loaded host) is re-measured at the M5 exit.
 
 ## 12. Refresh log (append-only)
 

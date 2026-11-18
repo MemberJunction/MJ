@@ -59,7 +59,7 @@ describe('PredictiveStudioScoringStartup', () => {
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
   });
 
-  it('gracefully handles malformed JSON in ChallengerConfigurationObject by logging and setting no challenger (S2)', async () => {
+  it('resolves a processor for a Record Process whose ChallengerConfiguration is malformed without reading it: the processor holds no challenger (D-069)', async () => {
     await PredictiveStudioScoringStartup.Instance.HandleStartup();
 
     const mockRp = {
@@ -77,10 +77,7 @@ describe('PredictiveStudioScoringStartup', () => {
       RecordProcess: mockRp,
     }) as MLModelInferenceProcessor;
 
-    expect(ConsoleCapture.Lines(errors)).toEqual([
-      "Record Process '': failed to parse ChallengerConfiguration; ignoring challenger config: Unexpected token in JSON: {\"Enabled\":true,}",
-    ]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([]);
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
-    expect((proc as unknown as { challengerConfig?: unknown }).challengerConfig).toBeUndefined();
   });
 });

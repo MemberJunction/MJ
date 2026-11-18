@@ -1,19 +1,16 @@
 /**
  * @module operations/score-record-set.operation
  *
- * **Score Record Set** Remote Operation — the server body for the Manual-mode
- * `PredictiveStudio.ScoreRecordSet` operation. The typed peer of the Score *Action*:
- * it resolves the requested scope and scores it with a trained model, returning the
- * counts plus either ephemeral predictions or a write-back confirmation.
+ * **Score Record Set** Remote Operation — the server body for `PredictiveStudio.ScoreRecordSet`, the typed peer of the
+ * Score *Action*. With a `bindingId` it scores through the binding and writes the binding's Feature Values; without one
+ * it predicts and returns the predictions, writing nothing. A completed run is `Success = true` with the run under
+ * `Output`; a refused or failed run is `Success = false` with the refusal's `ResultCode` and a message naming the
+ * refusal and the scoring run (the structured refusal is stored on that `MJ: ML Scoring Runs` row).
  *
- * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
- * it carries no scoring logic. The scope resolution + `MLModelInferenceProcessor`
- * batch path live in {@link ProductionScoreRecordSetRunner}, shared with the Score
- * action via {@link ScoreRecordSetViaRunner}.
+ * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter: the scope resolution and the
+ * `ScoringService` call live in {@link ProductionScoreRecordSetRunner}, shared with the Score action.
  *
- * Marked `LongRunning` (a large scope can take a while): it emits coarse start/finish
- * progress. The runner does not expose a per-record progress hook today, so progress
- * is bounded to the lifecycle phases.
+ * Marked `LongRunning` (a large scope can take a while): it emits coarse start/finish progress.
  */
 
 import { RegisterClass } from '@memberjunction/global';
@@ -25,12 +22,8 @@ import {
   type PredictiveStudioScoreRecordSetOutput,
 } from '@memberjunction/core-entities';
 
-import type {
-  IScoreRecordSetRunner,
-  ScoringScope,
-  WriteBackDirective,
-} from '../actions/score-record-set.action';
-import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
+import { PredictiveStudioScoreRecordSetAction, type IScoreRecordSetRunner, type ScoreRecordSetScope } from '../actions/score-record-set.action';
+import type { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation';
 import { PredictiveStudioRefusals } from './refusals';
 
@@ -61,76 +54,37 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
     user: UserInfo,
     context: RemoteOpServerContext,
   ): Promise<PredictiveStudioScoreRecordSetOutput> {
-    if (!input?.modelId) {
-      throw new Error('modelId is required');
+    if (!input?.modelId) throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'modelId', 'is required');
+    const scope = input.scope as ScoreRecordSetScope | undefined;
+    if (!scope || PredictiveStudioScoreRecordSetAction.CountScopeSelectors(scope) !== 1) {
+      throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'scope', 'must populate exactly one of: records, viewId, listId, filter, single');
     }
-    const scope = input.scope;
-    if (!scope || this.countScopeSelectors(scope) !== 1) {
-      throw new Error('scope must populate exactly one of: records, viewId, listId, filter, single');
-    }
+    context.emitProgress({ OperationKey: this.OperationKey, Processed: 0, Status: 'Running', Message: `Scoring records with model ${input.modelId}…` });
 
-    context.emitProgress({
-      OperationKey: this.OperationKey,
-      Processed: 0,
-      Status: 'Running',
-      Message: `Scoring records with model ${input.modelId}…`,
-    });
-
-    const result = await ScoreRecordSetViaRunner(
+    const outcome = await ScoreRecordSetViaRunner(
       {
-        modelId: input.modelId,
-        scope: scope as ScoringScope,
-        writeBack: input.writeBack as WriteBackDirective | undefined,
-        dryRun: input.dryRun === true,
-        contextUser: user,
-        provider,
+        modelId: input.modelId, bindingId: input.bindingId, scope, asOfDate: input.asOfDate, entityMapping: input.entityMapping,
+        dryRun: input.dryRun === true, contextUser: user, provider,
       },
       this.runner(),
     );
-
-    context.emitProgress({
-      OperationKey: this.OperationKey,
-      Processed: result.scoredCount + result.failedCount + result.skippedCount,
-      Status: 'Running',
-      Message: `Scored ${result.scoredCount}, failed ${result.failedCount}, skipped ${result.skippedCount}.`,
-    });
-
+    const result = outcome.Result;
+    context.emitProgress({ OperationKey: this.OperationKey, Processed: result.Total, Status: 'Running', Message: `Scored ${result.Total}, wrote ${result.Written} (scoring run ${result.ScoringRunID}).` });
     return {
-      scored: result.scoredCount,
-      failed: result.failedCount,
-      skipped: result.skippedCount,
-      wroteBack: result.wroteBack,
-      // Predictions are ephemeral — only present when NOT writing back (the runner
-      // already drops them on write-back; map straight through).
-      predictions: result.wroteBack ? undefined : result.predictions,
+      status: result.Status, scoringRunId: result.ScoringRunID, modelId: result.ModelID, modelVersion: result.ModelVersion, artifactSha256: result.ArtifactSha256,
+      total: result.Total, written: result.Written, dryRun: result.DryRun,
+      // Predictions travel only when nothing was written (no binding, or a dry run).
+      predictions: outcome.Predictions.length > 0 ? [...outcome.Predictions] : undefined,
     };
-  }
-
-  /**
-   * Count how many of the mutually-exclusive scope selectors are populated. More
-   * than one is ambiguous and is rejected the same as none, so the caller's intent
-   * is always unambiguous (mirrors the Score action's `scopeHasTarget`).
-   */
-  protected countScopeSelectors(scope: PredictiveStudioScoreRecordSetInput['scope']): number {
-    let count = 0;
-    if (Array.isArray(scope.records) && scope.records.length > 0) count++;
-    if (scope.viewId) count++;
-    if (scope.listId) count++;
-    if (scope.filter) count++;
-    if (scope.single) count++;
-    return count;
   }
 
   /**
    * The scoring runner to delegate to. Overridable so unit tests inject a mock with
    * no live DB / sidecar (mirrors the Action's `createRunner` seam). The production
-   * default ({@link ProductionScoreRecordSetRunner}) resolves the scope and drives
-   * the `MLModelInferenceProcessor` — the SAME path the Score action uses.
+   * default ({@link ProductionScoreRecordSetRunner}) resolves the scope and calls
+   * `ScoringService` — the SAME path the Score action uses.
    */
   protected runner(): IScoreRecordSetRunner {
-    // Use the loader-wired factory so the runner can read the persisted model
-    // artifact at score time (a bare `new ProductionScoreRecordSetRunner()` has
-    // no artifact loader → "no artifact loader is configured").
     return BuildScoreRecordSetRunner();
   }
 }

@@ -64,6 +64,19 @@ export class ModelValueRows {
     };
   }
 
+  /**
+   * A scored row as one number with its class: a binary model's probability of class 1 (the sidecar's `score`), a
+   * multiclass model's probability of its predicted class, a regression's point; with the predicted class and the
+   * adverse probability of a classification. Pure.
+   */
+  public static Score(row: ScoredRow): { readonly score: number; readonly class?: string; readonly adverseProbability?: number } {  // case-violation-ok-legacy-back-compat: the prediction wire keys
+    const output = row.output;
+    if (output.kind === 'value') return { score: output.point };
+    const predicted = ModelValueRows.PredictedClass(output);
+    const score = output.probabilities.length === 2 ? output.probabilities[1] : predicted.Probability;
+    return { score, class: predicted.Class, adverseProbability: output.adverseProbability };
+  }
+
   /** The most probable class of a class-probability output and its probability (the first on a tie). Pure. */
   public static PredictedClass(output: Extract<ScoreOutput, { kind: 'class-probabilities' }>): { readonly Class: string; readonly Probability: number } {
     let best = 0;

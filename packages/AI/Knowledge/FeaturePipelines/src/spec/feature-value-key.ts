@@ -40,8 +40,6 @@ export interface FeatureValueKeyInput {
     ParametersHash: string | null;
     InputHash: string | null;
     Source: FeatureValueSource;
-    /** The ML Model that computed the values for an 'ML Model' process; null for prompt/human values. */
-    MLModelID?: string | null;
     /**
      * The scoring binding of a Human row with no Record Process; null or absent on every Record-Process-scoped row. It
      * keeps two bindings' Human rows of one record and feature apart on `UQ_FeatureValue_ValueKey (RecordProcessID,
@@ -118,7 +116,6 @@ export class FeatureValueKey {
             PipelineVersion: key.PipelineVersion,
             PromptVersionHash: key.PromptVersionHash,
             AIModelID: key.AIModelID ? NormalizeUUID(key.AIModelID) : null,
-            ...(key.MLModelID ? { MLModelID: NormalizeUUID(key.MLModelID) } : {}),
             // only when present, so every Record-Process-scoped key keeps the hash it had before bindings existed
             ...(key.MLModelScoringBindingID ? { MLModelScoringBindingID: NormalizeUUID(key.MLModelScoringBindingID) } : {}),
             ParametersHash: key.ParametersHash,

@@ -16,21 +16,30 @@ export interface PredictiveStudioScoringScope {
     single?: { entityName: string; primaryKey: Record<string, unknown> };
 }
 
-/**
- * Optional write-back directive. `true` enables write-back with the model's default
- * mapping; an object supplies an explicit `OutputMapping` (target column / child
- * record). When omitted, predictions are returned ephemerally.
- */
-export type PredictiveStudioWriteBackDirective = boolean | { OutputMapping: Record<string, unknown> };
-
 /** Input for `PredictiveStudio.ScoreRecordSet`. */
 export interface PredictiveStudioScoreRecordSetInput {
-    /** Id of the `MJ: ML Models` row to score with. */
+    /** Id of the `MJ: ML Models` row to score with; with a `bindingId` it must be a model of the binding's pipeline. */
     modelId: string;
+    /**
+     * The `MJ: ML Model Scoring Bindings` row to score through. With it, the binding's pipeline's Published model scores
+     * the scope and the scores are written as the binding's Feature Values (and its column copy, when it names one);
+     * without it, the predictions are returned and nothing is written.
+     */
+    bindingId?: string;
     /** The records to score — populate exactly one selector on the scope. */
     scope: PredictiveStudioScoringScope;
-    /** Compute the predictions WITHOUT writing them back (preview) when true/omitted with no write-back. */
+    /** The date the scope is scored as of (ISO); the run date when omitted. Only a model trained on a Prediction Unit scores an earlier date. */
+    asOfDate?: string;
+    /** The stored row that maps the scope's entity onto the model's entity, when they differ. */
+    entityMapping?: PredictiveStudioEntityRef;
+    /** Score and record the run, but write no Feature Value and no column. */
     dryRun?: boolean;
-    /** Optional write-back directive; when omitted (or false) predictions are returned ephemerally. */
-    writeBack?: PredictiveStudioWriteBackDirective;
+}
+
+/** A reference to a stored row: its entity name and ID. */
+export interface PredictiveStudioEntityRef {
+    /** The entity's name. */
+    entity: string;
+    /** The row's ID. */
+    id: string;
 }

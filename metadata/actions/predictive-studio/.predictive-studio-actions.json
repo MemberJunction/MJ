@@ -286,13 +286,13 @@
   },
   {
     "_comments": [
-      "Score Record Set — thin Action boundary over the MLModelInferenceProcessor scoring work type.",
-      "Validates ModelID + Scope, delegates scope resolution + scoring to the runner, returns counts +",
-      "ephemeral predictions OR confirms a write-back."
+      "Score Record Set — thin Action boundary over ScoringService.",
+      "With a BindingID it scores through the binding and writes the binding's Feature Values (Score);",
+      "without one the model predicts and nothing is written (Predict). Outputs the scoring run's fields."
     ],
     "fields": {
       "Name": "Score Record Set",
-      "Description": "Scores a set of records with a trained ML Model. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). Returns the scored count and either the ephemeral predictions or confirmation that scores were written back to the target.",
+      "Description": "Scores a set of records with a trained ML Model. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). With a BindingID the binding's pipeline's Published model scores the scope and the scores are written as the binding's Feature Values (and copied into its column, when it names one); without one the model predicts and the predictions are returned, writing nothing. Outputs the scoring run: ScoringRunID, Status, Total, Written, Failed, and Predictions when nothing was written. A refused or failed run fails the action with the refusal's code and still names its scoring run.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScoreRecordSetAction",
       "Status": "Active",
@@ -347,7 +347,7 @@
             "ValueType": "Simple Object",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional. true to write scores back with the model's default mapping, or an object { OutputMapping: ... } to write to a specific column/child record. When omitted, predictions are returned ephemerally."
+            "Description": "Retired. Score Record Set writes only through a scoring binding (BindingID); there is no write-back directive."
           },
           "primaryKey": {
             "ID": "313EF2E8-3BE2-475D-ADF3-E0226585B6E9"
@@ -355,6 +355,10 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:33.871Z",
             "checksum": "5c891c2c4e5fe3d8d32f85a465d4226d7d6e910e60aaa96191aa6e20f4e4d3a7"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-18T09:33:29.228Z"
           }
         },
         {
@@ -365,7 +369,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Number of records successfully scored."
+            "Description": "Retired. See Total and Written."
           },
           "primaryKey": {
             "ID": "03512976-A3F7-4762-9314-1648B6DE09FF"
@@ -373,6 +377,10 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:33.895Z",
             "checksum": "21c6fc591beca4847d753a6e8e3cba2d4c53d966ad7432c2bd4c8b8032e4ad16"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-18T09:33:29.302Z"
           }
         },
         {
@@ -383,7 +391,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "True when scores were written back to the target (predictions are then NOT returned ephemerally)."
+            "Description": "Retired. See Written."
           },
           "primaryKey": {
             "ID": "B0B84CDE-8583-4EF6-B9C0-6EA7EC20BE93"
@@ -391,6 +399,136 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:33.916Z",
             "checksum": "8a8234afa9fc5546ebdc9280a4343a3e1f25a7b92765517f81f0fcfdc67c299f"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-18T09:33:29.381Z"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BindingID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional. The scoring binding to score through: its pipeline's Published model scores the scope, and the scores are written as the binding's Feature Values (and copied into its column, when it names one). Without it, the predictions are returned and nothing is written."
+          },
+          "primaryKey": {
+            "ID": "FAEDA21E-56FD-4835-B718-1E3B2A9ACF5B"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.599Z",
+            "checksum": "412515fec87462b7e0b7946b83782713089c956867aa65e718a09ffddb403a0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AsOfDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional. The date the scope is scored as of (ISO); the run date when omitted. Only a model trained on a Prediction Unit scores an earlier date."
+          },
+          "primaryKey": {
+            "ID": "C9E2CBC6-27B1-4794-B26E-F63C50BC82B6"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.627Z",
+            "checksum": "8a6fe2cdf82a8658c3e8c534b4b92b6df7d8b89d559fdbdc8d679a9df7575b81"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScoringRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The MJ: ML Scoring Runs row of the call; set on a refused or failed run too."
+          },
+          "primaryKey": {
+            "ID": "0E4011D5-BF9D-4397-9727-C326C484296F"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.653Z",
+            "checksum": "c5daf0255d4a9e4e333db377a2058e7bcf1734d35e93cda60c369ff2b95f9d23"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The scoring run's status: completed, refused or failed."
+          },
+          "primaryKey": {
+            "ID": "9629698C-5B43-40C2-8497-58036C8CBDC0"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.679Z",
+            "checksum": "05a28156f72740900f57a1a54fb573e2cc5fa4eb76762b6c83199ec2c95fe9a1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Total",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Records in the scope."
+          },
+          "primaryKey": {
+            "ID": "46C960EC-E1FE-4749-828E-1E6480BB4BB9"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.703Z",
+            "checksum": "c330008fa2fe296ad32cc65d9074e9b8b47aacbce180f3437c4aa3c4f5a96a0f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Written",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Feature Values written (0 without a BindingID and on a dry run)."
+          },
+          "primaryKey": {
+            "ID": "8D036FC2-424F-4FAB-8783-FB29193E7863"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.731Z",
+            "checksum": "930c02e86cf0d4a68d046ca2738abcd821339560df5932ba12da39881170b542"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Records that failed (a failed run)."
+          },
+          "primaryKey": {
+            "ID": "3E486761-4C88-43CB-9E38-1E5286882E08"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T09:33:28.761Z",
+            "checksum": "ce9d45ec37ab103451e0fdb99ef96f7a1e736f41b35a34d4853532e64c58a94e"
           }
         },
         {
@@ -401,14 +539,14 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "JSON array of ephemeral predictions ({recordId, score, class}), present only when WriteBack was not requested."
+            "Description": "JSON array of predictions ({recordId, score, class, adverseProbability, inTraining}), each keyed by the record's bare key; present when nothing was written (no BindingID, or a dry run)."
           },
           "primaryKey": {
             "ID": "65484624-5507-45BC-AE89-3F5443E93C10"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:33.938Z",
-            "checksum": "b024c8bacfc720ab99c73336f097e88669e7020b4769e34fd40433383d0bd288"
+            "lastModified": "2026-11-18T20:35:23.403Z",
+            "checksum": "799abbc1219ae10067e85226d4e7eabbad1e90603b7fb8c8865fc857266efca0"
           }
         }
       ],
@@ -418,14 +556,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Records scored (predictions returned or written back)."
+            "Description": "Records scored: written as the binding's Feature Values, or the predictions returned (no binding)."
           },
           "primaryKey": {
             "ID": "B7548FE0-57A0-4435-B90D-BE1D37E8A7CB"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:33.957Z",
-            "checksum": "ad110e492d3c3a0640c41d344d2d3933ba0bc03664e80b797924d4fc3388e99f"
+            "lastModified": "2026-11-18T20:35:23.404Z",
+            "checksum": "7e34169e36989ba15c4786e887ea460aea71e5b64b866b54b2bc700add4451e5"
           }
         },
         {
@@ -478,14 +616,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "MODEL_NOT_SCORABLE",
             "IsSuccess": false,
-            "Description": "Scoring refused: the model's status does not allow scoring. Only Validated and Published models score; a trained Draft must be promoted to Validated first, and an Archived model cannot score. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+            "Description": "Scoring refused by a Record Process no binding names: the model's status does not allow scoring (only Published scores). Score Record Set reports a model's status as MODEL_NOT_PUBLISHED."
           },
           "primaryKey": {
             "ID": "FFA2645F-430A-4BBD-B3DE-9950E2CBBE27"
           },
           "sync": {
-            "lastModified": "2026-10-28T00:35:16.347Z",
-            "checksum": "e87ee24ab1dc8b2c0df06e43b5e5fc99a97ddffeef8a5e2484910eca9d67d6d6"
+            "lastModified": "2026-11-18T20:35:23.405Z",
+            "checksum": "0fa7f32dfb63bcbb2ca828beb3d7c9266caef77622a7785a25997cc610d1f650"
           }
         },
         {
@@ -493,14 +631,254 @@
             "ActionID": "@parent:ID",
             "ResultCode": "MODEL_NEEDS_TRAINING",
             "IsSuccess": false,
-            "Description": "Scoring refused: the model has no trained artifact yet. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+            "Description": "The model does not exist or has no trained artifact yet. A binding run over a never-trained model ends a failed run (SCORING_RUN_FAILED)."
           },
           "primaryKey": {
             "ID": "7BF3C847-3B6C-48B4-BE64-F15C1767883A"
           },
           "sync": {
-            "lastModified": "2026-10-28T00:35:16.357Z",
-            "checksum": "f4b9256f9210f1f3a607f74556608a0b82020d1a04502bb2aa4e44a19950bbc2"
+            "lastModified": "2026-11-18T20:35:23.406Z",
+            "checksum": "ccf5cf67150bb3b829f378c273017de01fba3fe67c2da7f43dd564a46ae9638f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NOT_PUBLISHED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model's status is not Published (the refusal names the status). The run row records the refusal."
+          },
+          "primaryKey": {
+            "ID": "9011CF96-2457-429D-BD13-5F6D1CE78691"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.769Z",
+            "checksum": "c0a1e4611c60123c039dcd573d17a8d45b904bca4a5cd1d8e84070da86e47cc7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_FLAGGED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model carries leakage flags, or a dominance re-run flagged one feature."
+          },
+          "primaryKey": {
+            "ID": "D588DF1A-B169-44A0-A9AF-6ED48CAF1FF7"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.788Z",
+            "checksum": "160c5b3b64b61be6abf90d854d2eb986635eda911c838ddebebe9a3181fa8db9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_MISSING",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model's artifact file is missing."
+          },
+          "primaryKey": {
+            "ID": "B5D8A158-29F5-4A91-A5E9-53F2040992DF"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.806Z",
+            "checksum": "00ea20fc4168fa91e6a93bd791b5acbed023c9df3e1dfaeae7f2002b2242311d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_HASH_MISMATCH",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model's artifact bytes do not match its registered SHA-256."
+          },
+          "primaryKey": {
+            "ID": "9F94538F-8203-42B8-994B-7C52EFDC7E42"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.822Z",
+            "checksum": "fb15cb2debc15b17f3de5e4b482367320fa711a4cf246fd2bd6c012c05554d13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_UNVERIFIED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model has no registered artifact hash to verify against."
+          },
+          "primaryKey": {
+            "ID": "EE9858B6-565D-448D-9E52-4E532E7DF9D5"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.838Z",
+            "checksum": "566fde2ba8e7311d82d6ab2219eefbf330aee32490a18ff696e0a8201d150f2f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FEATURE_SCHEMA_MISMATCH",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the assembled feature columns do not match the model's schema; the message names the missing, extra and retyped columns."
+          },
+          "primaryKey": {
+            "ID": "695CBCA9-6E27-467E-B9D4-75176F3F1AAD"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.854Z",
+            "checksum": "afe5ee874397714f9071decb427e8ab4b4adfa2dd8b1a95cf18aee3ff0a94b2a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SCOPE_ENTITY_MISMATCH",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the scope's entity is not the model's or the binding's entity, and no entity mapping was given."
+          },
+          "primaryKey": {
+            "ID": "6F2F2724-0C3D-41B6-B562-6B1A1DCA3C9D"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.871Z",
+            "checksum": "c775fb9feead89b3ac8c0f8a7a06491bfa51e2a9c91ca4801cb08d76f8a0dc68"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ASSEMBLY_REFUSED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: feature assembly refused the scope (a capped read, a row its change history does not cover)."
+          },
+          "primaryKey": {
+            "ID": "2E452413-3199-44B4-A4EE-5A8B62531516"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.885Z",
+            "checksum": "be1114a7630390fd89c27864b7ff27bc15f3f79c469673cca8375251f70a1b41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_FEATURE_COLUMN",
+            "IsSuccess": false,
+            "Description": "Scoring refused: a feature column holds no value on any scored record."
+          },
+          "primaryKey": {
+            "ID": "083B479B-3667-4493-83D9-18FA0197B1DB"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.901Z",
+            "checksum": "2f9c2fbf20816554fc430d41f10c0a23b7c84e73448f266a89fe5ac633ff48ec"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PUBLISHED_MODEL",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the binding's pipeline has no Published model."
+          },
+          "primaryKey": {
+            "ID": "7F2D20DD-3712-41E6-A644-F15375B7D2C4"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.917Z",
+            "checksum": "db9d8dd1bbabbd8e23ea5941ef752ffef70b955692fac60824661c3091a1a389"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BINDING_WITHDRAWN",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the scoring binding was withdrawn."
+          },
+          "primaryKey": {
+            "ID": "363FF3F7-A8FF-4DD3-96B6-64EABECF108E"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.935Z",
+            "checksum": "e99d3a7b09b2ff915d4883064a654dda761b4478ac3abaa5c87f8219a0ede3b7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BINDING_NOT_AUTHORIZED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the caller does not hold the binding's view authorization."
+          },
+          "primaryKey": {
+            "ID": "A2472DBD-8761-49F4-A8F3-B72DB520AAC9"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.953Z",
+            "checksum": "571b7998dc4994522187b7a6c4363ef356cb93f2a9b4be28afd7db206d68157d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AS_OF_UNSUPPORTED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: a model trained without a Prediction Unit scores only the run date."
+          },
+          "primaryKey": {
+            "ID": "76731D0D-E3B1-47CB-81A0-C755B9A74122"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.969Z",
+            "checksum": "329ffe01fe6ef6c9c1acdef19770019556c5774e9e9601df06deebff1c56787a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LEAKAGE_UNKNOWN",
+            "IsSuccess": false,
+            "Description": "Scoring refused: a pre-change model kept serving has no stored feature importance to test for leakage."
+          },
+          "primaryKey": {
+            "ID": "DEC63233-5BC5-46E5-A255-ABB0BB71257A"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:28.990Z",
+            "checksum": "4f5689c3ad1c25bca3b69a65cf8e3c3d0330dfb4b2bc0c233fbb2c30d2dbcca2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SCORING_RUN_FAILED",
+            "IsSuccess": false,
+            "Description": "The scoring run stopped at a batch in which a record failed; the batches before it stay. ScoringRunID names the run and its first errors."
+          },
+          "primaryKey": {
+            "ID": "9AE78827-6BA1-4EA3-88C9-0FE846D35DE1"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:29.008Z",
+            "checksum": "da7d15e13f663b1ee434c5d2ea5d114d13b995d8cd87bd3245639558aa4767d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT",
+            "IsSuccess": false,
+            "Description": "The input breaks the action's contract (a BindingID whose pipeline is not the model's, an unknown entity or key, a non-UUID id); the message names the field."
+          },
+          "primaryKey": {
+            "ID": "0E15135C-21B1-4DBD-B02C-84356B740D5A"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T14:45:29.027Z",
+            "checksum": "ae81142357b24fb0ad857ea1cf0866ffbd551422f587be0e2169bd0bb908bd69"
           }
         }
       ]
@@ -509,8 +887,8 @@
       "ID": "745B8BDC-B748-42F0-82E2-25C5E0615777"
     },
     "sync": {
-      "lastModified": "2026-11-10T23:41:38.187Z",
-      "checksum": "5e4c3599525cb715312ac5d903fa0f852d196e59e84272354a100469282e3e6a"
+      "lastModified": "2026-11-18T20:35:23.383Z",
+      "checksum": "52774d64eac18c1ed86e2cdaf2b1263cfa3903157ca404de145dacb5ea711b9b"
     }
   },
   {
@@ -881,8 +1259,8 @@
             "ID": "8B1C4AEC-D5AF-4202-90B7-6B03F666DAAC"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:34.368Z",
-            "checksum": "e7a0a254a6e53cc0c43e7c17cd60f2ef79a08d5d293ccdd312a8b391ce0257c0"
+            "lastModified": "2026-11-18T20:35:23.434Z",
+            "checksum": "9cf80eb02bc51956761c9a5be4edf03f546249ed34dee36d842fa709a0b0d5d7"
           }
         },
         {
@@ -896,8 +1274,8 @@
             "ID": "408C3D81-C59E-4CA0-9B26-2F92A3F9494B"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:34.389Z",
-            "checksum": "13fc440195503ea507161400a438d80a7ae37e9884dabc03aab40a0c5c631a9f"
+            "lastModified": "2026-11-18T20:35:23.434Z",
+            "checksum": "28810bebbd3c313f6b574efc5c78cfc7ff5291f4729964afba6ddf2ff7a492d5"
           }
         },
         {
@@ -964,8 +1342,8 @@
             "ID": "896E1F71-8A61-480B-807E-0CCE7CF04D49"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:34.470Z",
-            "checksum": "c17d3d3fa656d3b4c2c44d2cec56734c8a4281b13e1360172354bddbf94aa9b5"
+            "lastModified": "2026-11-18T20:35:23.435Z",
+            "checksum": "c9efaeea422c506acdabd37ac42af6c2a668fccc6a0f5089a9cbb21370269475"
           }
         },
         {
@@ -998,8 +1376,8 @@
             "ID": "2BA2642A-EEE4-4C7E-9403-7CB2EBC70E36"
           },
           "sync": {
-            "lastModified": "2026-11-10T23:41:38.442Z",
-            "checksum": "198005d3b74e6af2037a456cd627cbe4750bf8d9298e21f6dcdad57efc8bf930"
+            "lastModified": "2026-11-18T20:35:23.435Z",
+            "checksum": "7176a29e229511ef9c54798ba2394e037356467cce7dd00a2afc5ea0529f6cad"
           }
         },
         {
@@ -1013,8 +1391,8 @@
             "ID": "655E1445-800B-4AC4-8EFF-8FE9DF2D5EF6"
           },
           "sync": {
-            "lastModified": "2026-11-10T23:41:38.454Z",
-            "checksum": "e285616213bc76e5600a5c78cad7a1119608f55433f61a9c0b4f7a4f32df6e00"
+            "lastModified": "2026-11-18T20:35:23.436Z",
+            "checksum": "f81603c193d39d18505c9ec525163434203e7b2665483d53fe06792eaac0b3b9"
           }
         },
         {
@@ -1067,8 +1445,8 @@
       "ID": "FD787F18-C8C4-4C50-8735-A029F41BC478"
     },
     "sync": {
-      "lastModified": "2026-11-10T23:41:38.200Z",
-      "checksum": "42f00b7e1882c6dacfcec24c31c30b0ddef5831544bb082168080d48d5d636aa"
+      "lastModified": "2026-11-18T20:35:23.386Z",
+      "checksum": "a4f2f1c8f45cfa2ca238607d00d1c96aa437725f26f09298f935a8148ad0c500"
     }
   },
   {

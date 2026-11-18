@@ -256,16 +256,18 @@ describe('createScheduledModelScoring — assembled Record Process', () => {
     expect(JSON.parse(rp.Configuration as string).primaryKeyField).toBe('MembershipID');
   });
 
-  it('writes OutputMapping mapping the output field to $.score by default', async () => {
-    const { opts, rp } = setup();
+  it('writes no OutputMapping in write-back mode: the binding names the column and its copy source (the score by default)', async () => {
+    const { opts, rp, binding } = setup();
     await CreateScheduledModelScoring(opts);
-    expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalScore: '$.score' } });
+    expect(rp.OutputMapping).toBeNull();
+    expect([binding.TargetColumn, binding.TargetColumnSource]).toEqual(['RenewalScore', '$.AdverseProbability']);
   });
 
-  it('writes OutputMapping mapping to $.class when valueKind=class', async () => {
-    const { opts, rp } = setup({ valueKind: 'class', outputField: 'RenewalSegment' });
+  it('writes no OutputMapping when valueKind=class: the binding copies the class', async () => {
+    const { opts, rp, binding } = setup({ valueKind: 'class', outputField: 'RenewalSegment' });
     await CreateScheduledModelScoring(opts);
-    expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalSegment: '$.class' } });
+    expect(rp.OutputMapping).toBeNull();
+    expect([binding.TargetColumn, binding.TargetColumnSource]).toEqual(['RenewalSegment', '$.Class']);
   });
 
   it('generates a descriptive default name (with the write-back column) when none is supplied', async () => {

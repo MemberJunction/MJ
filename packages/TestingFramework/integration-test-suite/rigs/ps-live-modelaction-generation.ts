@@ -382,10 +382,12 @@ async function main(): Promise<void> {
       );
     }
     const scopeParam = params.find((p) => p.Name === 'Scope');
-    const writeBackParam = params.find((p) => p.Name === 'WriteBack');
+    const bindingParam = params.find((p) => p.Name === 'BindingID');
+    const runParam = params.find((p) => p.Name === 'ScoringRunID');
     check(!!scopeParam && scopeParam.Type === 'Input', `a 'Scope' Input param exists`);
     check(!!scopeParam && scopeParam.IsRequired === true, `the 'Scope' param is required`);
-    check(!!writeBackParam && writeBackParam.Type === 'Input', `a 'WriteBack' Input param exists`);
+    check(!!bindingParam && bindingParam.Type === 'Input' && bindingParam.IsRequired === false, `an optional 'BindingID' Input param exists`);
+    check(!!runParam && runParam.Type === 'Output', `a 'ScoringRunID' Output param exists`);
 
     // ── 7. Bonus: invoke the generated action with only a Scope ────────────────
     // SKIPPED BY DESIGN: invoking an Action requires the SERVER-SIDE ActionEngineServer.RunAction

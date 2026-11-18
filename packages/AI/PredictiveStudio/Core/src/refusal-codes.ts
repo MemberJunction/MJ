@@ -40,6 +40,30 @@ const REFUSAL_CODES = [
   'MODEL_ARCHIVED',
   /** A remote operation's input breaks its wire contract (a missing field, or a value outside its declared set); the message names the field. */
   'INVALID_INPUT',
+  /** A scoring call names a model whose status may not score (`model-not-published`). */
+  'MODEL_NOT_PUBLISHED',
+  /** A scoring call names a model with leakage flags, or one the dominance re-run flagged (`model-flagged`). */
+  'MODEL_FLAGGED',
+  /** The assembled feature columns do not match the model's stored schema; the message names the columns (`feature-schema-mismatch`). */
+  'FEATURE_SCHEMA_MISMATCH',
+  /** The scope's entity is neither the model's nor the binding's entity, and no entity mapping is given (`scope-entity-mismatch`). */
+  'SCOPE_ENTITY_MISMATCH',
+  /** Feature assembly refused the scope (a capped read, a row the change history does not cover; `assembly-refused`). */
+  'ASSEMBLY_REFUSED',
+  /** A feature column holds no value on any scored row (`nan-or-empty-feature-column`). */
+  'EMPTY_FEATURE_COLUMN',
+  /** The binding's pipeline has no Published model to score with (`no-published-model`). */
+  'NO_PUBLISHED_MODEL',
+  /** The scoring binding was withdrawn (`binding-withdrawn`). */
+  'BINDING_WITHDRAWN',
+  /** The caller does not hold the binding's view authorization (`binding-not-authorized`). */
+  'BINDING_NOT_AUTHORIZED',
+  /** A model trained without a Prediction Unit scores only the run date (`as-of-unsupported`). */
+  'AS_OF_UNSUPPORTED',
+  /** A pre-change model kept serving has no stored feature importance to test for dominance (`leakage-unknown`). */
+  'LEAKAGE_UNKNOWN',
+  /** A scoring run stopped at a batch in which a record failed; the run row names the first errors. */
+  'SCORING_RUN_FAILED',
 ] as const;
 
 /** Why a Train, Score or SignOffModel request was refused. */

@@ -1,10 +1,11 @@
 import { RemoteOperationError, type RemoteOpResult } from '@memberjunction/core';
-import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import { InvalidMajorityBaselineRuleError, PredictiveStudioRefusalCodes, type PredictiveStudioRefusalCode, type ScoringRefusal } from '@memberjunction/predictive-studio-core';
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import { ArtifactUnavailableError, ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
+import { ScoringRefusedError } from '../scoring/scoring-refused-error';
 
 /**
  * Turns Predictive Studio refusal errors into typed `ResultCode`s on the operation result.
@@ -16,6 +17,9 @@ import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.de
 export class PredictiveStudioRefusals {
   /** The refusal code for a Predictive Studio refusal error; null for any other error. */
   public static CodeOf(e: Error): PredictiveStudioRefusalCode | null {
+    // A typed refusal thrown through Refusal()/InvalidInput() keeps its code when ExecuteServer below catches it.
+    if (e instanceof RemoteOperationError && PredictiveStudioRefusalCodes.IsRefusal(e.ResultCode)) return e.ResultCode;
+    if (e instanceof ScoringRefusedError) return e.Result.Status === 'failed' ? 'SCORING_RUN_FAILED' : PredictiveStudioRefusals.ScoringRefusalCode(e.Result.Reason);
     if (e instanceof ReadCapExceededError) return 'READ_CAP_EXCEEDED';
     if (e instanceof TrainingRefusedError) return PredictiveStudioRefusals.trainingRefusalCode(e);
     // A modeling plan that asks for point-in-time assembly is refused before any pipeline exists (the pipeline builder).
@@ -27,6 +31,32 @@ export class PredictiveStudioRefusals {
     if (e instanceof ExperimentSessionsUnavailableError) return 'EXPERIMENT_SESSIONS_UNAVAILABLE';
     if (e instanceof InvalidMajorityBaselineRuleError) return 'INVALID_EVALUATION_SETTING';
     return null;
+  }
+
+  /** The code of a scoring refusal, read off its kind; every kind has one (a new kind fails to compile). */
+  public static ScoringRefusalCode(reason: ScoringRefusal): PredictiveStudioRefusalCode {
+    switch (reason.kind) {
+      case 'model-not-published': return 'MODEL_NOT_PUBLISHED';
+      case 'model-flagged': return 'MODEL_FLAGGED';
+      case 'artifact-missing': return 'ARTIFACT_MISSING';
+      case 'artifact-hash-mismatch': return 'ARTIFACT_HASH_MISMATCH';
+      case 'artifact-unverified': return 'ARTIFACT_UNVERIFIED';
+      case 'feature-schema-mismatch': return 'FEATURE_SCHEMA_MISMATCH';
+      case 'scope-entity-mismatch': return 'SCOPE_ENTITY_MISMATCH';
+      case 'assembly-refused': return 'ASSEMBLY_REFUSED';
+      case 'nan-or-empty-feature-column': return 'EMPTY_FEATURE_COLUMN';
+      case 'no-published-model': return 'NO_PUBLISHED_MODEL';
+      case 'binding-withdrawn': return 'BINDING_WITHDRAWN';
+      case 'binding-not-authorized': return 'BINDING_NOT_AUTHORIZED';
+      case 'as-of-unsupported': return 'AS_OF_UNSUPPORTED';
+      case 'leakage-unknown': return 'LEAKAGE_UNKNOWN';
+      default: return PredictiveStudioRefusals.unknownScoringRefusal(reason);
+    }
+  }
+
+  /** Unreachable while every scoring refusal kind has a code. */
+  private static unknownScoringRefusal(reason: never): PredictiveStudioRefusalCode {
+    throw new Error(`PredictiveStudioRefusals: scoring refusal ${JSON.stringify(reason)} has no code`);
   }
 
   /** The code of an artifact that is not served, read off its refusal kind. */

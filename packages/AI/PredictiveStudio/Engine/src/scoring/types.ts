@@ -27,9 +27,10 @@
  * `AsOfFeatureAssembler` training used ({@link LoadedModel.unit}).
  */
 
+import type { ScoringServiceSeams } from './scoring-seams';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { UUIDSet } from '@memberjunction/global';
-import type { MJMLModelEntity, MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
   PredictResponse,
@@ -50,7 +51,6 @@ import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-hist
 import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
-import type { ShadowScoringCoordinator } from './shadow-scoring';
 import type { ScoringBindingMode } from './scoring-binding';
 
 /**
@@ -236,10 +236,8 @@ export interface MLModelInferenceProcessorOptions {
   autoTrainer?: IModelAutoTrainer;
   /** Optional RecordProcessID associated with this scoring processor instance. */
   recordProcessId?: string;
-  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
-  challengerConfig?: MJRecordProcessEntity_IRecordProcessChallengerConfig;
-  /** Optional WS-4.4 shadow scoring coordinator. */
-  shadowCoordinator?: ShadowScoringCoordinator;
+  /** Replacements for the scoring service's production collaborators on a bound run (tests). */
+  scoringSeams?: Partial<ScoringServiceSeams>;
 }
 
 /**

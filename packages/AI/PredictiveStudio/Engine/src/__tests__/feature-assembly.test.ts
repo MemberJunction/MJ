@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { FeatureStepGraph, SourceBinding, AsOfStrategy, LeakageGuard } from '@memberjunction/predictive-studio-core';
 import {
   FeatureAssemblyExecutor,
+  MissingFeatureColumnsError,
   type FeatureAssemblyParams,
   type IFeatureDataAccess,
   type FetchRowsParams,
@@ -332,8 +333,21 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     leakageGuard: noLeakGuard,
   };
 
-  it('hydrates a required feature column missing from the scored rows by re-reading the entity view', async () => {
-    // Score-time rows: narrow projection dropped MembershipType.
+  it('scoring never re-reads a column its rows lack from the training entity: it refuses naming the column', async () => {
+    const reads: string[] = [];
+    const dataAccess = new InMemoryDataAccess({ Members: [{ ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' }] });
+    const spying: IFeatureDataAccess = {
+      fetchRows: async (params) => { reads.push(params.EntityName); return dataAccess.fetchRows(params); },
+      fetchEmbedding: (e, r, m, d) => dataAccess.fetchEmbedding(e, r, m, d),
+    };
+    const error = await new FeatureAssemblyExecutor().assemble({ ...base, records: [{ ID: 'm1', AutoRenew: 1 }], dataAccess: spying, context: 'on-demand' }).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(MissingFeatureColumnsError);
+    expect(error instanceof MissingFeatureColumnsError ? error.Columns : null).toEqual(['MembershipType']);
+    expect(reads).toEqual([]);
+  });
+
+  it('materialization hydrates a required feature column missing from its rows by re-reading the entity view', async () => {
+    // Narrow projection dropped MembershipType.
     const narrowRows: SourceRow[] = [
       { ID: 'm1', AutoRenew: 1 },
       { ID: 'm2', AutoRenew: 0 },
@@ -349,7 +363,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
       ...base,
       records: narrowRows,
       dataAccess,
-      context: 'on-demand',
+      context: 'materialize',
     });
 
     expect(result.matrix.columns).toEqual(['AutoRenew', 'MembershipType']);
@@ -368,7 +382,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     ).rejects.toThrow(/required feature column\(s\) \[MembershipType\] are absent/);
   });
 
-  it('produces an identical matrix whether the column arrives inline (train) or via hydrate (score)', async () => {
+  it('produces an identical matrix whether the column arrives inline (train) or via hydrate (materialize)', async () => {
     const fullRows: SourceRow[] = [
       { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
       { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
@@ -385,12 +399,12 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
       dataAccess: new InMemoryDataAccess({ Members: fullRows }),
       context: 'train',
     });
-    // Score context: narrow rows + hydrate from the same view → must be byte-for-byte identical.
+    // Materialize context: narrow rows + hydrate from the same view → must be byte-for-byte identical.
     const score = await new FeatureAssemblyExecutor().assemble({
       ...base,
       records: narrowRows,
       dataAccess: new InMemoryDataAccess({ Members: fullRows }),
-      context: 'on-demand',
+      context: 'materialize',
     });
 
     expect(score.matrix).toEqual(train.matrix);
@@ -408,17 +422,17 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
       ...base,
       records: narrowRows,
       dataAccess: new InMemoryDataAccess({ Members: viewRows }),
-      context: 'on-demand',
+      context: 'materialize',
     });
 
     expect(result.matrix.rows).toHaveLength(1);
     expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
   });
 
-  it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
-    // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
-    // handed rows without RegistrationDate → every record failed at ResolveAsOfDate → 0/6747 +
-    // circuit breaker. The as-of column must be hydrated exactly like a feature column.
+  it("materialization hydrates the AsOfStrategy 'column' date when its rows' projection dropped it", async () => {
+    // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). A narrow scope handed
+    // rows without RegistrationDate → every record failed at ResolveAsOfDate → 0/6747 + circuit
+    // breaker. The as-of column must be hydrated exactly like a feature column.
     const narrowRows: SourceRow[] = [
       { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
       { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
@@ -433,7 +447,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
       asOf: { Mode: 'column', Column: 'RegistrationDate' },
       records: narrowRows,
       dataAccess: new InMemoryDataAccess({ Members: viewRows }),
-      context: 'on-demand',
+      context: 'materialize',
     });
 
     // Without hydration this throws "AsOfStrategy column 'RegistrationDate' is missing…" per record.

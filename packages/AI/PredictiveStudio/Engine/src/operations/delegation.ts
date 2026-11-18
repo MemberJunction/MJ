@@ -46,7 +46,7 @@ import type { MLInferenceDeps } from '../scoring/types';
 import type {
   IScoreRecordSetRunner,
   ScoreRecordSetRequest,
-  ScoreRecordSetResult,
+  ScoredRecordSet,
 } from '../actions/score-record-set.action';
 
 import { LifecycleGate, LifecycleModelNotFoundError } from '../registry/lifecycle-gate';
@@ -179,27 +179,25 @@ export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
 }
 
 /**
- * Build the production scoring runner wired with the production {@link MLInferenceDeps}
- * (see {@link BuildProductionMLInferenceDeps}). No provider lookup is needed at score
- * time — the File id IS the artifact key.
+ * Build the production scoring runner: `ScoringService` with its production collaborators (the storage-provider
+ * artifact loader, the sidecar, the inference runtime, the Feature Value store).
  */
 export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
-  return new ProductionScoreRecordSetRunner({ deps: BuildProductionMLInferenceDeps() });
+  return new ProductionScoreRecordSetRunner();
 }
 
 /**
- * Score a record set, delegating to the SAME production runner the Score action
- * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
- * default runner is wired with the {@link StorageProviderArtifactLoader} so the artifact is
- * read through the storage provider its `MJ: Files` row names. The `runner` is injectable for tests.
+ * Score a record set, delegating to the SAME production runner the Score action uses
+ * ({@link ProductionScoreRecordSetRunner} → `ScoringService`). The `runner` is injectable for tests.
  *
- * @param request the model id + resolved scope + write-back directive + user/provider
+ * @param request the model, the optional binding, the scope, the as-of date and the user/provider
  * @param runner optional runner override (defaults to {@link BuildScoreRecordSetRunner})
+ * @throws ScoringRefusedError when the run is refused or fails
  */
 export function ScoreRecordSetViaRunner(
   request: ScoreRecordSetRequest,
   runner: IScoreRecordSetRunner = BuildScoreRecordSetRunner(),
-): Promise<ScoreRecordSetResult> {
+): Promise<ScoredRecordSet> {
   return runner.run(request);
 }
 

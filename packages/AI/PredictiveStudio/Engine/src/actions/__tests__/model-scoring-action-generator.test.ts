@@ -247,10 +247,10 @@ describe('ModelScoringActionGenerator — GenerateForModel', () => {
     expect(modelIdParam!['IsRequired']).toBe(false);
     expect(modelIdParam!['DefaultValue']).toBe('model-uuid-1');
 
-    // The full canonical param set is present (3 inputs + 5 outputs).
-    expect(params).toHaveLength(8);
+    // The full canonical param set is present (4 inputs + 6 outputs), named as the parent Score Record Set writes them.
+    expect(params).toHaveLength(10);
     expect(params.map((p) => p['Name']).sort()).toEqual(
-      ['FailedCount', 'ModelID', 'Predictions', 'Scope', 'ScoredCount', 'SkippedCount', 'WriteBack', 'WroteBack'].sort(),
+      ['AsOfDate', 'BindingID', 'Failed', 'ModelID', 'Predictions', 'Scope', 'ScoringRunID', 'Status', 'Total', 'Written'].sort(),
     );
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3' for model 'model-uuid-1'.")]);
   });
@@ -281,7 +281,7 @@ describe('ModelScoringActionGenerator — GenerateForModel', () => {
 
     const children = actions(store);
     expect(children).toHaveLength(1); // reused, not duplicated
-    expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(8); // recreated, not doubled
+    expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(10); // recreated, not doubled
     expect(store.rows['MJ: Action Categories']).toHaveLength(1); // category reused too
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'")]);
   });

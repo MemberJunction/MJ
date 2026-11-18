@@ -224,10 +224,10 @@ async function main(): Promise<void> {
       throw new Error(`Scoring failed: ${scoreResult.ErrorMessage}`);
     }
     const s = scoreResult.Output;
-    console.log(`  scored=${s.scored} failed=${s.failed} skipped=${s.skipped} wroteBack=${s.wroteBack}`);
+    console.log(`  status=${s.status} total=${s.total} written=${s.written} scoringRunId=${s.scoringRunId}`);
     const samples = (s.predictions ?? []).slice(0, 8);
     for (const p of samples) {
-      console.log(`    • record ${p.recordId?.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
+      console.log(`    • record ${p.recordId.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
     }
 
     // ── 5. Evaluate (Draft → Validated or KeepBaseline, the stored decision) through the lifecycle gate ──

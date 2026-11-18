@@ -72,8 +72,6 @@ export interface FeatureValueOutputItem {
     constraintType?: ValueConstraint['Type'];
     reasoning?: string | null;
     confidence?: number | null;
-    /** Optional explicit text value; stored in ValueText alongside a numeric score for classification models (M3). */
-    valueText?: string | null;
 }
 
 /** Parameters for upserting a record's Feature Values, one row per Feature Value key; every key part is required. */
@@ -97,8 +95,6 @@ export interface RecordFeatureValuesParams {
     pipelineVersion: number | null;
     /** The pin's primary AI model; null when the prompt has no Active model, or for a human value. */
     aiModelID: string | null;
-    /** The ML Model that computed the values for an 'ML Model' process; null for prompt/human values (B1). */
-    mlModelID?: string | null;
     /** The pin's parameters hash; null for a human value. */
     parametersHash: string | null;
     /** SHA-256 of the record's normalised inputs (the cache key hash); null when there is none. */
@@ -467,7 +463,6 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
                 PipelineVersion: params.pipelineVersion, PromptVersionHash: params.promptVersionHash,
                 AIModelID: params.aiModelID, ParametersHash: params.parametersHash,
                 InputHash: params.inputHash, Source: params.source,
-                MLModelID: params.mlModelID ?? null,
                 MLModelScoringBindingID: params.recordProcessID === null ? params.mlModelScoringBindingID || null : null,
             }),
         })));
@@ -692,7 +687,6 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         fv.PromptVersionHash = params.promptVersionHash;
         fv.ConstraintHash = params.constraintHash ?? null;
         fv.AIModelID = params.aiModelID;
-        fv.MLModelID = params.mlModelID ?? null;
         fv.ParametersHash = params.parametersHash;
         fv.InputHash = params.inputHash;
         fv.ValueKeyHash = keyHash;
@@ -998,14 +992,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return undefined;
     }
 
-    /**
-     * The typed value columns an output is stored with: its typed value, with an explicit `valueText` (an ML label
-     * stored beside its score) in `ValueText`. Unchanged and concurrent-insert checks compare against this, so an
-     * unchanged labelled score is Unchanged rather than rewritten.
-     */
+    /** The typed value columns an output is stored with. Unchanged and concurrent-insert checks compare against this. */
     protected static StoredValueOf(out: FeatureValueOutputItem): TypedFeatureValue {
-        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
-        return out.valueText !== undefined ? { ...typed, ValueText: out.valueText } : typed;
+        return FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
     }
 
     /** A copy of a row's typed value columns. */

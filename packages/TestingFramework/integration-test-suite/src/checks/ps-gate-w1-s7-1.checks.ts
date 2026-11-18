@@ -17,13 +17,13 @@ import { PredictionDigest, PsGateRegistry } from './ps-gates/ps-gate-registry';
 class PsGateW1S71Steps {
   /** "refused <code>", "refused without a refusal code", or "not refused (the run succeeded: N scored, M failed)". */
   public static Outcome(a: ScoreAttempt): string {
-    if (a.Ok) return `not refused (the run succeeded: ${a.Scored} scored, ${a.Failed} failed)`;
+    if (a.Ok) return `not refused (the run succeeded: ${a.Total} scored, ${a.Failed} failed)`;
     return a.RefusalCode ? `refused ${a.RefusalCode}` : 'refused without a refusal code';
   }
 
   /** True when the attempt scored every row and returned a prediction for each (no write-back withholds them). */
   public static Complete(a: ScoreAttempt, rows: number): boolean {
-    return a.Ok && a.Scored === rows && a.Predictions.length === rows;
+    return a.Ok && a.Total === rows && a.Predictions.length === rows;
   }
 
   /** Both attempts complete and their `(RecordID, Score, Class)` digests equal. */
@@ -56,12 +56,12 @@ export const PsGateW1S71Checks: NamedCheck[] = [
       PsGate.Assert({
         Passed: warmedComplete && refusedLoudly && afterLoss.ArtifactStatus === 'missing' && identical && hashKept,
         Measured: {
-          warmedOk: warmed.Ok, warmedScored: warmed.Scored, warmedPredictions: warmed.Predictions.length, refusedLoudly: refusedLoudly ? 1 : 0, refusalCode: refused.RefusalCode,
-          artifactStatus: afterLoss.ArtifactStatus, scoredBefore: before.Scored, predictionsBefore: before.Predictions.length, scoredAfter: after.Scored,
+          warmedOk: warmed.Ok, warmedScored: warmed.Total, warmedPredictions: warmed.Predictions.length, refusedLoudly: refusedLoudly ? 1 : 0, refusalCode: refused.RefusalCode,
+          artifactStatus: afterLoss.ArtifactStatus, scoredBefore: before.Total, predictionsBefore: before.Predictions.length, scoredAfter: after.Total,
           predictionsAfter: after.Predictions.length, rows: w1.RowCount, predictionsIdentical: identical, sha256Before: keptBefore.ArtifactSha256, sha256After: keptRow.ArtifactSha256,
         },
-        Detail: `run fails loudly, ${refusedLoudly ? 1 : 0} of 1: lost artifact ${PsGateW1S71Steps.Outcome(refused)} after a warm score of ${warmed.Scored} of ${w1.RowCount} `
-          + `(ArtifactStatus ${afterLoss.ArtifactStatus}); kept artifact scored ${before.Scored} (${before.Predictions.length} predictions) before and ${after.Scored} `
+        Detail: `run fails loudly, ${refusedLoudly ? 1 : 0} of 1: lost artifact ${PsGateW1S71Steps.Outcome(refused)} after a warm score of ${warmed.Total} of ${w1.RowCount} `
+          + `(ArtifactStatus ${afterLoss.ArtifactStatus}); kept artifact scored ${before.Total} (${before.Predictions.length} predictions) before and ${after.Total} `
           + `(${after.Predictions.length} predictions) of ${w1.RowCount} after a sidecar restart, predictions ${identical ? 'bit-identical' : 'different or incomplete'}, `
           + `registered SHA-256 ${hashKept ? 'unchanged' : 'changed or missing'}`,
       });

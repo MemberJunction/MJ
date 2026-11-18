@@ -311,7 +311,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const { engine, deps, pipeline, models, files, snapshots } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const trained = models[0];
-    trained.Status = 'Validated';
+    trained.Status = 'Published';
     trained.ArtifactFileID = 'file-1';
     const modelBytes = new TextEncoder().encode('model-bytes');
     // Scoring loads only a verified artifact: the loader holds other bytes than the run stored, so register their hash.

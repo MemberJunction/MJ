@@ -302,10 +302,10 @@ interface RunDetailVM {
         <ps-operate-dialog
           [Visible]="OperateOpen"
           [modelId]="Selected.modelId"
-          [modelLabel]="Selected.label"
+          [ModelLabel]="Selected.label"
           [engine]="Engine"
           [provider]="ProviderToUse"
-          [currentUser]="ProviderToUse.CurrentUser"
+          [CurrentUser]="ProviderToUse.CurrentUser"
           (Close)="OnOperateClose($event)">
         </ps-operate-dialog>
       }

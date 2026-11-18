@@ -82,12 +82,21 @@ interface AssembledScope {
   readonly Assembled: ScoringAssembled | null;
 }
 
-/** The live challenger of a binding run: its ready model and its own run row. */
+/** The live challenger of a binding run: its ready model, its own run row and the run's records it samples. */
 interface ChallengerRun {
   readonly Ready: ReadyModel;
   readonly Run: MJMLScoringRunEntity;
+  /** The run's records in the challenger's sample. */
+  readonly Sampled: ReadonlySet<string>;
   Active: boolean;
   Written: number;
+}
+
+/** One batch of assembled rows. */
+interface AssembledBatch {
+  readonly IDs: readonly string[];
+  readonly Rows: ScoringAssembled['Matrix']['rows'];
+  readonly Columns: readonly string[];
 }
 
 /** One planned column write of a batch. */
@@ -110,6 +119,7 @@ class BatchFailure extends Error {
 export class ScoringService {
   private readonly seams: ScoringServiceSeams;
   private preview: ColumnChangePreview[] = [];
+  private scoredRows: ScoredRow[] = [];
 
   /** @param ctx the caller's user, provider, path and options; its `Seams` replace production collaborators */
   constructor(private readonly ctx: ScoringContext) {
@@ -124,6 +134,7 @@ export class ScoringService {
    */
   public async Score(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, asOf: Date, dryRun: boolean): Promise<ScoringResult> {
     this.preview = [];
+    this.scoredRows = [];
     const day = ScoringService.Normalize(asOf);
     const early = await this.refusalBeforeModel(binding);
     if (early !== null) return this.refuseWithoutModel(binding, scope, day, dryRun, early);
@@ -135,6 +146,26 @@ export class ScoringService {
     } catch (e) {
       return this.failOnError(run, resolved.Model, e);
     }
+  }
+
+  /**
+   * Checks a binding before any record is read, for a caller that scores the binding in batches (a bound Record
+   * Process, one {@link Score} per batch): the binding's refusals, the model's resolution and checks 1–3 over `scope`.
+   * A refusal writes its refused run row, as {@link Score} would, and is returned; null when the binding may score (no
+   * run row is written).
+   *
+   * @throws ModelNeedsTrainingError when the resolved model has no artifact file (it was never trained)
+   */
+  public async Admit(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, asOf: Date, dryRun: boolean): Promise<ScoringResult | null> {
+    const day = ScoringService.Normalize(asOf);
+    const early = await this.refusalBeforeModel(binding);
+    if (early !== null) return this.refuseWithoutModel(binding, scope, day, dryRun, early);
+    const resolved = await this.ResolvePublishedModel(binding);
+    if ('kind' in resolved) return this.refuseWithoutModel(binding, scope, day, dryRun, resolved);
+    const ready = await this.RunChecksBeforeAssembly(resolved, binding.TargetEntity, scope, day, false);
+    if (!('kind' in ready)) return null;
+    const run = await this.OpenRun(resolved.Model, binding, scope, day, dryRun);
+    return this.CloseRun(run, ScoringService.refused(run, resolved.Model.ID, ready));
   }
 
   /**
@@ -155,6 +186,14 @@ export class ScoringService {
     } catch (e) {
       return { Result: await this.failOnError(run, model, e), Rows: [] };
     }
+  }
+
+  /**
+   * The champion rows this instance's last {@link Score} wrote (or, on a dry run, computed), batch by batch; a failed
+   * batch's rows are not among them.
+   */
+  public ScoredRows(): readonly ScoredRow[] {
+    return [...this.scoredRows];
   }
 
   /** The column changes of this instance's last dry run of {@link Score}; empty after a writing run. */
@@ -223,10 +262,11 @@ export class ScoringService {
    * Assembles the records with PR 3's assembly: a `grain-x-periods` unit with its unit rule (each row dated by its own
    * decision date), every other model with the normalised as-of date (D4-66).
    */
-  protected async Assemble(ready: ReadyModel, recordIds: readonly string[], keyField: string, asOf: Date): Promise<ScoringAssembled | ScoringRefusal> {
+  protected async Assemble(ready: ReadyModel, recordIds: readonly string[], keyField: string, asOf: Date, entityName: string): Promise<ScoringAssembled | ScoringRefusal> {
     const unit = ready.Prepared.Loaded.unit;
-    const assembly = await ready.Prepared.Assemble(recordIds, keyField, unit !== null && unit.Spec.rows.kind === 'grain-x-periods' ? 'unit-rule' : asOf);
+    const assembly = await ready.Prepared.Assemble(recordIds, keyField, unit !== null && unit.Spec.rows.kind === 'grain-x-periods' ? 'unit-rule' : asOf, entityName, this.ctx);
     if (assembly.Status === 'refused') return { kind: 'assembly-refused', refusal: assembly.Refusal };
+    if (assembly.Status === 'missing-columns') return ScoringService.missingColumns(ready.Model, assembly.Columns);
     if (assembly.RowIDs.length !== recordIds.length) throw new Error(`ScoringService: assembly returned ${assembly.RowIDs.length} rows for ${recordIds.length} records`);
     return assembly;
   }
@@ -245,7 +285,7 @@ export class ScoringService {
     const keyField = entity.FirstPrimaryKey.Name; // first-pk-ok: Feature Value RecordIDs are the bare single-column key
     if (scope.kind === 'record-ids') return { RecordIDs: [...new Set(scope.ids.map((id) => id.trim()).filter((id) => id.length > 0))], KeyField: keyField };
     const read = await RunView.FromMetadataProvider(this.ctx.Provider).RunView<Record<string, string>>({
-      EntityName: entity.Name, Fields: [keyField], ResultType: 'simple', BypassCache: true,
+      EntityName: entity.Name, Fields: [keyField], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true,
       ...(scope.kind === 'view' ? { ViewID: scope.userViewId } : { ExtraFilter: scope.extraFilter }),
     }, this.ctx.ContextUser);
     if (!read.Success) throw new Error(`ScoringService: reading the scope of ${entity.Name} failed: ${read.ErrorMessage}`);
@@ -306,7 +346,7 @@ export class ScoringService {
   private async scoreBinding(binding: MJMLModelScoringBindingEntity, resolved: ResolvedModel, run: MJMLScoringRunEntity, scope: ScoringScope, day: Date, dryRun: boolean): Promise<ScoringResult> {
     const scoped = await this.assembleScope(resolved, binding.TargetEntity, scope, day, false);
     if ('kind' in scoped) return this.CloseRun(run, ScoringService.refused(run, resolved.Model.ID, scoped));
-    const challenger = dryRun || scoped.Assembled === null ? null : await this.openChallenger(binding, scope, day, scoped.Assembled);
+    const challenger = dryRun || scoped.Assembled === null ? null : await this.openChallenger(binding, scope, day, scoped.Assembled, scoped.RecordIDs);
     return this.scoreBatches(binding, scoped, run, challenger, day, dryRun);
   }
 
@@ -317,7 +357,7 @@ export class ScoringService {
     const read = await this.ReadScope(scope);
     if ('kind' in read) return read;
     if (read.RecordIDs.length === 0) return { Ready: ready, RecordIDs: [], Assembled: null };
-    const assembled = await this.Assemble(ready, read.RecordIDs, read.KeyField, day);
+    const assembled = await this.Assemble(ready, read.RecordIDs, read.KeyField, day, scope.entity);
     if ('kind' in assembled) return assembled;
     const after = this.RunChecksAfterAssembly(ready.Model, assembled);
     return after !== null ? after : { Ready: ready, RecordIDs: assembled.RowIDs, Assembled: assembled };
@@ -331,18 +371,19 @@ export class ScoringService {
         const rows = await this.PredictBatch(scoped.Ready, run, batch.Rows, batch.IDs, batch.Columns, day);
         const mirror = await this.mirrorBatch(challenger, batch, day);
         run.Written += await this.WriteBatch(binding, run, rows, mirror, day, dryRun);
+        this.scoredRows.push(...rows);
         if (challenger !== null && mirror !== null) challenger.Written += mirror.Rows.length;
       } catch (e) {
-        await this.closeChallenger(challenger, total);
+        await this.closeChallenger(challenger);
         return this.CloseRun(run, ScoringService.failed(run, scoped.Ready.Model, total, batch.IDs, e));
       }
     }
-    await this.closeChallenger(challenger, total);
+    await this.closeChallenger(challenger);
     return this.CloseRun(run, this.completed(scoped.Ready, run, total, dryRun));
   }
 
   /** The assembled rows in batches of the seams' batch size. */
-  private *batches(scoped: AssembledScope): Generator<{ readonly IDs: readonly string[]; readonly Rows: ScoringAssembled['Matrix']['rows']; readonly Columns: readonly string[] }> {
+  private *batches(scoped: AssembledScope): Generator<AssembledBatch> {
     if (scoped.Assembled === null) return;
     const size = this.seams.BatchSize;
     for (let i = 0; i < scoped.RecordIDs.length; i += size) {
@@ -350,33 +391,48 @@ export class ScoringService {
     }
   }
 
-  /** The challenger's rows of a batch; a challenger that fails is dropped (its run ends failed), the champion goes on. */
-  private async mirrorBatch(challenger: ChallengerRun | null, batch: { readonly IDs: readonly string[]; readonly Rows: ScoringAssembled['Matrix']['rows']; readonly Columns: readonly string[] }, day: Date): Promise<{ readonly Run: MJMLScoringRunEntity; readonly Rows: readonly ScoredRow[] } | null> {
+  /**
+   * The challenger's rows of a batch: its sampled records only, scored on the champion's assembled rows; null when the
+   * batch has none. A challenger that fails is dropped (its run ends failed), the champion goes on.
+   */
+  private async mirrorBatch(challenger: ChallengerRun | null, batch: AssembledBatch, day: Date): Promise<{ readonly Run: MJMLScoringRunEntity; readonly Rows: readonly ScoredRow[] } | null> {
     if (challenger === null || !challenger.Active) return null;
+    const sampled = ScoringService.sampledBatch(batch, challenger.Sampled);
+    if (sampled.IDs.length === 0) return null;
     try {
-      return { Run: challenger.Run, Rows: await this.PredictBatch(challenger.Ready, challenger.Run, batch.Rows, batch.IDs, batch.Columns, day) };
+      return { Run: challenger.Run, Rows: await this.PredictBatch(challenger.Ready, challenger.Run, sampled.Rows, sampled.IDs, sampled.Columns, day) };
     } catch (e) {
       challenger.Active = false;
       LogError(`ScoringService: challenger '${challenger.Ready.Model.ID}' stopped mirroring: ${e instanceof Error ? e.message : String(e)}`);
-      await ScoringRunRecorder.Close(challenger.Run, ScoringService.failed(challenger.Run, challenger.Ready.Model, batch.IDs.length, batch.IDs, e));
+      await ScoringRunRecorder.Close(challenger.Run, ScoringService.failed(challenger.Run, challenger.Ready.Model, challenger.Sampled.size, sampled.IDs, e));
       return null;
     }
   }
 
+  /** The records of `batch` in `sampled`, with their rows, in the batch's order. Pure. */
+  private static sampledBatch(batch: AssembledBatch, sampled: ReadonlySet<string>): AssembledBatch {
+    const at = batch.IDs.map((id, i) => (sampled.has(id) ? i : -1)).filter((i) => i >= 0);
+    return { IDs: at.map((i) => batch.IDs[i]), Rows: at.map((i) => batch.Rows[i]), Columns: batch.Columns };
+  }
+
   /**
    * The binding's named challenger with its run row, checked as every path is: 1–3 on its own row, then 4–6 against the
-   * champion's assembled columns it will be scored on. One that cannot score gets a refused run and mirrors nothing.
+   * champion's assembled columns it will be scored on. One that cannot score gets a refused run and mirrors nothing; one
+   * whose sample draws none of the run's records opens no run.
    */
-  private async openChallenger(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, day: Date, assembled: ScoringAssembled): Promise<ChallengerRun | null> {
-    const id = await this.seams.Challengers.ChallengerModelID(binding, this.ctx);
-    const model = id === null ? null : await this.loadModel(id);
+  private async openChallenger(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, day: Date, assembled: ScoringAssembled, recordIds: readonly string[]): Promise<ChallengerRun | null> {
+    const selection = await this.seams.Challengers.Challenger(binding, day, this.ctx);
+    if (selection === null) return null;
+    const sampled = new Set(recordIds.filter((id) => selection.Sampled(id)));
+    if (sampled.size === 0) return null;
+    const model = await this.loadModel(selection.ModelID);
     if (model === null) return null;
     const run = await this.OpenRun(model, binding, scope, day, false);
     const ready = await this.RunChecksBeforeAssembly({ Model: model, Admission: 'challenger' }, binding.TargetEntity, scope, day, false);
     if ('kind' in ready) return this.refuseChallenger(run, model, ready);
     const after = this.RunChecksAfterAssembly(model, assembled);
     if (after !== null) return this.refuseChallenger(run, model, after);
-    return { Ready: ready, Run: run, Active: true, Written: 0 };
+    return { Ready: ready, Run: run, Sampled: sampled, Active: true, Written: 0 };
   }
 
   /** Closes a challenger's run refused; it mirrors nothing. */
@@ -385,10 +441,10 @@ export class ScoringService {
     return null;
   }
 
-  /** Closes an active challenger's run completed with what it wrote. */
-  private async closeChallenger(challenger: ChallengerRun | null, total: number): Promise<void> {
+  /** Closes an active challenger's run completed with what it wrote of its sampled records. */
+  private async closeChallenger(challenger: ChallengerRun | null): Promise<void> {
     if (challenger === null || !challenger.Active) return;
-    await ScoringRunRecorder.Close(challenger.Run, this.completed(challenger.Ready, challenger.Run, total, false, challenger.Written));
+    await ScoringRunRecorder.Close(challenger.Run, this.completed(challenger.Ready, challenger.Run, challenger.Sampled.size, false, challenger.Written));
   }
 
   // ----- the column copy -------------------------------------------------------------------------------------------
@@ -503,6 +559,14 @@ export class ScoringService {
   /** The completed result. */
   private completed(ready: ReadyModel, run: MJMLScoringRunEntity, total: number, dryRun: boolean, written: number = run.Written): ScoringResult {
     return { Status: 'completed', ScoringRunID: run.ID, ModelID: ready.Model.ID, ModelVersion: ready.Model.Version, ArtifactSha256: ready.Sha256, Total: total, Written: written, DryRun: dryRun };
+  }
+
+  /**
+   * The check-5 refusal of a scope whose rows lack feature columns the model reads: they are its missing columns (a
+   * renamed or dropped column of the scope's entity is never re-read from the training entity).
+   */
+  private static missingColumns(model: MJMLModelEntity, columns: readonly string[]): ScoringRefusal {
+    return { kind: 'feature-schema-mismatch', expectedHash: model.FeatureSchemaHash?.trim() || '', actualHash: '', missingColumns: [...columns], extraColumns: [], typeMismatches: [] };
   }
 
   /** The refused result. */

@@ -12,7 +12,7 @@ describe('ProductionRescoreRunner — re-scores the whole population (F-MNT-6 re
     const requests: ScoreRecordSetRequest[] = [];
     vi.spyOn(ProductionScoreRecordSetRunner.prototype, 'run').mockImplementation(async (request: ScoreRecordSetRequest) => {
       requests.push(request);
-      return { scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false };
+      return { Result: { Status: 'completed', ScoringRunID: 'run-1', ModelID: 'm1', ModelVersion: 1, ArtifactSha256: 'a'.repeat(64), Total: 0, Written: 0, DryRun: false }, Predictions: [] };
     });
     // Test double: the mocked run never reads the provider.
     await new ProductionRescoreRunner().rescore({ modelId: 'm1', targetEntityName: 'Members', provider: {} as unknown as IMetadataProvider });

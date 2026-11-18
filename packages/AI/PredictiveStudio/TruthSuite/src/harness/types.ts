@@ -61,10 +61,22 @@ export interface CandidateModel {
 
 // The operation's shipped input minus the model, so the request keeps the operation's own wire names.
 export type ScoreRequest = Omit<PredictiveStudioScoreRecordSetInput, 'modelId'>;
+/** One `PredictiveStudio.ScoreRecordSet` call, read from the operation's result (the `ScoringResult` union on the wire). */
 export interface ScoreAttempt { Ok: boolean; ErrorMessage: string | null;
   /** The operation's refusal code (`RemoteOpResult.ResultCode`) when it refused; null on success or a generic failure. */
-  RefusalCode: PredictiveStudioRefusalCode | null; Scored: number; Failed: number; Skipped: number;
-  WroteBack: boolean; Predictions: Array<{ RecordID: string; Score: number; Class: string | null }>; DurationMs: number }
+  RefusalCode: PredictiveStudioRefusalCode | null;
+  /** The call's `MJ: ML Scoring Runs` row: the output's, or the one a refusal's message names; null when the call wrote none. */
+  ScoringRunID: string | null;
+  /** The scoring run's status; null when the call wrote no run (an input error, a transport failure). */
+  Status: 'completed' | 'refused' | 'failed' | null;
+  /** Records in the scope (a completed or failed run). */
+  Total: number;
+  /** Feature Values written (a completed run with a binding; 0 otherwise). */
+  Written: number;
+  /** Records that failed (a failed run). */
+  Failed: number;
+  /** The predictions returned when nothing was written (no binding, or a dry run), by bare record id. */
+  Predictions: Array<{ RecordID: string; Score: number; Class: string | null }>; DurationMs: number }
 
 export interface RecordProcessScoring {
   ProcessRunID: string; Status: MJProcessRunEntity['Status'];

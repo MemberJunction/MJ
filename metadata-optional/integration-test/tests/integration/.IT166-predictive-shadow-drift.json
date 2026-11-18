@@ -2,10 +2,10 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT166 - Predictive Shadow Scoring and Drift",
-    "Description": "Exercises Predictive Studio shadow scoring and PSI drift evaluation end-to-end (deterministic, no sidecar). PSD1: creates a test Record Process with ChallengerConfigurationObject, runs champion + challenger scoring, and verifies Role='Champion' (non-null ValueKeyHash) and Role='Challenger' (ValueKeyHash=null) rows in MJ: Feature Values while FeatureValueCacheService returns only the Champion value. PSD2: seeds baseline and drifted evaluation MJ: Feature Values rows and invokes PredictiveStudioEvaluateDriftAction through ActionEngineServer, verifying both MinSampleSize=100 InsufficientData gating and MinSampleSize=10 OverallSeverity='Critical' alert emission.",
+    "Description": "Exercises Predictive Studio's live challenger and PSI drift evaluation end-to-end (deterministic, no sidecar). PSD1: a bound 'ML Model' Record Process whose ChallengerConfiguration names a challenger is scored through ScoringService; its champion and challenger predictions are Source='Model' Feature Values, each role under its own MJ: ML Scoring Runs row, with no Source='Pipeline' row. PSD2: seeds baseline and drifted evaluation MJ: Feature Values rows and invokes PredictiveStudioEvaluateDriftAction through ActionEngineServer, verifying both MinSampleSize=100 InsufficientData gating and MinSampleSize=10 OverallSeverity='Critical' alert emission.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "Shadow challenger rows persist with Role='Challenger' and ValueKeyHash=null without polluting champion cache reads; PredictiveStudioEvaluateDriftAction loads windows from MJ: Feature Values, enforces MinSampleSize=100 InsufficientData gating, detects Critical PSI drift at MinSampleSize=10, and emits an alert record."
+      "summary": "The champion's and the challenger's rows of a bound process are Source='Model' rows of two scoring runs (one per role) and no Pipeline row is written; PredictiveStudioEvaluateDriftAction loads windows from MJ: Feature Values, enforces MinSampleSize=100 InsufficientData gating, detects Critical PSI drift at MinSampleSize=10, and emits an alert record."
     },
     "Configuration": {
       "tier": "deterministic",

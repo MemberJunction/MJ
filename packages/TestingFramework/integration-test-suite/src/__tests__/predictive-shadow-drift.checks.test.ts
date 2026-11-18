@@ -246,15 +246,18 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         expect(member?.primaryKey.ID).not.toBe('C94F1A82-7E3B-4D6A-82C1-5B9E0F3A4D2E');
     });
 
-    it('PSD1 skips, naming M6.8, before it writes any fixture (PR 4 D4-94: its champion is created Published, which the status guard refuses)', async () => {
+    it("PSD1 scores a bound process through ScoringService and asserts Model rows of two runs; it writes no Pipeline row and skips, naming why, on a provider that cannot place model status by SQL (D-069)", async () => {
         const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
+        const psd1Source = source.slice(source.indexOf("Id: 'predictive-shadow-drift.PSD1'"), source.indexOf("Id: 'predictive-shadow-drift.PSD2'"));
         expect(source).not.toContain('RecordFeatureValues(');
+        expect(source).not.toMatch(/new ShadowScoringCoordinator\(|FeatureValueShadowAuditSink|MLModelChallengerScoreRunner|awaits M6\.8/);
+        expect(psd1Source).toContain('new ScoringService(');
+        expect(source).toContain("AssertEqual(runRows.length, 2, 'one MJ: ML Scoring Runs row per role')");
 
         const { ctx } = buildInMemoryHarness();
         const psd1 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD1');
         expect(psd1).toBeDefined();
-
-        await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'awaits M6.8: its fixture publishes a model outside the lifecycle gate (PR 4 D4-94)' });
+        await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD1 needs a database provider: its fixtures place model status by SQL' });
     });
 
     it('PSD2 verifies real ActionEngineServer registration (no fallback action object) and exercises both MinSampleSize=100 InsufficientData and MinSampleSize=10 Critical drift (R6b, R6c)', async () => {

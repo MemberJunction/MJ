@@ -13,6 +13,9 @@
 "@memberjunction/predictive-studio": minor
 "@memberjunction/predictive-studio-core": minor
 "@memberjunction/predictive-studio-sidecar": minor
+"@memberjunction/react-runtime": minor
+"@memberjunction/record-set-processor": minor
+"@memberjunction/record-set-processor-base": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor

@@ -18,7 +18,8 @@ import type {
 } from '@memberjunction/core-entities';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
-import type { MLInferenceDeps } from '../scoring/types';
+import type { ScoringServiceSeams } from '../scoring/scoring-seams';
+import { ScoringRefusedError } from '../scoring/scoring-refused-error';
 import type {
   IMaintenanceLoader,
   IRowCounter,
@@ -159,43 +160,32 @@ export class RunViewRowCounter implements IRowCounter {
 }
 
 /**
- * {@link IRescoreRunner} backed by the scoring action's
- * {@link ProductionScoreRecordSetRunner}. Re-scores a binding's full population via
- * a `filter` scope over the target entity, reusing the SAME inference path
- * (transform-only assembly → sidecar `/predict`) as on-demand scoring.
- *
- * The artifact-loader half of `MLInferenceDeps` must be supplied by the higher
- * layer that owns the MJStorage binding (the Engine package does not import
- * MJStorage drivers — see `scoring/seams.ts`). Pass `deps` when constructing.
+ * {@link IRescoreRunner} backed by the scoring action's {@link ProductionScoreRecordSetRunner}: re-scores a binding's
+ * full population through `ScoringService.Predict` (path `'predict'`, writes nothing) over a `filter` scope of the
+ * target entity. A failed run reports its failed records; a refused one throws its `ScoringRefusedError`.
  */
 export class ProductionRescoreRunner implements IRescoreRunner {
   private readonly runner: ProductionScoreRecordSetRunner;
 
-  /**
-   * @param deps optional scoring deps bundle (model loader / artifact loader /
-   *   sidecar). When omitted the underlying runner builds production model-loader +
-   *   sidecar, but a real artifact loader must be wired in for production scoring.
-   * @param primaryKeyField primary-key field on scored entities (defaults to `ID`)
-   */
-  constructor(deps?: MLInferenceDeps, primaryKeyField?: string) {
-    this.runner = new ProductionScoreRecordSetRunner({ deps, primaryKeyField });
+  /** @param seams optional replacements for the scoring service's production collaborators (tests) */
+  constructor(seams?: Partial<ScoringServiceSeams>) {
+    this.runner = new ProductionScoreRecordSetRunner({ seams, path: 'predict' });
   }
 
   /** @inheritdoc */
   public async rescore(request: RescoreRequest): Promise<RescoreResult> {
-    const result = await this.runner.run({
-      modelId: request.modelId,
-      scope: {
-        filter: {
-          entityName: request.targetEntityName,
-          extraFilter: request.extraFilter,
-          maxRows: request.maxRows,
-        },
-      },
-      contextUser: request.contextUser,
-      provider: request.provider,
-    });
-    return { scoredCount: result.scoredCount, failedCount: result.failedCount };
+    try {
+      const scored = await this.runner.run({
+        modelId: request.modelId,
+        scope: { filter: { entityName: request.targetEntityName, extraFilter: request.extraFilter, maxRows: request.maxRows } },
+        contextUser: request.contextUser,
+        provider: request.provider,
+      });
+      return { scoredCount: scored.Result.Total, failedCount: 0 };
+    } catch (e) {
+      if (e instanceof ScoringRefusedError && e.Result.Status === 'failed') return { scoredCount: 0, failedCount: e.Result.Failed };
+      throw e;
+    }
   }
 }
 

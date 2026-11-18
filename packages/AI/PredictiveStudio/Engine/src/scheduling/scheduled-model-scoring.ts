@@ -13,16 +13,16 @@
  *
  *   1. {@link CreateScheduledModelScoring} creates + saves a Record Process with
  *      `WorkType='ML Model'` (the runtime-registered scoring work type, PS2-1),
- *      a `Configuration` of `{ modelId, primaryKeyField }`, an `OutputMapping` of
- *      `{ fields: { <outputField>: '$.score' } }` (write the prediction into a
- *      column), and `ScheduleEnabled=true` + a cron expression for the cadence.
+ *      a `Configuration` of `{ modelId, primaryKeyField }` (no `OutputMapping`: the
+ *      binding's column copy writes the column), and `ScheduleEnabled=true` + a cron
+ *      expression for the cadence.
  *   2. Saving that row with `Status='Active'` + `ScheduleEnabled=true` + a
  *      `CronExpression` auto-creates an owned `MJ: Scheduled Jobs` row (via
  *      `MJRecordProcessEntityServer.Save → reconcileScheduledJob`).
  *   3. `SchedulingEngine` dispatches that job on its cron through
  *      `RecordProcessScheduledJobDriver → RecordProcessExecutor.RunByID(...)`,
- *      which resolves the scope, scores each row with the model, and writes the
- *      prediction back per the `OutputMapping`.
+ *      which resolves the scope and scores it through `ScoringService` per batch: the
+ *      binding's Feature Values, and its column copy when it names a column.
  *   4. AFTER the Record Process is saved, this helper also creates a
  *      `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`, in generic mode too)
  *      naming the model's training pipeline, that Record Process, the target entity
@@ -37,7 +37,7 @@
  * Process row, and records the binding for it.
  *
  * The shape + field-population primitives (scope model, value-kind → result-ref,
- * `Configuration` / `OutputMapping` serialization, scope application, validation,
+ * `Configuration` serialization, scope application, validation,
  * entity resolution, lineage-binding creation) are shared with the on-demand sibling
  * ({@link module:scoring/scoring-process}) in {@link module:scoring/scoring-process-shared};
  * this module composes them and owns only the schedule-specific bits (cadence → cron).
@@ -54,13 +54,12 @@ import {
   ML_MODEL_WORK_TYPE,
   ApplyScope,
   ModelConfiguration,
-  WriteBackOutputMapping,
   CreateScoringBinding,
   CountScopeSelectors,
   ResolveTargetEntityID,
   IsNonEmpty,
   type ScoringValueKind,
-  type ScoringScope,
+  type ScoringProcessScope,
 } from '../scoring/scoring-process-shared';
 
 // Re-export the shared value-kind under this module's long-standing name so existing
@@ -76,10 +75,10 @@ export type ScoringCadence = 'Monthly' | 'Weekly' | 'Daily' | { cron: string };
 /**
  * The scope of records each scheduled run scores. Exactly one selector must be
  * populated — the common case is a `filter`, but a saved `viewId`/`listId` and `all`
- * (the whole entity) are supported too. An alias of the shared {@link ScoringScope}
+ * (the whole entity) are supported too. An alias of the shared {@link ScoringProcessScope}
  * shape, kept under this module's long-standing name for backwards compatibility.
  */
-export type ScheduledScoringScope = ScoringScope;
+export type ScheduledScoringScope = ScoringProcessScope;
 
 /**
  * Inputs for {@link CreateScheduledModelScoring}. The required trio — `modelId`,
@@ -163,10 +162,10 @@ export interface ScheduledModelScoringResult {
  * `modelId` on a recurring cadence. Operates in one of two modes, driven by whether
  * `opts.outputField` is supplied:
  *
- * - **Write-back** (`outputField` present): each run writes the prediction into that
- *   target column (via the Record Process `OutputMapping`).
- * - **Generic** (`outputField` omitted): no `OutputMapping` is set; each run's
- *   predictions are recorded in the process run history (`MJ: Process Run Details`).
+ * - **Write-back** (`outputField` present): the binding names that target column, and
+ *   each run copies the newest score into it (the binding's column copy, `ScoringService`).
+ * - **Generic** (`outputField` omitted): the binding names no column; each run writes
+ *   the scores as the binding's Feature Values only.
  *
  * In both modes this helper records a `MJ: ML Model Scoring Bindings` row
  * (`Mode='Scheduled'`) naming the model's training pipeline, the Record Process, the
@@ -227,9 +226,8 @@ export async function CreateScheduledModelScoring(
  * work-type, the scope, the model `Configuration`, the schedule (cron + timezone),
  * and enables on-demand runs too.
  *
- * The write-back `OutputMapping` is set ONLY in write-back mode (`opts.outputField`
- * present). In generic mode it is left unset, so each run records its predictions in
- * the process run history (`MJ: Process Run Details`) only — there is no target column.
+ * No `OutputMapping` is set in either mode: the binding names the column, and each run
+ * writes its scores as the binding's Feature Values and copies the newest into the column.
  */
 function applyRecordProcessFields(
   rp: MJRecordProcessEntity,
@@ -248,11 +246,8 @@ function applyRecordProcessFields(
   ApplyScope(rp, opts.scope);
 
   rp.Configuration = ModelConfiguration(opts.modelId, opts.primaryKeyField);
-  // Write-back mode only: map the prediction into the target column. Generic mode
-  // (no outputField) leaves OutputMapping unset — predictions land in run history only.
-  if (IsNonEmpty(opts.outputField)) {
-    rp.OutputMapping = WriteBackOutputMapping(opts.outputField, opts.valueKind);
-  }
+  // No OutputMapping in either mode: a write-back column is the binding's column copy (ScoringService), so the
+  // column is written once, by the binding, never also by a Record Process write-back.
 
   rp.ScheduleEnabled = true;
   rp.CronExpression = cron;

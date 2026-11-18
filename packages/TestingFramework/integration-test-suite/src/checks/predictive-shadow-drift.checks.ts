@@ -1,50 +1,45 @@
 /**
- * predictive-shadow-drift.checks.ts — the 'predictive-shadow-drift' bundle (PSD1–PSD2):
- * deterministic integration checks for Predictive Studio shadow scoring (`Role = 'Challenger'`
- * vs `Role = 'Champion'` isolation in `MJ: Feature Values` and `FeatureValueCacheService`)
- * and `PredictiveStudioEvaluateDriftAction` end-to-end execution over `MJ: Feature Values`.
+ * predictive-shadow-drift.checks.ts — the 'predictive-shadow-drift' bundle (PSD1–PSD2): deterministic integration
+ * checks for Predictive Studio's live challenger and `PredictiveStudioEvaluateDriftAction`.
+ *
+ * PSD1 (D-069, §5.8.3 step 5): a bound Record Process with a `ChallengerConfiguration` scored through `ScoringService`
+ * writes its champion's and its challenger's predictions as `Source = 'Model'` rows, each role under its own
+ * `MJ: ML Scoring Runs` row, and no `Source = 'Pipeline'` row. The sidecar and the model runtime are doubles (no model is
+ * trained); the challenger is read from the Record Process by the production `ShadowScoringCoordinator`.
+ * PSD2: the drift action over `MJ: Feature Values` (M6.8 supersedes it).
  */
 import { createHash } from 'node:crypto';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import {
+import { DatabaseProviderBase, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, FilterByUUIDs, IndexByUUID, MJGlobal, UUIDSet, UUIDsEqual, type UUIDMap } from '@memberjunction/global';
+import type {
     MJFeatureValueEntity,
+    MJFileEntity,
+    MJKnowledgeHubSavedSearchEntity,
     MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJRecordProcessEntity,
     MJUserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { RunActionParams } from '@memberjunction/actions-base';
-import { FeatureValueCacheService } from '@memberjunction/feature-pipelines';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-base';
 import {
     EVALUATE_DRIFT_DRIVER_CLASS,
     EvaluateFeatureAndPredictionDriftAction,
-    FeatureAssemblyExecutor,
-    FeatureValueShadowAuditSink,
     InMemoryArtifactLoader,
     LoadMLModelInferenceProcessor,
     LoadPredictiveStudioActions,
-    MLModelChallengerScoreRunner,
-    MLModelInferenceProcessor,
-    ML_INFERENCE_WORK_TYPE,
-    RegisterMLScoringProcessor,
-    ShadowScoringCoordinator,
-    type FetchRowsParams,
-    type FetchRowsResult,
-    type IFeatureDataAccess,
-    type MLInferenceDeps,
+    ScoringBindings,
+    ScoringService,
+    type IScoringModelRuntime,
+    type IScoringPreparedModel,
+    type ISidecarPredictor,
+    type LoadedModel,
+    type ScoringContext,
 } from '@memberjunction/predictive-studio';
-import type {
-    AsOfStrategy,
-    FeatureSchemaEntry,
-    FeatureStepGraph,
-    PredictRequest,
-    PredictResponse,
-    SourceBinding,
-} from '@memberjunction/predictive-studio-core';
+import { resolveOutcomeConfig, type FeatureSchemaEntry, type PredictRequest, type PredictResponse } from '@memberjunction/predictive-studio-core';
 import {
     Assert,
     AssertEqual,
@@ -55,12 +50,6 @@ import {
 } from '@memberjunction/testing-integration';
 
 const TAG = '(mj-integration-test — safe to delete)';
-
-/**
- * PSD1 skips, visibly, until M6.8 rewrites it: its fixture creates its champion as `Published`, which the lifecycle
- * gate's status guard refuses (`create-not-draft`). M6.8 deletes this with the rewrite (PR 4 D4-94).
- */
-const PSD1_SKIP_REASON: string | null = 'awaits M6.8: its fixture publishes a model outside the lifecycle gate (PR 4 D4-94)';
 
 LoadMLModelInferenceProcessor();
 LoadPredictiveStudioActions();
@@ -78,281 +67,201 @@ async function resolveFirstId(
     return res.Results?.[0]?.ID;
 }
 
-class InMemoryDataAccess implements IFeatureDataAccess {
-    public async fetchRows(_params: FetchRowsParams): Promise<FetchRowsResult> {
-        return { Success: true, Rows: [], TotalRowCount: 0 };
-    }
-    public async fetchEmbedding(): Promise<number[] | null> {
-        return null;
+/** PSD1's target entity: a plain MJ entity with no save hooks. */
+const PSD1_TARGET = 'MJ: Knowledge Hub Saved Searches';
+const PSD1_FEATURES: readonly FeatureSchemaEntry[] = [{ Name: 'Tenure', Kind: 'numeric' }];
+/** The adverse-class probability the champion's and the challenger's double return for every record. */
+const PSD1_SCORES = { Champion: 0.3, Challenger: 0.8 } as const;
+const PSD1_RECORDS = 3;
+
+/** The rows PSD1 creates, so its teardown finds them. */
+interface Psd1Fixtures {
+    readonly Tag: string;
+    readonly Pipeline: MJMLTrainingPipelineEntity;
+    readonly Champion: MJMLModelEntity;
+    readonly Challenger: MJMLModelEntity;
+    readonly RecordProcess: MJRecordProcessEntity;
+    readonly Binding: MJMLModelScoringBindingEntity;
+    readonly RecordIDs: readonly string[];
+    readonly Artifacts: InMemoryArtifactLoader;
+}
+
+/** `[schema].[table]` of an entity, read from metadata. */
+function tableOf(provider: IMetadataProvider, entityName: string): string {
+    const entity = provider.EntityByName(entityName);
+    if (!entity) throw new Error(`entity ${entityName} is not in metadata`);
+    return `[${entity.SchemaName}].[${entity.BaseTable}]`;
+}
+
+/** Saves a new row of `entityName` with `fill` applied; fails the check with the provider's message when it does not save. */
+async function createRow<T extends BaseEntity>(ctx: IntegrationCheckContext, entityName: string, fill: (row: T) => void): Promise<T> {
+    const row = await ctx.Provider.GetEntityObject<T>(entityName, ctx.User);
+    row.NewRecord();
+    fill(row);
+    Assert(await row.Save(), `PSD1 fixture ${entityName} did not save: ${row.LatestResult?.CompleteMessage}`);
+    return row;
+}
+
+/** The sidecar double: the champion's artifact scores every row `PSD1_SCORES.Champion`, the challenger's `.Challenger`. */
+class Psd1Sidecar implements ISidecarPredictor {
+    public async predict(req: PredictRequest): Promise<PredictResponse> {
+        const p = Buffer.from(req.artifact_b64 || '', 'base64').toString('utf8').includes('challenger') ? PSD1_SCORES.Challenger : PSD1_SCORES.Champion;
+        return { classOrder: ['renewed', 'lapsed'], predictions: req.rows.map(() => ({ score: p, class: p >= 0.5 ? 'lapsed' : 'renewed', probabilities: [1 - p, p] })) };
     }
 }
 
-class TestAssembler extends FeatureAssemblyExecutor {
-    constructor(private readonly dataAccess: IFeatureDataAccess) {
-        super();
+/** The model runtime double: a model trained without a unit on the target entity, its artifact the stored bytes. */
+class Psd1Runtime implements IScoringModelRuntime {
+    public async Prepare(model: MJMLModelEntity, bytes: Uint8Array): Promise<IScoringPreparedModel> {
+        const loaded: LoadedModel = {
+            modelId: model.ID, targetEntityName: PSD1_TARGET, artifactB64: Buffer.from(bytes).toString('base64'), fittedPreprocessing: {}, featureSchema: [...PSD1_FEATURES],
+            problemType: 'classification', targetVariable: 'Lapsed', sourceBindings: [], featureSteps: { Steps: [] }, asOf: { Mode: 'none' },
+            leakageGuard: { DenyFields: [], SingleFeatureDominanceThreshold: 1 }, outcomeConfig: resolveOutcomeConfig(), unit: null, trainingRowIds: new UUIDSet(),
+        };
+        return {
+            Loaded: loaded,
+            Assemble: async (ids) => ({ Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map(() => [1]) }, Columns: [...PSD1_FEATURES], HashColumns: null, RowIDs: [...ids] }),
+        };
     }
-    public override assemble(params: Parameters<FeatureAssemblyExecutor['assemble']>[0]) {
-        return super.assemble({ ...params, dataAccess: this.dataAccess });
+}
+
+/** Sets a fixture model's status, artifact and output semantics by SQL: Status is the lifecycle gate's to write. */
+async function placeModel(provider: DatabaseProviderBase, model: MJMLModelEntity, status: MJMLModelEntity['Status'], file: MJFileEntity, bytes: Uint8Array): Promise<void> {
+    const semantics = JSON.stringify({ task: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 } });
+    await provider.ExecuteSQL(
+        `UPDATE ${tableOf(provider, 'MJ: ML Models')} SET Status = '${EscapeSQLString(status)}', ArtifactFileID = '${EscapeSQLString(file.ID)}', ` +
+            `ArtifactSha256 = '${createHash('sha256').update(bytes).digest('hex')}', OutputSemantics = '${EscapeSQLString(semantics)}' WHERE ID = '${EscapeSQLString(model.ID)}'`,
+        undefined, { isMutation: true, description: 'PSD1: place a fixture model outside the lifecycle gate' }, undefined,
+    );
+}
+
+/** A fixture model of the pipeline with its artifact file; `status` is set by SQL. */
+async function createModel(ctx: IntegrationCheckContext, provider: DatabaseProviderBase, pipeline: MJMLTrainingPipelineEntity, version: number, status: MJMLModelEntity['Status'], artifacts: InMemoryArtifactLoader, tag: string): Promise<MJMLModelEntity> {
+    const providerId = await resolveFirstId('MJ: File Storage Providers', ctx.User, ctx.Provider);
+    Assert(!!providerId, 'Could not resolve a MJ: File Storage Providers row');
+    const role = version === 1 ? 'champion' : 'challenger';
+    const file = await createRow<MJFileEntity>(ctx, 'MJ: Files', (f) => { f.Name = `${tag} ${role}.bin`; f.ProviderID = providerId!; });
+    const bytes = new TextEncoder().encode(`${role} artifact of ${tag}`);
+    artifacts.Set(file.ID, bytes);
+    const model = await createRow<MJMLModelEntity>(ctx, 'MJ: ML Models', (m) => {
+        m.PipelineID = pipeline.ID; m.AlgorithmID = pipeline.AlgorithmID; m.Version = version; m.FeatureSchema = JSON.stringify(PSD1_FEATURES);
+        m.TargetVariable = 'Lapsed'; m.ProblemType = 'classification';
+    });
+    await placeModel(provider, model, status, file, bytes);
+    return model;
+}
+
+/** The pipeline, champion (Published), challenger (Validated), a Record Process naming the challenger, its binding and three target records. */
+async function createPsd1Fixtures(ctx: IntegrationCheckContext, provider: DatabaseProviderBase): Promise<Psd1Fixtures> {
+    const tag = `PSD1 ${Date.now()} ${TAG}`;
+    const targetEntityId = ctx.Provider.EntityByName(PSD1_TARGET)?.ID;
+    const algorithmId = await resolveFirstId('MJ: ML Algorithms', ctx.User, ctx.Provider);
+    Assert(!!targetEntityId && !!algorithmId, `Could not resolve ${PSD1_TARGET} or a MJ: ML Algorithms row`);
+    const artifacts = new InMemoryArtifactLoader();
+    const pipeline = await createRow<MJMLTrainingPipelineEntity>(ctx, 'MJ: ML Training Pipelines', (p) => {
+        p.Name = tag; p.Status = 'Draft'; p.TargetEntityID = targetEntityId!; p.TargetVariable = 'Lapsed'; p.ProblemType = 'classification'; p.AlgorithmID = algorithmId!;
+    });
+    const champion = await createModel(ctx, provider, pipeline, 1, 'Published', artifacts, tag);
+    const challenger = await createModel(ctx, provider, pipeline, 2, 'Validated', artifacts, tag);
+    const recordProcess = await createRow<MJRecordProcessEntity>(ctx, 'MJ: Record Processes', (rp) => {
+        rp.Name = tag; rp.EntityID = targetEntityId!; rp.WorkType = 'ML Model'; rp.ScopeType = 'Filter'; rp.ScopeFilter = '1=0'; rp.Status = 'Active';
+        rp.ScheduleEnabled = false; rp.OnDemandEnabled = true; rp.Configuration = JSON.stringify({ modelId: champion.ID });
+        rp.ChallengerConfigurationObject = { Enabled: true, SampleRate: 1, WorkType: 'ML Model', ChallengerModelID: challenger.ID };
+    });
+    const binding = await createRow<MJMLModelScoringBindingEntity>(ctx, 'MJ: ML Model Scoring Bindings', (b) => {
+        b.MLTrainingPipelineID = pipeline.ID; b.FeatureName = tag; b.TargetEntityID = targetEntityId!; b.RecordProcessID = recordProcess.ID; b.Mode = 'OnDemand'; b.Status = 'Active';
+        b.ViewAuthorizationID = ScoringBindings.ResolveViewAuthorizationID(null, ctx.Provider);
+    });
+    const recordIds: string[] = [];
+    for (let i = 0; i < PSD1_RECORDS; i++) {
+        recordIds.push((await createRow<MJKnowledgeHubSavedSearchEntity>(ctx, PSD1_TARGET, (t) => { t.Name = `${tag} r${i}`; t.UserID = ctx.User.ID; t.Query = tag; })).ID);
     }
+    return { Tag: tag, Pipeline: pipeline, Champion: champion, Challenger: challenger, RecordProcess: recordProcess, Binding: binding, RecordIDs: recordIds, Artifacts: artifacts };
+}
+
+/** Deletes every row PSD1 created, children first, by SQL (the binding refuses an entity delete before withdrawal). */
+async function deletePsd1Fixtures(provider: DatabaseProviderBase, tag: string): Promise<void> {
+    const t = (entityName: string): string => tableOf(provider, entityName);
+    const name = `'${EscapeSQLString(tag)}'`;
+    const like = `'${EscapeSQLString(tag)}%'`;
+    const bindings = `SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name}`;
+    const pipelines = `SELECT ID FROM ${t('MJ: ML Training Pipelines')} WHERE Name = ${name}`;
+    await provider.ExecuteSQL(`
+        DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelScoringBindingID IN (${bindings});
+        DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (${bindings});
+        DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name};
+        DELETE FROM ${t('MJ: Record Processes')} WHERE Name = ${name};
+        DELETE FROM ${t('MJ: ML Models')} WHERE PipelineID IN (${pipelines});
+        DELETE FROM ${t('MJ: ML Training Pipelines')} WHERE Name = ${name};
+        DELETE FROM ${t('MJ: Files')} WHERE Name LIKE ${like};
+        DELETE FROM ${t(PSD1_TARGET)} WHERE Name LIKE ${like};`, undefined, { isMutation: true, description: 'PSD1: delete its fixtures' }, undefined);
+}
+
+/** The scoring context of the check's user: the sidecar, model runtime and artifact loader are doubles; the challenger source is production's. */
+function psd1Context(ctx: IntegrationCheckContext, artifacts: InMemoryArtifactLoader): ScoringContext {
+    return {
+        ContextUser: ctx.User, Provider: ctx.Provider, Path: 'record-process', OverwriteHumanValues: false, ProcessRunID: null, ScheduledJobRunID: null,
+        Seams: { Sidecar: new Psd1Sidecar(), Runtime: new Psd1Runtime(), ArtifactLoader: artifacts },
+    };
+}
+
+/** The binding's rows of one role and the scoring runs of the binding. */
+type Psd1Row = Pick<MJFeatureValueEntity, 'ID' | 'Source' | 'Role' | 'RecordID' | 'MLModelID' | 'MLScoringRunID' | 'ValueNumeric'>;
+type Psd1Run = Pick<MJMLScoringRunEntity, 'ID' | 'ModelID' | 'Status' | 'Written'>;
+
+/** Asserts one role: its model's run completed with a row per record, and each row is a Model row of that model and run holding its score. */
+function assertPsd1Role(role: 'Champion' | 'Challenger', model: MJMLModelEntity, score: number, rows: readonly Psd1Row[], runsByModel: UUIDMap<Psd1Run>): void {
+    const ofRole = rows.filter((r) => r.Role === role);
+    const run = runsByModel.Get(model.ID);
+    Assert(!!run && run.Status === 'completed' && run.Written === PSD1_RECORDS, `the ${role} run completed with ${PSD1_RECORDS} rows (got ${JSON.stringify(run)})`);
+    AssertEqual(ofRole.length, PSD1_RECORDS, `one ${role} row per record`);
+    const ofModel = FilterByUUIDs(ofRole, [model.ID], (r) => r.MLModelID || '');
+    const ofRun = FilterByUUIDs(ofRole, [run!.ID], (r) => r.MLScoringRunID || '');
+    Assert(ofRole.every((r) => r.Source === 'Model') && ofModel.length === ofRole.length && ofRun.length === ofRole.length, `every ${role} row is a Model row of the ${role} model and its run`);
+    Assert(ofRole.every((r) => Math.abs(Number(r.ValueNumeric) - score) < 1e-9), `every ${role} row holds the ${role} score ${score}`);
+}
+
+/** Asserts the binding's rows: a Model row of each role per record, each role under its own run of its own model, no Pipeline row. */
+async function assertPsd1Rows(ctx: IntegrationCheckContext, f: Psd1Fixtures): Promise<void> {
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const [values, pipelineRows] = await rv.RunViews<Psd1Row>([
+        { EntityName: 'MJ: Feature Values', ExtraFilter: `MLModelScoringBindingID = '${EscapeSQLString(f.Binding.ID)}'`, ResultType: 'simple', BypassCache: true,
+          Fields: ['ID', 'Source', 'Role', 'RecordID', 'MLModelID', 'MLScoringRunID', 'ValueNumeric'] },
+        { EntityName: 'MJ: Feature Values', ExtraFilter: `RecordProcessID = '${EscapeSQLString(f.RecordProcess.ID)}' AND Source = 'Pipeline'`, ResultType: 'simple', BypassCache: true,
+          Fields: ['ID', 'Source', 'Role', 'RecordID', 'MLModelID', 'MLScoringRunID', 'ValueNumeric'] },
+    ], ctx.User);
+    const runs = await rv.RunView<Psd1Run>({
+        EntityName: 'MJ: ML Scoring Runs', ExtraFilter: `MLModelScoringBindingID = '${EscapeSQLString(f.Binding.ID)}'`, ResultType: 'simple', BypassCache: true, Fields: ['ID', 'ModelID', 'Status', 'Written'],
+    }, ctx.User);
+    Assert(values.Success && runs.Success && pipelineRows.Success, `PSD1 reads failed: ${values.ErrorMessage || runs.ErrorMessage || pipelineRows.ErrorMessage}`);
+    const rows = values.Results;
+    const runRows = runs.Results;
+    AssertEqual(runRows.length, 2, 'one MJ: ML Scoring Runs row per role');
+    AssertEqual(pipelineRows.Results.length, 0, "the Record Process has no Source = 'Pipeline' row");
+    const runsByModel = IndexByUUID(runRows, (r) => r.ModelID || '');
+    assertPsd1Role('Champion', f.Champion, PSD1_SCORES.Champion, rows, runsByModel);
+    assertPsd1Role('Challenger', f.Challenger, PSD1_SCORES.Challenger, rows, runsByModel);
 }
 
 export const PredictiveShadowDriftChecks: NamedCheck[] = [
     {
         Id: 'predictive-shadow-drift.PSD1',
-        Name: 'PSD1: RecordProcess ChallengerConfigurationObject writes Role=Challenger (ValueKeyHash=null) alongside Role=Champion and FeatureValueCacheService isolates Champion reads',
+        Name: "PSD1: a bound Record Process's ChallengerConfiguration mirrors the champion to the challenger: both roles are Source = 'Model' rows, each under its own MJ: ML Scoring Runs row, and no Pipeline row is written",
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (PSD1_SKIP_REASON !== null) SkipCheck(PSD1_SKIP_REASON);
-            const md = ctx.Provider;
-            const user = ctx.User;
-            const createdFeatureValues: MJFeatureValueEntity[] = [];
-            let recordProcess: MJRecordProcessEntity | null = null;
-            let challengerModel: MJMLModelEntity | null = null;
-            let championModel: MJMLModelEntity | null = null;
-            let pipeline: MJMLTrainingPipelineEntity | null = null;
-
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) SkipCheck('PSD1 needs a database provider: its fixtures place model status by SQL');
+            const provider = ctx.Provider;
+            let fixtures: Psd1Fixtures | null = null;
+            const tagOf = (): string => fixtures?.Tag || '';
             try {
-                const targetEntityId = await resolveFirstId('MJ: Entities', user, md);
-                Assert(!!targetEntityId, 'Could not resolve a seed MJ: Entities row');
-                const algorithmId = await resolveFirstId('MJ: ML Algorithms', user, md);
-                Assert(!!algorithmId, 'Could not resolve a seed MJ: ML Algorithms row');
-
-                pipeline = await md.GetEntityObject<MJMLTrainingPipelineEntity>(
-                    'MJ: ML Training Pipelines',
-                    user,
+                fixtures = await createPsd1Fixtures(ctx, provider);
+                const asOf = new Date();
+                const result = await new ScoringService(psd1Context(ctx, fixtures.Artifacts)).Score(
+                    fixtures.Binding, { kind: 'record-ids', entity: PSD1_TARGET, ids: [...fixtures.RecordIDs] }, asOf, false,
                 );
-                pipeline.NewRecord();
-                pipeline.Name = `PSD1 Shadow Pipeline ${TAG}`;
-                pipeline.Status = 'Draft';
-                pipeline.TargetEntityID = targetEntityId!;
-                pipeline.TargetVariable = 'RenewalScore';
-                pipeline.ProblemType = 'classification';
-                pipeline.AlgorithmID = algorithmId!;
-                Assert(
-                    await pipeline.Save(),
-                    `Failed to save test pipeline: ${pipeline.LatestResult?.CompleteMessage}`,
-                );
-
-                const schema: FeatureSchemaEntry[] = [{ Name: 'tenure', Kind: 'numeric' }];
-                const lineage = JSON.stringify({
-                    targetEntityName: 'Members',
-                    sourceBindings: [{ Kind: 'Entity', Ref: 'Members' }] satisfies SourceBinding[],
-                    featureSteps: {
-                        Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }],
-                    } satisfies FeatureStepGraph,
-                    asOfStrategy: { Mode: 'none' } satisfies AsOfStrategy,
-                });
-
-                championModel = await md.GetEntityObject<MJMLModelEntity>('MJ: ML Models', user);
-                championModel.NewRecord();
-                championModel.PipelineID = pipeline.ID;
-                championModel.Version = 1;
-                championModel.AlgorithmID = algorithmId!;
-                championModel.FeatureSchema = JSON.stringify(schema);
-                championModel.FittedPreprocessing = JSON.stringify({});
-                championModel.Lineage = lineage;
-                championModel.TargetVariable = 'RenewalScore';
-                championModel.ProblemType = 'classification';
-                championModel.Status = 'Published';
-                Assert(
-                    await championModel.Save(),
-                    `Failed to save champion model: ${championModel.LatestResult?.CompleteMessage}`,
-                );
-
-                challengerModel = await md.GetEntityObject<MJMLModelEntity>('MJ: ML Models', user);
-                challengerModel.NewRecord();
-                challengerModel.PipelineID = pipeline.ID;
-                challengerModel.Version = 2;
-                challengerModel.AlgorithmID = algorithmId!;
-                challengerModel.FeatureSchema = JSON.stringify(schema);
-                challengerModel.FittedPreprocessing = JSON.stringify({});
-                challengerModel.Lineage = lineage;
-                challengerModel.TargetVariable = 'RenewalScore';
-                challengerModel.ProblemType = 'classification';
-                challengerModel.Status = 'Validated';
-                Assert(
-                    await challengerModel.Save(),
-                    `Failed to save challenger model: ${challengerModel.LatestResult?.CompleteMessage}`,
-                );
-
-                recordProcess = await md.GetEntityObject<MJRecordProcessEntity>(
-                    'MJ: Record Processes',
-                    user,
-                );
-                recordProcess.NewRecord();
-                recordProcess.Name = `PSD1 Shadow Record Process ${TAG}`;
-                recordProcess.EntityID = targetEntityId!;
-                recordProcess.WorkType = 'ML Model';
-                recordProcess.ScopeType = 'Filter';
-                recordProcess.ScopeFilter = '1=0';
-                recordProcess.Status = 'Active';
-                recordProcess.ScheduleEnabled = false;
-                recordProcess.OnDemandEnabled = true;
-                recordProcess.Configuration = JSON.stringify({ modelId: championModel.ID });
-                recordProcess.ChallengerConfigurationObject = {
-                    Enabled: true,
-                    SampleRate: 1.0,
-                    WorkType: 'ML Model',
-                    ChallengerModelID: challengerModel.ID,
-                    MaxLatencyMs: 2000,
-                };
-                Assert(
-                    await recordProcess.Save(),
-                    `Failed to save RecordProcess with ChallengerConfigurationObject: ${recordProcess.LatestResult?.CompleteMessage}`,
-                );
-
-                const artifacts = new InMemoryArtifactLoader();
-                const championBytes = new Uint8Array(Buffer.from('champion-bytes'));
-                const challengerBytes = new Uint8Array(Buffer.from('challenger-bytes'));
-                artifacts.Set('artifact-champion', championBytes);
-                artifacts.Set('artifact-challenger', challengerBytes);
-                championModel.ArtifactFileID = 'artifact-champion';
-                challengerModel.ArtifactFileID = 'artifact-challenger';
-                // Scoring serves only a verified artifact: register the hash of the bytes each in-memory file holds.
-                championModel.ArtifactSha256 = createHash('sha256').update(championBytes).digest('hex');
-                challengerModel.ArtifactSha256 = createHash('sha256').update(challengerBytes).digest('hex');
-
-                const champRef = championModel;
-                const challRef = challengerModel;
-                const deps: MLInferenceDeps = {
-                    modelLoader: {
-                        loadModel: async (id) => {
-                            if (UUIDsEqual(id, champRef.ID)) return champRef;
-                            if (UUIDsEqual(id, challRef.ID)) return challRef;
-                            return null;
-                        },
-                    },
-                    artifactLoader: artifacts,
-                    sidecar: {
-                        predict: async (req: PredictRequest): Promise<PredictResponse> => {
-                            const isChallenger = Buffer.from(req.artifact_b64 ?? '', 'base64')
-                                .toString('utf8')
-                                .includes('challenger');
-                            return {
-                                predictions: [
-                                    isChallenger
-                                        ? { score: 0.91, class: 'challenger-band', probabilities: null }
-                                        : { score: 0.35, class: 'champion-band', probabilities: null },
-                                ],
-                                classOrder: null,
-                            };
-                        },
-                    },
-                };
-
-                const coordinator = new ShadowScoringCoordinator({
-                    ChallengerRunner: new MLModelChallengerScoreRunner(deps),
-                    AuditSink: new FeatureValueShadowAuditSink(),
-                });
-                RegisterMLScoringProcessor(deps, undefined, coordinator);
-
-                const resolved = RecordProcessorRegistry.Instance.Resolve({
-                    WorkType: ML_INFERENCE_WORK_TYPE,
-                    RecordProcessID: recordProcess.ID,
-                    EntityID: targetEntityId!,
-                    Configuration: recordProcess.Configuration,
-                    RecordProcess: {
-                        ID: recordProcess.ID,
-                        ChallengerConfigurationObject: recordProcess.ChallengerConfigurationObject,
-                    },
-                });
-                Assert(
-                    resolved instanceof MLModelInferenceProcessor,
-                    'Expected RecordProcessorRegistry to resolve MLModelInferenceProcessor',
-                );
-
-                const processor = new MLModelInferenceProcessor(
-                    {
-                        modelId: championModel.ID,
-                        deps,
-                        recordProcessId: recordProcess.ID,
-                        challengerConfig: recordProcess.ChallengerConfigurationObject ?? undefined,
-                        shadowCoordinator: coordinator,
-                    },
-                    new TestAssembler(new InMemoryDataAccess()),
-                );
-
-                const testRecordId = `psd1-rec-${Date.now()}`;
-                const procResult = await processor.ProcessRecord(
-                    {
-                        EntityID: targetEntityId!,
-                        RecordID: testRecordId,
-                        Record: { ID: testRecordId, tenure: 12 },
-                    },
-                    {
-                        ContextUser: user,
-                        Provider: md,
-                        RecordProcessID: recordProcess.ID,
-                        EntityID: targetEntityId!,
-                    },
-                );
-                AssertEqual(procResult.Status, 'Succeeded', 'Champion scoring succeeded');
-                await coordinator.FlushInFlight();
-
-                const rv = RunView.FromMetadataProvider(md);
-                const fvRes = await rv.RunView<MJFeatureValueEntity>(
-                    {
-                        EntityName: 'MJ: Feature Values',
-                        ExtraFilter: `RecordProcessID = '${recordProcess.ID}' AND RecordID = '${testRecordId}'`,
-                        ResultType: 'entity_object',
-                        BypassCache: true,
-                    },
-                    user,
-                );
-                Assert(fvRes.Success, `RunView on MJ: Feature Values failed: ${fvRes.ErrorMessage}`);
-                const rows = fvRes.Results ?? [];
-                createdFeatureValues.push(...rows);
-
-                const champRow = rows.find((r) => r.Role === 'Champion');
-                const challRow = rows.find((r) => r.Role === 'Challenger');
-                Assert(!!champRow, 'Expected Role=Champion row in MJ: Feature Values');
-                Assert(!!challRow, 'Expected Role=Challenger row in MJ: Feature Values');
-                Assert(
-                    typeof champRow!.ValueKeyHash === 'string' && champRow!.ValueKeyHash.length > 0,
-                    'Champion row must have non-null ValueKeyHash',
-                );
-                AssertEqual(challRow!.ValueKeyHash, null, 'Challenger row must have ValueKeyHash = null');
-                Assert(
-                    UUIDsEqual(champRow!.MLModelID, championModel.ID),
-                    'Champion row must record championModel.ID in MLModelID',
-                );
-                AssertEqual(champRow!.AIModelID, null, 'Champion row must leave AIModelID null for ML Model');
-                Assert(
-                    UUIDsEqual(challRow!.MLModelID, challengerModel.ID),
-                    'Challenger row must record challengerModel.ID in MLModelID',
-                );
-                AssertEqual(challRow!.AIModelID, null, 'Challenger row must leave AIModelID null for ML Model');
-
-                const latest = await FeatureValueCacheService.Instance.GetLatestValue({
-                    RecordProcessID: recordProcess.ID,
-                    EntityID: targetEntityId!,
-                    RecordID: testRecordId,
-                    FeatureName: 'RenewalScore',
-                    Source: 'Pipeline',
-                    ContextUser: user,
-                    Provider: md,
-                });
-                Assert(!!latest, 'GetLatestValue returned the champion feature value');
-                AssertEqual(
-                    Number(latest!.ValueNumeric),
-                    0.35,
-                    'GetLatestValue returned the champion score (0.35), never challenger (0.91)',
-                );
+                AssertEqual(result.Status, 'completed', `the binding run completed (${JSON.stringify(result)})`);
+                await assertPsd1Rows(ctx, fixtures);
             } finally {
-                for (const fv of createdFeatureValues) {
-                    await fv.Delete().catch(() => undefined);
-                }
-                if (recordProcess?.IsSaved) {
-                    await recordProcess.Delete().catch(() => undefined);
-                }
-                if (challengerModel?.IsSaved) {
-                    await challengerModel.Delete().catch(() => undefined);
-                }
-                if (championModel?.IsSaved) {
-                    await championModel.Delete().catch(() => undefined);
-                }
-                if (pipeline?.IsSaved) {
-                    await pipeline.Delete().catch(() => undefined);
-                }
+                if (tagOf() !== '') await deletePsd1Fixtures(provider, tagOf());
             }
         },
     },

@@ -117,7 +117,7 @@ interface ModelResult {
   skipped: boolean;
   trained: boolean;
   holdoutMetric: string;
-  scored: number;
+  scoredTotal: number;
   evaluated: boolean;
   /** Wall-clock for this model's lifecycle in seconds. */
   seconds: number;
@@ -270,7 +270,7 @@ async function createPipeline(
 async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, algorithmId: string, cfg: ModelConfig): Promise<ModelResult> {
   const t0 = Date.now();
   const result: ModelResult = {
-    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scored: 0, evaluated: false, seconds: 0, cleanupFailures: 0,
+    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scoredTotal: 0, evaluated: false, seconds: 0, cleanupFailures: 0,
   };
 
   banner(`MODEL: ${cfg.name}  (${cfg.targetEntity}.${cfg.targetVariable}, ${cfg.problemType})`);
@@ -346,11 +346,11 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
       throw new Error(`Scoring failed: ${scoreResult.ErrorMessage}`);
     }
     const s = scoreResult.Output;
-    result.scored = s.scored;
-    console.log(`    scored=${s.scored} failed=${s.failed} skipped=${s.skipped} wroteBack=${s.wroteBack}`);
+    result.scoredTotal = s.total;
+    console.log(`    status=${s.status} total=${s.total} written=${s.written} scoringRunId=${s.scoringRunId}`);
     const samples = (s.predictions ?? []).slice(0, 5);
     for (const p of samples) {
-      console.log(`      • record ${p.recordId?.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
+      console.log(`      • record ${p.recordId.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
     }
 
     // ── Evaluate (Draft → Validated or KeepBaseline, the stored decision) through the lifecycle gate ──
@@ -394,7 +394,7 @@ function printSummary(results: ModelResult[], totalSeconds: number): void {
     const holdout = r.skipped ? '—' : r.error && !r.trained ? `ERR: ${trim(r.error, 24)}` : trim(r.holdoutMetric, 30);
     const evaluated = r.skipped ? '—' : r.evaluated ? 'yes' : 'no';
     console.log(
-      `  ${pad(r.name, 22)} ${pad(trained, 8)} ${pad(holdout, 30)} ${pad(String(r.scored), 7)} ${pad(evaluated, 9)} ${pad(r.seconds.toFixed(1), 8)}`,
+      `  ${pad(r.name, 22)} ${pad(trained, 8)} ${pad(holdout, 30)} ${pad(String(r.scoredTotal), 7)} ${pad(evaluated, 9)} ${pad(r.seconds.toFixed(1), 8)}`,
     );
   }
   console.log(`\n  Total wall-clock: ${totalSeconds.toFixed(1)}s`);

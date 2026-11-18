@@ -158,7 +158,7 @@ export type ArtifactRefusal = Extract<ScoringRefusal, { kind: 'artifact-missing'
 export class ArtifactUnavailableError extends Error {
   /**
    * @param Refusal the stored scoring refusal
-   * @param Source the component that refused (`MLModelInferenceProcessor`, `MLModelChallengerScoreRunner`), the message prefix
+   * @param Source the component that refused (`MLModelInferenceProcessor`, `ScoringService`), the message prefix
    * @param ModelID the `MJ: ML Models` row whose artifact was loaded
    * @param FileID the model's `ArtifactFileID`
    */

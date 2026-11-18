@@ -14,9 +14,9 @@
  *   1. **Create** the on-demand scoring Record Process — this helper. It assembles a
  *      single `MJ: Record Processes` row (`WorkType='ML Model'`, `Status='Active'`,
  *      `OnDemandEnabled=true`, `ScheduleEnabled=false`, NO cron) with the model
- *      `Configuration`, the scope, and — when a write-back column is supplied — an
- *      `OutputMapping`, plus — in both modes — a `MJ: ML Model Scoring Bindings`
- *      row (`Mode='OnDemand'`) naming the model's training pipeline.
+ *      `Configuration` and the scope (no `OutputMapping`), plus — in both modes — a
+ *      `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`) naming the model's
+ *      training pipeline and, when a write-back column is supplied, the column.
  *   2. **Run / schedule** it later via the GENERIC surfaces — the existing
  *      "Run Record Process" Remote Op for run-now, and the generic
  *      `@memberjunction/ng-scheduling` dialog for scheduling (which creates its own
@@ -24,7 +24,7 @@
  *
  * So the only ML-specific server piece is creating the row in step 1 — exactly what
  * this helper does. It shares the scope model, value-kind → result-ref mapping,
- * `Configuration`/`OutputMapping` serialization, scope application, validation, entity
+ * `Configuration` serialization, scope application, validation, entity
  * resolution, and lineage-binding creation with the scheduled sibling (in
  * {@link module:scoring/scoring-process-shared}); it owns only the on-demand-trigger
  * difference (no cron, `ScheduleEnabled=false`, binding `Mode='OnDemand'`).
@@ -41,13 +41,12 @@ import {
   ML_MODEL_WORK_TYPE,
   ApplyScope,
   ModelConfiguration,
-  WriteBackOutputMapping,
   CreateScoringBinding,
   CountScopeSelectors,
   ResolveTargetEntityID,
   IsNonEmpty,
   type ScoringValueKind,
-  type ScoringScope,
+  type ScoringProcessScope,
 } from './scoring-process-shared';
 
 /**
@@ -71,7 +70,7 @@ export interface CreateScoringProcessOptions {
   /** The entity whose rows are scored (e.g. `'Memberships'`). */
   targetEntityName: string;
   /** The records a run scores. Populate EXACTLY ONE of: `filter`, `viewId`, `listId`, `all`. */
-  scope: ScoringScope;
+  scope: ScoringProcessScope;
   /**
    * Optional. The target-entity column to write the prediction into (e.g.
    * `'RenewalScore'`). **Omit for generic output** — a run's predictions are recorded
@@ -118,10 +117,10 @@ const HELPER_NAME = 'createScoringProcess';
  * and the generic scheduling dialog target the returned row later. Operates in one of
  * two modes, driven by whether `opts.outputField` is supplied:
  *
- * - **Write-back** (`outputField` present): a run writes the prediction into that
- *   target column (via the Record Process `OutputMapping`).
- * - **Generic** (`outputField` omitted): no `OutputMapping` is set; a run's predictions
- *   are recorded in the process run history (`MJ: Process Run Details`).
+ * - **Write-back** (`outputField` present): the binding names that target column, and
+ *   a run copies the newest score into it (the binding's column copy, `ScoringService`).
+ * - **Generic** (`outputField` omitted): the binding names no column; a run writes the
+ *   scores as the binding's Feature Values only.
  *
  * In both modes this helper records a `MJ: ML Model Scoring Bindings` row
  * (`Mode='OnDemand'`) naming the model's training pipeline, the Record Process, the
@@ -183,9 +182,8 @@ export async function CreateScoringProcess(
  * runs — but leaves scheduling OFF (`ScheduleEnabled=false`, no cron), the one
  * difference from the scheduled sibling.
  *
- * The write-back `OutputMapping` is set ONLY in write-back mode (`opts.outputField`
- * present). In generic mode it is left unset, so a run records its predictions in the
- * process run history (`MJ: Process Run Details`) only — there is no target column.
+ * No `OutputMapping` is set in either mode: the binding names the column, and each run
+ * writes its scores as the binding's Feature Values and copies the newest into the column.
  */
 function applyRecordProcessFields(
   rp: MJRecordProcessEntity,
@@ -203,11 +201,8 @@ function applyRecordProcessFields(
   ApplyScope(rp, opts.scope);
 
   rp.Configuration = ModelConfiguration(opts.modelId, opts.primaryKeyField);
-  // Write-back mode only: map the prediction into the target column. Generic mode
-  // (no outputField) leaves OutputMapping unset — predictions land in run history only.
-  if (IsNonEmpty(opts.outputField)) {
-    rp.OutputMapping = WriteBackOutputMapping(opts.outputField, opts.valueKind);
-  }
+  // No OutputMapping in either mode: a write-back column is the binding's column copy (ScoringService), so the
+  // column is written once, by the binding, never also by a Record Process write-back.
 
   // On-demand only: enable run-now, leave the schedule off (no cron → no owned job).
   rp.OnDemandEnabled = true;

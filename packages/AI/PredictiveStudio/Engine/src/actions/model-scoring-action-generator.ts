@@ -62,6 +62,21 @@ interface ParamSpec {
 }
 
 /**
+ * The optional binding and as-of inputs and the scoring run's outputs, the same names the parent Score Record Set
+ * action writes (the `ScoringResult` union's fields).
+ */
+const SCORING_RUN_PARAM_SPECS: readonly ParamSpec[] = [
+  { Name: 'BindingID', Type: 'Input', ValueType: 'Scalar', IsRequired: false, Description: 'Optional. The scoring binding to score through: its Feature Values (and column copy) are written. Without it, the predictions are returned and nothing is written.' },
+  { Name: 'AsOfDate', Type: 'Input', ValueType: 'Scalar', IsRequired: false, Description: 'Optional. The date the scope is scored as of (ISO); the run date when omitted.' },
+  { Name: 'ScoringRunID', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'The MJ: ML Scoring Runs row of the call (also on a refused or failed run).' },
+  { Name: 'Status', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'The scoring run\'s status: completed, refused or failed.' },
+  { Name: 'Total', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'Records in the scope.' },
+  { Name: 'Written', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'Feature Values written (0 without a binding).' },
+  { Name: 'Failed', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'Records that failed (a failed run).' },
+  { Name: 'Predictions', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'JSON array of predictions ({recordId, score, class, adverseProbability, inTraining}), present when nothing was written.' },
+];
+
+/**
  * Generates (and disables) the per-model "Score with <Model> v<n>" child Action.
  * Stateless + idempotent — safe to call on every promotion.
  */
@@ -342,9 +357,9 @@ export class ModelScoringActionGenerator {
   }
 
   /**
-   * The canonical scoring param set, mirroring the parent **Score Record Set**
-   * action: `ModelID` (pre-seeded for this model), `Scope`, `WriteBack`, plus the
-   * five output params. Kept DRY via a small spec list.
+   * The canonical scoring param set, mirroring the parent **Score Record Set** action: `ModelID` (pre-seeded for this
+   * model), `Scope`, the optional `BindingID` and `AsOfDate`, plus the scoring run's output params. Kept DRY via a small
+   * spec list.
    */
   protected buildParamSpecs(model: MJMLModelEntity): ParamSpec[] {
     return [
@@ -365,52 +380,7 @@ export class ModelScoringActionGenerator {
           'JSON describing the records to score. Populate exactly one of: records (id/pk array), ' +
           'viewId, listId, filter ({entityName, extraFilter, maxRows}), single ({entityName, primaryKey}).',
       },
-      {
-        Name: 'WriteBack',
-        Type: 'Input',
-        ValueType: 'Simple Object',
-        IsRequired: false,
-        Description:
-          'Optional. true to write scores back with the model\'s default mapping, or an object ' +
-          '{ OutputMapping: ... } to write to a specific column/child record. When omitted, predictions ' +
-          'are returned ephemerally.',
-      },
-      {
-        Name: 'ScoredCount',
-        Type: 'Output',
-        ValueType: 'Scalar',
-        IsRequired: false,
-        Description: 'Number of records successfully scored.',
-      },
-      {
-        Name: 'FailedCount',
-        Type: 'Output',
-        ValueType: 'Scalar',
-        IsRequired: false,
-        Description: 'Number of records that failed to score.',
-      },
-      {
-        Name: 'SkippedCount',
-        Type: 'Output',
-        ValueType: 'Scalar',
-        IsRequired: false,
-        Description: 'Number of records the processor skipped (e.g. ineligible / filtered out).',
-      },
-      {
-        Name: 'WroteBack',
-        Type: 'Output',
-        ValueType: 'Scalar',
-        IsRequired: false,
-        Description: 'True when scores were written back to the target (predictions are then NOT returned ephemerally).',
-      },
-      {
-        Name: 'Predictions',
-        Type: 'Output',
-        ValueType: 'Scalar',
-        IsRequired: false,
-        Description:
-          'JSON array of ephemeral predictions ({recordId, score, class}), present only when WriteBack was not requested.',
-      },
+      ...SCORING_RUN_PARAM_SPECS,
     ];
   }
 

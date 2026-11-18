@@ -24,7 +24,7 @@ export const PsGateW1S75Checks: NamedCheck[] = [
       const trainOk = m ? trainRead === w1.RowCount : t.RefusalCode === 'READ_CAP_EXCEEDED';
       const scoring = await RunFixtures.W1S42PublishedModel(h); // full-row, published through the gate: scoring is tested even if training refused
       const s = await h.Score(scoring.ModelID, { scope: { filter: { entityName: w1.Entity.Name } } });
-      const scoreOk = s.Ok ? s.Scored === w1.RowCount : s.RefusalCode === 'READ_CAP_EXCEEDED';
+      const scoreOk = s.Ok ? s.Total === w1.RowCount : s.RefusalCode === 'READ_CAP_EXCEEDED';
       PsGate.Assert({
         Passed: w1.RowCount === W1_S42_LABELLED_ROWS && trainOk && scoreOk,
         Measured: {
@@ -33,11 +33,11 @@ export const PsGateW1S75Checks: NamedCheck[] = [
           holdoutRows: m?.HoldoutRowCount ?? null,
           trainRefusalCode: t.RefusalCode,
           trainError: t.ErrorMessage,
-          filterScored: s.Scored,
+          filterScored: s.Total,
           scoreRefusalCode: s.RefusalCode,
           scoreError: s.ErrorMessage,
         },
-        Detail: `${w1.RowCount} of ${W1_S42_LABELLED_ROWS} labelled rows loaded; training read ${trainRead === null ? `refused (${t.RefusalCode || 'no refusal code'})` : trainRead} of ${w1.RowCount}; filter scoring scored ${s.Scored}${s.ErrorMessage ? ` (${s.RefusalCode || 'no refusal code'}: ${s.ErrorMessage})` : ''}`,
+        Detail: `${w1.RowCount} of ${W1_S42_LABELLED_ROWS} labelled rows loaded; training read ${trainRead === null ? `refused (${t.RefusalCode || 'no refusal code'})` : trainRead} of ${w1.RowCount}; filter scoring scored ${s.Total}${s.ErrorMessage ? ` (${s.RefusalCode || 'no refusal code'}: ${s.ErrorMessage})` : ''}`,
       });
     },
   },

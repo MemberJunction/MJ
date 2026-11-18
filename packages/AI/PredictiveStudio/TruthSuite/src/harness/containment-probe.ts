@@ -74,9 +74,9 @@ export class ContainmentProbe {
     return !a.Ok && a.RefusalCode === expected && a.ModelID === null;
   }
 
-  /** Scoring refused: the expected refusal code and nothing scored. */
+  /** Scoring refused: the expected refusal code, nothing written and nothing returned. */
   public static WasScoringRefused(a: ScoreAttempt, expected: PredictiveStudioRefusalCode): boolean {
-    return !a.Ok && a.RefusalCode === expected && a.Scored === 0;
+    return !a.Ok && a.RefusalCode === expected && a.Written === 0 && a.Predictions.length === 0;
   }
 
   /**

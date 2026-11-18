@@ -25,12 +25,6 @@ import {
 import { ArtifactUnavailableError, ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../model-readiness';
 import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { InMemoryArtifactLoader } from '../artifact-loader';
-import type { MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
-import {
-  ShadowScoringCoordinator,
-  type ShadowFeatureValueAuditRecord,
-  type ShadowScoreEnvelope,
-} from '../shadow-scoring';
 import type { ArtifactBytesRead, IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import { TrainingEngine } from '../../training/training-engine';
@@ -372,7 +366,7 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
 });
 
 describe('MLModelInferenceProcessor — lifecycle status gate', () => {
-  for (const status of ['Draft', 'Archived'] as const) {
+  for (const status of ['Draft', 'Validated', 'Archived'] as const) {
     it(`refuses a ${status} model in Preflight before any record is scored or artifact is downloaded`, async () => {
       const model = new FakeMLModel();
       model.Status = status;
@@ -406,8 +400,8 @@ describe('MLModelInferenceProcessor — lifecycle status gate', () => {
     });
   }
 
-  for (const status of ['Validated', 'Published'] as const) {
-    it(`scores a ${status} model`, async () => {
+  for (const status of ['Published'] as const) {
+    it(`scores a ${status} model (the only status that scores without a binding's challenger, G0.7)`, async () => {
       const model = new FakeMLModel();
       model.Status = status;
       const { deps } = buildDeps(model);
@@ -586,13 +580,13 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   /** The pipeline → unit lookup: `pipe-u` points at the unit world's unit; any other pipeline has none. */
   const pipelineUnits = { PredictionUnitIDOf: async (pipelineId: string) => (pipelineId === 'pipe-u' ? UnitYearsWorld.UnitID : null) };
 
-  /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
+  /** A Published unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
   async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits, trainingRowIds: ReadonlySet<string> = new Set<string>(), world: ScoringWorld = defaultWorld()): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
     const dataAccess = new TableDataAccess(world.Tables);
     const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess, world));
     if (training.Assembled.Status !== 'assembled') throw new Error(`training assembly refused: ${JSON.stringify(training.Assembled.Refusal)}`);
     const model = new FakeMLModel();
-    model.Status = 'Validated';
+    model.Status = 'Published';
     model.PipelineID = 'pipe-u';
     model.FeatureSchema = JSON.stringify(training.Assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })));
     model.Lineage = JSON.stringify({
@@ -847,7 +841,7 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     const training = await new TrainingEngine().AssembleForTraining('pipe-u', deps);
     if (training.Assembled.Status !== 'assembled') throw new Error(`training assembly refused: ${JSON.stringify(training.Assembled.Refusal)}`);
     const model = new FakeMLModel();
-    model.Status = 'Validated';
+    model.Status = 'Published';
     model.PipelineID = 'pipe-u';
     model.FeatureSchema = JSON.stringify(training.Assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })));
     model.Lineage = JSON.stringify({
@@ -962,7 +956,7 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
     const scoringCtx: RecordProcessorContext = { ContextUser: { ID: 'user-1' } as UserInfo, Provider: undefined as unknown as IMetadataProvider };
     function seriesModelDeps(dataAccess: CountingDataAccess): MLInferenceDeps {
       const model = new FakeMLModel();
-      model.Status = 'Validated';
+      model.Status = 'Published';
       model.PipelineID = 'pipe-m';
       model.Lineage = JSON.stringify({
         predictionUnitId: unit.id, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Months',
@@ -1052,409 +1046,34 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
   });
 });
 
-describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13)', () => {
-  const challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig = {
-    Enabled: true,
-    SampleRate: 1.0,
-    WorkType: 'ML Model',
-    ChallengerModelID: 'model-challenger-2',
-    MaxLatencyMs: 50,
+describe('MLModelInferenceProcessor — an unbound process writes no Feature Value (D-069, §5.8.3)', () => {
+  /** A provider that records every entity object asked for, and serves no rows. */
+  const recordingProvider = (): { readonly Provider: IMetadataProvider; readonly Asked: string[] } => {
+    const asked: string[] = [];
+    const empty = { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+    const provider = {
+      GetEntityObject: async <T>(entityName: string): Promise<T> => { asked.push(entityName); throw new Error(`no entity object expected (${entityName})`); },
+      RunView: async () => empty,
+      RunViews: async (views: unknown[]) => views.map(() => empty),
+    } as unknown as IMetadataProvider;
+    return { Provider: provider, Asked: asked };
   };
 
-  it('converts MatrixToFeatureRows exactly ONCE for an N-record batch and maps each record to its own feature row (D3, D13)', async () => {
+  it('scores a batch with one feature-row conversion and asks for no MJ: Feature Values object, in ProcessBatch or ProcessRecord', async () => {
     const { deps } = buildDeps();
-    const publishedEnvelopes: ShadowScoreEnvelope[] = [];
-    const shadowCoordinator = new ShadowScoringCoordinator({
-      WorkQueuePublisher: {
-        PublishShadowItem: async (env) => {
-          publishedEnvelopes.push(env);
-        },
-      },
-    });
-
-    const proc = new MLModelInferenceProcessor(
-      {
-        modelId: 'model-1',
-        deps,
-        recordProcessId: 'rp-batch-1',
-        challengerConfig,
-        shadowCoordinator,
-      },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
+    const { Provider, Asked } = recordingProvider();
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, recordProcessId: 'rp-batch-1' }, new TestAssembler(new InMemoryDataAccess()));
     const spy = vi.spyOn(MLModelInferenceProcessor, 'MatrixToFeatureRows');
     try {
-      const records = [
-        memberRecord('m1', 10, 1, 'NYC'),
-        memberRecord('m2', 20, 2, 'LA'),
-        memberRecord('m3', 30, 3, 'NYC'),
-        memberRecord('m4', 40, 4, 'LA'),
-      ];
-      const results = await proc.ProcessBatch(records, { ...CTX, RecordProcessID: 'rp-batch-1' });
-      await shadowCoordinator.FlushInFlight();
-
-      expect(results).toHaveLength(4);
-      expect(results.every((r) => r.Status === 'Succeeded')).toBe(true);
-      // D3: MatrixToFeatureRows must be called once for the batch, not once + N times
+      const records = [memberRecord('m1', 10, 1, 'NYC'), memberRecord('m2', 20, 2, 'LA'), memberRecord('m3', 30, 3, 'NYC'), memberRecord('m4', 40, 4, 'LA')];
+      const ctx: RecordProcessorContext = { ...CTX, Provider, RecordProcessID: 'rp-batch-1' };
+      const results = await proc.ProcessBatch(records, ctx);
+      expect(results.map((r) => r.Status)).toEqual(['Succeeded', 'Succeeded', 'Succeeded', 'Succeeded']);
       expect(spy).toHaveBeenCalledTimes(1);
-
-      // D13: Each record in the batch gets its own row-aligned FrozenFeatures
-      expect(publishedEnvelopes).toHaveLength(4);
-      expect(publishedEnvelopes.map((e) => e.RecordID)).toEqual(['m1', 'm2', 'm3', 'm4']);
-      expect(publishedEnvelopes[0].FrozenFeatures).toEqual({ tenure: 10, events_at_signup: 1, city: 'NYC' });
-      expect(publishedEnvelopes[1].FrozenFeatures).toEqual({ tenure: 20, events_at_signup: 2, city: 'LA' });
-      expect(publishedEnvelopes[2].FrozenFeatures).toEqual({ tenure: 30, events_at_signup: 3, city: 'NYC' });
-      expect(publishedEnvelopes[3].FrozenFeatures).toEqual({ tenure: 40, events_at_signup: 4, city: 'LA' });
+      expect((await proc.ProcessRecord(memberRecord('m5', 50, 5, 'LA'), ctx)).Status).toBe('Succeeded');
+      expect(Asked).toEqual([]);
     } finally {
       spy.mockRestore();
-    }
-  });
-
-  it('checks ShouldSample BEFORE constructing envelopes and skips shadow dispatch completely when DryRun is true (D3, D13)', async () => {
-    const { deps } = buildDeps();
-    let dispatchCalls = 0;
-    const shadowCoordinator = new ShadowScoringCoordinator({
-      Rng: () => 0.99, // above SampleRate 0.10 -> not sampled
-      WorkQueuePublisher: {
-        PublishShadowItem: async () => {
-          dispatchCalls++;
-        },
-      },
-    });
-
-    const procUnsampled = new MLModelInferenceProcessor(
-      {
-        modelId: 'model-1',
-        deps,
-        challengerConfig: { ...challengerConfig, SampleRate: 0.1 },
-        shadowCoordinator,
-      },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
-    await procUnsampled.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), CTX);
-    await shadowCoordinator.FlushInFlight();
-    expect(dispatchCalls).toBe(0);
-
-    // Now with SampleRate 1.0 but DryRun = true -> must skip shadow dispatch
-    const alwaysSampleCoordinator = new ShadowScoringCoordinator({
-      WorkQueuePublisher: {
-        PublishShadowItem: async () => {
-          dispatchCalls++;
-        },
-      },
-    });
-    const procDryRun = new MLModelInferenceProcessor(
-      {
-        modelId: 'model-1',
-        deps,
-        challengerConfig,
-        shadowCoordinator: alwaysSampleCoordinator,
-      },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
-    const dryResult = await procDryRun.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), {
-      ...CTX,
-      DryRun: true,
-    });
-    await alwaysSampleCoordinator.FlushInFlight();
-    expect(dryResult.Status).toBe('Succeeded');
-    expect(dispatchCalls).toBe(0);
-  });
-
-  it('records per-record amortized champion latency in ProcessBatch rather than full batch latency (D10)', async () => {
-    const { deps } = buildDeps();
-    deps.sidecar = {
-      predict: async (req: PredictRequest): Promise<PredictResponse> => {
-        await new Promise((r) => setTimeout(r, 80));
-        return { predictions: (req.rows ?? []).map(() => ({ score: 0.75, class: 'renew', probabilities: null })), classOrder: null };
-      },
-    };
-
-    const publishedEnvelopes: ShadowScoreEnvelope[] = [];
-    const shadowCoordinator = new ShadowScoringCoordinator({
-      WorkQueuePublisher: {
-        PublishShadowItem: async (env) => {
-          publishedEnvelopes.push(env);
-        },
-      },
-    });
-
-    const proc = new MLModelInferenceProcessor(
-      {
-        modelId: 'model-1',
-        deps,
-        challengerConfig,
-        shadowCoordinator,
-      },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
-    const batchSize = 4;
-    const records = Array.from({ length: batchSize }, (_, i) => memberRecord(`m${i}`, 10 + i, 2, 'NYC'));
-    const startedAt = Date.now();
-    await proc.ProcessBatch(records, CTX);
-    const totalWallMs = Date.now() - startedAt;
-    await shadowCoordinator.FlushInFlight();
-
-    expect(publishedEnvelopes).toHaveLength(batchSize);
-    for (const env of publishedEnvelopes) {
-      expect(env.ChampionLatencyMs).toBeDefined();
-      // Per-record latency is batch time / 4, strictly less than half the total batch wall-clock duration
-      expect(env.ChampionLatencyMs!).toBeLessThan(totalWallMs * 0.6);
-      expect(env.ChampionLatencyMs!).toBeGreaterThan(0);
-    }
-  });
-
-  it('writes the batch\'s champion audit rows before ProcessBatch returns, without waiting for the challengers (P4)', async () => {
-    const { deps } = buildDeps();
-    const championSaves: string[] = [];
-    let challengersFinished = 0;
-    /** A Feature Value row whose save takes 30 ms, like a database write. */
-    const slowFeatureValue = () => {
-      const row: Record<string, unknown> = {
-        NewRecord: () => true,
-        Save: async () => {
-          await new Promise((r) => setTimeout(r, 30));
-          if (row['Role'] === 'Champion') {
-            championSaves.push(String(row['RecordID']));
-          }
-          return true;
-        },
-      };
-      return row;
-    };
-    const emptyRead = { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
-    const provider = {
-      GetEntityObject: async <T>() => slowFeatureValue() as T,
-      RunView: async () => emptyRead,
-      RunViews: async (views: unknown[]) => views.map(() => emptyRead),
-    } as unknown as IMetadataProvider;
-
-    const shadowCoordinator = new ShadowScoringCoordinator({
-      ChallengerRunner: {
-        RunChallenger: async () => {
-          await new Promise((r) => setTimeout(r, 300));
-          challengersFinished++;
-          return { Score: 0.5 };
-        },
-      },
-      AuditSink: { RecordShadowAudit: async () => {} },
-    });
-    const proc = new MLModelInferenceProcessor(
-      { modelId: 'model-1', deps, recordProcessId: 'rp-p4', challengerConfig: { ...challengerConfig, MaxLatencyMs: 1000 }, shadowCoordinator },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
-    const records = [memberRecord('m1', 10, 1, 'NYC'), memberRecord('m2', 20, 2, 'LA'), memberRecord('m3', 30, 3, 'NYC')];
-    const startedAt = Date.now();
-    const results = await proc.ProcessBatch(records, {
-      ContextUser: { ID: 'user-1' } as UserInfo,
-      Provider: provider,
-      RecordProcessID: 'rp-p4',
-      EntityID: 'ent-members',
-    });
-    const elapsedMs = Date.now() - startedAt;
-
-    expect(results.every((r) => r.Status === 'Succeeded')).toBe(true);
-    expect(championSaves.sort()).toEqual(['m1', 'm2', 'm3']);
-    // The champion path did not wait for the 300 ms challengers.
-    expect(challengersFinished).toBe(0);
-    expect(elapsedMs).toBeLessThan(250);
-
-    await shadowCoordinator.FlushInFlight();
-    expect(challengersFinished).toBe(3);
-  });
-
-  it('logs each batch\'s own dropped challenger count when two runs share one coordinator (low: DroppedCount attribution)', async () => {
-    const errorLogs: string[] = [];
-    const origConsoleError = console.error;
-    console.error = (...args: unknown[]) => {
-      errorLogs.push(args.map((a) => String(a)).join(' '));
-    };
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    try {
-      // Champion audit writes take 30 ms, so both runs are awaiting theirs at the same time.
-      const slowRow = () => ({ NewRecord: () => true, Save: async () => { await new Promise((r) => setTimeout(r, 30)); return true; } });
-      const emptyRead = { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
-      const provider = {
-        GetEntityObject: async <T>() => slowRow() as T,
-        RunView: async () => emptyRead,
-        RunViews: async (views: unknown[]) => views.map(() => emptyRead),
-      } as unknown as IMetadataProvider;
-      // One shared coordinator with a single in-flight slot, held until the gate opens.
-      const shared = new ShadowScoringCoordinator({
-        MaxInFlight: 1,
-        ChallengerRunner: { RunChallenger: async () => { await gate; return { Score: 0.5 }; } },
-        AuditSink: { RecordShadowAudit: async () => {} },
-      });
-      const run = (recordProcessId: string, processRunId: string, ids: string[]) =>
-        new MLModelInferenceProcessor(
-          { modelId: 'model-1', deps: buildDeps().deps, recordProcessId, challengerConfig: { ...challengerConfig, MaxLatencyMs: 5000 }, shadowCoordinator: shared },
-          new TestAssembler(new InMemoryDataAccess()),
-        ).ProcessBatch(
-          ids.map((id, i) => memberRecord(id, 10 + i, 1, 'NYC')),
-          { ContextUser: { ID: 'user-1' } as UserInfo, Provider: provider, RecordProcessID: recordProcessId, ProcessRunID: processRunId, EntityID: 'ent-members' },
-        );
-
-      // An earlier dispatch holds the only slot, so run A drops all 3 of its challengers and run B, concurrently, both of its 2.
-      shared.DispatchShadowScore(
-        { RecordID: 'prime', ChallengerConfig: challengerConfig, FrozenFeatures: {}, DispatchedAt: new Date().toISOString() },
-      );
-      await Promise.all([run('rp-A', 'run-A', ['a1', 'a2', 'a3']), run('rp-B', 'run-B', ['b1', 'b2'])]);
-
-      const dropCounts = errorLogs
-        .map((m) => /(\d+) shadow (?:score|challenger) task\(s\) dropped/.exec(m)?.[1])
-        .filter((n): n is string => n !== undefined)
-        .map(Number);
-      expect(dropCounts.sort()).toEqual([2, 3]);
-      const dropLogs = errorLogs.filter((m) => m.includes('dropped in this batch'));
-      expect(dropLogs.find((m) => m.includes("'rp-A' run 'run-A'"))).toContain(': 3 shadow challenger task(s) dropped');
-      expect(dropLogs.find((m) => m.includes("'rp-B' run 'run-B'"))).toContain(': 2 shadow challenger task(s) dropped');
-      expect(shared.DroppedCount).toBe(5);
-      release?.();
-      await shared.FlushInFlight();
-    } finally {
-      release?.();
-      console.error = origConsoleError;
-    }
-  });
-
-  it('never fails the champion or mutates the target business entity when the challenger times out or throws (D13)', async () => {
-    const { deps } = buildDeps();
-    const auditRecords: ShadowFeatureValueAuditRecord[] = [];
-    const shadowCoordinator = new ShadowScoringCoordinator({
-      ChallengerRunner: {
-        RunChallenger: async (env) => {
-          // Challenger attempts to mutate FrozenFeatures and then times out
-          expect(Object.isFrozen(env.FrozenFeatures)).toBe(true);
-          await new Promise((r) => setTimeout(r, 120));
-          throw new Error('Challenger exploded');
-        },
-      },
-      AuditSink: {
-        RecordShadowAudit: async (rec) => {
-          auditRecords.push(rec);
-        },
-      },
-    });
-
-    const proc = new MLModelInferenceProcessor(
-      {
-        modelId: 'model-1',
-        deps,
-        challengerConfig: { ...challengerConfig, MaxLatencyMs: 20 },
-        shadowCoordinator,
-      },
-      new TestAssembler(new InMemoryDataAccess()),
-    );
-
-    // Pass a real business entity double into ProcessRecord and verify the processor + challenger leave it untouched
-    const businessEntityFields = {
-      ID: 'mem-real-1',
-      tenure: 15,
-      events_at_signup: 4,
-      city: 'NYC',
-      RenewalProbability: 0.11,
-      RenewalStatus: 'Existing',
-    };
-    let setCalledOnBusinessEntity = false;
-    const businessEntityDouble = {
-      GetAll: () => ({ ...businessEntityFields }),
-      Set: () => {
-        setCalledOnBusinessEntity = true;
-      },
-    };
-
-    const errors = ConsoleCapture.Errors();
-    const championResult = await proc.ProcessRecord(
-      {
-        EntityID: 'ent-members',
-        RecordID: 'mem-real-1',
-        Record: businessEntityDouble,
-      },
-      CTX,
-    );
-
-    expect(championResult.Status).toBe('Succeeded');
-    const payload = championResult.ResultPayload as MLInferenceResultPayload;
-    expect(payload.score).toBeCloseTo(0.5, 5);
-    expect(payload.class).toBe('renew');
-
-    await shadowCoordinator.FlushInFlight();
-    expect(ConsoleCapture.Lines(errors)).toEqual([
-      "ShadowScoringCoordinator: challenger failed for record 'mem-real-1' (model='model-challenger-2'): SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (20ms)",
-    ]);
-
-    // Challenger timed out and was recorded as Role = 'Challenger'
-    expect(auditRecords).toHaveLength(1);
-    expect(auditRecords[0].Role).toBe('Challenger');
-    expect(auditRecords[0].TimedOut).toBe(true);
-
-    // Target business entity was never mutated by the processor or the shadow challenger
-    expect(setCalledOnBusinessEntity).toBe(false);
-    expect(businessEntityFields).toEqual({
-      ID: 'mem-real-1',
-      tenure: 15,
-      events_at_signup: 4,
-      city: 'NYC',
-      RenewalProbability: 0.11,
-      RenewalStatus: 'Existing',
-    });
-  });
-
-  it('skips challengerConfig with WorkType !== "ML Model" and logs a single error on construction instead of per record (R7)', async () => {
-    const { deps } = buildDeps();
-    const errorLogs: string[] = [];
-    const origConsoleError = console.error;
-    console.error = (...args: unknown[]) => {
-      errorLogs.push(args.map((a) => String(a)).join(' '));
-    };
-
-    try {
-      let publishedCount = 0;
-      const shadowCoordinator = new ShadowScoringCoordinator({
-        WorkQueuePublisher: {
-          PublishShadowItem: async () => {
-            publishedCount++;
-          },
-        },
-      });
-
-      const proc = new MLModelInferenceProcessor(
-        {
-          modelId: 'model-1',
-          deps,
-          recordProcessId: 'rp-mismatched-wt',
-          challengerConfig: {
-            Enabled: true,
-            SampleRate: 1.0,
-            WorkType: 'Infer',
-            ChallengerPromptID: 'prompt-challenger-1',
-            ChallengerModelID: 'model-challenger-ignored',
-            MaxLatencyMs: 50,
-          },
-          shadowCoordinator,
-        },
-        new TestAssembler(new InMemoryDataAccess()),
-      );
-
-      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
-
-      await proc.ProcessRecord(memberRecord('m1', 10, 1, 'NYC'), CTX);
-      await proc.ProcessRecord(memberRecord('m2', 20, 2, 'LA'), CTX);
-      await proc.ProcessRecord(memberRecord('m3', 30, 3, 'NYC'), CTX);
-      await shadowCoordinator.FlushInFlight();
-
-      expect(publishedCount).toBe(0);
-      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
-    } finally {
-      console.error = origConsoleError;
     }
   });
 });

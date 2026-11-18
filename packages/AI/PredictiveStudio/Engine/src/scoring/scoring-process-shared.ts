@@ -13,7 +13,7 @@
  * Rather than copy-paste that contract twice, the shared shape + the field-population
  * primitives live here: the scope model, the value-kind → result-ref mapping, the
  * runtime-registered work-type constant, scope application onto the row, the model
- * `Configuration` JSON, the (optional) write-back `OutputMapping`, scope validation,
+ * `Configuration` JSON, scope validation,
  * target-entity resolution, and the lineage-binding creation. The two helpers compose
  * these primitives and own only their trigger-specific bits.
  */
@@ -25,9 +25,9 @@ import { ScoringBindings, type ScoringBindingMode } from './scoring-binding';
 import { MetadataEntityFactory } from '../training/seams';
 
 /**
- * Which prediction value the write-back lands in the target column: the numeric
- * `score` (probability / regression value — the default) or the predicted `class`
- * label (classification). Maps to the `OutputMapping` result-ref `$.score` / `$.class`.
+ * Which prediction value the binding's column copy writes into the target column: the
+ * numeric score (the adverse probability of a classification, a regression's value — the
+ * default) or the predicted `class` label ({@link DefaultCopySource}).
  */
 export type ScoringValueKind = 'score' | 'class';
 
@@ -39,26 +39,26 @@ export type ScoringValueKind = 'score' | 'class';
  * (Filter / View / List); `all` is expressed as a `Filter` with an explicit all-rows
  * predicate (`(1=1)`).
  */
-export interface ScoringScope {
+export interface ScoringProcessScope {
   /** A SQL filter (`ScopeFilter`) over the target entity selecting the rows to score. */
-  filter?: string;
+  filter?: string;  // case-violation-ok-legacy-back-compat: the CreateScoringProcess operation's scope wire keys
   /** A `User Views` id whose rows are scored (`ScopeViewID`). */
-  viewId?: string;
+  viewId?: string;  // case-violation-ok-legacy-back-compat: the CreateScoringProcess operation's scope wire keys
   /** A `Lists` id whose member rows are scored (`ScopeListID`). */
-  listId?: string;
+  listId?: string;  // case-violation-ok-legacy-back-compat: the CreateScoringProcess operation's scope wire keys
   /**
    * Score the WHOLE target entity ("score everyone"). When `true`, the run scores
    * every row — expressed as `ScopeType='Filter'` with the explicit all-rows
    * predicate `(1=1)`. Mutually exclusive with `filter` / `viewId` / `listId`.
    */
-  all?: boolean;
+  all?: boolean;  // case-violation-ok-legacy-back-compat: the CreateScoringProcess operation's scope wire keys
 }
 
 /** The runtime-registered scoring work-type (PS2-1) — not in the CodeGen'd `WorkType` union. */
 export const ML_MODEL_WORK_TYPE = 'ML Model';
 
 /** Set the `ScopeType` + corresponding scope field from the (validated, single-selector) scope. */
-export function ApplyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void {
+export function ApplyScope(rp: MJRecordProcessEntity, scope: ScoringProcessScope): void {
   if (scope.all === true) {
     // Whole entity ("score everyone") — a Filter with an explicit all-rows predicate.
     rp.ScopeType = 'Filter';
@@ -77,12 +77,6 @@ export function ApplyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void
 }
 
 
-/** The prediction result-ref the write-back maps into the column: `$.class` for a label, else `$.score`. */
-export function OutputRef(valueKind: ScoringValueKind | undefined): string {
-  return valueKind === 'class' ? '$.class' : '$.score';
-}
-
-
 /**
  * Serialize the model `Configuration` JSON every scoring Record Process carries: the
  * `MJ: ML Models` id to score with and the target-entity primary-key field (default
@@ -90,15 +84,6 @@ export function OutputRef(valueKind: ScoringValueKind | undefined): string {
  */
 export function ModelConfiguration(modelId: string, primaryKeyField: string | undefined): string {
   return JSON.stringify({ modelId, primaryKeyField: primaryKeyField ?? 'ID' });
-}
-
-
-/**
- * Serialize the write-back `OutputMapping` JSON mapping the (non-empty) `outputField`
- * to the prediction result-ref for `valueKind`. Only called in write-back mode.
- */
-export function WriteBackOutputMapping(outputField: string, valueKind: ScoringValueKind | undefined): string {
-  return JSON.stringify({ fields: { [outputField]: OutputRef(valueKind) } });
 }
 
 
@@ -216,7 +201,7 @@ async function readExistingBinding(request: ScoringBindingRequest, featureName: 
  * Count how many of the mutually-exclusive scope selectors are populated — the basis
  * for the exactly-one-selector validation both helpers enforce.
  */
-export function CountScopeSelectors(scope: ScoringScope | undefined): number {
+export function CountScopeSelectors(scope: ScoringProcessScope | undefined): number {
   if (!scope) {
     return 0;
   }
