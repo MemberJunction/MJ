@@ -58,12 +58,36 @@ import {
     TwoTierCacheStorageProvider,
 } from '@memberjunction/redis-provider';
 import { TemplateEngineServer } from '@memberjunction/templates';
+import {
+    CanonicalizeKernelRequestKey,
+    CloneKernelValue,
+    SharedTabKernelClient,
+    SharedTabKernelHost,
+    SharedTabKernelStorageProvider,
+    type KernelPortMessageEventLike,
+    type KernelWsClientConfig,
+    type KernelWsClientLike,
+    type KernelWsSink,
+    type KernelWsSubscribePayload,
+    type TabPortLike,
+} from '@memberjunction/graphql-dataprovider';
 import { RedactParamsToJSON, type ActionParam } from '@memberjunction/actions-base';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
-import { PayloadManager } from '@memberjunction/ai-agents';
-import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    BuildDecisionDiscoveryOptionSet,
+    EvaluateEdgePreDiscoveryHint,
+    PayloadManager,
+} from '@memberjunction/ai-agents';
+import {
+    CalibrateEdgeLogitToConfidence,
+    IsEdgePreDiscoveryHintConfident,
+    SanitizeEdgePreDiscoveryHint,
+    type ExecuteAgentResult,
+    type MJAIAgentEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import { SimpleVectorService, type VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterTestLLM, TestLLM, type TestLLMOutcome } from '@memberjunction/unit-testing';
 import {
@@ -171,6 +195,17 @@ export interface PrimitiveBenchmarkMetrics {
     PgAdhocPoolMax?: number;
     BgeMaxCandidatesCap?: number;
     UserByID10kLookupsMs?: number;
+    // Wave 6B (PB22) metrics:
+    SharedTabWsCount10Tabs?: number;
+    SharedTabRunViewBackendCalls10Tabs?: number;
+    SharedTabMetadataIdbReadsTab2To10?: number;
+    SharedTabIdbDedupWritesSaved?: number;
+    SharedTab10TabStressMs?: number;
+    // Wave 6C (PB23) metrics:
+    EdgeHintSanitizeDiscardedCount?: number;
+    EdgeHintFastPathConfidence?: number;
+    OmnibarFloat32Index100QueriesMs?: number;
+    OmnibarFloat32PerQueryMs?: number;
 }
 
 export interface BaselineComparisonRow {
@@ -3186,6 +3221,494 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             );
         },
     },
+
+    // =========================================================================
+    // PB22 — Wave 6B Multi-Tab SharedWorker WS, Cache & IDB Multiplexing
+    // =========================================================================
+    {
+        Id: `${BUNDLE}.PB22`,
+        Name: 'PB22: Wave 6B — Multi-tab SharedTabKernel single-WS multiplexing, RunView coalescing & single-IDB L1',
+        Fn: async (_ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+
+            // In-process bidirectional MessagePort fake implementing TabPortLike
+            const createPortPair = (): { ClientPort: TabPortLike; HostPort: TabPortLike } => {
+                class PbPort implements TabPortLike {
+                    public Peer: PbPort | null = null;
+                    public IsClosed = false;
+                    public OnMessage: ((ev: KernelPortMessageEventLike) => void) | null = null;
+                    private readonly _listeners = new Set<(ev: KernelPortMessageEventLike) => void>();
+                    private _started = false;
+                    private readonly _queue: unknown[] = [];
+
+                    public Start(): void {
+                        if (this._started) return;
+                        this._started = true;
+                        while (this._queue.length > 0 && !this.IsClosed) {
+                            this.deliver(this._queue.shift());
+                        }
+                    }
+
+                    public Close(): void {
+                        this.IsClosed = true;
+                        this._listeners.clear();
+                        this.OnMessage = null;
+                        this._queue.length = 0;
+                    }
+
+                    public PostMessage(message: unknown): void {
+                        if (this.IsClosed || !this.Peer || this.Peer.IsClosed) return;
+                        const cloned = CloneKernelValue(message);
+                        const target = this.Peer;
+                        queueMicrotask(() => {
+                            if (!target.IsClosed) {
+                                target.receive(cloned);
+                            }
+                        });
+                    }
+
+                    public AddEventListener(type: string, listener: (ev: KernelPortMessageEventLike) => void): void {
+                        if (type === 'message') {
+                            this._listeners.add(listener);
+                        }
+                    }
+
+                    public RemoveEventListener(type: string, listener: (ev: KernelPortMessageEventLike) => void): void {
+                        if (type === 'message') {
+                            this._listeners.delete(listener);
+                        }
+                    }
+
+                    private receive(data: unknown): void {
+                        if (!this._started && this._listeners.size === 0 && !this.OnMessage) {
+                            this._queue.push(data);
+                            return;
+                        }
+                        this._started = true;
+                        this.deliver(data);
+                    }
+
+                    private deliver(data: unknown): void {
+                        const ev: KernelPortMessageEventLike = { Data: data };
+                        this.OnMessage?.(ev);
+                        for (const l of Array.from(this._listeners)) {
+                            l(ev);
+                        }
+                    }
+                }
+                const ClientPort = new PbPort();
+                const HostPort = new PbPort();
+                ClientPort.Peer = HostPort;
+                HostPort.Peer = ClientPort;
+                return { ClientPort, HostPort };
+            };
+
+            let wsCreatedCount = 0;
+            const activeSubs = new Map<number, { Payload: KernelWsSubscribePayload; Sink: KernelWsSink }>();
+            let nextSubId = 1;
+
+            const wsFactory = (_config: KernelWsClientConfig): KernelWsClientLike => {
+                wsCreatedCount++;
+                const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+                queueMicrotask(() => {
+                    for (const l of Array.from(listeners.get('connected') ?? [])) {
+                        l({}, {}, false);
+                    }
+                });
+                return {
+                    On: (event, listener) => {
+                        let set = listeners.get(event);
+                        if (!set) {
+                            set = new Set();
+                            listeners.set(event, set);
+                        }
+                        set.add(listener);
+                        return () => set?.delete(listener);
+                    },
+                    Subscribe: (payload, sink) => {
+                        const id = nextSubId++;
+                        activeSubs.set(id, { Payload: payload, Sink: sink });
+                        return () => {
+                            activeSubs.delete(id);
+                        };
+                    },
+                    Dispose: () => {
+                        activeSubs.clear();
+                    },
+                    Terminate: () => {
+                        for (const l of Array.from(listeners.get('closed') ?? [])) {
+                            l({ code: 4499 });
+                        }
+                    },
+                };
+            };
+
+            const baseStorage = new InMemoryLocalStorageProvider();
+            let physicalReads = 0;
+            let physicalWrites = 0;
+            const trackedStorage: ILocalStorageProvider = {
+                SharesReferences: false,
+                SupportsCrossProcessPersistence: true,
+                SharedAcrossProcesses: true,
+                async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+                    physicalReads++;
+                    return baseStorage.GetItem<T>(key, category);
+                },
+                async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+                    if (keys.length > 0) physicalReads++;
+                    return baseStorage.GetItems<T>(keys, category);
+                },
+                async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+                    physicalWrites++;
+                    return baseStorage.SetItem<T>(key, value, category);
+                },
+                async Remove(key: string, category?: string): Promise<void> {
+                    return baseStorage.Remove(key, category);
+                },
+                async ClearCategory(category: string): Promise<void> {
+                    return baseStorage.ClearCategory(category);
+                },
+                async GetCategoryKeys(category: string): Promise<string[]> {
+                    return baseStorage.GetCategoryKeys(category);
+                },
+            };
+
+            const host = new SharedTabKernelHost({
+                CreateWsClient: wsFactory,
+                CreateStorageProvider: () => trackedStorage,
+                RunViewL1TtlMs: 10_000,
+            });
+
+            const tStart = performance.now();
+            const clients: SharedTabKernelClient[] = [];
+            const storages: SharedTabKernelStorageProvider[] = [];
+            const receivedCounts: number[] = Array(10).fill(0);
+            const invalidationCounts: number[] = Array(10).fill(0);
+            const rxSubs: Array<{ unsubscribe: () => void }> = [];
+
+            try {
+                for (let i = 0; i < 10; i++) {
+                    const client = new SharedTabKernelClient({
+                        ScopeKey: 'ws://localhost:4000/graphql|pb22-user',
+                        SessionId: `pb22-session-${i}`,
+                        WsUrl: 'ws://localhost:4000/graphql',
+                        GraphQLUrl: 'http://localhost:4000/graphql',
+                        Token: 'pb22-jwt',
+                        CanRefreshToken: true,
+                        Environment: {
+                            CreateKernelPort: () => {
+                                const { ClientPort, HostPort } = createPortPair();
+                                host.AttachPort(HostPort);
+                                return ClientPort;
+                            },
+                            HeartbeatIntervalMs: 60_000,
+                        },
+                        Callbacks: {
+                            OnBecomeLeader: async () => {},
+                            OnLoseLeadership: () => {},
+                            OnRemoteInvalidation: () => {
+                                invalidationCounts[i]++;
+                            },
+                            OnPerformCatchUp: async () => true,
+                            GetCurrentSequence: () => 0,
+                            GetServerProcessId: () => 'pb22-srv',
+                        },
+                    });
+                    client.Start();
+                    clients.push(client);
+                    storages.push(
+                        new SharedTabKernelStorageProvider(
+                            () => client,
+                            () => trackedStorage
+                        )
+                    );
+                }
+
+                const readyStates = await Promise.all(clients.map((c) => c.WaitUntilReady()));
+                Assert(readyStates.every((r) => r === true), 'PB22: all 10 tabs must connect to SharedTabKernelHost');
+
+                for (let i = 0; i < 10; i++) {
+                    rxSubs.push(
+                        clients[i].Subscribe('cache_invalidation', 'cache_invalidation', 'subscription { cacheInvalidation { EntityName } }').subscribe(() => {}),
+                        clients[i]
+                            .Subscribe(
+                                'status_updates',
+                                `status_updates:pb22-session-${i}`,
+                                'subscription StatusUpdates($sessionId: String!) { statusUpdates(sessionId: $sessionId) { message } }',
+                                { sessionId: `pb22-session-${i}` },
+                                `pb22-session-${i}`
+                            )
+                            .subscribe(() => {
+                                receivedCounts[i]++;
+                            })
+                    );
+                }
+                await new Promise((r) => setTimeout(r, 15));
+
+                // Push 50 status messages per tab (500 total) + 5 invalidations on 1 origin WS
+                for (let m = 0; m < 50; m++) {
+                    for (const sub of activeSubs.values()) {
+                        if (sub.Payload.Query.includes('statusUpdates')) {
+                            sub.Sink.Next({ data: { statusUpdates: { message: `m-${m}` } } });
+                        }
+                    }
+                }
+                for (let inv = 1; inv <= 5; inv++) {
+                    for (const sub of activeSubs.values()) {
+                        if (sub.Payload.Query.includes('cacheInvalidation')) {
+                            sub.Sink.Next({
+                                data: {
+                                    cacheInvalidation: {
+                                        EntityName: 'MJ: Entities',
+                                        PrimaryKeyValues: `["${inv}"]`,
+                                        Action: 'Update',
+                                        SourceServerID: 'pb22-srv',
+                                        Timestamp: new Date().toISOString(),
+                                        Sequence: inv,
+                                    },
+                                },
+                            });
+                        }
+                    }
+                }
+                await new Promise((r) => setTimeout(r, 20));
+
+                AssertEqual(wsCreatedCount, 1, 'PB22: 10 tabs must share exactly 1 origin WebSocket connection');
+                for (let i = 0; i < 10; i++) {
+                    AssertEqual(receivedCounts[i], 50, `PB22: tab ${i} must receive all 50 status updates`);
+                    AssertEqual(invalidationCounts[i], 5, `PB22: tab ${i} must receive all 5 cache invalidations`);
+                }
+
+                // Close Tab 0 cleanly mid-stream -> remaining Tabs 1..9 continue on same WS without drop
+                rxSubs[0].unsubscribe();
+                rxSubs[1].unsubscribe();
+                await clients[0].Dispose();
+                for (let m = 0; m < 20; m++) {
+                    for (const sub of activeSubs.values()) {
+                        if (sub.Payload.Query.includes('statusUpdates')) {
+                            sub.Sink.Next({ data: { statusUpdates: { message: `post-close-${m}` } } });
+                        }
+                    }
+                }
+                await new Promise((r) => setTimeout(r, 15));
+                AssertEqual(wsCreatedCount, 1, 'PB22: closing Tab 0 must NOT trigger WebSocket recreation');
+                for (let i = 1; i < 10; i++) {
+                    AssertEqual(receivedCounts[i], 70, `PB22: surviving tab ${i} must drop 0 messages after Tab 0 close`);
+                }
+
+                // Coalesce 9 remaining concurrent RunView calls -> 1 backend execution + copy-on-read isolation
+                const rvKey = CanonicalizeKernelRequestKey('rv', { EntityName: 'MJ: Users', ExtraFilter: 'IsActive=1' });
+                let backendCalls = 0;
+                let releaseLoader!: () => void;
+                const gate = new Promise<void>((resolve) => {
+                    releaseLoader = resolve;
+                });
+                const rvPromises = clients.slice(1).map((c) =>
+                    c.ExecuteWithKernelCoalescing<{ Rows: Array<{ Name: string }> }>(rvKey, ['MJ: Users'], true, true, async () => {
+                        backendCalls++;
+                        await gate;
+                        return { Rows: [{ Name: 'SharedRow' }] };
+                    })
+                );
+                await new Promise((r) => setTimeout(r, 10));
+                releaseLoader();
+                const rvResults = await Promise.all(rvPromises);
+                AssertEqual(backendCalls, 1, 'PB22: concurrent RunViews across 9 tabs must coalesce into 1 backend execution');
+                rvResults[0].Rows[0].Name = 'MUTATED_LOCAL';
+                const warmRead = await clients[5].ExecuteWithKernelCoalescing<{ Rows: Array<{ Name: string }> }>(
+                    rvKey,
+                    ['MJ: Users'],
+                    true,
+                    true,
+                    async () => {
+                        backendCalls++;
+                        return { Rows: [{ Name: 'ShouldNotRun' }] };
+                    }
+                );
+                AssertEqual(backendCalls, 1, 'PB22: warm L1 hit across tabs must incur 0 backend executions');
+                AssertEqual(warmRead.Rows[0].Name, 'SharedRow', 'PB22: copy-on-read must isolate caller mutations from L1');
+
+                // Metadata hydration + identical write deduplication through Single IDB Owner
+                const metaFixture = { entities: 150, fields: 2400 };
+                await storages[1].SetObject('MJ_Metadata', metaFixture, 'metadata');
+                const writesAfterFirst = physicalWrites;
+                await Promise.all(storages.slice(1).map((s) => s.SetObject('MJ_Metadata', { entities: 150, fields: 2400 }, 'metadata')));
+                AssertEqual(physicalWrites, writesAfterFirst, 'PB22: identical storage writes across tabs must deduplicate to 0 extra IDB writes');
+
+                const readsBeforeHydrate = physicalReads;
+                const hydrated = await Promise.all(
+                    storages.slice(2).map((s) => s.GetObject<typeof metaFixture>('MJ_Metadata', 'metadata'))
+                );
+                const tab2To10Reads = physicalReads - readsBeforeHydrate;
+                AssertEqual(tab2To10Reads, 0, 'PB22: Tabs 2..10 metadata hydration must hit Worker L1 with 0 physical IDB reads');
+                for (const h of hydrated) {
+                    AssertEqual(h?.entities, 150, 'PB22: hydrated metadata payload must match');
+                }
+
+                const hostStats = await clients[1].GetKernelStats();
+                Assert(hostStats !== null, 'PB22: GetKernelStats() must return metrics snapshot');
+
+                const elapsedMs = Math.max(0.01, Number((performance.now() - tStart).toFixed(2)));
+                fx.Primitives.SharedTabWsCount10Tabs = hostStats!.WsClientCreatedCount;
+                fx.Primitives.SharedTabRunViewBackendCalls10Tabs = backendCalls;
+                fx.Primitives.SharedTabMetadataIdbReadsTab2To10 = tab2To10Reads;
+                fx.Primitives.SharedTabIdbDedupWritesSaved = hostStats!.StorageIdbDeduplicatedWriteCount;
+                fx.Primitives.SharedTab10TabStressMs = elapsedMs;
+
+                console.log(
+                    `      → PB22 Wave 6B SharedTabKernel KPIs: WS(10tabs)=${hostStats!.WsClientCreatedCount} | ` +
+                        `CoalescedBackendCalls=${backendCalls}/9 | Tab2..10_IDB_Reads=${tab2To10Reads} | ` +
+                        `DedupWritesSaved=${hostStats!.StorageIdbDeduplicatedWriteCount} | elapsed=${elapsedMs}ms`
+                );
+            } finally {
+                for (const sub of rxSubs) {
+                    sub.unsubscribe();
+                }
+                for (const c of clients) {
+                    await c.Dispose();
+                }
+                host.Dispose();
+            }
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB23`,
+        Name: 'PB23: Wave 6C — Edge pre-discovery hint permission sanitization & SimpleVectorService float32 local metadata index lookup speed',
+        Fn: async (): Promise<void> => {
+            const fx = requireFixture();
+
+            // ── Part A: Server-guard-of-truth sanitization for untrusted EdgePreDiscoveryHint ──
+            const allowedOptions = [
+                { ID: '11111111-1111-4111-8111-111111111101', Name: 'Query Builder', Description: 'SQL analytics' },
+                { ID: '11111111-1111-4111-8111-111111111102', Name: 'Marketing Agent', Description: 'Blog posts and copy' },
+                { ID: '11111111-1111-4111-8111-111111111103', Name: 'Database Designer', Description: 'Schema migrations' },
+            ];
+            const unauthorizedId = '99999999-9999-4999-8999-999999999901';
+            const unknownId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+            const forgedEval = EvaluateEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: [unauthorizedId, unknownId, allowedOptions[0].ID, allowedOptions[1].ID],
+                    SuggestedAgentId: unauthorizedId,
+                    Confidence: 0.99,
+                    TopLogit: 2.5,
+                },
+                allowedOptions
+            );
+            AssertEqual(forgedEval.DirectOutcome, null, 'PB23: unauthorized SuggestedAgentId must never trigger direct outcome');
+            AssertEqual(forgedEval.DiscardedCount, 3, 'PB23: expected 3 unauthorized/unknown IDs discarded');
+            AssertEqual(
+                forgedEval.SanitizedHint?.CandidateAgentIds.length ?? 0,
+                2,
+                'PB23: expected 2 permitted candidate IDs to survive sanitization'
+            );
+
+            // Forged Confidence paired with unconfident TopLogit must be rejected
+            const lowLogitSanitized = SanitizeEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: allowedOptions.map((o) => o.ID),
+                    SuggestedAgentId: allowedOptions[0].ID,
+                    Confidence: 0.99,
+                    TopLogit: -4.2,
+                },
+                allowedOptions
+            );
+            AssertEqual(
+                IsEdgePreDiscoveryHintConfident(lowLogitSanitized),
+                false,
+                'PB23: low TopLogit (-4.2) must reject forged high Confidence'
+            );
+
+            // Verified confident hint produces calibrated confidence >= 0.85
+            const validConfidence = CalibrateEdgeLogitToConfidence(-1.5);
+            const validEval = EvaluateEdgePreDiscoveryHint(
+                {
+                    CandidateAgentIds: allowedOptions.map((o) => o.ID),
+                    SuggestedAgentId: allowedOptions[0].ID,
+                    Confidence: validConfidence,
+                    TopLogit: -1.5,
+                },
+                allowedOptions
+            );
+            Assert(validEval.DirectOutcome?.Injected === true, 'PB23: verified confident edge hint must inject <suggested_agent>');
+
+            // BuildDecisionDiscoveryOptionSet narrows >25 catalog via PreferredCandidateIDs without calling SearchEntity
+            const largeCatalog = Array.from({ length: 35 }, (_, i) => ({
+                ID: `22222222-2222-4222-8222-${String(i + 1).padStart(12, '0')}`,
+                Name: `Catalog Agent ${i + 1}`,
+                Description: `Specialist ${i + 1}`,
+                Status: 'Active' as const,
+                InvocationMode: 'Top-Level' as const,
+                ParentID: null,
+            }));
+            let searchCalls = 0;
+            const narrowed = await BuildDecisionDiscoveryOptionSet({
+                Agents: largeCatalog,
+                RunningAgentID: '33333333-3333-4333-8333-333333333333',
+                PreferredCandidateIDs: [largeCatalog[2].ID, largeCatalog[8].ID, largeCatalog[14].ID, largeCatalog[25].ID],
+                Search: async () => {
+                    searchCalls++;
+                    return [];
+                },
+            });
+            AssertEqual(searchCalls, 0, 'PB23: valid PreferredCandidateIDs must skip SearchEntity round-trip');
+            AssertEqual(narrowed.Options.length, 4, 'PB23: expected 4 narrowed options');
+
+            // ── Part B: SimpleVectorService float32 local metadata index lookup speed (1,000 x 384d) ─
+            const dims = 384;
+            const entryCount = 1000;
+            const vectorService = new SimpleVectorService<{ Kind: string; Name: string }>({ Precision: 'float32' });
+            AssertEqual(vectorService.Precision, 'float32', 'PB23: Omnibar index must use float32 precision');
+
+            const makeUnitVec = (seed: number): Float32Array => {
+                const v = new Float32Array(dims);
+                v[seed % dims] = 1.0;
+                v[(seed * 7 + 13) % dims] = 0.5;
+                v[(seed * 17 + 29) % dims] = 0.25;
+                let norm = 0;
+                for (let d = 0; d < dims; d++) {
+                    norm += v[d] * v[d];
+                }
+                norm = Math.sqrt(norm);
+                for (let d = 0; d < dims; d++) {
+                    v[d] /= norm;
+                }
+                return v;
+            };
+
+            const entries: VectorInputEntry<{ Kind: string; Name: string }>[] = Array.from({ length: entryCount }, (_, i) => ({
+                key: `meta:${i}`,
+                vector: makeUnitVec(i),
+                metadata: { Kind: i % 2 === 0 ? 'entity' : 'view', Name: `MetadataItem_${i}` },
+            }));
+            vectorService.LoadVectors(entries);
+
+            // Warmup JIT
+            const queryVec = Array.from(makeUnitVec(42));
+            const warmHit = vectorService.FindNearest(queryVec, 5, undefined, 'cosine');
+            AssertEqual(warmHit[0]?.key, 'meta:42', 'PB23: float32 FindNearest must rank exact match first');
+
+            const t0 = performance.now();
+            for (let q = 0; q < 100; q++) {
+                const qv = Array.from(makeUnitVec((q * 11) % entryCount));
+                const hits = vectorService.FindNearest(qv, 5, undefined, 'cosine');
+                Assert(hits.length === 5, 'PB23: expected 5 nearest hits');
+            }
+            const total100Ms = Math.max(0.05, Number((performance.now() - t0).toFixed(2)));
+            const perQueryMs = Number((total100Ms / 100).toFixed(4));
+            Assert(perQueryMs < 15, `PB23: float32 lookup per query (${perQueryMs}ms) must stay well under 15ms`);
+
+            fx.Primitives.EdgeHintSanitizeDiscardedCount = forgedEval.DiscardedCount;
+            fx.Primitives.EdgeHintFastPathConfidence = validConfidence;
+            fx.Primitives.OmnibarFloat32Index100QueriesMs = total100Ms;
+            fx.Primitives.OmnibarFloat32PerQueryMs = perQueryMs;
+
+            console.log(
+                `      → PB23 Wave 6C Edge AI KPIs: SanitizeDiscarded=${forgedEval.DiscardedCount} | ` +
+                    `FastPathConf=${validConfidence} | Float32(1000x384d, 100 queries)=${total100Ms}ms (${perQueryMs}ms/query)`
+            );
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -3248,6 +3771,8 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
         `| **PB19** | \`CanCountFromBaseTable\` subqueries & PG temporal + \`EXISTS\` \`count_only\` | ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (\`baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false}\`) |`,
         `| **PB20** | \`EntityInfo\` lazy \`Fields\` construction (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5-entity access | ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms (storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms, structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false}) |`,
         `| **PB21** | Wave 6A frozen \`Fields\` wire cache (5,000 rows x 20), PG pools, BGE worker cap, \`UserByID\` (10k) | ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}, BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, \`UserByID\`=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms |`,
+        `| **PB22** | Wave 6B \`SharedTabKernel\` (10 tabs: single WS, RunView coalescing, single-IDB L1 & write dedup) | WS=${report.Primitives.SharedTabWsCount10Tabs ?? 'n/a'}, RV backend=${report.Primitives.SharedTabRunViewBackendCalls10Tabs ?? 'n/a'}, IDB reads=${report.Primitives.SharedTabMetadataIdbReadsTab2To10 ?? 'n/a'}, dedup writes=${report.Primitives.SharedTabIdbDedupWritesSaved ?? 'n/a'} (${report.Primitives.SharedTab10TabStressMs ?? 'n/a'} ms) |`,
+        `| **PB23** | Wave 6C edge hint permission sanitization & \`SimpleVectorService\` float32 lookup (1,000 x 384d, 100 queries) | Discarded=${report.Primitives.EdgeHintSanitizeDiscardedCount ?? 'n/a'}, Conf=${report.Primitives.EdgeHintFastPathConfidence ?? 'n/a'}, \`Float32\`=${report.Primitives.OmnibarFloat32Index100QueriesMs ?? 'n/a'} ms (${report.Primitives.OmnibarFloat32PerQueryMs ?? 'n/a'} ms/query) |`,
         ``,
         `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
         ``,
@@ -3335,6 +3860,8 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB19 CanCountFromBaseTable subqueries & EXISTS:     ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false})`);
     console.log(`    - PB20 Lazy EntityInfo (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5 Fields: ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms | Storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms (structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false})`);
     console.log(`    - PB21 Wave 6A Server Density (Frozen subset wire):     ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), PG(RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}), BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, UserByID=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms`);
+    console.log(`    - PB22 Wave 6B SharedTabKernel (10 tabs):             WS=${report.Primitives.SharedTabWsCount10Tabs ?? 'n/a'}, RV backend=${report.Primitives.SharedTabRunViewBackendCalls10Tabs ?? 'n/a'}, IDB reads=${report.Primitives.SharedTabMetadataIdbReadsTab2To10 ?? 'n/a'}, dedup writes=${report.Primitives.SharedTabIdbDedupWritesSaved ?? 'n/a'} (${report.Primitives.SharedTab10TabStressMs ?? 'n/a'} ms)`);
+    console.log(`    - PB23 Wave 6C Edge AI (Sanitization + Float32):       Discarded=${report.Primitives.EdgeHintSanitizeDiscardedCount ?? 'n/a'}, FastPathConf=${report.Primitives.EdgeHintFastPathConfidence ?? 'n/a'}, Float32=${report.Primitives.OmnibarFloat32Index100QueriesMs ?? 'n/a'} ms (${report.Primitives.OmnibarFloat32PerQueryMs ?? 'n/a'} ms/query)`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {

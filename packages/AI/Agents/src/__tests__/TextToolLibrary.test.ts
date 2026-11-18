@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { TextToolLibrary } from '../artifact-tools/TextToolLibrary';
 
+/**
+ * Wall-clock ceiling for the pathological-input check (50,000-character ReDoS input). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 interface LineMatch {
     lineNumber: number;
     text: string;
@@ -152,7 +159,7 @@ describe('TextToolLibrary', () => {
             const data = res.data as TextGrepResultData;
             expect(data.matchCount).toBe(0);
             expect(data.warnings).toEqual([]);
-            expect(elapsed).toBeLessThan(10);
+            expect(elapsed).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         });
 
         it('R14-1: single-line catastrophic regex timeout + normal match produces per-line timeout warning', async () => {

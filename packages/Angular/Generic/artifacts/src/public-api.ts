@@ -32,6 +32,8 @@ export * from './lib/components/previews/audio-artifact-preview.component';
 // Snapshot helpers (pure functions for creating DataSnapshots from artifact content)
 export * from './lib/snapshot-helpers';
 export { ComputeLineDiff, type LineDiffLine, type LineDiffResult } from './lib/utils/line-diff';
+export * from './lib/utils/artifact-suggestion-normalizer.util';
+export * from './lib/utils/frozen-snapshot-verification.util';
 export {
   CaptureRenderedElementThumbnail,
   CaptureThumbnailForDriverIfAllowed,
@@ -95,4 +97,12 @@ export * from './lib/components/plugins/video-production/video-production-review
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
 export * from './lib/components/presence/artifact-agent-presence-bar.component';
 export * from './lib/components/presence/artifact-agent-region-indicator.component';
+export * from './lib/components/plugins/artifact-command-palette.component';
+export {
+  SanitizeHtmlForSandboxedFrame,
+  SanitizeSvgForSandboxedFrame,
+  BuildSandboxedHtmlDocument,
+  OpenHtmlInSandboxedWindow,
+  PrintHtmlInSandboxedIframe,
+} from './lib/utils/html-sandbox.util';
 

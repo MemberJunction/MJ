@@ -17,8 +17,8 @@
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Criteria&Name=EvaluatorConfig"
         },
         "sync": {
-          "lastModified": "2026-10-06T20:21:58.443Z",
-          "checksum": "9f8438b010a69ad2798afa8e94378ad5d1e008da1186c93b5f199045997b446a"
+          "lastModified": "2026-11-18T00:23:12.892Z",
+          "checksum": "2d4ea79daaf17624468763a0175862ba400890517a94a0422bbcd6b818087075"
         }
       },
       {
@@ -31,8 +31,8 @@
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores&Name=Evidence"
         },
         "sync": {
-          "lastModified": "2026-10-06T20:21:58.468Z",
-          "checksum": "f3c21ee77b388aa4d73ec84248c91269847aea3e88866f1028f8bd74cf3a5c9f"
+          "lastModified": "2026-11-18T00:23:12.901Z",
+          "checksum": "f5373bd97124c862a6f6765f95bcb7d02d9cf1007f5e46015950206f327164a1"
         }
       },
       {
@@ -45,8 +45,8 @@
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=Metadata"
         },
         "sync": {
-          "lastModified": "2026-10-06T20:21:58.494Z",
-          "checksum": "f4c9c205c3e99139096921b208a10d954c5891121464b124d0415442842badc6"
+          "lastModified": "2026-11-18T00:23:12.911Z",
+          "checksum": "f5fe6a7bc295245390a3efe03751d5e71ce184c47163d4ec9ab5cf7deaaeddc7"
         }
       },
       {
@@ -59,8 +59,8 @@
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Versions&Name=ChangeDetails"
         },
         "sync": {
-          "lastModified": "2026-10-06T20:21:58.517Z",
-          "checksum": "86cc8c90911f4cb485cc11bc547dc89d206024181fba293b72808ea60b8aea7b"
+          "lastModified": "2026-11-18T00:23:12.922Z",
+          "checksum": "224e3e88135fe11da0e81177c1e5db95e5b8aa81ed476825faeae98b5c9080a1"
         }
       },
       {
@@ -73,8 +73,8 @@
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics&Name=EvaluatorConfig"
         },
         "sync": {
-          "lastModified": "2026-10-06T20:21:58.541Z",
-          "checksum": "7b17bb8b2321a9dad0ef7d56aed17b6b731e4ae523fb17108fb23a762b6816da"
+          "lastModified": "2026-11-18T00:23:12.932Z",
+          "checksum": "0f218acfe6bfab08793f62503f72982d4b83f5731b18b81bb2f37793a0b5a6cc"
         }
       }
     ]

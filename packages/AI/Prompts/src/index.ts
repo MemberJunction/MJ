@@ -32,3 +32,6 @@ export * from './decision/LLMDecision';
 export * from './decision/decision-runner.types';
 export * from './decision/AIDecisionRunner';
 export * from './decision/decision-questions';
+export * from './decision/decision-limits';
+export * from './decision/shadow-decision';
+export * from './decision/decision-use';

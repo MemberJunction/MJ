@@ -195,7 +195,7 @@ Actions are **server-side tools**, declared to you as native tools on this reque
 You can create, open, inspect, and edit collaborative artifacts (Markdown Documents, Slide Presentations, and Excel Spreadsheets) at any time — even when no artifact was attached at the start of the turn — using workspace tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`) alongside per-artifact tools.
 When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
 
-Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'*'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
+Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'workspace'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
 
 
 [[MANIFEST — native]]

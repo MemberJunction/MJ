@@ -69,9 +69,15 @@ const DASHBOARDS = application('A0000000-0000-4000-8000-00000000000D', 'Dashboar
 ]);
 const LIBRARY_MOVE: MovedNavItem = { FromApplication: 'Data Explorer', FromNavItem: 'Dashboards', ToApplication: 'Dashboards', ToNavItem: 'Library' };
 const CHAT_TASKS_MOVE: MovedNavItem = { FromApplication: 'Chat', FromNavItem: 'Tasks', ToApplication: 'Chat', ToNavItem: 'Agent Activity' };
+const CHAT_COLLECTIONS_MOVE: MovedNavItem = { FromApplication: 'Chat', FromNavItem: 'Collections', ToApplication: 'Chat', ToNavItem: 'Library' };
 const CHAT = application('7A873E1A-692E-43FA-97F8-57D8161A985C', 'Chat', [
   navItem('Conversations', 'ChatConversationsResource', true),
   navItem('Collections', 'ChatCollectionsResource'),
+  navItem('Agent Activity', 'ChatTasksResource'),
+]);
+const CHAT_LIBRARY = application('7A873E1A-692E-43FA-97F8-57D8161A985C', 'Chat', [
+  navItem('Conversations', 'ChatConversationsResource', true),
+  navItem('Library', 'LibraryResource'),
   navItem('Agent Activity', 'ChatTasksResource'),
 ]);
 
@@ -193,6 +199,13 @@ describe('FindMovedNavItem', () => {
     expect(FindMovedNavItem(applicationName, navItemName)).toEqual(CHAT_TASKS_MOVE);
   });
 
+  it.each([
+    ['Chat', 'Collections'],
+    ['chat ', ' collections '],
+  ])('returns the Chat Library move for %j and %j', (applicationName, navItemName) => {
+    expect(FindMovedNavItem(applicationName, navItemName)).toEqual(CHAT_COLLECTIONS_MOVE);
+  });
+
   it('returns null for an application and nav item that did not move', () => {
     expect(FindMovedNavItem('Data Explorer', 'Queries')).toBeNull();
     expect(FindMovedNavItem('Dashboards', 'Dashboards')).toBeNull();
@@ -263,6 +276,18 @@ describe('NavigationService.SwitchToApp for a moved nav item', () => {
     expect(tab?.applicationId).toBe(CHAT.ID);
     expect(tab?.configuration['navItemName']).toBe('Agent Activity');
     expect(tab?.configuration['queryParams']).toEqual({ taskId: 'task-42' });
+  });
+
+  it("retargets Chat's legacy Collections nav item to Library while preserving query params", async () => {
+    const { service, manager, setActiveApp } = createService([CHAT_LIBRARY]);
+
+    await service.SwitchToApp(CHAT_LIBRARY.ID, 'Collections', { collectionId: 'col-9' });
+
+    expect(setActiveApp.mock.calls).toEqual([[CHAT_LIBRARY.ID]]);
+    const tab = activeTab(manager);
+    expect(tab?.applicationId).toBe(CHAT_LIBRARY.ID);
+    expect(tab?.configuration['navItemName']).toBe('Library');
+    expect(tab?.configuration['queryParams']).toEqual({ collectionId: 'col-9' });
   });
 
   it('stays on Data Explorer when the user has no Dashboards app', async () => {

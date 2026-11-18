@@ -14,7 +14,7 @@ You act **only** by calling the tools declared on this request. There is no JSON
 - **Calling a tool continues the loop.** The framework runs it and returns its result to you on this turn; you decide again. Call several tools in one turn only when they are independent of each other — do not rely on the order they run in. You do not need to write anything alongside a call.
 - **A tool that fails returns an error result.** Read it, correct the call, and try again — do not stop at the first error.
 {% if _NATIVE_CONTROL.Terminal == 'text' %}- **When the task is done, reply in plain text** with no tool call. That reply is your answer for the user or calling agent, and it ends the run.
-{% else %}- **When the task is done, call `complete_task`** with your answer in `message`{% if _NATIVE_CONTROL.PayloadChangeTool != false %} and any final payload writes in `payloadChangeRequest`{% endif %}. It must be the only call on its turn; if the result fails validation you get the reason back and continue. A plain-text reply with no tool call also ends the run, with your text as the answer.
+{% else %}- **When the task is done, call `complete_task`** with your answer in `message`{% if _NATIVE_CONTROL.PayloadChangeTool != false %}, any final payload writes in `payloadChangeRequest`{% endif %}{% if _ARTIFACTS_ENABLED != false %}, and optional `artifactDirective` (`{ behavior, targetArtifactId?, name?, description? }`) when producing or updating an output artifact{% endif %}. It must be the only call on its turn; if the result fails validation you get the reason back and continue. A plain-text reply with no tool call also ends the run, with your text as the answer.
 {% endif %}
 {%- if _NATIVE_CONTROL.PayloadChangeTool != false %}- **`payload_change_request`** stores results in the shared payload when the payload contract says to. It is applied and the loop continues.
 {% endif %}
@@ -743,12 +743,12 @@ Write to it by calling the `scratchpad_write` tool with `notes` and/or `taskList
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
 {% endif %}
 
-{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false and not _IMPLICIT and _ARTIFACTS_ENABLED != false %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false and _ARTIFACTS_ENABLED != false and not (_NATIVE_ONLY and _NATIVE_CONTROL.Terminal == 'text') %}
 ## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
 
-When your payload produces or updates a user-facing artifact (via `payloadChangeRequest`), include `artifactDirective` on your response to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
+When your payload produces or updates a user-facing artifact{% if not _NATIVE_ONLY %} (via `payloadChangeRequest`){% endif %}, include {% if _NATIVE_ONLY %}`complete_task.artifactDirective`{% else %}`artifactDirective` on your response{% endif %} to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
 
-All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and target it via `artifactDirective`:
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via {% if _NATIVE_ONLY %}`artifact_tool`{% else %}`artifactToolCalls`{% endif %} (`get_full`) and target it via `artifactDirective`:
 
 1. **Create a NEW artifact (`behavior: "create-new"`)** when:
    - This is the first artifact in the conversation, OR
@@ -784,7 +784,7 @@ All artifacts created during this conversation are listed in **Available Artifac
    - You are updating internal working state in `payloadChangeRequest` that should NOT be saved or shown as a user artifact on this turn.
 
 4. **Combine or compare multiple artifacts from the conversation**:
-   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
+   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use {% if _NATIVE_ONLY %}`artifact_tool`{% else %}`artifactToolCalls`{% endif %} (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
 {% endif %}
 
 {% if __agentTypePromptParams.includeDecisionsDocs != false and not (_NATIVE_ONLY and not __agentTypePromptParams.decisionsEnabled) %}
@@ -912,7 +912,7 @@ Your tools are declared natively on this request — the Actions{% if subAgentCo
 - **`payload_change_request`** stores results in the shared payload when the payload contract says to. It is applied and the loop continues.
 - **`ask_user`** pauses the run and asks the user. Only for something the user alone can give you — never for work a sub-agent or an Action can do. If the brief is complete enough to start, start. To offer choices or collect fields, pass `responseForm` as an argument of `ask_user` — the same shape as the Response Forms section. There is no `type: "Chat"` step in this mode; do not wrap a form in JSON.
 - **Structured multi-step primitives (`ForEach`, `While`{% if _PIPELINE_TOOLS %}, `Pipeline`{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}, `Tasks`{% endif %}) use the `LoopAgentResponse` JSON envelope.** When a turn calls for batch iteration, a multi-stage server-side dataflow, or a durable task graph, emit **no native tool call** on that turn and reply with **only** the `LoopAgentResponse` JSON object (`"taskComplete": false` with the matching `nextStep`). Never mix a native tool call and a JSON envelope on the same turn. Inside `ForEach`, `While`{% if _PIPELINE_TOOLS %}, `Pipeline`{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}, or `Tasks`{% endif %} you may reference Actions and sub-agents by either their canonical MemberJunction name or their declared native tool name (such as `calculate_expression` or `delegate_to_…`).
-- **When the task is done, call `complete_task`** with your answer in `message` and any final payload writes in `payloadChangeRequest` — one call that stores the result and completes the task. It must be the only call on its turn. If the result fails validation you get the reason back and continue.
+- **When the task is done, call `complete_task`** with your answer in `message`, any final payload writes in `payloadChangeRequest`{% if _ARTIFACTS_ENABLED != false %}, and optional `artifactDirective` (`{ behavior, targetArtifactId?, name?, description? }`) when producing or updating an output artifact{% endif %} — one call that stores the result and completes the task. It must be the only call on its turn. If the result fails validation you get the reason back and continue.
 - A reply in plain text with no tool call also completes the task, with your text as the answer — but it cannot write the payload, so use `complete_task` whenever the task produces payload data.
 {%- elif actionCount > 0 and _NATIVE_TOOL_CALLING %}
 ## Actions ({{actionCount}} available)
@@ -1031,9 +1031,9 @@ Client tools run **in the user's browser** and interact with the user and their 
 You can create, open, inspect, and edit collaborative artifacts (Markdown Documents, Slide Presentations, and Excel Spreadsheets) at any time — even when no artifact was attached at the start of the turn — using workspace tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`) alongside per-artifact tools.
 When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
 
-{% if _NATIVE_ONLY %}Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'*'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
+{% if _NATIVE_ONLY %}Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'workspace'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
 {% else %}Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them using `artifactToolCalls` in your response.
-Each call specifies an artifact ID (A, B, C, etc., or `'*'` for workspace tools), a tool name, and input parameters.
+Each call specifies an artifact ID (A, B, C, etc., or `'workspace'` for workspace tools), a tool name, and input parameters.
 Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
 
 **Critical constraints:**

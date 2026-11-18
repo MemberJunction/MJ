@@ -166,19 +166,29 @@ describe('ResolveRealtimeAvatar', () => {
         expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
     });
 
-    it("drops a picker's avatar when the voiced agent's video setting is off: no avatar, reason video-off, no persona read", () => {
+    it("enables a picked avatar-enabled voice even when the voiced agent's default video setting is off", () => {
         const s = source();
         const target = JSON.stringify({ realtime: { video: { enabled: false } } });
-        // A crafted override that turns video on itself is held to the agent's setting too.
-        const crafted = JSON.stringify({ realtime: { video: { enabled: true, avatarId: 'Ben' } } });
-        for (const overrides of [BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben'), crafted]) {
-            for (const targetJson of [target, undefined]) {
-                const effective = ResolveEffectiveRealtimeConfig(null, null, overrides, targetJson);
-                expect(effective.realtime?.video?.enabled).not.toBe(true);
-                const result = ResolveRealtimeAvatar(
-                    { EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, AvatarPicked: true }, s);
-                expect(result).toEqual({ Reason: 'video-off' });
-            }
+        const overrides = BuildRealtimeOverridesJson(MODEL, 'Puck', 'Ben');
+        for (const targetJson of [target, undefined]) {
+            const effective = ResolveEffectiveRealtimeConfig(null, null, overrides, targetJson);
+            expect(effective.realtime?.video?.enabled).toBe(true);
+            const result = ResolveRealtimeAvatar(
+                { EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, AvatarPicked: true }, s);
+            expect(result.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'override', Kind: 'preset', Resolution: 'standard' });
+        }
+    });
+
+    it("still reports video-off when an avatarId override has video disabled (no enabled: true)", () => {
+        const s = source();
+        const target = JSON.stringify({ realtime: { video: { enabled: false } } });
+        const avatarIdOnly = JSON.stringify({ realtime: { video: { avatarId: 'Ben' } } });
+        for (const targetJson of [target, undefined]) {
+            const effective = ResolveEffectiveRealtimeConfig(null, null, avatarIdOnly, targetJson);
+            expect(effective.realtime?.video?.enabled).not.toBe(true);
+            const result = ResolveRealtimeAvatar(
+                { EffectiveConfig: effective, TargetAgentID: 'target', CoAgentID: 'co', ModelID: MODEL, VendorID: VERTEX, AvatarPicked: true }, s);
+            expect(result).toEqual({ Reason: 'video-off' });
         }
         expect(s.VendorsAsked).toEqual([]);
     });

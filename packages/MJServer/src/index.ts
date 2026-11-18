@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -35,7 +35,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
-import { ArtifactCollaborationServer, RedisYjsRoomRelay } from './collaboration/index.js';
+import { ArtifactCollaborationServer, RedisTicketReplayStore, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
@@ -49,6 +49,7 @@ import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from 
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
@@ -107,6 +108,7 @@ import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
+  SetTypedQueryDriftMode,
 } from '@memberjunction/core-entities';
 import {
   ServerExtensionLoader,
@@ -278,15 +280,21 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './resolvers/PublicGuestShareResolver.js';
 export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
 export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
 export {
     CreateGuestShareLinkServerOperation,
     RevokeGuestShareLinkServerOperation,
-    ResolveGuestShareLinkServerOperation,
     LoadArtifactGuestShareOperations,
-    SetGuestShareSigningSecret,
+    ResolveGuestArtifactSnapshotForSession,
+    FindUnfrozenLiveContentReason,
+    SanitizeGuestShareConfiguration,
+    IsGuestShareSupportedArtifactType,
+    SAFE_GUEST_SHARE_DRIVER_CLASSES,
+    type PublicArtifactGuestShareResolution,
+    type PublicGuestShareErrorCode,
 } from './operations/ArtifactGuestShareServerOperations.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
@@ -321,7 +329,14 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
-import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { SetRestrictedFieldClassifierDecisionMode } from '@memberjunction/core-entities-server';
+import { SetTagMatchDecisionMode } from '@memberjunction/tag-engine';
+import { RegisterArtifactPostRunViewProtectedEntities } from './generic/RegisterArtifactProtectedEntities.js';
+import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
+export { RegisterArtifactPostRunViewProtectedEntities };
+
+RegisterArtifactPostRunViewProtectedEntities();
+RegisterServerArtifactFileBytesLoader();
 import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -594,6 +609,7 @@ const setupComplete$ = new ReplaySubject(1);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
+    ArtifactCollaborationServer.Instance.SetTicketReplayStore(new RedisTicketReplayStore(sharedCache));
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
@@ -680,6 +696,7 @@ const setupComplete$ = new ReplaySubject(1);
     pgConfigData.LocalStorageProvider = effectiveStorageProvider;
     pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -851,8 +868,8 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
 
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const pgEntityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const pgEntityCount = AssertEntityMetadataLoaded(Metadata.Provider, `PostgreSQL ${pgHost}:${pgPort}/${pgDatabase}`); // global-provider-ok: bootstrap
     startupLog.LogIf('verbose', `Data Source has been initialized. ${pgEntityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('PostgreSQL', `${pgHost}:${pgPort}/${pgDatabase}`, pgEntityCount);
   } else {
@@ -898,6 +915,7 @@ const setupComplete$ = new ReplaySubject(1);
     config.LocalStorageProvider = effectiveStorageProvider;
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
@@ -908,9 +926,9 @@ const setupComplete$ = new ReplaySubject(1);
     validateAuthProvidersRegistered();
     validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const entityCount = AssertEntityMetadataLoaded(Metadata.Provider, `SQL Server ${dbHost}:${dbPort}/${dbDatabase}`); // global-provider-ok: bootstrap
     startupLog.BeginPhase('Initializing data provider');
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const entityCount = md?.Entities ? md.Entities.length : 0;
     startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('SQL Server', `${dbHost}:${dbPort}/${dbDatabase}`, entityCount);
 
@@ -1156,7 +1174,11 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
-  EnsureAnchoredConversationReadHookRegistered();
+  RegisterArtifactPostRunViewProtectedEntities();
+  RegisterServerArtifactFileBytesLoader();
+  // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
+  SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
+  SetTagMatchDecisionMode(configInfo.decisions?.tagMatch);
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;

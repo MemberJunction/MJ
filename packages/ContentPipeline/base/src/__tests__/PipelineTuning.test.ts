@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ConfidenceScale, ResolveConfidence } from '../ConfidenceScale.js';
-import { DefaultPipelineTuning, ResolveTuning } from '../PipelineTuning.js';
+import { DefaultPipelineTuning, ResolveTuning, RetryDelayMs } from '../PipelineTuning.js';
 
 describe('ResolveTuning', () => {
     it('falls back to the documented defaults when nothing is configured', () => {
@@ -139,5 +139,38 @@ describe('ResolveConfidence', () => {
     it('ignores a non-finite override', () => {
         const c = ResolveConfidence({ Confidence: { ExtractorText: Number.POSITIVE_INFINITY } });
         expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
+    });
+});
+
+describe('RetryDelayMs', () => {
+    const tuning = { RetryBackoffBaseMs: 60_000, RetryBackoffMaxMs: 3_600_000 };
+
+    it('defaults to one minute, doubling to at most an hour', () => {
+        const t = ResolveTuning(undefined);
+        expect(t.RetryBackoffBaseMs).toBe(60_000);
+        expect(t.RetryBackoffMaxMs).toBe(3_600_000);
+    });
+
+    it('waits the base for the first retry and doubles for each one after', () => {
+        expect([1, 2, 3, 4].map((n) => RetryDelayMs(n, tuning))).toEqual([60_000, 120_000, 240_000, 480_000]);
+    });
+
+    it('never waits longer than the maximum, however many retries', () => {
+        expect(RetryDelayMs(7, tuning)).toBe(3_600_000);
+        expect(RetryDelayMs(10_000, tuning)).toBe(3_600_000);
+    });
+
+    it('treats a count below one as the first retry', () => {
+        expect(RetryDelayMs(0, tuning)).toBe(60_000);
+    });
+
+    it('waits the base when the maximum is configured below it', () => {
+        expect(RetryDelayMs(3, { RetryBackoffBaseMs: 60_000, RetryBackoffMaxMs: 1_000 })).toBe(60_000);
+    });
+
+    it('takes configured knobs and ignores invalid ones', () => {
+        const t = ResolveTuning({ Tuning: { RetryBackoffBaseMs: 5_000, RetryBackoffMaxMs: -1 } });
+        expect(t.RetryBackoffBaseMs).toBe(5_000);
+        expect(t.RetryBackoffMaxMs).toBe(DefaultPipelineTuning.RetryBackoffMaxMs);
     });
 });

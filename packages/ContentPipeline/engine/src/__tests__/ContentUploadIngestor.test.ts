@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CompositeKey } from '@memberjunction/core';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
@@ -849,6 +850,14 @@ describe('ContentUploadIngestor', () => {
         vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID, options) => {
             const scope = options.Scope as { Kind: string; RecordIDs: string[] };
             processCalls.push({ processID, recordIDs: scope.RecordIDs });
+            if (processID === CONTENT_PIPELINE_EXTRACT_PROCESS_ID) {
+                for (const id of scope.RecordIDs) {
+                    const row = items.find((i) => i.ID === id);
+                    if (row) {
+                        row.ExtractionStatus = 'Complete';
+                    }
+                }
+            }
             if (processID === CONTENT_PIPELINE_SEGMENT_PROCESS_ID) {
                 chunks.push({
                     ID: 'CHK-350-NEW',
@@ -906,6 +915,14 @@ describe('ContentUploadIngestor', () => {
         vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID, options) => {
             const scope = options.Scope as { Kind: string; RecordIDs: string[] };
             processCalls.push({ processID, recordIDs: scope.RecordIDs });
+            if (processID === CONTENT_PIPELINE_EXTRACT_PROCESS_ID) {
+                for (const id of scope.RecordIDs) {
+                    const row = items.find((i) => i.ID === id);
+                    if (row) {
+                        row.ExtractionStatus = 'Complete';
+                    }
+                }
+            }
             if (processID === CONTENT_PIPELINE_SEGMENT_PROCESS_ID) {
                 chunks.push(
                     { ID: 'CHK-1', ContentItemID: scope.RecordIDs[0], EmbeddingStatus: 'Pending', DeleteStatus: null },
@@ -1082,6 +1099,315 @@ describe('ContentUploadIngestor', () => {
                 recordIDs: ['CHK-ITEM-UPLOAD-1', 'CHK-ITEM-GRANDCHILD-1'],
             },
         ]);
+    });
+
+    it('excludes deferred archive members whose ExtractionStatus stays Pending from Segment and Tag (#6236)', async () => {
+        const { items, chunks, provider, contextUser } = createFakeEnvironment();
+        const processCalls: { processID: string; recordIDs: string[] }[] = [];
+
+        vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID, options) => {
+            const scope = options.Scope as { Kind: string; RecordIDs: string[] };
+            processCalls.push({ processID, recordIDs: scope.RecordIDs });
+
+            if (processID === CONTENT_PIPELINE_EXTRACT_PROCESS_ID) {
+                items[0].ExtractionStatus = 'Complete';
+                items.push(
+                    {
+                        ID: 'ITEM-CHILD-READY',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-READY',
+                        URL: `${UploadItemURL('FILE-460')}#readme.md`,
+                        Name: 'readme.md',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-DEFERRED-AUDIO',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-AUDIO',
+                        URL: `${UploadItemURL('FILE-460')}#call.mp3`,
+                        Name: 'call.mp3',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Pending',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-PROCESSING',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-PROC',
+                        URL: `${UploadItemURL('FILE-460')}#video.mp4`,
+                        Name: 'video.mp4',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Processing',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                );
+                return { Status: 'Completed', Processed: 1, Success: 1, Error: 0, Skipped: 0, ProcessRunID: 'R-EX-460' } as never;
+            }
+
+            if (processID === CONTENT_PIPELINE_SEGMENT_PROCESS_ID) {
+                for (const id of scope.RecordIDs) {
+                    const row = items.find((i) => i.ID === id)!;
+                    if (row.ExtractionStatus !== 'Complete') {
+                        // Mirrors SegmentStage marking unextracted items Skipped if they ever leak through.
+                        row.SegmentationStatus = 'Skipped';
+                    } else {
+                        row.SegmentationStatus = 'Complete';
+                        chunks.push({
+                            ID: `CHK-${id}`,
+                            ContentItemID: id,
+                            EmbeddingStatus: 'Pending',
+                            DeleteStatus: null,
+                        });
+                    }
+                }
+            }
+
+            return {
+                Status: 'Completed',
+                Processed: scope.RecordIDs.length,
+                Success: scope.RecordIDs.length,
+                Error: 0,
+                Skipped: 0,
+                ProcessRunID: 'R-OTHER-460',
+            } as never;
+        });
+
+        await ContentUploadIngestor.Ingest({
+            ContentSourceID: 'SRC-UPLOAD-1',
+            FileID: 'FILE-460',
+            Name: 'archive-with-media.zip',
+            RunNow: true,
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+
+        expect(processCalls).toEqual([
+            { processID: CONTENT_PIPELINE_EXTRACT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
+            { processID: CONTENT_PIPELINE_SEGMENT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1', 'ITEM-CHILD-READY'] },
+            { processID: CONTENT_PIPELINE_TAG_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1', 'ITEM-CHILD-READY'] },
+            { processID: CONTENT_PIPELINE_EMBED_PROCESS_ID, recordIDs: ['CHK-ITEM-UPLOAD-1', 'CHK-ITEM-CHILD-READY'] },
+        ]);
+        const deferredAudio = items.find((i) => i.ID === 'ITEM-CHILD-DEFERRED-AUDIO')!;
+        expect(deferredAudio.ExtractionStatus).toBe('Pending');
+        expect(deferredAudio.SegmentationStatus).toBe('Pending');
+        expect(deferredAudio.TaggingStatus).toBe('Pending');
+
+        const processingVideo = items.find((i) => i.ID === 'ITEM-CHILD-PROCESSING')!;
+        expect(processingVideo.ExtractionStatus).toBe('Processing');
+        expect(processingVideo.SegmentationStatus).toBe('Pending');
+        expect(processingVideo.TaggingStatus).toBe('Pending');
+    });
+
+    it('logs and continues marking remaining items Failed when Save returns false or throws inside markItemsFailed (#6236)', async () => {
+        const { items, provider, contextUser } = createFakeEnvironment();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const baseGetEntityObject = provider.GetEntityObject;
+
+        provider.GetEntityObject = vi.fn(async (entityName: string) => {
+            const entity = await baseGetEntityObject(entityName);
+            if (entityName !== 'MJ: Content Items') {
+                return entity;
+            }
+            const baseSave = entity.Save.bind(entity);
+            const baseInnerLoad = entity.InnerLoad.bind(entity);
+            const latestResult = { CompleteMessage: 'optimistic lock conflict' };
+            return Object.assign(entity, {
+                LatestResult: latestResult,
+                InnerLoad: async (ck: CompositeKey) => {
+                    const id = String(ck.KeyValuePairs[0]?.Value ?? '');
+                    if (id === 'ITEM-CHILD-LOAD-FALSE') {
+                        latestResult.CompleteMessage = 'record not found in storage';
+                        return false;
+                    }
+                    if (id === 'ITEM-CHILD-LOAD-THROW') {
+                        throw new Error('database timeout on load');
+                    }
+                    return baseInnerLoad(ck);
+                },
+                Save: async () => {
+                    if (entity.ID === 'ITEM-CHILD-SAVE-FALSE' && entity.SegmentationStatus === 'Failed') {
+                        return false;
+                    }
+                    if (entity.ID === 'ITEM-CHILD-SAVE-THROW' && entity.SegmentationStatus === 'Failed') {
+                        throw new Error('db connection reset');
+                    }
+                    return baseSave();
+                },
+            });
+        });
+
+        vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID) => {
+            if (processID === CONTENT_PIPELINE_EXTRACT_PROCESS_ID) {
+                items[0].ExtractionStatus = 'Complete';
+                items.push(
+                    {
+                        ID: 'ITEM-CHILD-LOAD-FALSE',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-LF',
+                        URL: `${UploadItemURL('FILE-470')}#lf.txt`,
+                        Name: 'lf.txt',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-LOAD-THROW',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-LT',
+                        URL: `${UploadItemURL('FILE-470')}#lt.txt`,
+                        Name: 'lt.txt',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-SAVE-FALSE',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-SF',
+                        URL: `${UploadItemURL('FILE-470')}#a.txt`,
+                        Name: 'a.txt',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-SAVE-THROW',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-ST',
+                        URL: `${UploadItemURL('FILE-470')}#b.txt`,
+                        Name: 'b.txt',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                    {
+                        ID: 'ITEM-CHILD-SAVE-OK',
+                        ContentSourceID: 'SRC-UPLOAD-1',
+                        ContentTypeID: 'CT-DOC',
+                        ContentSourceTypeID: 'CST-UPLOAD',
+                        ContentFileTypeID: 'CFT-PDF',
+                        FileID: 'FILE-SOK',
+                        URL: `${UploadItemURL('FILE-470')}#c.txt`,
+                        Name: 'c.txt',
+                        Description: null,
+                        EntityRecordDocumentID: null,
+                        ParentID: 'ITEM-UPLOAD-1',
+                        RootParentID: 'ITEM-UPLOAD-1',
+                        ExtractionStatus: 'Complete',
+                        TaggingStatus: 'Pending',
+                        SegmentationStatus: 'Pending',
+                        EmbeddingStatus: 'Pending',
+                        DeleteStatus: null,
+                    },
+                );
+                return { Status: 'Completed', Processed: 1, Success: 1, Error: 0, Skipped: 0, ProcessRunID: 'R-EX-470' } as never;
+            }
+            if (processID === CONTENT_PIPELINE_SEGMENT_PROCESS_ID) {
+                throw new Error('segmenter crashed');
+            }
+            return { Status: 'Completed', Processed: 6, Success: 6, Error: 0, Skipped: 0, ProcessRunID: 'R-TAG-470' } as never;
+        });
+
+        const result = await ContentUploadIngestor.Ingest({
+            ContentSourceID: 'SRC-UPLOAD-1',
+            FileID: 'FILE-470',
+            Name: 'archive-fail.zip',
+            RunNow: true,
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+
+        expect(result.ContentItemID).toBe('ITEM-UPLOAD-1');
+        expect(items.find((i) => i.ID === 'ITEM-UPLOAD-1')?.SegmentationStatus).toBe('Failed');
+        expect(items.find((i) => i.ID === 'ITEM-CHILD-SAVE-OK')?.SegmentationStatus).toBe('Failed');
+
+        const loggedMessages = errorSpy.mock.calls.map((args) => String(args[0]));
+        expect(loggedMessages.some((m) => m.includes('Segment threw') && m.includes('segmenter crashed'))).toBe(true);
+        expect(
+            loggedMessages.some(
+                (m) => m.includes("failed to mark Content Item 'ITEM-CHILD-LOAD-FALSE'") && m.includes('record not found in storage'),
+            ),
+        ).toBe(true);
+        expect(
+            loggedMessages.some(
+                (m) => m.includes("failed to mark Content Item 'ITEM-CHILD-LOAD-THROW'") && m.includes('database timeout on load'),
+            ),
+        ).toBe(true);
+        expect(
+            loggedMessages.some(
+                (m) => m.includes("failed to mark Content Item 'ITEM-CHILD-SAVE-FALSE'") && m.includes('optimistic lock conflict'),
+            ),
+        ).toBe(true);
+        expect(
+            loggedMessages.some(
+                (m) => m.includes("failed to mark Content Item 'ITEM-CHILD-SAVE-THROW'") && m.includes('db connection reset'),
+            ),
+        ).toBe(true);
     });
 
     it('Remove marks the root and every descendant at any depth and all their chunks as Pending delete with IgnoreMaxRows: true, checks receipts, and reports unremoved IDs when RunNow fails (M1, M5)', async () => {

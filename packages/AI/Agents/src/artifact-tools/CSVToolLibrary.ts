@@ -5,7 +5,14 @@
  * artifact. Uses a built-in RFC 4180-style parser — no external dep.
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    BaseArtifactToolLibrary,
+    type ArtifactToolArgs,
+    type ArtifactToolDefinition,
+    type ArtifactToolResult,
+} from '@memberjunction/ai-core-plus';
+import { CompileSafeToolRegex } from './artifact-tool-helpers';
+import { ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 interface ParsedCsv {
     columns: string[];
@@ -51,7 +58,7 @@ export class CSVToolLibrary extends BaseArtifactToolLibrary {
 
     protected async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer,
     ): Promise<ArtifactToolResult> {
         const csv = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
@@ -69,7 +76,7 @@ export class CSVToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleGetRows(parsed: ParsedCsv, input: Record<string, unknown>): ArtifactToolResult {
+    private handleGetRows(parsed: ParsedCsv, input: ArtifactToolArgs): ArtifactToolResult {
         const start = Math.max(0, Number(input.start ?? 0));
         const count = Math.max(0, Number(input.count ?? 50));
         const window = parsed.rows.slice(start, start + count);
@@ -77,8 +84,8 @@ export class CSVToolLibrary extends BaseArtifactToolLibrary {
         return { success: true, data: { start, count: window.length, total: parsed.rows.length, rows } };
     }
 
-    private handleSearch(parsed: ParsedCsv, input: Record<string, unknown>): ArtifactToolResult {
-        const pattern = String(input.pattern);
+    private handleSearch(parsed: ParsedCsv, input: ArtifactToolArgs): ArtifactToolResult {
+        const pattern = String(input.pattern ?? '');
         const flags = typeof input.flags === 'string' ? input.flags : '';
         const column = typeof input.column === 'string' ? input.column : undefined;
         const colIndex = column ? parsed.columns.indexOf(column) : -1;
@@ -86,21 +93,49 @@ export class CSVToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: `Column "${column}" not found. Available: ${parsed.columns.join(', ')}.` };
         }
 
-        let re: RegExp;
-        try {
-            re = new RegExp(pattern, flags);
-        } catch (err) {
-            return { success: false, data: null, errorMessage: `Invalid regex: ${err instanceof Error ? err.message : String(err)}` };
+        const compiled = CompileSafeToolRegex(pattern, flags);
+        if (!compiled.Regex) {
+            return { success: false, data: null, errorMessage: compiled.ErrorMessage ?? `Invalid or unsafe regex: "${pattern}".` };
+        }
+
+        const rowIndices: number[] = [];
+        const cellTexts: string[] = [];
+        for (let r = 0; r < parsed.rows.length; r++) {
+            const cells = parsed.rows[r];
+            if (colIndex >= 0) {
+                rowIndices.push(r);
+                cellTexts.push(cells[colIndex] ?? '');
+            } else {
+                for (const cell of cells) {
+                    rowIndices.push(r);
+                    cellTexts.push(cell);
+                }
+            }
+        }
+
+        const batchResult = ExecuteSafeRegexBatchWithRecovery(compiled.Regex, cellTexts, performance.now() + 1500);
+        const matchedRowSet = new Set<number>();
+        for (let i = 0; i < batchResult.Matches.length; i++) {
+            if (batchResult.Matches[i]) {
+                matchedRowSet.add(rowIndices[i]);
+            }
         }
 
         const matches: Array<{ rowIndex: number; row: Record<string, string> }> = [];
-        parsed.rows.forEach((cells, i) => {
-            const cellsToScan = colIndex >= 0 ? [cells[colIndex] ?? ''] : cells;
-            if (cellsToScan.some(c => re.test(c))) {
-                matches.push({ rowIndex: i, row: zipRow(parsed.columns, cells) });
-            }
-        });
-        return { success: true, data: { matchCount: matches.length, matches } };
+        for (const rowIndex of matchedRowSet) {
+            matches.push({ rowIndex, row: zipRow(parsed.columns, parsed.rows[rowIndex]) });
+        }
+
+        return {
+            success: true,
+            data: {
+                matchCount: matches.length,
+                matches,
+                ...(batchResult.BudgetExpired || batchResult.TimedOut.some(Boolean)
+                    ? { partial: true, budgetExpired: batchResult.BudgetExpired }
+                    : {}),
+            },
+        };
     }
 }
 
