@@ -101,3 +101,5 @@ export function SetProvider(provider) {
     RunQuery.Provider = provider;
 }
 
+
+// CI test: core change; run, record, then skip on a verified record. Do not merge.
