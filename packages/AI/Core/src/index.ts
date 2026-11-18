@@ -32,6 +32,7 @@ export * from './generic/errorAnalyzer';
 export * from './generic/cancellation';
 export * from './generic/realtimeToolBatchBarrier';
 export * from './generic/realtimeSessionResumption';
+export * from './generic/realtimeConversationMemory';
 export * from './generic/realtimeConnectionSetup';
 export * from './generic/realtimeTracks';
 export * from './generic/realtimeAgentVision';

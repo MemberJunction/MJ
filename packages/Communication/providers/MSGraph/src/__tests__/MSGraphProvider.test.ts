@@ -715,3 +715,83 @@ describe('MSGraphProvider', () => {
     });
   });
 });
+
+describe('MSGraphProvider — forward mailbox, direction and Bcc (#4322 #5811)', () => {
+  let provider: Record<string, Function>;
+  const MAILBOX = 'test@example.com'; // AZURE_ACCOUNT_EMAIL in the shared env mock
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    provider = new MSGraphProvider() as unknown as Record<string, Function>;
+  });
+
+  type Mapped = { Direction?: string; BCCRecipients?: string[] };
+
+  /** Routes each Graph path: the message list, or the Sent Items folder lookup. */
+  const getMessagesFor = async (graphMessages: Record<string, unknown>[], sentItemsId = 'sent-folder-id'): Promise<{ messages: Mapped[]; paths: string[] }> => {
+    const paths: string[] = [];
+    mockGraphApi.mockImplementation((path: string) => {
+      paths.push(path);
+      const isFolder = path.endsWith('/mailFolders/sentitems');
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(isFolder ? { id: sentItemsId } : { value: graphMessages }),
+      };
+      return chain;
+    });
+    const result = (await provider.GetMessages({ NumMessages: 10 })) as { Messages: Mapped[] };
+    return { messages: result.Messages, paths };
+  };
+
+  const msg = (overrides: Record<string, unknown>) => ({
+    id: 'm', conversationId: 'c', subject: 's', body: { content: 'b' }, parentFolderId: 'inbox-id', ...overrides,
+  });
+
+  it('maps a message sent on someone\'s behalf (from = executive, sender = this mailbox) as Outbound', async () => {
+    const { messages } = await getMessagesFor([msg({
+      from: { emailAddress: { address: 'executive@example.com' } },
+      sender: { emailAddress: { address: MAILBOX } },
+    })]);
+    expect(messages[0].Direction).toBe('Outbound');
+  });
+
+  it('maps a message in Sent Items as Outbound and an ordinary received one as Inbound', async () => {
+    const { messages } = await getMessagesFor([
+      msg({ from: { emailAddress: { address: 'shared@example.com' } }, sender: { emailAddress: { address: 'shared@example.com' } }, parentFolderId: 'sent-folder-id' }),
+      msg({ from: { emailAddress: { address: 'someone@example.org' } }, sender: { emailAddress: { address: 'someone@example.org' } } }),
+    ]);
+    expect(messages.map((m) => m.Direction)).toEqual(['Outbound', 'Inbound']);
+  });
+
+  it('maps bccRecipients', async () => {
+    const { messages } = await getMessagesFor([msg({
+      from: { emailAddress: { address: MAILBOX } },
+      bccRecipients: [{ emailAddress: { address: 'hidden@example.org' } }, { emailAddress: {} }],
+    })]);
+    expect(messages[0].BCCRecipients).toEqual(['hidden@example.org']);
+  });
+
+  it('does not look up Sent Items when every message is settled by its sender', async () => {
+    const { paths } = await getMessagesFor([msg({ from: { emailAddress: { address: MAILBOX } } })]);
+    expect(paths.some((p) => p.endsWith('/mailFolders/sentitems'))).toBe(false);
+  });
+
+  it('forwards from the mailbox named in ContextData.Email', async () => {
+    const post = vi.fn().mockResolvedValue({});
+    const paths: string[] = [];
+    mockGraphApi.mockImplementation((path: string) => {
+      paths.push(path);
+      return { post };
+    });
+
+    const result = (await provider.ForwardMessage({
+      MessageID: 'msg-1',
+      ToRecipients: ['to@example.org'],
+      ContextData: { Email: 'delegate@example.com' },
+    })) as { Success: boolean };
+
+    expect(result.Success).toBe(true);
+    expect(paths[0]).toContain(`/${encodeURIComponent('delegate@example.com')}/messages/msg-1/forward`);
+  });
+});

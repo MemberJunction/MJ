@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import type { UserInfo } from '@memberjunction/core';
-import { HarnessFileStorage, type FileStorageActivation } from './file-storage';
+import { RunView, type UserInfo } from '@memberjunction/core';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
 import { HarnessTraining } from './train';
@@ -11,8 +12,11 @@ import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
 import { HarnessCleanup, RunRecords } from './cleanup';
+import { HarnessWorldTruth } from './world-truth';
+import { HarnessProvenance } from './provenance';
+import { HarnessSidecar } from './sidecar';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
-import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
+import type { CandidateModel, LoadedDataset, PipelineSpec, TruthHarness } from './types';
 
 /** What every harness member closes over: one MJAPI connection, one mssql pool, the algorithm catalogue, the run id. */
 export interface RunContext {
@@ -23,11 +27,10 @@ export interface RunContext {
   readonly RunID: string;
 }
 
-/** One harness and what it holds open: its mssql pool and the File Storage Provider it switched on, if any. */
+/** One harness and what it holds open: its mssql pool. */
 interface HarnessConnection {
   readonly Harness: TruthHarness;
   readonly Pool: DatasetPool;
-  readonly FileStorage: FileStorageActivation | null;
 }
 
 /** A harness bound to one client provider (see {@link RunFixtures.HarnessFor}). */
@@ -62,8 +65,8 @@ export class RunFixtures {
   /**
    * For every harness bound since the last cleanup: look up the pipelines of its agent runs again by their exact names
    * (a run can create them after the client call returned), delete the pipelines and models it recorded with their
-   * training runs and scoring bindings through the entity layer, put back the File Storage Provider it switched on,
-   * and close its pool. Every step is attempted; throws one error naming each failure. No-op when nothing was bound.
+   * training runs and scoring bindings through the entity layer, and close its pool. Every step is attempted; throws
+   * one error naming each failure. No-op when nothing was bound.
    */
   public static async CleanupRun(user: UserInfo): Promise<void> {
     const bound = RunFixtures.bound;
@@ -85,23 +88,17 @@ export class RunFixtures {
     try {
       conn = await b.Connection;
     } catch {
-      return []; // the harness never connected, so it created, switched on and opened nothing
+      return []; // the harness never connected, so it created and opened nothing
     }
     const h = conn.Harness;
     const failures: string[] = [];
     try {
       const agentPipelines = await HarnessAgent.PipelineIDsNamed(h.Provider, user, h.Created.AgentPipelineNames);
       for (const id of agentPipelines) h.Created.RecordPipeline(id);
+      await RunFixtures.recordPipelineBindings(h, user, agentPipelines);
       failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
-    }
-    if (conn.FileStorage) {
-      try {
-        await HarnessFileStorage.Restore(h.Provider, user, conn.FileStorage);
-      } catch (e) {
-        failures.push(e instanceof Error ? e.message : String(e));
-      }
     }
     try {
       await conn.Pool.close();
@@ -111,7 +108,21 @@ export class RunFixtures {
     return failures.map((f) => `run ${h.RunID}: ${f}`);
   }
 
-  /** Trains a logistic-regression model on the given dataset (`MaxRows: 1_000_000`) and returns its `ModelID`. */
+  /**
+   * The unit and protocol versions the agent runs' pipelines are bound to (the builder binds them), recorded so cleanup
+   * deletes them with their pipelines.
+   */
+  private static async recordPipelineBindings(h: TruthHarness, user: UserInfo, pipelineIds: readonly string[]): Promise<void> {
+    if (pipelineIds.length === 0) return;
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLTrainingPipelineEntity, 'PredictionUnitID' | 'EvaluationProtocolID'>>({
+      EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID IN (${pipelineIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`,
+      Fields: ['PredictionUnitID', 'EvaluationProtocolID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    if (!r.Success) throw new Error(`reading the agent pipelines' bindings failed: ${r.ErrorMessage}`);
+    for (const p of r.Results) h.Created.RecordPipelineBindings(p);
+  }
+
+  /** Trains a logistic-regression model on the given dataset (every unit row: a unit pipeline refuses a row cap) and returns its `ModelID`. */
   public static async TrainedModel(h: TruthHarness, tag: string, dataset: LoadedDataset): Promise<string> {
     const p = await h.CreatePipeline({
       Name: `PSTruth: ${tag} ${h.RunID}`,
@@ -124,12 +135,12 @@ export class RunFixtures {
       Validation: { Strategy: 'train_test_split', LockedHoldoutFraction: 0.2 },
       DenyFields: [...W_WORLD_DENY_FIELDS],
     });
-    const t = await h.Train(p, { MaxRows: 1_000_000 });
+    const t = await h.Train(p);
     if (!t.ModelID) throw new Error(`${tag} training failed: ${t.ErrorMessage || 'no model id'}`);
     return t.ModelID;
   }
 
-  /** Memoised W1 s42 Draft logistic-regression model (`MaxRows: 1_000_000`). */
+  /** Memoised W1 s42 Draft logistic-regression model. */
   public static W1S42Model(h: TruthHarness): Promise<CandidateModel> {
     RunFixtures.w1Draft ||= (async (): Promise<CandidateModel> => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
@@ -139,7 +150,7 @@ export class RunFixtures {
     return RunFixtures.w1Draft;
   }
 
-  /** Memoised W1 s42 Validated logistic-regression model (`MaxRows: 1_000_000`), promoted via `h.Promote`. */
+  /** Memoised W1 s42 Validated logistic-regression model, promoted via `h.Promote`. */
   public static W1S42ValidatedModel(h: TruthHarness): Promise<CandidateModel> {
     RunFixtures.w1Validated ||= (async (): Promise<CandidateModel> => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
@@ -152,19 +163,25 @@ export class RunFixtures {
   }
 
   /**
-   * The harness on a caller's provider: makes sure model artifacts have an active storage provider (recording any it
-   * switched on), then opens the dataset pool. The pool is closed again if building the harness fails.
+   * The harness on a caller's provider: opens the dataset pool, closed again if building the harness fails. Model
+   * files need no setup here: training stores them through the provider `PS_STORAGE_PROVIDER` names, whatever its
+   * `IsActive` flag.
    */
   private static async connect(provider: GraphQLDataProvider, user: UserInfo): Promise<HarnessConnection> {
-    const fileStorage = await HarnessFileStorage.EnsureActive(provider, user);
     const pool = await HarnessDatasets.OpenDatasetPool();
     try {
-      return { Harness: await RunFixtures.harnessFrom(provider, user, pool), Pool: pool, FileStorage: fileStorage };
+      return { Harness: await RunFixtures.harnessFrom(provider, user, pool), Pool: pool };
     } catch (e) {
       await pool.close();
-      if (fileStorage) await HarnessFileStorage.Restore(provider, user, fileStorage);
       throw e;
     }
+  }
+
+  /** Creates a pipeline and records the unit and protocol the migration bound to it: they are this run's rows too, so cleanup deletes them. */
+  private static async createRecordedPipeline(ctx: RunContext, created: RunRecords, spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity> {
+    const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
+    created.RecordPipelineBindings(p);
+    return p;
   }
 
   /** One object literal: a TruthHarness member without a line here is a compile error. */
@@ -183,7 +200,7 @@ export class RunFixtures {
       RunID: ctx.RunID,
       Created: created,
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
-      CreatePipeline: (spec) => HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec),
+      CreatePipeline: (spec) => RunFixtures.createRecordedPipeline(ctx, created, spec),
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
       RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),
@@ -197,6 +214,10 @@ export class RunFixtures {
       GenerateStory: (modelId) => HarnessAgent.GenerateStory(ctx, modelId),
       Judge: (module, args) => JudgeBridge.Judge(module, args),
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),
+      ReadWorldTruth: (dataset) => HarnessWorldTruth.ReadWorldTruth(dataset),
+      SampleRowIds: (dataset, n, seed) => HarnessProvenance.SampleRowIds(ctx, dataset, n, seed),
+      ResolveProvenance: (check) => HarnessProvenance.ResolveProvenance(ctx, check),
+      UseSuiteSidecar: () => HarnessSidecar.UseSuiteSidecar(),
     });
   }
 }

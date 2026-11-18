@@ -1,4 +1,10 @@
-import { HarnessNetworkPolicy, HarnessWorkspaceScope } from '../types.js';
+import {
+    CloudSandboxMetadata,
+    CloudSandboxOptions,
+    HarnessNetworkPolicy,
+    HarnessSandboxProviderType,
+    HarnessWorkspaceScope,
+} from '../types.js';
 import { SandboxExecutor } from './SandboxExecutor.js';
 
 /**
@@ -16,9 +22,43 @@ export interface WorkspaceKey {
     RunId: string;
 }
 
+/** Workspace provisioning mode for local sandboxes. */
+export type SandboxWorkspaceMode = 'managed' | 'attach';
+
+/** Workspace attachment and boundary options for `SandboxConfig`. */
+export interface SandboxWorkspaceOptions {
+    /**
+     * `'managed'` creates an empty scope directory under the provider root; `'attach'` binds an
+     * existing host directory without creating or deleting it on finalize.
+     */
+    mode?: SandboxWorkspaceMode;
+    /** Explicit host path to attach when `mode === 'attach'`. */
+    path?: string;
+    /**
+     * Dotted path into the turn's data/payload/context (e.g. `'repositoryWorkspacePath'`) used to
+     * resolve the attach path dynamically per run when `path` is not hardcoded.
+     */
+    pathFromPayload?: string;
+    /**
+     * Permitted root directories under which an attached workspace and additional directories must
+     * resolve (combined with `MJ_HARNESS_ALLOWED_WORKSPACE_ROOTS`). Fail-closed when empty.
+     */
+    allowedRoots?: string[];
+    /**
+     * Extra host directories passed to CLI harnesses (e.g. via `--add-dir`). Supports the
+     * `${parentDir}` placeholder (resolved to the parent directory of the attached workspace) and is
+     * containment-checked against `allowedRoots`.
+     */
+    additionalDirectories?: string[];
+    /** Require `.git` inside an attached workspace directory (defaults to `true` for attach mode). */
+    requireGitRepo?: boolean;
+}
+
 /** Runtime knobs a provider honours when provisioning. */
 export interface SandboxConfig {
-    NetworkPolicy: HarnessNetworkPolicy;
+    /** Optional placement provider (`'local' | 'docker' | 'cloud'`). */
+    provider?: HarnessSandboxProviderType;
+    NetworkPolicy?: HarnessNetworkPolicy;
     /** Container image, for providers that have one. Ignored by the local provider. */
     Image?: string;
     /** How to handle two runs wanting the same durable workspace. */
@@ -37,10 +77,20 @@ export interface SandboxConfig {
     User?: string;
     /** Drop all Linux capabilities and forbid privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`). Ignored by the local provider. */
     DropCapabilities?: boolean;
+    /** Cloud-hosted sandbox runtime configuration when `provider === 'cloud'`. */
+    cloud?: CloudSandboxOptions;
+    /** Workspace mode and attach boundary configuration (honoured by local provider). */
+    workspace?: SandboxWorkspaceOptions;
+    /** Pre-resolved host path when `workspace.pathFromPayload` was evaluated by the caller. */
+    resolvedWorkspacePath?: string;
+    /** Pre-resolved additional directories evaluated by the caller. */
+    resolvedAdditionalDirectories?: string[];
 }
 
 /** A provisioned workspace, and the means of running commands inside it. */
 export interface SandboxHandle {
+    /** Sandbox provider name (`'local' | 'docker' | 'cloud'`). */
+    Provider?: HarnessSandboxProviderType;
     /**
      * Workspace path AS THE HARNESS SEES IT.
      *
@@ -59,6 +109,12 @@ export interface SandboxHandle {
     Key: WorkspaceKey;
     /** True when the workspace is discarded on finalize rather than retained for the next run. */
     Ephemeral: boolean;
+    /** Serialized cleanup correlation token for remote or out-of-process sandboxes. */
+    CleanupToken?: string;
+    /** Normalized cloud execution metadata when provisioned by `CloudSandboxProvider`. */
+    Metadata?: CloudSandboxMetadata;
+    /** Canonical extra directories exposed to the harness (e.g. via `--add-dir`). */
+    AdditionalDirectories?: string[];
     /**
      * Runs harness processes inside this sandbox.
      *
@@ -81,6 +137,8 @@ export interface SandboxHandle {
  * meaningful there.
  */
 export interface ISandboxProvider {
+    /** Identifier of the sandbox provider (`'local' | 'docker' | 'cloud'`). */
+    readonly Name?: HarnessSandboxProviderType;
     /** Provisions (or reattaches to) the workspace identified by `key`. */
     Provision(key: WorkspaceKey, config: SandboxConfig): Promise<SandboxHandle>;
     /**

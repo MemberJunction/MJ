@@ -32,6 +32,7 @@ import {
     OpenConnectionPayload,
 } from '../handoff';
 import { ForgetConnection, LoadConnection, SaveConnection, StoredConnection } from './connection-store';
+import { RegisterMjExcelCustomFunctions } from './functions';
 import {
     ConnectionRefusedError,
     FetchCatalog,
@@ -1344,6 +1345,7 @@ Office.onReady(info => {
         byId('notice').hidden = false;
         return;
     }
+    RegisterMjExcelCustomFunctions();
     byId('toggle-server-switcher').addEventListener('click', () => pane.ToggleServerSwitcher());
     byId('cancel-server-btn').addEventListener('click', () => pane.ToggleServerSwitcher(false));
     byId('reset-server-btn').addEventListener('click', () => void pane.ResetServerToDefault());

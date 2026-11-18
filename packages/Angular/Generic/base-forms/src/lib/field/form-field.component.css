@@ -1851,8 +1851,14 @@ mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
 }
 
 /* ============================================
-   FIELD-LEVEL ANCHORED COMMENTS
+   FIELD-LEVEL ANCHORED COMMENTS & SUGGESTIONS
    ============================================ */
+.mj-forms-field__comment-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .mj-forms-field__comment-pill {
   display: inline-flex;
   align-items: center;
@@ -1872,6 +1878,18 @@ mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
 .mj-forms-field__comment-pill:hover {
   background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
   border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-field__comment-pill--suggestion {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 55%, transparent);
+  background: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-warning, var(--mj-brand-primary));
+}
+
+.mj-forms-field__comment-pill--suggestion:hover {
+  background: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 22%, var(--mj-bg-surface));
+  border-color: var(--mj-status-warning, var(--mj-brand-primary));
 }
 
 .mj-forms-field__comment-trigger {

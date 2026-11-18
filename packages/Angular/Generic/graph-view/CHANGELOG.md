@@ -1,5 +1,31 @@
 # @memberjunction/ng-graph-view
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ng-ui-components@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [1b282a0]
+- Updated dependencies [4884a47]
+- Updated dependencies [31cc053]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ng-ui-components@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

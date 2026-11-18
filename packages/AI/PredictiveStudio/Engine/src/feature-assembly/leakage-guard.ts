@@ -12,7 +12,7 @@
  * 2. **Single-feature-dominance detection (post-train).** After training, if one
  *    feature's importance exceeds a threshold (e.g. >0.6), the run is flagged as
  *    suspicious → warn loudly + block promotion until a human signs off. The
- *    detection itself ({@link detectSingleFeatureDominance}) runs post-train
+ *    detection itself ({@link DetectSingleFeatureDominance}) runs post-train
  *    (importance only exists after a model is fit); the executor only enforces
  *    the deny-list at assembly time.
  */

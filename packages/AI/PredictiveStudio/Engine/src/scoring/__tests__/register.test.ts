@@ -27,7 +27,7 @@ import type { MLInferenceDeps } from '../types';
 const deps: MLInferenceDeps = {
   modelLoader: { async loadModel() { return null; } },
   artifactLoader: new InMemoryArtifactLoader(),
-  sidecar: { async predict() { return { predictions: [] }; } },
+  sidecar: { async predict() { return { predictions: [], classOrder: null }; } },
 };
 
 describe('isMLInferenceWorkType', () => {
@@ -110,5 +110,59 @@ describe('registerMLScoringProcessor', () => {
       Configuration: JSON.stringify({ autoTrain: { pipelineId: 'pipe-1' } }),
     });
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
+
+  it('wires ChallengerConfigurationObject from context.RecordProcess into the resolved MLModelInferenceProcessor (D1)', () => {
+    RegisterMLScoringProcessor(deps);
+    const challengerConfig = {
+      Enabled: true,
+      SampleRate: 0.5,
+      WorkType: 'ML Model' as const,
+      ChallengerModelID: 'challenger-model-99',
+      MaxLatencyMs: 250,
+    };
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      RecordProcessID: 'rp-shadow-1',
+      Configuration: JSON.stringify({ modelId: 'champion-model-1' }),
+      RecordProcess: {
+        ID: 'rp-shadow-1',
+        ChallengerConfigurationObject: challengerConfig,
+      },
+    }) as MLModelInferenceProcessor;
+
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect(Reflect.get(proc, 'challengerConfig')).toEqual(challengerConfig);
+    expect(Reflect.get(proc, 'shadowCoordinator')).toBeDefined();
+  });
+
+  it('reads ChallengerConfigurationObject only and ignores raw ChallengerConfiguration string or Configuration.challengerConfiguration (R10)', () => {
+    RegisterMLScoringProcessor(deps);
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      RecordProcessID: 'rp-shadow-legacy',
+      Configuration: JSON.stringify({
+        modelId: 'champion-model-1',
+        challengerConfiguration: {
+          Enabled: true,
+          SampleRate: 1.0,
+          WorkType: 'ML Model',
+          ChallengerModelID: 'legacy-config-challenger',
+        },
+      }),
+      RecordProcess: {
+        ID: 'rp-shadow-legacy',
+        ChallengerConfiguration: JSON.stringify({
+          Enabled: true,
+          SampleRate: 1.0,
+          WorkType: 'ML Model',
+          ChallengerModelID: 'legacy-string-challenger',
+        }),
+        ChallengerConfigurationObject: null,
+      },
+    }) as MLModelInferenceProcessor;
+
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect(Reflect.get(proc, 'challengerConfig')).toBeUndefined();
   });
 });

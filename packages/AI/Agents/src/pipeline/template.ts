@@ -15,8 +15,61 @@ import { ValueToText } from './coerce';
 /** Binding scope: `$` = current upstream value; other keys = map/let bindings. */
 export type TemplateScope = Record<string, PipeValue>;
 
-const WHOLE = /^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/;
-const EMBEDDED = /\{\{\s*([^}]+?)\s*\}\}/g;
+/**
+ * If `s` (ignoring outer whitespace) consists of a single `{{ expression }}` placeholder
+ * with no nested braces, returns the trimmed inner expression; otherwise `null`. Index checks
+ * rather than a regex, so a long run of whitespace or braces costs linear time
+ * (CodeQL js/polynomial-redos).
+ */
+export function ExtractWholeTemplateExpression(s: string): string | null {
+    const trimmed = s.trim();
+    if (!trimmed.startsWith('{{') || !trimmed.endsWith('}}') || trimmed.length < 4) {
+        return null;
+    }
+    const rawInner = trimmed.slice(2, -2);
+    if (rawInner.includes('{{') || rawInner.includes('}')) {
+        return null;
+    }
+    const expr = rawInner.trim();
+    return expr.length > 0 ? expr : null;
+}
+
+/**
+ * Replace every embedded `{{ expression }}` placeholder in `template`, left to right, with
+ * `replaceExpr(trimmedExpression, rawMatch)`. A placeholder opens at `{{` and closes at the first `}`
+ * after it, which must be the first of `}}`. Malformed or empty placeholders (unclosed `{{`, empty or
+ * all-whitespace `{{ }}`, a single `}`) are kept verbatim, and scanning resumes after them, so a later
+ * well-formed placeholder still resolves. The position of the next `}` is remembered across candidate
+ * openings, so text full of `{{` with no closing brace is scanned once (CodeQL js/polynomial-redos).
+ */
+export function ReplaceEmbeddedTemplateExpressions(
+    template: string,
+    replaceExpr: (expr: string, rawMatch: string) => string
+): string {
+    let out = '';
+    let copied = 0;
+    let nextClose = -1;
+    let open = template.indexOf('{{');
+    while (open !== -1) {
+        if (nextClose < open + 2) {
+            nextClose = template.indexOf('}', open + 2);
+            if (nextClose === -1) {
+                break;
+            }
+        }
+        if (template[nextClose + 1] === '}') {
+            const expr = template.slice(open + 2, nextClose).trim();
+            if (expr.length > 0) {
+                out += template.slice(copied, open) + replaceExpr(expr, template.slice(open, nextClose + 2));
+                copied = nextClose + 2;
+                open = template.indexOf('{{', copied);
+                continue;
+            }
+        }
+        open = template.indexOf('{{', open + 1);
+    }
+    return out + template.slice(copied);
+}
 
 /** Recursively resolve templates in a tool's `with` params object. */
 export function ResolveParams(params: Record<string, unknown>, scope: TemplateScope): Record<string, unknown> {
@@ -42,11 +95,11 @@ function resolveValue(value: unknown, scope: TemplateScope): unknown {
 }
 
 function resolveString(s: string, scope: TemplateScope): unknown {
-    const whole = WHOLE.exec(s);
-    if (whole) {
-        return ResolvePath(whole[1], scope); // raw value
+    const wholeExpr = ExtractWholeTemplateExpression(s);
+    if (wholeExpr !== null) {
+        return ResolvePath(wholeExpr, scope); // raw value
     }
-    return s.replace(EMBEDDED, (_m, path) => ValueToText(ResolvePath(path, scope) ?? null));
+    return ReplaceEmbeddedTemplateExpressions(s, (path) => ValueToText(ResolvePath(path, scope) ?? null));
 }
 
 /** Resolve a scoped path like `row.Email` or `$.Results[0].Name`. Throws on an unknown binding. */

@@ -32,7 +32,8 @@ import {
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { UserSettingsModule } from '@memberjunction/ng-explorer-settings/user-settings.module';
+import { DashboardEditorModule } from './dashboard-editor.module';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
@@ -56,6 +57,7 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+import { HealthObservatoryComponent } from './HealthObservatory/health-observatory.component';
 import { ThemeStudioDashboardComponent } from './ThemeStudio/theme-studio-dashboard.component';
 import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resource.component';
 import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
@@ -82,9 +84,7 @@ import { AdminDataSchemaComponent } from './Admin/admin-data-schema.component';
 import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
-import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
 import { DashboardsCategoriesResourceComponent } from './DashboardBrowser/dashboards-categories-resource.component';
-import { DashboardEditorComponent } from './DashboardEditor/dashboard-editor.component';
 // API Keys
 import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
@@ -130,6 +130,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
+    HealthObservatoryComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,
@@ -145,9 +146,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent,
     DashboardsCategoriesResourceComponent,
-    DashboardEditorComponent,
     // API Keys
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
@@ -210,7 +209,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     RecordProcessStudioComponent,
     RecordProcessHistoryComponent,
     CodeEditorModule,
-    ExplorerSettingsModule,
+    UserSettingsModule,
+    DashboardEditorModule,
     EntityRelationshipDiagramModule,
     QueryViewerModule,
     DashboardViewerModule,
@@ -236,6 +236,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
     SystemDiagnosticsComponent,
+    HealthObservatoryComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,
@@ -251,9 +252,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent,
     DashboardsCategoriesResourceComponent,
-    DashboardEditorComponent,
+    DashboardEditorModule,
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
     APIKeyEditPanelComponent,

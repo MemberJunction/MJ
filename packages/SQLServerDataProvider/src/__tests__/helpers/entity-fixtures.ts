@@ -76,6 +76,8 @@ export function makeWidgetEntityInfo(options?: {
   updateProc?: boolean;
   cascadeDeletes?: boolean;
   saveReturnMode?: 'full' | 'datestamps_only';
+  /** Extra field init rows appended after the standard Widget fields. */
+  extraFields?: Record<string, unknown>[];
 }): EntityInfo {
   return new EntityInfo({
     ID: WIDGET_ENTITY_ID,
@@ -99,7 +101,7 @@ export function makeWidgetEntityInfo(options?: {
     ExternalDataSourceID: null,
     VirtualEntity: false,
     AllowMultipleSubtypes: false,
-    EntityFields: widgetFieldInitData(),
+    EntityFields: [...widgetFieldInitData(), ...(options?.extraFields ?? [])],
     EntityPermissions: [],
   });
 }

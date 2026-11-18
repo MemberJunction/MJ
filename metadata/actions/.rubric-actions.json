@@ -994,7 +994,10 @@
       "DriverClass": "Submit Human Rubric",
       "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
       "Status": "Active",
-      "CodeApprovalStatus": "Approved"
+      "CodeApprovalStatus": "Approved",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "260B8927-0B3D-4879-BC29-6480DE46F2C9"
@@ -1130,8 +1133,8 @@
       ]
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:07.931Z",
-      "checksum": "23eb0cc372248af19d6e2b45eecfa9caaef16a393c3b92c289f7c4bcea8cb8e6"
+      "lastModified": "2026-11-10T23:41:37.414Z",
+      "checksum": "4b80aaef401cc5ca1fe5ebd3dae29de9ef8e2771894cb2e3473b54ba44f88eb4"
     }
   }
 ]

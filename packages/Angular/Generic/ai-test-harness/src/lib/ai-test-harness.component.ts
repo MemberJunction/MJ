@@ -15,6 +15,7 @@ import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@m
 import {
     ParentTaskIDFromStepOutput,
     ReadPaneSizePair,
+    RememberedBreakpointsStore,
     ToPaneSizePair,
     type PaneSizePair,
 } from '@memberjunction/ng-task-graph-editor';
@@ -338,6 +339,37 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private workflowStartingData: Record<string, unknown> | null = null;
     /** Consumed by executeAgent; set only by DebugWorkflow so Pause-after-submit cannot race. */
     private startWorkflowPaused = false;
+
+    /** The person's remembered breakpoints for this workflow, as stable step IDs (#3798). */
+    public RememberedBreakpointStepIDs: string[] = [];
+
+    private readonly rememberedBreakpoints = new RememberedBreakpointsStore({
+        Get: (key) => UserInfoEngine.Instance.GetSetting(key),
+        Set: (key, value) => { void UserInfoEngine.Instance.SetSetting(key, value); },
+    });
+
+    /** Loads the remembered breakpoints for the current agent; called when the agent changes. */
+    private loadRememberedBreakpoints(): void {
+        this.RememberedBreakpointStepIDs = this.entity?.ID ? this.rememberedBreakpoints.Load(this.entity.ID) : [];
+    }
+
+    /** A step's "Remember Breakpoint for Future Runs" was toggled in the debugger. */
+    public OnRememberBreakpointToggled(event: { StepID: string; Remember: boolean }): void {
+        if (!this.entity?.ID) return;
+        this.RememberedBreakpointStepIDs = this.rememberedBreakpoints.Toggle(this.entity.ID, event.StepID, event.Remember);
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * The submit-time debug request: start paused when asked, and start with the remembered breakpoints on a
+     * Debug run. A normal run carries neither, so remembered breakpoints never stop a run nobody is debugging.
+     */
+    public BuildWorkflowDebugRequest(): { paused?: boolean; breakpointStepIDs?: string[] } | undefined {
+        if (!this.startWorkflowPaused) return undefined;
+        return this.RememberedBreakpointStepIDs.length > 0
+            ? { paused: true, breakpointStepIDs: [...this.RememberedBreakpointStepIDs] }
+            : { paused: true };
+    }
     private workflowAttachTimer: ReturnType<typeof setInterval> | null = null;
 
     /** [chat, sidebar] percentages. Restored from `MJ: User Settings`. */
@@ -1012,6 +1044,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         this.loadSavedConversations();
+        this.loadRememberedBreakpoints();
         this.subscribeToEvents();
         this.ResetHarness();
         
@@ -1048,6 +1081,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 this.Mode = 'agent';
                 this.loadSavedConversations();
             }
+            this.loadRememberedBreakpoints();
         }
         
         if (changes['isVisible']) {
@@ -1214,7 +1248,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
             }
             
-            // Set default response format from prompt with slight delay for Kendo dropdown
+            // Set default response format from prompt with slight delay for the dropdown
             setTimeout(() => {
                 const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
                 if (format) {
@@ -2132,7 +2166,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 lastRunId: this.lastAgentRunId || undefined,
                 autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
                 configurationId: this.AgentConfigurationId || undefined,
-                taskGraphDebug: this.startWorkflowPaused ? { paused: true } : undefined,
+                taskGraphDebug: this.BuildWorkflowDebugRequest(),
             });
 
             // Stop elapsed time counter

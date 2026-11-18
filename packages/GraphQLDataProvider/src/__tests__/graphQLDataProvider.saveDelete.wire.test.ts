@@ -1190,6 +1190,45 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             });
             expect(item.Vars).toEqual({ input: expect.objectContaining({ Name: 'Queued Co' }) });
         });
+
+        it('carries an update\'s OldValues on the queued TransactionItem so the group can send them', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+
+            expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(group.Pending[0].OperationType).toBe('Update');
+            expect(group.Pending[0].ExtraData.oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },
+            ]);
+        });
+
+        it('carries no OldValues on a queued update when SkipOldValuesCheck is true', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+            const options = new EntitySaveOptions();
+            options.SkipOldValuesCheck = true;
+
+            await provider.Save(entity, user, options);
+
+            expect(group.Pending[0].ExtraData.oldValues).toBeUndefined();
+        });
     });
 
     describe('Delete', () => {
@@ -1247,6 +1286,17 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(deleted).toBe(false);
             expect(entity.LatestResult.Success).toBe(false);
             expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
+        });
+
+        it('accepts a UUID primary key the server echoes in another casing', async () => {
+            const entity = new TestCustomerEntity(BuildCustomerEntityInfo(), provider);
+            entity.LoadFromData({ ID: '8e56c3f7-b401-4684-b778-661756e947d8', Name: 'Lower-cased key', 'First Name': null, Tier: 'Gold', IsActive: true, Age: 42, SignedUpAt: new Date(SIGNED_UP_AT_MS), Photo: null, __mj_CreatedAt: CREATED_AT, __mj_UpdatedAt: UPDATED_AT });
+            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: '8E56C3F7-B401-4684-B778-661756E947D8' } });
+
+            const deleted = await provider.Delete(entity, new EntityDeleteOptions(), user);
+
+            expect(deleted).toBe(true);
+            expect(entity.LatestResult.Success).toBe(true);
         });
 
         it('fails when the response lacks the mutation key', async () => {

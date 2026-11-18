@@ -10,7 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { GoogleGenAI, type Content, type GenerateContentParameters } from '@google/genai';
 import { ChatParams, type ChatMessage } from '@memberjunction/ai';
-import { GeminiLLM, GEMINI_TRAILING_USER_TURN_TEXT } from '../index';
+import { GeminiLLM, GEMINI_LEADING_USER_TURN_TEXT, GEMINI_TRAILING_USER_TURN_TEXT, GEMINI_USER_TURN_SEPARATOR_TEXT } from '../index';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 /** The Query Writer's third request, as MJ stored it. Only the first call of each turn is signed. */
 function QueryWriterThirdRequest(origin: string): ChatMessage[] {
@@ -95,7 +96,7 @@ describe('GeminiLLM — the turns a native tool loop sends', () => {
 
         await llm.ChatCompletion(ToolParams(messages));
 
-        const contents = sent[0].contents as Content[];
+        const contents = WithoutCacheAnchor(sent[0].contents as Content[]);
         expect(contents.map((c) => c.role)).toEqual(['user', 'model', 'user']);
         expect(contents[1].parts).toEqual([{ text: 'Hello.' }]);
         expect(contents[2].parts).toEqual([{ text: GEMINI_TRAILING_USER_TURN_TEXT }]);
@@ -108,8 +109,56 @@ describe('GeminiLLM — the turns a native tool loop sends', () => {
 
         await llm.ChatCompletion(ToolParams(messages));
 
-        const contents = sent[0].contents as Content[];
+        const contents = WithoutCacheAnchor(sent[0].contents as Content[]);
         expect(TurnProblems(contents)).toEqual([]);
-        expect(contents.map((c) => c.role)).toEqual(['user']);
+        // The two user messages stay apart behind a separator model turn (a cache boundary), not an empty one.
+        expect(contents.map((c) => c.role)).toEqual(['user', 'model', 'user']);
+        expect(contents[1].parts).toEqual([{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }]);
+    });
+});
+
+describe('GeminiLLM — the prompt-cache anchor', () => {
+    it('opens every request with the fixed user turn and a separator, so two calls of one loop share it', async () => {
+        const llm = new GeminiLLM('test-key');
+        const sent = CaptureRequests(llm, new GoogleGenAI({ apiKey: 'test-key' }));
+        // A loop's first call carries only per-turn state; its second call replaces that state.
+        await llm.ChatCompletion(ToolParams([{ role: 'system', content: 'sys' }, { role: 'user', content: 'Turn 1 of 10.' }]));
+        await llm.ChatCompletion(ToolParams([
+            { role: 'system', content: 'sys' },
+            { role: 'user', content: '[Action results] 42 rows' },
+            { role: 'user', content: 'Turn 2 of 10.' },
+        ]));
+
+        const [first, second] = sent.map((r) => r.contents as Content[]);
+        const anchor = [{ role: 'user', parts: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] }, { role: 'model', parts: [{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }] }];
+        expect(first.slice(0, 2)).toEqual(anchor);
+        expect(second.slice(0, 2)).toEqual(anchor);
+        expect(first.map((c) => c.role)).toEqual(['user', 'model', 'user']);
+    });
+
+    it('does not add it again when the conversation already opens with the fixed turn', async () => {
+        const llm = new GeminiLLM('test-key');
+        const sent = CaptureRequests(llm, new GoogleGenAI({ apiKey: 'test-key' }));
+        // Opens with a model turn, so the driver puts the fixed user turn first itself.
+        await llm.ChatCompletion(ToolParams([{ role: 'system', content: 'sys' }, { role: 'assistant', content: 'Hello.' }, { role: 'user', content: 'Hi' }]));
+
+        const contents = sent[0].contents as Content[];
+        expect(contents.filter((c) => (c.parts ?? []).some((p) => p.text === GEMINI_LEADING_USER_TURN_TEXT))).toHaveLength(1);
+        expect(contents[0].parts).toEqual([{ text: GEMINI_LEADING_USER_TURN_TEXT }]);
+    });
+});
+
+describe('GeminiLLM — an empty user message', () => {
+    it('is dropped, so the request never ends on the anchor model turn (Gemini rejects that)', async () => {
+        const llm = new GeminiLLM('test-key');
+        const sent = CaptureRequests(llm, new GoogleGenAI({ apiKey: 'test-key' }));
+        // A prompt that renders everything into the system message and sends an empty user message.
+        await llm.ChatCompletion(ToolParams([{ role: 'system', content: 'sys' }, { role: 'user', content: '' }]));
+
+        const contents = sent[0].contents as Content[];
+        const last = contents[contents.length - 1];
+        expect(last.role).toBe('user');
+        expect((last.parts ?? []).some((p) => !!p.text)).toBe(true);
+        expect(TurnProblems(contents)).toEqual([]);
     });
 });

@@ -37,37 +37,42 @@ describe('RECOMMENDATION_RANK', () => {
   });
 });
 
-describe('computeBestLevels', () => {
+describe('ComputeBestLevels', () => {
   it('returns an empty map when no scenarios are selected', () => {
-    expect(ComputeBestLevels(rankings, []).size).toBe(0);
+    expect(ComputeBestLevels(rankings, []).Size).toBe(0);
   });
 
   it('returns each algorithm level for a single scenario', () => {
     const result = ComputeBestLevels(rankings, [BINARY]);
-    expect(result.get(XGB)).toBe('Primary');
-    expect(result.get(LOGREG)).toBe('Viable');
-    expect(result.get(MLP)).toBe('Viable');
+    expect(result.Get(XGB)).toBe('Primary');
+    expect(result.Get(LOGREG)).toBe('Viable');
+    expect(result.Get(MLP)).toBe('Viable');
   });
 
   it('takes the BEST level across multiple scenarios (max by rank)', () => {
     // XGB: Primary(binary) vs Weak(interp) → Primary
     // LOGREG: Viable(binary) vs Primary(interp) → Primary
     const result = ComputeBestLevels(rankings, [BINARY, INTERP]);
-    expect(result.get(XGB)).toBe('Primary');
-    expect(result.get(LOGREG)).toBe('Primary');
+    expect(result.Get(XGB)).toBe('Primary');
+    expect(result.Get(LOGREG)).toBe('Primary');
   });
 
   it('omits algorithms with no ranking row for the selected scenarios', () => {
     // Only EMBED selected → LOGREG has no EMBED row.
     const result = ComputeBestLevels(rankings, [EMBED]);
-    expect(result.has(LOGREG)).toBe(false);
-    expect(result.get(MLP)).toBe('Primary');
-    expect(result.get(XGB)).toBe('Strong');
+    expect(result.Has(LOGREG)).toBe(false);
+    expect(result.Get(MLP)).toBe('Primary');
+    expect(result.Get(XGB)).toBe('Strong');
   });
 
   it('is case-insensitive on use-case IDs (UUID skew tolerance)', () => {
     const result = ComputeBestLevels(rankings, [BINARY.toUpperCase()]);
-    expect(result.get(XGB)).toBe('Primary');
+    expect(result.Get(XGB)).toBe('Primary');
+  });
+
+  it("finds an algorithm's level whichever case its ID is spelled in (UUID skew tolerance)", () => {
+    const upper = rankings.map((r) => ({ ...r, MLAlgorithmID: r.MLAlgorithmID.toUpperCase() }));
+    expect(ComputeBestLevels(upper, [BINARY]).Get(XGB)).toBe('Primary');
   });
 });
 

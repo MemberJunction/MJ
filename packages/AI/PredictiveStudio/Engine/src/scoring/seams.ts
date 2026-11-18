@@ -10,12 +10,14 @@
  */
 
 import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
 
-import type { IMLModelLoader, ISidecarPredictor } from './types';
+import type { IMLModelLoader, IPipelineUnitLookup, ISidecarPredictor, ITrainingRowsLookup } from './types';
+import { TrainingKeys } from './training-keys';
 
 /**
  * `RunView`-backed {@link IMLModelLoader}. Loads the model as a full
@@ -48,6 +50,35 @@ export class RunViewMLModelLoader implements IMLModelLoader {
 }
 
 /**
+ * `RunView`-backed {@link IPipelineUnitLookup}: one narrow read of the pipeline's `PredictionUnitID`. A failed read and
+ * a read that finds no row both throw: a pipeline that cannot be read is not a pipeline without a unit.
+ */
+export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
+  /** @inheritdoc */
+  public async PredictionUnitIDOf(pipelineId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<string | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLTrainingPipelineEntity, 'ID' | 'PredictionUnitID'>>(
+      { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID='${EscapeSQLString(pipelineId)}'`, Fields: ['ID', 'PredictionUnitID'], MaxRows: 1 },
+      contextUser,
+    );
+    if (!result.Success) throw new Error(`Reading ML Training Pipeline ${pipelineId} failed: ${result.ErrorMessage || 'unknown error'}`);
+    const row = result.Results[0];
+    if (!row) throw new Error(`ML Training Pipeline ${pipelineId} was not found or not readable, so whether its models belong to a Prediction Unit is unknown`);
+    return row.PredictionUnitID || null;
+  }
+}
+
+/**
+ * {@link ITrainingRowsLookup} over the model's Training Snapshot: the development row ids of its verified row manifest
+ * ({@link TrainingKeys.LoadTrainingRowIDs}). A failed read throws naming the model.
+ */
+export class RunViewTrainingRowsLookup implements ITrainingRowsLookup {
+  /** @inheritdoc */
+  public async TrainingRowIDsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>> {
+    return TrainingKeys.LoadTrainingRowIDs(modelId, provider, contextUser);
+  }
+}
+
+/**
  * {@link ISidecarPredictor} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
  * `MLSidecar` from options/env), then warm-caches the connection for the run.
@@ -67,22 +98,19 @@ export class MJSidecarPredictor implements ISidecarPredictor {
   constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
 
   /** @inheritdoc */
-  public async predict(req: PredictRequest): Promise<PredictResponse> {
+  public async predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse> {
     if (!this.started) {
-      await this.sidecar.start();
+      await this.sidecar.Start();
       this.started = true;
     }
-    return this.sidecar.predict(req);
+    return this.sidecar.Predict(req, signal);
   }
 }
 
 // NOTE on `IArtifactLoader`:
 //
 // The read-side artifact loader is the counterpart to the training
-// `MJFilesArtifactStore.save`. Like the training store, the byte transfer to
-// MJStorage is wired by the layer that owns the storage binding (provider id +
-// MJStorage driver). The Engine package deliberately does NOT import MJStorage
-// drivers (keeping it slim + trivially mockable), so the production
-// `IArtifactLoader` is supplied by that higher layer (or by the sidecar's own
-// warm artifact cache keyed by model id). Tests inject an in-memory loader; see
-// `./artifact-loader` for the in-memory implementation.
+// `StorageProviderArtifactStore.save`. The production loader is
+// `StorageProviderArtifactLoader` (`./storage-provider-artifact-loader`), which reads
+// through the storage provider the file's `MJ: Files` row names. Tests inject an
+// in-memory loader; see `./artifact-loader`.

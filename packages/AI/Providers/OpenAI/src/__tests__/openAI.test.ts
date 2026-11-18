@@ -721,6 +721,27 @@ describe('OpenAILLM — native tool calling', () => {
             expect(mockCreate).toHaveBeenCalledTimes(1);
         });
 
+        it("sends 'none' on the first request when the catalog marks the model (toolsRequireNoReasoning), one call", async () => {
+            mockCreate.mockReset();
+            mockCreate.mockResolvedValue(ok);
+
+            await run({ model: 'luna-f', messages: user, tools: [WEATHER_TOOL], toolsRequireNoReasoning: true });
+
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+            expect(sent(0).reasoning_effort).toBe('none');
+            expect(sent(0).tools).toHaveLength(1);
+        });
+
+        it('ignores the catalog flag on a request without tools', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockResolvedValue(ok);
+
+            await run({ model: 'luna-g', messages: user, effortLevel: 'high', toolsRequireNoReasoning: true });
+
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+            expect(sent(0).reasoning_effort).toBe('high');
+        });
+
         it('rethrows any other 400 without a resend', async () => {
             mockCreate.mockReset();
             mockCreate.mockRejectedValueOnce(Object.assign(new Error("400 Invalid schema for function 'get_weather'"), { status: 400 }));

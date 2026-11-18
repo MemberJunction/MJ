@@ -79,6 +79,21 @@ describe('CatalogViewRule', () => {
       expect(result).not.toContain('sys.');
     });
 
+    it('lists only key columns of vwTableUniqueKeys, with the index, key position, key count and filter (#4536)', () => {
+      const sql = `CREATE OR ALTER VIEW [__mj].[vwTableUniqueKeys] AS SELECT s.name AS SchemaName FROM sys.tables t`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE OR REPLACE VIEW __mj."vwTableUniqueKeys"');
+      // INCLUDE columns follow the key columns in indkey; indnkeyatts is how many are keys
+      expect(result).toContain('WITH ORDINALITY AS cols(col_num, ord)');
+      expect(result).toContain('cols.ord <= i.indnkeyatts');
+      for (const column of ['"IndexName"', '"KeyOrdinal"', '"KeyColumnCount"', '"IsFiltered"', '"FilterDefinition"']) {
+        expect(result).toContain(column);
+      }
+      // CREATE OR REPLACE VIEW can only append columns, so the original three stay first
+      const positions = ['"SchemaName"', '"TableName"', '"ColumnName"', '"IndexName"'].map((c) => result.indexOf(c));
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    });
+
     it('should recognize and convert vwSQLSchemas', () => {
       const sql = `CREATE VIEW [__mj].[vwSQLSchemas] AS SELECT s.schema_id AS SchemaID FROM sys.schemas s`;
       const result = convert(sql);
@@ -110,6 +125,14 @@ describe('CatalogViewRule', () => {
       expect(result).toContain('"Description"');
       expect(result).toContain('"EntityField"');
       expect(result).not.toContain('sys.');
+    });
+
+    it('reports no DefaultValue for a generated column in vwSQLColumnsAndEntityFields (#6511)', () => {
+      const sql = `CREATE VIEW [__mj].[vwSQLColumnsAndEntityFields] AS WITH FilteredColumns AS (SELECT * FROM sys.all_columns)`;
+      const result = convert(sql);
+      const defaultLine = result.slice(result.indexOf("CASE WHEN COALESCE(bt_a.attgenerated, '')"), result.indexOf('AS "DefaultValue"'));
+      expect(defaultLine).toContain("CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL");
+      expect(defaultLine).toContain('ELSE pg_get_expr(ad.adbin, ad.adrelid) END');
     });
 
     it('should recognize and convert vwEntityFieldsWithCheckConstraints', () => {

@@ -50,6 +50,7 @@ describe('verify-sw-cache-shape.js', () => {
             'styles-GHI12345.css',
             'chunk-JKL67890.js',
             'chunk-MNO12345.js',
+            'worker-PQR67890.js',
             // SW infrastructure files — should be ignored, not flagged
             'ngsw-worker.js',
             'ngsw.json',

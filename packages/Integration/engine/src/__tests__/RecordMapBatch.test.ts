@@ -38,6 +38,8 @@ interface SavedRow {
  */
 function createProvider(platform: 'sqlserver' | 'postgresql' = 'sqlserver') {
     const saved: SavedRow[] = [];
+    /** The Origin each saved row carried, in save order; undefined when the write left it alone. */
+    const savedOrigins: Array<string | undefined> = [];
     /** Per-external-ID hooks: return false to make Save() fail, throw to make it throw. */
     const saveBehavior = new Map<string, () => boolean>();
     /** External IDs whose Load() should report the row has since been deleted. */
@@ -50,6 +52,7 @@ function createProvider(platform: 'sqlserver' | 'postgresql' = 'sqlserver') {
             LoadedID: null, IsNew: false,
             CompanyIntegrationID: '', EntityID: '', ExternalSystemRecordID: '', EntityRecordID: '',
         };
+        let origin: string | undefined;
         return {
             LatestResult: { CompleteMessage: 'constraint violation' },
             NewRecord: vi.fn(() => { row.IsNew = true; return true; }),
@@ -59,6 +62,7 @@ function createProvider(platform: 'sqlserver' | 'postgresql' = 'sqlserver') {
             }),
             Save: vi.fn(async () => {
                 saved.push({ ...row });
+                savedOrigins.push(origin);
                 const behavior = saveBehavior.get(row.ExternalSystemRecordID);
                 return behavior ? behavior() : true;
             }),
@@ -66,6 +70,7 @@ function createProvider(platform: 'sqlserver' | 'postgresql' = 'sqlserver') {
             set EntityID(v: string) { row.EntityID = v; },
             set ExternalSystemRecordID(v: string) { row.ExternalSystemRecordID = v; },
             set EntityRecordID(v: string) { row.EntityRecordID = v; },
+            set Origin(v: string) { origin = v; },
         };
     };
 
@@ -80,7 +85,7 @@ function createProvider(platform: 'sqlserver' | 'postgresql' = 'sqlserver') {
         ExecuteSQL: { value: executeSQL },
     });
 
-    return { provider: provider as IMetadataProvider, saved, saveBehavior, loadFails, getEntityObject, executeSQL };
+    return { provider: provider as IMetadataProvider, saved, savedOrigins, saveBehavior, loadFails, getEntityObject, executeSQL };
 }
 
 /** A provider with no dialect at all — the client-side shape RecordMapBatch must not assume away. */
@@ -90,8 +95,8 @@ function createDialectlessProvider() {
     } as unknown as IMetadataProvider;
 }
 
-function mapping(ext: string, rec = `mj-${ext}`, entityID = 'entity-1'): PendingRecordMap {
-    return { EntityID: entityID, ExternalID: ext, EntityRecordID: rec };
+function mapping(ext: string, rec = `mj-${ext}`, entityID = 'entity-1', origin: PendingRecordMap['Origin'] = 'Created'): PendingRecordMap {
+    return { EntityID: entityID, ExternalID: ext, EntityRecordID: rec, Origin: origin };
 }
 
 /** The chunk read finds nothing — every queued mapping is an insert. */
@@ -311,6 +316,44 @@ describe('RecordMapBatch', () => {
             expect(saved).toHaveLength(1);
             expect(saved[0].IsNew).toBe(true);
             expect(batch.Failures).toEqual([]);
+        });
+
+        it('writes the queued Origin on a new row (#3528)', async () => {
+            const { provider, savedOrigins } = createProvider();
+            const batch = new RecordMapBatch(provider, 'ci-1', contextUser, vi.fn());
+
+            batch.Queue(mapping('a', 'mj-a', 'entity-1', 'Adopted'));
+            batch.Queue(mapping('b', 'mj-b', 'entity-1', 'Created'));
+            await batch.Flush();
+
+            expect(savedOrigins).toEqual(['Adopted', 'Created']);
+        });
+
+        it('leaves Origin alone on an existing row it repoints (#3528)', async () => {
+            const { provider, saved, savedOrigins } = createProvider();
+            const batch = new RecordMapBatch(provider, 'ci-1', contextUser, vi.fn());
+
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'map-a', ExternalSystemRecordID: 'a', EntityRecordID: 'mj-stale' }],
+            });
+            batch.Queue(mapping('a', 'mj-a', 'entity-1', 'Adopted'));
+            await batch.Flush();
+
+            expect(saved[0].IsNew).toBe(false);
+            expect(savedOrigins).toEqual([undefined]);
+        });
+
+        it('passes the queued Origin to the per-row fallback (#3528)', async () => {
+            const { provider } = createProvider();
+            const saveSingle = vi.fn(async () => undefined);
+            const batch = new RecordMapBatch(provider, 'ci-1', contextUser, saveSingle);
+
+            mockRunViewFn.mockResolvedValue({ Success: false, Results: [], ErrorMessage: 'DB down' });
+            batch.Queue(mapping('a', 'mj-a', 'entity-1', 'Adopted'));
+            await batch.Flush();
+
+            expect(saveSingle).toHaveBeenCalledWith('ci-1', 'a', 'entity-1', 'mj-a', contextUser, 'Adopted');
         });
 
         it('keeps the first row when the table carries a duplicate for one external ID', async () => {

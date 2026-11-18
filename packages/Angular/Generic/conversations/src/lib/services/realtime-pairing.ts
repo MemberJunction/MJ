@@ -208,9 +208,9 @@ export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandid
  * The voice is filed PROVIDER-AGNOSTICALLY: the browser has a model id, never a vendor `DriverClass`
  * (`GetRealtimeModelVoices` does not return one), so naming a provider here would be a guess that
  * silently voided the setting for every non-OpenAI vendor. The server files it onto whichever driver
- * it resolves. A picked avatar leaves video to the agent: the server shows it only when the voiced
- * agent's own video setting is on (else the call says why, reason `video-off`), and only when it names
- * a Video binding on the vendor it resolves. Kept in lockstep with the server-side
+ * it resolves. Picking an avatar-enabled voice includes `video.enabled: true` alongside `avatarId`
+ * so the avatar shows by default when explicitly selected, while leaving `video` absent for audio-only
+ * voices. Kept in lockstep with the server-side
  * `BuildRealtimeOverridesJson` in `@memberjunction/ai-agents` by `realtime-convergence-drift.test.ts`.
  * See issue #3530.
  *
@@ -230,7 +230,7 @@ export function BuildRealtimeConfigOverridesJson(
   if (modelId.length === 0 && voice.length === 0 && avatarId.length === 0) {
     return null;
   }
-  const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
+  const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: boolean; avatarId: string } } = {};
   if (modelId.length > 0) {
     realtime.modelPreference = modelId;
   }
@@ -238,7 +238,7 @@ export function BuildRealtimeConfigOverridesJson(
     realtime.voice = { default: { voice } };
   }
   if (avatarId.length > 0) {
-    realtime.video = { avatarId };
+    realtime.video = { enabled: true, avatarId };
   }
   return JSON.stringify({ realtime });
 }

@@ -284,3 +284,13 @@ describe('ContentKey — excludes the watermark column so a PK-less row updates 
         expect(after.ExternalID).toBe(before.ExternalID);
     });
 });
+
+describe('WatermarkLookbackSeconds — late commits are re-read (#3085)', () => {
+    it('external-data-source connectors are monotonic and overlap five minutes', () => {
+        const sql = new TestSqlConnector(resolvedFor(new MockDriver()));
+        const doc = new TestDocConnector(resolvedFor(new MockDriver()));
+        expect(sql.MonotonicWatermark).toBe(true);
+        expect(sql.WatermarkLookbackSeconds).toBe(300);
+        expect(doc.WatermarkLookbackSeconds).toBe(300);
+    });
+});

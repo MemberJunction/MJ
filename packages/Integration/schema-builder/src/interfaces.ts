@@ -42,7 +42,7 @@ export interface TargetTableConfig {
     Description?: string;
     /**
      * Primary key field name(s) from the source system.
-     * These columns get a UNIQUE constraint and are registered as soft PKs.
+     * These columns receive a non-unique index (`IX_{Schema}_{Table}_PK`) and are registered as soft PKs.
      * Supports composite PKs (multiple fields). Must be a subset of Columns.
      */
     PrimaryKeyFields: string[];
@@ -50,6 +50,11 @@ export interface TargetTableConfig {
     Columns: TargetColumnConfig[];
     /** Soft FK relationships to configure. */
     SoftForeignKeys: SoftFKEntry[];
+    /**
+     * Optional organic key column tuples (cross-system natural match keys, e.g., [['Email']]).
+     * Each tuple receives a non-unique index (`IX_{Schema}_{Table}_OK_{Cols}`).
+     */
+    OrganicKeyFields?: string[][];
 }
 
 /** User's customization of a single column. */
@@ -99,6 +104,8 @@ export interface ExistingTableInfo {
     SchemaName: string;
     TableName: string;
     Columns: ExistingColumnInfo[];
+    /** Existing index names on the table (optional; used to skip already-present indexes in diffs). */
+    Indexes?: string[];
 }
 
 /** Describes an existing column in a target table. */
@@ -121,6 +128,8 @@ export interface SchemaDiff {
     RemovedColumns: string[];
     /** Warnings about skipped changes (PK type changes, etc.) — reported but not executed. */
     Warnings: string[];
+    /** Soft PK, Soft FK, and Organic Key indexes to ensure on the table. */
+    AddedIndexes?: Array<{ IndexName: string; Columns: string[] }>;
 }
 
 /** Describes a column type/nullability change. */

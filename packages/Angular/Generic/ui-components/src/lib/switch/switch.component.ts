@@ -14,7 +14,7 @@ import { MJNamedControlBase } from '../a11y/named-control.base';
 import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
- * mj-switch — Toggle switch. Replaces `<kendo-switch>`.
+ * mj-switch — Toggle switch.
  *
  * Every switch needs an ACCESSIBLE NAME. Without one it announces as "switch, on" — or, worse, as
  * its own STATE, because `OnLabel`/`OffLabel` render inside the button and a `role=switch` takes

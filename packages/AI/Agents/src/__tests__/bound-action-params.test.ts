@@ -85,7 +85,8 @@ interface AgentInternals {
     _catalogNarrowing: unknown;
     _fatalActionFailures: Set<string>;
     formatActionDetails(actions: MJActionEntityExtended[], bound?: BoundActionParams): string;
-    gatherPromptTemplateData(agent: MJAIAgentEntityExtended, user?: unknown, extra?: unknown, actionChanges?: unknown, subAgentChanges?: unknown, bound?: BoundActionParams): Promise<{ actionDetails: string; agentTypePromptParams?: Record<string, unknown> }>;
+    gatherPromptTemplateData(agent: MJAIAgentEntityExtended, user?: unknown, extra?: unknown, actionChanges?: unknown, subAgentChanges?: unknown, bound?: BoundActionParams, withholding?: { TaskGraphs: boolean; Handoff: boolean; CallerContext: boolean }): Promise<{ actionDetails: string; agentTypePromptParams?: Record<string, unknown> }>;
+    promptWithholding(params: ExecuteAgentParams): { TaskGraphs: boolean };
     _agentTypePromptParams: Record<string, unknown>;
     boundActionParamsError(params: ExecuteAgentParams): string | null;
     inheritBoundActionParams(params: ExecuteAgentParams): Promise<void>;
@@ -252,7 +253,11 @@ describe('the prose catalog', () => {
 });
 
 describe('the catalog the prompt is built from (gatherPromptTemplateData)', () => {
-    const render = async (probe: Probe, bound?: BoundActionParams) => probe.Internals.gatherPromptTemplateData(AGENT, undefined, undefined, undefined, undefined, bound);
+    // The withholding comes from the run's own predicate, as `Execute` passes it (task graphs are withheld from
+    // a bound run unless the registered submitter enforces security envelopes; none is registered here).
+    const render = async (probe: Probe, bound?: BoundActionParams) => probe.Internals.gatherPromptTemplateData(
+        AGENT, undefined, undefined, undefined, undefined, bound,
+        { TaskGraphs: probe.Internals.promptWithholding(agentParams({ boundActionParams: bound })).TaskGraphs, Handoff: false, CallerContext: false });
 
     it('hides the bound parameter while the cached catalog text is left as it was', async () => {
         const probe = new Probe().StubCatalogRender();

@@ -8,42 +8,26 @@ vi.mock('@memberjunction/global', () => ({
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        private _apiKey: string;
-        protected get apiKey(): string {
-            return this._apiKey;
-        }
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface so the driver — which does
-    // NOT override either member (Inworld is server-bridged only) — inherits the correct behavior:
-    // SupportsClientDirect defaults to false and CreateClientSession throws unless overridden.
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
-    // A REPRESENTATIVE shared-key list, not the real one. Reaching for the real export here means
-    // `importOriginal`, which loads the whole @memberjunction/ai barrel — realtimeProxyRegistry then
-    // wants BaseSingleton off the mocked @memberjunction/global, and the mocks cascade. Which is why
-    // this mock exists in the first place.
-    //
-    // The split that keeps this honest: these tests pin the driver's MECHANISM (it consults the
-    // registry and skips every key in it), while membership of the registry — that `firstMessage` is
-    // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
-    // can drift without the other failing.
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
     const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
     // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
     // module without the barrel: the drop tests below assert against shipped behavior.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
     // The turn-detection reader is dependency-free too, so the mapping tests run against the real one.
     const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter, ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection };
+    return {
+        BaseModel,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
+        REALTIME_SHARED_CONFIG_KEYS,
+        RealtimeDroppedInputReporter,
+        ReadRealtimeTurnDetection,
+        DescribeUnappliedTurnDetection,
+    };
 });
 
 import {
@@ -830,6 +814,46 @@ describe('InworldRealtime', () => {
             };
             await expect(session.Close()).resolves.toBeUndefined();
             expect(driver.Fake.Closed).toBe(true);
+        });
+
+        it('reconnects in place with a fresh socket and seeds prior conversation turns (#21)', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'input_audio_transcription.completed', text: 'Caller turn 1' });
+            driver.Fire({ type: 'output_audio_transcript.done', text: 'Agent turn 1' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
+            await new Promise((r) => setTimeout(r, 0));
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            expect(socket1.Closed).toBe(true);
+            const updateFrame = socket2.Find('session.update') as { session?: { instructions?: string } } | undefined;
+            expect(updateFrame?.session?.instructions).toContain('Inworld base prompt.');
+            expect(updateFrame?.session?.instructions).toContain('Caller turn 1');
+            expect(updateFrame?.session?.instructions).toContain('Agent turn 1');
+        });
+
+        it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'tool.call', call_id: 'call_1', name: 'GetWeather', arguments: '{"city":"NYC"}' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
+            await new Promise((r) => setTimeout(r, 0));
+            await session.SendToolResult('call_1', '{"status":"shipped"}');
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            const carrying = (socket: FakeSocket) => socket.SentRaw.filter((raw) => raw.includes('shipped'));
+            expect(carrying(socket1)).toEqual([]);
+            expect(carrying(socket2)).toHaveLength(1);
+            expect(JSON.parse(carrying(socket2)[0]).type).toBe('session.update'); // the late-result note rides the instructions
+            await session.Close();
         });
     });
 });

@@ -22,7 +22,6 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
 /**
  * mj-dialog — Modal dialog component using native `<dialog>` element.
  *
- * Replaces `<kendo-dialog>`.
  *
  * Supports both explicit width/height and size presets.
  * Content is projected, with an optional `<mj-dialog-actions>` for the footer.
@@ -483,7 +482,6 @@ export class MJDialogComponent implements OnDestroy {
 /**
  * mj-dialog-titlebar — Custom titlebar content for mj-dialog.
  *
- * Replaces `<kendo-dialog-titlebar>`.
  *
  * @example
  * ```html
@@ -505,7 +503,6 @@ export class MJDialogTitlebarComponent {}
 /**
  * mj-dialog-actions — Footer action bar for mj-dialog.
  *
- * Replaces `<kendo-dialog-actions>`.
  *
  * @example
  * ```html

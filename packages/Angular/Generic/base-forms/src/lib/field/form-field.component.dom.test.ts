@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntity, DocumentNumberingEngine, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 import { MjRecordLinkDirective } from '../links/record-link.directive';
@@ -95,6 +95,7 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F10', Name: 'PhotoURL', Type: 'nvarchar', Length: 8000, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Image' },
       { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
       { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
+      { ID: 'F13', Name: 'OrderNumber', DisplayName: 'Order Number', Type: 'nvarchar', Length: 20, AllowsNull: false, AllowUpdateAPI: true },
     ],
   });
 }
@@ -433,6 +434,38 @@ describe('MjFormFieldComponent (DOM)', () => {
       // constraint, not an inference from nullability.
       const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+    });
+
+    describe('a field an AutoNumber policy fills (#4001)', () => {
+      afterEach(() => DocumentNumberingEngine.Instance.UnregisterPolicy('Test Widgets'));
+      const policy = () => DocumentNumberingEngine.Instance.RegisterPolicy('Test Widgets', { targetField: 'OrderNumber', pattern: 'ORD-{SEQ:4}' });
+      /** An unsaved record: never hydrated with replaceOldValues, so IsSaved is false. */
+      const newWidget = () => new TestWidgetEntity(makeWidgetEntityInfo());
+
+      it('is not marked required-empty on a new record', () => {
+        policy();
+        const f = render({ Record: newWidget(), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(f.componentInstance.IsRequired).toBe(false);
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+      });
+
+      it('is still marked required-empty on a saved record', () => {
+        policy();
+        const f = render({ Record: makeWidget({ OrderNumber: null }), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(f.componentInstance.IsRequired).toBe(true);
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
+
+      it('without a policy, the same field on a new record is marked required-empty', () => {
+        const f = render({ Record: newWidget(), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
+
+      it('another NOT NULL field on the same new record stays required', () => {
+        policy();
+        const f = render({ Record: newWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
     });
 
     it('does not flag a required field as required-empty when it has a value', () => {

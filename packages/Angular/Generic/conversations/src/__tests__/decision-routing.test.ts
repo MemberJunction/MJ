@@ -7,7 +7,8 @@
  * (`@memberjunction/ai-core-plus`, conversation-routing-decision.test.ts). The component wiring is
  * pinned in message-input-decision-routing.test.ts.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
 import {
     BuildRoutingArtifactVersions,
@@ -111,7 +112,22 @@ function candidates(overrides: Partial<AgentTurnCandidates> = {}): AgentTurnCand
 const isKnown = (id: string) => !!findAgent(id);
 const ALWAYS = { ReplyMode: 'Always', AllowedAgentIDs: null } as const;
 
+/**
+ * The conversation-routing calibrations shipped on the Jev and LLM Decision AI models
+ * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngineBase.Instance` would serve them.
+ */
+const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
+    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }],
+    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }],
+};
+
 describe('decision routing', () => {
+    beforeEach(() => {
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(
+            (modelName: string) => Object.hasOwn(SHIPPED_ROUTING_CALIBRATIONS, modelName) ? SHIPPED_ROUTING_CALIBRATIONS[modelName] : []
+        );
+    });
+
     afterEach(() => {
         vi.useRealTimers();
     });
@@ -200,8 +216,8 @@ describe('decision routing', () => {
         });
 
         it('keeps continuity when the Likelihood is ambiguous', async () => {
-            // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
-            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) });
+            // Ambiguous after calibration: Jev's raw 0.6 is a calibrated 0.47 (a raw 0.3 is 0.09, a clear "leaves")
+            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.6) });
             expect((await RunRoutingDecision(input(), runner(ambiguous))).Verdict).toBe('KeptContinuity');
         });
 
@@ -303,7 +319,11 @@ describe('decision routing', () => {
         });
 
         it('applies only to the turn of the agent that made the version', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_2, 0.9) }));
+            const outcome = InterpretRoutingAnswers(
+                withArtifacts(),
+                leaves(WRITER.ID, { artifact: choice(VERSION_2, 0.9) }),
+                SHIPPED_ROUTING_CALIBRATIONS['Jev'][0],
+            );
             expect(ArtifactVersionForTurn(outcome, WRITER.ID)).toBe(VERSION_2);
             expect(ArtifactVersionForTurn(outcome, RESEARCH.ID)).toBeNull();
             expect(ArtifactVersionForTurn(null, WRITER.ID)).toBeNull();

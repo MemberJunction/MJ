@@ -197,6 +197,16 @@ describe('TaskStore ownership', () => {
         expect(store.GetForUser('t1', OWNER)).toBeUndefined();
     });
 
+    it('finds a task, its owner and its abort controller by a case variant of its ID', () => {
+        const lower = 'abcdefab-1111-4000-8000-00000000000a';
+        const store = new TaskStore();
+        store.Set(lower, makeTask(lower, 'in_progress', new Date()), OWNER);
+        const controller = store.RegisterAbortController(lower);
+        expect(store.GetForUser(lower.toUpperCase(), OWNER)?.id).toBe(lower);
+        expect(store.CancelTask(lower.toUpperCase())).toBe(true);
+        expect(controller.signal.aborted).toBe(true);
+    });
+
     it('forgets the owner when the task is removed', () => {
         const store = new TaskStore();
         store.Set('t1', makeTask('t1', 'pending', new Date()), OWNER);

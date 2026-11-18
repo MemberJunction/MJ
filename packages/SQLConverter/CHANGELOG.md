@@ -1,5 +1,42 @@
 # @memberjunction/sql-converter
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- e9472ef: PostgreSQL CodeGen: the logged base-view SQL (migration log and bake capture) now carries the guarded `spRebindLayeredOuterView` call for each alternate base view, so `vw*Active` views pick up new columns on migrate-only installs (#6539). `vwSQLColumnsAndEntityFields` reports `NULL` as the `DefaultValue` of a generated column; the expression stays in `ComputedColumnDefinition` (#6511).
+- e288291: PostgreSQL conversion fixes for Open App migrations (issue #5364).
+  - sql-converter (`mj migrate convert`): T-SQL built-ins are no longer emitted as quoted identifiers (`"UPPER"(x)`, `"LEN"(x)`); `OBJECT_ID('s.T')` becomes `to_regclass('s."T"')` and `parent_object_id` becomes `conrelid` in constraint guards; `LIKE` patterns with character classes become `~` / `!~` regexes instead of CHECKs that accept every value; `IF COL_LENGTH(...) IS [NOT] NULL` column guards are translated and placed with the DDL, ahead of the backfill and CHECK that use the column; mid-batch `DECLARE @X = (SELECT ...)` variables are inlined where they are used; `Length=` / `Precision=` in CodeGen `UPDATE EntityField` blocks are quoted; CodeGen hierarchy inline TVFs convert with typed result columns and keep `+ 1` as arithmetic; CodeGen CRUD procedures and `__mj_UpdatedAt` triggers in an Open App schema convert instead of being skipped; `CREATE OR ALTER` routines are classified by kind, and hand-written Open App triggers, procedures and functions are commented out whole under a counted `NEEDS HAND AUTHORING` gap instead of passing through as live T-SQL. An `__mj_<App>.` schema qualifier is no longer quoted as if it were an `__mj_` column.
+  - sqlglot-ts: `TINYINT` maps to `SMALLINT` (it was emitted as `UTINYINT`).
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` bake a baseline's CodeGen only for entities in the target `--schema`, not every schema in the working database.
+
+- Updated dependencies [e288291]
+  - @memberjunction/sqlglot-ts@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 9eb002d: Record unique keys as column sets and narrow `EntityField.IsUnique` (#4536). A new `EntityUniqueKey` table, kept in step with the catalog by CodeGen, holds every unique index or constraint as its key columns in order; `EntityInfo.UniqueKeySets` and `EntityInfo.IsUniqueFieldSet` expose them. `IsUnique` is now set only when a column alone is the key of an unfiltered unique index or is the sole primary key column; composite members, INCLUDE columns, filtered or partial indexes and composite primary key columns no longer count. Record cloning reads the key sets for collision checks, unique foreign keys and renames.
+
+### Patch Changes
+
+- fcc8668: PostgreSQL converter: an `EXEC` inside a converted procedure body (such as CodeGen's spDelete cascade updates) now emits a call that works whether the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1` to `_Clear` flags and known boolean columns as `FALSE`/`TRUE`. Before, these calls used typed arguments and integer literals, so deleting a record with dependents failed at run time with `function ... does not exist` (for example, deleting a conversation). The call logic is now shared with the top-level EXEC conversion.
+
+  Converted procedure bodies also handle three more T-SQL forms: `SELECT @a = x, @b = y ...` becomes `SELECT x, y INTO p_a, p_b ...` (before, it became a comparison with no destination); `OUTPUT` parameters become `INOUT` when the procedure returns no rows (before, they were `IN` with `RETURNS VOID`, so the caller got nothing back); and `0`/`1` compared with a known boolean column, such as `ci.IsActive = 1`, becomes `FALSE`/`TRUE`.
+
+  `mj migrate convert` without `--split` now warns when a migration contains CodeGen CRUD procedures, and names `--split --bake-codegen` as the way to write them natively for PostgreSQL.
+
+- 1e73a8d: Legacy `mj migrate convert` no longer drops nearly all of a Metadata_Sync whose last save is followed by the session footer. A create-or-update block now converts when comments trail its closing `END`; a guarded block that cannot convert is skipped instead of emitted as raw T-SQL; the `IF EXISTS` pre-flight removal reads its condition to the matching paren, so it can't run across statements; and a skipped EXEC block counts as a conversion gap, so the run reports it.
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [9cd37bd]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [66fcfde]
+- Updated dependencies [d87bb40]
+  - @memberjunction/sqlglot-ts@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

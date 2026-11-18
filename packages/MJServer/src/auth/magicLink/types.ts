@@ -99,10 +99,14 @@ export interface MagicLinkJWTClaims {
   mj_magic_link: true;  // case-violation-ok-legacy-back-compat: snake_case mirrors an external payload — the remote spelling is the contract, not MJ convention
 }
 
-/** Parameters for creating a magic-link invite (POST /magic-link/create). */
-export interface CreateMagicLinkInviteParams {
-  /** Recipient email — becomes the provisioned user's email. */
-  email: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+/**
+ * Invite kinds `MagicLinkService.CreateInvite` mints. `anonymous-embed` is left out: its documented
+ * issuance requirements (allowed framing domains, a tier capability) have no implementation yet.
+ */
+export type MintableMagicLinkInviteKind = Exclude<MJMagicLinkInviteEntity['Kind'], 'anonymous-embed'>;
+
+/** Fields shared by every invite, whatever its identity mode. */
+export interface CreateMagicLinkInviteBaseParams {
   /** The Application the invite grants access to. */
   ApplicationId: string;
   /** Restricted role to assign. Defaults to the configured `restrictedRoleName`. */
@@ -124,10 +128,44 @@ export interface CreateMagicLinkInviteParams {
   /**
    * When `false`, skips MJServer's default invite email delivery and returns `rawToken` +
    * `redemptionUrl` so the caller (e.g. a `BaseServerExtension`) can send its own branded message.
-   * Defaults to `true` when a communication provider is configured.
+   * Defaults to `true` when a communication provider is configured. An anonymous invite is emailed
+   * only when it carries a delivery `email`.
    */
   SendEmail?: boolean;
+  /**
+   * Invite kind. Defaults to `'app-session'`. `'resource-share'` scopes the session to the single
+   * resource named by `ResourceTypeID` + `ResourceID`, both required for that kind.
+   */
+  Kind?: MintableMagicLinkInviteKind;
+  /** For `'resource-share'`: the Resource Type of the shared resource. */
+  ResourceTypeID?: string;
+  /** For `'resource-share'`: the ID of the shared resource. */
+  ResourceID?: string;
 }
+
+/** An invite that provisions (or links) a per-email user. The default identity mode. */
+export interface CreateEmailMagicLinkInviteParams extends CreateMagicLinkInviteBaseParams {
+  IdentityMode?: Extract<MJMagicLinkInviteEntity['IdentityMode'], 'email'>;
+  /** Recipient email — becomes the provisioned user's email. */
+  email: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+}
+
+/**
+ * An invite every redemption of which resolves to the shared Anonymous principal. The link itself
+ * is the credential.
+ */
+export interface CreateAnonymousMagicLinkInviteParams extends CreateMagicLinkInviteBaseParams {
+  IdentityMode: Extract<MJMagicLinkInviteEntity['IdentityMode'], 'anonymous'>;
+  /**
+   * Optional delivery address: stored on the invite and used to send the link (unless
+   * `SendEmail` is `false`). It never binds identity — redemption still resolves the shared
+   * Anonymous principal and never looks up or provisions a user by this address.
+   */
+  email?: string;  // case-violation-ok-legacy-back-compat: same member as the email-mode variant, which keeps its legacy name
+}
+
+/** Parameters for creating a magic-link invite (POST /magic-link/create, or in-process callers). */
+export type CreateMagicLinkInviteParams = CreateEmailMagicLinkInviteParams | CreateAnonymousMagicLinkInviteParams;
 
 /** Result of creating an invite. */
 export interface CreateMagicLinkInviteResult {

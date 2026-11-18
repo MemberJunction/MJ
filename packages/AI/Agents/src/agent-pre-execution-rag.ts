@@ -16,6 +16,11 @@
  *   4. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
  *      (MaxResults, MinScore, FusionWeightsOverride), the agent's multi-tenant context
  *      (PrimaryScopeRecordID, SecondaryScopes) and the run's audience (`SearchParams.Audience`).
+ *      The engine fuses every lane the scope runs — vector, full-text, entity and the Semantic Graph
+ *      lane (`GraphSearchProvider`, available once MJAPI registers the graph expansion service; a global
+ *      scope runs it, a bounded scope runs it when it lists that provider). The audience reaches the graph
+ *      lane as `ScopeConstraints.AudienceReaders`, so its traversal never passes through a node a reader
+ *      cannot see; with no active graph the lane returns nothing.
  *   5. Cross-scope RRF when multiple scopes produced results.
  *   6. Format results as a `<retrieved_context>` system message and return.
  *
@@ -143,6 +148,14 @@ export class AgentPreExecutionRAG {
      */
     public async Execute(params: AgentPreExecutionRAGParams): Promise<AgentPreExecutionRAGResult | null> {
         if (!params.agent?.ID) return null;
+        if (typeof SearchEngineBase.Instance.HasActiveAgentScopes === 'function') {
+            const hasScopes = await SearchEngineBase.Instance.HasActiveAgentScopes(
+                params.agent.ID,
+                'PreExecution',
+                params.contextUser
+            );
+            if (!hasScopes) return null;
+        }
         await SearchEngineBase.Instance.Config(false, params.contextUser);
 
         // 1. Load active PreExecution/Both scope rows for this agent (sorted by priority)

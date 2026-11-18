@@ -80,7 +80,7 @@ npm install @memberjunction/ng-explorer-settings
 | `@memberjunction/ng-simple-record-list` | Simple record CRUD lists |
 | `@memberjunction/ng-join-grid` | Join/relationship grid |
 | `@memberjunction/ng-user-avatar` | User avatar display |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 | `@angular/cdk` | Angular CDK utilities |
 
 ## Usage

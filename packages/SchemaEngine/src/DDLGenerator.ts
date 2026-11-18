@@ -51,17 +51,24 @@ export class DDLGenerator {
     const q = d.QuoteIdentifier.bind(d);
     const fullTable = `${q(def.SchemaName)}.${q(def.TableName)}`;
 
-    // PK columns in a UNIQUE constraint may need type capping (e.g. SQL Server NVARCHAR(MAX) → 450)
-    const pkFieldSet = new Set((def.SoftPrimaryKeys ?? []).map(f => f.toLowerCase()));
+    // Columns participating in Soft PK, Soft FK, or Organic Key indexes may need type capping
+    // (e.g. SQL Server NVARCHAR(MAX) or NVARCHAR(>450) → NVARCHAR(450)) so CREATE INDEX succeeds.
+    const indexedColSet = new Set<string>([
+      ...(def.SoftPrimaryKeys ?? []).map(f => f.toLowerCase()),
+      ...(def.ForeignKeys?.filter(f => f.IsSoft).map(f => f.ColumnName.toLowerCase()) ?? []),
+      ...(def.OrganicKeys ?? []).flat().map(f => f.toLowerCase()),
+    ]);
     const lines: string[] = [];
 
     for (const col of def.Columns) {
-      lines.push(this.renderColumnLine(this.capPKColumnType(col, pkFieldSet, d), d));
+      lines.push(this.renderColumnLine(this.capIndexedColumnType(col, indexedColSet, d), d));
     }
 
     for (const col of def.AdditionalColumns ?? []) {
-      lines.push(this.renderColumnLine(this.capPKColumnType(col, pkFieldSet, d), d));
+      lines.push(this.renderColumnLine(this.capIndexedColumnType(col, indexedColSet, d), d));
     }
+
+    const indexedTuples = new Set<string>();
 
     if (def.PrimaryKeyColumns && def.PrimaryKeyColumns.length > 0) {
       const pkColNames = def.PrimaryKeyColumns.map((f) => {
@@ -70,30 +77,66 @@ export class DDLGenerator {
       }).join(', ');
       const pkName = `PK_${def.TableName}`;
       lines.push(`    CONSTRAINT ${q(pkName)} PRIMARY KEY (${pkColNames})`);
+      indexedTuples.add(def.PrimaryKeyColumns.map(f => f.toLowerCase()).join(','));
     }
 
-    // All integration PKs/FKs are SOFT — declared in metadata so CodeGen can key its sprocs, but NOT
-    // enforced by a hard DB constraint. The PK is an inferred/statistical key; a UNIQUE constraint
-    // would reject genuine rows the inference missed and turn a guess into a write-blocking failure.
-    // We emit a NON-UNIQUE index instead, so per-record match/load lookups stay fast without
-    // enforcing a uniqueness we only inferred. (Soft FKs are already excluded in the FK loop below.)
-    const softPkIndex: string[] = [];
+    // All integration PKs/FKs/OrganicKeys are SOFT — declared in metadata so CodeGen can key its sprocs
+    // and views, but NOT enforced by a hard DB constraint. We emit idempotent NON-UNIQUE indexes for
+    // SoftPrimaryKeys, Soft ForeignKeys, and OrganicKeys so point lookups and joins use Index Seek.
+    const softIndexes: string[] = [];
     if (def.SoftPrimaryKeys && def.SoftPrimaryKeys.length > 0) {
       def.SoftPrimaryKeys.forEach((f) => ValidateIdentifier(f, 'soft-pk column'));
-      const ixName = `IX_${def.SchemaName}_${def.TableName}_PK`;
-      const idx = d.IndexDDL({
-        schema: def.SchemaName,
-        tableName: def.TableName,
-        indexName: ixName,
-        columns: def.SoftPrimaryKeys,
-        unique: false,
-      });
-      // Idempotent on re-codegen: PG IndexDDL already emits IF NOT EXISTS; guard SQL Server explicitly.
-      softPkIndex.push(
-        platform === 'postgresql'
-          ? idx + ';'
-          : `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'${ixName}' AND object_id = OBJECT_ID(N'${fullTable}'))\n${idx};`,
-      );
+      const tupleKey = def.SoftPrimaryKeys.map(f => f.toLowerCase()).join(',');
+      if (!indexedTuples.has(tupleKey)) {
+        indexedTuples.add(tupleKey);
+        const ixName = `IX_${def.SchemaName}_${def.TableName}_PK`;
+        softIndexes.push(
+          d.CreateIndexIfAbsent({
+            schema: def.SchemaName,
+            tableName: def.TableName,
+            indexName: ixName,
+            columns: def.SoftPrimaryKeys,
+            unique: false,
+          }),
+        );
+      }
+    }
+
+    for (const fk of def.ForeignKeys?.filter((f) => f.IsSoft) ?? []) {
+      ValidateIdentifier(fk.ColumnName, 'soft-fk column');
+      const tupleKey = fk.ColumnName.toLowerCase();
+      if (!indexedTuples.has(tupleKey)) {
+        indexedTuples.add(tupleKey);
+        const ixName = `IX_${def.SchemaName}_${def.TableName}_FK_${fk.ColumnName}`;
+        softIndexes.push(
+          d.CreateIndexIfAbsent({
+            schema: def.SchemaName,
+            tableName: def.TableName,
+            indexName: ixName,
+            columns: [fk.ColumnName],
+            unique: false,
+          }),
+        );
+      }
+    }
+
+    for (const cols of def.OrganicKeys ?? []) {
+      if (cols.length === 0) continue;
+      cols.forEach((c) => ValidateIdentifier(c, 'organic-key column'));
+      const tupleKey = cols.map(c => c.toLowerCase()).join(',');
+      if (!indexedTuples.has(tupleKey)) {
+        indexedTuples.add(tupleKey);
+        const ixName = `IX_${def.SchemaName}_${def.TableName}_OK_${cols.join('_')}`;
+        softIndexes.push(
+          d.CreateIndexIfAbsent({
+            schema: def.SchemaName,
+            tableName: def.TableName,
+            indexName: ixName,
+            columns: cols,
+            unique: false,
+          }),
+        );
+      }
     }
 
     for (const fk of def.ForeignKeys?.filter((f) => !f.IsSoft) ?? []) {
@@ -110,7 +153,7 @@ export class DDLGenerator {
       ? d.CreateTableIfAbsent(fullTable, body)
       : `CREATE TABLE ${fullTable} (\n${body}\n);`;
 
-    const trailing = [...softPkIndex, ...this.GenerateDescriptions(def, d, options?.IfNotExists)];
+    const trailing = [...softIndexes, ...this.GenerateDescriptions(def, d, options?.IfNotExists)];
     if (trailing.length > 0) {
       return createTable + '\n\n' + trailing.join('\n\n');
     }
@@ -186,12 +229,19 @@ export class DDLGenerator {
 
   // ─── Private helpers ─────────────────────────────────────────────
 
-  private capPKColumnType(col: ColumnDefinition, pkFieldSet: Set<string>, dialect: SQLDialect): ColumnDefinition {
-    if (pkFieldSet.has(col.Name.toLowerCase()) && col.RawSqlType) {
-      const capped = dialect.CapIndexableType(col.RawSqlType);
-      if (capped !== col.RawSqlType) {
-        return { ...col, RawSqlType: capped };
-      }
+  private capIndexedColumnType(col: ColumnDefinition, indexedColSet: Set<string>, dialect: SQLDialect): ColumnDefinition {
+    if (!indexedColSet.has(col.Name.toLowerCase())) {
+      return col;
+    }
+    const rawSqlType = col.RawSqlType ?? dialect.ResolveAbstractType({
+      type: col.Type,
+      maxLength: col.MaxLength,
+      precision: col.Precision,
+      scale: col.Scale,
+    });
+    const capped = dialect.CapIndexableType(rawSqlType);
+    if (capped !== rawSqlType) {
+      return { ...col, RawSqlType: capped };
     }
     return col;
   }

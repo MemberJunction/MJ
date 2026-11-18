@@ -10,7 +10,7 @@ import { ComponentSpec, ComponentQueryDataRequirement, SimpleEntityFieldInfo } f
 import type { EntityFieldInfo } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { LibraryLintCache } from './library-lint-cache';
+import { CompiledValidator, LibraryLintCache } from './library-lint-cache';
 import type { LinterOptions } from './linter-options';
 import { TypeContext } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
@@ -146,6 +146,9 @@ export class ComponentLinter {
     if (sqlDialect) {
       ComponentLinter._sqlDialect = sqlDialect;
     }
+    // Callers pass `spec.name`, which can be undefined at runtime; rules call string
+    // methods on the name, so fall back to the spec's name and then to ''.
+    componentName = componentName || componentSpec?.name || '';
     try {
       // Require contextUser when libraries need to be checked
       if (componentSpec?.libraries && componentSpec.libraries.length > 0 && !contextUser) {
@@ -1360,6 +1363,43 @@ export class ComponentLinter {
   }
 
   /**
+   * Runs one library validator on every node of the AST. A validator that throws is
+   * skipped for that node, and its failures are reported once per lint with the
+   * error's message and the number of nodes it failed on. Logging the raw error
+   * object prints `{}` in JSON log pipelines and, for a validator that throws on
+   * every node, floods the log with one line per node.
+   */
+  private static runValidatorOverAst(
+    ast: t.File,
+    libraryName: string,
+    validatorName: string,
+    validateFn: CompiledValidator['validateFn'],
+    context: Parameters<CompiledValidator['validateFn']>[3],
+    debugMode?: boolean,
+  ): void {
+    let failures = 0;
+    let firstError: unknown = null;
+    traverse(ast, {
+      enter(path: NodePath) {
+        try {
+          // Validators don't return violations, they push to context.violations
+          validateFn(ast, path, t, context);
+        } catch (error) {
+          failures++;
+          firstError = firstError ?? error;
+        }
+      },
+    });
+    if (failures > 0) {
+      const message = firstError instanceof Error ? firstError.message : String(firstError);
+      console.warn(`Validator ${libraryName}/${validatorName} failed on ${failures} AST node(s): ${message}`);
+      if (debugMode) {
+        console.error('Full error:', firstError);
+      }
+    }
+  }
+
+  /**
    * Execute pre-compiled validators from cache
    */
   private static executeCompiledValidators(
@@ -1407,20 +1447,7 @@ export class ComponentLinter {
         }
 
         // Traverse AST and apply validator
-        traverse(ast, {
-          enter(path: NodePath) {
-            try {
-              // Validators don't return violations, they push to context.violations
-              validator.validateFn(ast, path, t, context);
-            } catch (error) {
-              // Validator execution error - log but don't crash
-              console.warn(`Validator ${validatorName} failed:`, error);
-              if (debugMode) {
-                console.error('Full error:', error);
-              }
-            }
-          },
-        });
+        ComponentLinter.runValidatorOverAst(ast, libraryName, validatorName, validator.validateFn, context, debugMode);
 
         // Debug logging for this specific validator
         const newViolations = context.violations.length - beforeCount;

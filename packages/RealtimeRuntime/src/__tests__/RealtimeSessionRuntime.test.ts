@@ -2,7 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY, type RealtimeClientError } from '@memberjunction/ai-realtime-client';
+import {
+    BaseRealtimeClient,
+    MEDIA_PLACEMENTS,
+    REQUESTED_TRACKS_SESSION_KEY,
+    type RealtimeClientError,
+    type RealtimeClientTokenRefreshOptions,
+    type RefreshedRealtimeClientCredential,
+} from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -1682,6 +1689,29 @@ describe('BuildClientConfig: the requested-tracks key has one home', () => {
         expect(tracks).toEqual(expect.arrayContaining([expect.objectContaining(video), expect.objectContaining(minted)]));
     });
 
+    it('carries the minted catalog timing onto the client config (F1)', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const config = runtime.BuildClientConfig({
+            ...session('{}'),
+            ConnectionMaxSeconds: 45,
+            SessionMaxSeconds: 1200,
+            ReconnectBufferSeconds: 7,
+            TrustNativeResumption: false,
+        });
+        expect(config).toMatchObject({ ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false });
+        // Timing travels on the typed fields only, never in the provider-facing bag.
+        expect(config.SessionConfig).toEqual({});
+    });
+
+    it('leaves the timing fields out when the mint carried none (an older server, or null)', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const config = runtime.BuildClientConfig({ ...session('{}'), ConnectionMaxSeconds: null, TrustNativeResumption: null });
+        expect('ConnectionMaxSeconds' in config).toBe(false);
+        expect('SessionMaxSeconds' in config).toBe(false);
+        expect('ReconnectBufferSeconds' in config).toBe(false);
+        expect('TrustNativeResumption' in config).toBe(false);
+    });
+
     it('never spells the key as a string literal in the runtime source', () => {
         const source = readFileSync(fileURLToPath(new URL('../session/RealtimeSessionRuntime.ts', import.meta.url)), 'utf8');
         expect(source.length).toBeGreaterThan(0);
@@ -1693,7 +1723,15 @@ describe('one slot, one owner on the mint path (StartRealtimeSession) and when a
     /** A driver that connects to nothing; registered so the runtime's real driver lookup runs. */
     @RegisterClass(BaseRealtimeClient, 'fake-mint-path')
     class MintPathClient extends BaseRealtimeClient {
-        public async Connect(): Promise<void> {}
+        /** The instance the runtime last connected, so a test can drive the refresh callback the runtime registered. */
+        public static LastConnected: MintPathClient | null = null;
+        public async Connect(): Promise<void> {
+            MintPathClient.LastConnected = this;
+        }
+        /** Asks for a refresh through the runtime's registered callback, as a driver's reconnect does. */
+        public RequestRefresh(options?: RealtimeClientTokenRefreshOptions): Promise<RefreshedRealtimeClientCredential> {
+            return this.refreshCredentialForReconnect(options);
+        }
         public SendText(): void {}
         public CancelActiveResponse(): void {}
         public SendContextNote(): void {}
@@ -1780,5 +1818,175 @@ describe('one slot, one owner on the mint path (StartRealtimeSession) and when a
         await runtime.StartRealtimeSession('agent-1', null).catch(() => undefined);
         expect(runtime.CurrentAgentSessionId).toBe('minted-2');
     });
+
+    it('wires SetTokenRefreshCallback to RefreshRealtimeClientSessionToken and supports rolling-upgrade fallback', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+
+        const refreshFn = (
+            runtime as unknown as {
+                refreshClientSessionCredential: (s: unknown) => Promise<{
+                    EphemeralToken: string;
+                    ExpiresAt: string;
+                    SessionConfig: Record<string, unknown>;
+                }>;
+            }
+        ).refreshClientSessionCredential.bind(runtime);
+
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        EphemeralToken: 'fresh-tok-99',
+                        ExpiresAt: '2030-01-01T00:10:00Z',
+                        SessionConfigJson: '{"voice":"alloy"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const refreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(refreshed.EphemeralToken).toBe('fresh-tok-99');
+        expect(refreshed.SessionConfig).toEqual({ voice: 'alloy' });
+
+        // Rolling-upgrade fallback when older MJServer rejects unknown field RefreshRealtimeClientSessionToken:
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                throw new Error('Cannot query field "RefreshRealtimeClientSessionToken" on type "Mutation".');
+            }
+            return origExecute(query, variables);
+        };
+
+        const fallback = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{"voice":"shimmer"}',
+        });
+        expect(fallback.EphemeralToken).toBe('initial-tok');
+        expect(fallback.SessionConfig).toEqual({ voice: 'shimmer' });
+
+        // Relay refresh path: Kind === 'relay' accepts an empty EphemeralToken without rejecting (#5, #21):
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        Kind: 'relay',
+                        EphemeralToken: '',
+                        ExpiresAt: '2030-01-01T00:20:00Z',
+                        RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-99',
+                        SessionConfigJson: '{"model":"gemini-live-2.5-flash-native-audio"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const relayRefreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: '',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(relayRefreshed.EphemeralToken).toBe('');
+        expect(relayRefreshed.SessionConfig).toEqual({ model: 'gemini-live-2.5-flash-native-audio' });
+
+        await runtime.EndRealtimeSession();
+    });
+
+    it('forwards the client\'s AllowFreshReopen request to the refresh mutation as allowFreshReopen (F7)', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+        const client = MintPathClient.LastConnected;
+        expect(client).not.toBeNull();
+
+        const refreshCalls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                refreshCalls.push({ query, variables });
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        Kind: 'relay',
+                        EphemeralToken: '',
+                        ExpiresAt: '2030-01-01T00:20:00Z',
+                        RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-f7',
+                        SessionConfigJson: '{}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        // The Gemini relay seed-fallback asks for a fresh reopen; the server only re-arms the
+        // handle-less reopen window when the mutation carries allowFreshReopen: true.
+        await client!.RequestRefresh({ AllowFreshReopen: true });
+        expect(refreshCalls).toHaveLength(1);
+        expect(refreshCalls[0].variables).toEqual({ agentSessionId: 'minted-1', allowFreshReopen: true });
+        expect(refreshCalls[0].query).toContain('allowFreshReopen: $allowFreshReopen');
+
+        // A plain refresh (no reopen asked for) keeps the narrow mutation without the variable.
+        await client!.RequestRefresh();
+        expect(refreshCalls[1].variables).toEqual({ agentSessionId: 'minted-1' });
+        expect(refreshCalls[1].query).not.toContain('allowFreshReopen');
+
+        await runtime.EndRealtimeSession();
+    });
+
+    it('asks the refresh for the catalog timing and hands it to the client driver (F1)', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+        const refreshFn = (
+            runtime as unknown as {
+                refreshClientSessionCredential: (s: unknown) => Promise<Record<string, unknown>>;
+            }
+        ).refreshClientSessionCredential.bind(runtime);
+
+        const queries: string[] = [];
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                queries.push(query);
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        EphemeralToken: 'fresh-tok-f1',
+                        ExpiresAt: '2030-01-01T00:10:00Z',
+                        SessionConfigJson: '{}',
+                        ConnectionMaxSeconds: 45,
+                        SessionMaxSeconds: 1200,
+                        ReconnectBufferSeconds: 7,
+                        TrustNativeResumption: false,
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const refreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        for (const field of ['ConnectionMaxSeconds', 'SessionMaxSeconds', 'ReconnectBufferSeconds', 'TrustNativeResumption']) {
+            expect(queries[0]).toContain(field);
+        }
+        expect(refreshed).toMatchObject({ ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false });
+
+        await runtime.EndRealtimeSession();
+    });
 });
+
+
 

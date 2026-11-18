@@ -379,6 +379,48 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return recipients?.map((recipient) => recipient.emailAddress?.address || '').filter((address) => address.length > 0) || [];
     }
 
+    /** Sent Items folder ID per mailbox, looked up once per provider instance. */
+    private readonly sentItemsFolderIds = new Map<string, string | null>();
+
+    /**
+     * The ID of a mailbox's Sent Items folder, or null when it cannot be read. Graph returns a
+     * message's folder as an opaque `parentFolderId`, so the well-known folder is resolved once.
+     */
+    private async getSentItemsFolderId(client: Client, mailbox: string): Promise<string | null> {
+        const key = mailbox.toLowerCase();
+        if (this.sentItemsFolderIds.has(key)) {
+            return this.sentItemsFolderIds.get(key) ?? null;
+        }
+        let id: string | null = null;
+        try {
+            const folder = await client.api(`${this.getApiUri()}/${encodeURIComponent(mailbox)}/mailFolders/sentitems`).get();
+            id = typeof folder?.id === 'string' ? folder.id : null;
+        } catch (ex) {
+            LogError(`MS Graph: could not read the Sent Items folder of ${mailbox}; message direction uses sender only`, undefined, ex);
+        }
+        this.sentItemsFolderIds.set(key, id);
+        return id;
+    }
+
+    /**
+     * #5811 — `Outbound` when the message sits in the mailbox's Sent Items, or when the mailbox being
+     * read is its `sender` or `from` (mail sent on someone's behalf has from = that person,
+     * sender = this mailbox); otherwise `Inbound`.
+     */
+    private messageDirection(message: Message, mailbox: string, sentItemsFolderId: string | null): 'Inbound' | 'Outbound' {
+        const own = mailbox.toLowerCase();
+        if (sentItemsFolderId && message.parentFolderId === sentItemsFolderId) return 'Outbound';
+        const sender = message.sender?.emailAddress?.address?.toLowerCase();
+        const from = message.from?.emailAddress?.address?.toLowerCase();
+        return sender === own || from === own ? 'Outbound' : 'Inbound';
+    }
+
+    /** The Sent Items folder ID, fetched only when some message's direction is not already settled by its sender. */
+    private async sentItemsFolderIdIfNeeded(client: Client, mailbox: string, messages: Message[]): Promise<string | null> {
+        const undecided = messages.some((m) => m.parentFolderId && this.messageDirection(m, mailbox, null) === 'Inbound');
+        return undecided ? this.getSentItemsFolderId(client, mailbox) : null;
+    }
+
     /**
      * Sends a single email message via MS Graph.
      *
@@ -611,6 +653,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             headers = await Promise.all(headersPromises);
         }
 
+        const sentItemsFolderId = await this.sentItemsFolderIdIfNeeded(client, emailToUse, sourceMessages as Message[]);
         const messages = sourceMessages.map((message: Record<string, unknown>, index: number) => {
             const msgTyped = message as Message;
             const replyTo: string[] = msgTyped.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [];
@@ -624,6 +667,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 To: primaryToRecipient,
                 ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
                 CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
+                BCCRecipients: this.extractRecipientAddresses(msgTyped.bccRecipients),
+                Direction: this.messageDirection(msgTyped, emailToUse, sentItemsFolderId),
                 ReplyTo: replyTo,
                 Subject: msgTyped.subject || '',
                 Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.hTMLConverter(msgTyped.body?.content || '') : msgTyped.body?.content || '',
@@ -688,7 +733,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const mailbox = this.resolveMailbox('ForwardMessage', creds);
+            // Same resolution as ReplyToMessage: a stored Azure Service Principal credential has no
+            // accountEmail, so the caller names the mailbox through ContextData.Email (#4322).
+            const mailbox = this.resolveMailbox('ForwardMessage', creds, params.ContextData?.Email as string | undefined);
             const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/forward`;
             const forwardResult = await client.api(sendMessagePath).post(forward);
 
@@ -2151,6 +2198,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
             const msgTyped = msgResponse as Message;
             const replyTo = msgTyped.replyTo?.map(r => r.emailAddress?.address || '') || [];
+            const sentItemsFolderId = await this.sentItemsFolderIdIfNeeded(client, emailToUse, [msgTyped]);
 
             return {
                 Success: true,
@@ -2159,6 +2207,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                     To: replyTo.length > 0 ? replyTo[0] : '',
                     ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
                     CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
+                    BCCRecipients: this.extractRecipientAddresses(msgTyped.bccRecipients),
+                    Direction: this.messageDirection(msgTyped, emailToUse, sentItemsFolderId),
                     ReplyTo: replyTo,
                     Subject: msgTyped.subject || '',
                     Body: msgTyped.body?.content || '',

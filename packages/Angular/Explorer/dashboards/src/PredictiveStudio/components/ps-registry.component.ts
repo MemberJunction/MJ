@@ -8,14 +8,13 @@ import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { PSModelDetailComponent } from '@memberjunction/ng-core-entity-forms';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
+import { PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 
 interface ModelRowVM {
   id: string;
   name: string;
   version: number;
   algorithm: string;
-  holdoutAuc: string;
   holdoutScore: string;
   scoreLabel: string;
   status: string;
@@ -37,48 +36,48 @@ interface ModelRowVM {
   styleUrls: ['../predictive-studio.shared.css', './ps-registry.component.css'],
   template: `
     <div class="ps-panel ps-registry" data-testid="ps-registry-panel">
-      @if (models.length === 0) {
+      @if (Models.length === 0) {
         <div class="ps-empty" data-testid="ps-registry-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-cubes"></i></span>
           <h3>No trained models yet</h3>
           <p>Train a pipeline to register your first immutable model. Each successful training run produces a versioned model you can validate, publish, and score with here.</p>
         </div>
       } @else {
-        <div class="reg-layout" [class.list-collapsed]="isListCollapsed">
-          @if (isListCollapsed) {
+        <div class="reg-layout" [class.list-collapsed]="IsListCollapsed">
+          @if (IsListCollapsed) {
             <div class="reg-collapsed-strip" role="region" aria-label="Model registry list (collapsed)">
-              <button class="reg-rail-collapse" type="button" (click)="toggleList()" aria-label="Expand models list" title="Expand list">
+              <button class="reg-rail-collapse" type="button" (click)="ToggleList()" aria-label="Expand models list" title="Expand list">
                 <i class="fa-solid fa-chevron-right"></i>
               </button>
               <div class="reg-collapsed-strip-label"><i class="fa-solid fa-cubes"></i></div>
             </div>
           }
 
-          <as-split direction="horizontal" class="reg-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onSplitDragEnd($event.sizes)">
-            @if (!isListCollapsed) {
-              <as-split-area [size]="listSizePct" [minSize]="18" [maxSize]="50">
+          <as-split direction="horizontal" class="reg-splitter" unit="percent" [gutterSize]="6" (dragEnd)="OnSplitDragEnd($event.sizes)">
+            @if (!IsListCollapsed) {
+              <as-split-area [size]="ListSizePct" [minSize]="18" [maxSize]="50">
                 <!-- master list -->
                 <div class="ps-card mlist" data-testid="ps-registry-list">
                   <div class="ps-card-head">
                     <h3>ML Models</h3>
                     <div style="display:flex;gap:6px;align-items:center">
-                      <span class="ps-badge gray">{{ models.length }}</span>
-                      <button class="reg-collapse-btn" type="button" (click)="toggleList()" title="Collapse list" aria-label="Collapse list">
+                      <span class="ps-badge gray">{{ Models.length }}</span>
+                      <button class="reg-collapse-btn" type="button" (click)="ToggleList()" title="Collapse list" aria-label="Collapse list">
                         <i class="fa-solid fa-chevron-left"></i>
                       </button>
                     </div>
                   </div>
                   <div class="ps-card-body" style="padding:8px">
-                    @for (m of models; track m.id) {
-                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="m.id === selectedId" [class.arc]="m.status === 'Archived'" (click)="select(m.id)">
+                    @for (m of Models; track m.id) {
+                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="IsSelected(m.id)" [class.arc]="m.status === 'Archived'" (click)="Select(m.id)">
                         <div class="ico" [class]="m.iconClass"><i class="fa-solid fa-cube"></i></div>
                         <div style="flex:1;min-width:0">
                           <div class="nm">{{ m.name }}</div>
                           <div class="ln2 ps-muted ps-small">v{{ m.version }} &bull; {{ m.algorithm }}</div>
                         </div>
                         <div class="auc">
-                          <div class="v">{{ m.holdoutScore }}</div>
-                          <div class="st" [class]="statusClass(m.status)">{{ m.status }}</div>
+                          <div class="v">{{ m.scoreLabel }} {{ m.holdoutScore }}</div>
+                          <div class="st" [class]="StatusClass(m.status)">{{ m.status }}</div>
                         </div>
                       </div>
                     }
@@ -87,16 +86,16 @@ interface ModelRowVM {
               </as-split-area>
             }
 
-            <as-split-area [size]="isListCollapsed ? 100 : detailSizePct" [minSize]="50">
+            <as-split-area [size]="IsListCollapsed ? 100 : DetailSizePct" [minSize]="50">
               <!-- detail via unified PSModelDetailComponent -->
               <div class="ps-col detail" data-testid="ps-registry-detail">
-                @if (selectedEntity) {
+                @if (SelectedEntity) {
                   <ps-model-detail
-                    [model]="selectedEntity"
-                    [displayName]="engine ? engine.ModelDisplayName(selectedEntity) : undefined"
-                    [provider]="provider"
-                    [currentUser]="currentUser"
-                    (statusChanged)="onModelStatusChanged($event)">
+                    [Model]="SelectedEntity"
+                    [displayName]="engine ? engine.ModelDisplayName(SelectedEntity) : undefined"
+                    [Provider]="provider"
+                    [CurrentUser]="CurrentUser"
+                    (StatusChanged)="OnModelStatusChanged($event)">
                   </ps-model-detail>
                 } @else {
                   <div class="ps-empty" style="padding: 40px 20px;">
@@ -118,70 +117,19 @@ export class PSRegistryComponent implements OnInit {
   /** Acting user for the engine refresh after a mutation. */
   @Input() CurrentUser: UserInfo | null = null;
 
-  /** @deprecated Use {@link CurrentUser}. */
-  @Input() set currentUser(value: UserInfo | null) {
-    this.CurrentUser = value;
-  }
-  /** @deprecated Use {@link CurrentUser}. */
-  get currentUser(): UserInfo | null {
-    return this.CurrentUser;
-  }
-
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
 
   public Models: ModelRowVM[] = [];
 
-  /** @deprecated Use {@link Models}. */
-  public get models(): ModelRowVM[] {
-    return this.Models;
-  }
-  /** @deprecated Use {@link Models}. */
-  public set models(value: ModelRowVM[]) {
-    this.Models = value;
-  }
   public SelectedId = '';
-
-  /** @deprecated Use {@link SelectedId}. */
-  public get selectedId() {
-    return this.SelectedId;
-  }
-  /** @deprecated Use {@link SelectedId}. */
-  public set selectedId(value) {
-    this.SelectedId = value;
-  }
 
   // Resizable split state
   public ListSizePct = 28;
 
-  /** @deprecated Use {@link ListSizePct}. */
-  public get listSizePct() {
-    return this.ListSizePct;
-  }
-  /** @deprecated Use {@link ListSizePct}. */
-  public set listSizePct(value) {
-    this.ListSizePct = value;
-  }
   public DetailSizePct = 72;
 
-  /** @deprecated Use {@link DetailSizePct}. */
-  public get detailSizePct() {
-    return this.DetailSizePct;
-  }
-  /** @deprecated Use {@link DetailSizePct}. */
-  public set detailSizePct(value) {
-    this.DetailSizePct = value;
-  }
   public IsListCollapsed = false;
-
-  /** @deprecated Use {@link IsListCollapsed}. */
-  public get isListCollapsed() {
-    return this.IsListCollapsed;
-  }
-  /** @deprecated Use {@link IsListCollapsed}. */
-  public set isListCollapsed(value) {
-    this.IsListCollapsed = value;
-  }
 
   private _initialModelId?: string;
   @Input()
@@ -191,23 +139,15 @@ export class PSRegistryComponent implements OnInit {
       if (this.Models.length === 0 || !this.Models.some((m) => UUIDsEqual(m.id, id))) {
         this.buildModels();
       }
-      if (this.Models.some((m) => UUIDsEqual(m.id, id))) {
-        this.SelectedId = id;
+      const match = this.Models.find((m) => UUIDsEqual(m.id, id));
+      if (match) {
+        this.SelectedId = match.id;
       }
       this.cdr.detectChanges();
     }
   }
   public get InitialModelId(): string | undefined {
     return this._initialModelId;
-  }
-
-  /** @deprecated Use {@link InitialModelId}. */
-  public get initialModelId(): string | undefined {
-    return this.InitialModelId;
-  }
-  /** @deprecated Use {@link InitialModelId}. */
-  @Input() public set initialModelId(value: string | undefined) {
-    this.InitialModelId = value;
   }
 
   ngOnInit(): void {
@@ -224,11 +164,8 @@ export class PSRegistryComponent implements OnInit {
     }
 
     this.buildModels();
-    if (this._initialModelId && this.Models.some((m) => UUIDsEqual(m.id, this._initialModelId))) {
-      this.SelectedId = this._initialModelId;
-    } else {
-      this.SelectedId = this.Models[0]?.id ?? '';
-    }
+    const initial = this._initialModelId ? this.Models.find((m) => UUIDsEqual(m.id, this._initialModelId)) : undefined;
+    this.SelectedId = initial ? initial.id : this.Models[0]?.id ?? '';
   }
 
   // ---- splitter resizing & persistence ----
@@ -241,20 +178,10 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
-  /** @deprecated Use {@link OnSplitDragEnd}. */
-  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
-    return this.OnSplitDragEnd(sizes);
-  }
-
   public ToggleList(): void {
     this.IsListCollapsed = !this.IsListCollapsed;
     this.saveLayoutPrefs();
     this.cdr.markForCheck();
-  }
-
-  /** @deprecated Use {@link ToggleList}. */
-  public toggleList(): void {
-    return this.ToggleList();
   }
 
   private saveLayoutPrefs(): void {
@@ -272,27 +199,17 @@ export class PSRegistryComponent implements OnInit {
     this.SelectedId = id;
   }
 
-  /** @deprecated Use {@link Select}. */
-  public select(id: string): void {
-    return this.Select(id);
+  /** True for the selected row (IDs compared case-insensitively: a deep link may spell the ID in another case). */
+  public IsSelected(id: string): boolean {
+    return UUIDsEqual(id, this.SelectedId);
   }
 
   public get Selected(): ModelRowVM {
-    return this.Models.find((m) => m.id === this.SelectedId) ?? this.Models[0] ?? this.placeholder();
-  }
-
-  /** @deprecated Use {@link Selected}. */
-  public get selected(): ModelRowVM {
-    return this.Selected;
+    return this.Models.find((m) => UUIDsEqual(m.id, this.SelectedId)) ?? this.Models[0] ?? this.placeholder();
   }
 
   public get SelectedEntity(): MJMLModelEntity | undefined {
     return this.engine?.Models?.find((m) => UUIDsEqual(m.ID, this.SelectedId));
-  }
-
-  /** @deprecated Use {@link SelectedEntity}. */
-  public get selectedEntity(): MJMLModelEntity | undefined {
-    return this.SelectedEntity;
   }
 
   public StatusClass(status: string): string {
@@ -305,20 +222,10 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
-  /** @deprecated Use {@link StatusClass}. */
-  public statusClass(status: string): string {
-    return this.StatusClass(status);
-  }
-
   // ---- lifecycle change handling ----
 
   public async OnModelStatusChanged(evt: { modelId: string; newStatus: string }): Promise<void> {
     await this.refreshAfterMutation();
-  }
-
-  /** @deprecated Use {@link OnModelStatusChanged}. */
-  public async onModelStatusChanged(evt: { modelId: string; newStatus: string }): Promise<void> {
-    return this.OnModelStatusChanged(evt);
   }
 
   /** Force-refresh the engine's cached models, then rebuild the master list. */
@@ -326,7 +233,7 @@ export class PSRegistryComponent implements OnInit {
     const provider = this.provider ?? undefined;
     await this.engine.Config(true, this.CurrentUser ?? undefined, provider);
     this.buildModels();
-    if (!this.Models.some((m) => m.id === this.SelectedId)) {
+    if (!this.Models.some((m) => UUIDsEqual(m.id, this.SelectedId))) {
       this.SelectedId = this.Models[0]?.id ?? '';
     }
     this.cdr.detectChanges();
@@ -339,23 +246,21 @@ export class PSRegistryComponent implements OnInit {
   }
 
   private toVM(m: MJMLModelEntity): ModelRowVM {
-    const holdout = PrimaryAuc(m);
     const score = PrimaryModelScore(m);
-    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : (holdout != null ? holdout.toFixed(3) : '—');
+    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : '—';
     return {
       id: m.ID,
       name: this.engine?.ModelDisplayName ? this.engine.ModelDisplayName(m) : (m.Pipeline || `Model v${m.Version}`),
       version: m.Version,
       algorithm: this.engine?.AlgorithmName ? this.engine.AlgorithmName(m.AlgorithmID) : (m.Algorithm || 'Algorithm'),
-      holdoutAuc: holdout != null ? holdout.toFixed(3) : formattedScore,
       holdoutScore: formattedScore,
-      scoreLabel: score?.label ?? 'AUC',
+      scoreLabel: score?.label ?? 'Score',
       status: m.Status,
       iconClass: 'xgb',
     };
   }
 
   private placeholder(): ModelRowVM {
-    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutAuc: '—', holdoutScore: '—', scoreLabel: 'AUC', status: 'Draft', iconClass: 'xgb' };
+    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', iconClass: 'xgb' };
   }
 }

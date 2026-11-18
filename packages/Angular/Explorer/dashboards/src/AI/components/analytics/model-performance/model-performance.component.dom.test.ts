@@ -4,6 +4,13 @@ import { RunQueryParams } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubLoadingComponent, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsModelPerformanceComponent } from './model-performance.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+});
 
 /**
  * DOM coverage for <app-analytics-model-performance> — the model leaderboard table. It calls

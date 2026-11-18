@@ -410,6 +410,20 @@ describe('ExecutePrompt — the gate decision reaches the ChatResult', () => {
     expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'Native', toolResults: false });
   });
 
+  it('records NativeRecovered when the driver read the tool call back out of a provider rejection (#5847)', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeToolResults: true } });
+    // 'failResult' hands the scripted result back verbatim; here it is a SUCCESS shaped like the
+    // Groq driver's recovered tool_use_failed result.
+    const recovered = makeSuccessChatResult('');
+    recovered.data.choices[0].message.toolCalls = [{ id: 'call_recovered_1_0', name: 'get_weather', arguments: { city: 'Oslo' } }];
+    recovered.data.choices[0].finish_reason = 'tool_calls';
+    recovered.ToolCallsRecovered = true;
+    testLLM.Script({ kind: 'failResult', result: recovered });
+    const tools = [{ name: 'get_weather', inputSchema: { type: 'object', properties: { city: { type: 'string' } } } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'NativeRecovered', useNativeTools: true, toolResults: true });
+  });
+
   it('still records Envelope on the result when the gate is closed', async () => {
     engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true } });
     testLLM.Script({ kind: 'succeed', content: 'done' });
