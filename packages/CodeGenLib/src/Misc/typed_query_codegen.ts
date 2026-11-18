@@ -1,13 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import { DatabasePlatform, EntityInfo } from '@memberjunction/core';
 import {
     ComputeTypedQuerySignature,
-    DatabasePlatform,
-    EntityInfo,
-    QueryInfo,
+    MJQueryEntityExtended,
     TypedQuerySignatureFieldInput,
     TypedQuerySignatureParamInput,
-} from '@memberjunction/core';
+} from '@memberjunction/core-entities';
 import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import { GetQueryDialect } from '@memberjunction/sql-dialect';
 import { QueryTemplate } from '@memberjunction/sql-parser';
@@ -17,34 +16,34 @@ import { LogWarning, logError, logStatus } from './status_logging';
 
 /**
  * Minimal parameter metadata shape consumed by {@link TypedQueryGeneratorBase}.
- * Compatible with `QueryParameterInfo` and lightweight unit-test fixtures.
+ * Compatible with `MJQueryParameterEntity` and lightweight unit-test fixtures.
  */
 export interface TypedQueryCodeGenParameter {
     Name: string;
     Type?: string | null;
-    IsRequired?: boolean;
+    IsRequired?: boolean | null;
     DefaultValue?: string | null;
     Description?: string | null;
-    IsServerSet?: boolean;
+    IsServerSet?: boolean | null;
     DetectionMethod?: string | null;
 }
 
 /**
  * Minimal output field metadata shape consumed by {@link TypedQueryGeneratorBase}.
- * Compatible with `QueryFieldInfo` and lightweight unit-test fixtures.
+ * Compatible with `MJQueryFieldEntity` and lightweight unit-test fixtures.
  */
 export interface TypedQueryCodeGenField {
     Name: string;
-    Sequence?: number;
+    Sequence?: number | null;
     SQLBaseType: string;
     SQLFullType?: string | null;
     Description?: string | null;
     IsNullable?: boolean | null;
-    IsComputed?: boolean;
+    IsComputed?: boolean | null;
     SourceEntityID?: string | null;
     SourceEntity?: string | null;
     SourceFieldName?: string | null;
-    InAllBranchVariants?: boolean;
+    InAllBranchVariants?: boolean | null;
 }
 
 /**
@@ -74,7 +73,7 @@ export interface TypedQueryCodeGenEntity {
 
 /**
  * Minimal query metadata shape consumed by {@link TypedQueryGeneratorBase}.
- * Compatible with `QueryInfo` and `MJQueryEntityExtended`.
+ * Build it from `QueryEngine` queries with {@link TypedQueryCodeGenQueriesFromEngine}.
  */
 export interface TypedQueryCodeGenQuery {
     ID: string;
@@ -101,6 +100,35 @@ export interface GenerateTypedQueriesOptions {
     onWarning?: (message: string) => void;
     /** Whether to emit Zod row schemas alongside row interfaces (defaults to `true`). */
     emitZodSchemas?: boolean;
+    /**
+     * Module the generated files import `DefineTypedQuery` from (defaults to
+     * {@link TypedQueryDefinerModule}). Output that lands inside `@memberjunction/core-entities`
+     * itself passes a relative path, since a package cannot import its own name.
+     */
+    definerModule?: string;
+}
+
+/** The package that exports `DefineTypedQuery`: what generated typed-query files import by default. */
+export const TypedQueryDefinerModule = '@memberjunction/core-entities';
+
+/**
+ * The query shape {@link TypedQueryGeneratorBase} reads, built from `QueryEngine` queries: the
+ * entity names its child collections `QueryParameters`, `QueryFields` and `QueryEntities`.
+ */
+export function TypedQueryCodeGenQueriesFromEngine(queries: ReadonlyArray<MJQueryEntityExtended>): TypedQueryCodeGenQuery[] {
+    return queries.map((q) => ({
+        ID: q.ID,
+        Name: q.Name,
+        Description: q.Description,
+        SQL: q.SQL,
+        Status: q.Status,
+        Reusable: q.Reusable,
+        CategoryPath: q.CategoryPath,
+        Category: q.Category,
+        Parameters: q.QueryParameters,
+        Fields: q.QueryFields,
+        Entities: q.QueryEntities,
+    }));
 }
 
 interface ResolvedParameterSpec {
@@ -380,7 +408,7 @@ export function GenerateTypedQueriesFileContent(
         return lines.join('\n');
     }
 
-    lines.push("import { DefineTypedQuery } from '@memberjunction/core';");
+    lines.push(`import { DefineTypedQuery } from '${options.definerModule ?? TypedQueryDefinerModule}';`);
     if (emitZod) {
         lines.push("import { z } from 'zod';");
     }

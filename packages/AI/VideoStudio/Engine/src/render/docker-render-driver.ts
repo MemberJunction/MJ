@@ -330,10 +330,17 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
                 ? Math.min(req.TimeoutMs, this.settings.Timeouts.RenderMs)
                 : this.settings.Timeouts.RenderMs;
 
+        // Inside a CPU-limited container the worker would size capture workers from the HOST's CPU
+        // count (os.availableParallelism ignores the --cpus quota), so default it to the quota here.
+        const requestWithWorkers: RenderRequest =
+            typeof req.Workers === 'number'
+                ? req
+                : { ...req, Workers: this.settings.Workers ?? Math.max(1, Math.floor(this.settings.Docker.Cpus)) };
+
         return this.trackRun(
             this.executeContainerOperation<RenderRequest, RenderResult>(
                 'render',
-                req,
+                requestWithWorkers,
                 effectiveTimeoutMs,
                 signal,
                 onProgress,

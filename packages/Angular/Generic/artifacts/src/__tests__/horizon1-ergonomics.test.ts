@@ -22,6 +22,10 @@ import {
   SLIDES_TOOLBAR_PINS_SETTING_KEY,
   SlideDeckArtifactViewerComponent,
 } from '../lib/components/plugins/slide-deck-artifact-viewer.component';
+import { MarkdownArtifactViewerComponent } from '../lib/components/plugins/markdown-artifact-viewer.component';
+import { DocumentImportExportService } from '../lib/services/document-import-export.service';
+import { ElementRef, NgZone, Renderer2 } from '@angular/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SlideDeckExportService } from '../lib/services/slide-deck-export.service';
 
 function createMockCdr(): ChangeDetectorRef {
@@ -233,11 +237,11 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
-      // Unpin 'theme' and pin 'presenter'
-      comp.TogglePinToolbarAction('theme');
+      // Unpin 'add-slide' and pin 'presenter'
+      comp.TogglePinToolbarAction('add-slide');
       comp.TogglePinToolbarAction('presenter');
       expect(comp.PinnedToolbarActions).toContain('presenter');
-      expect(comp.PinnedToolbarActions).not.toContain('theme');
+      expect(comp.PinnedToolbarActions).not.toContain('add-slide');
       expect(setSettingSpy).toHaveBeenCalledWith(
         SLIDES_TOOLBAR_PINS_SETTING_KEY,
         expect.stringContaining('presenter'),
@@ -245,6 +249,14 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
       comp.ResetToolbarPreferences();
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
+
+      // Slides Cmd+K command palette opens cleanly and exposes layouts, themes & present actions
+      comp.OpenCommandPalette();
+      expect(comp.ShowCommandPalette).toBe(true);
+      expect(comp.SlidesCommandPaletteItems.some((c) => c.Id === 'layout:KpiStrip')).toBe(true);
+      expect(comp.SlidesCommandPaletteItems.some((c) => c.Id === 'theme:executive-slate')).toBe(true);
+      comp.ExecuteSlidePaletteCommand('layout:KpiStrip');
+      expect(comp.ActiveSlide.Layout).toBe('KpiStrip');
 
       getSettingSpy.mockRestore();
       setSettingSpy.mockRestore();
@@ -264,9 +276,13 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS]);
-      // Already at max (6), pinning another should not exceed 6
+      // Starts with 2 calm defaults; fill up to MaxPinnedToolbarActions (4), then verify 5th is capped
+      comp.TogglePinToolbarAction('bold');
+      comp.TogglePinToolbarAction('freeze-header');
+      expect(comp.PinnedToolbarActions.length).toBe(comp.MaxPinnedToolbarActions);
       comp.TogglePinToolbarAction('export-xlsx');
       expect(comp.PinnedToolbarActions.length).toBe(comp.MaxPinnedToolbarActions);
+      expect(comp.PinnedToolbarActions).not.toContain('export-xlsx');
 
       comp.TogglePinToolbarAction('add-chart');
       comp.TogglePinToolbarAction('export-xlsx');
@@ -276,16 +292,55 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
         expect.stringContaining('export-xlsx'),
       );
 
+      // Sheets Cmd+K command palette opens cleanly and exposes Freeze/Protect actions
+      comp.OpenCommandPalette();
+      expect(comp.ShowCommandPalette).toBe(true);
+      expect(comp.SheetsCommandPaletteItems.some((c) => c.Id === 'freeze-top-row')).toBe(true);
+      expect(comp.SheetsCommandPaletteItems.some((c) => c.Id === 'toggle-protect')).toBe(true);
+
       comp.ngOnDestroy();
     });
   });
 
-  describe('P1.2 — Cross-Artifact Sheet Chart & Range Slash Commands', () => {
-    it('exposes /sheet-chart and /sheet-range slash commands', () => {
+  describe('P1.2 — Cross-Artifact Sheet Chart & Range Slash Commands & Docs Insert Actions', () => {
+    it('exposes /sheet-chart and /sheet-range slash commands and opens picker from OpenSlashBlockInsert', () => {
       const service = new DocumentCollaborationService();
       const cmds = service.GetSlashCommands('sheet');
       expect(cmds.some((c) => c.Command === '/sheet-chart')).toBe(true);
       expect(cmds.some((c) => c.Command === '/sheet-range')).toBe(true);
+
+      const injector = Injector.create({
+        providers: [
+          { provide: ChangeDetectorRef, useValue: createMockCdr() },
+          { provide: ElementRef, useValue: { nativeElement: null } },
+          { provide: NgZone, useValue: { run: (fn: () => void) => fn() } },
+          { provide: Renderer2, useValue: {} },
+          { provide: DocumentCollaborationService, useValue: service },
+          { provide: DocumentImportExportService, useValue: {} },
+          { provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } },
+        ],
+      });
+      const docsViewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+
+      // Fails closed when read-only
+      docsViewer.readonly = true;
+      docsViewer.OpenSlashBlockInsert('/sheet-chart');
+      expect(docsViewer.PendingBlockInsertType).toBeNull();
+
+      // Opens Sheet Chart & Sheet Range pickers with preselected spreadsheet defaults when editable
+      docsViewer.readonly = false;
+      docsViewer.HasEditPermission = true;
+      docsViewer.OpenSlashBlockInsert('/sheet-chart');
+      expect(docsViewer.PendingBlockInsertType).toBe('Artifact');
+      expect(docsViewer.NewBlockArtifactTypeName).toBe('Spreadsheet');
+      expect(docsViewer.NewBlockSheetMode).toBe('chart');
+
+      docsViewer.OpenSlashBlockInsert('/sheet-range');
+      expect(docsViewer.PendingBlockInsertType).toBe('Artifact');
+      expect(docsViewer.NewBlockSheetMode).toBe('range');
+      expect(docsViewer.NewBlockSheetRange).toBe('A1:D8');
+
+      docsViewer.ngOnDestroy();
     });
   });
 

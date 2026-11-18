@@ -24,6 +24,47 @@ export const NARRATION_TAIL_SECONDS = 0.5;
 /** Silence gap in seconds between consecutive narration lines within the same beat. */
 export const NARRATION_LINE_GAP_SECONDS = 0.2;
 
+/** Longest per-line pause honored (seconds); longer values are clamped (the spec validator rejects them). */
+export const NARRATION_MAX_PAUSE_SECONDS = 3;
+
+/**
+ * Silences around the narration lines of one beat, after per-line overrides.
+ */
+export interface BeatLinePauses {
+    /** Silence before the first line (its `PauseBeforeSeconds`, else the 0.3 s lead-in). */
+    LeadInSeconds: number;
+    /** Silence between line `i` and line `i + 1` (`Gaps.length === lines.length - 1`). */
+    GapSeconds: number[];
+    /** Silence after the last line (its `PauseAfterSeconds`, else the 0.5 s tail). */
+    TailSeconds: number;
+}
+
+function readPause(value: number | undefined): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? Math.min(NARRATION_MAX_PAUSE_SECONDS, Math.max(0, value)) : undefined;
+}
+
+/**
+ * Resolves the silences around a beat's lines. Defaults are unchanged when no line sets a pause. An
+ * explicit pause replaces the default on its side; when both sides of a gap are explicit (one line's
+ * `PauseAfterSeconds` and the next line's `PauseBeforeSeconds`) they add up.
+ */
+export function ResolveBeatLinePauses(lines: readonly Pick<NarrationLine, 'PauseBeforeSeconds' | 'PauseAfterSeconds'>[]): BeatLinePauses {
+    if (lines.length === 0) {
+        return { LeadInSeconds: 0, GapSeconds: [], TailSeconds: 0 };
+    }
+    const gaps: number[] = [];
+    for (let i = 0; i < lines.length - 1; i++) {
+        const after = readPause(lines[i].PauseAfterSeconds);
+        const before = readPause(lines[i + 1].PauseBeforeSeconds);
+        gaps.push(after === undefined && before === undefined ? NARRATION_LINE_GAP_SECONDS : (after ?? 0) + (before ?? 0));
+    }
+    return {
+        LeadInSeconds: readPause(lines[0].PauseBeforeSeconds) ?? NARRATION_LEAD_IN_SECONDS,
+        GapSeconds: gaps,
+        TailSeconds: readPause(lines[lines.length - 1].PauseAfterSeconds) ?? NARRATION_TAIL_SECONDS,
+    };
+}
+
 /**
  * Machine-readable issue codes emitted by narration timeline fitting and synthesis.
  */
@@ -150,9 +191,10 @@ function fitSingleBeat(
         return roundSeconds(Math.max(0, beat.EndSeconds - beat.StartSeconds));
     }
 
+    const pauses = ResolveBeatLinePauses(measuredLines);
     const clipsTotal = measuredLines.reduce((sum, l) => sum + (l.DurationSeconds ?? 0), 0);
-    const gapsTotal = (measuredLines.length - 1) * NARRATION_LINE_GAP_SECONDS;
-    let beatLength = roundSeconds(NARRATION_LEAD_IN_SECONDS + clipsTotal + gapsTotal + NARRATION_TAIL_SECONDS);
+    const gapsTotal = pauses.GapSeconds.reduce((sum, gap) => sum + gap, 0);
+    let beatLength = roundSeconds(pauses.LeadInSeconds + clipsTotal + gapsTotal + pauses.TailSeconds);
 
     if (
         typeof pacing?.MinBeatDurationSeconds === 'number' &&
@@ -175,8 +217,8 @@ function fitSingleBeat(
         });
     }
 
-    let cursor = roundSeconds(beatStart + NARRATION_LEAD_IN_SECONDS);
-    for (const line of measuredLines) {
+    let cursor = roundSeconds(beatStart + pauses.LeadInSeconds);
+    measuredLines.forEach((line, index) => {
         const lineStart = cursor;
         line.StartSeconds = lineStart;
         if (line.WordTimings) {
@@ -186,8 +228,8 @@ function fitSingleBeat(
                 EndSeconds: roundSeconds(wt.EndSeconds + lineStart),
             }));
         }
-        cursor = roundSeconds(lineStart + (line.DurationSeconds ?? 0) + NARRATION_LINE_GAP_SECONDS);
-    }
+        cursor = roundSeconds(lineStart + (line.DurationSeconds ?? 0) + (pauses.GapSeconds[index] ?? 0));
+    });
 
     return beatLength;
 }

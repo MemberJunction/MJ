@@ -23,6 +23,9 @@ vi.mock('@memberjunction/core', () => ({
         public static Provider = {};
     },
 }));
+vi.mock('@memberjunction/core-entities', () => ({
+    QueryEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), Queries: [] } },
+}));
 
 import { MentionAutocomplete } from '../mentions/MentionAutocomplete';
 import type { MentionSuggestion, MentionSuggestionScope } from '../mentions/MentionSuggestion';
