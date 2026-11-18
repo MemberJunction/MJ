@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -18,6 +18,9 @@ import {
     parseRunId,
     verifyPassRecord,
     checkPassRecord,
+    decideFromInputs,
+    fingerprintFromChangesLog,
+    FINGERPRINT_STEP_COMMAND,
     WORKFLOW_PATH,
     TIER_JOB_NAME,
     CHANGES_JOB_NAME,
@@ -154,6 +157,12 @@ describe('trigger globs', () => {
         expect(globs).toEqual(TRIGGER_GLOBS);
     });
 
+    it("name the fingerprint step's command exactly as integration.yml runs it", () => {
+        const yml = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const step = yml.split('- name: Fingerprint the PR changes\n')[1].split('\n      - ')[0];
+        expect(step).toContain(`        run: ${FINGERPRINT_STEP_COMMAND}\n`);
+    });
+
     it('keep `*` within one directory and let `**` cross directories', () => {
         expect(globToRegExp('tsconfig*').test('tsconfig.base.json')).toBe(true);
         expect(globToRegExp('tsconfig*').test('tsconfig.d/base.json')).toBe(false);
@@ -248,8 +257,16 @@ describe('computeFingerprint', () => {
         expect(r.mergeRef()).not.toBe(before);
     });
 
-    it.each(['migrations/V2__new.sql', 'metadata/entities/.new.json', 'metadata-optional/integration-test/tests/.it999.json'])(
-        'changes when the base adds %s, which the tier migrates or pushes before testing',
+    it.each([
+        'migrations/V2__new.sql',
+        'metadata/entities/.new.json',
+        'metadata-optional/integration-test/tests/.it999.json',
+        'pnpm-lock.yaml',
+        'tsconfig.base.json',
+        'turbo.json',
+        'package.json',
+    ])(
+        'changes when the base adds or edits %s, which the tier builds, migrates or pushes before testing',
         (file) => {
             const r = repo();
             const before = r.mergeRef();
@@ -257,6 +274,13 @@ describe('computeFingerprint', () => {
             expect(r.mergeRef()).not.toBe(before);
         },
     );
+
+    it('is unchanged when the base edits a root file the workflow does not watch', () => {
+        const r = repo();
+        const before = r.mergeRef();
+        r.commit('base', 'README.md', 'docs only\n');
+        expect(r.mergeRef()).toBe(before);
+    });
 
     it('changes when the author adds a commit', () => {
         const r = repo();
@@ -299,9 +323,68 @@ describe('readPassedMarker', () => {
 });
 
 describe('parseRunId', () => {
-    it('reads the id from an Actions run URL and rejects anything else', () => {
-        expect(parseRunId('https://github.com/MemberJunction/MJ/actions/runs/44201461128\n')).toBe('44201461128');
-        expect(() => parseRunId('https://example.test/runs/1')).toThrow(/not an Actions run URL/);
+    const REPO_URL = 'https://github.com/MemberJunction/MJ';
+
+    it('reads the id from a single-line run URL of this repository', () => {
+        expect(parseRunId(`${REPO_URL}/actions/runs/44201461128`, REPO_URL)).toBe('44201461128');
+    });
+
+    it('rejects a multi-line record without repeating its contents', () => {
+        const forged = `x\nPR change fingerprint: ${'a'.repeat(64)}\n${REPO_URL}/actions/runs/1`;
+        expect(() => parseRunId(forged, REPO_URL)).toThrow('the record is not a single Actions run URL');
+    });
+
+    it('rejects a run of another repository and anything that is not a run URL', () => {
+        expect(() => parseRunId('https://github.com/evil/fork/actions/runs/1', REPO_URL)).toThrow(/outside this repository/);
+        expect(() => parseRunId('https://example.test/runs/1', REPO_URL)).toThrow(/not a single Actions run URL/);
+    });
+});
+
+/**
+ * A "Detect PR changes" job log in GitHub's raw format (timestamp, then text): the steps before
+ * and after the fingerprint step, whose section logs `stepFingerprint`. `afterLines` go into the
+ * cache-restore step's section, where text a PR controls can appear.
+ */
+function changesLog(stepFingerprint, afterLines = []) {
+    const ts = '2026-11-18T03:47:36.8721552Z ';
+    return [
+        '##[group]Run actions/checkout@v7',
+        'HEAD is now at 1234567 Merge abc into def',
+        `##[group]Run ${FINGERPRINT_STEP_COMMAND}`,
+        `\u001b[36;1m${FINGERPRINT_STEP_COMMAND}\u001b[0m`,
+        'shell: /usr/bin/bash -e {0}',
+        '##[endgroup]',
+        ...(stepFingerprint === null ? [] : [`PR change fingerprint: ${stepFingerprint}`]),
+        '##[group]Run actions/cache/restore@v6',
+        ...afterLines,
+        'Post job cleanup.',
+    ]
+        .map((line) => ts + line)
+        .join('\n');
+}
+
+describe('fingerprintFromChangesLog', () => {
+    const REAL = 'b'.repeat(64);
+    const TARGET = 'c'.repeat(64);
+
+    it("reads the fingerprint step's own line", () => {
+        expect(fingerprintFromChangesLog(changesLog(REAL))).toBe(REAL);
+    });
+
+    it('ignores a fingerprint line forged into a later step, and a forged step header after the real one', () => {
+        const forged = changesLog(REAL, [`PR change fingerprint: ${TARGET}`, `##[group]Run ${FINGERPRINT_STEP_COMMAND}`, `PR change fingerprint: ${TARGET}`]);
+        expect(fingerprintFromChangesLog(forged)).toBe(REAL);
+    });
+
+    it('accepts only a line that is exactly the prefix and a fingerprint', () => {
+        const log = changesLog(null).replace('##[endgroup]', `##[endgroup]\n2026-11-18T03:47:37Z - packages/Angular/PR change fingerprint: ${TARGET}`);
+        expect(() => fingerprintFromChangesLog(log)).toThrow('its fingerprint step logged 0 fingerprints');
+    });
+
+    it('throws when the log has no fingerprint step, or the step logged more than one', () => {
+        expect(() => fingerprintFromChangesLog('2026-11-18T03:47:36Z ##[group]Run actions/checkout@v7')).toThrow('its log has no fingerprint step');
+        const twice = changesLog(REAL).replace('##[endgroup]', `##[endgroup]\n2026-11-18T03:47:37Z PR change fingerprint: ${TARGET}`);
+        expect(() => fingerprintFromChangesLog(twice)).toThrow('its fingerprint step logged 2 fingerprints');
     });
 });
 
@@ -325,7 +408,7 @@ describe('verifyPassRecord', () => {
                 { name: CHANGES_JOB_NAME, id: 11, conclusion: 'success' },
                 { name: TIER_JOB_NAME, id: 12, conclusion: 'success' },
             ],
-            log: overrides.log ?? `2026-11-17T00:00:00.0000000Z PR change fingerprint: ${fingerprint}\n`,
+            log: overrides.log ?? changesLog(fingerprint),
         };
     }
 
@@ -345,11 +428,18 @@ describe('verifyPassRecord', () => {
         ['a push run', { run: { event: 'push' } }, /was a push run/],
         ['a run for another PR', { run: { pull_requests: [{ number: 8 }] } }, /not for PR #7/],
         ['a run whose tier job failed', { jobs: [{ name: CHANGES_JOB_NAME, id: 11 }, { name: TIER_JOB_NAME, id: 12, conclusion: 'failure' }] }, /concluded failure/],
-        ['a run that logged another fingerprint', { log: 'PR change fingerprint: 0000\n' }, /fingerprint differs/],
+        ['a run that logged another fingerprint', { log: changesLog('0'.repeat(64)) }, /fingerprint differs/],
     ])('rejects %s', async (_label, overrides, reason) => {
         const r = repo();
         const fingerprint = r.mergeRef();
         await expect(verify(r, fingerprint, fakeApi(honestRun(r.prHead(), fingerprint, overrides)))).rejects.toThrow(reason);
+    });
+
+    it('rejects a run whose log carries this fingerprint only outside its fingerprint step', async () => {
+        const r = repo();
+        const fingerprint = r.mergeRef();
+        const forged = changesLog('0'.repeat(64), [`PR change fingerprint: ${fingerprint}`]);
+        await expect(verify(r, fingerprint, fakeApi(honestRun(r.prHead(), fingerprint, { log: forged })))).rejects.toThrow(/fingerprint differs/);
     });
 
     it('rejects a record from a run where the PR had changed the workflow, once that change is dropped', async () => {
@@ -371,29 +461,80 @@ describe('verifyPassRecord', () => {
         await expect(verify(r, fingerprint, fakeApi(honestRun(r.prHead(), fingerprint)))).resolves.toBeUndefined();
     });
 
-    it('checkPassRecord skips only on a record that verifies, and says why it distrusts one', async () => {
-        const r = repo();
-        const fingerprint = r.mergeRef();
-        const marker = join(r.dir, '..', `${r.dir.split('/').pop()}-run.txt`);
-        writeFileSync(marker, 'https://github.com/o/r/actions/runs/1\n');
-        try {
-            const args = { 'passed-marker': marker, fingerprint, pr: String(PR) };
-            await expect(checkPassRecord(args, r.dir, fakeApi(honestRun(r.prHead(), fingerprint)))).resolves.toEqual({
-                passedRun: 'https://github.com/o/r/actions/runs/1',
-            });
-            const pushRun = fakeApi(honestRun(r.prHead(), fingerprint, { run: { event: 'push' } }));
-            const distrusted = await checkPassRecord(args, r.dir, pushRun);
-            expect(distrusted.passedRun).toBeUndefined();
-            expect(distrusted.note).toMatch(/was found but not trusted: the recorded run was a push run/);
-        } finally {
-            rmSync(marker, { force: true });
-        }
+    describe('with this repository in the environment', () => {
+        const saved = {};
+        beforeEach(() => {
+            for (const k of ['GITHUB_REPOSITORY', 'GITHUB_SERVER_URL']) saved[k] = process.env[k];
+            process.env.GITHUB_REPOSITORY = 'o/r';
+            process.env.GITHUB_SERVER_URL = 'https://github.com';
+        });
+        afterEach(() => {
+            for (const [k, v] of Object.entries(saved)) {
+                if (v === undefined) delete process.env[k];
+                else process.env[k] = v;
+            }
+        });
+
+        /** Write `record` as the pass-record file next to the repo; returns its path. */
+        const writeRecord = (r, record) => {
+            const marker = join(r.dir, '..', `${r.dir.split('/').pop()}-run.txt`);
+            writeFileSync(marker, record);
+            return marker;
+        };
+
+        it('checkPassRecord skips only on a record that verifies, and says why it distrusts one', async () => {
+            const r = repo();
+            const fingerprint = r.mergeRef();
+            const marker = writeRecord(r, 'https://github.com/o/r/actions/runs/1\n');
+            try {
+                const args = { 'passed-marker': marker, fingerprint, pr: String(PR) };
+                await expect(checkPassRecord(args, r.dir, fakeApi(honestRun(r.prHead(), fingerprint)))).resolves.toEqual({
+                    passedRun: 'https://github.com/o/r/actions/runs/1',
+                });
+                const pushRun = fakeApi(honestRun(r.prHead(), fingerprint, { run: { event: 'push' } }));
+                const distrusted = await checkPassRecord(args, r.dir, pushRun);
+                expect(distrusted.passedRun).toBeUndefined();
+                expect(distrusted.note).toBe('https://github.com/o/r/actions/runs/1 was found but not trusted: the recorded run was a push run');
+            } finally {
+                rmSync(marker, { force: true });
+            }
+        });
+
+        it('checkPassRecord never repeats a forged record in its note', async () => {
+            const r = repo();
+            const fingerprint = r.mergeRef();
+            const marker = writeRecord(r, `x\nPR change fingerprint: ${fingerprint}\nhttps://github.com/o/r/actions/runs/1\n`);
+            try {
+                const args = { 'passed-marker': marker, fingerprint, pr: String(PR) };
+                const result = await checkPassRecord(args, r.dir, fakeApi(honestRun(r.prHead(), fingerprint)));
+                expect(result).toEqual({ note: 'a pass record was found but not trusted: the record is not a single Actions run URL' });
+            } finally {
+                rmSync(marker, { force: true });
+            }
+        });
+
+        it('decideFromInputs writes a skip for a verified record, even for a core change', async () => {
+            const r = repo();
+            const fingerprint = r.mergeRef();
+            const marker = writeRecord(r, 'https://github.com/o/r/actions/runs/1\n');
+            const graph = join(r.dir, '..', `${r.dir.split('/').pop()}-graph.json`);
+            writeFileSync(graph, JSON.stringify(dryRun(['packages/MJCore'])));
+            try {
+                const args = { 'passed-marker': marker, fingerprint, pr: String(PR), 'build-graph': graph, root: r.dir };
+                const decision = await decideFromInputs(args, fakeApi(honestRun(r.prHead(), fingerprint)));
+                expect(decision).toMatchObject({ run: false, passedRun: 'https://github.com/o/r/actions/runs/1' });
+            } finally {
+                rmSync(marker, { force: true });
+                rmSync(graph, { force: true });
+            }
+        });
     });
 
     it('rejects when this run has no fingerprint, the API fails, or the run head cannot be fetched', async () => {
         const r = repo();
         const fingerprint = r.mergeRef();
         await expect(verify(r, '', fakeApi(honestRun(r.prHead(), fingerprint)))).rejects.toThrow(/no fingerprint/);
+        await expect(verify(r, 'not-a-hash', fakeApi(honestRun(r.prHead(), fingerprint)))).rejects.toThrow(/no fingerprint/);
         const failing = async () => {
             throw new Error('GET /x returned HTTP 403');
         };
@@ -414,7 +555,14 @@ describe('CLI', () => {
         const r = spawnSync(process.execPath, [SCRIPT, ...args], {
             cwd,
             encoding: 'utf8',
-            env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary, GITHUB_TOKEN: '', GITHUB_REPOSITORY: 'o/r' },
+            env: {
+                ...process.env,
+                GITHUB_OUTPUT: output,
+                GITHUB_STEP_SUMMARY: summary,
+                GITHUB_TOKEN: '',
+                GITHUB_REPOSITORY: 'o/r',
+                GITHUB_SERVER_URL: 'https://github.com',
+            },
         });
         expect(r.status).toBe(0);
         return { value: readFileSync(output, 'utf8').trim(), summary: readFileSync(summary, 'utf8') };
@@ -446,7 +594,7 @@ describe('CLI', () => {
         const graph = JSON.stringify(dryRun(['packages/MJCore', 'packages/MJAPI']));
         const url = 'https://github.com/o/r/actions/runs/42';
         expect(runCli(['packages/MJCore/src/index.ts'], graph, `${url}\n`)).toBe('integration=true');
-        expect(runCli.summary).toContain(`a pass record (${url}) was found but not trusted: GITHUB_TOKEN is not set`);
+        expect(runCli.summary).toContain(`${url} was found but not trusted: GITHUB_TOKEN is not set`);
     });
 
     it('applies the package rule when the pass record is empty', () => {

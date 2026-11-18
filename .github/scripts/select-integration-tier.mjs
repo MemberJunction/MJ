@@ -35,11 +35,14 @@
  * So the tier is also skipped when the PR's *changes* already passed. `fingerprint` hashes the
  * patch the run tests — GitHub's PR merge commit against its first parent, the base it was
  * merged onto — including each touched file's before-image blob id, plus the base's
- * `migrations/`, `metadata/` and `metadata-optional/` trees. The hash is unchanged by a
- * catch-up merge that leaves the PR's files and those three trees alone. It changes when the
- * author edits anything, when the base edits a file the PR also touches, and when the base adds
- * or changes a migration, metadata, or an integration test definition: the tier migrates and
- * pushes those before any test, so they change what it tests without sharing a file with the PR.
+ * `migrations/`, `metadata/` and `metadata-optional/` trees and its root build inputs. The hash
+ * is unchanged by a catch-up merge that leaves the PR's files, those trees and those inputs
+ * alone. It changes when the author edits anything, when the base edits a file the PR also
+ * touches, when the base adds or changes a migration, metadata, or an integration test
+ * definition (the tier migrates and pushes those before any test, so they change what it tests
+ * without sharing a file with the PR), and when the base changes the lockfile or root build
+ * configuration. What it does not see is newer base code under `packages/` that the PR calls;
+ * the full tier on the base branch after the merge covers that.
  *
  * The workflow records the passing run's URL under the fingerprint after a green tier run (a
  * PR-scoped Actions cache entry). A cache entry alone proves nothing — any workflow a PR runs
@@ -118,6 +121,15 @@ export const TIER_JOB_NAME = 'Integration (SQL Server, deterministic)';
 export const CHANGES_JOB_NAME = 'Detect PR changes';
 const FINGERPRINT_LOG_PREFIX = 'PR change fingerprint: ';
 
+/**
+ * The command of integration.yml's "Fingerprint the PR changes" step. GitHub opens that step's
+ * section of the job log with `##[group]Run <command>`; a unit test keeps the two in sync.
+ */
+export const FINGERPRINT_STEP_COMMAND = 'node .github/scripts/select-integration-tier.mjs fingerprint';
+
+/** A fingerprint as `computeFingerprint` writes it. */
+const FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/;
+
 /** How many reasons the summary lists before it truncates. */
 const MAX_REASONS_SHOWN = 20;
 
@@ -147,6 +159,9 @@ const TRIGGER_REGEXPS = TRIGGER_GLOBS.map(globToRegExp);
 export function matchesTrigger(path) {
     return TRIGGER_REGEXPS.some((re) => re.test(path));
 }
+
+/** The watched root-level files (lockfile, root package.json, tsconfig*, turbo.json, ...): build inputs for every package. */
+const ROOT_INPUT_REGEXPS = TRIGGER_GLOBS.filter((glob) => !glob.includes('/')).map(globToRegExp);
 
 /**
  * The package directories (repo-relative, e.g. `packages/MJAPI`) that have a `build` task in a
@@ -258,8 +273,9 @@ export function changedPathsOfMergeCommit(cwd = process.cwd()) {
 }
 
 /**
- * SHA-256 over the patch a PR run tests (`HEAD` against its first parent, the base) and the
- * base's tree ids for `BASE_STATE_DIRS`. The patch's `index` lines carry each touched file's
+ * SHA-256 over the patch a PR run tests (`HEAD` against its first parent, the base), the
+ * base's tree ids for `BASE_STATE_DIRS`, and the base's blob ids for the watched root-level
+ * build inputs (lockfile, root package.json, tsconfig*, turbo.json, mj.config.cjs, ...). The patch's `index` lines carry each touched file's
  * before-image blob id, so a base edit to a PR file changes the hash; `--full-index` and
  * `--no-renames` keep the text independent of git configuration (abbreviation length, rename
  * settings). Throws when `HEAD` is not a two-parent merge commit.
@@ -275,7 +291,20 @@ export function computeFingerprint(cwd = process.cwd()) {
     for (const dir of BASE_STATE_DIRS) {
         hash.update(`\nbase ${dir} ${objectId('HEAD^1', dir, cwd)}`);
     }
+    for (const entry of baseRootInputs(cwd)) {
+        hash.update(`\nbase ${entry}`);
+    }
     return hash.digest('hex');
+}
+
+/** `<object id> <name>` for each watched root-level file in the base, sorted by name. */
+function baseRootInputs(cwd) {
+    return git(['ls-tree', 'HEAD^1'], cwd)
+        .split('\n')
+        .map((line) => /^\S+ \S+ (\S+)\t(.+)$/.exec(line))
+        .filter((m) => m && ROOT_INPUT_REGEXPS.some((re) => re.test(m[2])))
+        .map((m) => `${m[1]} ${m[2]}`)
+        .sort((a, b) => a.split(' ')[1].localeCompare(b.split(' ')[1]));
 }
 
 /** The URL recorded by an earlier passing run, or null when there is no record. */
@@ -285,11 +314,33 @@ export function readPassedMarker(path) {
     return text.length > 0 ? text : null;
 }
 
-/** The numeric run id at the end of an Actions run URL. */
-export function parseRunId(url) {
-    const m = /\/actions\/runs\/(\d+)$/.exec(url.trim());
-    if (!m) throw new Error(`not an Actions run URL: ${url}`);
-    return m[1];
+/**
+ * The run id of a pass record, which must be exactly one line: `<repoUrl>/actions/runs/<id>`.
+ * The record comes from a cache entry anyone's workflow could have written, so the error never
+ * repeats its contents — echoed text could forge lines in this job's log.
+ */
+export function parseRunId(record, repoUrl) {
+    const m = /^(\S+)\/actions\/runs\/(\d+)$/.exec(record);
+    if (!m) throw new Error('the record is not a single Actions run URL');
+    if (m[1] !== repoUrl) throw new Error('the record names a run outside this repository');
+    return m[2];
+}
+
+/**
+ * The fingerprint a recorded run's "Detect PR changes" job computed, read from that job's log.
+ * Only the fingerprint step's own section counts — from the first `##[group]Run` header for
+ * its command to the next step's header — and it must hold exactly one line that is the
+ * fingerprint and nothing else. Lines elsewhere in the log can carry text a PR controls.
+ */
+export function fingerprintFromChangesLog(log) {
+    const lines = log.split('\n').map((line) => line.replace(/\r$/, '').replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z /, ''));
+    const start = lines.indexOf(`##[group]Run ${FINGERPRINT_STEP_COMMAND}`);
+    if (start < 0) throw new Error('its log has no fingerprint step');
+    const end = lines.findIndex((line, i) => i > start && line.startsWith('##[group]Run '));
+    const section = lines.slice(start + 1, end < 0 ? undefined : end);
+    const found = section.filter((line) => line.startsWith(FINGERPRINT_LOG_PREFIX) && FINGERPRINT_PATTERN.test(line.slice(FINGERPRINT_LOG_PREFIX.length)));
+    if (found.length !== 1) throw new Error(`its fingerprint step logged ${found.length} fingerprints`);
+    return found[0].slice(FINGERPRINT_LOG_PREFIX.length);
 }
 
 /** A GET helper for the GitHub REST API; returns parsed JSON, or text when `text` is set. */
@@ -320,8 +371,7 @@ async function assertRunPassedWithFingerprint(api, repository, runId, fingerprin
     const changes = jobs.find((j) => j.name === CHANGES_JOB_NAME);
     if (!changes) throw new Error(`it has no "${CHANGES_JOB_NAME}" job`);
     const log = await api(`/repos/${repository}/actions/jobs/${changes.id}/logs`, { text: true });
-    const logged = log.split('\n').some((line) => line.trimEnd().endsWith(`${FINGERPRINT_LOG_PREFIX}${fingerprint}`));
-    if (!logged) throw new Error('its fingerprint differs from this run');
+    if (fingerprintFromChangesLog(log) !== fingerprint) throw new Error('its fingerprint differs from this run');
 }
 
 /**
@@ -351,7 +401,7 @@ export function assertTrustedFilesUnchangedByPr(headSha, cwd) {
  * altered; rejects with the reason otherwise.
  */
 export async function verifyPassRecord({ runId, fingerprint, prNumber, repository, api, cwd = process.cwd() }) {
-    if (!fingerprint) throw new Error('this run has no fingerprint');
+    if (!FINGERPRINT_PATTERN.test(fingerprint ?? '')) throw new Error('this run has no fingerprint');
     const run = await api(`/repos/${repository}/actions/runs/${runId}`);
     assertRunIsThisPrsTier(run, prNumber);
     await assertRunPassedWithFingerprint(api, repository, runId, fingerprint);
@@ -410,28 +460,29 @@ function apiFromEnvironment() {
  * why a record that was found is not trusted, or `{}` when there is none.
  */
 export async function checkPassRecord(args, root, api = apiFromEnvironment()) {
-    const url = readPassedMarker(args['passed-marker']);
-    if (url === null) return {};
+    const record = readPassedMarker(args['passed-marker']);
+    if (record === null) return {};
+    const repository = process.env.GITHUB_REPOSITORY;
+    const repoUrl = `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${repository}`;
+    let runUrl = 'a pass record';
     try {
+        const runId = parseRunId(record, repoUrl);
+        runUrl = `${repoUrl}/actions/runs/${runId}`;
         if (!api) throw new Error('GITHUB_TOKEN is not set');
-        await verifyPassRecord({
-            runId: parseRunId(url),
-            fingerprint: args.fingerprint,
-            prNumber: Number(args.pr),
-            repository: process.env.GITHUB_REPOSITORY,
-            api,
-            cwd: root,
-        });
-        return { passedRun: url };
+        await verifyPassRecord({ runId, fingerprint: args.fingerprint, prNumber: Number(args.pr), repository, api, cwd: root });
+        return { passedRun: runUrl };
     } catch (e) {
-        return { note: `a pass record (${url}) was found but not trusted: ${e.message}` };
+        return { note: `${runUrl} was found but not trusted: ${e.message}` };
     }
 }
 
-/** Compute the decision from the CLI inputs; any failure becomes a "run" decision. */
-async function decideFromInputs(args) {
+/**
+ * Compute the decision from the CLI inputs; any failure becomes a "run" decision. `api` is the
+ * GitHub API client used to verify a pass record (the environment's by default).
+ */
+export async function decideFromInputs(args, api = apiFromEnvironment()) {
     const root = args.root ?? process.cwd();
-    const record = await checkPassRecord(args, root);
+    const record = await checkPassRecord(args, root, api);
     if (record.passedRun) {
         return { run: false, reasons: [], unbuiltPackages: [], passedRun: record.passedRun };
     }
@@ -452,7 +503,7 @@ function writeFingerprint() {
     let fingerprint = '';
     try {
         fingerprint = computeFingerprint();
-        console.log(`PR change fingerprint: ${fingerprint}`);
+        console.log(`${FINGERPRINT_LOG_PREFIX}${fingerprint}`);
     } catch (e) {
         console.log(`::warning::Could not fingerprint the PR changes (${e.message}); the already-passed skip is off for this run.`);
     }
