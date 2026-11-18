@@ -24192,7 +24192,7 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this feature value history record.`),
-    RecordProcessID: z.string().describe(`
+    RecordProcessID: z.string().nullable().describe(`
         * * Field Name: RecordProcessID
         * * Display Name: Record Process
         * * SQL Data Type: uniqueidentifier
@@ -24332,7 +24332,7 @@ export const MJFeatureValueSchema = z.object({
         * * Display Name: Value Key Hash
         * * SQL Data Type: nvarchar(64)
         * * Description: SHA-256 of the canonical FeatureValueKey (entity, record, feature, pipeline version, prompt version hash, AI model, parameters hash, input hash, source). Unique per pipeline: re-computing the same key updates the row instead of inserting a duplicate.`),
-    Source: z.union([z.literal('Human'), z.literal('Pipeline')]).describe(`
+    Source: z.union([z.literal('Human'), z.literal('Model'), z.literal('Pipeline')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
@@ -24340,6 +24340,7 @@ export const MJFeatureValueSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Human
+    *   * Model
     *   * Pipeline
         * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
     EffectiveAsOf: z.date().nullable().describe(`
@@ -24368,6 +24369,23 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
         * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.`),
+    MLModelScoringBindingID: z.string().nullable().describe(`
+        * * Field Name: MLModelScoringBindingID
+        * * Display Name: ML Model Scoring Binding
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+        * * Description: The scoring binding whose prediction this is; set on every Model row and on a person's value entered on a binding.`),
+    MLScoringRunID: z.string().nullable().describe(`
+        * * Field Name: MLScoringRunID
+        * * Display Name: ML Scoring Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Scoring Runs (vwMLScoringRuns.ID)
+        * * Description: The scoring run that wrote this Model row.`),
+    InTraining: z.boolean().nullable().describe(`
+        * * Field Name: InTraining
+        * * Display Name: In Training
+        * * SQL Data Type: bit
+        * * Description: Model rows: true when the record was in the model's training snapshot, so its score is optimistic.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -24392,6 +24410,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: AIModel
         * * Display Name: AI Model Details
         * * SQL Data Type: nvarchar(50)`),
+    MLModelScoringBinding: z.string().nullable().describe(`
+        * * Field Name: MLModelScoringBinding
+        * * Display Name: ML Model Scoring Binding
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -27114,17 +27136,17 @@ export const MJvwLatestFeatureValuesSchema = z.object({
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Unique identifier for the underlying champion feature value record.`),
+        * * Description: Unique identifier for this feature value record, matching the source FeatureValue.ID.`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Identifier of the entity that this feature value belongs to.`),
+        * * Description: The entity ID of the record this feature was computed for.`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
         * * Display Name: Record ID
         * * SQL Data Type: nvarchar(900)
-        * * Description: Serialized primary key of the target record this feature was computed for.`),
+        * * Description: Serialized primary key of the record this feature value belongs to.`),
     FeatureName: z.string().describe(`
         * * Field Name: FeatureName
         * * Display Name: Feature Name
@@ -27134,7 +27156,7 @@ export const MJvwLatestFeatureValuesSchema = z.object({
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
-        * * Description: Origin of the feature value (e.g., Pipeline or Human).`),
+        * * Description: Who produced the value (e.g., Pipeline, Human, Model).`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
@@ -27144,52 +27166,67 @@ export const MJvwLatestFeatureValuesSchema = z.object({
         * * Field Name: EffectiveAsOf
         * * Display Name: Effective As Of
         * * SQL Data Type: datetimeoffset
-        * * Description: Timestamp indicating the point in time from which this feature value is considered effective.`),
+        * * Description: Timestamp from which this value is considered effective for the feature.`),
     ComputedAt: z.date().describe(`
         * * Field Name: ComputedAt
         * * Display Name: Computed At
         * * SQL Data Type: datetimeoffset
-        * * Description: Timestamp when the feature value was computed.`),
+        * * Description: Timestamp when this feature value was computed.`),
+    MLModelScoringBindingID: z.string().nullable().describe(`
+        * * Field Name: MLModelScoringBindingID
+        * * Display Name: ML Model Scoring Binding ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Identifier of the scoring binding whose prediction this value represents.`),
     MLModelID: z.string().nullable().describe(`
         * * Field Name: MLModelID
         * * Display Name: ML Model ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Reference identifier of the ML model that produced this feature score, if applicable.`),
-    RecordProcessID: z.string().describe(`
+        * * Description: Identifier of the ML model that scored this value.`),
+    MLScoringRunID: z.string().nullable().describe(`
+        * * Field Name: MLScoringRunID
+        * * Display Name: ML Scoring Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Identifier of the ML scoring run that computed this value.`),
+    InTraining: z.boolean().nullable().describe(`
+        * * Field Name: InTraining
+        * * Display Name: In Training
+        * * SQL Data Type: bit
+        * * Description: Indicates whether this record was included in the model's training snapshot.`),
+    RecordProcessID: z.string().nullable().describe(`
         * * Field Name: RecordProcessID
         * * Display Name: Record Process ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Reference identifier of the Record Process (Feature Pipeline) that generated this value.`),
+        * * Description: Identifier of the Record Process (Feature Pipeline) that computed this feature value.`),
     ValueText: z.string().nullable().describe(`
         * * Field Name: ValueText
         * * Display Name: Value (Text)
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Computed value represented as text or categorical string.`),
+        * * Description: Computed feature value as text, for textual or categorical features.`),
     ValueNumeric: z.number().nullable().describe(`
         * * Field Name: ValueNumeric
         * * Display Name: Value (Numeric)
         * * SQL Data Type: float(53)
-        * * Description: Computed value represented as a numeric floating-point number.`),
+        * * Description: Computed feature value as a floating-point numeric score or metric.`),
     ValueDate: z.date().nullable().describe(`
         * * Field Name: ValueDate
         * * Display Name: Value (Date)
         * * SQL Data Type: datetimeoffset
-        * * Description: Computed value represented as a date/time timestamp.`),
+        * * Description: Computed feature value formatted as a date/time timestamp.`),
     ValueBoolean: z.boolean().nullable().describe(`
         * * Field Name: ValueBoolean
         * * Display Name: Value (Boolean)
         * * SQL Data Type: bit
-        * * Description: Computed value represented as a boolean flag.`),
+        * * Description: Computed feature value as a boolean true/false flag.`),
     ValueJSON: z.string().nullable().describe(`
         * * Field Name: ValueJSON
         * * Display Name: Value (JSON)
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Computed value represented as a JSON document or structure.`),
+        * * Description: Computed feature value as structured JSON data.`),
     Confidence: z.number().nullable().describe(`
         * * Field Name: Confidence
         * * Display Name: Confidence
         * * SQL Data Type: float(53)
-        * * Description: Confidence score associated with this computed value.`),
+        * * Description: Optional confidence score associated with this computed feature value.`),
 });
 
 export type MJvwLatestFeatureValuesEntityType = z.infer<typeof MJvwLatestFeatureValuesSchema>;
@@ -28755,7 +28792,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Description: automated-gate when no person approved the publish; user when a person published or the publish consumed that person's approving sign-off.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The person who approved, when ApproverKind is user.`),
@@ -28806,7 +28843,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Description: JSON array of the leakage flags a sign-off acknowledges by name; empty on every other row.`),
     SignOffID: z.string().nullable().describe(`
         * * Field Name: SignOffID
-        * * Display Name: Sign Off
+        * * Display Name: Sign-Off
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
         * * Description: Publish rows: the human sign-off this publish consumed, when one was required.`),
@@ -28818,7 +28855,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Description: Publish rows: the model archived in the same transaction.`),
     Refusal: z.any().nullable().describe(`
         * * Field Name: Refusal
-        * * Display Name: Refusal
+        * * Display Name: Refusal Details
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJMLModelPublishRecordEntity_TransitionRefusal
         * * Description: Refusal rows: JSON TransitionRefusal, the reason the attempt was refused.`),
@@ -28840,7 +28877,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Default Value: getutcdate()`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Details
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -28855,12 +28892,6 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    MLModelID: z.string().describe(`
-        * * Field Name: MLModelID
-        * * Display Name: ML Model ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
-        * * Description: Foreign key to the MLModel that does the scoring`),
     RecordProcessID: z.string().nullable().describe(`
         * * Field Name: RecordProcessID
         * * Display Name: Record Process ID
@@ -28877,23 +28908,17 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Field Name: TargetColumn
         * * Display Name: Target Column
         * * SQL Data Type: nvarchar(255)
-        * * Description: Name of the column that receives the prediction (when scores are written back / materialized)`),
-    Mode: z.union([z.literal('Materialized'), z.literal('OnDemand'), z.literal('Scheduled')]).describe(`
+        * * Description: Name of an existing column of the target entity that also receives the newest prediction; NULL stores the predictions as Feature Values only.`),
+    Mode: z.union([z.literal('OnDemand'), z.literal('Scheduled')]).describe(`
         * * Field Name: Mode
         * * Display Name: Scoring Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: OnDemand
     * * Value List Type: List
     * * Possible Values 
-    *   * Materialized
     *   * OnDemand
     *   * Scheduled
-        * * Description: Scoring mode: OnDemand, Scheduled, or Materialized`),
-    MaterializedResultID: z.string().nullable().describe(`
-        * * Field Name: MaterializedResultID
-        * * Display Name: Materialized Result ID
-        * * SQL Data Type: uniqueidentifier
-        * * Description: Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists`),
+        * * Description: Scoring mode: OnDemand or Scheduled.`),
     LastScoredAt: z.date().nullable().describe(`
         * * Field Name: LastScoredAt
         * * Display Name: Last Scored At
@@ -28914,6 +28939,43 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MLTrainingPipelineID: z.string().describe(`
+        * * Field Name: MLTrainingPipelineID
+        * * Display Name: ML Training Pipeline
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: The training pipeline whose Published model scores for this binding; publishing a new version needs no binding change.`),
+    FeatureName: z.string().describe(`
+        * * Field Name: FeatureName
+        * * Display Name: Feature Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The feature name the predictions are stored under, unique on the target entity.`),
+    TargetColumnSource: z.string().nullable().describe(`
+        * * Field Name: TargetColumnSource
+        * * Display Name: Target Column Source
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The result reference ($.Value, $.Class, $.AdverseProbability or $.Probabilities.<class>) the column copy writes into TargetColumn; required when TargetColumn is set.`),
+    Status: z.union([z.literal('Active'), z.literal('Withdrawn')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Withdrawn
+        * * Description: Active or Withdrawn. A withdrawn binding no longer scores, and the column copies it made are cleared; its Feature Values stay.`),
+    ViewAuthorizationID: z.string().nullable().describe(`
+        * * Field Name: ViewAuthorizationID
+        * * Display Name: View Authorization
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)
+        * * Description: The authorization a user must hold to see this binding's predictions; a binding with none is visible to no user.`),
+    RetentionDays: z.number().nullable().describe(`
+        * * Field Name: RetentionDays
+        * * Display Name: Retention Days
+        * * SQL Data Type: int
+        * * Description: Days of prediction history kept; NULL keeps all of it.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -28922,6 +28984,14 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
+    MLTrainingPipeline: z.string().nullable().describe(`
+        * * Field Name: MLTrainingPipeline
+        * * Display Name: ML Training Pipeline Name
+        * * SQL Data Type: nvarchar(255)`),
+    ViewAuthorization: z.string().nullable().describe(`
+        * * Field Name: ViewAuthorization
+        * * Display Name: View Authorization Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJMLModelScoringBindingEntityType = z.infer<typeof MJMLModelScoringBindingSchema>;
@@ -29044,25 +29114,25 @@ export const MJMLModelSchema = z.object({
         * * Default Value: getutcdate()`),
     PredictionUnitID: z.string().nullable().describe(`
         * * Field Name: PredictionUnitID
-        * * Display Name: Prediction Unit ID
+        * * Display Name: Prediction Unit
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
         * * Description: The Prediction Unit version the model was trained under (the exact version row).`),
     EvaluationProtocolID: z.string().nullable().describe(`
         * * Field Name: EvaluationProtocolID
-        * * Display Name: Evaluation Protocol ID
+        * * Display Name: Evaluation Protocol
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
         * * Description: The Evaluation Protocol version the model was graded under (the exact version row).`),
     TrainingSnapshotID: z.string().nullable().describe(`
         * * Field Name: TrainingSnapshotID
-        * * Display Name: Training Snapshot ID
+        * * Display Name: Training Snapshot
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
         * * Description: The Training Snapshot the model was trained on.`),
     TrainingRunID: z.string().nullable().describe(`
         * * Field Name: TrainingRunID
-        * * Display Name: Training Run ID
+        * * Display Name: Training Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
         * * Description: The training run that produced the model.`),
@@ -29142,15 +29212,15 @@ export const MJMLModelSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
     PredictionUnit: z.string().nullable().describe(`
         * * Field Name: PredictionUnit
-        * * Display Name: Prediction Unit
+        * * Display Name: Prediction Unit Name
         * * SQL Data Type: nvarchar(255)`),
     EvaluationProtocol: z.string().nullable().describe(`
         * * Field Name: EvaluationProtocol
-        * * Display Name: Evaluation Protocol
+        * * Display Name: Evaluation Protocol Name
         * * SQL Data Type: nvarchar(255)`),
     TrainingSnapshot: z.string().nullable().describe(`
         * * Field Name: TrainingSnapshot
-        * * Display Name: Training Snapshot
+        * * Display Name: Training Snapshot Name
         * * SQL Data Type: nvarchar(64)`),
 });
 
@@ -29617,7 +29687,7 @@ export const MJMLScoringRunSchema = z.object({
         * * Description: running, refused, failed or completed. A failed run keeps the batches it wrote before the failing one.`),
     Refusal: z.string().nullable().describe(`
         * * Field Name: Refusal
-        * * Display Name: Refusal Details
+        * * Display Name: Refusal
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON ScoringRefusal when the run was refused.`),
     Total: z.number().describe(`
@@ -29684,7 +29754,7 @@ export const MJMLScoringRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Name
+        * * Display Name: Scheduled Job Run Details
         * * SQL Data Type: nvarchar(200)`),
 });
 

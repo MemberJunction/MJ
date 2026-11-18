@@ -10,13 +10,31 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Monitoring Period & Status Section -->
+    <!-- Monitoring Period and Status Section -->
     <mj-collapsible-panel
-        SectionKey="monitoringPeriodStatus"
-        SectionName="Monitoring Period & Status"
-        Icon="fa fa-calendar"
+        SectionKey="monitoringPeriodAndStatus"
+        SectionName="Monitoring Period and Status"
+        Icon="fa fa-calendar-alt"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledJobRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -52,10 +70,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Metrics & Outcomes Section -->
+    <!-- Evaluation Metrics Section -->
     <mj-collapsible-panel
-        SectionKey="metricsOutcomes"
-        SectionName="Metrics & Outcomes"
+        SectionKey="evaluationMetrics"
+        SectionName="Evaluation Metrics"
         Icon="fa fa-chart-bar"
         [Form]="this"
         [FormContext]="formContext">
@@ -134,11 +152,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Drift & Parity Section -->
+    <!-- Drift and Parity Analysis Section -->
     <mj-collapsible-panel
-        SectionKey="driftParity"
-        SectionName="Drift & Parity"
-        Icon="fa fa-wave-square"
+        SectionKey="driftAndParityAnalysis"
+        SectionName="Drift and Parity Analysis"
+        Icon="fa fa-balance-scale"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -168,11 +186,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Triggers & Actions Section -->
+    <!-- Triggers and Governance Section -->
     <mj-collapsible-panel
-        SectionKey="triggersActions"
-        SectionName="Triggers & Actions"
-        Icon="fa fa-bolt"
+        SectionKey="triggersAndGovernance"
+        SectionName="Triggers and Governance"
+        Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -218,24 +236,6 @@
         Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ScheduledJobRunID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

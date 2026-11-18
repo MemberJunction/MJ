@@ -923,11 +923,11 @@
     },
     {
       "table": "MLModelScoringBinding",
-      "column": "MLModelID",
-      "references": "MLModel",
+      "column": "MLTrainingPipelineID",
+      "references": "MLTrainingPipeline",
       "nullable": false,
       "action": "delete",
-      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
     },
     {
       "table": "MLTrainingRun",
@@ -1024,6 +1024,22 @@
       "nullable": true,
       "action": "null",
       "reason": "Nullable reference to a MLModel row this proc deletes; cleared, after the model's own Source = 'Model' rows are deleted (D4-32)."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLModelScoringBindingID",
+      "references": "MLModelScoringBinding",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModelScoringBinding row this proc deletes; deleted, not cleared: a Model row, or a person's value on a binding with no Record Process, fails CK_FeatureValue_SourceLineage when nulled."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLScoringRunID",
+      "references": "MLScoringRun",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLScoringRun row this proc deletes; deleted, not cleared: a Model row fails CK_FeatureValue_SourceLineage when nulled."
     },
     {
       "table": "MLOutputBinding",
@@ -1141,9 +1157,9 @@
       "table": "FeatureValue",
       "column": "RecordProcessID",
       "references": "RecordProcess",
-      "nullable": false,
+      "nullable": true,
       "action": "delete",
-      "reason": "NOT NULL reference to a RecordProcess row this proc deletes; deleted first."
+      "reason": "Nullable since a Model row carries none; a Pipeline row without its Record Process fails CK_FeatureValue_SourceLineage, so the process's rows are deleted."
     },
     {
       "table": "MLModelScoringBinding",

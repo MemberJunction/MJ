@@ -70739,10 +70739,10 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
     * * Description: The Record Process (Feature Pipeline) that computed this feature value.
     */
-    get RecordProcessID(): string {
+    get RecordProcessID(): string | null {
         return this.Get('RecordProcessID');
     }
-    set RecordProcessID(value: string) {
+    set RecordProcessID(value: string | null) {
         this.Set('RecordProcessID', value);
     }
 
@@ -71082,13 +71082,14 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Human
+    *   * Model
     *   * Pipeline
     * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).
     */
-    get Source(): 'Human' | 'Pipeline' {
+    get Source(): 'Human' | 'Model' | 'Pipeline' {
         return this.Get('Source');
     }
-    set Source(value: 'Human' | 'Pipeline') {
+    set Source(value: 'Human' | 'Model' | 'Pipeline') {
         this.Set('Source', value);
     }
 
@@ -71151,6 +71152,47 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+    * * Description: The scoring binding whose prediction this is; set on every Model row and on a person's value entered on a binding.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
+    * * Field Name: MLScoringRunID
+    * * Display Name: ML Scoring Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Scoring Runs (vwMLScoringRuns.ID)
+    * * Description: The scoring run that wrote this Model row.
+    */
+    get MLScoringRunID(): string | null {
+        return this.Get('MLScoringRunID');
+    }
+    set MLScoringRunID(value: string | null) {
+        this.Set('MLScoringRunID', value);
+    }
+
+    /**
+    * * Field Name: InTraining
+    * * Display Name: In Training
+    * * SQL Data Type: bit
+    * * Description: Model rows: true when the record was in the model's training snapshot, so its score is optimistic.
+    */
+    get InTraining(): boolean | null {
+        return this.Get('InTraining');
+    }
+    set InTraining(value: boolean | null) {
+        this.Set('InTraining', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -71202,6 +71244,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get AIModel(): string | null {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: MLModelScoringBinding
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLModelScoringBinding(): string | null {
+        return this.Get('MLModelScoringBinding');
     }
 }
 
@@ -78193,7 +78244,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Unique identifier for the underlying champion feature value record.
+    * * Description: Unique identifier for this feature value record, matching the source FeatureValue.ID.
     */
     get ID(): string {
         return this.Get('ID');
@@ -78206,7 +78257,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: EntityID
     * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Identifier of the entity that this feature value belongs to.
+    * * Description: The entity ID of the record this feature was computed for.
     */
     get EntityID(): string {
         return this.Get('EntityID');
@@ -78219,7 +78270,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: RecordID
     * * Display Name: Record ID
     * * SQL Data Type: nvarchar(900)
-    * * Description: Serialized primary key of the target record this feature was computed for.
+    * * Description: Serialized primary key of the record this feature value belongs to.
     */
     get RecordID(): string {
         return this.Get('RecordID');
@@ -78245,7 +78296,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: Source
     * * Display Name: Source
     * * SQL Data Type: nvarchar(20)
-    * * Description: Origin of the feature value (e.g., Pipeline or Human).
+    * * Description: Who produced the value (e.g., Pipeline, Human, Model).
     */
     get Source(): string {
         return this.Get('Source');
@@ -78271,7 +78322,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: EffectiveAsOf
     * * Display Name: Effective As Of
     * * SQL Data Type: datetimeoffset
-    * * Description: Timestamp indicating the point in time from which this feature value is considered effective.
+    * * Description: Timestamp from which this value is considered effective for the feature.
     */
     get EffectiveAsOf(): Date | null {
         return this.Get('EffectiveAsOf');
@@ -78284,7 +78335,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ComputedAt
     * * Display Name: Computed At
     * * SQL Data Type: datetimeoffset
-    * * Description: Timestamp when the feature value was computed.
+    * * Description: Timestamp when this feature value was computed.
     */
     get ComputedAt(): Date {
         return this.Get('ComputedAt');
@@ -78294,10 +78345,23 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     }
 
     /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the scoring binding whose prediction this value represents.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
     * * Field Name: MLModelID
     * * Display Name: ML Model ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Reference identifier of the ML model that produced this feature score, if applicable.
+    * * Description: Identifier of the ML model that scored this value.
     */
     get MLModelID(): string | null {
         return this.Get('MLModelID');
@@ -78307,15 +78371,41 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     }
 
     /**
+    * * Field Name: MLScoringRunID
+    * * Display Name: ML Scoring Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the ML scoring run that computed this value.
+    */
+    get MLScoringRunID(): string | null {
+        return this.Get('MLScoringRunID');
+    }
+    set MLScoringRunID(value: string | null) {
+        this.Set('MLScoringRunID', value);
+    }
+
+    /**
+    * * Field Name: InTraining
+    * * Display Name: In Training
+    * * SQL Data Type: bit
+    * * Description: Indicates whether this record was included in the model's training snapshot.
+    */
+    get InTraining(): boolean | null {
+        return this.Get('InTraining');
+    }
+    set InTraining(value: boolean | null) {
+        this.Set('InTraining', value);
+    }
+
+    /**
     * * Field Name: RecordProcessID
     * * Display Name: Record Process ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Reference identifier of the Record Process (Feature Pipeline) that generated this value.
+    * * Description: Identifier of the Record Process (Feature Pipeline) that computed this feature value.
     */
-    get RecordProcessID(): string {
+    get RecordProcessID(): string | null {
         return this.Get('RecordProcessID');
     }
-    set RecordProcessID(value: string) {
+    set RecordProcessID(value: string | null) {
         this.Set('RecordProcessID', value);
     }
 
@@ -78323,7 +78413,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueText
     * * Display Name: Value (Text)
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Computed value represented as text or categorical string.
+    * * Description: Computed feature value as text, for textual or categorical features.
     */
     get ValueText(): string | null {
         return this.Get('ValueText');
@@ -78336,7 +78426,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueNumeric
     * * Display Name: Value (Numeric)
     * * SQL Data Type: float(53)
-    * * Description: Computed value represented as a numeric floating-point number.
+    * * Description: Computed feature value as a floating-point numeric score or metric.
     */
     get ValueNumeric(): number | null {
         return this.Get('ValueNumeric');
@@ -78349,7 +78439,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueDate
     * * Display Name: Value (Date)
     * * SQL Data Type: datetimeoffset
-    * * Description: Computed value represented as a date/time timestamp.
+    * * Description: Computed feature value formatted as a date/time timestamp.
     */
     get ValueDate(): Date | null {
         return this.Get('ValueDate');
@@ -78362,7 +78452,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueBoolean
     * * Display Name: Value (Boolean)
     * * SQL Data Type: bit
-    * * Description: Computed value represented as a boolean flag.
+    * * Description: Computed feature value as a boolean true/false flag.
     */
     get ValueBoolean(): boolean | null {
         return this.Get('ValueBoolean');
@@ -78375,7 +78465,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueJSON
     * * Display Name: Value (JSON)
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Computed value represented as a JSON document or structure.
+    * * Description: Computed feature value as structured JSON data.
     */
     get ValueJSON(): string | null {
         return this.Get('ValueJSON');
@@ -78388,7 +78478,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: Confidence
     * * Display Name: Confidence
     * * SQL Data Type: float(53)
-    * * Description: Confidence score associated with this computed value.
+    * * Description: Optional confidence score associated with this computed feature value.
     */
     get Confidence(): number | null {
         return this.Get('Confidence');
@@ -82560,7 +82650,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The person who approved, when ApproverKind is user.
@@ -82728,7 +82818,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: SignOffID
-    * * Display Name: Sign Off
+    * * Display Name: Sign-Off
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
     * * Description: Publish rows: the human sign-off this publish consumed, when one was required.
@@ -82756,7 +82846,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: Refusal
-    * * Display Name: Refusal
+    * * Display Name: Refusal Details
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJMLModelPublishRecordEntity_TransitionRefusal
     * * Description: Refusal rows: JSON TransitionRefusal, the reason the attempt was refused.
@@ -82819,7 +82909,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Details
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -82833,7 +82923,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
  * * Schema: __mj
  * * Base Table: MLModelScoringBinding
  * * Base View: vwMLModelScoringBindings
- * * @description Binds an MLModel to where it scores, so staleness can be detected and retraining driven (maintenance). The scoring itself runs as a Record Process (the new ML inference work type); the binding records the target entity/column written and the scoring mode. MaterializedResultID is a forward-compatible SOFT reference to MJ: Materialized Results (PR #2770), not yet a FK because that table is not merged.
+ * * @description Defines a prediction feature: the training pipeline whose Published model scores, the entity whose records it scores and the feature name its predictions are stored under as Feature Values. Optionally copies the newest value into an existing column. Who may see the predictions is ViewAuthorizationID.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -82872,20 +82962,6 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
-    * * Field Name: MLModelID
-    * * Display Name: ML Model ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
-    * * Description: Foreign key to the MLModel that does the scoring
-    */
-    get MLModelID(): string {
-        return this.Get('MLModelID');
-    }
-    set MLModelID(value: string) {
-        this.Set('MLModelID', value);
-    }
-
-    /**
     * * Field Name: RecordProcessID
     * * Display Name: Record Process ID
     * * SQL Data Type: uniqueidentifier
@@ -82917,7 +82993,7 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     * * Field Name: TargetColumn
     * * Display Name: Target Column
     * * SQL Data Type: nvarchar(255)
-    * * Description: Name of the column that receives the prediction (when scores are written back / materialized)
+    * * Description: Name of an existing column of the target entity that also receives the newest prediction; NULL stores the predictions as Feature Values only.
     */
     get TargetColumn(): string | null {
         return this.Get('TargetColumn');
@@ -82933,29 +83009,15 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     * * Default Value: OnDemand
     * * Value List Type: List
     * * Possible Values 
-    *   * Materialized
     *   * OnDemand
     *   * Scheduled
-    * * Description: Scoring mode: OnDemand, Scheduled, or Materialized
+    * * Description: Scoring mode: OnDemand or Scheduled.
     */
-    get Mode(): 'Materialized' | 'OnDemand' | 'Scheduled' {
+    get Mode(): 'OnDemand' | 'Scheduled' {
         return this.Get('Mode');
     }
-    set Mode(value: 'Materialized' | 'OnDemand' | 'Scheduled') {
+    set Mode(value: 'OnDemand' | 'Scheduled') {
         this.Set('Mode', value);
-    }
-
-    /**
-    * * Field Name: MaterializedResultID
-    * * Display Name: Materialized Result ID
-    * * SQL Data Type: uniqueidentifier
-    * * Description: Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists
-    */
-    get MaterializedResultID(): string | null {
-        return this.Get('MaterializedResultID');
-    }
-    set MaterializedResultID(value: string | null) {
-        this.Set('MaterializedResultID', value);
     }
 
     /**
@@ -83005,6 +83067,91 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
+    * * Field Name: MLTrainingPipelineID
+    * * Display Name: ML Training Pipeline
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: The training pipeline whose Published model scores for this binding; publishing a new version needs no binding change.
+    */
+    get MLTrainingPipelineID(): string {
+        return this.Get('MLTrainingPipelineID');
+    }
+    set MLTrainingPipelineID(value: string) {
+        this.Set('MLTrainingPipelineID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The feature name the predictions are stored under, unique on the target entity.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: TargetColumnSource
+    * * Display Name: Target Column Source
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The result reference ($.Value, $.Class, $.AdverseProbability or $.Probabilities.<class>) the column copy writes into TargetColumn; required when TargetColumn is set.
+    */
+    get TargetColumnSource(): string | null {
+        return this.Get('TargetColumnSource');
+    }
+    set TargetColumnSource(value: string | null) {
+        this.Set('TargetColumnSource', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Withdrawn
+    * * Description: Active or Withdrawn. A withdrawn binding no longer scores, and the column copies it made are cleared; its Feature Values stay.
+    */
+    get Status(): 'Active' | 'Withdrawn' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Withdrawn') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ViewAuthorizationID
+    * * Display Name: View Authorization
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)
+    * * Description: The authorization a user must hold to see this binding's predictions; a binding with none is visible to no user.
+    */
+    get ViewAuthorizationID(): string | null {
+        return this.Get('ViewAuthorizationID');
+    }
+    set ViewAuthorizationID(value: string | null) {
+        this.Set('ViewAuthorizationID', value);
+    }
+
+    /**
+    * * Field Name: RetentionDays
+    * * Display Name: Retention Days
+    * * SQL Data Type: int
+    * * Description: Days of prediction history kept; NULL keeps all of it.
+    */
+    get RetentionDays(): number | null {
+        return this.Get('RetentionDays');
+    }
+    set RetentionDays(value: number | null) {
+        this.Set('RetentionDays', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -83020,6 +83167,24 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     */
     get TargetEntity(): string | null {
         return this.Get('TargetEntity');
+    }
+
+    /**
+    * * Field Name: MLTrainingPipeline
+    * * Display Name: ML Training Pipeline Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLTrainingPipeline(): string | null {
+        return this.Get('MLTrainingPipeline');
+    }
+
+    /**
+    * * Field Name: ViewAuthorization
+    * * Display Name: View Authorization Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ViewAuthorization(): string | null {
+        return this.Get('ViewAuthorization');
     }
 }
 
@@ -83415,7 +83580,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: PredictionUnitID
-    * * Display Name: Prediction Unit ID
+    * * Display Name: Prediction Unit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
     * * Description: The Prediction Unit version the model was trained under (the exact version row).
@@ -83429,7 +83594,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: EvaluationProtocolID
-    * * Display Name: Evaluation Protocol ID
+    * * Display Name: Evaluation Protocol
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
     * * Description: The Evaluation Protocol version the model was graded under (the exact version row).
@@ -83443,7 +83608,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingSnapshotID
-    * * Display Name: Training Snapshot ID
+    * * Display Name: Training Snapshot
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
     * * Description: The Training Snapshot the model was trained on.
@@ -83457,7 +83622,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingRunID
-    * * Display Name: Training Run ID
+    * * Display Name: Training Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
     * * Description: The training run that produced the model.
@@ -83685,7 +83850,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: PredictionUnit
-    * * Display Name: Prediction Unit
+    * * Display Name: Prediction Unit Name
     * * SQL Data Type: nvarchar(255)
     */
     get PredictionUnit(): string | null {
@@ -83694,7 +83859,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: EvaluationProtocol
-    * * Display Name: Evaluation Protocol
+    * * Display Name: Evaluation Protocol Name
     * * SQL Data Type: nvarchar(255)
     */
     get EvaluationProtocol(): string | null {
@@ -83703,7 +83868,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingSnapshot
-    * * Display Name: Training Snapshot
+    * * Display Name: Training Snapshot Name
     * * SQL Data Type: nvarchar(64)
     */
     get TrainingSnapshot(): string | null {
@@ -84839,7 +85004,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
 
     /**
     * * Field Name: Refusal
-    * * Display Name: Refusal Details
+    * * Display Name: Refusal
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON ScoringRefusal when the run was refused.
     */
@@ -84995,7 +85160,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Name
+    * * Display Name: Scheduled Job Run Details
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {

@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="recordContext"
         SectionName="Record Context"
-        Icon="fa-solid fa-database"
+        Icon="fa-solid fa-bullseye"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -44,14 +44,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Role"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="EffectiveAsOf"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -72,14 +64,30 @@
     <mj-collapsible-panel
         SectionKey="featureDetails"
         SectionName="Feature Details"
-        Icon="fa-solid fa-cube"
+        Icon="fa-solid fa-sliders"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="FeatureName"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Role"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Confidence"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -96,8 +104,32 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="MLModelScoringBindingID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="MLModelID"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MLScoringRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="InTraining"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -116,7 +148,7 @@
     <mj-collapsible-panel
         SectionKey="featureValues"
         SectionName="Feature Values"
-        Icon="fa-solid fa-list-check"
+        Icon="fa-solid fa-square-root-variable"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -156,24 +188,6 @@
             [ShowLabel]="true"
             FieldName="ValueJSON"
             Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- AI Insights Section -->
-    <mj-collapsible-panel
-        SectionKey="aIInsights"
-        SectionName="AI Insights"
-        Icon="fa-solid fa-brain"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="Confidence"
-            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

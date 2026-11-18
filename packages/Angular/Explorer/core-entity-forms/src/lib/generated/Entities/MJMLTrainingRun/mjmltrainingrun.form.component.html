@@ -234,6 +234,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- ML Model Publish Records Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLModelPublishRecords"
+        SectionName="ML Model Publish Records"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLModelPublishRecords')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Publish Records','TrainingRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Publish Records','TrainingRunID')"
+                [AllowLoad]="IsSectionExpanded('mJMLModelPublishRecords')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLModelPublishRecords', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- ML Models Section -->
     <mj-collapsible-panel
         SectionKey="mJMLModels"
@@ -278,31 +303,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLMonitoringResults', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- ML Model Publish Records Section -->
-    <mj-collapsible-panel
-        SectionKey="mJMLModelPublishRecords"
-        SectionName="ML Model Publish Records"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLModelPublishRecords')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Publish Records','TrainingRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Publish Records','TrainingRunID')"
-                [AllowLoad]="IsSectionExpanded('mJMLModelPublishRecords')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLModelPublishRecords', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

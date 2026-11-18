@@ -60532,6 +60532,17 @@ export class MJFeatureValue_ {
     @MaxLength(36)
     MLModelID?: string;
         
+    @Field({nullable: true, description: "The scoring binding whose prediction this is; set on every Model row and on a person's value entered on a binding."}) 
+    @MaxLength(36)
+    MLModelScoringBindingID?: string;
+        
+    @Field({nullable: true, description: "The scoring run that wrote this Model row."}) 
+    @MaxLength(36)
+    MLScoringRunID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "Model rows: true when the record was in the model's training snapshot, so its score is optimistic."}) 
+    InTraining?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -60556,6 +60567,10 @@ export class MJFeatureValue_ {
     @MaxLength(50)
     AIModel?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    MLModelScoringBinding?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -60570,7 +60585,7 @@ export class CreateMJFeatureValueInput {
     ID?: string;
 
     @Field({ nullable: true })
-    RecordProcessID?: string;
+    RecordProcessID: string | null;
 
     @Field({ nullable: true })
     EntityID?: string;
@@ -60656,6 +60671,15 @@ export class CreateMJFeatureValueInput {
     @Field({ nullable: true })
     MLModelID: string | null;
 
+    @Field({ nullable: true })
+    MLModelScoringBindingID: string | null;
+
+    @Field({ nullable: true })
+    MLScoringRunID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InTraining: boolean | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -60670,7 +60694,7 @@ export class UpdateMJFeatureValueInput {
     ID: string;
 
     @Field({ nullable: true })
-    RecordProcessID?: string;
+    RecordProcessID?: string | null;
 
     @Field({ nullable: true })
     EntityID?: string;
@@ -60755,6 +60779,15 @@ export class UpdateMJFeatureValueInput {
 
     @Field({ nullable: true })
     MLModelID?: string | null;
+
+    @Field({ nullable: true })
+    MLModelScoringBindingID?: string | null;
+
+    @Field({ nullable: true })
+    MLScoringRunID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InTraining?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68220,15 +68253,15 @@ export class MJKnowledgeHubSavedSearchResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: "The latest value of each record's feature: one row per entity, record and feature name, the newest Champion Feature Value by effective date, then computation time. Read-only." })
 export class MJvwLatestFeatureValues_ {
-    @Field({description: "Unique identifier for the underlying champion feature value record."}) 
+    @Field({description: "Unique identifier for this feature value record, matching the source FeatureValue.ID."}) 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: "Identifier of the entity that this feature value belongs to."}) 
+    @Field({nullable: true, description: "The entity ID of the record this feature was computed for."}) 
     @MaxLength(36)
     EntityID?: string;
         
-    @Field({nullable: true, description: "Serialized primary key of the target record this feature was computed for."}) 
+    @Field({nullable: true, description: "Serialized primary key of the record this feature value belongs to."}) 
     @MaxLength(900)
     RecordID?: string;
         
@@ -68236,7 +68269,7 @@ export class MJvwLatestFeatureValues_ {
     @MaxLength(255)
     FeatureName?: string;
         
-    @Field({nullable: true, description: "Origin of the feature value (e.g., Pipeline or Human)."}) 
+    @Field({nullable: true, description: "Who produced the value (e.g., Pipeline, Human, Model)."}) 
     @MaxLength(20)
     Source?: string;
         
@@ -68244,36 +68277,47 @@ export class MJvwLatestFeatureValues_ {
     @MaxLength(20)
     Role?: string;
         
-    @Field({nullable: true, description: "Timestamp indicating the point in time from which this feature value is considered effective."}) 
+    @Field({nullable: true, description: "Timestamp from which this value is considered effective for the feature."}) 
     EffectiveAsOf?: Date;
         
-    @Field({nullable: true, description: "Timestamp when the feature value was computed."}) 
+    @Field({nullable: true, description: "Timestamp when this feature value was computed."}) 
     ComputedAt?: Date;
         
-    @Field({nullable: true, description: "Reference identifier of the ML model that produced this feature score, if applicable."}) 
+    @Field({nullable: true, description: "Identifier of the scoring binding whose prediction this value represents."}) 
+    @MaxLength(36)
+    MLModelScoringBindingID?: string;
+        
+    @Field({nullable: true, description: "Identifier of the ML model that scored this value."}) 
     @MaxLength(36)
     MLModelID?: string;
         
-    @Field({nullable: true, description: "Reference identifier of the Record Process (Feature Pipeline) that generated this value."}) 
+    @Field({nullable: true, description: "Identifier of the ML scoring run that computed this value."}) 
+    @MaxLength(36)
+    MLScoringRunID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "Indicates whether this record was included in the model's training snapshot."}) 
+    InTraining?: boolean;
+        
+    @Field({nullable: true, description: "Identifier of the Record Process (Feature Pipeline) that computed this feature value."}) 
     @MaxLength(36)
     RecordProcessID?: string;
         
-    @Field({nullable: true, description: "Computed value represented as text or categorical string."}) 
+    @Field({nullable: true, description: "Computed feature value as text, for textual or categorical features."}) 
     ValueText?: string;
         
-    @Field(() => Float, {nullable: true, description: "Computed value represented as a numeric floating-point number."}) 
+    @Field(() => Float, {nullable: true, description: "Computed feature value as a floating-point numeric score or metric."}) 
     ValueNumeric?: number;
         
-    @Field({nullable: true, description: "Computed value represented as a date/time timestamp."}) 
+    @Field({nullable: true, description: "Computed feature value formatted as a date/time timestamp."}) 
     ValueDate?: Date;
         
-    @Field(() => Boolean, {nullable: true, description: "Computed value represented as a boolean flag."}) 
+    @Field(() => Boolean, {nullable: true, description: "Computed feature value as a boolean true/false flag."}) 
     ValueBoolean?: boolean;
         
-    @Field({nullable: true, description: "Computed value represented as a JSON document or structure."}) 
+    @Field({nullable: true, description: "Computed feature value as structured JSON data."}) 
     ValueJSON?: string;
         
-    @Field(() => Float, {nullable: true, description: "Confidence score associated with this computed value."}) 
+    @Field(() => Float, {nullable: true, description: "Optional confidence score associated with this computed feature value."}) 
     Confidence?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
@@ -72809,15 +72853,11 @@ export class MJMLModelPublishRecordResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: ML Model Scoring Bindings
 //****************************************************************************
-@ObjectType({ description: "Binds an MLModel to where it scores, so staleness can be detected and retraining driven (maintenance). The scoring itself runs as a Record Process (the new ML inference work type); the binding records the target entity/column written and the scoring mode. MaterializedResultID is a forward-compatible SOFT reference to MJ: Materialized Results (PR #2770), not yet a FK because that table is not merged." })
+@ObjectType({ description: "Defines a prediction feature: the training pipeline whose Published model scores, the entity whose records it scores and the feature name its predictions are stored under as Feature Values. Optionally copies the newest value into an existing column. Who may see the predictions is ViewAuthorizationID." })
 export class MJMLModelScoringBinding_ {
     @Field() 
     @MaxLength(36)
     ID: string;
-        
-    @Field({nullable: true, description: "Foreign key to the MLModel that does the scoring"}) 
-    @MaxLength(36)
-    MLModelID?: string;
         
     @Field({nullable: true, description: "Foreign key to the Record Process that runs the ML inference work for this binding"}) 
     @MaxLength(36)
@@ -72827,17 +72867,13 @@ export class MJMLModelScoringBinding_ {
     @MaxLength(36)
     TargetEntityID?: string;
         
-    @Field({nullable: true, description: "Name of the column that receives the prediction (when scores are written back / materialized)"}) 
+    @Field({nullable: true, description: "Name of an existing column of the target entity that also receives the newest prediction; NULL stores the predictions as Feature Values only."}) 
     @MaxLength(255)
     TargetColumn?: string;
         
-    @Field({nullable: true, description: "Scoring mode: OnDemand, Scheduled, or Materialized"}) 
+    @Field({nullable: true, description: "Scoring mode: OnDemand or Scheduled."}) 
     @MaxLength(20)
     Mode?: string;
-        
-    @Field({nullable: true, description: "Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists"}) 
-    @MaxLength(36)
-    MaterializedResultID?: string;
         
     @Field({nullable: true, description: "Timestamp of the most recent scoring run for this binding"}) 
     LastScoredAt?: Date;
@@ -72851,6 +72887,29 @@ export class MJMLModelScoringBinding_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "The training pipeline whose Published model scores for this binding; publishing a new version needs no binding change."}) 
+    @MaxLength(36)
+    MLTrainingPipelineID?: string;
+        
+    @Field({nullable: true, description: "The feature name the predictions are stored under, unique on the target entity."}) 
+    @MaxLength(255)
+    FeatureName?: string;
+        
+    @Field({nullable: true, description: "The result reference ($.Value, $.Class, $.AdverseProbability or $.Probabilities.<class>) the column copy writes into TargetColumn; required when TargetColumn is set."}) 
+    @MaxLength(255)
+    TargetColumnSource?: string;
+        
+    @Field({nullable: true, description: "Active or Withdrawn. A withdrawn binding no longer scores, and the column copies it made are cleared; its Feature Values stay."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "The authorization a user must hold to see this binding's predictions; a binding with none is visible to no user."}) 
+    @MaxLength(36)
+    ViewAuthorizationID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Days of prediction history kept; NULL keeps all of it."}) 
+    RetentionDays?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -72858,6 +72917,14 @@ export class MJMLModelScoringBinding_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     TargetEntity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    MLTrainingPipeline?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ViewAuthorization?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -72873,9 +72940,6 @@ export class CreateMJMLModelScoringBindingInput {
     ID?: string;
 
     @Field({ nullable: true })
-    MLModelID?: string;
-
-    @Field({ nullable: true })
     RecordProcessID: string | null;
 
     @Field({ nullable: true })
@@ -72888,13 +72952,28 @@ export class CreateMJMLModelScoringBindingInput {
     Mode?: string;
 
     @Field({ nullable: true })
-    MaterializedResultID: string | null;
-
-    @Field({ nullable: true })
     LastScoredAt: Date | null;
 
     @Field(() => Int, { nullable: true })
     LastRowCount: number | null;
+
+    @Field({ nullable: true })
+    MLTrainingPipelineID?: string;
+
+    @Field({ nullable: true })
+    FeatureName?: string;
+
+    @Field({ nullable: true })
+    TargetColumnSource: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ViewAuthorizationID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetentionDays: number | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -72910,9 +72989,6 @@ export class UpdateMJMLModelScoringBindingInput {
     ID: string;
 
     @Field({ nullable: true })
-    MLModelID?: string;
-
-    @Field({ nullable: true })
     RecordProcessID?: string | null;
 
     @Field({ nullable: true })
@@ -72925,13 +73001,28 @@ export class UpdateMJMLModelScoringBindingInput {
     Mode?: string;
 
     @Field({ nullable: true })
-    MaterializedResultID?: string | null;
-
-    @Field({ nullable: true })
     LastScoredAt?: Date | null;
 
     @Field(() => Int, { nullable: true })
     LastRowCount?: number | null;
+
+    @Field({ nullable: true })
+    MLTrainingPipelineID?: string;
+
+    @Field({ nullable: true })
+    FeatureName?: string;
+
+    @Field({ nullable: true })
+    TargetColumnSource?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ViewAuthorizationID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetentionDays?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -18,7 +18,8 @@ export class MJMLModelPublishRecordFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'publishReferences', sectionName: 'Publish References', isExpanded: true },
             { sectionKey: 'publishDetails', sectionName: 'Publish Details', isExpanded: true },
-            { sectionKey: 'auditAndDecisions', sectionName: 'Audit and Decisions', isExpanded: true },
+            { sectionKey: 'authorizationAndActors', sectionName: 'Authorization and Actors', isExpanded: true },
+            { sectionKey: 'decisionAndEvaluation', sectionName: 'Decision and Evaluation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false }
         ]);

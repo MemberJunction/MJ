@@ -19,7 +19,9 @@ export class MJMLModelScoringBindingFormComponent extends BaseFormComponent {
             { sectionKey: 'bindingConfiguration', sectionName: 'Binding Configuration', isExpanded: true },
             { sectionKey: 'targetDestination', sectionName: 'Target Destination', isExpanded: true },
             { sectionKey: 'executionMetrics', sectionName: 'Execution Metrics', isExpanded: true },
+            { sectionKey: 'securityAndRetention', sectionName: 'Security and Retention', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
             { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
         ]);
     }

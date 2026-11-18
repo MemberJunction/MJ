@@ -82,6 +82,32 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="RecordedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Transient"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Authorization and Actors Section -->
+    <mj-collapsible-panel
+        SectionKey="authorizationAndActors"
+        SectionName="Authorization and Actors"
+        Icon="fa fa-user-shield"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="ApproverKind"
             Type="textbox"
             [EditMode]="EditMode"
@@ -104,22 +130,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RecordedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Audit and Decisions Section -->
+    <!-- Decision and Evaluation Section -->
     <mj-collapsible-panel
-        SectionKey="auditAndDecisions"
-        SectionName="Audit and Decisions"
-        Icon="fa fa-shield-alt"
+        SectionKey="decisionAndEvaluation"
+        SectionName="Decision and Evaluation"
+        Icon="fa fa-clipboard-check"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -175,14 +193,6 @@
             [ShowLabel]="true"
             FieldName="Refusal"
             Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Transient"
-            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

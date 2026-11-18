@@ -15,7 +15,7 @@ export class MJMLOutputBindingFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'mLOutputConfiguration', sectionName: 'ML Output Configuration', isExpanded: true },
+            { sectionKey: 'modelBindingConfiguration', sectionName: 'Model Binding Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

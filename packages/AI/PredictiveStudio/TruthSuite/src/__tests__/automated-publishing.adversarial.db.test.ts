@@ -146,8 +146,9 @@ const MIGRATIONS_V6 = new URL('../../../../../../migrations/v6/', import.meta.ur
  * The procedure's model step for the models in `@MLModelIDs`, verbatim from the migration (each is checked against it):
  * the runs that name a model let go of it, the publish records of the models and the run-level refusals go (the
  * `@PipelineIDs` half matches nothing: the case deletes one model, never its pipeline), the references from surviving
- * records are cleared, and the models' Feature Values, output bindings, scoring runs, monitoring results and scoring
- * bindings go. The procedure then deletes models by pipeline; for one model the last statement is {@link MODEL_ROW_DELETE}.
+ * records are cleared, and the models' Feature Values, output bindings, scoring runs (with the Feature Values they
+ * wrote) and monitoring results go. Scoring bindings belong to the pipeline, not the model, so the model step leaves
+ * them. The procedure then deletes models by pipeline; for one model the last statement is {@link MODEL_ROW_DELETE}.
  */
 const MODEL_STEP: readonly string[] = [
   'UPDATE [${flyway:defaultSchema}].[MLTrainingRun] SET [ResultingModelID] = NULL WHERE [ResultingModelID] IN (SELECT ID FROM @MLModelIDs);',
@@ -155,9 +156,9 @@ const MODEL_STEP: readonly string[] = [
   "DELETE FROM [${flyway:defaultSchema}].[FeatureValue] WHERE [Source] = N'Model' AND [MLModelID] IN (SELECT ID FROM @MLModelIDs);",
   'UPDATE [${flyway:defaultSchema}].[FeatureValue] SET [MLModelID] = NULL WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs);',
   'DELETE FROM [${flyway:defaultSchema}].[MLOutputBinding] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs);',
+  'DELETE FROM [${flyway:defaultSchema}].[FeatureValue] WHERE [MLScoringRunID] IN (SELECT ID FROM [${flyway:defaultSchema}].[MLScoringRun] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs));',
   'DELETE FROM [${flyway:defaultSchema}].[MLScoringRun] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs);',
   'DELETE FROM [${flyway:defaultSchema}].[MLMonitoringResult] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs);',
-  'DELETE FROM [${flyway:defaultSchema}].[MLModelScoringBinding] WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs);',
 ];
 /** The model rows of `@MLModelIDs`: the procedure's `DELETE FROM [MLModel]` narrowed from the pipeline to the one model. */
 const MODEL_ROW_DELETE = 'DELETE FROM [${flyway:defaultSchema}].[MLModel] WHERE [ID] IN (SELECT ID FROM @MLModelIDs);';

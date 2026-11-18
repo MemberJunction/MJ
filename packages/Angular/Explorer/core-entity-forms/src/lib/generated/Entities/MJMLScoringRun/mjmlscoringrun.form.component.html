@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Model and Configuration Section -->
+    <!-- Model and Binding Details Section -->
     <mj-collapsible-panel
-        SectionKey="modelAndConfiguration"
-        SectionName="Model and Configuration"
+        SectionKey="modelAndBindingDetails"
+        SectionName="Model and Binding Details"
         Icon="fa fa-cube"
         [Form]="this"
         [FormContext]="formContext">
@@ -59,6 +59,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Scoring Scope and Execution Section -->
+    <mj-collapsible-panel
+        SectionKey="scoringScopeAndExecution"
+        SectionName="Scoring Scope and Execution"
+        Icon="fa fa-crosshairs"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -67,16 +77,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Scoring Scope and Parameters Section -->
-    <mj-collapsible-panel
-        SectionKey="scoringScopeAndParameters"
-        SectionName="Scoring Scope and Parameters"
-        Icon="fa fa-crosshairs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -137,10 +137,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Request and Execution Context Section -->
+    <!-- Execution Request and Context Section -->
     <mj-collapsible-panel
-        SectionKey="requestAndExecutionContext"
-        SectionName="Request and Execution Context"
+        SectionKey="executionRequestAndContext"
+        SectionName="Execution Request and Context"
         Icon="fa fa-user-clock"
         [Form]="this"
         [FormContext]="formContext">
@@ -182,10 +182,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Status and Results Section -->
+    <!-- Run Results and Status Section -->
     <mj-collapsible-panel
-        SectionKey="statusAndResults"
-        SectionName="Status and Results"
+        SectionKey="runResultsAndStatus"
+        SectionName="Run Results and Status"
         Icon="fa fa-chart-bar"
         [Form]="this"
         [FormContext]="formContext">
@@ -291,6 +291,35 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Feature Values Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeatureValues"
+        SectionName="Feature Values"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeatureValues')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Values','MLScoringRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Values','MLScoringRunID')"
+                [AllowLoad]="IsSectionExpanded('mJFeatureValues')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeatureValues', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>

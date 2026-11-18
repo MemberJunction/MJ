@@ -188,7 +188,7 @@ Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you di
   `scripts/sidecar.mts` sets it to the checkout's `git rev-parse HEAD` when the caller did not (M2's exit), so every
   start path, `HarnessSidecar.Restart` included, records the real SHA. Models trained before M2's exit record
   `"unrecorded"`.
-- The TruthSuite DB lane (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && STORAGE_LOCAL_ROOT=$HOME/.mj-ps/pr4-${AGENT}/storage pnpm run test:db -- <filter>'`)
+- The TruthSuite DB lane (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && STORAGE_LOCAL_ROOT=$HOME/.mj-ps/pr4-${AGENT}/storage pnpm run test:db <filter>'`)
   runs every DB-lane file whatever the filter (`vitest.db.config.ts`; four files at M2: isolation 2, serving-schema 21,
   artifact-registry 13, dataset-loader 2 = 38), and it loads Engine's `dist`, not its `src`: rebuild Engine
   (`cd packages/AI/PredictiveStudio/Engine && pnpm run build`) after any Engine change, and after each guard flip and
@@ -6026,7 +6026,7 @@ M1's sections, then the regenerated tail) · Modify (CodeGen output only) `packa
 `MLModelScoringBindingID`, `MLScoringRunID`, `InTraining`, `RecordProcessID: string | null` and `Source` including
 `'Model'`; the `MJ: Latest Feature Values` class with the three lineage getters
 
-- [ ] Step 1: Write the failing DB cases (TruthSuite DB lane; generated entities through `BootstrapIntegrationServer()`'s
+- [x] Step 1: Write the failing DB cases (TruthSuite DB lane; generated entities through `BootstrapIntegrationServer()`'s
   provider, raw SQL only through `TruthConnection.OpenPool()` for a constraint the API cannot reach):
   ```ts
   describe('model Feature Values carry their lineage', () => {
@@ -6059,9 +6059,9 @@ M1's sections, then the regenerated tail) · Modify (CodeGen output only) `packa
   ```
   (`NewModelRow`, `NewHumanRow`, `RawInsertFeatureValue` are the file's own helpers over `MJFeatureValueEntity` and the
   raw pool; `LatestRows` is the M1 file's helper, imported.)
-- [ ] Step 2: `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- scoring-service'`
+- [x] Step 2: `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db scoring-service'`
   → fails to compile: `MJFeatureValueEntity` has no `MLScoringRunID`.
-- [ ] Step 3: Run the read-only checks first and record their outcomes in §9.1 and §11: A-FV-BINDINGS
+- [x] Step 3: Run the read-only checks first and record their outcomes in §9.1 and §11: A-FV-BINDINGS
   (`SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE TargetEntityID IS NULL OR Mode = 'Materialized' OR MaterializedResultID IS NOT NULL`
   on the agent's database → expected 0; a non-zero count is handled by the data section below). Then write the new
   hand-written section, in this order, every string column `COLLATE SQL_Latin1_General_CP1_CI_AS`, no plan vocabulary
@@ -6089,10 +6089,10 @@ M1's sections, then the regenerated tail) · Modify (CodeGen output only) `packa
   database holds the old one) → `mj sync push` → `mj codegen` → `pnpm run build`; the
   `__mj.ts` getters of `MJFeatureValueEntity`, `MJMLModelScoringBindingEntity` and the latest-value class are diffed
   against the two views' column lists.
-- [ ] Step 4: Step 2's command → the six cases pass; `node .github/scripts/check-migration-entityfield-sequence.mjs` →
+- [x] Step 4: Step 2's command → the six cases pass; `node .github/scripts/check-migration-entityfield-sequence.mjs` →
   exit 0; `npm run check:codegen-tail` → exit 0; A-078 → `git grep -ci "1AC777D7-EEE8-485F-83DB-2127DBB4BFB7" HEAD -- "$OURS"`
   ≥ 1 + 19 (A-6180-COLUMNS retired, D4-79).
-- [ ] Step 5: Runtime (`sqlcmd` with the env loaded): `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.MLModelScoringBinding') AND name IN ('MLModelID','MaterializedResultID')`
+- [x] Step 5: Runtime (`sqlcmd` with the env loaded): `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.MLModelScoringBinding') AND name IN ('MLModelID','MaterializedResultID')`
   → 0; `SELECT is_nullable FROM sys.columns WHERE object_id = OBJECT_ID('__mj.FeatureValue') AND name = 'RecordProcessID'`
   → 1; `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.vwLatestFeatureValues')` → 19;
   `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE MLTrainingPipelineID IS NULL OR FeatureName IS NULL` → 0; on
@@ -6119,13 +6119,13 @@ rewritten ("Nullable since a Model row carries none; a Pipeline row without its 
 CK_FeatureValue_SourceLineage, so the process's rows are deleted."). `MLModelScoringBinding.ViewAuthorizationID` needs
 none: the procedure deletes from no `[Authorization]` row. `references` stays at M1's 95 (D4-74).
 
-- [ ] Step 1: The failing test is the shipped one: after Task M5.1's CodeGen, `cd packages/CodeGenLib && pnpm test`.
-- [ ] Step 2: Expected failures: `has a dependents entry for every generated FK into a table the proc deletes from`
+- [x] Step 1: The failing test is the shipped one: after Task M5.1's CodeGen, `cd packages/CodeGenLib && pnpm test`.
+- [x] Step 2: Expected failures: `has a dependents entry for every generated FK into a table the proc deletes from`
   (`delete-entity-fk-coverage.test.ts:181-205` on `599c288dee`, three `expect`s in order) fails first on the three
   missing keys, then, once they are added, on the `FeatureValue.RecordProcessID` nullability drift, then on the stale
   `MLModelScoringBinding.MLModelID` entry; `carries out every dependents entry before deleting the parent rows` (`:225`)
   fails until the procedure's new deletes precede the `MLScoringRun` and `MLModelScoringBinding` deletes.
-- [ ] Step 3: Edit the four entries above, and re-create the procedure in section (7) with `CREATE OR ALTER PROC` = M1's
+- [x] Step 3: Edit the four entries above, and re-create the procedure in section (7) with `CREATE OR ALTER PROC` = M1's
   whole body with these changes: before M1's `DELETE FROM … [MLScoringRun] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs)`,
   ```sql
   DELETE FROM [${flyway:defaultSchema}].[FeatureValue] WHERE [MLScoringRunID] IN (SELECT ID FROM [${flyway:defaultSchema}].[MLScoringRun] WHERE [ModelID] IN (SELECT ID FROM @MLModelIDs));
@@ -6141,11 +6141,11 @@ none: the procedure deletes from no `[Authorization]` row. `references` stays at
   DELETE FROM [${flyway:defaultSchema}].[MLModelScoringBinding] WHERE [MLTrainingPipelineID] IN (SELECT ID FROM @PipelineIDs);
   ```
   M1's `Source = N'Model'` delete stays before its `MLModelID` `UPDATE` (D4-32).
-- [ ] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
+- [x] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
   measured at M5 (the local tree's CodeGenLib differs from `599c288dee`: `git -C $MJ diff --stat HEAD origin/next -- packages/CodeGenLib`
   → 6 files changed); A-6180-DELETE-PROC → the training-snapshot step, the `Source = N'Model'` `DELETE` before the
   `MLModelID` `UPDATE`, and PR 4's body ⊇ `V202611101901`'s (D4-79).
-- [ ] Step 5: Runtime on a scratch copy: an entity whose pipeline has a Published model, a binding with `Model` rows of
+- [x] Step 5: Runtime on a scratch copy: an entity whose pipeline has a Published model, a binding with `Model` rows of
   two scoring runs, a binding `Human` row without a Record Process, and a scoring run scoped to the entity →
   `EXEC __mj.spDeleteEntityWithCoreDependencies @EntityID = '<the scratch entity>'` → exit 0;
   `SELECT COUNT(*) FROM __mj.FeatureValue WHERE MLModelScoringBindingID = '<binding>' OR MLScoringRunID IN ('<run1>','<run2>')`
@@ -6229,7 +6229,8 @@ deleted), `Engine/src/scoring/scoring-process-shared.ts`, `Engine/src/scoring/sc
 `viewAuthorizationId`), `Engine/src/maintenance/maintenance-engine.ts` (`:450` resolves the binding's pipeline's
 Published model; the module is deleted at M6) and `Engine/src/maintenance/types.ts` (`:214` `MaintenanceBindingMode`
 becomes `ScoringBindingMode`), `Engine/src/actions/schedule-model-scoring.action.ts`,
-`packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-production.component.ts` (bindings by
+`packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ml-model-form.component.{ts,html}` (the bindings
+section reads by pipeline, D4-148), `packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-production.component.ts` (bindings by
 pipeline; `ModeBadge`, `:906-908`, loses its `'Materialized'` branch), `…/PredictiveStudio/engine/predictive-studio.engine.ts`,
 `…/PredictiveStudio/production-distribution.ts` (`ModeBadgeClass`, `:290`, takes `MJMLModelScoringBindingEntity['Mode'] |
 null | undefined` and loses its `'Materialized'` case, `:294`; D-042, D4-69),
@@ -6859,7 +6860,7 @@ milestone; counts, cells and claims go to §11.
   refuses `artifact-unverified`), scored on the run date through a binding and through its Record Process — `a serving pre-change model of a unitless pipeline
   scores through the transform-only assembly and writes its rows` (D4-61); plus a record whose
   `RecordID` is a 900-character CompositeKey (A-FV-VOLUME's warning 1945: its batch fails loudly, D4-09).
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- scoring-service'`
+- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db scoring-service'`
   → every case as its cell says; counts measured at M5.
 - [ ] Step 3: The reviewer flips the M5 guards one at a time — each of checks 1–6; "any failed record fails the run";
   dry run writes 0; both `/predict` refusals (pytest); the newest-only copy rule; the human-value guard on the copy;
@@ -6888,7 +6889,7 @@ milestone; counts, cells and claims go to §11.
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Scoring"`
   → 6 passed, 0 failed; `… "Predictive Studio Gates — Registry and Gate"` → 9 (M4's count; serial order, D4-63; 5 under
   the parallel option until the sub-branches are merged), 0 failed.
-- The TruthSuite DB lanes `pnpm run test:db -- scoring-service` and `-- serving-schema` → 0 failed (counts measured at
+- The TruthSuite DB lanes `pnpm run test:db scoring-service` and `-- serving-schema` → 0 failed (counts measured at
   M5); `node .github/scripts/check-migration-entityfield-sequence.mjs`, `npm run check:codegen-tail`,
   `npm run check:guards`, `npm run check:standards`, `npm run check:ui` → exit 0; A-078 and
   A-6180-DELETE-PROC → PR 4's procedure body ⊇ `V202611101901`'s (§8.2: the two `awk` extracts, `diff` shows only
@@ -8990,7 +8991,7 @@ stays a per-milestone check wherever a milestone re-creates the procedure. The h
 **Prediction-serving checks (D-058, D-078).** Run on the PR's private database after M1 for the read-only ones, and as
 the first step of the milestone named.
 
-- [ ] **A-FV-AUTHZ Authorization semantics in SQL (M5).** The equivalence test of M5b's exit tests, run as soon as M5's
+- [x] **A-FV-AUTHZ Authorization semantics in SQL (M5).** The equivalence test of M5b's exit tests, run as soon as M5's
   migration extension creates `vwUserHeldAuthorizations` → 0 mismatches between the view and
   `EvaluateActionRunAuthorization` (`MJServer/src/auth/actionAuthorization.ts:46`) over the fixture matrix (Allow, Deny
   on the linked authorization, Deny on an ancestor, a three-level parent chain, an inactive authorization, an Owner). On
@@ -8998,11 +8999,12 @@ the first step of the milestone named.
   design's fallback; it needs an MJCore change to how RLS filter text is produced), recorded as a proposed program
   decision in §9.
   **Kickoff refresh 2026-11-10 @ `599c288dee`: scheduled: after M1 on `MJ_PS_PR4_claude`** (first step of the milestone named; the database does not exist yet).
-- [ ] **A-FV-VOLUME Feature Value volume, indexes and the view (M5).** Load 1M `Model` rows (100,000 records × 2
+- [x] **A-FV-VOLUME Feature Value volume, indexes and the view (M5).** Load 1M `Model` rows (100,000 records × 2
   bindings × 5 as-of dates) on the dev database; `SET STATISTICS IO, TIME ON` for the panel's latest read (through
   `vwLatestFeatureValues` with `EntityID`, `RecordID` filtered), an as-of read, the outcome join and the view's
   population-wide read of one feature (`SELECT … FROM __mj.vwLatestFeatureValues WHERE EntityID = @e AND FeatureName
-  = @f`) → the first three use `IX_FeatureValue_Record_Feature_AsOf` or `UQ_FeatureValue_ModelRow` as a seek and complete
+  = @f`) → the first three run as an index seek (the panel's read on PR 1's record index, the outcome join on
+  `IX_FeatureValue_Binding_AsOf`, D4-149) and complete
   under 200 ms (panel) / 60 s (outcome join for one model's period), and the population-wide read's time is recorded
   (D-078's residual: a DBA may later promote the query to a materialization under MJ's own process); record the timings and set the binding editor's default
   `RetentionDays` from them (null when the plans hold at 1M rows). Both indexes include `RecordID NVARCHAR(900)`, so
@@ -9014,7 +9016,7 @@ the first step of the milestone named.
   monitoring, parity and the retention sweep read every `Model` row; otherwise M5b grants the authorization to the
   system user's role in metadata.
   **Kickoff refresh 2026-11-10 @ `599c288dee`: scheduled: after M1 on `MJ_PS_PR4_claude`** (first step of the milestone named; the database does not exist yet).
-- [ ] **A-FV-BINDINGS Existing bindings (M5).** `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE TargetEntityID IS NULL OR Mode = 'Materialized' OR MaterializedResultID IS NOT NULL`
+- [x] **A-FV-BINDINGS Existing bindings (M5).** `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE TargetEntityID IS NULL OR Mode = 'Materialized' OR MaterializedResultID IS NOT NULL`
   on the suite database and on a copy of a MoreCheese database → expected 0 (bindings are created only in write-back
   mode with a target entity, `scoring-process.ts:165`). A non-zero count is handled by the migration's data section:
   `Mode` → `'OnDemand'`, a null `TargetEntityID` from the pipeline's `TargetEntityID`.
@@ -10105,6 +10107,37 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `PredictiveStudioProtocolPromotion` are `RESERVED_AGENT_RUN_DATA_KEYS` (CorePlus); a run reads them only when its
   caller sets `TrustReservedRunData` (the system user or an `agent:trusted` API key), and every other entry point and a
   parent model's `templateParameters` strip them. The gate harness is trusted through the existing system API key.
+- **D4-148 · The stale `MLModelID` relationship is deleted with its column** (M5.1 review, I1). After the binding
+  reshape drops `MLModelScoringBinding.MLModelID`, the `EntityRelationship` row `b3324f8a-5e80-4c82-a929-5cf1b8e5d015`
+  (`MJ: ML Models` → `MJ: ML Model Scoring Bindings`, joined on `MLModelID`) survived on every fresh install and broke
+  the ML Models form's bindings section (`Invalid column name 'MLModelID'`). The migration deletes the row by ID right
+  after the drop, a cleanup tied to the schema change rather than metadata authoring. The custom
+  `ml-model-form.component.{ts,html}` joins Task M5.4's Files.
+- **D4-149 · The outcome join gets a filtered index** (M5.1 review, I2; A-FV-VOLUME). At 1M `Model` rows the outcome
+  join scanned the clustered index (61,191 logical reads, 125 ms): inside the time limit, but §8.2 asks for a seek and
+  neither named index can give one. `IX_FeatureValue_Binding_AsOf (MLModelScoringBindingID, EffectiveAsOf) INCLUDE
+  (EntityID, RecordID, Role, MLModelID, InTraining, ValueNumeric, ValueText) WHERE Source = N'Model'` makes it a seek
+  (2,521 reads, 60 ms; about 183 MB per 1M rows). The panel's latest read seeks PR 1's index; §8.2 now names the index
+  each read uses.
+- **D4-150 · M5.1/M5.2 as built** (M5.1 report, concerns 1, 3 and 9). The delete procedure is written once, as the M5
+  section's last part: M1's earlier copy is removed, because the new body names `MLTrainingPipelineID`, which exists
+  only after the M5 section, and CodeGenLib's coverage test reads the first `CREATE OR ALTER PROC` in the file. The
+  policy fixture's `references` count is 96 at HEAD, not 95: an M4-era merge of next added `Artifact.DelegateEntityID`,
+  and M5 changes no reference. The TruthSuite DB lane takes its filter positionally (`pnpm run test:db scoring-service`);
+  `-- scoring-service` does not filter.
+- **D4-151 · A-FV outcomes at M5.1** (§8.2). **A-FV-BINDINGS:** 0 on the agent database (no bindings); the data
+  section ran on a seeded scratch copy (4 bindings → `Churn Risk`, `Churn Risk (2)`, `Churn Risk (3)`, the
+  materialized one `OnDemand` with its entity from the pipeline, `Lifetime Value` with `$.Value`; the bound process's
+  `OutputMapping` NULL, an unbound one kept). **A-FV-AUTHZ:** `vwUserHeldAuthorizations` equals
+  `EvaluateActionRunAuthorization` with 0 mismatches, over 480 pairs on the agent database (15 users × 32
+  authorizations) and 840 pairs on a scratch grant matrix (three-level chain, Deny on the linked authorization and on an
+  ancestor, inactive leaf and parent, Allow + Deny across two roles, a `ParentID` cycle, a padded lower-case `allow`, an
+  Owner, no roles); Task M5b.2 still writes the equivalence test. **A-FV-VOLUME (1M `Model` rows):** panel latest 1–9 ms
+  (seek, PR 1's `IX_FeatureValue_Entity_Record_Feature_ComputedAt`); as-of 0–1 ms (seek,
+  `IX_FeatureValue_Record_Feature_AsOf`); outcome join of one model's month (90,000 rows) 101–104 ms, 2,754 logical
+  reads (seek, `IX_FeatureValue_Binding_AsOf`, D4-149); population-wide read of one feature (100,000 rows) 403–545 ms
+  (clustered scan, D-078's residual). Warning 1945 on `UQ_FeatureValue_ModelRow` (1,882 bytes). The binding editor's
+  default `RetentionDays` is null.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10422,7 +10455,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->10<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->10<!-- /gen:checks -->
-- Head: <!-- gen:head -->9afd63f8bf<!-- /gen:head -->
+- Head: <!-- gen:head -->a5c50d8950<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11978,6 +12011,23 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
     from this pass's MJAPI form, which omitted `MJ_ARTIFACT_GUEST_SHARING_ENABLED=true` (next's `integration.yml` sets
     it), and later passes set it. `MJQueryEntityServer.usesTemplate.test.ts` (modified by PR 4) had 3 type errors in
     next's lines (`:129` missing `platform`, `:177`/`:178` stub fields); fixed, tsc 0, MJCoreEntitiesServer 1604/1604.
+
+### 2026-11-17 — Tasks M5.1 + M5.2 (prediction store, binding reshape, views, delete procedure) — Claude (Opus 5.5)
+
+- Migration sections 6–12 follow M1's 1–5; the delete procedure is written once, as section 12 (D4-150). The stale
+  `MLModelID` relationship is deleted after the drop (D4-148); `IX_FeatureValue_Binding_AsOf` added (D4-149). Tail
+  regenerated from a clean bootstrap on `MJ_PS_PR4_claude_M5` (OF4-34's four statements and the `TargetVariable`
+  `IsNameField` statement removed under the tail header's rule); D4-89 on both rebuilt databases: OF4-34's four only.
+  Both databases rebuilt from clean and identical (entities 509, fields 7929, relationships 1027); stale-relationship
+  query 0 on both.
+- `entity-delete-fk-policy.json`: dependents 74 → 76, references 96 (D4-150); CodeGenLib `2583 passed | 66 skipped`,
+  the coverage test 11/11 (2 failed on the old fixture). TruthSuite `scoring-service` 6/6, `serving-schema` 21/21;
+  `check:codegen-tail`, the EntityField-sequence check, `check:guards` pass. A-FV outcomes: D4-151. Delete procedure on
+  a scratch entity: binding, runs, `Model` and `Human` rows gone, the surviving model kept.
+- **Open at this commit (Task M5.4 owns it):** the root build has 16 errors in 4 packages, all in M5.4's files; the DB
+  lane is `1 failed | 84 passed`, from runtime filters naming the dropped columns (`cleanup.ts:536`,
+  `auto-train.ts:416`), which also left test rows on the agent database. Review: Spec ✅ / Quality Approved after fix
+  round 1 (`task-M5.1-2-review.md`).
 
 ## 12. Refresh log (append-only)
 

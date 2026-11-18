@@ -11,7 +11,6 @@ import sql from 'mssql';
 import { RunView, type BaseEntity, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import type {
   MJFeatureValueEntity,
-  MJvwLatestFeatureValuesEntity,
   MJMLAlgorithmEntity,
   MJMLModelEntity,
   MJMLModelPublishRecordEntity,
@@ -25,10 +24,11 @@ import type {
 } from '@memberjunction/core-entities';
 import { MJMLModelSchema } from '@memberjunction/core-entities';
 import { SemanticsRules, type OutputSemantics, type PersistedModelStatus } from '@memberjunction/predictive-studio-core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
 import { ConsoleCapture } from './fixtures/console-capture';
+import { LatestRows } from './fixtures/latest-feature-values';
 
 /** The publish-record columns a case sets; every other column takes the valid value for the row's `Kind`. */
 type PublishRecordOverrides = Partial<
@@ -212,26 +212,6 @@ async function RawUnevaluatedServing(p: sql.ConnectionPool, modelId: string): Pr
   await p.request()
     .input('ID', sql.UniqueIdentifier, modelId)
     .query(`UPDATE ${tableOf(server.Provider, 'MJ: ML Models')} SET Status = N'Unevaluated', ServingWhileUnevaluated = 1 WHERE ID = @ID`);
-}
-
-/** The latest-value view's rows for one record and feature, read through the entity like any reader. */
-async function LatestRows(
-  ctx: IntegrationBootstrapContext,
-  entityId: string,
-  recordId: string,
-  featureName: string,
-): Promise<Pick<MJvwLatestFeatureValuesEntity, 'ID'>[]> {
-  const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJvwLatestFeatureValuesEntity, 'ID'>>(
-    {
-      EntityName: 'MJ: Latest Feature Values',
-      ExtraFilter: `EntityID = '${EscapeSQLString(entityId)}' AND RecordID = '${EscapeSQLString(recordId)}' AND FeatureName = '${EscapeSQLString(featureName)}'`,
-      Fields: ['ID'],
-      ResultType: 'simple',
-    },
-    ctx.User,
-  );
-  if (!result.Success) throw new Error(`MJ: Latest Feature Values did not load: ${result.ErrorMessage}`);
-  return result.Results;
 }
 
 /** A new training run of the pipeline, saved through the generated entity. */
@@ -491,7 +471,7 @@ describe('ML model publish records refuse inconsistent rows', () => {
     const newestDatedChampion = await value('Champion', new Date('2026-03-01T00:00:00Z'), new Date('2026-03-05T00:00:00Z'));
     await value('Champion', null, new Date('2026-09-01T00:00:00Z'));                                   // undated: never beats a dated value
     await value('Challenger', new Date('2026-06-01T00:00:00Z'), new Date('2026-06-02T00:00:00Z'));    // newer, but a shadow score
-    const rows = await LatestRows(server, entityId, recordId, PROBE_FEATURE);
+    const rows = await LatestRows(server, entityId, recordId, PROBE_FEATURE, ['ID']);
     expect(rows.map((r) => r.ID)).toEqual([newestDatedChampion.ID]);
   });
 
@@ -515,7 +495,7 @@ describe('ML model publish records refuse inconsistent rows', () => {
     const rerunRecord = randomUUID();
     const rerun = await champion(rerunRecord, new Date('2026-04-01T18:00:00Z'));
     await champion(rerunRecord, new Date('2026-04-01T06:00:00Z'));
-    expect((await LatestRows(server, entityId, rerunRecord, PROBE_FEATURE)).map((r) => r.ID)).toEqual([rerun.ID]);
+    expect((await LatestRows(server, entityId, rerunRecord, PROBE_FEATURE, ['ID'])).map((r) => r.ID)).toEqual([rerun.ID]);
     // one EffectiveAsOf and one ComputedAt: the higher ID, in the database's uniqueidentifier order
     const tieRecord = randomUUID();
     const sameInstant = new Date('2026-04-01T12:00:00Z');
@@ -524,7 +504,7 @@ describe('ML model publish records refuse inconsistent rows', () => {
       .input('A', sql.UniqueIdentifier, tied[0].ID)
       .input('B', sql.UniqueIdentifier, tied[1].ID)
       .query<{ ID: string }>(`SELECT TOP 1 ID FROM ${tableOf(server.Provider, 'MJ: Feature Values')} WHERE ID IN (@A, @B) ORDER BY ID DESC`);
-    const latest = await LatestRows(server, entityId, tieRecord, PROBE_FEATURE);
+    const latest = await LatestRows(server, entityId, tieRecord, PROBE_FEATURE, ['ID']);
     expect(latest).toHaveLength(1);
     expect(UUIDsEqual(latest[0].ID, higher.recordset[0].ID)).toBe(true);
   });
@@ -734,7 +714,8 @@ async function createDoomedServingRows(d: DoomedPipeline, survivingModelId: stri
   const consumedSignOff = await SavePublishRecord({ Kind: 'sign-off', ModelID: d.ModelID });
   await createRow<MJMLOutputBindingEntity>('MJ: ML Output Bindings', fillOutputBinding(d.ModelID));
   const binding = await createRow<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', (b) => {
-    b.MLModelID = d.ModelID;
+    b.MLTrainingPipelineID = d.PipelineID;
+    b.FeatureName = `${TAG}-doomed`;
     b.TargetEntityID = d.EntityID;
     b.Mode = 'OnDemand';
   });
@@ -855,10 +836,10 @@ async function deleteDoomedWorld(w: DoomedEntityWorld, s: ServingFixtures): Prom
       INSERT INTO @Runs (ID) SELECT ID FROM ${t('MJ: ML Training Runs')} WHERE PipelineID IN (@Doomed, @Surviving);
       DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelID IN (SELECT ID FROM @Models);
       DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE ModelID IN (SELECT ID FROM @Models) OR ScopeEntityID = @EntityID
-        OR MLModelScoringBindingID IN (SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE MLModelID IN (SELECT ID FROM @Models));
+        OR MLModelScoringBindingID IN (SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE MLTrainingPipelineID IN (@Doomed, @Surviving));
       DELETE FROM ${t('MJ: ML Monitoring Results')} WHERE ModelID IN (SELECT ID FROM @Models);
       DELETE FROM ${t('MJ: ML Output Bindings')} WHERE ModelID IN (SELECT ID FROM @Models);
-      DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE MLModelID IN (SELECT ID FROM @Models);
+      DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE MLTrainingPipelineID IN (@Doomed, @Surviving);
       DELETE FROM ${t('MJ: ML Model Publish Records')} WHERE ModelID IN (SELECT ID FROM @Models)
         OR ReplacesModelID IN (SELECT ID FROM @Models) OR TrainingRunID IN (SELECT ID FROM @Runs);
       UPDATE ${t('MJ: ML Models')} SET TrainingRunID = NULL, TrainingSnapshotID = NULL WHERE ID IN (SELECT ID FROM @Models);
@@ -967,7 +948,7 @@ function sliceBetween(text: string, start: string, end: string): string {
  */
 function idempotentBatches(schema: string): string[] {
   const text = readFileSync(SERVING_MIGRATION, 'utf8');
-  const section = sliceBetween(text, '-- 5. vwLatestFeatureValues and the MJ: Latest Feature Values virtual entity', '-- 6. spDeleteEntityWithCoreDependencies');
+  const section = sliceBetween(text, '-- 5. vwLatestFeatureValues and the MJ: Latest Feature Values virtual entity', '-- 6. FeatureValue: model predictions and their lineage');
   const entityInsert = sliceBetween(section, `IF NOT EXISTS (SELECT 1 FROM [\${flyway:defaultSchema}].[Entity] WHERE [ID] = '${LATEST_VALUES_ENTITY_ID}')`, '\nGO');
   return entityInsert
     .split('${flyway:defaultSchema}').join(schema)
