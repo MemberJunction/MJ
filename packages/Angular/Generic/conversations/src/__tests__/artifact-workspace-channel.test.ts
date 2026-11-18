@@ -899,5 +899,60 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
       expect(capturedFilters[1]).toContain('100\\%\\_Q4\\[Plan]');
       expect(capturedFilters[1]).toContain("Visibility <> 'System Only'");
     });
+
+    it('persists workspace tabs via RequestSave on mutations and suppresses saves during RestoreState', async () => {
+      const ctx = MakeContext({ Notes: [] });
+      const requestSave = vi.fn();
+      ctx.RequestSave = requestSave;
+
+      const channel = new ArtifactWorkspaceChannel();
+      await channel.Initialize(ctx);
+
+      // RestoreState hydrates Engine without triggering a redundant save right away.
+      const restored = channel.RestoreState(
+        JSON.stringify({
+          activeArtifactId: 'art-restored',
+          instances: [
+            {
+              ArtifactID: 'art-restored',
+              ArtifactVersionID: 'ver-1',
+              VersionNumber: 1,
+              Name: 'Restored Doc',
+              ArtifactTypeName: 'Markdown Document',
+            },
+          ],
+        }),
+      );
+      expect(restored).toBe(true);
+      expect(requestSave).not.toHaveBeenCalled();
+
+      // Opening another artifact via Open() triggers RequestSave with both open workspace docs.
+      const openResult = await channel.Open({
+        artifactId: 'art-new',
+        artifactVersionId: 'ver-2',
+        versionNumber: 1,
+        name: 'New Sheet',
+        artifactTypeName: 'Excel Spreadsheet',
+      });
+      expect(openResult.Success).toBe(true);
+      expect(requestSave).toHaveBeenCalledTimes(1);
+      const saved = JSON.parse(requestSave.mock.calls[0][0] as string) as {
+        activeArtifactId: string;
+        instances: Array<{ ArtifactID: string }>;
+      };
+      expect(saved.activeArtifactId).toBe('art-new');
+      expect(saved.instances.map((i) => i.ArtifactID)).toEqual(['art-restored', 'art-new']);
+
+      // Closing a tab also updates RequestSave (Remove + Active change coalesce cleanly; latest payload matches).
+      await channel.ApplyVerb('close', { artifactId: 'art-new' }, 'user');
+      expect(requestSave.mock.calls.length).toBeGreaterThanOrEqual(2);
+      const afterClose = JSON.parse(requestSave.mock.calls.at(-1)?.[0] as string) as {
+        activeArtifactId: string;
+        instances: Array<{ ArtifactID: string }>;
+      };
+      expect(afterClose.instances.map((i) => i.ArtifactID)).toEqual(['art-restored']);
+
+      channel.Dispose();
+    });
   });
 });
