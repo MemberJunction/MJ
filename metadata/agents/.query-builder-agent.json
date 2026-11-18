@@ -102,10 +102,10 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "ALL_QUERIES",
-            "Description": "Complete list of existing queries for reference and composition. Includes Reusable flag and SQL for composition planning.",
+            "Description": "Approved queries, for reference and composition: names, descriptions, categories and the Reusable flag, without SQL. Approved only: a Pending query is a draft (for example one saved from a conversation so a list can refresh from it) and is not offered to agents.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
-            "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
+            "ExtraFilter": "Status = 'Approved'",
             "OrderBy": "Name ASC",
             "FieldsToRetrieve": [
               "ID",
@@ -114,8 +114,7 @@
               "CategoryID",
               "Category",
               "Status",
-              "Reusable",
-              "SQL"
+              "Reusable"
             ],
             "ResultType": "simple",
             "DestinationType": "Data",

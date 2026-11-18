@@ -105,14 +105,15 @@ export class ListFromQuery {
     const key = await this.findKeyColumnAsync(sql, request.KeyField ?? pkName, entity.Name);
     if (typeof key !== 'string') return key;
 
-    const saved = await new UserListQueries(this.contextUser, this.provider).SaveAsync({
+    const queries = new UserListQueries(this.contextUser, this.provider);
+    const saved = await queries.SaveAsync({
       Name: request.ListName,
       SQL: sql.SQL,
       Description: `Saved so the list "${request.ListName}" can refresh from it.`,
     });
     if ('Reason' in saved) return this.staticListAsync(sql, request, entity.Name, key, saved.Reason);
 
-    const result = await this.ops().MaterializeFromQuery(saved.QueryID, {
+    const result = await this.materializeOrDiscardAsync(queries, saved.QueryID, {
       ListName: request.ListName,
       Description: request.Description,
       CategoryId: request.CategoryID,
@@ -122,6 +123,27 @@ export class ListFromQuery {
       AutoRefresh: request.AutoRefresh,
     });
     return { Kind: 'Created', Result: result, SourceQueryID: saved.QueryID, SourceQueryName: saved.QueryName, SavedNewQuery: true, StaticReason: null };
+  }
+
+  /**
+   * Makes the list from the query just saved for it. When no list comes of it (the run threw, or
+   * the list wasn't created), the query is deleted, so a retry doesn't leave "Name (2)" beside an
+   * orphan in the user's User Lists.
+   */
+  private async materializeOrDiscardAsync(
+    queries: UserListQueries,
+    queryID: string,
+    opts: Parameters<ListOperations['MaterializeFromQuery']>[1],
+  ): Promise<ApplyResult> {
+    let result: ApplyResult;
+    try {
+      result = await this.ops().MaterializeFromQuery(queryID, opts);
+    } catch (e) {
+      await queries.DeleteAsync(queryID);
+      throw e;
+    }
+    if (!result.CreatedListId) await queries.DeleteAsync(queryID);
+    return result;
   }
 
   /**

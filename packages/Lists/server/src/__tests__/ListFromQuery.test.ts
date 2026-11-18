@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   materialize: vi.fn(),
   createFromRecords: vi.fn(),
   saveQuery: vi.fn(),
+  deleteQuery: vi.fn(),
   runView: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ vi.mock('../ListOperations', () => ({
 vi.mock('../UserListQueries', () => ({
   UserListQueries: class {
     SaveAsync = h.saveQuery;
+    DeleteAsync = h.deleteQuery;
   },
 }));
 
@@ -105,6 +107,27 @@ describe('ListFromQuery.FromSQLAsync', () => {
     expect(sql.Run).toHaveBeenCalledWith(1);
     expect(h.saveQuery).toHaveBeenCalledWith(expect.objectContaining({ Name: 'Active members', SQL }));
     expect(h.materialize).toHaveBeenCalledWith('q-new', expect.objectContaining({ EntityName: 'Persons', KeyField: 'id', AutoRefresh: true }));
+    expect(h.deleteQuery).not.toHaveBeenCalled();
+  });
+
+  it('deletes the saved query when no list comes of it, so a retry leaves no orphan', async () => {
+    h.materialize.mockResolvedValue({ Success: false, ResultCode: 'PERMISSION_DENIED', Message: 'cannot create lists' });
+    const refused = await service().FromSQLAsync(callerSQL([{ ID: 'p1' }]), request({ EntityName: 'Persons' }));
+    expect(refused).toMatchObject({ Kind: 'Created', Result: { Success: false, ResultCode: 'PERMISSION_DENIED' } });
+    expect(h.deleteQuery).toHaveBeenCalledWith('q-new');
+
+    h.deleteQuery.mockClear();
+    h.materialize.mockRejectedValue(new Error('Query "Active members" failed: timeout'));
+    await expect(service().FromSQLAsync(callerSQL([{ ID: 'p1' }]), request({ EntityName: 'Persons' }))).rejects.toThrow(/timeout/);
+    expect(h.deleteQuery).toHaveBeenCalledWith('q-new');
+  });
+
+  it('keeps the query when the list was made, even if some records failed', async () => {
+    h.materialize.mockResolvedValue({ ...CREATED, Success: false, ResultCode: 'PARTIAL_SUCCESS', Counts: { Added: 1, Removed: 0, Failed: 1 } });
+
+    await service().FromSQLAsync(callerSQL([{ ID: 'p1' }]), request({ EntityName: 'Persons' }));
+
+    expect(h.deleteQuery).not.toHaveBeenCalled();
   });
 
   it('uses the key column asked for, and assumes it when the SQL returns no rows', async () => {

@@ -150,6 +150,8 @@ export const ListFromQueryChecks: NamedCheck[] = [
             const result = await new ListOperations(ctx.User, ctx.Provider).RefreshFromSource(f.ListID!, undefined, { ConfirmDrops: true });
             Assert(result.Success, `refresh failed: ${result.ResultCode} ${result.Message}`);
             AssertEqual(await memberCount(ctx.User, f.ListID!), await roleCount(ctx.User), 'members after the refresh');
+            // A refresh runs a draft without approving it; requiring Approved would break every chat-made list.
+            AssertEqual((await loadQuery(ctx.Provider, ctx.User, f.QueryIDs[0])).Status, 'Pending', 'query status after the refresh');
         },
     },
     {

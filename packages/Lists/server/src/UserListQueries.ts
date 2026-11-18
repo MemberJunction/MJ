@@ -39,10 +39,25 @@ export class UserListQueries {
     query.Status = 'Pending';
     query.CategoryID = category.ID;
     if (args.Description) query.Description = args.Description;
+    // A draft for one list, not a catalog entry: no embedding for semantic search. Extraction stays
+    // on, since it writes the Query Fields the definition fingerprint covers.
+    query.SkipEmbeddings = true;
     if (!(await query.Save())) {
       return { Saved: false, Reason: `The query could not be saved: ${query.LatestResult?.CompleteMessage ?? 'unknown error'}` };
     }
     return { Saved: true, QueryID: query.ID, QueryName: query.Name };
+  }
+
+  /**
+   * Deletes a query this class saved, when the list it was saved for could not be made. Best
+   * effort: a failure is logged, and the query stays in the user's User Lists.
+   */
+  public async DeleteAsync(queryID: string): Promise<void> {
+    const query = await this.metadata().GetEntityObject<MJQueryEntity>('MJ: Queries', this.contextUser);
+    if (!(await query.Load(queryID))) return;
+    if (!(await query.Delete())) {
+      LogError(`UserListQueries: could not delete unused query ${queryID}: ${query.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
   }
 
   /** The user's subcategory of User Lists, created when it doesn't exist yet. */

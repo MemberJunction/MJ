@@ -146,7 +146,7 @@ describe('Create List From Query — SQL from a conversation', () => {
     expect(h.readOnlyRunQuery).toHaveBeenCalledWith({ SQL, MaxRows: 1, TimeoutSeconds: 30 }, USER);
     expect(h.fromSQL).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ListName: 'Active members', EntityName: 'Persons' }));
     expect(output(params, 'SourceQueryStatus')).toBe('Pending');
-    expect(result.Message).toMatch(/saved as the query "Active members" in your User Lists, Pending approval/);
+    expect(result.Message).toMatch(/saved as the draft query "Active members" \(Pending\) in the User Lists folder/);
   });
 
   it('hands over the columns the agent data policy hides', async () => {

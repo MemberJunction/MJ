@@ -140,7 +140,7 @@ function describe(outcome: Extract<ListFromQueryOutcome, { Kind: 'Created' }>): 
   if (!result.CreatedListId) return result.Message;
   if (outcome.StaticReason) return `${result.Message}. It won't refresh, because the SQL could not be saved as a query: ${outcome.StaticReason}`;
   const saved = outcome.SavedNewQuery
-    ? ` The SQL was saved as the query "${outcome.SourceQueryName}" in your User Lists, Pending approval; editing it pauses refreshes until you approve the change.`
+    ? ` The SQL was saved as the draft query "${outcome.SourceQueryName}" (Pending) in the User Lists folder; editing it pauses refreshes until you approve the change.`
     : ` It refreshes from the query "${outcome.SourceQueryName}".`;
   return `${result.Message}.${saved}`;
 }

@@ -86,7 +86,7 @@ describe('UserListQueries.SaveAsync', () => {
     const result = await new UserListQueries(USER as never).SaveAsync({ Name: 'Active members', SQL: 'SELECT 1', Description: 'For a list' });
 
     expect(result).toEqual({ Saved: true, QueryID: 'q-new', QueryName: 'Active members' });
-    expect(query).toMatchObject({ Name: 'Active members', SQL: 'SELECT 1', Status: 'Pending', CategoryID: 'cat-erin', Description: 'For a list' });
+    expect(query).toMatchObject({ Name: 'Active members', SQL: 'SELECT 1', Status: 'Pending', CategoryID: 'cat-erin', Description: 'For a list', SkipEmbeddings: true });
     const lookup = mockRunView.mock.calls[0][0] as { ExtraFilter: string; BypassCache: boolean };
     expect(lookup.ExtraFilter).toBe(`ParentID='${USER_LISTS_QUERY_CATEGORY_ID}' AND UserID='user-1'`);
     expect(lookup.BypassCache).toBe(true);
@@ -183,5 +183,28 @@ describe('UserListQueries.SaveAsync', () => {
     const result = await new UserListQueries(USER as never).SaveAsync({ Name: 'Members', SQL: 'SELECT 1' });
 
     expect(result).toEqual({ Saved: false, Reason: 'The query could not be saved: no Create permission on Queries' });
+  });
+});
+
+describe('UserListQueries.DeleteAsync', () => {
+  it('deletes the query', async () => {
+    const query = fakeRecord('q-new', { Delete: vi.fn().mockResolvedValue(true) });
+    wireEntities(query);
+
+    await new UserListQueries(USER as never).DeleteAsync('q-new');
+
+    expect(query.Load).toHaveBeenCalledWith('q-new');
+    expect(query.Delete).toHaveBeenCalled();
+  });
+
+  it('does not throw when the query is gone or cannot be deleted', async () => {
+    const gone = fakeRecord('q-new', { Load: vi.fn().mockResolvedValue(false), Delete: vi.fn() });
+    wireEntities(gone);
+    await expect(new UserListQueries(USER as never).DeleteAsync('q-new')).resolves.toBeUndefined();
+    expect(gone.Delete).not.toHaveBeenCalled();
+
+    const stuck = fakeRecord('q-new', { Delete: vi.fn().mockResolvedValue(false) });
+    wireEntities(stuck);
+    await expect(new UserListQueries(USER as never).DeleteAsync('q-new')).resolves.toBeUndefined();
   });
 });

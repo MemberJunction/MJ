@@ -44,7 +44,7 @@ describe('SaveAsListDialogComponent (DOM)', () => {
   });
 
   it('says the query will be saved Pending, or names the saved query it links to', () => {
-    expect(text(render(), 'mj-alert')).toContain('saved in your User Lists, Pending approval');
+    expect(text(render(), 'mj-alert')).toContain('saved as a draft (Pending) in the User Lists folder');
     expect(text(render({ SavedQueryName: 'Conference attendees' }), 'mj-alert')).toContain('the saved query Conference attendees');
   });
 

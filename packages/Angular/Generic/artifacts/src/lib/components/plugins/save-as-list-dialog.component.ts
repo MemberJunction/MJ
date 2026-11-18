@@ -53,7 +53,7 @@ export interface SaveAsListRequest {
             @if (SavedQueryName) {
               The list will refresh from the saved query <strong>{{ SavedQueryName }}</strong>.
             } @else {
-              The query will be saved in your User Lists, Pending approval, so the list can refresh from it.
+              The query will be saved as a draft (Pending) in the User Lists folder, so the list can refresh from it. Drafts aren't offered to agents or in #query mentions until they're approved.
               Editing the query later pauses refreshes until you approve the change.
             }
           </mj-alert>

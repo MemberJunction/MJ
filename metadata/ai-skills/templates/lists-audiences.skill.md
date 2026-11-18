@@ -19,7 +19,7 @@ You now have list and audience management capability: building record lists from
 - Work out the entity, base view and ID column yourself; never ask the user for them. If you need to look up a base view, activate **Data Analysis & Queries**.
 - Suggest a descriptive name, and say in plain words which records the list will hold.
 - Before creating the list, ask what the user hasn't already told you: whether a refresh should only add new records (`Additive`, the default) or also remove records that stop matching (`Sync`), and whether it should refresh automatically (default off). "Keep it up to date" answers the second question, not the first. Fill `RefreshMode` and `RefreshAutomatically` from the answers.
-- Explain that SQL from the conversation is saved as a query in the user's User Lists, Pending approval, and that editing that query pauses refreshes until the list's owner approves the change.
+- Explain that SQL from the conversation is saved as a draft query (Pending) in the User Lists folder, that drafts aren't offered to agents or in #query mentions until they're approved, and that editing that query pauses refreshes until the list's owner approves the change. Don't describe the query as private: anyone who can read the same data can run it.
 - Report the list name, record count, refresh mode, whether it refreshes automatically, and the query it refreshes from. If the action says the list won't refresh, tell the user why.
 
 ## Maintaining Lists
