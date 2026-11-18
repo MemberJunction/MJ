@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { ResolveParams, ResolvePath } from '../template';
 
+/**
+ * Wall-clock ceiling for the pathological-input check (50,000-character unclosed template). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 describe('template', () => {
     const scope = { $: { Results: [{ ID: '1' }] }, row: { Email: 'a@b.com', Balance: 50, Meta: { k: 'v' } } };
 
@@ -38,7 +45,7 @@ describe('template', () => {
             scope
         );
         const elapsedMs = performance.now() - startMs;
-        expect(elapsedMs).toBeLessThan(50);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         expect(out.unclosed).toBe(pathological);
         expect(out.whole).toBe(50);
         expect(out.embedded).toBe('User a@b.com has 50');

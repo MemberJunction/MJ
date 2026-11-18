@@ -29,10 +29,6 @@ vi.mock('@memberjunction/ng-container-directives', () => ({
   ContainerDirectivesModule: class {},
 }));
 
-vi.mock('@memberjunction/ng-explorer-settings', () => ({
-  ExplorerSettingsModule: class {},
-}));
-
 describe('MJExplorerModulesBundle', () => {
   it('should export the bundle module', async () => {
     const mod = await import('../lib/explorer-modules.module');

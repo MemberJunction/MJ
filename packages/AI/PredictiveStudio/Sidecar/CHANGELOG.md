@@ -1,5 +1,12 @@
 # @memberjunction/predictive-studio-sidecar
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [2b4969f]
+  - @memberjunction/predictive-studio-core@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

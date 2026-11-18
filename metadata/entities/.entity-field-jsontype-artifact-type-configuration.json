@@ -23,6 +23,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Types&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.746Z",
+            "checksum": "da76e08ae787ba7f3aa9cfe52d1d974a605b609cea170ffd1939617d02817607"
           }
         }
       ]
