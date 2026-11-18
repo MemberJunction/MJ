@@ -33,6 +33,7 @@
     },
     {
       "ViewName": "vwCustomerMetrics",
+      "SchemaName": "dbo",
       "EntityName": "Customer Metrics",
       "Description": "Computed customer metrics view (lifetime value, order count, etc.)",
       "PrimaryKey": ["CustomerID"]
