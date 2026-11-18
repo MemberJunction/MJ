@@ -58,6 +58,9 @@ export {
   PostgreSQLHeaderBuilder,
   getHeaderBuilder,
   registerHeaderBuilder,
+  PG_EXTENSION_REQUIREMENTS,
+  RequiredPgExtensions,
+  BuildPgExtensionStatements,
   convertFile,
   printReport,
   postProcess,
@@ -106,6 +109,7 @@ export type {
   BatchConverterResult,
   DialectCombination,
   DialectHeaderBuilder,
+  PgExtensionRequirement,
   ParsedType,
 } from './rules/index.js';
 

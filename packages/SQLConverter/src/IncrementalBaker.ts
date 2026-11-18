@@ -17,6 +17,7 @@
  */
 import { ConvertMigration } from './MigrationConverter.js';
 import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from './MigrationConverter.js';
+import { BuildPgExtensionStatements } from './rules/DialectHeaderBuilder.js';
 
 /**
  * Thrown when the working-DB apply/capture fails DURING a bake — carries the already-transpiled
@@ -282,7 +283,8 @@ export class IncrementalBaker {
 
   /** Build the standalone baked `.pg.sql`: baked header, hand body, then native CodeGen. */
   private assemble(fileName: string, handBody: string, captured: string[]): string {
-    const parts: string[] = [this.bakedHeader(fileName)];
+    // The header is built from everything it precedes, so it emits only the extensions used.
+    const parts: string[] = [this.bakedHeader(fileName, [handBody, ...captured].join('\n'))];
     if (handBody) {
       parts.push(handBody);
     }
@@ -299,7 +301,7 @@ export class IncrementalBaker {
       .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
   }
 
-  private bakedHeader(fileName: string): string {
+  private bakedHeader(fileName: string, body: string): string {
     return [
       '-- ============================================================================',
       `-- MemberJunction PostgreSQL Migration — ${fileName}`,
@@ -308,7 +310,7 @@ export class IncrementalBaker {
       '-- baked natively from `mj codegen`. Applies standalone via `mj migrate` — no deploy codegen.',
       '-- ============================================================================',
       '',
-      'CREATE EXTENSION IF NOT EXISTS "pgcrypto";',
+      BuildPgExtensionStatements(body),
       `CREATE SCHEMA IF NOT EXISTS ${this.schema};`,
       `SET search_path TO ${this.schema}, public;`,
       'SET standard_conforming_strings = on;',

@@ -167,13 +167,6 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   log('Assembling output...');
   const outputParts: string[] = [];
 
-  if (includeHeader) {
-    const headerBuilder = GetHeaderBuilder(targetDialect);
-    if (headerBuilder) {
-      outputParts.push(headerBuilder.BuildHeader(schema));
-    }
-  }
-
   // Only emit section headers for groups that have content.
   // Sections that come AFTER Data are flagged to receive a preamble flushing
   // pending trigger events. The Data section's INSERT/UPDATE/DELETE statements
@@ -201,6 +194,15 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
       outputParts.push(`\n-- ===================== ${section.header} =====================\n`);
       if (section.flushBefore && dataHasContent) outputParts.push(flushPreamble);
       outputParts.push(...section.items);
+    }
+  }
+
+  // The header goes in LAST, ahead of the body it describes: it is built from that body, so it
+  // emits only the prerequisites (e.g. PostgreSQL extensions) the converted SQL actually uses.
+  if (includeHeader) {
+    const headerBuilder = GetHeaderBuilder(targetDialect);
+    if (headerBuilder) {
+      outputParts.unshift(headerBuilder.BuildHeader(schema, outputParts.join('\n')));
     }
   }
 

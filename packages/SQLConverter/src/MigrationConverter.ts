@@ -28,6 +28,7 @@ import { SplitMigration, type MigrationSplitResult, type MigrationRegionKind } f
 import { SplitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
 import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
 import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
+import { BuildPgExtensionStatements } from './rules/DialectHeaderBuilder.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -492,15 +493,17 @@ function assemblePgSQL(
   includeHeader: boolean,
   coreSchema: string,
 ): string {
+  const body = transpiled.sql
+    .map((s) => (s.trim().endsWith(';') ? s : `${s};`))
+    .join('\n\n');
+
   const parts: string[] = [];
-  if (includeHeader) parts.push(pgHeader(kept.fileName));
+  // Built from the body so it emits only the extensions the body calls into.
+  if (includeHeader) parts.push(pgHeader(kept.fileName, body));
 
   const gaps = gapComments(kept.handProcedural, transpiled.unhandled);
   if (gaps) parts.push(gaps);
 
-  const body = transpiled.sql
-    .map((s) => (s.trim().endsWith(';') ? s : `${s};`))
-    .join('\n\n');
   parts.push(body);
 
   // Committed .pg.sql files use the literal schema (Flyway placeholder substitution
@@ -561,8 +564,13 @@ function castCoreMetadataBooleans(body: string): string {
   );
 }
 
-/** The standard committed-`.pg.sql` provenance header. */
-function pgHeader(fileName: string): string {
+/**
+ * The standard committed-`.pg.sql` provenance header.
+ *
+ * @param fileName - The source migration's file name.
+ * @param body - The converted body the header precedes; it decides which extensions are emitted.
+ */
+function pgHeader(fileName: string, body: string): string {
   return [
     '-- ============================================================================',
     `-- MemberJunction PostgreSQL Migration — ${fileName}`,
@@ -570,7 +578,7 @@ function pgHeader(fileName: string): string {
     '-- hand-written DDL; CodeGen objects regenerated natively; metadata re-seeded).',
     '-- ============================================================================',
     '',
-    'CREATE EXTENSION IF NOT EXISTS "pgcrypto";',
+    BuildPgExtensionStatements(body),
     'CREATE SCHEMA IF NOT EXISTS __mj;',
     'SET search_path TO __mj, public;',
     'SET standard_conforming_strings = on;',

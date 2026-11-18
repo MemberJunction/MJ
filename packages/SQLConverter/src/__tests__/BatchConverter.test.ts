@@ -288,8 +288,15 @@ describe('convertFile (BatchConverter)', () => {
     const sql = 'SELECT 1;';
     const result = ConvertFile(makeConfig(sql, { IncludeHeader: true }));
     expect(result.OutputSQL).toContain('MemberJunction PostgreSQL Migration');
-    expect(result.OutputSQL).toContain('CREATE EXTENSION IF NOT EXISTS');
-    expect(result.OutputSQL).toContain('pgcrypto');
+  });
+
+  it('should emit no CREATE EXTENSION when the body uses only built-in gen_random_uuid()', () => {
+    // NEWID() converts to the built-in gen_random_uuid(); neither pgcrypto nor uuid-ossp is needed,
+    // and managed hosts reject a CREATE EXTENSION that is not on their allowlist (W5).
+    const sql = 'CREATE TABLE [__mj].[T1] ([ID] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(), [Name] NVARCHAR(50));';
+    const result = ConvertFile(makeConfig(sql, { IncludeHeader: true }));
+    expect(result.OutputSQL).toContain('gen_random_uuid()');
+    expect(result.OutputSQL).not.toContain('CREATE EXTENSION');
   });
 
   it('should omit PG header when IncludeHeader is false', () => {
