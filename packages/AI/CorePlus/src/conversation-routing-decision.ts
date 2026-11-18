@@ -11,11 +11,12 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { ApplyPlattCalibration, type ChoiceOption, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
+import { type ChoiceOption, type DecisionAnswer, type DecisionQuestion } from '@memberjunction/ai';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ConversationUtility } from './conversation-utility';
-import { DescribeAnsweringModel, FindDecisionCalibration, type DecisionAnsweringModel, type DecisionModelCalibration } from './decision-calibration';
+import { ApplyPlattCalibration, type PlattCalibration } from '@memberjunction/ai';
+import { DescribeAnsweringModel, type DecisionAnsweringModel, type DecisionCalibrationKey } from './decision-calibration';
 import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 
 /**
@@ -32,7 +33,7 @@ import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
  * network time, and a budget under 300 ms, network included, would give up on more. 350 ms leaves
  * room for the network. The cost is bounded and safe: a call that misses the deadline keeps
  * continuity, as if routing were off; the wait falls only on an unmentioned message in a chat with
- * `EnableDecisionRouting` on, which is off by default; and it is at most this long. LLM Decision, the
+ * `EnableDecisionRouting` on (the default); and it is at most this long. LLM Decision, the
  * failover, answered in about 520 ms at p50, so while Jev is unavailable routing times out and keeps
  * continuity. Revisit the figure, or the plan's budget, once client-side latency is measured.
  */
@@ -42,15 +43,18 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  * The lowest confidence routing acts on. An agent Choice answered below it keeps continuity, and
  * so does an artifact Choice. The thread Likelihood must also be clear of the middle: a message
  * leaves the thread only when its **calibrated** probability of continuing (see
- * {@link ROUTING_CONTINUES_CALIBRATION}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
+ * {@link ROUTING_CONTINUES_CALIBRATION_KEY}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
  *
- * **What the bar means in a chat.** The calibration was fitted on a corpus that is mostly switches
- * (174 switches, 127 continuations), and a chat is mostly continuations. A calibrated 0.30 is a 30%
- * chance that the message continues only at the corpus's mix; at a 90%-continue prior it is about an
- * 84% chance (see {@link ROUTING_CONTINUES_CALIBRATION}). In raw terms, routing leaves the thread when
- * Jev's raw probability is at most about 0.80 (LLM Decision's, about 0.78). Before calibration the
- * bar was a raw 0.30. This value was not chosen for a chat's mix. Routing ships off, and the bar
- * should be set on the prior-weighted figures below before routing is turned on.
+ * **What the bar means in a chat.** The shipped calibration is targeted at a chat's mix: fitted on a
+ * corpus that is mostly switches (174 switches, 127 continuations), then shifted to a 90%-continue
+ * prior (see {@link ROUTING_CONTINUES_CALIBRATION_KEY}). So a calibrated 0.30 is a 30% chance that the
+ * message continues in a chat, and routing leaves the thread only when it is at least 70% likely the
+ * person moved on. In raw terms that is Jev's raw probability at most about 0.50 (LLM Decision's,
+ * about 0.43).
+ *
+ * **Before the shift**, the fits were at the corpus's mix, where the same bar left the thread at a raw
+ * 0.80, which at a chat's mix is an 84% chance the message continues. The figures below were measured
+ * at that old bar, and are why routing shipped off until the shift.
  *
  * **Measured at a calibrated 0.30** in the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), on that
  * corpus. Jev left the thread on 155 points, and 150 of them were real switches. So it caught 86.2%
@@ -77,21 +81,24 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  */
 export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
 
+/** The decision use whose calibrations conversation routing reads. */
+export const DECISION_ROUTING_USE = 'conversation-routing';
+
 /**
- * Platt calibration of the thread Likelihood (`continues`), per decision model, each tied to the
- * exact model it was fitted on (see `FindDecisionCalibration`): the MJ decision model that answered
- * (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). Any other model,
- * including Jev at another version or `LLM Decision` answered by another chat model, is treated as
- * unsure, so routing keeps continuity.
+ * Which calibration the thread Likelihood (`continues`) reads: use `conversation-routing`, question
+ * `continues`, in the answering model's `ModelConfiguration.Decision.Calibrations` (see
+ * `FindDecisionCalibration`). Each fit is tied to the exact model it was fitted on: the MJ decision
+ * model that answered (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). Any
+ * other model, including Jev at another version or `LLM Decision` answered by another chat model, is
+ * treated as unsure, so routing keeps continuity.
  *
- * **Calibrated at the corpus's mix, not a chat's.** Platt's `B` absorbs the base rate of the data it
- * was fitted on: 127 continuations to 174 switches, so 42% of messages continue. A calibrated value
- * is the chance that the message continues when 42% of messages do. Both models' raw answers lean
- * toward "continues": at the corpus's mix, Jev's raw 0.5 is a calibrated 0.03. At a 90%-continue
- * prior, closer to a chat, the calibrated logit gains ln(9 × 174/127) ≈ 2.51. Jev's raw 0.5 is then
- * about 0.30, and the leave bar of a calibrated 0.30 ({@link DECISION_ROUTING_MIN_CONFIDENCE}) is about
- * an 84% chance that the message continues. `B` is kept as fitted; that constant says what the bar
- * does at a chat's mix.
+ * **Calibrated at a chat's mix.** Platt's `B` absorbs the base rate of the data it was fitted on:
+ * 127 continuations to 174 switches, so 42% of messages continue. A chat is mostly continuations, so
+ * the shipped `B` is shifted to a 90%-continue prior: the calibrated logit gains
+ * logit(0.9) − logit(127/301) = ln(9 × 174/127) ≈ 2.5121 (the label-shift correction the
+ * `fit-decision-calibration` rig applies with `--target-prior`). Jev's raw 0.5, a calibrated 0.03 at
+ * the corpus's mix, is a calibrated 0.30 in a chat. The fitted (corpus-mix) values were Jev `B` -3.3506
+ * and LLM Decision `B` -2.9110; `A` is unchanged by the shift.
  *
  * **Where the fits come from.** The Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), cell
  * `production` (the production state layout and question), on the labelled continuity corpus with
@@ -112,38 +119,50 @@ export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
  * - LLM Decision reports its chat model's MJ name, `GPT-OSS-120B`, with no vendor. So its fit also
  *   covers answers served by Groq, which the LLM Decision prompt lists second, though the fit was
  *   measured via Cerebras. This assumes both vendors serve the same model.
- * - After a failover inside the LLM Decision prompt, the resolved model is the one `AIPromptRunner`
- *   first selected, not the one that answered: its `modelInfo` comes from the selected model, and
- *   failover moves only `promptRun.ModelID`. So if both GPT-OSS-120B vendors fail and another chat
- *   model answers, the GPT-OSS-120B fit is applied to that answer. Jev would have to fail first, and
- *   then both vendors, within {@link DECISION_ROUTING_TIMEOUT_MS}, so this is unlikely. The fix
- *   belongs in `AIPromptRunner`: build `modelInfo` from the candidate that answered.
+ * - After a failover inside the LLM Decision prompt, `LLMDecision` reports the chat model that
+ *   answered (the chat run's `ModelID`), not the one `AIPromptRunner` first selected, so a GPT 5.5
+ *   Instant answer is never read with the GPT-OSS-120B fit.
  *
  * Refit, and add the new pair, whenever a model, its version, the question or the state layout
  * changes. Note: the multi-person path (`AllowNoAgentOption`) adds the `no_agent` option and
- * speaker-attributed turns; it currently shares the single-user Platt fits below until a
- * multi-person eval corpus is fitted.
+ * speaker-attributed turns; it currently shares the single-user Platt fits until a multi-person eval
+ * corpus is fitted.
+ *
+ * **Where the fits live.** On the `Jev` and `LLM Decision` rows in `metadata/ai-models`, as
+ * `ModelConfiguration.Decision.Calibrations` entries with `Use: 'conversation-routing'` and
+ * `Question: 'continues'`: Jev at `typesafe/jev-1.13-20260917` (`A` 1.7757, `B` -0.8385) and LLM
+ * Decision at `GPT-OSS-120B` (`A` 1.6508, `B` -0.3989), both `B` shifted to a chat's mix.
  */
-export const ROUTING_CONTINUES_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
-    Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 1.7757, B: -3.3506 }) }),
-    Object.freeze({ ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: Object.freeze({ A: 1.6508, B: -2.9110 }) })
-]);
+export const ROUTING_CONTINUES_CALIBRATION_KEY: DecisionCalibrationKey = Object.freeze({
+    Use: DECISION_ROUTING_USE,
+    Question: 'continues',
+});
 
 /**
- * The thread Likelihood's calibrated probability for the model that answered, or null when that
- * exact model has no calibration, whose answer routing then treats as unsure.
+ * The thread Likelihood's calibrated probability, or null when the model that answered has no
+ * calibration, whose answer routing then treats as unsure.
  *
+ * @param calibration The fit for the model that answered: `AIEngineBase.Instance.FindDecisionCalibration(
+ *   ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`, or null when there is none.
  * @param probability The raw `continues` probability.
- * @param answeredBy The decision model that answered and the model behind it.
  */
-export function CalibratedContinuesProbability(probability: number, answeredBy: DecisionAnsweringModel): number | null {
-    const calibration = FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION, answeredBy);
+export function CalibratedContinuesProbability(calibration: PlattCalibration | null | undefined, probability: number): number | null {
     return calibration ? ApplyPlattCalibration(probability, calibration) : null;
+}
+
+/**
+ * The model that answered a routing decision, to look its calibration up with
+ * `AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, answeredBy)`.
+ *
+ * @param result The decision's result.
+ */
+export function RoutingAnsweredBy(result: Pick<RoutingDecisionAnswers, 'ModelName' | 'ResolvedModel'>): DecisionAnsweringModel {
+    return { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
 }
 
 /** Question keys. They are labels for code; the model never reads them. */
 const ROUTE_QUESTION = 'route';
-const CONTINUES_QUESTION = 'continues';
+const CONTINUES_QUESTION = ROUTING_CONTINUES_CALIBRATION_KEY.Question;
 const ARTIFACT_QUESTION = 'artifact';
 
 /** The artifact question's option for "the message modifies no artifact". */
@@ -316,7 +335,7 @@ type RouteVerdict = Pick<RoutingDecisionOutcome, 'Verdict' | 'RoutedAgentId' | '
  * `@memberjunction/graphql-dataprovider` has this shape.
  *
  * Its `ModelName` and `ResolvedModel` say which model answered. Calibration is per exact model
- * ({@link ROUTING_CONTINUES_CALIBRATION}), so routing acts on the thread Likelihood only when both
+ * ({@link ROUTING_CONTINUES_CALIBRATION_KEY}), so routing acts on the thread Likelihood only when both
  * are reported and name a calibrated model.
  */
 export interface RoutingDecisionAnswers extends DecisionAnsweringModel {
@@ -580,18 +599,26 @@ export function BuildRoutingStateStructured(input: RoutingDecisionInput): Routin
  *
  * @param input The input the decision was asked about.
  * @param result The decision's result.
+ * @param calibration The thread Likelihood's fit for the model that answered
+ * (`AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`).
+ * Null means the thread Likelihood is uncalibrated, so routing keeps continuity (or, in a
+ * multi-person chat, starts no agent turn).
  */
-export function InterpretRoutingAnswers(input: RoutingDecisionInput, result: RoutingDecisionAnswers): RoutingDecisionOutcome {
+export function InterpretRoutingAnswers(
+    input: RoutingDecisionInput,
+    result: RoutingDecisionAnswers,
+    calibration: PlattCalibration | null | undefined
+): RoutingDecisionOutcome {
     const promptRunId = result.PromptRunID ?? null;
     if (!result.Success) {
         const reason = `the decision failed: ${result.ErrorMessage ?? 'no reason given'}`;
         const failed = input.AllowNoAgentOption ? noAgent(reason) : keptContinuity(reason);
         return { ...failed, PromptRunID: promptRunId };
     }
-    const answeredBy: DecisionAnsweringModel = { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
+    const answeredBy = RoutingAnsweredBy(result);
     const verdict = input.AllowNoAgentOption
-        ? readMultiPartyRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy)
-        : readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy);
+        ? readMultiPartyRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration)
+        : readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration);
     return {
         Verdict: verdict.Verdict,
         RoutedAgentId: verdict.RoutedAgentId,
@@ -775,7 +802,8 @@ function readRouteVerdict(
     input: RoutingDecisionInput,
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
-    answeredBy: DecisionAnsweringModel
+    answeredBy: DecisionAnsweringModel,
+    calibration: PlattCalibration | null | undefined
 ): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return keptContinuity('the answer is missing the agent choice or the thread likelihood');
@@ -786,7 +814,7 @@ function readRouteVerdict(
     if (UUIDsEqual(route.Value, input.ContinuityAgentId)) {
         return keptContinuity('the message continues the current thread');
     }
-    const continuing = CalibratedContinuesProbability(continues.Probability, answeredBy);
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
     if (continuing === null) {
         return keptContinuity(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
     }
@@ -802,7 +830,8 @@ function readMultiPartyRouteVerdict(
     input: RoutingDecisionInput,
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
-    answeredBy: DecisionAnsweringModel
+    answeredBy: DecisionAnsweringModel,
+    calibration: PlattCalibration | null | undefined
 ): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return noAgent('the answer is missing the agent choice or the thread likelihood');
@@ -813,7 +842,7 @@ function readMultiPartyRouteVerdict(
     if (route.Confidence < DECISION_ROUTING_MIN_CONFIDENCE) {
         return noAgent(`the agent choice is unsure (confidence ${route.Confidence})`);
     }
-    const continuing = CalibratedContinuesProbability(continues.Probability, answeredBy);
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
     if (continuing === null) {
         return noAgent(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
     }

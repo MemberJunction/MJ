@@ -22,6 +22,7 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { agentFailureMessage } from '@memberjunction/ai-core-plus';
 import type { WidgetSession } from '../types.js';
 import type { IWidgetTransport, WidgetProgressCallback, WidgetTurnResult } from './widget-transport.js';
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
 const CONVERSATION_DETAILS_ENTITY = 'MJ: Conversation Details';
@@ -105,7 +106,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
     }
 
     private buildConfig(): GraphQLProviderConfigData {
-        const base = this.apiUrl.replace(/\/+$/, '');
+        const base = TrimTrailingSlashes(this.apiUrl);
         const wsUrl = base.replace(/^http/, 'ws');
         return new GraphQLProviderConfigData(this.token, base, wsUrl, async () => this.token);
     }

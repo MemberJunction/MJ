@@ -113,6 +113,16 @@ export interface LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -452,12 +462,42 @@ export interface EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link DecisionCalibrationEntry}).
  */
 export interface DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -468,6 +508,11 @@ export interface DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================

@@ -2,6 +2,18 @@ import { Component, ChangeDetectorRef, EventEmitter, Input, Output, inject } fro
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } from './office-preview.logic';
 
+type XlsxModule = typeof import('xlsx');
+let xlsxModulePromise: Promise<XlsxModule> | null = null;
+
+function loadXlsxModule(): Promise<XlsxModule> {
+  if (!xlsxModulePromise) {
+    // Genuine bundle-size deferral (AGENTS.md §8 #3): xlsx (SheetJS) is heavy and only
+    // needed when an Excel workbook preview is rendered.
+    xlsxModulePromise = import('xlsx');
+  }
+  return xlsxModulePromise;
+}
+
 /**
  * Renders a workbook (.xlsx, .xls) inline: fetches the bytes from `Url` (or takes them from `ArrayBuffer`), parses every
  * sheet with SheetJS and shows the active one in an AG Grid, with tabs when there is more than one sheet. Explorer's one
@@ -17,12 +29,12 @@ import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } 
     <div class="xlsx-preview">
       @if (IsLoading) {
         <div class="xlsx-preview__state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <i class="fa-solid fa-spinner fa-spin"></i>
           <span>Loading workbook…</span>
         </div>
       } @else if (ErrorMessage) {
         <div class="xlsx-preview__state xlsx-preview__state--error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="fa-solid fa-exclamation-triangle"></i>
           <span>{{ ErrorMessage }}</span>
         </div>
       } @else {
@@ -30,7 +42,7 @@ import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } 
           <div class="xlsx-preview__tabs">
             @for (sheet of Sheets; track sheet.name; let i = $index) {
               <button type="button" class="xlsx-preview__tab" [class.xlsx-preview__tab--active]="i === ActiveSheetIndex" (click)="SelectSheet(i)">
-                <i class="fas fa-table"></i>
+                <i class="fa-solid fa-table"></i>
                 {{ sheet.name }}
               </button>
             }
@@ -206,7 +218,7 @@ export class XlsxPreviewComponent {
         this.showError('No workbook to show.');
         return;
       }
-      const XLSX = (await import('xlsx')) as unknown as XlsxModuleShim;
+      const XLSX = (await loadXlsxModule()) as XlsxModuleShim;
       const sheets = ParseWorkbook(XLSX.read(bytes, { type: 'array' }), XLSX);
       if (token !== this.loadToken) return; // a newer input won
       this.Sheets = sheets;

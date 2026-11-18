@@ -24,12 +24,12 @@ export function IsWhiteboardChannel(channelName: string | null | undefined): boo
  * Whether a channel should get its surface tab registered UP FRONT (at the
  * registry-resolved emission) rather than waiting for first use.
  *
- * True only for the whiteboard (see {@link IsWhiteboardChannel}) OR a channel the agent has
- * already used this session (`hasBeenUsed`). Every other channel stays tab-less until its
- * first activity registers it — keeping the strip decluttered to the surfaces actually in play.
+ * True only when the channel has ALREADY been used this session (`hasBeenUsed`).
+ * Every channel — including the whiteboard — stays tab-less until first activity or
+ * prior-state restore registers it, keeping the strip decluttered to surfaces actually in play.
  */
-export function ShouldRegisterChannelTabUpFront(channelName: string, hasBeenUsed: boolean): boolean {
-  return IsWhiteboardChannel(channelName) || hasBeenUsed;
+export function ShouldRegisterChannelTabUpFront(_channelName: string, hasBeenUsed: boolean): boolean {
+  return hasBeenUsed;
 }
 
 /**

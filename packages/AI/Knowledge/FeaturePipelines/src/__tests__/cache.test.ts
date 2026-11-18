@@ -4,6 +4,13 @@ import { FeatureValueKey, type FeatureValueKeyInput } from '../spec/feature-valu
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 
 /**
+ * Wall-clock ceiling for the pathological-input check (5,000-digit string). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 1000;
+
+/**
  * The RunView stand-in: each call returns the next entry of `queue` when there is one, else `mockResults`; tests read
  * the `lastParams` (and every call's params in `calls`) the service passed.
  */
@@ -533,6 +540,44 @@ describe('FeatureValueCacheService', () => {
             const provider = stubProvider(vi.fn().mockResolvedValue(row));
             await expect(FeatureValueCacheService.Instance.Store({ ...base, provider })).rejects.toThrow(/UQ violation/);
         });
+
+        describe('KeyDisplay longer than its column (#4917)', () => {
+            /** A new row whose metadata gives KeyDisplay the nvarchar(500) limit. */
+            const rowWithLimit = (): Record<string, unknown> => ({
+                NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true),
+                EntityInfo: { Fields: [{ Name: 'KeyDisplay', MaxLength: 500 }, { Name: 'KeyJSON', MaxLength: 0 }] },
+            });
+
+            it('clamps an over-long display to MaxLength, ending with an ellipsis, and still saves', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const longDisplay = 'x'.repeat(1200);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: longDisplay, provider });
+                const display = row.KeyDisplay as string;
+                expect(display.length).toBe(500);
+                expect(display.endsWith('…')).toBe(true);
+                expect(display.startsWith('x'.repeat(499))).toBe(true);
+                expect(row.KeyHash).toBe('k-owner');
+                expect(row.Save).toHaveBeenCalledTimes(1);
+            });
+
+            it('leaves a display within the limit unchanged', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const exact = 'y'.repeat(500);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: exact, provider });
+                expect(row.KeyDisplay).toBe(exact);
+                await FeatureValueCacheService.Instance.Store({ ...base, provider });
+                expect(row.KeyDisplay).toBe('Owner');
+            });
+
+            it('ClampToLength treats 0 as unlimited', () => {
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 0)).toBe('abcdef');
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 4)).toBe('abc…');
+            });
+        });
     });
 
     describe('Human values', () => {
@@ -721,7 +766,7 @@ describe('FeatureValueCacheService', () => {
         it('rejects long digit strings with trailing non-numeric characters without polynomial backtracking', () => {
             const start = Date.now();
             const result = T('1'.repeat(5000) + 'a', 'numeric');
-            expect(Date.now() - start).toBeLessThan(100);
+            expect(Date.now() - start).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
             expect(result.ValueNumeric).toBeNull();
             expect(result.ValueText).toBe('1'.repeat(5000) + 'a');
         });

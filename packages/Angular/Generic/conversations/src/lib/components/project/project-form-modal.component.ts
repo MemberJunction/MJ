@@ -10,7 +10,8 @@ import {
   ProjectVisibilityTier,
   ResourcePermissionEngine
 } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, EntityPermissionType } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface FolderSharePermission {
   permissionId: string | null;
@@ -170,12 +171,14 @@ const DEFAULT_PROJECT_ICONS = [
                        (change)="SelectVisibility('Shared')" />
                 <span>Specific people &amp; roles (Shared)</span>
               </label>
-              <label class="visibility-choice">
-                <input type="radio" name="projectVisibility" value="Public"
-                       [checked]="VisibilityTier === 'Public'"
-                       (change)="SelectVisibility('Public')" />
-                <span>Everyone (Public)</span>
-              </label>
+              @if (CanMakePublic) {
+                <label class="visibility-choice">
+                  <input type="radio" name="projectVisibility" value="Public"
+                         [checked]="VisibilityTier === 'Public'"
+                         (change)="SelectVisibility('Public')" />
+                  <span>Everyone (Public)</span>
+                </label>
+              }
               <p class="visibility-hint" id="projectVisibilityHint">
                 {{ VisibilityHint }}
               </p>
@@ -798,6 +801,16 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     return this.IsEditMode && !this.Project?.OwnerUserID;
   }
 
+  /**
+   * True when this user may make a folder Public. A Public folder has no owner, so a user whose folder writes are
+   * row-filtered to their own folders (the UI role) cannot create one or turn one Public; the server refuses it, so
+   * the option is not offered.
+   */
+  public get CanMakePublic(): boolean {
+    const type = this.IsEditMode ? EntityPermissionType.Update : EntityPermissionType.Create;
+    return ConversationEngine.Instance.CanWriteAnyProject(this.CurrentUser, type, this.ProviderToUse);
+  }
+
   /** Translucent tint of the selected color, used behind the preview/icon glyph. */
   public get ChipBackground(): string {
     const hex = this.FormData.color || '#0076B6';
@@ -1030,7 +1043,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     } catch (error) {
       console.error('Error saving project:', error);
       const reason = error instanceof Error ? error.message : String(error);
-      alert(`Failed to save folder.\n\n${reason}`);
+      MJNotificationService.Instance.CreateSimpleNotification(`Failed to save folder: ${reason}`, 'error', 5000);
     }
   }
 

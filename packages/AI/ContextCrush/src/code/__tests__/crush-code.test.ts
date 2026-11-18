@@ -132,3 +132,53 @@ describe('CrushCode (sql)', () => {
   });
 });
 
+describe('CrushCode signature and whitespace scanning', () => {
+  const withBody = (signature: string) => [signature, '    a();', '    b();', '    c();', '}'].join('\n');
+  const collapses = (signature: string) => CrushCode(withBody(signature), 'typescript', { MinBodyLines: 2 }).Text.includes('elided');
+
+  it.each([
+    'public multiply(a: number, b: number): number {',
+    'async load(id: string): Promise<Item | null> {',
+    'foo(a) {',
+    'constructor (a) {',
+    'get value(): string {',
+    'map(a): Record<string, number> {',
+    'export default function (a) {',
+    'run(a)   {',
+    'foo(a) : string {',
+    'foo(a): {',
+  ])('collapses the body under %j', (signature) => {
+    expect(collapses(signature)).toBe(true);
+  });
+
+  it.each([
+    'const config = {',
+    'x = (a, b) {',
+    'foo(a): x = 1 {',
+    'a(b)(c) {',
+    '(a) {',
+    'f(a) :{',
+  ])('keeps the body under %j', (signature) => {
+    expect(collapses(signature)).toBe(false);
+  });
+
+  it('reads 100k characters of repeated ")" and ":" or "$(" in linear time', () => {
+    const started = Date.now();
+    CrushCode('):'.repeat(50_000) + 'x {\n}\n', 'typescript');
+    CrushCode('$('.repeat(50_000) + ') {\n}\n', 'typescript');
+    CrushCode('$():'.repeat(25_000) + 'x {\n}\n', 'typescript');
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
+
+  it('drops spaces and tabs before each newline but not at the end of the text', () => {
+    const sql = 'SELECT 1;   \nSELECT 2;\t \n\n  tail  ';
+    expect(CrushCode(sql, 'sql').Text).toBe('SELECT 1;\nSELECT 2;\n\n  tail  ');
+  });
+
+  it('reads 100k spaces with no newline in linear time', () => {
+    const sql = 'SELECT 1;' + ' \t'.repeat(50_000) + 'x';
+    const started = Date.now();
+    expect(CrushCode(sql, 'sql', { DropComments: true }).Text).toBe(sql);
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
+});

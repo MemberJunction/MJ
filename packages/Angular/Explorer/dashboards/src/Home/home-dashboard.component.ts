@@ -11,7 +11,7 @@ import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { DASHBOARD_NAME_MAX_LENGTH } from '@memberjunction/ng-dashboard-viewer';
 import type { DashboardNavRequestEvent } from '@memberjunction/ng-dashboard-viewer';
-import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
+import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings/user-settings.module';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import type { DashboardEditorComponent } from '../DashboardEditor/dashboard-editor.component';

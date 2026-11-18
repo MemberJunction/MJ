@@ -17,7 +17,7 @@
 import { createPublicKey } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ComputeJwkThumbprint, MJLruCache, ToProofPublicJwk, UUIDsEqual, VerifyProofOfPossessionJwt, type ProofPublicJwk } from '@memberjunction/global';
+import { ComputeJwkThumbprint, MJLruCache, ToProofPublicJwk, UUIDsEqual, VerifyProofOfPossessionJwt, type ProofPublicJwk, IsEmailShaped } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
@@ -251,7 +251,7 @@ export interface UpgradeGuestSessionResult {
 
 /** Minimal email sanity check (presence + single `@` with a dotted domain) — not full RFC validation. */
 function isLikelyEmail(email: string): boolean {
-  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  return IsEmailShaped(email);
 }
 
 /**

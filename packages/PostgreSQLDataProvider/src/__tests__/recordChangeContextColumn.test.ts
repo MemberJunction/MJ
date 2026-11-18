@@ -33,7 +33,10 @@ function makeHost(changeContext: string | null): Host {
 }
 
 const entity = {
-    EntityInfo: { Name: 'Widgets', SchemaName: 'app', ClassName: 'Widgets', BaseTableCodeName: 'Widget', PrimaryKeys: [{ Name: 'ID' }], TrackRecordChanges: true },
+    EntityInfo: {
+        Name: 'Widgets', SchemaName: 'app', ClassName: 'Widgets', BaseTableCodeName: 'Widget', PrimaryKeys: [{ Name: 'ID' }], TrackRecordChanges: true,
+        Fields: [{ Name: 'ID', Type: 'int' }], DatestampReturnFields: [{ Name: 'ID' }],
+    },
     Get: () => 42,
     GetAll: () => ({ ID: 42 }),
     RestoreContext: null,
@@ -45,7 +48,8 @@ describe('RecordChange.ChangeContext on PostgreSQL', () => {
     it('leaves the column out of an ordinary save and delete', () => {
         const saved = makeHost(null).WrapSaveCallWithRecordChange(save, { kind: 'pg-positional' }, { ...basePayload, changeContext: null }, entity);
         expect(saved.sql).not.toContain('ChangeContext');
-        expect(saved.parameters).toHaveLength(1 + 9);
+        // The snapshot is built from save_result, so FullRecordJSON is not one of the bound values.
+        expect(saved.parameters).toHaveLength(1 + 8);
 
         const deleted = makeHost(null).GenerateDeleteSQL(entity, user);
         expect(deleted.fullSQL).not.toContain('ChangeContext');
@@ -55,7 +59,7 @@ describe('RecordChange.ChangeContext on PostgreSQL', () => {
         const ctx = '{"Kind":"Clone"}';
         const saved = makeHost(ctx).WrapSaveCallWithRecordChange(save, { kind: 'pg-positional' }, { ...basePayload, changeContext: ctx }, entity);
         expect(saved.sql).toContain('"RestoreReason", "ChangeContext")');
-        expect(saved.sql).toContain('$11::text');
+        expect(saved.sql).toContain('$10::text');
         expect(saved.parameters?.at(-1)).toBe(ctx);
 
         const deleted = makeHost(ctx).GenerateDeleteSQL(entity, user);

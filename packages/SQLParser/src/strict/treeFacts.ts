@@ -148,6 +148,23 @@ export function TopLevelStatementKind(ast: unknown): SQLStatementKind {
     return 'select';
 }
 
+/**
+ * True when a branch of the top-level set operation is a SELECT … INTO. The grammar chains the
+ * branches through `_next`; {@link TopLevelStatementKind} reads only the first one.
+ */
+export function SetOperationSelectsInto(ast: unknown): boolean {
+    for (let branch = rootStatement(ast); branch; branch = asRecord(branch._next)) {
+        const into = branch.into;
+        if (into && typeof into === 'object' && (into as { position?: unknown }).position) return true;
+    }
+    return false;
+}
+
+/** `value` as a record when it is an object, null otherwise. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
 /** Whether any top-level statement of a parse writes, read the way `SQLParser.HasWriteStatement` reads it. */
 export function TopLevelHasWriteStatement(ast: unknown): boolean {
     if (!ast) return false;

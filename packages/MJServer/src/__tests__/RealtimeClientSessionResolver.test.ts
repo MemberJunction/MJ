@@ -45,9 +45,20 @@ vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => ({
             get AgentChannels() {
                 return engineChannelsMock();
             },
+            get Agents() {
+                return agentsMock();
+            },
+            get AgentTypes() {
+                return agentTypesMock();
+            },
+            get Models() {
+                return [];
+            },
         })),
     },
 }));
+
+import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 
 // --- Mock AIEngine so the Realtime Co-Agent resolves without DB-backed config ---
 /** Minimal cached-agent shape the resolver's co-agent chain reads. */
@@ -387,6 +398,48 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(result.EphemeralToken).toBe('ek_abc');
         expect(result.ExpiresAt).toBe('2026-01-01T00:00:00Z');
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
+    });
+
+    it('rejects StartRealtimeClientSession when conversationId belongs to another user (P1-5 IDOR)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const foreignConversation = makeSessionEntity({ ID: 'conv-foreign', UserID: 'other-user-999' });
+        currentProvider = makeProvider((name) => {
+            if (name === 'MJ: Conversations') return foreignConversation;
+            return makeSessionEntity();
+        });
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-foreign'),
+        ).rejects.toThrow('Access denied: you do not have access to the requested conversation');
+        expect(foreignConversation.Load).toHaveBeenCalledWith('conv-foreign');
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects StartRealtimeClientSession when anonymous magic-link visitor ml_B attempts to start on magic-link:ml_A conversation (P0-P3-3 IDOR)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const anonUserB = {
+            ID: 'anon-shared-user',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'ml_B',
+        } as UserInfo;
+        const foreignAnonConversation = makeSessionEntity({
+            ID: 'conv-ml-a',
+            UserID: 'anon-shared-user',
+            ExternalID: 'magic-link:ml_A',
+        });
+        currentProvider = makeProvider((name) => {
+            if (name === 'MJ: Conversations') return foreignAnonConversation;
+            return makeSessionEntity();
+        });
+        const resolver = makeResolver();
+        Reflect.set(resolver, 'GetUserFromPayload', () => anonUserB);
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-ml-a'),
+        ).rejects.toThrow('Access denied: you do not have access to the requested conversation');
+        expect(foreignAnonConversation.Load).toHaveBeenCalledWith('conv-ml-a');
+        expect(createSessionMock).not.toHaveBeenCalled();
     });
 
     describe('recording consent at start (#6010)', () => {
@@ -1759,6 +1812,107 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(Object.keys(states)).toEqual(['First']);
     });
 
+    it('merges channel states across a multi-leg LastSessionID chain (newest non-empty state wins, earlier-leg channels preserved)', async () => {
+        setupHappyStart();
+        const sessionA = makeSessionEntity({ ID: PRIOR_1, UserID: 'user-1', LastSessionID: null });
+        const sessionB = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+        const conversation = makeSessionEntity({ ExternalID: 'scope-res-1' });
+        const runView = vi.fn(async () => ({
+            Success: true,
+            Results: [
+                // Returned out of order by DB — resolver must sort newest leg (PRIOR_2) ahead of PRIOR_1.
+                { AgentSessionID: PRIOR_1, Channel: 'Remote Browser', Config: '{"url":"https://leg1.example"}' },
+                { AgentSessionID: PRIOR_1, Channel: 'ArtifactWorkspace', Config: '{"active":"leg1"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'ArtifactWorkspace', Config: '{"active":"leg2"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'Media', Config: '{"items":[1]}' },
+            ],
+        }));
+        const resolver = makeResolver();
+
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name?: string) => {
+                if (name === 'MJ: Conversations') {
+                    return conversation;
+                }
+                const wrapper = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+                wrapper.Load = vi.fn(async (id: string) => {
+                    if (id === PRIOR_2) {
+                        Object.assign(wrapper, sessionB);
+                        return true;
+                    }
+                    if (id === PRIOR_1) {
+                        Object.assign(wrapper, sessionA);
+                        return true;
+                    }
+                    return false;
+                });
+                return wrapper;
+            }),
+            RunView: runView,
+        };
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
+        expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
+            ArtifactWorkspace: '{"active":"leg2"}',
+            Media: '{"items":[1]}',
+            'Remote Browser': '{"url":"https://leg1.example"}',
+        });
+    });
+
+    it('synthesizes ArtifactWorkspace restore state from ConversationDetailArtifact when no ArtifactWorkspace channel row was saved', async () => {
+        setupHappyStart();
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-doc',
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+        });
+        const runView = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: AI Agent Session Channels':
+                    return { Success: true, Results: [{ AgentSessionID: PRIOR_1, Channel: 'Media', Config: '{"items":[]}' }] };
+                case 'MJ: Conversation Details':
+                    return { Success: true, Results: [{ ID: 'det-1' }] };
+                case 'MJ: Conversation Detail Artifacts':
+                    return { Success: true, Results: [{ ConversationDetailID: 'det-1', ArtifactVersionID: 'ver-doc' }] };
+                case 'MJ: Artifact Versions':
+                    return { Success: true, Results: [{ ID: 'ver-doc', ArtifactID: 'art-doc', VersionNumber: 2, Name: 'Demo Document' }] };
+                case 'MJ: Artifacts':
+                    return { Success: true, Results: [{ ID: 'art-doc', Name: 'Demo Document', Type: 'Markdown Document' }] };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const { provider: baseProvider } = makeRestoreProvider({});
+        currentProvider = {
+            ...(baseProvider as object),
+            RunView: runView,
+        };
+        const resolver = makeResolver();
+
+        try {
+            const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+            const parsed = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
+            expect(parsed.Media).toBe('{"items":[]}');
+            expect(JSON.parse(parsed.ArtifactWorkspace)).toEqual({
+                activeArtifactId: 'art-doc',
+                instances: [
+                    {
+                        ArtifactID: 'art-doc',
+                        ArtifactVersionID: 'ver-doc',
+                        VersionNumber: 2,
+                        Name: 'Demo Document',
+                        ArtifactTypeName: 'Markdown Document',
+                    },
+                ],
+            });
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
     it('tolerates a failed restore query (start succeeds, field omitted)', async () => {
         setupHappyStart();
         const { provider } = makeRestoreProvider({ runViewResult: { Success: false, ErrorMessage: 'db down' } });
@@ -1814,7 +1968,7 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         version: FakeSession;
         junction: FakeSession;
     } {
-        const artifact = opts.artifact ?? makeSessionEntity({ ID: 'artifact-1' });
+        const artifact = opts.artifact ?? makeSessionEntity({ ID: 'artifact-1', Delete: vi.fn(async () => true) });
         const version = opts.version ?? makeSessionEntity({ ID: 'version-1' });
         const junction = opts.junction ?? makeSessionEntity({ ID: 'junction-1' });
         const session = opts.session ?? makeSessionEntity();
@@ -2023,14 +2177,14 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         expect(version.Save).not.toHaveBeenCalled();
     });
 
-    it('returns a structured failure (carrying the orphaned ArtifactID) when the version save fails', async () => {
+    it('returns a structured failure and rolls back the orphaned Artifact when the version save fails', async () => {
         errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingVersion = makeSessionEntity({
             ID: 'version-fail',
             Save: vi.fn(async () => false),
             LatestResult: { CompleteMessage: 'too big' },
         });
-        const { provider, junction } = makeArtifactProvider({
+        const { provider, artifact, junction } = makeArtifactProvider({
             typeRows: [WHITEBOARD_TYPE_ROW],
             detailRows: [{ ID: 'detail-9' }],
             version: failingVersion,
@@ -2041,7 +2195,8 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
 
         expect(result.Success).toBe(false);
-        expect(result.ArtifactID).toBe('artifact-1');
+        expect(artifact.Delete).toHaveBeenCalledTimes(1);
+        expect(result.ArtifactID).toBeUndefined();
         expect(result.ArtifactVersionID).toBeUndefined();
         expect(result.ErrorMessage).toMatch(/artifact version save failed/i);
         expect(result.ErrorMessage).toContain('session session-1');
@@ -3745,7 +3900,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
 
     /** Provider routing the session (ownership) and the co-agent (recording storage resolution). */
     function makeRecordingProvider(): unknown {
-        const session = makeSessionEntity({ UserID: 'anon-1' });
+        const session = makeSessionEntity({ UserID: 'anon-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
         return {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
@@ -3855,7 +4010,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('a normal authenticated owner’s recording store runs as the SYSTEM user; ownership stays on the caller (#5195)', async () => {
         currentProvider = makeRecordingProvider();
         // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
-        const session = makeSessionEntity({ UserID: 'user-1' });
+        const session = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
@@ -5013,5 +5168,196 @@ describe('RealtimeClientSessionResolver — catalog timing reaches the browser (
         const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
 
         expect(result).toMatchObject({ Success: true, ...TIMING });
+    });
+});
+
+describe('RealtimeClientSessionResolver — conversation artifact hydration', () => {
+    it('hydrates deduplicated latest ConversationArtifacts from branch details into PrepareClientSession', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-1',
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+        });
+        const runViewMock = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Conversation Details':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'cd-1', Role: 'User', Message: 'Write a Diffusion doc', HiddenToUser: false, AgentSessionID: null },
+                            { ID: 'cd-2', Role: 'AI', Message: 'Created doc v1 and v2', HiddenToUser: false, AgentSessionID: null },
+                        ],
+                    };
+                case 'MJ: Conversation Detail Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-1' },
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-2' },
+                        ],
+                    };
+                case 'MJ: Artifact Versions':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'ver-1', ArtifactID: 'art-1', VersionNumber: 1, Name: 'Diffusion Doc' },
+                            { ID: 'ver-2', ArtifactID: 'art-1', VersionNumber: 2, Name: 'Diffusion Doc' },
+                        ],
+                    };
+                case 'MJ: Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'art-1', Name: 'Diffusion Doc', Type: 'Markdown Document' },
+                        ],
+                    };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const runViewsMock = vi.fn(async (list: Array<{ EntityName?: string }>) => Promise.all(list.map((p) => runViewMock(p))));
+        currentProvider = makeProvider(() => makeSessionEntity(), { RunView: runViewMock, RunViews: runViewsMock });
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-art-1', ConversationID: 'conv-art-1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini',
+                Model: 'gemini-live',
+                EphemeralToken: 'ek',
+                ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+
+        try {
+            await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-art-1');
+
+            expect(prepareClientSessionMock).toHaveBeenCalledTimes(1);
+            const prepArg = prepareClientSessionMock.mock.calls[0][0] as {
+                ConversationMessages?: Array<{ role: string; content: string }>;
+                ConversationArtifacts?: Array<{
+                    ArtifactID: string;
+                    Name: string;
+                    Type?: string;
+                    LatestVersionID?: string;
+                    LatestVersionNumber?: number;
+                }>;
+            };
+            expect(prepArg.ConversationMessages).toHaveLength(2);
+            expect(prepArg.ConversationArtifacts).toEqual([
+                {
+                    ArtifactID: 'art-1',
+                    Name: 'Diffusion Doc',
+                    Type: 'Markdown Document',
+                    LatestVersionID: 'ver-2',
+                    LatestVersionNumber: 2,
+                },
+            ]);
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
+    it('P1-5: filters out ConversationArtifacts where ArtifactPermissionEngine denies CanRead', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, artId) => ({
+                ArtifactID: artId,
+                CanRead: artId === 'art-allow',
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: artId === 'art-allow' ? 'Owner' : 'None',
+            }),
+        );
+        const runViewMock = vi.fn(async (params: { EntityName?: string; ExtraFilter?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Conversation Details':
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'cd-1', Role: 'AI', Message: 'Artifacts created', HiddenToUser: false, AgentSessionID: null }],
+                    };
+                case 'MJ: Conversation Detail Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ConversationDetailID: 'cd-1', ArtifactVersionID: 'ver-allow' },
+                            { ConversationDetailID: 'cd-1', ArtifactVersionID: 'ver-deny' },
+                        ],
+                    };
+                case 'MJ: Artifact Versions':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'ver-allow', ArtifactID: 'art-allow', VersionNumber: 1, Name: 'Allowed Doc' },
+                            { ID: 'ver-deny', ArtifactID: 'art-deny', VersionNumber: 1, Name: 'Denied Doc' },
+                        ],
+                    };
+                case 'MJ: Artifacts': {
+                    const allArts = [
+                        { ID: 'art-allow', Name: 'Allowed Doc', Type: 'Markdown Document' },
+                        { ID: 'art-deny', Name: 'Denied Doc', Type: 'Markdown Document' },
+                    ];
+                    const filter = params.ExtraFilter ?? '';
+                    return {
+                        Success: true,
+                        Results: filter ? allArts.filter((a) => filter.includes(a.ID)) : allArts,
+                    };
+                }
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const runViewsMock = vi.fn(async (list: Array<{ EntityName?: string }>) => Promise.all(list.map((p) => runViewMock(p))));
+        currentProvider = makeProvider(() => makeSessionEntity(), { RunView: runViewMock, RunViews: runViewsMock });
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-art-acl', ConversationID: 'conv-acl' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini',
+                Model: 'gemini-live',
+                EphemeralToken: 'ek',
+                ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+        try {
+            await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-acl');
+            const prepArg = prepareClientSessionMock.mock.calls[0][0] as {
+                ConversationArtifacts?: Array<{ ArtifactID: string }>;
+            };
+            expect(prepArg.ConversationArtifacts).toHaveLength(1);
+            expect(prepArg.ConversationArtifacts?.[0]?.ArtifactID).toBe('art-allow');
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
+    it('P1-5: rejects UploadRealtimeRecording and UploadRealtimeRecordingSegment when RecordingStartedAt is null or MIME is disallowed', async () => {
+        const audioB64 = Buffer.from([1, 2, 3, 4]).toString('base64');
+        const noRecordingSession = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: null });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : noRecordingSession)),
+        };
+
+        const noStartUpload = await makeResolver().UploadRealtimeRecording('session-1', audioB64, 'audio/wav', makeCtx(), 1000, true);
+        expect(noStartUpload.Success).toBe(false);
+        expect(noStartUpload.ErrorMessage).toMatch(/not been started/i);
+
+        const noStartSeg = await makeResolver().UploadRealtimeRecordingSegment('session-1', 0, audioB64, 'audio/wav', makeCtx());
+        expect(noStartSeg).toBe(false);
+
+        const startedSession = makeSessionEntity({ UserID: 'user-1', RecordingStartedAt: new Date('2026-01-01T00:00:00Z') });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : startedSession)),
+        };
+        const badMimeUpload = await makeResolver().UploadRealtimeRecording('session-1', audioB64, 'text/html', makeCtx(), 1000, true);
+        expect(badMimeUpload.Success).toBe(false);
+        expect(badMimeUpload.ErrorMessage).toMatch(/unsupported recording mime/i);
     });
 });

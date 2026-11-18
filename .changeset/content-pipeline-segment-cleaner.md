@@ -1,0 +1,7 @@
+---
+"@memberjunction/content-pipeline": minor
+---
+
+Content pipeline: Segment cleans an item's text before splitting it, and Extract stores HTML as it was served. The content cleaners in `@memberjunction/ai-segmentation` (`Html`, `PlainText`, and any registered `BaseContentCleaner`) and the `CleanerKey` columns on Content Sources and Content Types existed, but no stage used them, and the Html extractor stripped every tag before storing the page, so navigation, footers and banners reached the chunks and no selector could remove them. The Html extractor now stores the page's markup as the item's `Text` (a page with no readable text still yields nothing), and Segment resolves a cleaner (the run's `CleanerKey`, then the Content Source's `CleanerKey` or Configuration, then the Content Type's, then `Html` for an item the Html extractor read and `PlainText` otherwise), cleans with the layered `CleaningOptions` (content type, then source, then run), and splits the result. A wrong cleaner or selector is fixed by running Segment again, without fetching the page again. A page that cleaning leaves empty is Skipped. The item's `Text` keeps what Extract stored; the cleaner that ran is recorded on the run's detail (`Segment.cleanerKey`).
+
+Upgrade note: an HTML item extracted again after this change stores markup instead of text, so its content checksum changes once and the item is re-segmented and re-embedded. Readers of an HTML item's `Text` outside Segment (Tag, and any application that shows or searches the item's full text) now see the page's markup.

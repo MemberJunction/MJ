@@ -80,6 +80,15 @@ describe('React runtime subresource URL screening & selector-injection preventio
         expect(IsAllowedSubresourceUrl(null)).toBe(false);
     });
 
+    it('IsAllowedSubresourceUrl allows http(s) libraries on a page with an opaque origin (about:blank, srcdoc iframe)', () => {
+        // The test harness renders components on about:blank, whose origin is the string "null".
+        vi.stubGlobal('window', { location: { origin: 'null' } });
+        expect(IsAllowedSubresourceUrl('https://unpkg.com/antd@5.20.2/dist/antd.min.js')).toBe(true);
+        expect(IsAllowedSubresourceUrl('https://unpkg.com/d3@7.8.5/dist/d3.min.js')).toBe(true);
+        expect(IsAllowedSubresourceUrl('javascript:alert(1)')).toBe(false);
+        expect(IsAllowedSubresourceUrl('//evil.example.com/lib.js')).toBe(false);
+    });
+
     it('FindDomSubresourceByUrl safely matches URLs containing quotes and CSS selector metacharacters without calling querySelector', () => {
         const trickyUrl = 'https://cdn.example.com/style.css?v=1"] , body[data-x="1';
         const existing = makeFakeElement('link', { href: trickyUrl });

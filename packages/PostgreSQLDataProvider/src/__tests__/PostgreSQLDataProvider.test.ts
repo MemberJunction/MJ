@@ -953,6 +953,12 @@ describe('PostgreSQLDataProvider', () => {
                 options: EntitySaveOptions,
                 entityResult: BaseEntityResult,
             ): Promise<boolean>;
+            PrepareQueuedUpdateConcurrencyCheck(
+                entity: BaseEntity,
+                user: UserInfo,
+                options: EntitySaveOptions,
+                entityResult: BaseEntityResult,
+            ): (() => Promise<boolean>) | null;
             ExecuteSQL: PostgreSQLDataProvider['ExecuteSQL'];
             PostProcessRows: (
                 rows: Record<string, unknown>[],
@@ -1063,6 +1069,53 @@ describe('PostgreSQLDataProvider', () => {
             expect(executedSQL).toEqual([
                 `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
             ]);
+        });
+
+        it('prepares a queued-update check only when checking is on, capturing the values at queue time', async () => {
+            const hooks = provider as unknown as ProviderWithConcurrencyHooks;
+            const entityInfo = new EntityInfo({
+                ID: 'E0000000-0000-0000-0000-000000000002',
+                Name: 'Widgets',
+                Status: 'Active',
+                SchemaName: 'public',
+                BaseTable: 'Widget',
+                BaseTableCodeName: 'Widget',
+                BaseView: 'vwWidgets',
+                AllowUpdateAPI: true,
+                EntityFields: [
+                    { ID: 'F1', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 1, Name: 'ID', Type: 'uuid', Length: 16, AllowsNull: false, IsPrimaryKey: true, IsUnique: true, AllowUpdateAPI: false, Status: 'Active' },
+                    { ID: 'F2', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 2, Name: 'Name', Type: 'varchar', Length: 200, AllowsNull: false, IsPrimaryKey: false, AllowUpdateAPI: true, Status: 'Active' },
+                    { ID: 'F3', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 3, Name: 'Notes', Type: 'varchar', Length: 200, AllowsNull: true, IsPrimaryKey: false, AllowUpdateAPI: true, Status: 'Active' },
+                ],
+                EntityPermissions: [],
+            });
+            class PgQueuedEntity extends BaseEntity {}
+            const entity = new PgQueuedEntity(entityInfo);
+            const testUser = { ID: 'u-1', Name: 'Tester', Email: 't@example.com' } as unknown as UserInfo;
+            entity.ContextCurrentUser = testUser;
+            entity.SetMany({ ID: 'w-1', Name: 'Initial Name', Notes: null }, false, true, true);
+            entity.Set('Name', 'Caller New Name');
+
+            const executedSQL: string[] = [];
+            vi.spyOn(hooks, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+                executedSQL.push(sql);
+                return [{ Name: 'Concurrent DB Name' }] as never;
+            });
+            vi.spyOn(hooks, 'PostProcessRows').mockImplementation(async (rows) => rows);
+
+            expect(hooks.PrepareQueuedUpdateConcurrencyCheck(entity, testUser, new EntitySaveOptions(), new BaseEntityResult())).toBeNull();
+
+            const opts = new EntitySaveOptions();
+            opts.ConcurrencyCheck = 'enforce';
+            const result = new BaseEntityResult();
+            const check = hooks.PrepareQueuedUpdateConcurrencyCheck(entity, testUser, opts, result);
+            expect(check).not.toBeNull();
+            expect(executedSQL).toEqual([]);
+
+            entity.Set('Notes', 'edited after queueing');
+            expect(await check!()).toBe(false);
+            expect(result.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+            expect(executedSQL).toEqual([`SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`]);
         });
 
         it('defaults ConcurrencyCheck to "off" and DeltaUpdates to true on a fresh PostgreSQLDataProvider instance', () => {

@@ -104,44 +104,13 @@ export class ComponentVersionService {
   }
 
   /**
-   * Update the current (latest) version in place instead of creating a new one.
-   * @param comment - optional updated comment
-   * @returns true if the version was updated successfully
+   * Persists the latest changes by creating a new immutable artifact version
+   * (`MJ: Artifact Versions` rows are immutable once saved, `N4`).
+   * @param comment - optional version comment
+   * @returns true if the new version was saved successfully
    */
   async UpdateCurrentVersion(comment?: string): Promise<boolean> {
-    try {
-      if (!this._currentArtifactID || this._currentVersionNumber === 0) {
-        console.error('ComponentVersionService: No current version to update.');
-        return false;
-      }
-
-      const spec = this.stateService.GetCurrentSpec();
-      if (!spec) {
-        console.error('ComponentVersionService: No current spec available.');
-        return false;
-      }
-
-      const latestVersion = await this.findLatestVersionEntity(this._currentArtifactID);
-      if (!latestVersion) {
-        console.error('ComponentVersionService: Could not find latest version entity.');
-        return false;
-      }
-
-      latestVersion.Content = JSON.stringify(spec, null, 2);
-      if (comment) {
-        latestVersion.Comments = comment;
-      }
-
-      const saved = await latestVersion.Save();
-      if (saved) {
-        this._versionHistory = await this.fetchVersionHistory(this._currentArtifactID);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('ComponentVersionService: Error updating current version:', error);
-      return false;
-    }
+    return this.SaveVersion(comment);
   }
 
   /**

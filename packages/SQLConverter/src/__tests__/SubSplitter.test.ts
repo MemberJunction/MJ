@@ -257,3 +257,29 @@ describe('subSplitCompoundBatch', () => {
     expect(result[1]).toContain('IX_B');
   });
 });
+
+describe('subSplitCompoundBatch — issue #5364', () => {
+  it('keeps a CREATE OR ALTER TRIGGER whole instead of splitting it at statements in its body (item 7)', () => {
+    // A trigger body need not be wrapped in BEGIN/END, so its statements sit at depth 0.
+    const batch = [
+      'CREATE OR ALTER TRIGGER app.trg_X ON app.T AFTER INSERT AS',
+      'IF NOT EXISTS (SELECT 1 FROM inserted) RETURN;',
+      "INSERT INTO app.Log (Msg) VALUES ('x');",
+    ].join('\n');
+    expect(SubSplitCompoundBatch(batch)).toEqual([batch]);
+  });
+
+  it('splits an IF COL_LENGTH guard, with its BEGIN/END body, from the statements around it (item 3)', () => {
+    const batch = [
+      "IF COL_LENGTH('app.T', 'C') IS NULL",
+      'BEGIN',
+      '  ALTER TABLE app.T ADD C INT NULL;',
+      'END',
+      "UPDATE app.T SET C = 0 WHERE C IS NULL;",
+    ].join('\n');
+    const parts = SubSplitCompoundBatch(batch);
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toMatch(/^IF COL_LENGTH[\s\S]*END$/);
+    expect(parts[1]).toMatch(/^UPDATE/);
+  });
+});

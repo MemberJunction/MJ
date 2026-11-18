@@ -3,7 +3,46 @@
   "version": "6.3.0-edge.0",
   "description": "MemberJunction Explorer: Authentication Services",
   "main": "./dist/public-api.js",
+  "types": "./dist/public-api.d.ts",
   "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./preload": {
+      "types": "./dist/preload.d.ts",
+      "default": "./dist/preload.js"
+    },
+    "./msal": {
+      "types": "./dist/lib/providers/mjexplorer-msal-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-msal-provider.service.js"
+    },
+    "./auth0": {
+      "types": "./dist/lib/providers/mjexplorer-auth0-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-auth0-provider.service.js"
+    },
+    "./okta": {
+      "types": "./dist/lib/providers/mjexplorer-okta-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-okta-provider.service.js"
+    },
+    "./cognito": {
+      "types": "./dist/lib/providers/mjexplorer-cognito-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-cognito-provider.service.js"
+    },
+    "./workos": {
+      "types": "./dist/lib/providers/mjexplorer-workos-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-workos-provider.service.js"
+    },
+    "./magic-link": {
+      "types": "./dist/lib/providers/mjexplorer-magic-link-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-magic-link-provider.service.js"
+    },
+    "./local-dev": {
+      "types": "./dist/lib/providers/mjexplorer-local-dev-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-local-dev-provider.service.js"
+    }
+  },
   "files": [
     "/dist"
   ],
@@ -43,7 +82,10 @@
     "tslib": "^2.8.1",
     "@memberjunction/theme-engine": "6.3.0-edge.0"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/lib/providers/*.js",
+    "./src/lib/providers/*.ts"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"

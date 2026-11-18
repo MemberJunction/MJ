@@ -204,8 +204,9 @@ const liveKitProvider = {
 } as unknown as MJAIBridgeProviderEntity;
 
 let moduleSeq = 0;
-async function startMeeting(session: IRealtimeSession, replace?: (r: BridgeRealtimeSessionRecoveryRequest) => Promise<IRealtimeSession>): Promise<{ active: ActiveBridgeSession; room: RoomRecord }> {
+async function startMeeting(session: IRealtimeSession, replace?: (r: BridgeRealtimeSessionRecoveryRequest) => Promise<IRealtimeSession>): Promise<{ active: ActiveBridgeSession; room: RoomRecord; hostTold: string[] }> {
     const { module, room } = fakeRtcRoom();
+    const hostTold: string[] = [];
     const specifier = `test-avatar-e2e-${++moduleSeq}`;
     RegisterNativeRoomModule(specifier, CreateLiveKitRtcNodeModule({ Loader: async () => module, UseWorker: false, VideoEncodeWorker: false }));
     AIBridgeEngine.Instance.SetHostInstanceIdentity({ GetHostInstanceID: () => 'test:1:boot', GetInstancePrefix: () => 'test:1:', IsPriorBoot: () => false });
@@ -218,8 +219,11 @@ async function startMeeting(session: IRealtimeSession, replace?: (r: BridgeRealt
         ContextUser: user,
         MetadataProvider: metadata,
         RecoverRealtimeSessionWithoutAvatar: replace,
+        OnAvatarUnavailable: (reason) => {
+            hostTold.push(reason);
+        },
     });
-    return { active, room };
+    return { active, room, hostTold };
 }
 
 async function waitUntil(condition: () => boolean, timeoutMs: number): Promise<void> {
@@ -296,11 +300,11 @@ describe('the meeting avatar, end to end through the engine, the bridge and the 
         });
         afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-        it('takes the avatar down, says so on the bot, and replaces the model session with an audio-only one', async () => {
+        it('takes the avatar down, tells the host (which marks the bot), and replaces the model session with an audio-only one', async () => {
             const session = new AvatarFixtureSession();
             const audioOnly = new AvatarFixtureSession();
             const requests: BridgeRealtimeSessionRecoveryRequest[] = [];
-            const { active, room } = await startMeeting(session, async (request) => {
+            const { active, room, hostTold } = await startMeeting(session, async (request) => {
                 requests.push(request);
                 return audioOnly;
             });
@@ -309,7 +313,8 @@ describe('the meeting avatar, end to end through the engine, the bridge and the 
 
             expect(requests).toHaveLength(1);
             expect(requests[0].Reason).toContain('decoder-failed');
-            expect(room.Attributes).toEqual([{ 'mj.agentAvatar': 'audio-only:decoder-failed' }]);
+            expect(hostTold).toEqual(['decoder-failed']);
+            expect(room.Attributes).toEqual([]); // the bot's token cannot set its own attributes
             expect(room.Publishes.filter((p) => p.Video)).toEqual([]);
             expect(session.Closed).toBe(true);
         }, 20_000);

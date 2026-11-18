@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { ResolveParams, ResolvePath } from '../template';
 
+/**
+ * Wall-clock ceiling for the pathological-input check (50,000-character unclosed template). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 describe('template', () => {
     const scope = { $: { Results: [{ ID: '1' }] }, row: { Email: 'a@b.com', Balance: 50, Meta: { k: 'v' } } };
 
@@ -38,9 +45,41 @@ describe('template', () => {
             scope
         );
         const elapsedMs = performance.now() - startMs;
-        expect(elapsedMs).toBeLessThan(50);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         expect(out.unclosed).toBe(pathological);
         expect(out.whole).toBe(50);
         expect(out.embedded).toBe('User a@b.com has 50');
+    });
+
+    describe('placeholder scanning', () => {
+        it.each([
+            ['  {{ row.Balance }}  ', 50],
+            ['{{row.Balance}}', 50],
+            ['{{\trow.Meta\n}}', { k: 'v' }],
+        ])('treats %j as one whole placeholder', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toEqual(expected);
+        });
+
+        it.each([
+            ['{{row.Email}} and {{row.Balance}}', 'a@b.com and 50'],
+            ['{{ row.Email }}{{row.Balance}}', 'a@b.com50'],
+            ['no close {{row.Email', 'no close {{row.Email'],
+            ['single } brace {{row.Email} then {{row.Balance}}', 'single } brace {{row.Email} then 50'],
+            ['empty {{}} stays', 'empty {{}} stays'],
+            ['x {{row.Balance}}}', 'x 50}'],
+            ['a {{   }} b', 'a {{   }} b'],
+            ['  {{   }}  ', '  {{   }}  '],
+        ])('interpolates %j', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toBe(expected);
+        });
+
+        it('reads 100k characters of whitespace inside unclosed braces in linear time', () => {
+            const ws = '\t'.repeat(100_000);
+            const started = Date.now();
+            expect(ResolveParams({ x: '{{{{' + ws }, scope).x).toBe('{{{{' + ws);
+            expect(ResolveParams({ x: '{{{{|' + ws + '}' }, scope).x).toBe('{{{{|' + ws + '}');
+            expect(ResolveParams({ x: '{{'.repeat(50_000) }, scope).x).toBe('{{'.repeat(50_000));
+            expect(Date.now() - started).toBeLessThan(2500);
+        });
     });
 });

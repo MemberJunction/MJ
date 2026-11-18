@@ -163,6 +163,49 @@ export function TransformAngularTsconfig(packageTsconfig: string, baseTsconfig: 
   return JSON.stringify(merged, null, 2);
 }
 
+/** The prebundle exclude entry MJExplorer commits for the monorepo's linked `@memberjunction/*` packages. */
+const MONOREPO_PREBUNDLE_EXCLUDE = '@memberjunction/*';
+
+/**
+ * Transform the MJExplorer `angular.json` for a distribution: remove `@memberjunction/*` from each
+ * project's `serve.options.prebundle.exclude`.
+ *
+ * The monorepo excludes it because its MJ packages are symlinked workspace packages rebuilt in
+ * place. In a distribution they come from npm, and excluding them makes the dev server compile them
+ * into the app's own chunks and resolve their third-party imports (katex, mermaid, ...) from the
+ * app's folder, where pnpm does not put a dependency's dependencies: the page fails to load until
+ * the app declares each one. Pre-bundled, they resolve from their own location. The list is kept,
+ * even when empty, so `mj dev workspace` can still add linked scopes to it.
+ *
+ * @returns Pretty-printed JSON (2-space indent); the input unchanged when it holds no such entry.
+ */
+export function TransformExplorerAngularJson(angularJson: string): string {
+  const parsed = ParseJsonc(angularJson);
+  const projects = parsed.projects;
+  if (!isPlainObject(projects)) return angularJson;
+  let changed = false;
+  for (const project of Object.values(projects)) {
+    const prebundle = readPath(project, ['architect', 'serve', 'options', 'prebundle']);
+    if (!isPlainObject(prebundle) || !Array.isArray(prebundle.exclude)) continue;
+    const kept = prebundle.exclude.filter((entry) => entry !== MONOREPO_PREBUNDLE_EXCLUDE);
+    if (kept.length !== prebundle.exclude.length) {
+      prebundle.exclude = kept;
+      changed = true;
+    }
+  }
+  return changed ? JSON.stringify(parsed, null, 2) : angularJson;
+}
+
+/** The value at `keys` beneath `value`, or undefined when any step is not a plain object. */
+function readPath(value: unknown, keys: readonly string[]): unknown {
+  let current: unknown = value;
+  for (const key of keys) {
+    if (!isPlainObject(current)) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
 /** @deprecated Use {@link TransformAngularTsconfig}. */
 export function transformAngularTsconfig(packageTsconfig: string, baseTsconfig: string): string {
   return TransformAngularTsconfig(packageTsconfig, baseTsconfig);

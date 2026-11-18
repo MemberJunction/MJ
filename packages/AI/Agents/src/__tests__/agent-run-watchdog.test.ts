@@ -286,7 +286,7 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
         expect(params.ExtraFilter).not.toContain(`'${RUN_A}'`);
         // Through the entity, not a hand-built SELECT: the named fields, no cache, no row cap.
         expect(params.EntityName).toBe('MJ: AI Agent Runs');
-        expect(params.Fields).toEqual(['ID', 'CancellationReason']);
+        expect(params.Fields).toEqual(['ID', 'Status', 'CancellationReason', 'ErrorMessage']);
         expect(params.BypassCache).toBe(true);
         expect(params.IgnoreMaxRows).toBe(true);
         expect(p.ExecuteSQL.mock.calls.some(c => /SELECT/i.test(String(c[0])))).toBe(false);
@@ -362,6 +362,95 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
 
         expect(controller.signal.aborted).toBe(false);
         expect(wd.TrackedCount).toBe(1);
+    });
+});
+
+describe('AgentRunWatchdog force-failed runs still running here (#4883)', () => {
+    const SWEEP_MESSAGE = '[watchdog] Run force-failed: no liveness heartbeat for over 5 minute(s) (owning process presumed dead)';
+
+    beforeEach(() => {
+        resetSingletons();
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+    });
+
+    /** A provider whose poll returns `pollRows` and whose prune sees `failedRows` among runs that left Running. */
+    function providerWith(pollRows: Array<Record<string, string | null>>, failedRows: Array<{ ID: string; ErrorMessage: string | null }> = []): MockProvider {
+        const p = makeProvider();
+        p.RunView.mockImplementation(async (params: ReadParams) => {
+            if (isPoll(params)) {
+                return { Success: true, Results: pollRows };
+            }
+            if (/^\(Status='Failed'\)/.test(params.ExtraFilter)) {
+                return { Success: true, Results: failedRows };
+            }
+            return { Success: true, Results: [] };
+        });
+        return p;
+    }
+
+    it('the poll aborts a tracked run the watchdog force-failed, passing the row message as the reason', async () => {
+        const p = providerWith([{ ID: RUN_A, Status: 'Failed', CancellationReason: null, ErrorMessage: SWEEP_MESSAGE }]);
+        const controller = new AbortController();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(controller.signal.reason).toBe(SWEEP_MESSAGE);
+        expect(AgentRunWatchdog.IsForceFailedAbortReason(controller.signal.reason as string)).toBe(true);
+        expect(wd.TrackedCount).toBe(0);
+        const poll = p.RunView.mock.calls.map(c => c[0] as ReadParams).find(isPoll);
+        expect(poll!.ExtraFilter).toContain("Status='Failed'");
+    });
+
+    it('the poll leaves alone a run whose row the agent itself finished Failed', async () => {
+        const p = providerWith([{ ID: RUN_A, Status: 'Failed', CancellationReason: null, ErrorMessage: 'Agent repeated the same failing While step 3 times' }]);
+        const controller = new AbortController();
+        AgentRunWatchdog.Instance.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(controller.signal.aborted).toBe(false);
+    });
+
+    it('the prune aborts a force-failed run before dropping it, instead of forgetting its controller', async () => {
+        const wd = AgentRunWatchdog.Instance;
+        // The poll is pushed out past the sweep, so only the prune can see the force-fail.
+        wd.Configure({ cancellationPollIntervalMs: 60 * 60_000, sweepIntervalMs: 60_000 });
+        const p = providerWith([], [{ ID: RUN_A, ErrorMessage: SWEEP_MESSAGE }]);
+        const controller = new AbortController();
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(controller.signal.reason).toBe(SWEEP_MESSAGE);
+        expect(wd.TrackedCount).toBe(0);
+    });
+
+    it('the prune drops a run that completed normally without aborting it', async () => {
+        const wd = AgentRunWatchdog.Instance;
+        wd.Configure({ cancellationPollIntervalMs: 60 * 60_000, sweepIntervalMs: 60_000 });
+        const p = providerWith([], []);
+        const controller = new AbortController();
+        wd.Track(RUN_A, asProvider(p), mockUser, controller);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(controller.signal.aborted).toBe(false);
+        expect(wd.TrackedCount).toBe(0);
+        expect(wd.IsStoppable(RUN_A)).toBe(false);
+    });
+
+    it('a Failed row with no watchdog prefix is not a force-fail', () => {
+        expect(AgentRunWatchdog.IsForceFailedAbortReason(SWEEP_MESSAGE)).toBe(true);
+        expect(AgentRunWatchdog.IsForceFailedAbortReason('Agent failed')).toBe(false);
+        expect(AgentRunWatchdog.IsForceFailedAbortReason(null)).toBe(false);
     });
 });
 

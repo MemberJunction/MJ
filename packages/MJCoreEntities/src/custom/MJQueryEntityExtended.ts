@@ -38,6 +38,23 @@ export interface RenderedSQLCheckResult {
 }
 
 /**
+ * The `QueryEngine` a query's related metadata (fields, parameters, entities, permissions,
+ * dependencies, categories, platform SQL) is read from: the engine bound to the connection of the
+ * provider the query was loaded through, so a query from one database never reads another's rows.
+ * On a single-database process that is the global engine (per-request providers share its
+ * connection). Falls back to the global engine while the bound one is not loaded, or when the
+ * query has no provider.
+ */
+function queryEngineOf(query: MJQueryEntityExtended): QueryEngine {
+    const provider = query.ProviderToUse as unknown as IMetadataProvider | undefined;
+    if (!provider) {
+        return QueryEngine.Instance;
+    }
+    const bound = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    return bound.Loaded ? bound : QueryEngine.Instance;
+}
+
+/**
  * Extended query entity with child-relationship getters and business logic.
  * All child data reads through `QueryEngine`'s event-driven cache — always
  * fresh, no `provider.Refresh()` needed.
@@ -102,7 +119,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
 
     /** All field definitions for this query */
     public get QueryFields(): MJQueryFieldEntity[] {
-        return QueryEngine.Instance.GetQueryFields(this.ID);
+        return queryEngineOf(this).GetQueryFields(this.ID);
     }
 
     /**
@@ -131,27 +148,27 @@ export class MJQueryEntityExtended extends MJQueryEntity {
 
     /** All parameter definitions for this query */
     public get QueryParameters(): MJQueryParameterEntity[] {
-        return QueryEngine.Instance.GetQueryParameters(this.ID);
+        return queryEngineOf(this).GetQueryParameters(this.ID);
     }
 
     /** All entity associations for this query */
     public get QueryEntities(): MJQueryEntityEntity[] {
-        return QueryEngine.Instance.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
+        return queryEngineOf(this).QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
     }
 
     /** All permission records for this query */
     public get QueryPermissions(): MJQueryPermissionEntity[] {
-        return QueryEngine.Instance.GetQueryPermissions(this.ID);
+        return queryEngineOf(this).GetQueryPermissions(this.ID);
     }
 
     /** All composition dependency records (queries this query references via {{query:"..."}} syntax) */
     public get QueryDependencies(): MJQueryDependencyEntity[] {
-        return QueryEngine.Instance.Dependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+        return queryEngineOf(this).Dependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
     }
 
     /** Queries that depend on (reference) this query via {{query:"..."}} syntax */
     public get QueryDependents(): MJQueryDependencyEntity[] {
-        return QueryEngine.Instance.Dependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
+        return queryEngineOf(this).Dependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
     }
 
     // ─── Category Navigation ────────────────────────────────────────────────────
@@ -159,7 +176,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
     /** Gets the category entity for this query, or undefined if uncategorized */
     public get CategoryEntity(): MJQueryCategoryEntity | undefined {
         if (!this.CategoryID) return undefined;
-        return QueryEngine.Instance.Categories.find(c => UUIDsEqual(c.ID, this.CategoryID));
+        return queryEngineOf(this).Categories.find(c => UUIDsEqual(c.ID, this.CategoryID));
     }
 
     private _categoryPath: string | null = null;
@@ -181,7 +198,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
     public BuildCategoryPath(categoryID: string): string {
         if (!categoryID) return '';
 
-        const categories = QueryEngine.Instance.Categories;
+        const categories = queryEngineOf(this).Categories;
         const segments: string[] = [];
         let currentID: string | null = categoryID;
 
@@ -296,7 +313,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         // Step 4: Recursively check composition dependencies
         const dependencies = this.QueryDependencies;
         if (dependencies && dependencies.length > 0) {
-            const allQueries = QueryEngine.Instance.Queries;
+            const allQueries = queryEngineOf(this).Queries;
             for (const dep of dependencies) {
                 const depQuery = allQueries.find(q => UUIDsEqual(q.ID, dep.DependsOnQueryID));
                 if (!depQuery) continue;  // Dependency not found — skip
@@ -420,7 +437,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
      *   2. Base SQL property (the query's primary SQL)
      */
     public GetPlatformSQL(platform: DatabasePlatform): string {
-        const qe = QueryEngine.Instance;
+        const qe = queryEngineOf(this);
 
         const dialect = qe.SQLDialects.find(d => d.PlatformKey === platform);
         if (dialect) {
@@ -468,7 +485,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
     }
 
     private getInheritedCacheConfig(): QueryCacheConfig | null {
-        const categories = QueryEngine.Instance.Categories;
+        const categories = queryEngineOf(this).Categories;
         let catID = this.CategoryID;
 
         while (catID) {

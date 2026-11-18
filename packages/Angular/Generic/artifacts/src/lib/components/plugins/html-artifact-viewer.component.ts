@@ -15,14 +15,14 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       <div class="html-toolbar">
         <button class="btn-icon" [class.active]="viewMode === 'preview'"
                 title="Preview" (click)="viewMode = 'preview'">
-          <i class="fas fa-eye"></i> Preview
+          <i class="fa-solid fa-eye"></i> Preview
         </button>
         <button class="btn-icon" [class.active]="viewMode === 'source'"
                 title="Source" (click)="viewMode = 'source'">
-          <i class="fas fa-code"></i> Source
+          <i class="fa-solid fa-code"></i> Source
         </button>
         <button class="btn-icon" title="Copy HTML" (click)="onCopy()">
-          <i class="fas fa-copy"></i> Copy
+          <i class="fa-solid fa-copy"></i> Copy
         </button>
       </div>
       <div class="html-content-container">
@@ -54,14 +54,15 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       align-items: center;
       gap: 8px;
       padding: 8px;
-      background: #f5f5f5;
-      border-bottom: 1px solid #ddd;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .btn-icon {
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #ccc;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
@@ -71,14 +72,14 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
     }
 
     .btn-icon:hover {
-      background: #e9ecef;
-      border-color: #999;
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
     }
 
     .btn-icon.active {
-      background: #007acc;
-      color: white;
-      border-color: #007acc;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-brand-primary);
     }
 
     .html-content-container {
@@ -88,7 +89,8 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 
     .html-preview {
       padding: 20px;
-      background: white;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
       height: 100%;
       overflow: auto;
     }
