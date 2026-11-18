@@ -991,6 +991,8 @@ jobs:
       PGPORT: '5432'
       PGUSER: postgres
       PGPASSWORD: testpass
+      # Without it a bare `psql` connects to the database named after the user (`postgres`), not `test`.
+      PGDATABASE: test
       # Same reason as the SQL Server job: the smallest local embedding model, read by MJAPI and `mj`.
       MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
