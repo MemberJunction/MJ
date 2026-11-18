@@ -260,8 +260,13 @@ export class ViewRule implements IConversionRule {
     // Quote PascalCase word after ORDER BY / GROUP BY:
     // ORDER BY StartedAt → ORDER BY "StartedAt"
     // GROUP BY PatronID  → GROUP BY "PatronID"
+    // The trailing lookahead keeps it off a QUALIFIER. Without it, `ORDER BY cirInner."StartedAt"`
+    // (the `i` flag lets `[A-Z][a-z]` match a camelCase alias) became `"cirInner"."StartedAt"`, while
+    // the FROM clause's `cirInner` stayed unquoted and folded to `cirinner` — so the reference matched
+    // nothing (V202611110216). Every other pattern below ends in a required terminator, so only this
+    // one could swallow a qualifier.
     sql = sql.replace(
-      /(\b(?:ORDER|GROUP)\s+BY\s+)([A-Z][a-z]\w+)/gi,
+      /(\b(?:ORDER|GROUP)\s+BY\s+)([A-Z][a-z]\w+)(?![\w.])/gi,
       (match, prefix: string, ident: string) => {
         if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
         return `${prefix}"${ident}"`;

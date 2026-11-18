@@ -219,6 +219,33 @@ INNER JOIN [__mj].[vwEntities] relatedEntity
       expect(result).not.toContain('"relatedEntity"');
     });
 
+    // Regression: V202611110216 — ORDER BY's bare-identifier quoting swallowed the qualifier of
+    // `cirInner.StartedAt`, quoting the alias in ORDER BY alone while FROM/SELECT/WHERE left it bare.
+    it('does not quote an implicit alias used as an ORDER BY / GROUP BY qualifier', () => {
+      const sql = `CREATE OR ALTER VIEW __mj.vwCompanyIntegrations
+AS
+SELECT ci.*, cir.ID LastRunID, cir.StartedAt LastRunStartedAt
+FROM __mj.CompanyIntegration ci
+OUTER APPLY (
+  SELECT TOP 1 cirInner.ID, cirInner.StartedAt, cirInner.EndedAt
+  FROM __mj.CompanyIntegrationRun cirInner
+  WHERE cirInner.CompanyIntegrationID = ci.ID
+  ORDER BY cirInner.StartedAt DESC
+) cir`;
+      const result = convert(sql);
+      expect(result).toContain('ORDER BY cirInner."StartedAt" DESC');
+      expect(result).not.toContain('"cirInner"');
+      // Every reference agrees with the unquoted FROM-clause definition.
+      expect(result).toContain('__mj."CompanyIntegrationRun" cirInner');
+    });
+
+    it('still quotes a bare PascalCase ORDER BY / GROUP BY column', () => {
+      const result = convert(`CREATE VIEW [__mj].[vwFoo] AS
+SELECT PatronID, SUM(Amount) AS Total FROM [__mj].[Payment] GROUP BY PatronID ORDER BY Total`);
+      expect(result).toContain('GROUP BY "PatronID"');
+      expect(result).toContain('ORDER BY "Total"');
+    });
+
     it('should leave an all-lowercase alias unquoted', () => {
       const sql = `CREATE VIEW [__mj].[vwFoo] AS
 SELECT p.[ID] FROM [__mj].[Payment] AS p`;
