@@ -23,10 +23,6 @@ export * from './lib/login-picker.component';
 export * from './lib/login-screen-loader';
 export * from './lib/login-region.component';
 
-// Provider implementations
-export * from './lib/providers/mjexplorer-msal-provider.service';
-export * from './lib/providers/mjexplorer-auth0-provider.service';
-export * from './lib/providers/mjexplorer-okta-provider.service';
-export * from './lib/providers/mjexplorer-cognito-provider.service';
-export * from './lib/providers/mjexplorer-workos-provider.service';
-export * from './lib/providers/mjexplorer-magic-link-provider.service';
+// Lazy provider loader and session token detection (providers themselves live in subpath exports)
+export * from './lib/auth-provider-loader';
+export * from './lib/magic-link-session';

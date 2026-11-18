@@ -370,7 +370,7 @@ describe('PreflightPhase', () => {
       const pgCheck = result.Diagnostics.Checks.find(c => c.Name === 'PostgreSQL connectivity');
       expect(pgCheck).toBeDefined();
       expect(pgCheck!.Status).toBe('pass');
-      expect(pgCheck!.Message).toContain('PostgreSQL reachable at');
+      expect(pgCheck!.Message).toContain('PostgreSQL port reachable at');
       expect(mockPg.CheckConnectivity).toHaveBeenCalledWith(expect.any(String), 5432);
       expect(mockSql.CheckConnectivity).not.toHaveBeenCalled();
     });

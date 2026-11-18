@@ -56,8 +56,27 @@ export interface PipelineOperator {
 }
 
 /**
+ * Declarative deterministic semantic graph expansion stage (`graphExpand`) in `PipelineExecutor`.
+ * Resolves seeds and expands a bounded subgraph via `IGraphExpansionService` with zero LLM calls.
+ */
+export interface GraphExpandPipelineStage {
+    readonly stageType?: 'graphExpand'; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    readonly id?: string; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    /** Named graphs to traverse, e.g. ['MJ Canon'] or ['Member Network'] */
+    readonly graphNames: readonly string[]; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    /** JSONPath or template expression extracting seed text or { EntityName, RecordID } pairs from payload/input */
+    readonly seedSource: string; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    readonly maxDepth?: 1 | 2 | 3 | 4; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    readonly maxNodes?: number; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    readonly edgeTypeFilter?: readonly string[]; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+    /** Target payload key or context variable where the formatted subgraph is written */
+    readonly outputKey: string; // case-violation-ok-legacy-back-compat: matches PR #6180 WS-4.2 pipeline stage contract
+}
+
+/**
  * One stage of a pipeline, exactly one verb key + its args, e.g. `{ "where": "Balance > 0" }`,
- * `{ "tool": "Run View", "with": {...}, "pipeInto": "Body" }`, `{ "map": { "as": "row", "do": [...] } }`.
+ * `{ "tool": "Run View", "with": {...}, "pipeInto": "Body" }`, `{ "map": { "as": "row", "do": [...] } }`,
+ * or `{ "graphExpand": { ... } }` / `GraphExpandPipelineStage`.
  */
 export interface PipelineStage {
     [verb: string]: unknown;

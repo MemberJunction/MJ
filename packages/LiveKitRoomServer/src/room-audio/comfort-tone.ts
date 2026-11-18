@@ -12,15 +12,15 @@
 /** Length of one pass of the comfort tone, in seconds. */
 export const COMFORT_TONE_LOOP_SECONDS = 10;
 
-/** Peak level of the comfort tone as a fraction of full scale (about −15 dBFS — quieter than speech). */
-export const COMFORT_TONE_PEAK = 0.18;
+/** Peak level of the comfort tone as a fraction of full scale (voiced for PSTN 300–3400 Hz telephone handsets). */
+export const COMFORT_TONE_PEAK = 0.45;
 
-/** One chord of the progression: the frequencies of its voices, root first. */
+/** One chord of the progression: the frequencies of its voices, root first (C5/A4/F4/G4 inside the PSTN voice band). */
 const CHORDS: readonly (readonly number[])[] = [
-  [261.63, 329.63, 392.0], // C major (C4 E4 G4)
-  [220.0, 261.63, 329.63], // A minor (A3 C4 E4)
-  [174.61, 220.0, 261.63], // F major (F3 A3 C4)
-  [196.0, 246.94, 293.66], // G major (G3 B3 D4)
+  [523.25, 659.25, 783.99], // C major (C5 E5 G5)
+  [440.0, 523.25, 659.25], // A minor (A4 C5 E5)
+  [349.23, 440.0, 523.25], // F major (F4 A4 C5)
+  [392.0, 493.88, 587.33], // G major (G4 B4 D5)
 ];
 
 /** Fraction of each chord spent swelling in (and, symmetrically, fading out). */
@@ -28,7 +28,7 @@ const SWELL_FRACTION = 0.3;
 
 /** Relative weight of the bass voice (the chord root an octave down) and of each voice's second harmonic. */
 const BASS_WEIGHT = 0.5;
-const HARMONIC_WEIGHT = 0.15;
+const HARMONIC_WEIGHT = 0.35;
 
 /**
  * Generates one {@link COMFORT_TONE_LOOP_SECONDS}-second pass of the comfort tone as mono PCM16. Loop it end to end.

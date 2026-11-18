@@ -226,11 +226,11 @@ describe('ChatConversationsResource.handleActionableCommand (open:resource)', ()
     );
   });
 
-  it('delegates Artifact/File open:resource commands to ChatArea.openConversationArtifactForCommand', () => {
+  it('delegates Artifact/File open:resource commands to ChatArea.OpenConversationArtifactForCommand', () => {
     const h = createHarness();
     const openArtifactForCommand = vi.fn().mockReturnValue(true);
     (h.resource as unknown as Record<string, unknown>)['ChatArea'] = {
-      openConversationArtifactForCommand: openArtifactForCommand,
+      OpenConversationArtifactForCommand: openArtifactForCommand,
     };
 
     const handle = (h.resource as unknown as {

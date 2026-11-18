@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RealtimeDelegationCardVM, RealtimeThreadItem } from '../components/realtime/realtime-session-state';
 import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realtime-runtime';
@@ -9,7 +11,7 @@ import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realti
  * (mirrors `MJAIAgentSessionEntity.CloseReason`). `null` means the session is still open OR a
  * legacy row was closed before the column existed.
  */
-export type RealtimeReviewCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
+export type RealtimeReviewCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 /**
  * One historical caption turn of a reviewed session (a persisted `MJ: Conversation Details` row).
@@ -214,7 +216,14 @@ export interface RealtimeSessionReview {
    * panel, and they carry into a resumed live session. Empty when none / on any
    * tolerated load failure.
    */
+  /** Artifacts attached to the chain's conversation history... */
   Artifacts: ParsedDelegationArtifact[];
+  /**
+   * The voice model id resolved for the reviewed session (from `Config.realtimeMintSnapshot.modelID`),
+   * when recorded. Passed as `preferredModelId` on resume so a user who chose e.g. Grok Voice 3 keeps
+   * that same voice model instead of dropping back to the co-agent's default model.
+   */
+  ModelID?: string | null;
 }
 
 // ── Raw row shapes (ResultType: 'simple', narrowed Fields) ──────────────────
@@ -296,6 +305,9 @@ interface LegRows {
 interface SessionConfigJson {
   targetAgentID?: string;
   coAgentRunID?: string;
+  realtimeMintSnapshot?: {
+    modelID?: string;
+  };
 }
 
 const SESSION_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'ConversationID', 'Config', 'LastSessionID', 'LastActiveAt', 'ClosedAt', 'CloseReason', 'RecordingFileID', 'RecordingStartedAt', 'RecordingMedia', '__mj_CreatedAt'];
@@ -460,7 +472,15 @@ export class RealtimeSessionReviewService {
       }
       const chain = await this.collectChainLegs(primary, md);
       const artifacts = await this.loadChainArtifacts(chain, md);
-      return this.assembleReview(chain, artifacts);
+      const primaryConfig = this.parseSessionConfig(primary.session.Config);
+      const fallbackName = primary.session.Agent || 'the agent';
+      const targetAgentName = await this.resolveTargetAgentName(
+        primaryConfig.targetAgentID,
+        primary.session.AgentID,
+        fallbackName,
+        md
+      );
+      return this.assembleReview(chain, artifacts, targetAgentName);
     } catch (error) {
       console.error('[RealtimeSessionReview] Failed to load session review:', error);
       return null;
@@ -527,7 +547,7 @@ export class RealtimeSessionReviewService {
         break;
       }
       visited.add(key);
-      const leg = await this.loadLegRows(cursor, provider, false);
+      const leg = await this.loadLegRows(cursor, provider, true);
       if (!leg) {
         break;
       }
@@ -622,21 +642,68 @@ export class RealtimeSessionReviewService {
   }
 
   /**
+   * Resolves the human-facing target agent name (e.g. `"Sage"`) for sessions hosted by the
+   * `"Realtime Co-Agent"`, using {@link AIEngineBase}'s cached agent catalog. Falls back to
+   * the session's `Agent` string (`"Realtime Co-Agent"` or `"the agent"`) when the session has
+   * no distinct `targetAgentID` or agent metadata is unavailable.
+   */
+  private async resolveTargetAgentName(
+    targetAgentID: string | null | undefined,
+    sessionAgentID: string,
+    fallbackName: string,
+    provider: IMetadataProvider
+  ): Promise<string> {
+    const trimmedTarget = targetAgentID?.trim() ?? '';
+    if (!trimmedTarget || UUIDsEqual(trimmedTarget, sessionAgentID)) {
+      return fallbackName;
+    }
+    try {
+      const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+      if ((engine.Agents?.length ?? 0) === 0 && (provider.Entities?.length ?? 0) > 0) {
+        await engine.Config(false, undefined, provider);
+      }
+      const match = (engine.Agents ?? []).find(a => UUIDsEqual(a.ID, trimmedTarget));
+      if (match?.Name?.trim()) {
+        return match.Name.trim();
+      }
+    } catch {
+      // Tolerant: retain fallbackName when engine catalog cannot be loaded.
+    }
+    return fallbackName;
+  }
+
+  /**
    * Folds the chain's raw leg rows into the typed review. The PRIMARY (reviewed) leg —
    * the chain's LAST entry — supplies identity/lifecycle/channel state; turns and runs
    * are surfaced both per-leg (`Legs`) and flattened chronologically (`Turns` /
    * `DelegatedRuns`). Each leg excludes ITS OWN config's co-agent observability run.
    */
-  private assembleReview(chain: LegRows[], artifacts: ParsedDelegationArtifact[]): RealtimeSessionReview {
+  private assembleReview(
+    chain: LegRows[],
+    artifacts: ParsedDelegationArtifact[],
+    resolvedAgentName?: string
+  ): RealtimeSessionReview {
     const primary = chain[chain.length - 1];
     const session = primary.session;
     const config = this.parseSessionConfig(session.Config);
     const legs = chain.map(leg => this.mapLeg(leg));
+    let modelId: string | null = config.realtimeMintSnapshot?.modelID?.trim() || null;
+    if (!modelId) {
+      for (let i = chain.length - 2; i >= 0; i--) {
+        const legConfig = this.parseSessionConfig(chain[i].session.Config);
+        const legModelId = legConfig.realtimeMintSnapshot?.modelID?.trim();
+        if (legModelId) {
+          modelId = legModelId;
+          break;
+        }
+      }
+    }
     return {
       SessionID: session.ID,
       AgentID: session.AgentID,
-      AgentName: session.Agent || 'the agent',
+      AgentName: resolvedAgentName || session.Agent || 'the agent',
       TargetAgentID: config.targetAgentID ?? session.AgentID,
+      ModelID: modelId,
       ConversationID: session.ConversationID ?? null,
       Status: session.Status,
       CloseReason: session.CloseReason ?? null,

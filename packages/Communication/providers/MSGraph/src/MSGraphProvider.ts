@@ -65,17 +65,29 @@ import {
     WebhookNotificationInput,
     ParseNotificationResult,
     NormalizedNotification,
-    BaseMessageResult
+    BaseMessageResult,
+    CalendarEventChange,
+    CalendarEventResult,
+    CalendarTarget,
+    CalendarTargetError,
+    CalendarUpdateError,
+    CancelEventParams,
+    CreateEventParams,
+    GetEventParams,
+    SyncEventsParams,
+    SyncEventsResult,
+    UpdateEventParams
 } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials/index.js";
-import { Message } from "@microsoft/microsoft-graph-types";
+import { Message, Event as GraphEvent } from "@microsoft/microsoft-graph-types";
 import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import { compile, compiledFunction } from 'html-to-text';
 import * as Auth from "./auth";
 import * as Config from "./config";
+import { BuildGraphEventBody, GraphDeltaPage, GraphInstant, ToCalendarChange, ToCalendarEvent } from "./calendar";
 
 /**
  * Credentials for Microsoft Graph (Azure AD) email provider.
@@ -130,6 +142,14 @@ export interface MSGraphCredentials extends ProviderCredentialsBase {
      * Can also be overridden via message.From.
      */
     accountEmail?: string;
+
+    /**
+     * A bearer token the caller already holds: a delegated user token, or an app token from
+     * another registration (the realtime bridge passes its Teams bot token). When set it is used
+     * as is and tenantId/clientId/clientSecret are not needed. It is never cached here, so the
+     * caller refreshes it. Graph checks its scopes per call: calendar writes need Calendars.ReadWrite.
+     */
+    accessToken?: string;
 }
 
 /**
@@ -149,6 +169,8 @@ interface ResolvedMSGraphCredentials {
     clientId: string;
     clientSecret: string;
     accountEmail?: string;
+    /** Set only when the caller supplied a token; the three fields above are then empty and unused. */
+    accessToken?: string;
 }
 
 /**
@@ -167,6 +189,9 @@ function ODataInstant(when: Date): string {
 }
 
 const MSGRAPH_MAX_SUBSCRIPTION_MINUTES = 4230;
+
+/** A guard against a misbehaving delta stream, not a real limit: a calendar view rarely spans more than a few pages. */
+const MSGRAPH_MAX_DELTA_PAGES = 1000;
 
 /** Options carried in {@link CreateSubscriptionParams.ContextData} for MS Graph. */
 type MSGraphSubscriptionContext = {
@@ -243,6 +268,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      */
     private resolveCredentials(credentials?: MSGraphCredentials): ResolvedMSGraphCredentials {
         const disableFallback = credentials?.disableEnvironmentFallback ?? false;
+        const accessToken = credentials?.accessToken?.trim();
+        if (accessToken) {
+            const accountEmail = resolveCredentialValue(credentials?.accountEmail, Config.AZURE_ACCOUNT_EMAIL, disableFallback);
+            return { tenantId: '', clientId: '', clientSecret: '', accountEmail, accessToken };
+        }
 
         const tenantId = resolveCredentialValue(credentials?.tenantId, Config.AZURE_TENANT_ID, disableFallback);
         const clientId = resolveCredentialValue(credentials?.clientId, Config.AZURE_CLIENT_ID, disableFallback);
@@ -294,6 +324,13 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      * Uses cached client if credentials match environment (default case).
      */
     private getGraphClient(creds: ResolvedMSGraphCredentials): Client {
+        // A caller-supplied token wins, and is checked first so it can never fall into the env branch
+        // below. Not cached: the token expires and the caller refreshes it, and a client is cheap.
+        if (creds.accessToken) {
+            const token = creds.accessToken;
+            return Client.initWithMiddleware({ authProvider: { getAccessToken: async () => token } });
+        }
+
         // Check if using environment credentials (can use shared client)
         const isEnvCredentials =
             creds.tenantId === Config.AZURE_TENANT_ID &&
@@ -340,6 +377,48 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      */
     private extractRecipientAddresses(recipients: Message['toRecipients']): string[] {
         return recipients?.map((recipient) => recipient.emailAddress?.address || '').filter((address) => address.length > 0) || [];
+    }
+
+    /** Sent Items folder ID per mailbox, looked up once per provider instance. */
+    private readonly sentItemsFolderIds = new Map<string, string | null>();
+
+    /**
+     * The ID of a mailbox's Sent Items folder, or null when it cannot be read. Graph returns a
+     * message's folder as an opaque `parentFolderId`, so the well-known folder is resolved once.
+     */
+    private async getSentItemsFolderId(client: Client, mailbox: string): Promise<string | null> {
+        const key = mailbox.toLowerCase();
+        if (this.sentItemsFolderIds.has(key)) {
+            return this.sentItemsFolderIds.get(key) ?? null;
+        }
+        let id: string | null = null;
+        try {
+            const folder = await client.api(`${this.getApiUri()}/${encodeURIComponent(mailbox)}/mailFolders/sentitems`).get();
+            id = typeof folder?.id === 'string' ? folder.id : null;
+        } catch (ex) {
+            LogError(`MS Graph: could not read the Sent Items folder of ${mailbox}; message direction uses sender only`, undefined, ex);
+        }
+        this.sentItemsFolderIds.set(key, id);
+        return id;
+    }
+
+    /**
+     * #5811 — `Outbound` when the message sits in the mailbox's Sent Items, or when the mailbox being
+     * read is its `sender` or `from` (mail sent on someone's behalf has from = that person,
+     * sender = this mailbox); otherwise `Inbound`.
+     */
+    private messageDirection(message: Message, mailbox: string, sentItemsFolderId: string | null): 'Inbound' | 'Outbound' {
+        const own = mailbox.toLowerCase();
+        if (sentItemsFolderId && message.parentFolderId === sentItemsFolderId) return 'Outbound';
+        const sender = message.sender?.emailAddress?.address?.toLowerCase();
+        const from = message.from?.emailAddress?.address?.toLowerCase();
+        return sender === own || from === own ? 'Outbound' : 'Inbound';
+    }
+
+    /** The Sent Items folder ID, fetched only when some message's direction is not already settled by its sender. */
+    private async sentItemsFolderIdIfNeeded(client: Client, mailbox: string, messages: Message[]): Promise<string | null> {
+        const undecided = messages.some((m) => m.parentFolderId && this.messageDirection(m, mailbox, null) === 'Inbound');
+        return undecided ? this.getSentItemsFolderId(client, mailbox) : null;
     }
 
     /**
@@ -502,6 +581,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      * Retrieves email messages from a mailbox via MS Graph.
      *
      * @requires MS Graph Scope: Mail.Read (Application), or Mail.ReadWrite if using ContextData.MarkAsRead option
+     *
+     * `ContextData.Filter` narrows the request alongside the other filters; `ContextData.Expand` is sent
+     * as `$expand` (for example `singleValueExtendedProperties($filter=id eq 'String 0x1042')`).
      */
     public async GetMessages(
         params: GetMessagesParams<Record<string, unknown>>,
@@ -543,8 +625,15 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
         // Use email address directly in API path
         const messagesPath: string = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
-        const response = await client.api(messagesPath)
-            .filter(filter).top(top).get();
+        // ContextData.Expand is an OData $expand, passed through as given. Activity Sync uses it to read
+        // the reply headers and sensitivity as singleValueExtendedProperties in the same request,
+        // instead of one more call per message. Absent or blank, the request is exactly as before.
+        let request = client.api(messagesPath).filter(filter).top(top);
+        const expand = typeof contextData?.Expand === 'string' ? contextData.Expand.trim() : '';
+        if (expand) {
+            request = request.expand(expand);
+        }
+        const response = await request.get();
 
         if (!response) {
             return {
@@ -574,6 +663,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             headers = await Promise.all(headersPromises);
         }
 
+        const sentItemsFolderId = await this.sentItemsFolderIdIfNeeded(client, emailToUse, sourceMessages as Message[]);
         const messages = sourceMessages.map((message: Record<string, unknown>, index: number) => {
             const msgTyped = message as Message;
             const replyTo: string[] = msgTyped.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [];
@@ -587,6 +677,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 To: primaryToRecipient,
                 ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
                 CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
+                BCCRecipients: this.extractRecipientAddresses(msgTyped.bccRecipients),
+                Direction: this.messageDirection(msgTyped, emailToUse, sentItemsFolderId),
                 ReplyTo: replyTo,
                 Subject: msgTyped.subject || '',
                 Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.hTMLConverter(msgTyped.body?.content || '') : msgTyped.body?.content || '',
@@ -651,7 +743,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const mailbox = this.resolveMailbox('ForwardMessage', creds);
+            // Same resolution as ReplyToMessage: a stored Azure Service Principal credential has no
+            // accountEmail, so the caller names the mailbox through ContextData.Email (#4322).
+            const mailbox = this.resolveMailbox('ForwardMessage', creds, params.ContextData?.Email as string | undefined);
             const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/forward`;
             const forwardResult = await client.api(sendMessagePath).post(forward);
 
@@ -956,7 +1050,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             // Ask for UTC explicitly rather than relying on it. Graph returns start/end in UTC when no
             // `Prefer: outlook.timezone` is sent, so this changes nothing today — but the default is
             // Microsoft's to change, and every other value would need a tz database to resolve. Saying
-            // it makes the mapper's UTC assumption a request rather than a bet. `graphInstant` keeps
+            // it makes the mapper's UTC assumption a request rather than a bet. `GraphInstant` keeps
             // its null fallback for the case where a non-UTC zone comes back anyway.
             request = request.header('Prefer', 'outlook.timezone="UTC"');
 
@@ -1028,28 +1122,13 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             SeriesID: event.seriesMasterId ?? null,
             Subject: event.subject ?? '',
             Body: event.bodyPreview ?? '',
-            StartTime: MSGraphProvider.graphInstant(event.start),
-            EndTime: MSGraphProvider.graphInstant(event.end),
+            StartTime: GraphInstant(event.start),
+            EndTime: GraphInstant(event.end),
             Location: event.location?.displayName ?? null,
             Organizer: organizer,
             Attendees: [...new Set(attendees)],
             IsCancelled: event.isCancelled === true
         };
-    }
-
-    /** A Graph date slot as an instant, or null when it does not determine one. */
-    private static graphInstant(slot: { dateTime?: string; timeZone?: string } | undefined): Date | null {
-        const raw = slot?.dateTime?.trim();
-        if (!raw) return null;
-        // Both alternatives anchored. Unanchored, the `[Zz]` matched a "z" ANYWHERE in the string, so
-        // a value that merely contained one counted as carrying an offset and skipped the UTC check.
-        const hasOffset = /(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(raw);
-        const zone = (slot?.timeZone ?? 'UTC').trim().toUpperCase();
-        // Only UTC is safe to assume. Any other named zone would need a tz database to resolve, and
-        // guessing puts the meeting hours away from when it happened.
-        if (!hasOffset && zone !== 'UTC') return null;
-        const parsed = new Date(hasOffset ? raw : `${raw}Z`);
-        return Number.isNaN(parsed.getTime()) ? null : parsed;
     }
 
     /**
@@ -1108,10 +1187,10 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 const slots: FreeBusyScheduleSlot[] = [];
 
                 for (const item of rawItems) {
-                    const start = MSGraphProvider.graphInstant(
+                    const start = GraphInstant(
                         item.start as { dateTime?: string; timeZone?: string } | undefined
                     );
-                    const end = MSGraphProvider.graphInstant(
+                    const end = GraphInstant(
                         item.end as { dateTime?: string; timeZone?: string } | undefined
                     );
                     if (!start || !end) continue;
@@ -1216,8 +1295,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                     start?: { dateTime?: string; timeZone?: string };
                     end?: { dateTime?: string; timeZone?: string };
                 } | undefined;
-                const start = MSGraphProvider.graphInstant(slot?.start);
-                const end = MSGraphProvider.graphInstant(slot?.end);
+                const start = GraphInstant(slot?.start);
+                const end = GraphInstant(slot?.end);
                 if (!start || !end) continue;
 
                 const rawAvailability = (raw.attendeeAvailability as Array<Record<string, unknown>> | undefined) ?? [];
@@ -1629,6 +1708,11 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'DeleteSubscription',
             'ParseNotification',
             'GetEvents',
+            'CreateEvent',
+            'UpdateEvent',
+            'CancelEvent',
+            'GetEvent',
+            'SyncEvents',
             'GetFreeBusy',
             'FindMeetingTimes',
             'CreateCalendarEvent',
@@ -1637,6 +1721,175 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'CancelCalendarEvent',
             'VerifyMailboxAccess'
         ];
+    }
+
+    // ========================================================================
+    // CALENDAR EVENTS
+    // Every call names its mailbox through params.Target; there is no fallback to accountEmail or
+    // AZURE_ACCOUNT_EMAIL here, so a meeting never lands in the deployment's service mailbox by
+    // accident. Times are requested in UTC (`Prefer: outlook.timezone`), which GraphInstant relies on.
+    //
+    // Permissions: with the app's own client secret, Graph needs the APPLICATION permission
+    // Calendars.ReadWrite (admin-consented; an application access policy can narrow it to some
+    // mailboxes). With a caller-supplied accessToken, the token's own scopes apply: Calendars.ReadWrite
+    // delegated for a user's token, Calendars.Read for a token that only syncs.
+    // ========================================================================
+
+    /**
+     * Creates an event. With attendees, Graph sends the invitations from the target mailbox, which
+     * becomes the organizer. `IsOnlineMeeting` attaches a Teams meeting.
+     */
+    public override async CreateEvent(params: CreateEventParams, credentials?: MSGraphCredentials): Promise<CalendarEventResult> {
+        return this.calendarCall<CalendarEventResult>('CreateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (client, mailbox) => {
+            const calendar = params.Target.CalendarID?.trim();
+            const path = calendar ? `${mailbox}/calendars/${encodeURIComponent(calendar)}/events` : `${mailbox}/events`;
+            const created: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').post(BuildGraphEventBody(params.Event));
+            return { Success: true, Event: ToCalendarEvent(created) };
+        });
+    }
+
+    /** Patches the given fields. Graph sends updates to attendees when the organizer changes a meeting. */
+    public override async UpdateEvent(params: UpdateEventParams, credentials?: MSGraphCredentials): Promise<CalendarEventResult> {
+        const changeError = CalendarUpdateError(params.Changes);
+        if (changeError) return { Success: false, ErrorMessage: changeError };
+        return this.calendarCall<CalendarEventResult>('UpdateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (client, mailbox) => {
+            const path = `${mailbox}/events/${encodeURIComponent(params.ExternalEventID)}`;
+            const updated: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').patch(BuildGraphEventBody(params.Changes));
+            return { Success: true, Event: ToCalendarEvent(updated) };
+        });
+    }
+
+    /**
+     * Cancels an event.
+     *
+     * THE ORGANIZER CANCELS, ANYONE ELSE DELETES. Graph's `cancel` sends attendees a cancellation
+     * (with the comment) but refuses a non-organizer with a 400. So the event's `isOrganizer` is read
+     * first: the organizer's mailbox cancels, an attendee's mailbox deletes its own copy, which removes
+     * it from that calendar only and tells nobody. An event that is already gone (404) counts as
+     * cancelled, so a retry after a lost reply does not fail. A 404 for the MAILBOX does not: Graph
+     * answers an unknown or mailbox-less user with 404 too, and that cancelled nothing.
+     */
+    public override async CancelEvent(params: CancelEventParams, credentials?: MSGraphCredentials): Promise<BaseMessageResult> {
+        const failure = (message: string, err?: unknown): BaseMessageResult =>
+            this.getGraphStatusCode(err) === 404 && !this.isMailboxNotFound(err) ? { Success: true } : { Success: false, ErrorMessage: message };
+        return this.calendarCall('CancelEvent', params.Target, credentials, failure, async (client, mailbox) => {
+            const path = `${mailbox}/events/${encodeURIComponent(params.ExternalEventID)}`;
+            const current: GraphEvent = await client.api(path).select('isOrganizer').get();
+            if (current?.isOrganizer === false) {
+                await client.api(path).delete();
+            } else {
+                await client.api(`${path}/cancel`).post({ Comment: params.Comment ?? '' });
+            }
+            return { Success: true };
+        });
+    }
+
+    /** Reads one event with each attendee's response. */
+    public override async GetEvent(params: GetEventParams, credentials?: MSGraphCredentials): Promise<CalendarEventResult> {
+        return this.calendarCall<CalendarEventResult>('GetEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (client, mailbox) => {
+            const path = `${mailbox}/events/${encodeURIComponent(params.ExternalEventID)}`;
+            const event: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').get();
+            return { Success: true, Event: ToCalendarEvent(event) };
+        });
+    }
+
+    /**
+     * Reads changes through `calendarView/delta`.
+     *
+     * A full sync needs the window (Graph's delta over a calendar view is always bounded); the delta
+     * link Graph returns at the end carries that window, so later syncs need only the token. Pages are
+     * followed through `@odata.nextLink` until the `@odata.deltaLink`, which is the next token. Graph
+     * answers an expired or unknown token with 410 Gone: that comes back as `ResyncRequired`.
+     */
+    public override async SyncEvents(params: SyncEventsParams, credentials?: MSGraphCredentials): Promise<SyncEventsResult> {
+        const failure = (message: string, err?: unknown): SyncEventsResult => ({
+            Success: false,
+            Changes: [],
+            ErrorMessage: message,
+            ResyncRequired: !!params.SyncToken && this.isResyncError(err)
+        });
+        return this.calendarCall('SyncEvents', params.Target, credentials, failure, async (client, mailbox) => {
+            const result: SyncEventsResult = { Success: true, Changes: [] };
+            let url: string | undefined = params.SyncToken || this.firstDeltaUrl(mailbox, params);
+            for (let page = 0; url && page < MSGRAPH_MAX_DELTA_PAGES; page++) {
+                const response: GraphDeltaPage = await client.api(url).header('Prefer', 'outlook.timezone="UTC"').get();
+                result.Changes.push(...(response?.value ?? []).map(ToCalendarChange));
+                result.NextSyncToken = response?.['@odata.deltaLink'];
+                url = result.NextSyncToken ? undefined : response?.['@odata.nextLink'];
+            }
+            if (!result.NextSyncToken) return failure('Graph delta read ended without a deltaLink; nothing was applied.');
+            for (let i = 0; i < result.Changes.length; i++) {
+                if (result.Changes[i].Kind === 'Removed') result.Changes[i] = await this.confirmRemoval(client, mailbox, result.Changes[i]);
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Graph lists under `@removed` both an event that was deleted and one added, moved or changed
+     * OUTSIDE the delta's window (see Graph's event: delta). A caller that took every tombstone as a
+     * deletion would cancel a meeting that was only rescheduled past the window. So each one is read:
+     * a 404 is a real removal, anything found comes back as an upsert of the event as it is now.
+     *
+     * ponytail: one GET per tombstone; batch them (Graph $batch, 20 per call) if a calendar's syncs
+     * ever carry many.
+     */
+    private async confirmRemoval(client: Client, mailbox: string, change: CalendarEventChange): Promise<CalendarEventChange> {
+        try {
+            const path = `${mailbox}/events/${encodeURIComponent(change.ExternalEventID)}`;
+            const event: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').get();
+            return { Kind: 'Upserted', ExternalEventID: change.ExternalEventID, Event: ToCalendarEvent(event) };
+        } catch (err) {
+            if (this.getGraphStatusCode(err) === 404) return change;
+            throw err;
+        }
+    }
+
+    /** The first page of a full delta read. Throws when there is no window, which the caller reports. */
+    private firstDeltaUrl(mailbox: string, params: SyncEventsParams): string {
+        if (!params.WindowStart || !params.WindowEnd) {
+            throw new Error('a full sync (no SyncToken) needs WindowStart and WindowEnd: Graph only syncs a bounded calendar view');
+        }
+        const calendar = params.Target.CalendarID?.trim();
+        const view = calendar ? `${mailbox}/calendars/${encodeURIComponent(calendar)}/calendarView/delta` : `${mailbox}/calendarView/delta`;
+        const start = encodeURIComponent(params.WindowStart.toISOString());
+        const end = encodeURIComponent(params.WindowEnd.toISOString());
+        return `${view}?startDateTime=${start}&endDateTime=${end}`;
+    }
+
+    /** True when a Graph 404 is about the mailbox (no such user, or no Exchange mailbox), not the item. */
+    private isMailboxNotFound(err: unknown): boolean {
+        const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+        return code === 'ErrorInvalidUser' || code === 'MailboxNotEnabledForRESTAPI';
+    }
+
+    /** True when Graph refused a delta token as expired or unknown, so the caller must start over. */
+    private isResyncError(err: unknown): boolean {
+        if (this.getGraphStatusCode(err) === 410) return true;
+        const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+        return /syncState|resyncRequired/i.test(code);
+    }
+
+    /**
+     * The shared shape of every calendar call: refuse a missing target before any I/O, build the
+     * client and the mailbox path from the target alone, and turn a thrown error into a result.
+     */
+    private async calendarCall<T extends BaseMessageResult>(
+        operation: string,
+        target: CalendarTarget | undefined,
+        credentials: MSGraphCredentials | undefined,
+        failure: (message: string, err?: unknown) => T,
+        work: (client: Client, mailboxPath: string) => Promise<T>
+    ): Promise<T> {
+        const refusal = CalendarTargetError(operation, target);
+        if (refusal || !target) return failure(refusal ?? `${operation} needs a Target.`);
+        const identifier = target.Identifier.trim();
+        try {
+            const client = this.getGraphClient(this.resolveCredentials(credentials));
+            return await work(client, `${this.getApiUri()}/${encodeURIComponent(identifier)}`);
+        } catch (err) {
+            return failure(`Microsoft Graph ${operation} failed for ${identifier}: ${err instanceof Error ? err.message : String(err)}`, err);
+        }
     }
 
     // ========================================================================
@@ -1955,6 +2208,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
             const msgTyped = msgResponse as Message;
             const replyTo = msgTyped.replyTo?.map(r => r.emailAddress?.address || '') || [];
+            const sentItemsFolderId = await this.sentItemsFolderIdIfNeeded(client, emailToUse, [msgTyped]);
 
             return {
                 Success: true,
@@ -1963,6 +2217,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                     To: replyTo.length > 0 ? replyTo[0] : '',
                     ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
                     CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
+                    BCCRecipients: this.extractRecipientAddresses(msgTyped.bccRecipients),
+                    Direction: this.messageDirection(msgTyped, emailToUse, sentItemsFolderId),
                     ReplyTo: replyTo,
                     Subject: msgTyped.subject || '',
                     Body: msgTyped.body?.content || '',

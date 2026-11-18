@@ -90,7 +90,7 @@ TotalRevenue
 
 ❌ **Bad Approach** (Hardcoded Logic):
 ```sql
-WHERE OrderDate >= DATEADD(day, -90, GETDATE())
+WHERE OrderDate >= <a hardcoded "90 days before now" expression>
 ```
 
 ✅ **Good Approach** (Parameterized):

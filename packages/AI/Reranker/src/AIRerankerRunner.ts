@@ -281,17 +281,13 @@ export class AIRerankerRunner extends BaseModelRunner {
         return !hasActiveVendor && model.Name === LEGACY_LLM_RERANKER_MODEL_NAME;
     }
 
-    /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+    /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
     private selectCandidate(request: RerankRequest, candidates: ModelVendorCandidate[]): RerankSelection | string {
-        const credentialAvailability = new Map<string, boolean>();
-        let selected: ModelVendorCandidate | undefined;
-        for (const candidate of candidates) {
-            const available = this.HasCredentialsAvailable(candidate.driverClass, request.Prompt.ID, candidate.model.ID, candidate.vendorId, request.PromptParams);
-            credentialAvailability.set(this.candidateKey(candidate), available);
-            if (available && !selected) {
-                selected = candidate;
-            }
-        }
+        const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+            candidates,
+            c => this.HasCredentialsAvailable(c.driverClass, request.Prompt.ID, c.model.ID, c.vendorId, request.PromptParams),
+            true
+        );
         if (!selected) {
             const summary = candidates
                 .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -400,7 +396,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         const startTime = new Date();
         const bound = this.createExecutionBound(request.Prompt, request.PromptParams, request.PromptParams.cancellationToken);
         try {
-            const response = await this.RaceWithinBound(driver.Rerank(this.driverParams(request.Params, bound)), bound, request.Prompt);
+            const response = await this.RaceWithinBound(driver.Rerank(this.driverParams(request.Params, bound, candidate)), bound, request.Prompt);
             if (!response.success) {
                 return this.failedResponseAttempt(response, candidate, bound);
             }
@@ -418,14 +414,19 @@ export class AIRerankerRunner extends BaseModelRunner {
         }
     }
 
-    /** The driver's own params: the rerank fields, and the bound's signal as its cancellation token. */
-    private driverParams(params: AIRerankParams, bound: ExecutionBound): RerankParams {
+    /**
+     * The driver's own params: the rerank fields, the bound's signal as its cancellation token, and the
+     * candidate's model-vendor `MaxInputTokens` as the per-document token limit.
+     */
+    private driverParams(params: AIRerankParams, bound: ExecutionBound, candidate: ModelVendorCandidate): RerankParams {
+        const modelVendor = candidate.model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, candidate.vendorId));
         return {
             query: params.query,
             documents: params.documents,
             topK: params.topK,
             options: params.options,
             CancellationToken: bound.Signal,
+            MaxTokensPerDocument: modelVendor?.MaxInputTokens ?? undefined,
         };
     }
 
@@ -623,11 +624,6 @@ export class AIRerankerRunner extends BaseModelRunner {
         };
     }
 
-    /** The key format BaseModelRunner's failover credential cache uses. */
-    private candidateKey(candidate: ModelVendorCandidate): string {
-        return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-    }
-
     /** Records which candidate was chosen and why, for the run row. */
     private buildSelectionInfo(
         prompt: MJAIPromptEntityExtended,
@@ -642,7 +638,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         info.SelectionReason = 'First candidate with available credentials';
         info.FallbackUsed = false;
         info.ModelsConsidered = candidates.map(c => {
-            const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+            const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
             return {
                 model: c.model,
                 vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,

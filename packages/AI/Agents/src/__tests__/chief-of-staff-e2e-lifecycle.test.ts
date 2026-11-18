@@ -3,13 +3,16 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import type { AgentAction, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
+import { BaseAgent } from '../base-agent.js';
 import { DetectVolatilePlaceholders } from '../volatile-child-prompt.js';
 import type {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
     MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule,
 } from '@memberjunction/core-entities';
-import type { UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,19 +51,22 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         const actionLookups = agents[0].relatedEntities['MJ: AI Agent Actions'].map((a) => a.fields.ActionID);
         expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Schedule Next Agent Wake');
         expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Configure Agent User Policy');
-        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Chief of Staff Inter-Agent Request');
-        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Prepare Chief of Staff Outbound Call');
+        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Send Inter-Agent Request');
+        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Prepare Outbound Call Brief');
 
         const templateContent = fs.readFileSync(templatePath, 'utf8');
         expect(DetectVolatilePlaceholders(templateContent)).toEqual([]);
         expect(templateContent).toContain('Schedule Next Agent Wake');
         expect(templateContent).toContain('Configure Agent User Policy');
+        // Core carries no knowledge of an Open App's entities; business data arrives through skills.
+        expect(templateContent).not.toMatch(/BizApps/i);
+        expect(templateContent).toContain('ScheduleMode: "OneShot"');
     });
 
     it('enforces onboarding policy, RLS/FLS entity narrowing, time windows, and action approval gates end-to-end', () => {
         const entityRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[] = [
             {
-                entityPattern: 'MJ_BizApps_Tasks:*',
+                entityPattern: 'Sales:*',
                 access: 'ReadWrite',
                 rlsNarrowing: {
                     whereClause: "CreatedByPersonID = 'person-exec-1'",
@@ -71,7 +77,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
                 },
             },
             {
-                entityPattern: 'MJ_BizApps_Issues:*',
+                entityPattern: 'Support:*',
                 access: 'ReadOnly',
             },
         ];
@@ -87,7 +93,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
                 rationale: 'External emails require explicit executive sign-off',
             },
             {
-                actionPattern: 'Prepare Chief of Staff Outbound Call',
+                actionPattern: 'Prepare Outbound Call Brief',
                 policy: 'Allow',
                 timeWindows: [
                     {
@@ -126,9 +132,9 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
 
         const engine = AgentUserPolicyEngine.Instance;
 
-        // 1. Tasks entity update allowed with narrowed RLS & FLS; Delete requires approval due to RequireApprovalForDestructiveActions; Issues write denied due to ReadOnly
+        // 1. Opportunities update allowed with narrowed RLS & FLS; Delete requires approval due to RequireApprovalForDestructiveActions; Tickets write denied due to ReadOnly
         const taskUpdate = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Tasks: Tasks',
+            entityName: 'Sales: Opportunities',
             operation: 'Update',
             contextUser,
             policy,
@@ -139,7 +145,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(taskUpdate.deniedFieldPatterns).toEqual(['InternalCostNotes']);
 
         const taskDelete = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Tasks: Tasks',
+            entityName: 'Sales: Opportunities',
             operation: 'Delete',
             contextUser,
             policy,
@@ -147,7 +153,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(taskDelete.verdict).toBe('RequireApproval');
 
         const issueUpdate = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Issues: Issues',
+            entityName: 'Support: Tickets',
             operation: 'Update',
             contextUser,
             policy,
@@ -184,5 +190,75 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(promptBlock).toContain('Atlas');
         expect(promptBlock).toContain('Coordinator');
         expect(promptBlock).toContain('Focus on Q4 enterprise renewals');
+    });
+
+    it('BaseAgent.checkUserActionPolicy loads the user policy on cold cache and fails closed on lookup error', async () => {
+        class TestPolicyGateAgent extends BaseAgent {
+            public ExposeCheckUserActionPolicy(
+                params: ExecuteAgentParams,
+                action: AgentAction,
+                actionEntity: MJActionEntityExtended,
+                user?: UserInfo
+            ): Promise<ActionResult | null> {
+                return this.checkUserActionPolicy(params, action, actionEntity, user);
+            }
+        }
+
+        const agent = new TestPolicyGateAgent();
+        const actionEntity = {
+            ID: 'act-send-1',
+            Name: 'Send Single Message',
+            Params: [],
+        } as unknown as MJActionEntityExtended;
+        const action: AgentAction = {
+            name: 'Send Single Message',
+            params: {},
+        };
+
+        const coldPolicy = {
+            ID: 'pol-cold-1',
+            AgentID: 'agent-cos-1',
+            UserID: contextUser.ID,
+            Status: 'Active',
+            ActionPolicyRulesObject: [
+                {
+                    actionPattern: 'Send Single Message',
+                    policy: 'Deny',
+                    rationale: 'Outbound messages disabled by user policy',
+                },
+            ],
+        } as unknown as MJAIAgentUserPolicyEntity;
+
+        // 1. Cold cache (GetCachedPolicy returns null): checkUserActionPolicy loads via provider.RunView and enforces Deny
+        let runViewShouldFail = false;
+        const providerWithRunView = {
+            RunView: async () =>
+                runViewShouldFail
+                    ? { Success: false, Results: [], ErrorMessage: 'Simulated policy store outage' }
+                    : { Success: true, Results: [coldPolicy] },
+        } as unknown as IMetadataProvider;
+
+        const execParams = {
+            agent: { ID: 'agent-cos-1', Name: 'Chief of Staff' },
+            contextUser,
+            provider: providerWithRunView,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams;
+
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos-1', contextUser.ID, providerWithRunView)).toBeNull();
+        const coldDenied = await agent.ExposeCheckUserActionPolicy(execParams, action, actionEntity, contextUser);
+        expect(coldDenied).not.toBeNull();
+        expect(coldDenied?.Success).toBe(false);
+        expect(coldDenied?.ResultCode).toBe('POLICY_DENIED');
+        expect(coldDenied?.Message).toContain("Action 'Send Single Message' denied by action policy rule");
+
+        // 2. Lookup error on cold cache fails closed with POLICY_DENIED
+        AgentUserPolicyEngine.Instance.ClearCache();
+        runViewShouldFail = true;
+        const errorBlocked = await agent.ExposeCheckUserActionPolicy(execParams, action, actionEntity, contextUser);
+        expect(errorBlocked).not.toBeNull();
+        expect(errorBlocked?.Success).toBe(false);
+        expect(errorBlocked?.ResultCode).toBe('POLICY_DENIED');
+        expect(errorBlocked?.Message).toContain('Simulated policy store outage');
     });
 });

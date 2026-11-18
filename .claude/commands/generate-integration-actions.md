@@ -35,8 +35,8 @@ Output goes to `metadata/actions/integrations-auto-generated/.<connector>-action
 
 5. **Important notes for the user**:
    - For HubSpot migration: also run `node scripts/migrate-hubspot-actions.mjs` to preserve database primary keys and add delete markers for old params/result codes
-   - New actions (no `primaryKey`) will be created as new DB records on `mj sync push`
-   - Actions with `primaryKey` will update existing DB records
+   - The generator writes a `primaryKey` on every action, action param and result code (`metadata/CLAUDE.md` rule 1), so nothing needs adding by hand before pushing
+   - To regenerate over an existing file, pass its parsed records as `ExistingActionRecords` in the generator config: matching records (action `Name`, param `Name` + `Type`, `ResultCode`) keep their IDs, so the push updates the rows it created last time instead of duplicating them
    - Push with: `pnpm mj sync push --dir=metadata --include="actions"`
 
 ## Adding a New Connector

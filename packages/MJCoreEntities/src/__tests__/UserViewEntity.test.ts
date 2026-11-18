@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mocks must be defined before importing the module under test
 // ============================================================================
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/global')>()),
     RegisterClass: () => () => {},
     MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } },
     // Case-insensitive UUID equality — enough for the permission/ownership checks under test.
@@ -12,7 +13,9 @@ vi.mock('@memberjunction/global', () => ({
         (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
+    // The real validator, so the view's save-time Properties checks are exercised for real.
+    const { ValidateUserViewProperties, CompositeFilterSQLCompiler } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     class MockBaseInfo {
         copyInitData(data: Record<string, unknown>) {
             if (data) Object.assign(this, data);
@@ -61,6 +64,12 @@ vi.mock('@memberjunction/core', () => {
             Success = true;
             Errors: unknown[] = [];
         },
+        ValidationErrorInfo: class {
+            constructor(public Source: string, public Message: string, public Value: unknown, public Type: string) {}
+        },
+        ValidationErrorType: { Failure: 'Failure', Warning: 'Warning' },
+        ValidateUserViewProperties,
+        CompositeFilterSQLCompiler,
         ParseFilterField: (field: string) => {
             const raw = (field ?? '').trim();
             const dot = raw.indexOf('.');
@@ -97,6 +106,8 @@ vi.mock('../generated/entity_subclasses', () => ({
         Set(_name: string, _value: unknown) { /* no-op */ }
         CheckPermissions() { return true; }
         Save(_options?: unknown) { return Promise.resolve(true); }
+        Properties: string | null = null;
+        Validate() { return { Success: true, Errors: [] as { Message: string }[] }; }
 
         // Mock *Object accessors matching the CodeGen-generated pattern
         get GridStateObject() { return this.GridState ? JSON.parse(this.GridState) : null; }
@@ -820,6 +831,31 @@ describe('MJUserViewEntityExtended', () => {
     });
 
     // ----------------------------------------------------------------
+    // AlternateBaseView getter & setter
+    // ----------------------------------------------------------------
+    describe('AlternateBaseView', () => {
+        it('should return null when DisplayState is null or has no alternateBaseView', () => {
+            view.DisplayState = null;
+            expect(view.AlternateBaseView).toBeNull();
+            view.DisplayState = JSON.stringify({ defaultMode: 'grid' });
+            expect(view.AlternateBaseView).toBeNull();
+        });
+
+        it('should set and clear alternateBaseView in DisplayState while preserving other fields', () => {
+            view.DisplayState = JSON.stringify({ defaultMode: 'cards', enabledModes: { grid: true } });
+            view.AlternateBaseView = '  Active  ';
+            expect(view.AlternateBaseView).toBe('Active');
+            const parsed = JSON.parse(view.DisplayState as string);
+            expect(parsed.defaultMode).toBe('cards');
+            expect(parsed.alternateBaseView).toBe('Active');
+
+            view.AlternateBaseView = null;
+            expect(view.AlternateBaseView).toBeNull();
+            expect(JSON.parse(view.DisplayState as string).alternateBaseView).toBeUndefined();
+        });
+    });
+
+    // ----------------------------------------------------------------
     // isViewModeEnabled
     // ----------------------------------------------------------------
     describe('isViewModeEnabled', () => {
@@ -1080,12 +1116,12 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- isempty operator ---
-        it('should generate IS NULL for isempty', () => {
+        it('should generate IS NULL OR = empty string for isempty on string fields', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'Name', operator: 'isempty', value: '' }],
             });
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe('([Name] IS NULL)');
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] IS NULL OR [Name] = '')");
         });
 
         // --- isnotnull operator ---
@@ -1098,12 +1134,12 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- isnotempty operator ---
-        it('should generate IS NOT NULL for isnotempty', () => {
+        it('should generate IS NOT NULL AND <> empty string for isnotempty on string fields', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'Name', operator: 'isnotempty', value: '' }],
             });
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe('([Name] IS NOT NULL)');
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] IS NOT NULL AND [Name] <> '')");
         });
 
         // --- Boolean value conversion ---
@@ -1259,14 +1295,70 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- Case-insensitive field name matching ---
-        it('should match field names case-insensitively', () => {
+        it('should match field names case-insensitively and emit the canonical entity field name', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'name', operator: 'eq', value: 'Test' }],
             });
-            // The field is 'Name' in entity but 'name' in filter -- should still match
-            // Note: the output uses the field name from the filter (not from the entity)
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([name] = 'Test')");
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] = 'Test')");
+        });
+
+        // --- Phase 0: Escaping and SQL injection hardening ---
+        it("should escape single quotes in string values (e.g. O'Brien)", () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'eq', value: "O'Brien" }],
+            });
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] = 'O''Brien')");
+        });
+
+        it('should neutralize SQL injection attempts in string filter values and LIKE patterns', () => {
+            const eqInjection = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'eq', value: "x') OR 1=1 --" }],
+            });
+            expect(testView.TestGenerateWhereClause(eqInjection, entityInfo)).toBe("([Name] = 'x'') OR 1=1 --')");
+
+            const likeWildcardAndQuote = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'contains', value: "50%_O'Brien[1]" }],
+            });
+            expect(testView.TestGenerateWhereClause(likeWildcardAndQuote, entityInfo)).toBe(
+                "([Name] LIKE '%50[%][_]O''Brien[[]1]%')"
+            );
+        });
+
+        it('should reject non-numeric payloads on Number fields instead of interpolating raw text', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'TotalRevenue', operator: 'gt', value: '100 OR 1=1' }],
+            });
+            expect(() => testView.TestGenerateWhereClause(fs, entityInfo)).toThrow(
+                /Invalid numeric filter value/
+            );
+        });
+
+        it('should reject invalid date strings on Date fields', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'CreatedAt', operator: 'gte', value: "not-a-date' OR 1=1 --" }],
+            });
+            expect(() => testView.TestGenerateWhereClause(fs, entityInfo)).toThrow(
+                /Invalid date string filter value/
+            );
+        });
+
+        it('should compile in, notin, and between operators', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [
+                    { field: 'City', operator: 'in', value: ['Chicago', "O'Fallon"] },
+                    { field: 'ActivityCount', operator: 'between', value: [5, 20] },
+                ],
+            });
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe(
+                "([City] IN ('Chicago', 'O''Fallon')) AND ([ActivityCount] BETWEEN 5 AND 20)"
+            );
         });
 
         // --- Empty filters array ---
@@ -1607,6 +1699,38 @@ describe('MJUserViewEntityExtended WhereClause regeneration', () => {
         expect(view.WhereClause).toBe('[IsActive] = 1');
     });
 
+    // A BLANK clause is the same state as a missing one. The server's generator can return '' (or a
+    // model's whitespace), `WhereClause = SmartFilterWhereClause` then makes the view return EVERY
+    // row, and a re-save of the same prompt leaves no field dirty, so nothing ever retried it.
+    it.each([
+        ['empty', ''],
+        ['whitespace-only', '   '],
+    ])('UpdateWhereClause() on an EXISTING record whose SmartFilterWhereClause is %s calls the AI', async (_label, blank) => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: blank });
+        await view.UpdateWhereClause();
+        expect(view.GenerateCalls).toHaveLength(1);
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it('Save() on an EXISTING record with a smart filter but an empty clause regenerates it although nothing is Dirty', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '' });
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([{ prompt: 'Only active records' }]);
+        expect(view.SmartFilterWhereClause).toBe('[IsActive] = 1');
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it.each([
+        ['the smart filter is off', { smartEnabled: false, prompt: 'Only active records' }],
+        ['the prompt is blank', { smartEnabled: true, prompt: '  ' }],
+    ])('Save() on an EXISTING record with an empty clause leaves the WhereClause alone when %s', async (_label, init) => {
+        const view = makeSmartView({ isSaved: true, existingSmartWhere: '', ...init });
+        (view as unknown as Record<string, unknown>)['WhereClause'] = "([Name] = 'Acme')";
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([]);
+        expect(view.WhereClause).toBe("([Name] = 'Acme')");
+    });
+
     it('Save() on an EXISTING record with a changed prompt regenerates via the AI', async () => {
         const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Inactive only', promptDirty: true, existingSmartWhere: '[IsActive] = 1' });
         view.GeneratedWhereClause = '[IsActive] = 0';
@@ -1619,5 +1743,70 @@ describe('MJUserViewEntityExtended WhereClause regeneration', () => {
         const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '[IsActive] = 1' });
         await view.UpdateWhereClause(true);
         expect(view.GenerateCalls).toHaveLength(1);
+    });
+});
+
+describe('MJUserViewEntityExtended.Validate: Properties', () => {
+    const entityInfo = makeMockEntityInfo([
+        { Name: 'ID', NeedsQuotes: true, TSType: 'String' },
+        { Name: 'ChapterID', NeedsQuotes: true, TSType: 'String' },
+    ]);
+
+    function validate(properties: string | null) {
+        return createView({ _ViewEntityInfo: entityInfo, Properties: properties }).Validate();
+    }
+
+    it('a view with no properties validates exactly as before', () => {
+        expect(validate(null)).toEqual({ Success: true, Errors: [] });
+        expect(validate('')).toEqual({ Success: true, Errors: [] });
+    });
+
+    it('accepts well-formed properties', () => {
+        const ok = JSON.stringify([{ Name: 'Chapter', Type: 'uuid', AllowOverride: false, Target: { Field: 'ChapterID', Operator: '=' } }]);
+        expect(validate(ok).Success).toBe(true);
+    });
+
+    it('refuses a save with a bad property, naming it', () => {
+        const bad = JSON.stringify([
+            { Name: 'Chapter', Type: 'uuid', Target: { Field: 'Region', Operator: '>' }, Default: { Token: 'Context.Today' } },
+        ]);
+        const result = validate(bad);
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Message)).toEqual([
+            'Property "Chapter": Target.Field "Region" is not a field of the view\'s entity.',
+            'Property "Chapter": Target.Operator > does not apply to a uuid property. Allowed: =, <>, IN.',
+            'Property "Chapter": Context.Today cannot default a uuid property.',
+        ]);
+    });
+
+    it('refuses invalid JSON', () => {
+        const result = validate('[{');
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Message)).toEqual(['Properties must be valid JSON.']);
+    });
+});
+
+describe('MJUserViewEntityExtended.GenerateWhereClauseFromFilterState FLS enforcement', () => {
+    it('enforces field-level security when user is provided and a restricted field is referenced', () => {
+        const entityInfo = makeMockEntityInfo([
+            { Name: 'Name', NeedsQuotes: true, TSType: 'String' },
+            { Name: 'Salary', NeedsQuotes: false, TSType: 'Number' },
+        ]) as unknown as Record<string, unknown>;
+        entityInfo.FieldLevelSecurityApplies = true;
+        entityInfo.GetDeniedReadFields = () => new Set(['salary']);
+
+        const filterState = JSON.stringify({
+            logic: 'and',
+            filters: [{ field: 'Salary', operator: 'gt', value: 100000 }],
+        });
+        const restrictedUser = { ID: 'u-restricted', Name: 'Restricted User', Email: 'r@example.com' };
+
+        expect(() =>
+            MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(
+                filterState,
+                entityInfo as never,
+                restrictedUser as never,
+            ),
+        ).toThrow(/Field 'Salary' does not exist on entity 'MJTestEntity' or you do not have access to it/);
     });
 });

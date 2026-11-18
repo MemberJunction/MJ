@@ -621,6 +621,32 @@ describe('TemplateEngineServer', () => {
             );
             expect(result2.Output).toBe('second');
         });
+
+        it('renders raw when autoescape is false and escapes by default', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            } as never;
+            const content = { ID: 'tc-amp', TemplateText: 'Job Title: {{ Title }}' } as never;
+            const raw = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true, { autoescape: false });
+            const escaped = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true);
+            expect(raw.Output).toBe('Job Title: Affineur & Owner');
+            expect(escaped.Output).toBe('Job Title: Affineur &amp; Owner');
+        });
+
+        it('registers the template extensions on the raw environment', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            mockGetAllRegistrations.mockReturnValue([{ Key: 'template', SubClass: EmbedExtensionStandIn }]);
+            const result = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-ext', TemplateText: '{% template "Child" %}' } as never, {}, true, true, { autoescape: false });
+            mockGetAllRegistrations.mockReturnValue([]);
+            // the stand-in parses the tag; without the extension the compile fails with "unknown block tag"
+            expect(result.Message ?? '').not.toContain('unknown block tag');
+        });
     });
 
     describe('mergeDefaultValues', () => {
@@ -785,6 +811,25 @@ describe('TemplateEngineServer', () => {
             expect(result.Success).toBe(true);
             expect(result.Output).toBe('c');
         });
+
+        it('should automatically recompile when TemplateText changes in-place for the same contentId (MJ-CORE-5 AutoRefresh)', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            const tc = { ID: 'auto-refresh-id', TemplateText: 'Before: {{ x }}' };
+
+            const first = await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'val' });
+            expect(first.Success).toBe(true);
+            expect(first.Output).toBe('Before: val');
+
+            // Simulate AutoRefresh updating TemplateText on the cached entity
+            tc.TemplateText = 'After: {{ x }}!';
+            const second = await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'val' });
+            expect(second.Success).toBe(true);
+            expect(second.Output).toBe('After: val!');
+        });
     });
 
     describe('AddTemplate', () => {
@@ -834,6 +879,45 @@ describe('TemplateEngineServer', () => {
             const afterClear = engine.GetReferencedVariables(text);
             expect(afterClear).not.toBe(first);
             expect(afterClear.Names.has('childVar')).toBe(true);
+        });
+
+        it('should keep compiled templates across a warm Config(false) and drop them on Config(true)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const compile = vi.spyOn(engine as unknown as { createNunjucksTemplate: () => unknown }, 'createNunjucksTemplate');
+            try {
+                // Use a block tag so this test exercises compiled Nunjucks template caching rather than the pure-interpolation fast path.
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(2);
+            } finally {
+                compile.mockRestore();
+            }
+        });
+
+        it('should see an edited embedded template after a warm Config(false)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Child" %}{{ a }}';
+            expect(engine.GetReferencedVariables(text).Names.has('childVar')).toBe(true);
+
+            // AutoRefresh updates the embedded template in place; the parent's text does not change.
+            const content = childTemplate.Content[0];
+            const original = content.TemplateText;
+            content.TemplateText = '{{ editedChildVar }}';
+            try {
+                await engine.Config(false, { ID: 'test-user', Name: 'Test' } as never);
+                const result = engine.GetReferencedVariables(text);
+                expect(result.Names.has('editedChildVar')).toBe(true);
+                expect(result.Names.has('childVar')).toBe(false);
+            } finally {
+                content.TemplateText = original;
+            }
         });
 
         it('should return a frozen result', async () => {
@@ -918,6 +1002,50 @@ describe('TemplateEngineServer', () => {
 
             expect(result.Complete).toBe(true);
             expect(result.Names.has('childVar')).toBe(true);
+        });
+    });
+
+    describe('Sync extension-free fast path parity', () => {
+        it('renders HTML escaping, raw autoescape:false, loops, and custom json filters identically via fast path', async () => {
+            const escaped = await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'Acme & <Co>' });
+            expect(escaped).toEqual({ Success: true, Output: 'Hello Acme &amp; &lt;Co&gt;', Message: undefined });
+
+            const raw = await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'Acme & Co' }, { autoescape: false });
+            expect(raw).toEqual({ Success: true, Output: 'Hello Acme & Co', Message: undefined });
+
+            const loopResult = await engine.RenderTemplateSimple(
+                '{% for item in items %}{% if not loop.first %},{% endif %}{{ item }}{% endfor %} | {{ meta | jsoninline }}',
+                { items: ['a', 'b', 'c'], meta: { ok: true } },
+            );
+            expect(loopResult).toEqual({ Success: true, Output: 'a,b,c | {&quot;ok&quot;:true}', Message: undefined });
+
+            const rawLoopResult = await engine.RenderTemplateSimple(
+                '{% for item in items %}{% if not loop.first %},{% endif %}{{ item }}{% endfor %} | {{ meta | jsoninline }}',
+                { items: ['a', 'b', 'c'], meta: { ok: true } },
+                { autoescape: false },
+            );
+            expect(rawLoopResult).toEqual({ Success: true, Output: 'a,b,c | {"ok":true}', Message: undefined });
+        });
+
+        it('returns structured error result when sync fast-path template syntax throws', async () => {
+            const bad = await engine.RenderTemplateSimple('{{ unclosed', {});
+            expect(bad.Success).toBe(false);
+            expect(bad.Output).toBeNull();
+            expect(typeof bad.Message).toBe('string');
+            expect(bad.Message!.length).toBeGreaterThan(0);
+        });
+
+        it('renders via RenderTemplateSimple even before Config/SetupNunjucks initializes _nunjucksEnv', async () => {
+            const prevEnv = Reflect.get(engine, '_nunjucksEnv');
+            try {
+                Reflect.set(engine, '_nunjucksEnv', undefined);
+                engine.ClearTemplateCache();
+                const res = await engine.RenderTemplateSimple('Hello {{ who }}!', { who: 'World' });
+                expect(res).toEqual({ Success: true, Output: 'Hello World!', Message: undefined });
+            } finally {
+                Reflect.set(engine, '_nunjucksEnv', prevEnv);
+                engine.ClearTemplateCache();
+            }
         });
     });
 });

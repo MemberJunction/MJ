@@ -1353,7 +1353,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-copy"
+      "IconClass": "fa-solid fa-copy",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1527,8 +1530,8 @@
       "ID": "C7A56108-A83F-4885-80A4-FC2F3D9A78A1"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.736Z",
-      "checksum": "f2665a7021059a8d9d3f843faa383212aef1dcf4c12f8318e13157333d52c634"
+      "lastModified": "2026-11-10T23:41:29.285Z",
+      "checksum": "ae546b7c5258febf8a6328dd5b3f3b49abc1fdd9c68ea5364d65a2576283bc31"
     }
   },
   {
@@ -1539,7 +1542,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-arrows-turn-right"
+      "IconClass": "fa-solid fa-arrows-turn-right",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1713,8 +1719,8 @@
       "ID": "F41B61FE-2935-4DFC-A014-1007137310C8"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.737Z",
-      "checksum": "fa5544e646aad7df8283aac72e1552043a6a995a3715300e6a115cc4144d57a9"
+      "lastModified": "2026-11-10T23:41:29.297Z",
+      "checksum": "6eac73e720d4a915e0d51da23f4bb5f20c6a9e90e3fb5e860ab47d41a6859bcb"
     }
   },
   {
@@ -1725,7 +1731,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1866,8 +1875,8 @@
       "ID": "A27F079D-7E3A-442C-A971-DE242F3B6B02"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.738Z",
-      "checksum": "81e863d5147def4576de02873105b5ad8ba9bbdac30af72de62d090affdbd4cc"
+      "lastModified": "2026-11-10T23:41:29.308Z",
+      "checksum": "09fee6daf86d73ea43c08e37aa080f80844c135f1cd1bcbf2746d4ddafa30283"
     }
   },
   {
@@ -1878,7 +1887,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-folder-plus"
+      "IconClass": "fa-solid fa-folder-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2019,8 +2031,8 @@
       "ID": "7CF5A461-0115-4686-80E7-745AED222ED0"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.776Z",
-      "checksum": "39695815a83a0755ee33b438e1e303c33ade5fcf576de1bab1e9c9182197a6d3"
+      "lastModified": "2026-11-10T23:41:29.320Z",
+      "checksum": "4e98e19871b42aa7bd3c213773ed17d834341e9840deb7cf9dd8dda772ac0cff"
     }
   },
   {
@@ -2031,7 +2043,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-folder-minus"
+      "IconClass": "fa-solid fa-folder-minus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2191,8 +2206,8 @@
       "ID": "7A21C9D9-4718-4E09-BAD1-6F4C5252D840"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.777Z",
-      "checksum": "611ce8c9b0c7359505f1acb98670a4f160720e6b9367b18b77074ca9fb2631c1"
+      "lastModified": "2026-11-10T23:41:29.332Z",
+      "checksum": "dff555936e90bf2a20b05e36fb1e717141baa6d249c3c481dcf8b2db556ac87d"
     }
   }
 ]

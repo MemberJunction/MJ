@@ -16,6 +16,10 @@ import {
   parseVisionOutput,
   readImageRef,
 } from '../feature-assembly';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+
+/** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
 
 /**
  * Unit tests for the multimodal vision-LLM-as-feature step (plan §11 / PS-MM-1).
@@ -27,7 +31,9 @@ class InMemoryDataAccess implements IFeatureDataAccess {
   constructor(private readonly rowsByEntity: Record<string, SourceRow[]>) {}
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
     const rows = this.rowsByEntity[params.EntityName];
-    return rows ? { Success: true, Rows: rows } : { Success: false, Rows: [], ErrorMessage: `no fixture: ${params.EntityName}` };
+    return rows
+      ? { Success: true, Rows: rows, TotalRowCount: rows.length }
+      : { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `no fixture: ${params.EntityName}` };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -159,6 +165,7 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
     const dataAccess = new InMemoryDataAccess({ Assets: assets });
     const steps: FeatureStepGraph = { Steps: [{ Id: 's', Kind: 'select', Columns: ['tenure'] }, visionStep()] };
     const full: FeatureAssemblyParams = {
+      ...testScope,
       targetEntityName: 'Assets',
       records: assets,
       sources,
@@ -201,6 +208,7 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
     const runner = new FakeVisionRunner(() => structuredResult('item_count', 4));
     const dataAccess = new InMemoryDataAccess({ Assets: [{ ID: 'a', photo_url: 'http://img/a.png' }] });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Assets',
       records: [{ ID: 'a', photo_url: 'http://img/a.png' }],
       sources,
@@ -238,6 +246,7 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
     const runner = new FakeVisionRunner(() => structuredResult('condition', 'damaged'));
     const dataAccess = new InMemoryDataAccess({ Assets: [{ ID: 'a', tenure: 5, leaky: 9, photo_url: 'http://img/a.png' }] });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Assets',
       records: [{ ID: 'a', tenure: 5, leaky: 9, photo_url: 'http://img/a.png' }],
       sources,
@@ -257,6 +266,7 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
     const runner = new FakeVisionRunner(() => structuredResult('condition', 'damaged'));
     const dataAccess = new InMemoryDataAccess({ Assets: [{ ID: 'a', tenure: 5, photo_url: 'http://img/a.png' }] });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Assets',
       records: [{ ID: 'a', tenure: 5, photo_url: 'http://img/a.png' }],
       sources,

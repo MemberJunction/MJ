@@ -11,6 +11,39 @@
  */
 
 /**
+ * One action step inside a multi-step loop body (`ForEachOperation.steps` or `WhileOperation.steps`).
+ *
+ * Steps run sequentially in array order within each iteration with zero LLM round-trips between
+ * steps. Later steps in the same iteration can reference earlier step outputs via `steps.<id>.*`
+ * (or `steps.step_<index>.*` when `id` is omitted), alongside the loop's item/index bindings and
+ * `payload.*`.
+ *
+ * @since 6.2.0
+ */
+export interface LoopBodyActionStep {
+    /**
+     * Optional handle for referencing outputs from later steps in the same iteration (`steps.<id>.*`).
+     * Defaults to `step_<zeroBasedIndex>` when omitted.
+     */
+    id?: string;
+    /** Action name (canonical MJ Action name or sanitized native tool name). */
+    name: string;
+    /**
+     * Parameters passed to the action (`item.field`, `steps.<id>.field`, `payload.*`, `static:*`, or inline templates).
+     */
+    params: Record<string, unknown>;
+    /**
+     * Optional boolean expression evaluated before this step runs; falsy skips the step cleanly.
+     * May read `payload`, `steps`, `item` (or custom `itemVariable`), `index` (or custom `indexVariable`), and `iteration`.
+     */
+    condition?: string;
+    /**
+     * Optional JSON mapping string (`{"ActionOutputField": "payloadPath"}` or `"target[]"`) folding outputs into payload.
+     */
+    outputMapping?: string;
+}
+
+/**
  * Universal ForEach loop configuration used by all agent types.
  * Flow agents convert AIAgentStep configuration to this format.
  * Loop agents receive this from LLM responses.
@@ -60,6 +93,13 @@ export interface ForEachOperation {
         params: Record<string, unknown>;
         outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
     };
+
+    /**
+     * Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
+     * Mutually exclusive with `action`, `subAgent`, and `prompt`.
+     * @since 6.2.0
+     */
+    steps?: LoopBodyActionStep[];
 
     /** Execute sub-agent per iteration */
     subAgent?: {

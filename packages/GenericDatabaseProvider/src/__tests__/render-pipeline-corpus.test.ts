@@ -120,8 +120,9 @@ SELECT [ID], [Value] FROM [data].[vwRecords]`,
         expect(result.FinalSQL).toContain('[data].[vwRecords]');
     });
 
-    // TC-06.09: Nunjucks expression inside string literal + trailing ORDER BY (Bug D)
-    it('TC-06.09: strips ORDER BY when dep has template in string literal', () => {
+    // TC-06.09: a value tag inside a string literal in a dependency (the Bug D shape) is refused at
+    // run time: the value would be pasted between the quotes unescaped. The refusal names the dependency.
+    it('TC-06.09: refuses a composition whose dependency writes a value tag inside a string literal', () => {
         setupNoMetadata();
         const deps: QueryDependencySpec[] = [{
             Name: 'Filtered', CategoryPath: '/Test/', UsesTemplate: true, SQL:
@@ -130,16 +131,11 @@ FROM [data].[vwRecords]
 WHERE [Status] = '{{ StatusFilter }}'
 ORDER BY [Name] ASC`,
         }];
-        const result = RenderPipeline.Run(
+        expect(() => RenderPipeline.Run(
             `SELECT * FROM {{query:"Test/Filtered(StatusFilter=StatusFilter)"}} [r]`,
             { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
-              UsesTemplate: true, Parameters: { StatusFilter: 'Active' } }
-        );
-        // The dep ORDER BY must be stripped or made legal
-        const cteBody = extractCTEBody(result.Trace.AfterComposition);
-        const hasOrderBy = /ORDER\s+BY\s+\[Name\]\s+ASC/i.test(cteBody);
-        const hasOffset = /OFFSET\s+0\s+ROWS/i.test(cteBody);
-        expect(hasOrderBy === false || hasOffset).toBe(true);
+              UsesTemplate: true, Parameters: { StatusFilter: "x' OR 1=1 --" } }
+        )).toThrow(/^Query "Test\/Filtered" cannot run: .*\(parameter "StatusFilter"\) at line 3, column 19: '\{\{ StatusFilter \}\}'/);
     });
 
     // TC-06.10: ORDER BY after {% endif %} block
@@ -324,8 +320,8 @@ WHERE [p].[CleanValue] IS NOT NULL`,
         expect(result.FinalSQL).toContain('Parsed AS');
     });
 
-    // TC-03.06: Dep with inner CTE + Nunjucks template inside string literal (Bug D)
-    it('TC-03.06: strips ORDER BY when template is inside string literal', () => {
+    // TC-03.06: Dep with inner CTE + a filtered value that renders a string literal (the Bug D shape, as now written)
+    it('TC-03.06: strips ORDER BY when a filtered value renders a string literal', () => {
         setupNoMetadata();
         const deps: QueryDependencySpec[] = [{
             Name: 'MemberActivity', CategoryPath: '/Golden-Queries/Analytics/',
@@ -342,7 +338,7 @@ WHERE EXISTS (
     SELECT 1 FROM [ym].[vwMemberships] ms
     INNER JOIN [ym].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
     WHERE ms.MemberID = MemberActivities.MemberID
-      AND mt.Name = '{{ MembershipType }}'
+      AND mt.Name = {{ MembershipType | sqlString }}
 )
 {% endif %}
 ORDER BY TotalCount DESC`,
@@ -506,7 +502,7 @@ WITH Bridge AS (
 SELECT [b].[ID], [b].[Region], [b].[rn]
 FROM Bridge [b]
 {% if Region %}
-WHERE [b].[Region] = '{{ Region }}'
+WHERE [b].[Region] = {{ Region | sqlString }}
 {% endif %}
 ORDER BY [b].[rn]`,
             },
@@ -610,14 +606,42 @@ ORDER BY [LogCount] DESC`,
 
         expect(result.HasCompositions).toBe(true);
 
-        // Static param ResolvedOnly='1' should have been substituted
-        expect(result.Trace.AfterComposition).toContain("'1'");
+        // The static argument ResolvedOnly='1' reached the dependency's {% if %}. Render-then-compose evaluates
+        // it there instead of substituting the literal into the dependency's template text (C16), so the
+        // branch it selects is in the assembled SQL and the evaluated argument is in the instance trace.
+        expect(result.Trace.AfterComposition).toContain('[mel].[ResolvedMemberID] IS NOT NULL');
+        expect(result.Trace.Instances[0].Arguments).toEqual({ ResolvedOnly: '1', StartDate: '2024-01-01' });
 
         // After templates: no {{ }} tokens remain
         expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
 
         // Outer ORDER BY preserved
         expect(result.FinalSQL).toContain('ORDER BY');
+    });
+
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, each instance rendered before it is
+    // composed (DISCUSSION §6, 2026-10-27; Topic 2c/2d). C16. Was pinned with it.fails while composition ran
+    // before rendering.
+    it('AfterComposition of a composed, templated query is the assembled SQL with no template tags', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'Conditional', CategoryPath: '/Test/', UsesTemplate: true, SQL:
+`SELECT [ID], [Value]
+FROM [data].[vwRecords]
+WHERE 1 = 1
+{% if Region %}
+    AND [Region] = {{ Region | sqlString }}
+{% endif %}`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT * FROM {{query:"Test/Conditional(Region=Region)"}} [r]`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+              UsesTemplate: true, Parameters: { Region: 'West' } }
+        );
+        expect(result.HasCompositions).toBe(true);
+        expect(result.Trace.AfterComposition).toContain('[data].[vwRecords]');
+        expect(result.Trace.AfterComposition).not.toMatch(/\{\{|\{%/);
+        expect(result.Trace.AfterComposition).toContain("[Region] = 'West'");
     });
 });
 
@@ -940,7 +964,7 @@ ORDER BY [ft].[Depth]`,
         expect(result.FinalSQL).toContain('ORDER BY [ft].[Depth]');
     });
 
-    it('recursive CTE dep with template expression inside string literal (Bug D pattern)', () => {
+    it('recursive CTE dep whose filtered value renders a string literal (the Bug D shape)', () => {
         setupNoMetadata();
         const deps: QueryDependencySpec[] = [{
             Name: 'TypedTree', CategoryPath: '/Analytics/',
@@ -956,7 +980,7 @@ ORDER BY [ft].[Depth]`,
 )
 SELECT * FROM TypedTree
 {% if TypeFilter %}
-WHERE [TypeName] = '{{ TypeFilter }}'
+WHERE [TypeName] = {{ TypeFilter | sqlString }}
 {% endif %}
 ORDER BY [Depth]`,
         }];
@@ -974,8 +998,7 @@ FROM {{query:"Analytics/TypedTree(TypeFilter=TypeFilter)"}} [tt]`,
         expect(result.FinalSQL).toContain('UNION ALL');
         expect(result.FinalSQL).toContain('INNER JOIN TypedTree');
 
-        // Bug D pattern: '{{ TypeFilter }}' inside string literal must not
-        // break ORDER BY detection — dep ORDER BY should be stripped
+        // The rendered string literal must not break ORDER BY detection — dep ORDER BY should be stripped
         const afterComp = result.Trace.AfterComposition;
         const cteBody = extractCTEBody(afterComp);
         const hasDepOrderBy = /ORDER\s+BY\s+\[Depth\]/i.test(cteBody);

@@ -2,6 +2,9 @@
   {
     "fields": {
       "Name": "Google Custom Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Performs web search using Google's Custom Search JSON API with advanced filtering and structured results. Provides high-quality search results with support for site filtering, date restrictions, file type filtering, and more.",
       "DriverClass": "Google Custom Search",
       "Type": "Custom",
@@ -481,8 +484,8 @@
       "ID": "FC003992-0203-4B23-946C-F9E9A40646AE"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:11.280Z",
-      "checksum": "41265a0608ac7787b0660f88233d4bbe804f1fc10988d0866b5dd9b236ae8416"
+      "lastModified": "2026-11-03T23:46:07.744Z",
+      "checksum": "62fdf4b45497a14081d8e7da04e4dadc8269375928011829402c40360b672923"
     }
   }
 ]

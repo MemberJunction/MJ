@@ -1,4 +1,5 @@
-import { Component, Input, AfterViewInit, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { Component, Input, AfterViewInit, OnDestroy, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
 
@@ -41,7 +42,8 @@ export class JoinGridRow {
   templateUrl: './join-grid.component.html',
   styleUrls: ['./join-grid.component.css']
 })
-export class JoinGridComponent extends BaseAngularComponent implements AfterViewInit {
+export class JoinGridComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
+  private _mjGlobalSub: Subscription | null = null;
   /**
    * Required: the name of the entity that will be used for displaying data for rows. This means that each row in the RowsEntity will be shown as a row in the grid
    * where the RowsEntityDisplayField will be used in the first column of the grid.
@@ -665,7 +667,8 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     this.Refresh();
 
     // setup event listener for MJGlobal because we might have a parent component that sends us messages
-    MJGlobal.Instance.GetEventListener(false).subscribe((e: MJEvent) => {
+    this._mjGlobalSub?.unsubscribe();
+    this._mjGlobalSub = MJGlobal.Instance.GetEventListener(false).subscribe((e: MJEvent) => {
       switch (e.event) {
         case MJEventType.ComponentEvent:
           const b = BaseFormComponentEventCodes; // having issues using the const vs the type if we refer to it below directly for comparison so assign the const to a local variable first
@@ -702,6 +705,15 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
           break;
       }
     });
+  }
+
+  /**
+   * Unsubscribes the global `MJGlobal` event listener when the component is destroyed
+   * so destroyed `JoinGridComponent` instances are not retained by the global event bus.
+   */
+  ngOnDestroy(): void {
+    this._mjGlobalSub?.unsubscribe();
+    this._mjGlobalSub = null;
   }
 
   /**

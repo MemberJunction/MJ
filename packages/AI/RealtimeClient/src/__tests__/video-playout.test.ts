@@ -266,6 +266,34 @@ describe('VideoPlayout', () => {
             expect(buffer.TypeChanges).toEqual([]);
             expect(buffer.Appended).toHaveLength(1);
         });
+
+        it('accepts bare video/mp4 frames when the browser rejects unparameterized MediaSource.isTypeSupported("video/mp4")', async () => {
+            FakeMediaSource.UnsupportedTypes.add('video/mp4');
+            const buffer = attachAndOpen();
+            playout.Append(PieceFrame(AvatarInitSegment(true), 'video/mp4'));
+            await settle();
+            expect(problems).toEqual([]);
+            expect(buffer.Appended).toHaveLength(1);
+        });
+
+        it('falls back to a codec-qualified MSE type when constructed with bare video/mp4 and init has no codec metadata', async () => {
+            FakeMediaSource.UnsupportedTypes.add('video/mp4');
+            const bareProblems: string[] = [];
+            const barePlayout = new VideoPlayout({
+                MimeType: 'video/mp4',
+                OnProblem: (problem) => bareProblems.push(problem.Kind),
+            });
+            barePlayout.Append(PieceFrame(AvatarInitSegment(false), 'video/mp4'));
+            const detach = AttachVideoSource(barePlayout.Source, video);
+            const source = FakeMediaSource.Instances[0];
+            source.Open();
+            await settle();
+            expect(bareProblems).toEqual([]);
+            expect(source.Buffers).toHaveLength(1);
+            expect(source.Buffers[0].Appended).toHaveLength(1);
+            detach();
+            barePlayout.Dispose();
+        });
     });
 
     describe('IsPlaying', () => {

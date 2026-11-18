@@ -180,4 +180,119 @@ describe('KeyedSerialTaskQueue', () => {
         await q.flush();
         expect(order).toEqual(['child']);
     });
+
+    describe('Settled (#6014)', () => {
+        it('resolves only after the key\'s latest task settles', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            const order: string[] = [];
+
+            q.Enqueue(key, async () => { await delay(10); order.push('first'); });
+            q.Enqueue(key, async () => { await delay(10); order.push('second'); });
+            await q.Settled(key);
+            order.push('settled');
+
+            expect(order).toEqual(['first', 'second', 'settled']);
+        });
+
+        it('resolves at once for a key with no task', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const other = {};
+            q.Enqueue(other, () => delay(50));
+
+            let settled = false;
+            void q.Settled({}).then(() => { settled = true; });
+            await Promise.resolve();
+
+            expect(settled).toBe(true);
+            await q.Flush();
+        });
+
+        it('resolves (does not reject) when the key\'s task failed', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            q.Enqueue(key, async () => { await delay(5); throw new Error('boom'); });
+
+            await expect(q.Settled(key)).resolves.toBeUndefined();
+            expect((await q.Flush()).rejections).toBe(1);
+        });
+
+        it('is a pure read — it neither enqueues nor delays later tasks', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            await q.Settled(key);
+            expect(await q.Flush()).toEqual({ failures: 0, rejections: 0 });
+        });
+    });
+
+    describe('Enqueue ready option (#6045)', () => {
+        it('does not run the task before `ready` resolves', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const order: string[] = [];
+            let release!: () => void;
+            const ready = new Promise<void>((r) => { release = r; });
+
+            void q.Enqueue({}, async () => { order.push('task'); }, { ready });
+            await delay(10);
+            expect(order).toEqual([]);
+
+            release();
+            await q.Flush();
+            expect(order).toEqual(['task']);
+        });
+
+        it('makes Flush wait for a task still gated on `ready`', async () => {
+            const q = new KeyedSerialTaskQueue();
+            let release!: () => void;
+            const ready = new Promise<void>((r) => { release = r; });
+            void q.Enqueue({}, async () => undefined, { ready });
+
+            let flushed = false;
+            const flush = q.Flush().then(() => { flushed = true; });
+            await delay(10);
+            expect(flushed).toBe(false);
+
+            release();
+            await flush;
+            expect(flushed).toBe(true);
+        });
+
+        it('still runs the task when `ready` rejects', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const order: string[] = [];
+            const ready = Promise.reject(new Error('log write failed'));
+
+            void q.Enqueue({}, async () => { order.push('task'); }, { ready });
+            await q.Flush();
+            expect(order).toEqual(['task']);
+        });
+
+        it('keeps per-key order when `ready` rejects before the prior task finishes', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            const order: string[] = [];
+
+            void q.Enqueue(key, async () => { await delay(20); order.push('prior'); });
+            void q.Enqueue(key, async () => { order.push('next'); }, { ready: Promise.reject(new Error('log write failed')) });
+            await q.Flush();
+
+            expect(order).toEqual(['prior', 'next']);
+        });
+
+        it('holds back only its own key, not other keys', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const order: string[] = [];
+            let release!: () => void;
+            const ready = new Promise<void>((r) => { release = r; });
+
+            void q.Enqueue({}, async () => { order.push('gated'); }, { ready });
+            void q.Enqueue({}, async () => { order.push('free'); });
+            await delay(10);
+            expect(order).toEqual(['free']);
+
+            release();
+            await q.Flush();
+            expect(order).toEqual(['free', 'gated']);
+        });
+    });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  BuildResizeCommitPatch, IsResizableKind,
+  BuildResizeCommitPatch, IsResizableKind, IsWhiteboardHexColor,
   WhiteboardChange, WhiteboardConnectorItem, WhiteboardHtmlItem, WhiteboardInkItem,
   WhiteboardItemKind, WhiteboardMarkdownItem, WhiteboardShapeItem,
   WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
@@ -280,6 +280,64 @@ describe('WhiteboardState', () => {
     it('should throw on malformed payloads', () => {
       expect(() => WhiteboardState.FromJSON('{"nope":true}')).toThrow();
       expect(() => WhiteboardState.FromJSON('not json')).toThrow();
+    });
+
+    it('R9-8 (case W2): should ensure idCounter never goes backwards after merge and does not overwrite existing items', () => {
+      const mergedPayload = JSON.stringify({
+        version: 2,
+        seq: 10,
+        idCounter: 2,
+        zCounter: 3,
+        pageCounter: 1,
+        activePageId: 'page-1',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            items: [
+              {
+                ID: 'shape-2',
+                Kind: 'shape',
+                Shape: 'rect',
+                X: 10,
+                Y: 10,
+                W: 100,
+                H: 60,
+                Label: 'Human Shape',
+                Z: 2,
+                Author: 'user',
+              },
+              {
+                ID: 'shape-3',
+                Kind: 'shape',
+                Shape: 'rect',
+                X: 120,
+                Y: 10,
+                W: 100,
+                H: 60,
+                Label: 'Agent Shape',
+                Z: 3,
+                Author: 'agent',
+              },
+            ],
+          },
+        ],
+      });
+
+      const loaded = state.LoadFromJSON(mergedPayload);
+      expect(loaded).toBe(true);
+      expect(state.GetItem('shape-3')?.Label).toBe('Agent Shape');
+
+      const newItem = state.AddItem(
+        { Kind: 'shape', Shape: 'rect', X: 200, Y: 10, W: 100, H: 60, Label: 'New Human Shape' },
+        'user',
+      );
+      expect(newItem).not.toBeNull();
+      expect(newItem?.ID).toBe('shape-4');
+      expect(state.GetItem('shape-3')).toBeDefined();
+      expect(state.GetItem('shape-3')?.Label).toBe('Agent Shape');
+      expect(state.GetItem('shape-4')).toBeDefined();
+      expect(state.GetItem('shape-4')?.Label).toBe('New Human Shape');
     });
   });
 });
@@ -641,14 +699,33 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
 });
 
 describe('WHITEBOARD_TOOL_DEFINITIONS', () => {
-  it('should describe all fourteen channel tools with parameter schemas', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(14);
+  it('should describe all eighteen channel tools with parameter schemas', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(18);
     const names = WHITEBOARD_TOOL_DEFINITIONS.map((d) => d.Name);
     expect(names).toEqual(Object.values(WHITEBOARD_TOOL_NAMES));
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {
       expect(def.Description.length).toBeGreaterThan(10);
       expect(def.ParametersSchema['type']).toBe('object');
       expect(def.ParametersSchema['properties']).toBeTruthy();
+    }
+  });
+});
+
+describe('IsWhiteboardHexColor', () => {
+  it('accepts #rgb and #rrggbb in either case', () => {
+    for (const c of ['#abc', '#ABC', '#1d4ed8', '#1D4ED8', '#000000']) {
+      expect(IsWhiteboardHexColor(c)).toBe(true);
+    }
+  });
+
+  it('rejects anything that is not a 3- or 6-digit hex, including CSS that could fetch', () => {
+    const rejected = [
+      '', '#', '#12', '#1234', '#12345', '#1234567', '#12345678', '#ggg', '1d4ed8',
+      ' #1d4ed8', 'red', 'rgb(0, 0, 0)', 'var(--mj-brand)', 'url(https://tracker.example/pixel.gif)',
+      '#fff url(https://tracker.example/pixel.gif)',
+    ];
+    for (const c of rejected) {
+      expect(IsWhiteboardHexColor(c), c).toBe(false);
     }
   });
 });

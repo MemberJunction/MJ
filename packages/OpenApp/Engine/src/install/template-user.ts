@@ -204,6 +204,7 @@ async function FindUser(context: TemplateUserContext, email: string): Promise<Us
             Fields: ['ID', 'IsTemplate'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         },
         context.ContextUser
     );

@@ -1,8 +1,9 @@
 import { LogError, LogStatus, RunView } from '@memberjunction/core';
-import { IndexByUUID } from '@memberjunction/global';
+import { IndexByUUID, ShutdownRegistry } from '@memberjunction/global';
+import { DEFAULT_CONVERSATION_DETAIL_RECONCILER_SETTINGS, type ConversationDetailReconcilerSettings } from '../backgroundSweepConfigUnits.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 
 /**
  * Grace period after a run reaches a terminal state before its conversation detail is considered
@@ -110,7 +111,9 @@ export async function ReconcileOrphanedConversationDetails(
                 LogError(`[OrphanDetailReconciler] No owner resolved for conversation ${detail.ConversationID}; leaving detail ${detail.ID}`);
                 continue;
             }
-            const writable = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', owner);
+            const writable = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', owner);
+            // Closing an agent's reply is the server's write: unmarked, the gate refuses any change to what a reply says.
+            writable.MarkServerAuthoredReply();
             if (!(await writable.Load(detail.ID))) {
                 LogError(`[OrphanDetailReconciler] Could not load detail ${detail.ID} for write`);
                 continue;
@@ -264,4 +267,34 @@ async function loadConversationOwners(
         }
     }
     return owners;
+}
+
+/**
+ * Runs {@link ReconcileOrphanedConversationDetails} once now (closes what a restart orphaned) and,
+ * when `settings.enabled`, again every `settings.sweepIntervalMs` (closes mid-life orphans),
+ * registering the timer for graceful shutdown. With `enabled` false only the startup pass runs, so an
+ * idle server sends no periodic queries for it (`conversationDetailReconciler`; see the Serverless
+ * Database Auto-Pause guide). A failed pass is logged, never thrown.
+ *
+ * @returns The repeat timer, or `null` when no repeat was scheduled.
+ */
+export function StartOrphanedConversationDetailReconciler(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    settings: ConversationDetailReconcilerSettings = DEFAULT_CONVERSATION_DETAIL_RECONCILER_SETTINGS
+): ReturnType<typeof setInterval> | null {
+    const pass = (): void => {
+        void ReconcileOrphanedConversationDetails(provider, contextUser)
+            .catch(err => LogError(`[OrphanDetailReconciler] Pass failed: ${err instanceof Error ? err.message : String(err)}`));
+    };
+    pass();
+    if (!settings.enabled) {
+        return null;
+    }
+    const timer = setInterval(pass, settings.sweepIntervalMs);
+    ShutdownRegistry.Instance.Register({
+        ShutdownName: 'OrphanDetailReconciler',
+        Shutdown: () => { clearInterval(timer); },
+    });
+    return timer;
 }

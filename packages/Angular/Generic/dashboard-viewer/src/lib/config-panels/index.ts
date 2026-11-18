@@ -6,3 +6,4 @@ export * from './weburl-config-panel.component';
 export * from './view-config-panel.component';
 export * from './query-config-panel.component';
 export * from './artifact-config-panel.component';
+export * from './component-config-panel.component';

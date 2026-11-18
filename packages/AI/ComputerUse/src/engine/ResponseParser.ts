@@ -270,18 +270,41 @@ export class ResponseParser {
         }
 
         // Try markdown code block first
-        const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-        if (codeBlockMatch) {
-            return codeBlockMatch[1].trim();
+        const fenced = ResponseParser.extractFencedBlock(trimmed);
+        if (fenced !== null) {
+            return fenced;
         }
 
-        // Find first { ... } block anywhere in text
-        const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return jsonMatch[0];
+        // Find first { ... } block anywhere in text: first '{' through last '}'
+        const open = trimmed.indexOf('{');
+        const close = trimmed.lastIndexOf('}');
+        if (open !== -1 && close > open) {
+            return trimmed.slice(open, close + 1);
         }
 
         return null;
+    }
+
+    /**
+     * Contents of the first ``` fenced block (an optional `json` tag after the opening fence is
+     * skipped), trimmed; null when there is no closing fence. Scans with indexOf rather than a
+     * regex so a long reply full of backticks parses in linear time (model output is untrusted).
+     */
+    private static extractFencedBlock(text: string): string | null {
+        const FENCE = '```';
+        const openFence = text.indexOf(FENCE);
+        if (openFence === -1) {
+            return null;
+        }
+        let start = openFence + FENCE.length;
+        if (text.startsWith('json', start)) {
+            start += 'json'.length;
+        }
+        const closeFence = text.indexOf(FENCE, start);
+        if (closeFence === -1) {
+            return null;
+        }
+        return text.slice(start, closeFence).trim();
     }
 
     // ─── Type Coercion Helpers ─────────────────────────────

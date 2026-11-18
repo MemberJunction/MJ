@@ -240,6 +240,16 @@ describe('ProviderBase Fields-Override Gate — PreRunView', () => {
             expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
         });
 
+        it('TrustLocalCacheCompletely=true (server mode) with explicit CacheLocal=false → narrow Fields preserved on miss', async () => {
+            provider.trustLocalCache = true;
+            await provider.RunView({
+                EntityName: 'Cacheable',
+                Fields: NARROW_FIELDS,
+                CacheLocal: false,
+            });
+            expect(lastCapturedFields(provider)).toEqual(NARROW_FIELDS);
+        });
+
         it('CacheLocal=true with no Fields requested → Fields is still rewritten (caller wanted all anyway)', async () => {
             await provider.RunView({
                 EntityName: 'Cacheable',
@@ -356,16 +366,18 @@ describe('ProviderBase Fields-Override Gate — PreRunViews', () => {
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
     });
 
-    it('Batch under TrustLocalCacheCompletely=true: per-entity gating still applies', async () => {
+    it('Batch under TrustLocalCacheCompletely=true: per-entity gating still applies and CacheLocal=false opts out', async () => {
         provider.trustLocalCache = true;
         await provider.RunViews([
             { EntityName: 'Cacheable', Fields: NARROW_FIELDS },
             { EntityName: 'NoCaching', Fields: NARROW_FIELDS },
             { EntityName: 'MJ: Record Changes', Fields: NARROW_FIELDS },
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, CacheLocal: false },
         ]);
         expect(capturedFieldsAt(provider,0)).toEqual(FULL_FIELDS);
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
         expect(capturedFieldsAt(provider,2)).toEqual(NARROW_FIELDS);
+        expect(capturedFieldsAt(provider,3)).toEqual(NARROW_FIELDS);
     });
 
     it('Batch with BypassCache=true on every item: every item keeps narrow Fields', async () => {
@@ -399,8 +411,8 @@ describe('ProviderBase Fields-Override Gate — PreRunViews', () => {
     it('Batch with one BypassCache=true item under server mode: only that item keeps narrow Fields', async () => {
         provider.trustLocalCache = true;
         await provider.RunViews([
-            { EntityName: 'Cacheable', Fields: NARROW_FIELDS },                      // server-mode → override
-            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, BypassCache: true },   // bypassed → no override
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS },                                         // server mode default → override
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, BypassCache: true },                     // bypassed → no override
         ]);
         expect(capturedFieldsAt(provider,0)).toEqual(FULL_FIELDS);
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
@@ -1051,13 +1063,27 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
         expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
         // …the cache entry stored the full-width rows…
         const fp = cacheManager.GenerateRunViewFingerprint(
-            { EntityName: 'Cacheable' } as unknown as Parameters<typeof cacheManager.GenerateRunViewFingerprint>[0],
+            { EntityName: 'Cacheable' },
             provider.InstanceConnectionString
         );
         const stored = await cacheManager.GetRunViewResult(fp);
-        expect(Object.keys(stored!.results[0] as Record<string, unknown>).sort()).toEqual([...FULL_FIELDS].sort());
+        expect(Object.keys(stored!.results[0] as Record<string, string | number | boolean | null>).sort()).toEqual([...FULL_FIELDS].sort());
         // …but the CALLER received exactly the columns they asked for.
         expect(rowKeys(result)).toEqual(['ID', 'Name']);
+    });
+
+    it('Explicit CacheLocal: false in server mode preserves narrow SQL on miss and avoids cache poisoning', async () => {
+        await provider.RunView({
+            EntityName: 'Cacheable',
+            Fields: ['ID', 'Name'],
+            CacheLocal: false,
+        });
+        expect(lastCapturedFields(provider)).toEqual(['ID', 'Name']);
+        const fp = cacheManager.GenerateRunViewFingerprint(
+            { EntityName: 'Cacheable' },
+            provider.InstanceConnectionString
+        );
+        expect(await cacheManager.GetRunViewResult(fp)).toBeNull();
     });
 
     it('MISS and subsequent HIT return byte-identical shapes for the same request (the regression this fix exists for)', async () => {
@@ -1071,7 +1097,7 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
             EntityName: 'Cacheable',
             Fields: ['Name', 'Status'],
         });
-        // Second call really was a HIT (no DB query)
+        // Second call really was a HIT (no DB query, even without CacheLocal once warmed)
         expect(provider.captured).toHaveLength(0);
 
         expect(missResult.Results).toEqual(hitResult.Results);
@@ -1099,13 +1125,13 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
 
     it('Batch RunViews with a mixed HIT + MISS keeps per-index alignment (merge + projection agree on ordering)', async () => {
         // Warm the unfiltered-query cache entry
-        await provider.RunView({ EntityName: 'Cacheable', Fields: ['ID'] });
+        await provider.RunView({ EntityName: 'Cacheable' });
         provider.reset();
 
         const [hit, miss] = await provider.RunViews([
-            // Same fingerprint as the warmed entry (Fields excluded from fingerprint) → HIT
+            // Same fingerprint as the warmed entry (Fields excluded from fingerprint) → HIT even without CacheLocal!
             { EntityName: 'Cacheable', Fields: ['ID', 'Status'] },
-            // Different filter → different fingerprint → MISS
+            // Different filter → different fingerprint → MISS with CacheLocal=true
             { EntityName: 'Cacheable', Fields: ['Name'], ExtraFilter: "Status='Active'" },
         ]);
 

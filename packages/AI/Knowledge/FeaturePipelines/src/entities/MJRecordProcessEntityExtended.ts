@@ -8,23 +8,42 @@
  * It lives here, not in `@memberjunction/core-entities`, because the rules live here and this package
  * already depends on that one. The class registers on both tiers: in the browser through the Angular
  * class manifests, and on the server as the parent of `MJRecordProcessEntityServer`. The save check
- * therefore covers every save path: the record form, the API, and metadata sync.
+ * therefore covers every save path: the record form, the API, and metadata sync. On the server, the save
+ * also checks that an LLM pipeline's prompt template renders its output constraints
+ * ({@link RecordProcessPromptTemplateCheck}).
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseEntity, type IEntityDataProvider, type IMetadataProvider } from '@memberjunction/core';
-import { RegisterClass, SafeJSONParse, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
-import { MJRecordProcessEntity } from '@memberjunction/core-entities';
-import { ValidateSpec, type DataFeatureSpec } from '../spec/data-feature-spec.js';
+import { BaseEntity, ProviderType, type IEntityDataProvider, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
+import { MJRecordProcessEntity, type MJAIPromptEntity } from '@memberjunction/core-entities';
+import { ConstraintPromptTemplate, ValidateSpec, type DataFeatureSpec } from '../spec/data-feature-spec.js';
 import {
   BuildEntityFieldValueLookup,
   GetFeaturePipelineCapabilities,
   ValidateOutputsAgainstCapabilities,
   type FeaturePipelineFieldValueLookup,
 } from '../spec/feature-pipeline-driver-capabilities.js';
+import { PromptTemplateContent } from '../templates/PromptTemplateContent.js';
 
 /** The fields of a Record Process row that decide whether its spec is checked, and what the spec is. */
 export type RecordProcessSpecFields = Pick<MJRecordProcessEntity, 'WorkType' | 'Status' | 'Configuration'>;
+
+/**
+ * The spec a Record Process row's save checks read: undefined when the row carries none to check (not Infer,
+ * `Disabled`, or no `Configuration`); null when its `Configuration` is not a JSON object.
+ */
+function checkedSpecOf(row: RecordProcessSpecFields): DataFeatureSpec | null | undefined {
+  if (row.WorkType !== 'Infer' || row.Status === 'Disabled') {
+    return undefined;
+  }
+  const configuration = row.Configuration?.trim();
+  if (!configuration) {
+    return undefined;
+  }
+  const spec = SafeJSONParse<DataFeatureSpec>(configuration);
+  return spec && typeof spec === 'object' && !Array.isArray(spec) ? spec : null;
+}
 
 /**
  * Why a Record Process row's Feature Pipeline spec cannot run, as one message per problem; empty when it
@@ -44,15 +63,11 @@ export function GetRecordProcessSpecProblems(
   row: RecordProcessSpecFields,
   fieldValues?: FeaturePipelineFieldValueLookup
 ): string[] {
-  if (row.WorkType !== 'Infer' || row.Status === 'Disabled') {
+  const spec = checkedSpecOf(row);
+  if (spec === undefined) {
     return [];
   }
-  const configuration = row.Configuration?.trim();
-  if (!configuration) {
-    return [];
-  }
-  const spec = SafeJSONParse<DataFeatureSpec>(configuration);
-  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+  if (spec === null) {
     return ['Configuration is not a DataFeatureSpec: it must be a JSON object.'];
   }
 
@@ -76,6 +91,7 @@ export function GetRecordProcessSpecProblems(
 /**
  * `MJ: Record Processes` with the Feature Pipeline save check. `Validate()` runs on both tiers before a
  * save, so a spec the pipeline type cannot run is refused in the browser and again on the server.
+ * `ValidateAsync()` adds the prompt-template check on the server.
  */
 @RegisterClass(BaseEntity, 'MJ: Record Processes')
 export class MJRecordProcessEntityExtended extends MJRecordProcessEntity {
@@ -87,6 +103,94 @@ export class MJRecordProcessEntityExtended extends MJRecordProcessEntity {
       result.Errors.push(new ValidationErrorInfo('Configuration', problem, this.Configuration, ValidationErrorType.Failure));
     }
     return result;
+  }
+
+  /**
+   * The base async validation, plus, on the server, {@link RecordProcessPromptTemplateCheck}: a constrained LLM
+   * pipeline whose prompt template does not render the constraint block is refused at save, as its run would be.
+   * Async because the prompt and its template are read through the record's provider.
+   */
+  public override async ValidateAsync(): Promise<ValidationResult> {
+    const result = await super.ValidateAsync();
+    const problem = await RecordProcessPromptTemplateCheck.FindProblem(this);
+    if (problem) {
+      result.Success = false;
+      result.Errors.push(new ValidationErrorInfo('PromptID', problem, this.PromptID, ValidationErrorType.Failure));
+    }
+    return result;
+  }
+}
+
+/** The AI Prompt fields the save-time template check reads. */
+type CheckedPromptRow = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'TemplateID'>;
+
+/**
+ * The server-side save check that a Record Process row's prompt template renders its output constraints (the check
+ * `InferProcessor.Preflight` runs). The prompt and template are read through the record's provider, not the engine
+ * caches, so a save inside a transaction (`mj sync push`) sees the template written earlier in it.
+ */
+export class RecordProcessPromptTemplateCheck {
+  /** Why the row's prompt template cannot run with its spec; null when it can or there is nothing to check. */
+  public static async FindProblem(record: MJRecordProcessEntity): Promise<string | null> {
+    if (RecordProcessPromptTemplateCheck.ProviderOf(record)?.ProviderType !== ProviderType.Database || !record.PromptID) {
+      return null;
+    }
+    const spec = checkedSpecOf(record);
+    if (!spec || !ConstraintPromptTemplate.RequiresConstraintBlock(spec)) {
+      return null;
+    }
+    const prompt = await RecordProcessPromptTemplateCheck.ReadPrompt(record, record.PromptID);
+    if (typeof prompt === 'string') {
+      return prompt;
+    }
+    const templateText = prompt.TemplateID ? await RecordProcessPromptTemplateCheck.ReadTemplateText(record, prompt.TemplateID) : undefined;
+    if (templateText instanceof Error) {
+      return `The template of Feature Pipeline prompt '${prompt.Name}' could not be read to check that it renders the output constraints: ${templateText.message}`;
+    }
+    if (templateText === undefined) {
+      return (
+        `Feature Pipeline prompt '${prompt.Name}' has no template content, so it cannot render its output constraints. ` +
+        `Give the prompt a template that renders {{ ConstraintBlock }}, or remove the constraints from the pipeline's outputs.`
+      );
+    }
+    return ConstraintPromptTemplate.DescribeMissingBlock(spec, prompt.Name, templateText);
+  }
+
+  /** The pipeline's prompt row, read through the record's provider; a message naming the prompt when it cannot be read. */
+  protected static async ReadPrompt(record: MJRecordProcessEntity, promptID: string): Promise<CheckedPromptRow | string> {
+    const result = await record.RunViewProviderToUse.RunView<CheckedPromptRow>({
+      EntityName: 'MJ: AI Prompts',
+      ExtraFilter: `ID='${EscapeSQLString(promptID)}'`,
+      Fields: ['ID', 'Name', 'TemplateID'],
+    }, record.ContextCurrentUser);
+    if (!result.Success) {
+      return `AI Prompt '${promptID}' could not be read to check that its template renders the output constraints: ${result.ErrorMessage}`;
+    }
+    return result.Results[0] || `AI Prompt '${promptID}' was not found, so its template cannot render the pipeline's output constraints.`;
+  }
+
+  /**
+   * The text the prompt's template renders, through the record's provider ({@link PromptTemplateContent.ReadCurrent});
+   * undefined when the template has no content, the read's error when its content cannot be read (the save is refused
+   * with it rather than thrown out of validation).
+   */
+  protected static async ReadTemplateText(record: MJRecordProcessEntity, templateID: string): Promise<string | undefined | Error> {
+    const provider = RecordProcessPromptTemplateCheck.ProviderOf(record);
+    if (!provider) {
+      return new Error('the record has no provider');
+    }
+    try {
+      const row = await PromptTemplateContent.ReadCurrent(provider, templateID, record.ContextCurrentUser);
+      return row ? row.TemplateText || '' : undefined;
+    } catch (e) {
+      return e instanceof Error ? e : new Error(String(e));
+    }
+  }
+
+  /** The record's provider as a metadata provider (`BaseEntity.ProviderToUse` is typed as its entity-data side). */
+  protected static ProviderOf(record: MJRecordProcessEntity): IMetadataProvider | undefined {
+    const provider = record.ProviderToUse;
+    return isMetadataProvider(provider) ? provider : undefined;
   }
 }
 
@@ -101,6 +205,13 @@ function pipelineEntityFieldValues(record: MJRecordProcessEntity): FeaturePipeli
     return undefined;
   }
   return BuildEntityFieldValueLookup(provider.EntityByID(record.EntityID));
+}
+
+/** Whether the record's data provider is also a metadata provider (every MJ provider is both; a bare double may not be). */
+function isMetadataProvider(
+  provider: IEntityDataProvider | null | undefined
+): provider is IEntityDataProvider & IMetadataProvider {
+  return !!provider && 'ProviderType' in provider;
 }
 
 /** Whether the record's data provider also resolves entity metadata by ID, as every MJ provider does. */

@@ -11,6 +11,12 @@ import { fileURLToPath } from 'node:url';
  */
 const SOURCE = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../lib/components/livekit-whiteboard-surface.component.ts'), 'utf8');
 
+/** The component's inline template: the text between the backticks after `template:`, nothing past the closing one. */
+function template(): string {
+  const start = SOURCE.indexOf('`', SOURCE.indexOf('template:')) + 1;
+  return SOURCE.slice(start, SOURCE.indexOf('`', start));
+}
+
 /** The selectors of the component's style rules. */
 function selectors(): string[] {
   const styles = SOURCE.slice(SOURCE.indexOf('styles: ['));
@@ -24,8 +30,7 @@ describe('the room whiteboard surface', () => {
   });
 
   it('turns the board host\'s Focus toggle off: the room has no stage to move the board to', () => {
-    const template = SOURCE.slice(SOURCE.indexOf('template: `'), SOURCE.indexOf('styles: ['));
-    expect(template).toMatch(/\[ShowFocusToggle\]="false"/);
-    expect(template).not.toMatch(/\(FocusModeChange\)/);
+    expect(template()).toMatch(/\[ShowFocusToggle\]="false"/);
+    expect(template()).not.toMatch(/\(FocusModeChange\)/);
   });
 });

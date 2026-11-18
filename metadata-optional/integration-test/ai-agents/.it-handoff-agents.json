@@ -1,0 +1,160 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Handoff Source",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent with peer transfer enabled in prompt params and no memory or reranker. Source fixture for IT125 integration checks. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": true,
+      "InvocationMode": "Any",
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6,
+      "AgentTypePromptParams": {
+        "enableHandoff": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Handoff Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3596F73C-277D-4714-B12A-07B8E0F503FC"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "687A52C3-1442-4A15-91B5-4D4C60377CBB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Handoff Target",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Root Loop agent with peer transfer enabled in prompt params and Draft (Fast), Standard (Standard, IsDefault), and High (High Power) configuration presets. Target fixture for IT125 integration checks. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": true,
+      "InvocationMode": "Top-Level",
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6,
+      "AgentTypePromptParams": {
+        "enableHandoff": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Handoff Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "685B5508-5B34-4B62-A69C-0B74A58153F2"
+          }
+        }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast/Lower Quality",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5D558F8B-FEC2-46D9-8952-7D55C61B4A47"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Balanced Quality/Speed",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
+            "IsDefault": true,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BFDDF52D-6464-413B-887D-6C4D5017ED64"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "Highest Quality/Slower",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "IsDefault": false,
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "88CC379D-B066-4FB3-842D-2439F13041DE"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F9EDBA1A-9021-454B-9B05-EFE53A9F0300"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Handoff Sub-Agent Only",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent with InvocationMode='Sub-Agent' that is not directly discoverable as a peer target. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "InvocationMode": "Sub-Agent",
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Handoff Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "537FFE63-E100-4A40-84C0-ED4BF791F0EB"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0AB05E7E-30C4-41AF-8C24-17789ADFB4C7"
+    }
+  }
+]

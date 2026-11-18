@@ -23,6 +23,8 @@ function EntityDataGrid({
   onSelectionChanged,
   onSortChanged,
   onFilterChanged,
+  exportable = true, // Built-in CSV/Excel export icon; false renders the grid without it
+  exportLabel, // Export menu label and file name; defaults to entityName
   utilities,
   styles,
   components,
@@ -30,8 +32,46 @@ function EntityDataGrid({
   savedUserSettings,
   onSaveUserSettings
 }) {
-  // Get DataGrid component from registry
-  const { DataGrid } = components;
+  // Built-in export: the inner DataGrid shows the export button (registry ExportableData) and takes its
+  // rows from getExportRows: every record matching extraFilter, the text filter and the current sort,
+  // not only the loaded page. The columns are the grid's displayed columns.
+
+  const ENTITY_EXPORT_MAX_ROWS = 100000;
+
+  /** The grid's text filter: a row matches when any displayed field contains the text, case-insensitively. */
+  function filterRowsByText(rows, fieldNames, text) {
+    if (!text) return rows;
+    const search = text.toLowerCase();
+    return rows.filter(row => row && fieldNames.some(name => row[name] != null && String(row[name]).toLowerCase().includes(search)));
+  }
+
+  /**
+   * Every matching record in the given order, up to ENTITY_EXPORT_MAX_ROWS. `totalRowCount` is set
+   * (and a warning logged) only when the cap cut the result short.
+   */
+  async function loadAllRowsForExport(rv, params) {
+    const result = await rv.RunView({ ...params, ResultType: 'simple', MaxRows: ENTITY_EXPORT_MAX_ROWS });
+    if (result && result.Success) {
+      const rows = result.Results || [];
+      const capped = result.TotalRowCount != null && result.TotalRowCount > rows.length;
+      if (capped) {
+        console.warn(`[EntityDataGrid] Export of ${params.EntityName} is capped at ${rows.length} of ${result.TotalRowCount} records.`);
+      }
+      return { rows, totalRowCount: capped ? result.TotalRowCount : null };
+    }
+    throw new Error(`Loading ${params.EntityName} for export failed: ${result?.ErrorMessage || 'RunView returned no result'}`);
+  }
+
+  /** The last line of a capped export, so the file says it is partial. The text filter only saw the loaded records. */
+  function cappedExportNote(loaded, total, filterText) {
+    const count = `${loaded.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}`;
+    return filterText
+      ? `Partial export: only the first ${count} records were searched for "${filterText}".`
+      : `Partial export: the first ${count} records.`;
+  }
+
+  // Get DataGrid and ExportableData components from registry
+  const { DataGrid, ExportableData } = components;
 
   // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
   // that renders this component without styles.
@@ -676,6 +716,22 @@ function EntityDataGrid({
     };
   }, [currentPage, currentPageSize, totalRecords, data, cacheMode, allDataCache]);
 
+  // Built-in export (see the export helpers at the top of the component). Callers never wrap EntityDataGrid in ExportableData.
+  const exportEnabled = exportable !== false && Boolean(ExportableData);
+  const exportTitle = exportLabel || entityName || 'Data';
+  // Full cache mode already holds every record in the current sort; otherwise load them all.
+  const getExportRows = async () => {
+    if (cacheMode === 'full' && allDataCache) {
+      return filterRowsByText(allDataCache, fieldNames, currentFilter);
+    }
+    const params = { EntityName: entityName, ExtraFilter: extraFilter || '', OrderBy: effectiveOrderBy };
+    // Validated against metadata, so RunView accepts them; the primary keys ride along so the file keeps record identity.
+    if (entityInfo) params.Fields = [...new Set([...autoDetectedPrimaryKeys, ...fieldNames])];
+    const { rows, totalRowCount } = await loadAllRowsForExport(utilities.rv, params);
+    const filtered = filterRowsByText(rows, fieldNames, currentFilter);
+    return totalRowCount ? { rows: filtered, note: cappedExportNote(rows.length, totalRowCount, currentFilter) } : filtered;
+  };
+
   // Render error state
   if (error) {
     return (
@@ -788,7 +844,7 @@ function EntityDataGrid({
   }
 
   // Render success state with DataGrid
-  return (
+  const content = (
     <div style={{ width: '100%', position: 'relative' }}>
       {/* Cache Mode Indicator */}
       {showCacheModeIndicator && (
@@ -895,6 +951,9 @@ function EntityDataGrid({
           columns={columnDefinitions}
           sorting={false} // Disable DataGrid's internal sorting - we handle it via onSortChanged
           paging={false} // We handle pagination ourselves
+          exportable={exportEnabled} // The grid's toolbar shows the export button; its rows come from getExportRows,
+          exportLabel={exportTitle}  // since only one page is loaded here
+          exportGetRows={getExportRows}
           filtering={enableFiltering}
           selectionMode={selectionMode}
           autoFitColumns={autoFitColumns}
@@ -1078,4 +1137,6 @@ function EntityDataGrid({
       )}
     </div>
   );
+
+  return content;
 }

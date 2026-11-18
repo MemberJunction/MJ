@@ -8,7 +8,8 @@
 import { RunLLMToolCallingConformanceSuite, ScriptedToolCall } from '@memberjunction/unit-testing';
 import { GeminiLLM, GEMINI_LEADING_USER_TURN_TEXT } from '../index';
 import { describe, it, expect } from 'vitest';
-import { ChatParams, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from '@memberjunction/ai';
+import { ChatParams, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from '@memberjunction/ai';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 /** The one scripted response the seam will return for the next call. */
 let nextResponse: Record<string, unknown> = {};
@@ -26,8 +27,6 @@ const seamClient = {
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'Gemini',
     SupportsTools: true,
-    // Gemini passes its own uppercase vocabulary straight through on non-tool turns.
-    OrdinaryFinishReason: 'STOP',
     CreateLLM: () => {
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof seamClient })._gemini = seamClient;
@@ -127,7 +126,7 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         expect((captured.send?.message ?? []).some((p) => 'functionResponse' in p)).toBe(true);
     });
 
-    it('leaves a conversation that already opens with a user turn exactly as it was', async () => {
+    it('leaves a conversation that already opens with a user turn as it was, after the cache anchor', async () => {
         const { client, captured } = capturingSeam();
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof client })._gemini = client;
@@ -136,12 +135,12 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         params.messages = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Describe the active members.' }, callTurn, resultTurn];
         params.tools = [{ name: 'get_entity_details', inputSchema: { type: 'object', properties: {} } }];
         await llm.ChatCompletion(params);
-        const history = captured.create?.history ?? [];
+        const history = WithoutCacheAnchor(captured.create?.history ?? []);
         expect(history.map((h) => h.role)).toEqual(['user', 'model']);
         expect(history[0].parts).toEqual([{ text: 'Describe the active members.' }]);
     });
 
-    it('does not add a turn to a first request that has only a system prompt (the message sent is the empty user turn it always was)', async () => {
+    it('sends the leading user turn for a first request that has only a system prompt (Vertex AI rejects an empty message)', async () => {
         const { client, captured } = capturingSeam();
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof client })._gemini = client;
@@ -150,6 +149,47 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         params.messages = [{ role: 'system', content: 'Everything is in here.' }];
         await llm.ChatCompletion(params);
         expect(captured.create?.history ?? []).toEqual([]);
-        expect(captured.send?.message).toEqual([{ text: '' }]);
+        expect(captured.send?.message).toEqual([{ text: GEMINI_LEADING_USER_TURN_TEXT }]);
+    });
+});
+
+describe('GeminiLLM — a rejected tool call with no narration is reported, not treated as missing output', () => {
+    const run = async (finishReason: string, finishMessage?: string, declareTools = true) => {
+        nextResponse = {
+            candidates: [{ content: { parts: [] }, finishReason, ...(finishMessage ? { finishMessage } : {}) }],
+            usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 0 }
+        };
+        const llm = new GeminiLLM('conformance-test-key');
+        (llm as unknown as { _gemini: typeof seamClient })._gemini = seamClient;
+        const params = new ChatParams();
+        params.model = 'gemini-3.5-flash';
+        params.messages = [{ role: 'user', content: 'Search.' }];
+        if (declareTools) {
+            params.tools = [{ name: 'search_web', inputSchema: { type: 'object', properties: {} } }];
+        }
+        return llm.ChatCompletion(params);
+    };
+
+    it('reports UNEXPECTED_TOOL_CALL as the normalized unexpected-tool-call reason, with the provider\'s description', async () => {
+        const result = await run('UNEXPECTED_TOOL_CALL', 'Unexpected tool call: delete_everything');
+
+        expect(result.success).toBe(true);
+        expect(result.data.choices[0].finish_reason).toBe(CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL);
+        expect(result.data.choices[0].finishMessage).toBe('Unexpected tool call: delete_everything');
+    });
+
+    it('reports a MALFORMED_FUNCTION_CALL that came with no narration instead of failing for "no output"', async () => {
+        const result = await run('MALFORMED_FUNCTION_CALL', 'Malformed function call: search_web(query="unterminated');
+
+        expect(result.success).toBe(true);
+        expect(result.data.choices[0].finish_reason).toBe(CHAT_FINISH_REASON_MALFORMED_TOOL_CALL);
+        expect(result.data.choices[0].finishMessage).toContain('search_web');
+    });
+
+    it('fails an empty turn on a request that declared no tools, so failover can try another model', async () => {
+        const result = await run('UNEXPECTED_TOOL_CALL', 'Unexpected tool call: search_web', false);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toMatch(/No output received/);
     });
 });

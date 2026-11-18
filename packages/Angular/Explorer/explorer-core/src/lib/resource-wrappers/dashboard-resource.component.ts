@@ -19,13 +19,14 @@ import type { NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { PendingAttachment } from '@memberjunction/ng-composer';
 import { filter, takeUntil } from 'rxjs';
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
-import type { DashboardEditorComponent, DashboardEditorLoadError, ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import type { DashboardEditorComponent, DashboardEditorLoadError, ShareDialogResult } from '@memberjunction/ng-dashboards/dashboard-editor.module';
 import { ExtractPanelsFromLayout } from '@memberjunction/ng-dashboard-viewer';
 import type { DashboardConfig as DashboardLayoutConfig, DashboardNavRequestEvent, DashboardViewerComponent } from '@memberjunction/ng-dashboard-viewer';
 import { BuildDashboardTabAgentContext, BuildDashboardTabAgentTools, SummarizeDashboardPanels } from './dashboard-tab-agent';
 import type { DashboardPanelSummary, DashboardTabAgentHost, DashboardTabDashboard } from './dashboard-tab-agent';
 import { BuildDashboardStudioTools } from './dashboard-studio-tools';
 import type { DashboardStudioHost } from './dashboard-studio-tools';
+import { BuildDashboardClassNotRegisteredMessage } from './dashboard-class-resolution';
 import { SearchDashboardSources, SOURCE_KINDS } from './dashboard-source-search';
 import type { SourceKind, SourceSearchDeps, SourceSearchResult } from './dashboard-source-search';
 import {
@@ -1716,7 +1717,10 @@ export class DashboardResource extends BaseResourceComponent {
             );
 
             if (!classReg?.SubClass) {
-                throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
+                throw new Error(BuildDashboardClassNotRegisteredMessage(
+                    dashboard.DriverClass,
+                    MJGlobal.Instance.ClassFactory.DescribeMissingRegistration(BaseDashboard, dashboard.DriverClass)
+                ));
             }
 
             // Create the component instance

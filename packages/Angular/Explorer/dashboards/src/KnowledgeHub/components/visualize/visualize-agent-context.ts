@@ -17,7 +17,7 @@
  */
 
 /** Visualization modes hosted by the Visualize surface. */
-export const VISUALIZATION_MODES = ['clusters', 'tagcloud'] as const;
+export const VISUALIZATION_MODES = ['clusters', 'tagcloud', 'graph'] as const;
 
 /** A Visualize-surface mode id. */
 export type VisualizationModeId = (typeof VISUALIZATION_MODES)[number];

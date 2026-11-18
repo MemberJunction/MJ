@@ -35,7 +35,7 @@ import {
 import { ValidateEnumParam, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Visualization modes hosted by this surface. */
-export type VisualizationMode = 'clusters' | 'tagcloud';
+export type VisualizationMode = 'clusters' | 'tagcloud' | 'graph';
 
 interface ModeOption {
     ID: VisualizationMode;
@@ -85,6 +85,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
     public Modes: ModeOption[] = [
         { ID: 'clusters', Label: 'Clusters', Icon: 'fa-solid fa-circle-nodes' },
         { ID: 'tagcloud', Label: 'Tag Cloud', Icon: 'fa-solid fa-cloud' },
+        { ID: 'graph', Label: 'Graphs & Canon', Icon: 'fa-solid fa-diagram-project' },
     ];
 
     public ActiveMode: VisualizationMode = 'clusters';
@@ -429,7 +430,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
         // Prefer the new key; fall back to the legacy "Clusters" tab key.
         const raw = UserInfoEngine.Instance.GetSetting(VisualizeResourceComponent.PREFS_KEY)
             ?? UserInfoEngine.Instance.GetSetting(VisualizeResourceComponent.LEGACY_PREFS_KEY);
-        if (raw === 'clusters' || raw === 'tagcloud') {
+        if (raw === 'clusters' || raw === 'tagcloud' || raw === 'graph') {
             this.ActiveMode = raw;
         }
     }

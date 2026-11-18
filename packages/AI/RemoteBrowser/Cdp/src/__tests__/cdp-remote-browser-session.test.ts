@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     IRemoteBrowserProviderFeatures,
     RemoteBrowserActionResult,
@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, ClickAction, ScreencastFrame, TypeAction } from '@memberjunction/computer-use';
 import { RemoteBrowserAudioChunk } from '@memberjunction/remote-browser-base';
-import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
+import { CdpRemoteBrowserSession, ClampViewportToScreencastBounds } from '../cdp-remote-browser-session';
 import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter, LoopbackAudioCdpSessionBackend } from './fakes';
 
 /** Builds a session over fresh fakes with the given feature flags. */
@@ -66,6 +66,8 @@ describe('CdpRemoteBrowserSession — core', () => {
         failure.Success = false;
         failure.Error = 'element not found';
         adapter.NextExecuteResult = failure;
+        // No DOM under node: the click guard is told the selector matches one harmless element.
+        adapter.EvaluateFallback = { Found: true, Label: 'x', Destructive: false };
 
         const result = await session.ExecuteAction({ Kind: 'click', Selector: '#x' });
 
@@ -340,6 +342,8 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
 
     it('ExecuteAction does NOT force a frame for a non-navigation action (click)', async () => {
         const { session, adapter } = buildSession({});
+        // The click guard finds nothing at the target (no DOM under node), so the click proceeds.
+        adapter.EvaluateFallback = { Found: false, Label: '', Destructive: false };
         await session.ExecuteAction({ Kind: 'click', X: 1, Y: 1 });
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
@@ -353,3 +357,93 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
 });
+
+describe('CdpRemoteBrowserSession — navigation guard and page text', () => {
+    it('Navigate normalizes a bare domain to https:// before delegating to the adapter', async () => {
+        const { session, adapter } = buildSession({});
+        await session.Navigate('example.com');
+        expect(adapter.NavigatedUrls).toEqual(['https://example.com']);
+    });
+
+    it('Navigate refuses a non-http(s) scheme without touching the browser', async () => {
+        const { session, adapter } = buildSession({});
+        const result = await session.Navigate('file:///proc/self/environ');
+        expect(result.Success).toBe(false);
+        expect(result.Detail).toContain('Only http and https');
+        expect(adapter.NavigatedUrls).toEqual([]);
+    });
+
+    it('getPageText returns the visible text, capped so a long page cannot flood the context', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.VisibleTextValue = 'x'.repeat(25000);
+        const result = await session.ExecuteAction({ Kind: 'getPageText' });
+        expect(result.Success).toBe(true);
+        expect(result.Detail).toHaveLength(20000);
+    });
+
+    it('a click the guard cannot check (no page) is not made', async () => {
+        const { session, adapter } = buildSession({});
+        await expect(session.ExecuteAction({ Kind: 'click', X: 5, Y: 5 })).rejects.toThrow('did not respond');
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+});
+
+describe('CdpRemoteBrowserSession — navigation restriction wiring', () => {
+    it('restricts its adapter to http(s) as soon as it is built', () => {
+        const restrict = vi.spyOn(FakePlaywrightBrowserAdapter.prototype, 'RestrictNavigation');
+        try {
+            buildSession({});
+            expect(restrict).toHaveBeenCalledWith(null);
+        } finally {
+            restrict.mockRestore();
+        }
+    });
+
+    it('hands a private-network allow-list to its adapter', async () => {
+        const { session, adapter } = buildSession({});
+        const restrict = vi.spyOn(adapter, 'RestrictNavigation').mockResolvedValue(undefined);
+        await session.RestrictPrivateNetwork(['localhost:4200']);
+        expect(restrict).toHaveBeenCalledWith(['localhost:4200']);
+    });
+});
+
+describe('CdpRemoteBrowserSession — viewport resize in place', () => {
+    it('ClampViewportToScreencastBounds keeps sizes within 1280 × 800 1:1 and scales larger sizes proportionally', () => {
+        expect(ClampViewportToScreencastBounds(540, 760)).toEqual({ Width: 540, Height: 760 });
+        expect(ClampViewportToScreencastBounds(1280, 800)).toEqual({ Width: 1280, Height: 800 });
+        // Maximized 16:9 pane (1600 × 900) scales down proportionally to 1280 × 720
+        expect(ClampViewportToScreencastBounds(1600, 900)).toEqual({ Width: 1280, Height: 720 });
+        // Tall pane (900 × 1200) scales by height cap (800 / 1200 = 2/3) → 600 × 800
+        expect(ClampViewportToScreencastBounds(900, 1200)).toEqual({ Width: 600, Height: 800 });
+        expect(ClampViewportToScreencastBounds(0, 500)).toBeNull();
+        expect(ClampViewportToScreencastBounds(500, -10)).toBeNull();
+    });
+
+    it('ResizeViewport resizes the open adapter in place, caps proportionally to 1280 × 800, and pushes a fresh frame without navigating', async () => {
+        const { session, adapter } = buildSession({ ScreenStreaming: true });
+
+        await session.ResizeViewport(540, 760);
+        expect(adapter.ViewportResizes).toEqual([{ Width: 540, Height: 760 }]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+        expect(adapter.NavigatedUrls).toEqual([]);
+
+        await session.ResizeViewport(1920, 1080);
+        expect(adapter.ViewportResizes).toEqual([
+            { Width: 540, Height: 760 },
+            { Width: 1280, Height: 720 },
+        ]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(2);
+        expect(adapter.NavigatedUrls).toEqual([]);
+    });
+
+    it('ResizeViewport ignores non-positive dimensions without touching the adapter or pushing a frame', async () => {
+        const { session, adapter } = buildSession({ ScreenStreaming: true });
+
+        await session.ResizeViewport(0, 600);
+        await session.ResizeViewport(600, -1);
+
+        expect(adapter.ViewportResizes).toEqual([]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(0);
+    });
+});
+

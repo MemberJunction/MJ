@@ -69,7 +69,12 @@ function userWithRoles(roleIds: string[]): UserInfo {
  */
 function makeGrid(entity: EntityInfo, user: UserInfo | null): EntityDataGridComponent {
     const cdr = { detectChanges: () => {}, markForCheck: () => {} } as unknown as ChangeDetectorRef;
-    const elementRef = { nativeElement: { querySelector: () => null } } as unknown as ElementRef;
+    const elementRef = {
+        nativeElement: {
+            querySelector: () => null,
+            style: { setProperty: () => {}, removeProperty: () => {} }
+        }
+    } as unknown as ElementRef;
     const exportService = {} as never;
     const ngZone = { run: (fn: () => void) => fn(), runOutsideAngular: (fn: () => void) => fn() } as unknown as NgZone;
 
@@ -242,5 +247,44 @@ describe('EntityDataGridComponent — a denial is never written into the saved p
         const grid = makeGrid(entity, userWithRoles([PAYROLL_ROLE_ID]));
         expect(capturedColumnNames(grid, ['Name', 'ContractValue', 'Status']))
             .toEqual(['Name', 'ContractValue', 'Status']);
+    });
+});
+
+describe('EntityDataGridComponent — template getter memoization (MJ-NG-4)', () => {
+    it('memoizes EffectiveVisualConfig, CardAggregates, ColumnAggregates, VisibleRows, and VisibleColumnStates across CD passes', () => {
+        const entity = makeSecuredEntityInfo();
+        const grid = makeGrid(entity, userWithRoles([PAYROLL_ROLE_ID]));
+
+        // EffectiveVisualConfig returns the exact same object until VisualConfig changes
+        const vis1 = grid.EffectiveVisualConfig;
+        const vis2 = grid.EffectiveVisualConfig;
+        expect(vis2).toBe(vis1);
+        grid.VisualConfig = { alternateRows: false };
+        const vis3 = grid.EffectiveVisualConfig;
+        expect(vis3).not.toBe(vis1);
+        expect(grid.EffectiveVisualConfig).toBe(vis3);
+
+        // CardAggregates and ColumnAggregates return stable references when expressions are unchanged
+        grid.AggregatesConfig = {
+            expressions: [
+                { id: 'c1', expression: 'COUNT(*)', label: 'Total', displayType: 'card', order: 1, enabled: true },
+                { id: 'f1', expression: 'SUM(ContractValue)', label: 'Sum', displayType: 'column', column: 'ContractValue', order: 1, enabled: true },
+            ],
+        };
+        const cards1 = grid.CardAggregates;
+        const cards2 = grid.CardAggregates;
+        expect(cards2).toBe(cards1);
+        expect(cards1).toHaveLength(1);
+
+        const cols1 = grid.ColumnAggregates;
+        const cols2 = grid.ColumnAggregates;
+        expect(cols2).toBe(cols1);
+        expect(cols1).toHaveLength(1);
+
+        // VisibleRows & VisibleColumnStates return stable array references across repeated reads
+        const rows1 = grid.VisibleRows;
+        expect(grid.VisibleRows).toBe(rows1);
+        const colStates1 = grid.VisibleColumnStates;
+        expect(grid.VisibleColumnStates).toBe(colStates1);
     });
 });

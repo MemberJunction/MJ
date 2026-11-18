@@ -771,6 +771,11 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * Confidence score (0.00-1.00) when AI detection was used for this field
      */
     AutoDetectConfidenceScore: number = null
+    /**
+     * Whether this output column is produced by every template branch variant of the query.
+     * Defaults to true; when false, the column is only present when a conditional branch is taken.
+     */
+    InAllBranchVariants: boolean = true
 
     // virtual fields - returned by the database VIEW
     /**
@@ -867,6 +872,10 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      */
     public EntityID: string = null
     /**
+     * Optional foreign key to the specific EntityAlternateBaseView referenced in the query SQL
+     */
+    public AlternateBaseViewID: string | null = null
+    /**
      * How this entity association was detected: AI (automatic) or Manual (user-specified)
      */
     public DetectionMethod: 'AI' | 'Manual' = 'Manual'
@@ -892,6 +901,10 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * Entity name from the related entity
      */
     Entity: string = null
+    /**
+     * Alternate base view name when AlternateBaseViewID is set
+     */
+    AlternateBaseView: string | null = null
     
     constructor(initData: any = null, md?: IMetadataProvider) {
         super();
@@ -973,6 +986,11 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * Confidence score (0.00-1.00) when AI detection was used
      */
     public AutoDetectConfidenceScore: number = null
+    /**
+     * When true, only server code may supply this parameter's value (`RunQueryParams.ServerParameters`).
+     * A value for it in `RunQueryParams.Parameters` is refused.
+     */
+    public IsServerSet: boolean = false
     /**
      * Date and time when this parameter was created
      */

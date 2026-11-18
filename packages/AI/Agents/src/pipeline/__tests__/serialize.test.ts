@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { StructureArtifactData } from '../providers/serialize';
+import { ActionResult } from '@memberjunction/actions-base';
+import { StructureActionResult, StructureArtifactData } from '../providers/serialize';
 
 describe('structureArtifactData (get_full envelope unwrap)', () => {
     it('unwraps a get_full envelope and parses JSON-array content', () => {
@@ -51,5 +52,27 @@ describe('conservative JSON coercion (coerceMaybeJson)', () => {
         expect(StructureArtifactData('42')).toBe('42');
         expect(StructureArtifactData('true')).toBe('true');
         expect(StructureArtifactData('plain text')).toBe('plain text');
+    });
+});
+
+describe('StructureActionResult', () => {
+    it('coerces structured JSON Message when an action emits no Output params (e.g. Calculate Expression)', () => {
+        const res: ActionResult = {
+            Success: true,
+            Result: null,
+            Params: [{ Name: 'Expression', Value: '6*7', Type: 'Input' }],
+            Message: JSON.stringify({ summary: '6*7 = 42', details: { result: 42 } }),
+        };
+        expect(StructureActionResult(res)).toEqual({ summary: '6*7 = 42', details: { result: 42 } });
+    });
+
+    it('preserves plain-text Message when no Output params exist', () => {
+        const res: ActionResult = {
+            Success: true,
+            Result: null,
+            Params: [],
+            Message: 'Operation completed.',
+        };
+        expect(StructureActionResult(res)).toBe('Operation completed.');
     });
 });

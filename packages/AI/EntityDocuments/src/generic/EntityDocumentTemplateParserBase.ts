@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, UserScopedCacheKey } from '@memberjunction/global';
 import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
@@ -7,17 +8,75 @@ import { TemplateEngineServer } from '@memberjunction/templates';
  * Use EntityDocumentTemplateParser or a subclass thereof.
  */
 export abstract class EntityDocumentTemplateParserBase {
+  /**
+   * The most resolved placeholders kept at once. Every record version adds entries (the key includes a
+   * hash of the record values), so the least recently used entry is evicted once the cache is full.
+   */
+  public static readonly MaxCachedPlaceholders = 10_000;
+
   public static ClearCache(): void {
-    EntityDocumentTemplateParserBase.__cache = {};
+    EntityDocumentTemplateParserBase.__cache.clear();
   }
 
-  public static CreateCacheKey(EntityID: string, EntityRecordPrimaryKey: string, Content: string): string {
-    return `${EntityID}___${EntityRecordPrimaryKey}___${Content}`;
+  /** The number of resolved placeholders currently cached. */
+  public static get CachedPlaceholderCount(): number {
+    return EntityDocumentTemplateParserBase.__cache.size;
   }
 
-  protected static __cache: Record<string, string> = {};
-  protected static get _cache(): Record<string, string> {
-    return EntityDocumentTemplateParserBase.__cache;
+  /**
+   * Builds the key a resolved placeholder is cached under. Placeholders such as `Relationship()` load
+   * rows under the caller's permissions, so the key includes the user. It also includes a hash of the
+   * record values the placeholder was resolved from: a caller that strips restricted fields from a
+   * record must not be served a value resolved earlier from the full record, and a record whose values
+   * changed must not be served the old value. Returns null when there is no user ID, in which case the
+   * placeholder is resolved without caching.
+   *
+   * @param RecordValuesHash a hash of the record values, from {@link HashRecordValues}
+   */
+  public static CreateCacheKey(
+    EntityID: string,
+    EntityRecordPrimaryKey: string,
+    Content: string,
+    UserID: string | null | undefined,
+    RecordValuesHash: string = ''
+  ): string | null {
+    return UserScopedCacheKey(UserID, `${EntityID}___${EntityRecordPrimaryKey}___${RecordValuesHash}___${Content}`);
+  }
+
+  /**
+   * A hash of a record's values (nested objects such as `__Parent` included), independent of key order,
+   * so two records with the same values hash alike however they were built.
+   */
+  public static HashRecordValues(EntityRecord: Record<string, unknown>): string {
+    return createHash('sha256').update(stableSerialize(EntityRecord, new WeakSet<object>())).digest('hex');
+  }
+
+  /** Resolved placeholders by cache key, in least-recently-used-first order. */
+  protected static __cache: Map<string, string> = new Map<string, string>();
+
+  /** Returns a cached placeholder value and marks it most recently used, or undefined on a miss. */
+  protected static getCachedPlaceholder(cacheKey: string): string | undefined {
+    const cache = EntityDocumentTemplateParserBase.__cache;
+    const value = cache.get(cacheKey);
+    if (value !== undefined) {
+      cache.delete(cacheKey);
+      cache.set(cacheKey, value);
+    }
+    return value;
+  }
+
+  /** Caches a placeholder value, evicting the least recently used entries beyond {@link MaxCachedPlaceholders}. */
+  protected static setCachedPlaceholder(cacheKey: string, value: string): void {
+    const cache = EntityDocumentTemplateParserBase.__cache;
+    cache.delete(cacheKey);
+    cache.set(cacheKey, value);
+    while (cache.size > EntityDocumentTemplateParserBase.MaxCachedPlaceholders) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      cache.delete(oldest);
+    }
   }
 
   /** Optional provider override; falls back to Metadata.Provider when not set. */
@@ -67,7 +126,7 @@ export abstract class EntityDocumentTemplateParserBase {
     let processedTemplate = Template;
     if (Template.includes('{{') || Template.includes('{%')) {
       await TemplateEngineServer.Instance.Config(false, ContextUser);
-      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord);
+      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord, { ContextUser });
       if (renderResult.Success && renderResult.Output) {
         processedTemplate = renderResult.Output;
       }
@@ -76,27 +135,25 @@ export abstract class EntityDocumentTemplateParserBase {
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromEntityInfoAndRecord(entityInfo, EntityRecord);
 
+    const recordHash = EntityDocumentTemplateParserBase.HashRecordValues(EntityRecord);
     const regex = /\$\{([^{}]+)\}/g;
     const matches = processedTemplate.matchAll(regex);
 
     // Pass 2: Replace ${} placeholders (variables, dotted paths like __Parent.Field, and function calls)
     const replacements = Array.from(matches).map(async (match) => {
       const content = match[1]; // The captured group from regex
-      const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content);
-
-      if (!EntityDocumentTemplateParserBase._cache[cacheKey]) {
-        EntityDocumentTemplateParserBase._cache[cacheKey] = await this.evalSingleArgument(
-          content,
-          EntityID,
-          EntityRecord,
-          ContextUser
-        );
+      const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content, ContextUser.ID, recordHash);
+      if (cacheKey === null) {
+        return { old: match[0], new: await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser) };
       }
 
-      return {
-        old: match[0],
-        new: EntityDocumentTemplateParserBase._cache[cacheKey],
-      };
+      let resolved = EntityDocumentTemplateParserBase.getCachedPlaceholder(cacheKey);
+      if (resolved === undefined) {
+        resolved = await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser);
+        EntityDocumentTemplateParserBase.setCachedPlaceholder(cacheKey, resolved);
+      }
+
+      return { old: match[0], new: resolved };
     });
 
     const resolvedReplacements = await Promise.all(replacements);
@@ -162,4 +219,33 @@ export abstract class EntityDocumentTemplateParserBase {
       return val !== undefined && val !== null ? String(val) : '';
     }
   }
+}
+
+/**
+ * Serializes a value with object keys sorted, for {@link EntityDocumentTemplateParserBase.HashRecordValues}.
+ * Strings are JSON-quoted, so no string value can spell out the separators of another record shape.
+ * A value already being serialized higher up (a cycle) is written as a marker instead of recursing.
+ */
+function stableSerialize(value: unknown, seen: WeakSet<object>): string {
+  if (typeof value === 'string') {
+    return `string:${JSON.stringify(value)}`;
+  }
+  if (value === null || typeof value !== 'object') {
+    return typeof value === 'undefined' ? 'u' : `${typeof value}:${String(value)}`;
+  }
+  if (value instanceof Date) {
+    return `date:${Number.isNaN(value.getTime()) ? 'invalid' : value.toISOString()}`;
+  }
+  if (seen.has(value)) {
+    return 'cycle';
+  }
+  seen.add(value);
+  const body = Array.isArray(value)
+    ? `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`
+    : `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}=${stableSerialize((value as Record<string, unknown>)[key], seen)}`)
+        .join(',')}}`;
+  seen.delete(value);
+  return body;
 }

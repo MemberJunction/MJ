@@ -10,8 +10,8 @@
  * field-rules engine in `@memberjunction/global` — the same one the integration field-mapping engine uses.
  * @module @memberjunction/record-set-processor
  */
-import { BaseEntity, CompositeKey, EntityFieldRules, type EntityFieldRulesResult } from '@memberjunction/core';
-import { UUIDsEqual, type FieldChange, type FieldRuleSet, type PromptResolver } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityFieldRules, type EntityFieldRulesResult, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual, type FieldRuleSet, type PromptResolver } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJEntityDocumentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -19,6 +19,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { RegisterFieldRulesTransforms } from '@memberjunction/field-rules-transforms';
 import type { EntityDocumentResolver } from '@memberjunction/global';
 import {
+    type FieldRulesResultPayload,
     type IRecordProcessor,
     type RecordProcessorContext,
     type RecordRef,
@@ -31,13 +32,6 @@ export interface FieldRulesProcessorOptions {
     RuleSet: FieldRuleSet;
     /** When true, COMPUTE the changes but do NOT save — each result payload carries the per-field diff. */
     DryRun?: boolean;
-}
-
-/** The structured payload recorded on each Process Run Detail (the per-record diff). */
-export interface FieldRulesResultPayload {
-    DryRun: boolean;
-    Changes: FieldChange[];
-    ChangedFields: string[];
 }
 
 /**
@@ -59,8 +53,9 @@ export class FieldRulesProcessor implements IRecordProcessor {
             if (typeof obj === 'string') {
                 return { Status: 'Failed', ErrorMessage: obj, DurationMs: Date.now() - started };
             }
-            const rules = new EntityFieldRules(context.contextUser, this.buildPromptResolver(context), this.buildEntityDocumentResolver(context));
-            const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun });
+            const rules = new EntityFieldRules(context.ContextUser, this.buildPromptResolver(context), this.buildEntityDocumentResolver(context));
+            // A dry-run context previews too, whatever this processor was built with
+            const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun === true || context.DryRun === true });
             return this.toRecordResult(result, started);
         } catch (err) {
             return { Status: 'Failed', ErrorMessage: err instanceof Error ? err.message : String(err), DurationMs: Date.now() - started };
@@ -88,14 +83,14 @@ export class FieldRulesProcessor implements IRecordProcessor {
 
     /** Loads the BaseEntity for a record, or returns an error string. */
     private async loadRecord(record: RecordRef, context: RecordProcessorContext): Promise<BaseEntity | string> {
-        const entity = context.provider.EntityByID(record.EntityID);
+        const entity = context.Provider.EntityByID(record.EntityID);
         if (!entity) {
             return `entity '${record.EntityID}' not found in metadata`;
         }
         if (entity.PrimaryKeys.length !== 1) {
             return `field-rules updates support single-primary-key entities only ('${entity.Name}')`;
         }
-        const obj = await context.provider.GetEntityObject<BaseEntity>(entity.Name, context.contextUser);
+        const obj = await context.Provider.GetEntityObject<BaseEntity>(entity.Name, context.ContextUser);
         const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entity, record.RecordID));
         if (!loaded) {
             return `record '${record.RecordID}' of '${entity.Name}' not found`;
@@ -111,7 +106,7 @@ export class FieldRulesProcessor implements IRecordProcessor {
      */
     private buildPromptResolver(context: RecordProcessorContext): PromptResolver {
         return async ({ PromptID, Data }) => {
-            await AIEngine.Instance.Config(false, context.contextUser);
+            await AIEngine.Instance.Config(false, context.ContextUser);
             const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, PromptID));
             if (!prompt) {
                 throw new Error(`AI Prompt '${PromptID}' not found`);
@@ -119,7 +114,7 @@ export class FieldRulesProcessor implements IRecordProcessor {
             const params = new AIPromptParams();
             params.prompt = prompt;
             params.data = Data;
-            params.contextUser = context.contextUser;
+            params.contextUser = context.ContextUser;
             const result = await new AIPromptRunner().ExecutePrompt(params);
             if (!result.success) {
                 throw new Error(result.errorMessage ?? 'AI prompt execution failed');
@@ -140,16 +135,27 @@ export class FieldRulesProcessor implements IRecordProcessor {
                 throw new Error('an entityDocument source requires an EntityDocumentID');
             }
             // Configure the template engine first so the EntityDocument's virtual TemplateText resolves.
-            await TemplateEngineServer.Instance.Config(false, context.contextUser);
-            const doc = await context.provider.GetEntityObject<MJEntityDocumentEntityExtended>('MJ: Entity Documents', context.contextUser);
+            await TemplateEngineServer.Instance.Config(false, context.ContextUser);
+            const doc = await context.Provider.GetEntityObject<MJEntityDocumentEntityExtended>('MJ: Entity Documents', context.ContextUser);
             if (!(await doc.Load(EntityDocumentID))) {
                 throw new Error(`Entity Document '${EntityDocumentID}' not found`);
             }
-            const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(doc.TemplateText, Record);
-            if (!rendered.Success) {
-                throw new Error(rendered.Message ?? 'entity document render failed');
-            }
-            return rendered.Output ?? '';
+            return this.RenderEntityDocument(doc.TemplateText, Record, context.ContextUser);
         };
+    }
+
+    /**
+     * Renders an Entity Document's template against a record. The text feeds a prompt source's `Data`, so it renders
+     * without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
+     * @param templateText the document's template text
+     * @param record the record the template reads
+     * @param contextUser the user the render runs as; the template engine is shared, so it is never taken from the engine
+     */
+    protected async RenderEntityDocument(templateText: string, record: Record<string, unknown>, contextUser?: UserInfo): Promise<string> {
+        const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(templateText, record, { autoescape: false, ContextUser: contextUser });
+        if (!rendered.Success) {
+            throw new Error(rendered.Message ?? 'entity document render failed');
+        }
+        return rendered.Output ?? '';
     }
 }

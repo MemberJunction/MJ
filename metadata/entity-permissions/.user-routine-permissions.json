@@ -3,51 +3,54 @@
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routines",
       "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "4B2C433E-F36B-1410-8595-00C8AD7ACEA2"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: User Routines&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:40.895Z",
-      "checksum": "1b3fe4819c3058c8aca53762942a1ce191d6a8662a8ee64cd09054454e0b6884"
+      "lastModified": "2026-10-27T00:34:10.539Z",
+      "checksum": "7aec6b22743d2483e9aa36bf983eaac6fd905c2f5c241453b8875608ca32166f"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routine Recipients",
       "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "632C433E-F36B-1410-8595-00C8AD7ACEA2"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: User Routine Recipients&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:40.906Z",
-      "checksum": "36d62f09980ac7c650d2b20eeb5dec6b8dbe10f083646413add4f20ad938dfd2"
+      "lastModified": "2026-10-27T00:34:10.540Z",
+      "checksum": "649985efb9aac51650b09b77fa3cf6a33edb7f4e0b044204cab62bd5e00f08e7"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routine Runs",
       "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": false,
       "CanUpdate": false,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "7B2C433E-F36B-1410-8595-00C8AD7ACEA2"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: User Routine Runs&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:40.916Z",
-      "checksum": "d55217d1483afef4fcb7646539663e9fa498e3a3ec83eeb51b835a59aae42828"
+      "lastModified": "2026-10-27T00:34:10.541Z",
+      "checksum": "f160d8337581eac4b042ceef6cced350f609b58b62cff29eeaf644ed275ffa7c"
     }
   }
 ]

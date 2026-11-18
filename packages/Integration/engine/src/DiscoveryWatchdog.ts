@@ -48,7 +48,27 @@ export type DiscoveryWatchdogOptions = {
     /** Timer factory, injectable for tests. Must return something `Clear` accepts. */
     SetInterval?: (fn: () => void, ms: number) => unknown;
     Clear?: (handle: unknown) => void;
+    /**
+     * How long an entry may sit in flight before it is treated as abandoned. `<= 0` disables
+     * eviction. See {@link DEFAULT_STALE_AFTER_MS} for why one exists at all.
+     */
+    StaleAfterMs?: number;
 };
+
+/**
+ * When an in-flight entry stops being evidence and starts being noise.
+ *
+ * `End` is called in a `finally`, so an entry survives its owner only when the owner did not
+ * unwind at all: the process was killed mid-discovery and the registry was rebuilt from a stale
+ * source, or an await never settled and never rejected. In both cases the entry is not a slow
+ * object — it is a dead one, and the watchdog reporting it as "still in flight, oldest 4211s"
+ * is precisely the under-reporting-the-truth failure this class exists to prevent. An operator
+ * reading that line chases a sample that stopped existing an hour ago.
+ *
+ * One hour is deliberately far beyond any real discovery. This is not a timeout and it cancels
+ * nothing — it only decides when the watchdog should stop asserting something it cannot know.
+ */
+export const DEFAULT_STALE_AFTER_MS = 60 * 60 * 1000;
 
 /**
  * Resolves the report interval: `MJ_INTEGRATION_DISCOVERY_WATCHDOG_MS`, default 15s, `0` to
@@ -81,6 +101,7 @@ export class DiscoveryWatchdog extends BaseSingleton<DiscoveryWatchdog> implemen
 
     private readonly inFlight = new Map<string, DiscoveryWatchEntry>();
     private intervalMs: number;
+    private staleAfterMs = DEFAULT_STALE_AFTER_MS;
     private now: () => number;
     private log: (message: string) => void;
     private setIntervalFn: (fn: () => void, ms: number) => unknown;
@@ -116,6 +137,7 @@ export class DiscoveryWatchdog extends BaseSingleton<DiscoveryWatchdog> implemen
         if (options.Log) this.log = options.Log;
         if (options.SetInterval) this.setIntervalFn = options.SetInterval;
         if (options.Clear) this.clearFn = options.Clear;
+        if (options.StaleAfterMs !== undefined) this.staleAfterMs = options.StaleAfterMs;
         if (this.ticker !== null) {
             this.stopTicker();
             this.ensureTicker();
@@ -180,8 +202,46 @@ export class DiscoveryWatchdog extends BaseSingleton<DiscoveryWatchdog> implemen
         return `[DiscoveryWatchdog] ${entries.length} object(s) still in flight, oldest ${oldestSec}s:\n    ${rows.join('\n    ')}`;
     }
 
-    /** Emits one report immediately. Exposed so the ticker and tests drive the same path. */
+    /**
+     * Removes entries too old to be believed, naming each one.
+     *
+     * Eviction is loud on purpose. A sample vanishing from the report silently would look like it
+     * completed, which is the opposite of what happened — so the line says the entry was abandoned
+     * and how long it had been sitting there, and that is the last thing anyone hears about it.
+     *
+     * Returns the number evicted, so the caller (and tests) can distinguish "nothing was stale"
+     * from "eviction is switched off".
+     */
+    public EvictStale(): number {
+        if (this.staleAfterMs <= 0) return 0;
+        const now = this.now();
+        const dead: string[] = [];
+        for (const [key, entry] of this.inFlight) {
+            if (now - entry.StartedMs >= this.staleAfterMs) dead.push(key);
+        }
+        for (const key of dead) {
+            const entry = this.inFlight.get(key);
+            if (entry) {
+                this.log(
+                    `[DiscoveryWatchdog] evicting "${entry.Object}" — in flight ${Math.round((now - entry.StartedMs) / 1000)}s ` +
+                    `with no completion (stage=${entry.Stage} pages=${entry.Pages} records=${entry.Records}); treating it as abandoned, not running.`,
+                );
+            }
+            this.inFlight.delete(key);
+        }
+        if (this.inFlight.size === 0) this.stopTicker();
+        return dead.length;
+    }
+
+    /**
+     * Emits one report immediately. Exposed so the ticker and tests drive the same path.
+     *
+     * Eviction runs FIRST, so a report never describes an entry this same tick has already
+     * decided is dead — otherwise the report and the eviction line would contradict each other
+     * within a few lines of the same log.
+     */
     public Tick(): void {
+        this.EvictStale();
         if (this.inFlight.size === 0) {
             this.stopTicker();
             return;

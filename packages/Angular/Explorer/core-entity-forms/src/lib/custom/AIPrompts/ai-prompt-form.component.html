@@ -13,8 +13,8 @@
       <!-- Main Content Area - Template Editor and Configuration -->
       <div class="prompt-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
         <!-- Header Section -->
-        <div class="prompt-header" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-sunken); border-bottom: 2px solid var(--mj-border-default);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+        <div class="prompt-header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-sunken); border-bottom: 2px solid var(--mj-border-default);">
+          <div class="hero-header-row">
             <!-- Left: Prompt Info -->
             <div style="flex: 1; min-width: 0;">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -76,10 +76,10 @@
                   placeholder="Enter prompt description..."
                   style="width: 100%; max-width: 600px; margin-bottom: 12px;"></textarea>
               } @else if (record.Description) {
-                <p style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+                <p class="phone-hero-detail" style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
               }
               <!-- Quick Config Row -->
-              <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div class="quick-config phone-hero-detail" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                 @if (record.TypeID) {
                   <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                     <i class="fa-solid fa-tag" style="color: var(--mj-text-muted);"></i>
@@ -113,10 +113,10 @@
               </div>
             </div>
             <!-- Right: Action Buttons -->
-            <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+            <div class="action-buttons">
               <div style="display: flex; gap: 8px;">
                 @if (record.ID) {
-                  <button mjButton variant="primary" size="lg"
+                  <button mjButton variant="primary" size="lg" class="phone-hero-run"
                     (click)="openTestHarness()"
                     title="Run AI Prompt Test Harness">
                     <i class="fa-solid fa-play"></i> Run
@@ -138,11 +138,19 @@
               }
             </div>
           </div>
+          @if (!EditMode && HeroSummary) {
+            <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+              <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+          }
         </div>
         <!-- Configuration Sections with Expansion Panels -->
         <div class="configuration-sections" style="flex: 1; background: var(--mj-bg-surface-card); border-top: 2px solid var(--mj-border-default); padding: 16px; min-height: 0;">
+          <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+          <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
           <!-- Template Editor Section -->
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="template" SectionTitle="Template Editor" SectionIcon="fa-solid fa-code"
             [Expanded]="true"
             style="margin-bottom: 12px;">
             <ng-template mjAccordionTitle>
@@ -155,7 +163,7 @@
               </span>
             </ng-template>
             <!-- Direct Content Projection -->
-            <div class="template-section" style="display: flex; flex-direction: column; min-height: 400px; padding: 8px;">
+            <div class="phone-flush-x template-section" style="display: flex; flex-direction: column; min-height: 400px; padding: 8px;">
               @if (isLoadingTemplate) {
                 <div class="loading-state" style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--mj-text-muted);">
                   <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-right: 12px;"></i>
@@ -239,7 +247,7 @@
           </mj-accordion-panel>
           <!-- Model Configuration Expansion Panel -->
           @if (record.IsSaved) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="models" SectionTitle="Models" SectionIcon="fa-solid fa-microchip" [SectionCount]="promptModels.length"
               [Expanded]="true"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -440,7 +448,7 @@
                           </div>
                         </div>
                         <!-- Second row with additional details -->
-                        <div style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-sunken); font-size: 0.85em; color: var(--mj-text-muted);">
+                        <div class="model-details-row" style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-sunken); font-size: 0.85em; color: var(--mj-text-muted);">
                           <div></div>
                           <div>
                             <!-- Basic model details -->
@@ -456,7 +464,7 @@
                                   <i class="fa-solid fa-layer-group"></i> Model-Specific Parallel Execution
                                 </div>
                                 @if (EditMode) {
-                                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
+                                  <div class="model-parallel-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
                                     <!-- Parallel Mode -->
                                     <div>
                                       <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: var(--mj-text-secondary);">Parallel Mode</label>
@@ -530,7 +538,7 @@
             </mj-accordion-panel>
           }
           <!-- Advanced Configuration Expansion Panel -->
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="advanced" SectionTitle="Advanced Configuration" SectionIcon="fa-solid fa-cogs"
             [Expanded]="false"
             style="margin-bottom: 12px;">
             <ng-template mjAccordionTitle>
@@ -541,7 +549,7 @@
             </ng-template>
             <!-- Direct Content Projection -->
             <div style="padding: 16px 0;">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Left Column -->
                 <div>
                   <mj-form-field
@@ -642,7 +650,7 @@
             </div>
           </mj-accordion-panel>
           <!-- Prefill & Output Control Expansion Panel -->
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="prefill" SectionTitle="Prefill &amp; Output Control" SectionIcon="fa-solid fa-wand-magic-sparkles"
             [Expanded]="false"
             style="margin-bottom: 12px;">
             <ng-template mjAccordionTitle>
@@ -655,7 +663,7 @@
               <p style="margin: 0 0 12px 0; font-size: 0.85em; color: var(--mj-text-muted);">
                 Assistant prefill seeds the model's response with an initial string, guiding output format and content. Stop sequences terminate generation when encountered.
               </p>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Left Column -->
                 <div>
                   <mj-form-field
@@ -688,7 +696,7 @@
           </mj-accordion-panel>
           <!-- Template Parameters Expansion Panel -->
           @if (template && templateParams.length > 0) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="parameters" SectionTitle="Template Parameters" SectionIcon="fa-solid fa-sliders"
               [Expanded]="false"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -817,7 +825,7 @@
           }
           <!-- Output Example Expansion Panel (when OutputType = object) -->
           @if (showOutputExample) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="output-example" SectionTitle="Output Example" SectionIcon="fa-solid fa-code"
               [Expanded]="true"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -828,7 +836,7 @@
                 </span>
               </ng-template>
               <!-- Direct Content Projection -->
-              <div style="padding: 16px;">
+              <div class="phone-flush-x" style="padding: 16px;">
                 @if (EditMode) {
                   <mj-code-editor
                     [(ngModel)]="record.OutputExample"
@@ -850,7 +858,7 @@
           }
           <!-- Execution History Expansion Panel -->
           @if (record.IsSaved) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="history" SectionTitle="Execution History" SectionIcon="fa-solid fa-history" [SectionCount]="executionHistory.length"
               [Expanded]="false"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -863,7 +871,7 @@
                 </span>
               </ng-template>
               <!-- Custom Execution History Viewer -->
-              <div style="padding: 16px;">
+              <div class="phone-flush-x" style="padding: 16px;">
                 @if (isLoadingHistory) {
                   <div style="text-align: center; padding: 40px; color: var(--mj-text-muted);">
                     <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
@@ -928,7 +936,7 @@
                     </div>
                   </div>
                   <!-- Execution History Table -->
-                  <div style="border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden;">
+                  <div class="history-table-wrap" style="border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden;">
                     <table style="width: 100%; border-collapse: collapse;">
                       <thead>
                         <tr style="background: var(--mj-bg-surface-sunken); border-bottom: 2px solid var(--mj-border-default);">
@@ -996,13 +1004,29 @@
                       </tbody>
                     </table>
                   </div>
+                  <!-- Phone: one card per run; the table's eight columns do not fit a 375px screen -->
+                  <div class="history-cards">
+                    @for (run of executionHistory; track run.ID) {
+                      <button type="button" class="history-card" (click)="navigateToPromptRun(run.ID)">
+                        <span class="history-card-main">
+                          <span class="history-card-status" [style.color]="getExecutionStatusColor(run.Success)">
+                            <i [class]="'fa-solid ' + getExecutionStatusIcon(run.Success)" aria-hidden="true"></i>
+                            {{ run.Success === true ? 'Success' : run.Success === false ? 'Failed' : 'Running' }}
+                          </span>
+                          <span class="history-card-model">{{ run.Model || 'Unknown' }}</span>
+                        </span>
+                        <span class="history-card-meta">{{ run.RunAt | date:'short' }} · {{ formatDuration(run.ExecutionTimeMS) }} · {{ formatTokens(run.TokensUsed) }} tokens · {{ formatCost(run.TotalCost || run.Cost) }}@if (run.RunType) { · {{ run.RunType }}}</span>
+                        <i class="fa-solid fa-chevron-right history-card-open" aria-hidden="true"></i>
+                      </button>
+                    }
+                  </div>
                 }
               </div>
             </mj-accordion-panel>
           }
           <!-- Cache Expansion Panel -->
           @if (record.IsSaved && record.EnableCaching) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="cache" SectionTitle="Result Cache" SectionIcon="fa-solid fa-database"
               [Expanded]="false"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -1024,7 +1048,7 @@
           }
           <!-- Related Items Expansion Panel -->
           @if (record.IsSaved) {
-            <mj-accordion-panel
+            <mj-accordion-panel SectionKey="related" SectionTitle="Related Items" SectionIcon="fa-solid fa-link"
               [Expanded]="false"
               style="margin-bottom: 12px;">
               <ng-template mjAccordionTitle>
@@ -1035,7 +1059,7 @@
               </ng-template>
               <!-- Direct Content Projection -->
               <div style="padding: 16px 0;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                   <!-- AI Agents -->
                   <div>
                     <h6 style="margin: 0 0 12px 0; color: var(--mj-text-secondary);">AI Agents Using This Prompt</h6>
@@ -1060,6 +1084,7 @@
               </div>
             </mj-accordion-panel>
           }
+          </mj-accordion-sections>
         </div>
       </div>
     </form>

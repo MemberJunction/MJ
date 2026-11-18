@@ -199,6 +199,15 @@ describe('MJUserRoleEntityServer.SystemUserRejectionReason', () => {
         expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID)).toBeNull();
     });
 
+    it('refuses a role whose stored Deny is spelled non-canonically — the column collation is case-insensitive', () => {
+        // Direct SQL can store 'deny', and the runtime aggregation folds case, so the rule IS a Deny.
+        systemUserHolding();
+        metadataWithRuleForRole(RESTRICTED_ROLE_ID, true, {
+            ReadAccess: 'deny', UpdateAccess: 'no access', CreateAccess: 'No Access',
+        } as unknown as typeof DENYING);
+        expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID)).toBeTruthy();
+    });
+
     it('allows giving the system user a role whose rules are neutral', () => {
         systemUserHolding();
         metadataWithRuleForRole(RESTRICTED_ROLE_ID, true, NEUTRAL);

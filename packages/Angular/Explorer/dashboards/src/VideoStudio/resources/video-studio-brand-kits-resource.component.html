@@ -1,0 +1,225 @@
+<div class="vs-resource-shell">
+  <mj-page-layout class="vs-resource-shell__page">
+    <mj-page-header
+      Title="Brand Kits"
+      Icon="fa-solid fa-palette"
+      Subtitle="Configure palettes, typography, logos, soundtracks, and generation policies for video productions"
+    >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Brand kits"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+      <button
+        type="button"
+        mjButton
+        Variant="primary"
+        data-testid="new-brand-kit-button"
+        (click)="CreateNewBrandKit()"
+      >
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>New brand kit</span>
+      </button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search brand kits by name, description, or company..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"
+      />
+      <mj-filter-popover
+        Label="Filters"
+        Icon="fa-solid fa-filter"
+        [ActiveCount]="ActivePopoverFilterCount"
+        [ShowClearAll]="ActivePopoverFilterCount > 0"
+        (ClearAllRequested)="ClearAllFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          [ShowReset]="false"
+          (ValuesChange)="OnFilterValuesChange($event)"
+        />
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && AllBrandKits.length === 0) {
+      <div class="vs-loading-state" data-testid="brand-kits-loading">
+        <mj-loading Text="Loading brand kits..." Size="medium" />
+      </div>
+    } @else if (LoadError) {
+      <mj-empty-state
+        role="alert"
+        data-testid="brand-kits-error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Variant="error"
+        Title="Unable to load brand kits"
+        [Message]="LoadError"
+        ActionText="Try again"
+        ActionIcon="fa-solid fa-rotate"
+        (ActionClicked)="Refresh()"
+      ></mj-empty-state>
+    } @else if (FilteredBrandKits.length === 0) {
+      @if (AllBrandKits.length === 0) {
+        <mj-empty-state
+          data-testid="brand-kits-empty"
+          Icon="fa-solid fa-palette"
+          Variant="empty"
+          Title="No brand kits defined yet"
+          Message="Create a brand kit to establish your palette, typography, logos, and generation policies."
+          ActionText="New brand kit"
+          ActionIcon="fa-solid fa-plus"
+          (ActionClicked)="CreateNewBrandKit()"
+        ></mj-empty-state>
+      } @else {
+        <mj-empty-state
+          data-testid="brand-kits-empty"
+          Icon="fa-solid fa-palette"
+          Variant="no-results"
+          Title="No brand kits match your filters"
+          Message="Try clearing your search query or adjusting the active filter selections."
+          ActionText="Reset filters"
+          ActionIcon="fa-solid fa-filter-circle-xmark"
+          (ActionClicked)="ResetFiltersAndSearch()"
+        ></mj-empty-state>
+      }
+    } @else {
+      @if (DeleteError) {
+        <div class="vs-delete-error-banner" role="alert" data-testid="brand-kits-delete-error">
+          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+          <span>{{ DeleteError }}</span>
+        </div>
+      }
+      <div class="vs-brand-kits-grid" data-testid="brand-kits-grid">
+        @for (kit of FilteredBrandKits; track kit.ID) {
+          <article
+            class="vs-brand-kit-card"
+            [attr.data-testid]="'brand-kit-card-' + kit.ID"
+            tabindex="0"
+            role="button"
+            (click)="OpenBrandKit(kit)"
+            (keydown.enter)="$event.target === $event.currentTarget && OpenBrandKit(kit)"
+            (keydown.space)="$event.target === $event.currentTarget && $event.preventDefault(); $event.target === $event.currentTarget && OpenBrandKit(kit)"
+          >
+            <div class="vs-palette-strip" data-testid="brand-kit-palette-strip">
+              @if (kit.Swatches.length > 0) {
+                @for (swatch of kit.Swatches; track swatch.Name + swatch.Value) {
+                  <div
+                    class="vs-palette-swatch"
+                    [style.background-color]="swatch.Value"
+                    [title]="swatch.Name + ' (' + swatch.Value + ')'"
+                  ></div>
+                }
+              } @else {
+                <div class="vs-palette-empty">
+                  <span>No palette swatches configured</span>
+                </div>
+              }
+            </div>
+
+            <div class="vs-brand-kit-body">
+              <div class="vs-brand-kit-header">
+                <div class="vs-brand-kit-title-group">
+                  <div class="vs-brand-kit-logo-thumb" data-testid="brand-kit-logo-thumb">
+                    @if (kit.PrimaryLogoUrl) {
+                      <img
+                        class="vs-brand-kit-logo-img"
+                        [src]="kit.PrimaryLogoUrl"
+                        [alt]="kit.Name + ' logo'"
+                        loading="lazy"
+                      />
+                    } @else {
+                      <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                    }
+                  </div>
+                  <h3 class="vs-brand-kit-title" [title]="kit.Name">
+                    {{ kit.Name }}
+                  </h3>
+                  @if (kit.IsDefault) {
+                    <mj-video-badge
+                      Variant="neutral"
+                      Icon="fa-solid fa-star"
+                      title="Default brand kit"
+                      data-testid="brand-kit-default-star"
+                    >
+                      Default
+                    </mj-video-badge>
+                  }
+                </div>
+
+                <mj-video-badge
+                  [Variant]="StatusBadgeVariant(kit.Status)"
+                  data-testid="brand-kit-status-badge"
+                >
+                  {{ kit.Status }}
+                </mj-video-badge>
+              </div>
+
+              <div class="vs-brand-kit-footer">
+                <span class="vs-brand-kit-meta-item" data-testid="brand-kit-company-badge">
+                  <i class="fa-solid fa-building" aria-hidden="true"></i>
+                  <span>{{ kit.CompanyName || 'Workspace default' }}</span>
+                </span>
+
+                <button
+                  type="button"
+                  mjButton
+                  Variant="icon"
+                  Size="sm"
+                  [AriaLabel]="'Delete ' + kit.Name"
+                  [attr.data-testid]="'brand-kit-delete-' + kit.ID"
+                  [disabled]="DeletingKitId === kit.ID"
+                  (click)="DeleteBrandKit(kit, $event)"
+                  (keydown.enter)="$event.stopPropagation()"
+                  (keydown.space)="$event.stopPropagation()"
+                >
+                  <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </article>
+        }
+      </div>
+    }
+
+    @if (IsBrandKitCreatorOpen) {
+      <mj-dialog
+        [Visible]="true"
+        Title="New brand kit"
+        Size="lg"
+        (Close)="CloseBrandKitCreator()"
+      >
+        <mj-brand-kit-creator
+          [Provider]="ProviderToUse"
+          (Saved)="OnBrandKitCreatorSaved($event)"
+          (Cancelled)="CloseBrandKitCreator()"
+          (OpenMoreSettings)="OnBrandKitCreatorOpenMoreSettings($event)"
+        ></mj-brand-kit-creator>
+      </mj-dialog>
+    }
+  </mj-page-body>
+  </mj-page-layout>
+
+  <vs-studio-slide-in
+    [Provider]="ProviderToUse"
+    [CurrentUser]="CurrentUser"
+    [EnvironmentId]="EnvironmentId"
+    [ApplicationId]="ApplicationId"
+    [PageSource]="this"
+    [PageContext]="PageContext"
+    [PageTools]="PageTools"
+    [FallbackBrandKitId]="SelectedBrandKit?.ID ?? null"
+    [HeaderTitle]="'Video Studio'"
+  ></vs-studio-slide-in>
+</div>

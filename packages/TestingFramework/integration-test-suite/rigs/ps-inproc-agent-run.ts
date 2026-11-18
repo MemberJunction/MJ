@@ -3,21 +3,28 @@
  * a new prediction through the agent framework**. Where ps-inproc-agent-builder.ts calls the builder
  * SERVICE directly, this runs the registered **Pipeline Builder** code sub-agent end-to-end via the real
  * `AgentRunner` with an approved `ModelingPlanSpec` payload — exercising the full metadata → DriverClass
- * → `executeAgentInternal` → build → train → publish-gated-on-trust path that the conversational flow hits
- * once the user approves a plan. No LLM is involved (the builder is a code agent), so it's deterministic.
+ * → `executeAgentInternal` → build → bind the Prediction Unit and Evaluation Protocol → train one search →
+ * publish-gated-on-trust path that the conversational flow hits once the user approves a plan. The builder binds the
+ * pipeline's unit (the legacy mapping of the plan's target) and its default protocol, so the run stores a gate
+ * decision: the build ships a model with a verdict, or ships none (`no-signal`) and is held with the stored reason; it
+ * is published only under a "Ships" verdict. No LLM is involved (the builder is a code agent).
  *
  * Requires the `Pipeline Builder` sub-agent to be synced (DriverClass PredictiveStudioPipelineBuilderAgent).
- * Gated behind PS_INTEGRATION=1 + a reachable sidecar; self-cleans (run → model → pipeline).
+ * Gated behind PS_INTEGRATION=1 + a reachable sidecar. Self-cleans through `lib/ps-rig-lifecycle.ts`: the build's
+ * pipelines, models, training runs, Training Snapshots, Evaluation Protocols and Prediction Units, children first,
+ * with every Delete() checked (a row it cannot delete fails the rig).
  *
- * USAGE: PS_INTEGRATION=1 npx tsx packages/MJServer/integration-test-scripts/ps-inproc-agent-run.ts
+ * USAGE: PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-run.ts
  * Exit: 0 = passed/skipped, 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { DeleteRecordedRows, EnsureDriverAlgorithm, RecordPipelineBindings, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import '@memberjunction/core-entities';
-import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { LoadMLModelInferenceProcessor } from '@memberjunction/predictive-studio';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { GateOutcome, ModelingPlanSpec, OutcomeTitleText } from '@memberjunction/predictive-studio-core';
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
+import { LoadMLModelInferenceProcessor, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
 
@@ -31,18 +38,6 @@ const BUILDER_AGENT_NAME = 'Pipeline Builder';
 function banner(t: string): void { console.log(`\n${'═'.repeat(78)}\n  ${t}\n${'═'.repeat(78)}`); }
 let failures = 0;
 function check(c: boolean, label: string): void { console.log(`  ${c ? 'PASS' : 'FAIL'}  ${label}`); if (!c) failures++; }
-
-async function ensureAlgorithm(md: IMetadataProvider, user: UserInfo): Promise<string> {
-  const existing = await new RunView().RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, user);
-  if (existing.Success && existing.Results.length > 0) return existing.Results[0].ID;
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY; algo.Description = TAG; algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY; algo.SupportsFeatureImportance = true; algo.Status = 'Active';
-  if (!(await algo.Save())) throw new Error(`algo save failed: ${algo.LatestResult?.CompleteMessage}`);
-  return algo.ID;
-}
 
 function approvedPlan(): ModelingPlanSpec {
   return {
@@ -61,23 +56,26 @@ function approvedPlan(): ModelingPlanSpec {
   };
 }
 
-async function cleanup(md: IMetadataProvider, user: UserInfo): Promise<void> {
+/** The IDs of the pipelines this rig's agent runs created (the builder names them after the plan's goal, which carries the rig's tag). */
+async function rigPipelineIds(user: UserInfo): Promise<string[]> {
+  const pipes = await new RunView().RunView<Pick<MJMLTrainingPipelineEntity, 'ID'>>(
+    { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `Name LIKE '%ps-inproc-agent-run%'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
+  if (!pipes.Success) throw new Error(`Reading the rig's pipelines failed: ${pipes.ErrorMessage}`);
+  return pipes.Results.map((p) => p.ID);
+}
+
+/** The verdict title the stored gate outcome of a shipped model renders as (a kept baseline without a stored interval is not evaluated). */
+function expectedTitles(gate: GateOutcome | undefined): readonly OutcomeTitleText[] {
+  if (gate === 'model') return ['Ships — the model beats the flat guess'];
+  if (gate === 'keep-simple-baseline') return ['Ships — a simple baseline', 'Not evaluated yet'];
+  return [];
+}
+
+/** Deletes every row the rig's agent runs created (pipelines with their units, protocols, snapshots, runs and models); each failure fails the rig. */
+async function cleanup(md: IMetadataProvider, user: UserInfo, records: RunRecords, algorithm: RigAlgorithm | undefined): Promise<void> {
   banner('CLEANUP');
-  try {
-    const pipes = await new RunView().RunView<{ ID: string }>(
-      { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `Name LIKE '%ps-inproc-agent-run%'`, Fields: ['ID'], ResultType: 'simple' }, user);
-    for (const p of pipes.Results ?? []) {
-      const runs = await new RunView().RunView<MJMLTrainingRunEntity>(
-        { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${p.ID}'`, ResultType: 'entity_object' }, user);
-      for (const r of runs.Results ?? []) await r.Delete();
-      const models = await new RunView().RunView<MJMLModelEntity>(
-        { EntityName: 'MJ: ML Models', ExtraFilter: `PipelineID='${p.ID}'`, ResultType: 'entity_object' }, user);
-      for (const m of models.Results ?? []) await m.Delete();
-      const pe = await md.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
-      if (await pe.Load(p.ID)) await pe.Delete();
-    }
-    console.log('  cleanup done.');
-  } catch (e) { console.log(`  cleanup warning: ${e instanceof Error ? e.message : String(e)}`); }
+  await RecordPipelineBindings(md, user, records, await rigPipelineIds(user));
+  failures += ReportCleanup(await DeleteRecordedRows(md, user, records, algorithm));
 }
 
 async function main(): Promise<void> {
@@ -90,39 +88,52 @@ async function main(): Promise<void> {
   const agent = AIEngine.Instance.Agents.find((a) => a.Name?.toLowerCase() === BUILDER_AGENT_NAME.toLowerCase());
   check(!!agent, `'${BUILDER_AGENT_NAME}' sub-agent found in metadata (mj sync landed)`);
   check(agent?.DriverClass === 'PredictiveStudioPipelineBuilderAgent', `it has DriverClass 'PredictiveStudioPipelineBuilderAgent' (got '${agent?.DriverClass}')`);
-  if (!agent) { await cleanup(provider, user); process.exit(1); }
+  if (!agent) process.exit(1);
 
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
   try {
-    await ensureAlgorithm(provider, user);
+    algorithm = await EnsureDriverAlgorithm(provider, user, DRIVER_KEY, TAG);
     banner('RUN: AgentRunner.RunAgent(Pipeline Builder, payload=approved ModelingPlanSpec)');
     const t0 = Date.now();
-    const result = await new AgentRunner().RunAgent({
+    const result = await new AgentRunner().RunAgent<ModelingPlanSpec, PredictiveStudioBuilderPayload>({
       agent,
       conversationMessages: [{ role: 'user', content: 'build it' }],
       contextUser: user,
       payload: approvedPlan(),
     });
     console.log(`  Ran in ${Date.now() - t0}ms — agentRun=${result.agentRun?.ID} success=${result.success}`);
-    const built = (result.payload ?? {}) as { BuildResult?: { success?: boolean; pipelineId?: string; modelId?: string; trustGrade?: string; published?: boolean; heldReason?: string | null } };
-    const br = built.BuildResult;
-    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, grade: br.trustGrade, published: br.published }) : '(missing)'}`);
+    const br = result.payload?.BuildResult;
+    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, trust: br.trustTitle, headline: br.headline, published: br.published, held: br.heldReason }) : '(missing)'}`);
+
+    const gate = result.payload?.GateOutcome;
+    console.log(`  Stored gate decision: ${gate ?? '(none)'} — ${result.payload?.GateReason ?? '(no reason)'}`);
 
     check(!!result.agentRun?.ID, 'AgentRunner created an AI Agent Run (the framework ran the sub-agent)');
     check(!!br, 'the sub-agent wrote BuildResult back to the payload');
-    check(br?.success === true, 'the build succeeded (pipeline created + model trained) through the agent');
-    check(!!br?.pipelineId && !!br?.modelId, 'BuildResult carries the created pipeline + model ids');
-    check(typeof br?.trustGrade === 'string', 'a plain-language trust grade was produced');
-    // The near-chance renewal model is held, not published — the publish gate fires through the agent too.
-    check(br?.published === (br?.trustGrade !== 'Poor'), 'the publish gate fired through the agent (Poor → held)');
+    check(br?.success === true, `the build succeeded (pipeline created, bound, trained) through the agent${br?.errorMessage ? ` — ${br.errorMessage}` : ''}`);
+    check(!!br?.pipelineId, 'BuildResult carries the created pipeline id');
 
-    // Confirm a real pipeline actually landed in the DB.
-    const pipes = await new RunView().RunView<{ ID: string }>(
-      { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `Name LIKE '%ps-inproc-agent-run%'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
-    check((pipes.Results?.length ?? 0) >= 1, 'a real MJ: ML Training Pipeline was created in the database by the agent run');
+    // The builder bound the pipeline to a Prediction Unit and an Evaluation Protocol, so the run stored a gate decision.
+    if (br?.pipelineId) await RecordPipelineBindings(provider, user, records, [br.pipelineId]);
+    check(records.PredictionUnitIDs.Size === 1 && records.EvaluationProtocolIDs.Size === 1, 'the built pipeline is bound to a Prediction Unit and an Evaluation Protocol');
+    check(gate === 'model' || gate === 'keep-simple-baseline' || gate === 'no-signal', `the training run stored a gate decision (got '${gate ?? 'none'}')`);
+
+    if (gate === 'no-signal') {
+      // Nothing shipped: no model, no verdict, held with the stored reason.
+      check(!br?.modelId && br?.trustTitle === undefined, 'a no-signal build names no model and renders no verdict');
+    } else {
+      check(!!br?.modelId, 'BuildResult carries the shipped model id');
+      check(typeof br?.headline === 'string' && expectedTitles(gate).some((t) => t === br?.trustTitle),
+        `the verdict renders the stored outcome (title '${br?.trustTitle}' for '${gate}')`);
+    }
+    // Only a stored decision that ships can publish; anything held says why.
+    check(br?.published !== true || (br?.trustTitle || '').startsWith('Ships'), 'nothing is published without a shipping verdict');
+    check(br?.published === true || !!br?.heldReason, 'a build that is not published carries its held reason');
 
     banner(failures === 0 ? 'AGENT-RUN PROOF COMPLETE — ALL CHECKS PASSED' : `AGENT-RUN PROOF — ${failures} CHECK(S) FAILED`);
   } finally {
-    await cleanup(provider, user);
+    await cleanup(provider, user, records, algorithm);
   }
   process.exit(failures === 0 ? 0 : 1);
 }

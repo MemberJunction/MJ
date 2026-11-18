@@ -8,6 +8,7 @@ import { JsonWriteHelper } from './json-write-helper';
 import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
+import { CollectionPromotion, DeclaredCollectionsOf } from './collection-promotion';
 import {
   FindSubPropertyExternalizations,
   ExternalizeSubProperties,
@@ -269,7 +270,8 @@ export class RecordProcessor {
       ancestryPath,
       relatedEntities,
       verbose,
-      batchedRelatedData
+      batchedRelatedData,
+      collections
     );
 
     return {
@@ -1063,15 +1065,20 @@ export class RecordProcessor {
     ancestryPath: Set<string>,
     relatedEntities: Record<string, RecordData[]>,
     verbose?: boolean,
-    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>,
+    collections: Record<string, RecordData[]> = {}
   ): Promise<void> {
     if (!entityConfig.pull?.relatedEntities) {
       return;
     }
 
+    const declared = record.HasCompanions ? DeclaredCollectionsOf(record) : new Map<string, CollectionPromotion>();
     for (const [relationKey, relationConfig] of Object.entries(entityConfig.pull.relatedEntities)) {
       try {
-        const existingRelated = existingRecordData?.relatedEntities?.[relationKey] || [];
+        const promotion = this.collectionFormatFor(declared, relationConfig, relationKey, existingRecordData, collections);
+        const existingRelated = promotion
+          ? existingRecordData?.collections?.[promotion.CollectionName] ?? []
+          : existingRecordData?.relatedEntities?.[relationKey] || [];
 
         let relatedRecords: RecordData[];
 
@@ -1102,7 +1109,9 @@ export class RecordProcessor {
           );
         }
 
-        if (relatedRecords.length > 0) {
+        if (relatedRecords.length > 0 && promotion) {
+          collections[promotion.CollectionName] = relatedRecords.map((child) => WithoutJoinField(child, promotion.JoinField));
+        } else if (relatedRecords.length > 0) {
           relatedEntities[relationKey] = relatedRecords;
         }
       } catch (error) {
@@ -1117,7 +1126,8 @@ export class RecordProcessor {
   }
 
   /**
-   * Calculates sync metadata including checksum and last modified timestamp
+   * Calculates sync metadata including checksum and last modified timestamp.
+   * The checksum includes the content of every `@file` reference, at any depth, as push does.
    */
   private async calculateSyncMetadata(
     fields: Record<string, any>,
@@ -1129,18 +1139,8 @@ export class RecordProcessor {
     embeds?: Record<string, RecordData>,
     extension?: RecordData['extension']
   ): Promise<{ lastModified: string; checksum: string }> {
-    // Determine if we should include external file content in checksum
-    const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
-
     const checksumPayload = SyncEngine.BuildRecordChecksumPayload(fields, collections, embeds, extension);
-
-    const checksum = hasExternalizedFields
-      ? await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, targetDir)
-      : this.syncEngine.calculateChecksum(checksumPayload);
-
-    if (verbose && hasExternalizedFields) {
-      console.log(`Calculated checksum including external file content for record`);
-    }
+    const checksum = await this.syncEngine.CalculateChecksumWithFileContent(checksumPayload, targetDir);
 
     // Compare with existing checksum to determine if data changed
     const existingChecksum = existingRecordData?.sync?.checksum;
@@ -1170,6 +1170,39 @@ export class RecordProcessor {
         checksum: checksum
       };
     }
+  }
+
+  /**
+   * The declared collection a configured related entity is written as on pull, or `undefined` to
+   * write it under `relatedEntities` as before.
+   *
+   * Pull keeps the format the author chose: a record whose file holds the group under
+   * `relatedEntities` keeps it there, and one that holds it under `collections` keeps that. A record
+   * new to the file is written in the `collections` format whenever the parent declares a collection
+   * for the related entity on the configured foreign key, since push saves it through that collection
+   * either way. A collection another step of the pull already wrote is left as it is.
+   */
+  private collectionFormatFor(
+    declared: ReadonlyMap<string, CollectionPromotion>,
+    relationConfig: RelatedEntityConfig,
+    relationKey: string,
+    existingRecordData: RecordData | undefined,
+    collections: Record<string, RecordData[]>
+  ): CollectionPromotion | undefined {
+    const promotion = declared.get(relationConfig.entity.trim().toLowerCase());
+    if (!promotion || promotion.JoinField.toLowerCase() !== relationConfig.foreignKey.toLowerCase()) {
+      return undefined;
+    }
+    if (collections[promotion.CollectionName] !== undefined) {
+      return undefined;
+    }
+    if (!existingRecordData) {
+      return promotion;
+    }
+    if (existingRecordData.relatedEntities?.[relationKey] !== undefined) {
+      return undefined;
+    }
+    return existingRecordData.collections?.[promotion.CollectionName] !== undefined ? promotion : undefined;
   }
 
   /**
@@ -1402,16 +1435,6 @@ export class RecordProcessor {
   }
 
   /**
-   * Checks if the record has externalized fields
-   */
-  private hasExternalizedFields(fields: Record<string, any>, entityConfig: EntityConfig): boolean {
-    return !!entityConfig.pull?.externalizeFields &&
-           Object.values(fields).some(value =>
-             typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)
-           );
-  }
-
-  /**
    * Convert a GUID value to @lookup syntax by looking up the human-readable value
    */
   private async convertGuidToLookup(
@@ -1454,4 +1477,18 @@ export class RecordProcessor {
       return guidValue;
     }
   }
+}
+
+/**
+ * A pulled related record without its join field, for writing as a collection item: the collection
+ * sets the join field to the parent's key when it saves.
+ */
+export function WithoutJoinField(child: RecordData, joinField: string): RecordData {
+  const fields: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(child.fields ?? {})) {
+    if (name.toLowerCase() !== joinField.toLowerCase()) {
+      fields[name] = value;
+    }
+  }
+  return { ...child, fields };
 }

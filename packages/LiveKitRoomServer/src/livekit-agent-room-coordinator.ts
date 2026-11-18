@@ -25,6 +25,7 @@ import {
   ResolveIsModelFullDuplex,
   type IRealtimeSession,
   type RealtimeAvatarStatus,
+  type RealtimeAvatarUnavailableReason,
   type RealtimeToolDefinition,
 } from '@memberjunction/ai';
 import { DefaultNativeLoader, type NativeAvatarVideoSupport } from '@memberjunction/ai-bridge-livekit';
@@ -45,6 +46,7 @@ import {
   type RoomTurnSnapshot,
 } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService, type MintedToken } from './livekit-token-service';
+import { LiveKitParticipantService } from './livekit-participant-service';
 import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /**
@@ -286,6 +288,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
+  /** Sets a bot's attributes on the server's authority; created on first use (see {@link SetParticipantService}). */
+  private participantService?: LiveKitParticipantService;
   private turnToolBinder?: TurnToolBinder;
   private agentVisionResolver?: AgentVisionResolver;
   private failedStartRecorder?: FailedStartRecorder;
@@ -376,6 +380,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   public SetTokenService(service: LiveKitTokenService): void {
     this.tokenService = service;
+  }
+
+  /**
+   * Overrides the participant service used to mark a bot audio-only when its avatar is taken down (an injectable seam,
+   * primarily for unit testing; production uses one built from the environment's LiveKit credentials).
+   *
+   * @param service The participant service to use.
+   */
+  public SetParticipantService(service: LiveKitParticipantService): void {
+    this.participantService = service;
   }
 
   /**
@@ -604,6 +618,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
               return openModelSession(request.PriorTranscript);
             }
           : undefined,
+        // The bot's token cannot change its own attributes, so the server marks it audio-only when the bridge reports the
+        // avatar taken down (and again after its room client rejoins with the original token).
+        OnAvatarUnavailable: (reason) => this.markBotAudioOnly(params.RoomName, botIdentity, botName, reason),
         OnSessionEnded: async (reason) => {
           // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
           if (started.SessionBridgeID) {
@@ -686,6 +703,15 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const detail = avatarVideo.Supported === false && avatarVideo.Detail ? ` (${avatarVideo.Detail})` : '';
     LogStatus(`[LiveKitAgentRoomCoordinator] ${botName}'s avatar: ${resolved.Granted ? 'on' : `audio only, ${resolved.Reason ?? 'bridged'}${detail}`}`);
     return resolved;
+  }
+
+  /** Sets the bot's `mj.agentAvatar` attribute to audio-only through LiveKit's room service; logs a failure. */
+  private async markBotAudioOnly(roomName: string, botIdentity: string, botName: string, reason: RealtimeAvatarUnavailableReason): Promise<void> {
+    this.participantService ??= new LiveKitParticipantService();
+    const result = await this.participantService.SetAgentAvatarAudioOnly(roomName, botIdentity, reason);
+    if (!result.Success) {
+      LogError(`[LiveKitAgentRoomCoordinator] could not mark ${botName} audio-only in room ${roomName}: ${result.ErrorMessage ?? 'unknown error'}`);
+    }
   }
 
   /**
@@ -854,7 +880,21 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // Snapshot the bridge ids first — StopAgentRoomSession mutates the roster (removeFromRoster) as it runs.
     const bridgeIDs = (this.roomRosters.get(roomKey) ?? []).map((e) => e.SessionBridgeID);
     await Promise.all(bridgeIDs.map((id) => this.StopAgentRoomSession(id, reason, contextUser, provider)));
+    if (this.roomTeardownHook) {
+      try {
+        await this.roomTeardownHook(roomName, contextUser, provider);
+      } catch (err) {
+        LogError(`[LiveKitAgentRoomCoordinator] roomTeardownHook failed for ${roomName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     return bridgeIDs.length;
+  }
+
+  private roomTeardownHook?: (roomName: string, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>;
+
+  /** Registers an optional room teardown hook (e.g., for LiveKit SIP to hang up phone legs when a room is ended for everyone). */
+  public SetRoomTeardownHook(hook: ((roomName: string, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>) | undefined): void {
+    this.roomTeardownHook = hook;
   }
 
   /**

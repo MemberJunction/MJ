@@ -227,6 +227,22 @@ describe('SimpleVectorService', () => {
       expect(score).toBeCloseTo(1, 5);
     });
 
+    it('should calculate cosine-similarity as the standard cosine, without rescaling', () => {
+      expect(service.CalculateDistance([1, 0], [1, 0], 'cosine-similarity')).toBeCloseTo(1, 5);
+      expect(service.CalculateDistance([1, 0], [0, 1], 'cosine-similarity')).toBeCloseTo(0, 5);
+      expect(service.CalculateDistance([1, 0], [-1, 0], 'cosine-similarity')).toBeCloseTo(-1, 5);
+    });
+
+    it('should find nearest by cosine-similarity with the same order as cosine', async () => {
+      const svc = new SimpleVectorService();
+      svc.AddVector('same', [1, 0]);
+      svc.AddVector('orthogonal', [0, 1]);
+      svc.AddVector('opposite', [-1, 0]);
+      const raw = await svc.FindNearestAsync([1, 0], 3, undefined, 'cosine-similarity');
+      expect(raw.map(r => r.key)).toEqual(['same', 'orthogonal', 'opposite']);
+      expect(raw.map(r => Math.round(r.score * 1e6) / 1e6)).toEqual([1, 0, -1]);
+    });
+
     it('should calculate euclidean distance (normalized)', () => {
       const score = service.CalculateDistance([0, 0], [0, 0], 'euclidean');
       // Identical: distance=0, normalized = 1/(1+0) = 1
@@ -524,6 +540,36 @@ describe('SimpleVectorService', () => {
     it('jaccard with both zero vectors should be 1', () => {
       const score = service.CalculateDistance([0, 0, 0], [0, 0, 0], 'jaccard');
       expect(score).toBeCloseTo(1, 5);
+    });
+  });
+
+  describe('HasMatching', () => {
+    it('returns false on empty store with or without filter', () => {
+      expect(service.HasMatching()).toBe(false);
+      expect(service.HasMatching(() => true)).toBe(false);
+    });
+
+    it('returns true on non-empty store when no filter is supplied', () => {
+      service.AddVector('k1', [1, 0], { agentId: 'a1' });
+      expect(service.HasMatching()).toBe(true);
+    });
+
+    it('short-circuits on first live match and ignores deleted entries', () => {
+      service.AddVector('k1', [1, 0], { agentId: 'a1' });
+      service.AddVector('k2', [0, 1], { agentId: 'a2' });
+      service.AddVector('k3', [1, 1], { agentId: 'a1' });
+
+      let evalCount = 0;
+      const foundA1 = service.HasMatching((meta) => {
+        evalCount++;
+        return meta?.agentId === 'a1';
+      });
+      expect(foundA1).toBe(true);
+      expect(evalCount).toBe(1);
+
+      expect(service.HasMatching((meta) => meta?.agentId === 'a2')).toBe(true);
+      service.RemoveVector('k2');
+      expect(service.HasMatching((meta) => meta?.agentId === 'a2')).toBe(false);
     });
   });
 });

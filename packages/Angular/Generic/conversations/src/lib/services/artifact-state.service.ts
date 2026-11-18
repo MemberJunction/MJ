@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
-import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ArtifactPermissionService } from './artifact-permission.service';
 
@@ -255,16 +255,53 @@ export class ArtifactStateService {
   async LoadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
-      // Load artifacts through the collection join - use subquery to get artifact IDs from versions
+      // Resolve version IDs from collection links, then artifact IDs from versions (no protected subqueries)
+      const colLinksRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${collectionId}'`,
+          Fields: ['ArtifactVersionID'],
+          ResultType: 'simple'
+        },
+        currentUser
+      );
+      const versionIds = Array.from(
+        new Set(
+          (colLinksRes.Success && colLinksRes.Results ? colLinksRes.Results : [])
+            .map((r) => (r.ArtifactVersionID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (versionIds.length === 0) {
+        return [];
+      }
+
+      const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      const versionsRes = await rv.RunView<{ ArtifactID?: string | null }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${quotedVersionIds})`,
+          Fields: ['ArtifactID'],
+          ResultType: 'simple'
+        },
+        currentUser
+      );
+      const artifactIds = Array.from(
+        new Set(
+          (versionsRes.Success && versionsRes.Results ? versionsRes.Results : [])
+            .map((r) => (r.ArtifactID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (artifactIds.length === 0) {
+        return [];
+      }
+
+      const quotedArtifactIds = artifactIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
       const artifactsResult = await rv.RunView<MJArtifactEntity>(
         {
           EntityName: 'MJ: Artifacts',
-          ExtraFilter: `ID IN (
-            SELECT DISTINCT av.ArtifactID
-            FROM [__mj].[vwArtifactVersions] av
-            INNER JOIN [__mj].[vwCollectionArtifacts] ca ON ca.ArtifactVersionID = av.ID
-            WHERE ca.CollectionID = '${collectionId}'
-          )`,
+          ExtraFilter: `ID IN (${quotedArtifactIds})`,
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'entity_object'
         },
@@ -543,6 +580,7 @@ export class ArtifactStateService {
           ExtraFilter: `ArtifactID='${artifactId}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         },
         currentUser
@@ -586,13 +624,32 @@ export class ArtifactStateService {
     }
 
     const rv = RunView.FromMetadataProvider(this.Provider);
-    // Find all versions of this artifact in the collection
-    const result = await rv.RunView<any>(
+    // Resolve version IDs for this artifact first (no protected subquery)
+    const versionsRes = await rv.RunView<{ ID?: string | null }>(
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${artifactId}'`,
+        Fields: ['ID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+    const versionIds = Array.from(
+      new Set(
+        (versionsRes.Success && versionsRes.Results ? versionsRes.Results : [])
+          .map((r) => (r.ID ?? '').trim())
+          .filter((id) => id.length > 0)
+      )
+    );
+    if (versionIds.length === 0) {
+      throw new Error('Collection artifact link not found');
+    }
+
+    const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+    const result = await rv.RunView<MJCollectionArtifactEntity>(
       {
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID IN (
-          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
-        )`,
+        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID IN (${quotedVersionIds})`,
         ResultType: 'entity_object'
       },
       currentUser

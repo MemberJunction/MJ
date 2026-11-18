@@ -11,6 +11,8 @@ export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-sc
 export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
+export { ResolvePackagePlatform, PackageRunsOnTier } from './manifest/package-platform.js';
+export type { PackagePlatform, PlatformRoutable } from './manifest/package-platform.js';
 
 // Types
 export type {
@@ -39,6 +41,7 @@ export type {
 export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
 export type {
     ManifestFetcher,
+    DependencyVersionResolver,
     FetchedManifest,
     RootApp,
     GraphResolutionResult
@@ -58,7 +61,9 @@ export {
     ListGitHubTags,
     ValidateGitHubTag,
     DownloadMigrations,
+    ExtractSqlFilesFromTarGz,
     GetLatestVersion,
+    DescribeUnresolvedVersion,
     ParseGitHubUrl,
     GitHubAccessError,
     IsPrereleaseVersion,
@@ -66,10 +71,20 @@ export {
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
+    GitHubTokenSource,
     GitHubRelease,
     ManifestFetchResult,
     MigrationDownloadResult
 } from './github/github-client.js';
+
+// App sources: where an app's manifest, versions and SQL files come from
+export { ResolveAppSource, SubpathFromLocator } from './source/open-app-source.js';
+export type { OpenAppSource, SourceContext, VersionValidationResult } from './source/open-app-source.js';
+export { GitHubAppSource } from './source/github-app-source.js';
+export { LocalAppSource, NormalizeAppSource, IsLocalAppLocator, LOCAL_LOCATOR_PREFIX } from './source/local-app-source.js';
+export type { NormalizedAppSource } from './source/local-app-source.js';
+export { CheckWorkspacePackages } from './install/workspace-packages.js';
+export type { WorkspacePackageCheck } from './install/workspace-packages.js';
 
 // Install handlers
 export { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';

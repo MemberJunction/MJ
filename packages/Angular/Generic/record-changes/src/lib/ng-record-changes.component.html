@@ -13,28 +13,205 @@
 
   @if (!IsLoading) {
     <div class="rc-container">
-      <!-- Version Labels Section -->
-      <div class="rc-labels-section">
-        <div class="rc-labels-header">
-          <div class="rc-labels-title">
-            <i class="fa-solid fa-tags" aria-hidden="true"></i>
-            <span>Version Labels</span>
-            @if (RecordLabels.length > 0) {
-              <span class="rc-labels-count">{{ RecordLabels.length }}</span>
-            }
+      <!-- Compact Context Header (Entity Display Name + Record Name + Stats + Compact Version Labels Action) -->
+      <div class="rc-page-header">
+        <div class="rc-header-main">
+          <div class="rc-header-title-row">
+            <span class="rc-entity-badge rc-page-subtitle">
+              <i [class]="EntityIcon" aria-hidden="true"></i>
+              {{ EntityDisplayName }}
+            </span>
+            <h2 class="rc-page-title">{{ RecordDisplayName || 'Change History' }}</h2>
           </div>
-          <button class="rc-create-label-btn" (click)="OpenCreateWizard()" title="Create a version label for this record">
-            <i class="fa-solid fa-plus"></i> Create Label
+          @if (viewData.length > 0) {
+            <div class="rc-header-stats-row">
+              <span class="rc-change-count">
+                {{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot;
+                {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}
+              </span>
+              @if (TopContributors.length > 0) {
+                <div class="rc-contributor-stack" aria-label="Contributors">
+                  @for (contributor of TopContributors; track contributor.Name) {
+                    <span class="rc-contributor-avatar" [attr.aria-label]="contributor.Name" [title]="contributor.Name">
+                      {{ contributor.Initials }}
+                    </span>
+                  }
+                </div>
+              }
+              <span class="rc-latest-time">&middot; Latest {{ formatRelativeTime(viewData[0].ChangedAt) }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="rc-header-actions">
+          @if (GetPreviewableChanges().length > 0) {
+            <button
+              type="button"
+              class="rc-compare-toggle-btn"
+              [class.active]="CompareMode"
+              (click)="ToggleCompareMode()"
+              [attr.aria-pressed]="CompareMode"
+              aria-label="Compare any two versions">
+              <i class="fa-solid fa-code-compare" aria-hidden="true"></i>
+              <span>Compare</span>
+            </button>
+          }
+          @if (RecordLabels.length > 0) {
+            <button
+              type="button"
+              class="rc-labels-toggle-btn"
+              [class.active]="ShowLabelsTray"
+              (click)="ToggleLabelsTray()"
+              [attr.aria-expanded]="ShowLabelsTray">
+              <i class="fa-solid fa-tags" aria-hidden="true"></i>
+              <span>{{ RecordLabels.length }} Label{{ RecordLabels.length !== 1 ? 's' : '' }}</span>
+              <i class="fa-solid" [class.fa-chevron-up]="ShowLabelsTray" [class.fa-chevron-down]="!ShowLabelsTray" aria-hidden="true"></i>
+            </button>
+          }
+          <button
+            type="button"
+            class="rc-create-label-btn"
+            (click)="OpenCreateWizard()"
+            title="Create a version label snapshot for this record">
+            <i class="fa-solid fa-tag" aria-hidden="true"></i>
+            <span>+ Label</span>
           </button>
         </div>
-        @if (IsLoadingLabels) {
-          <div class="rc-labels-loading">
-            <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
+      </div>
+
+      <!-- Cross-Version Diff Comparison Workbench (vA <-> vB) -->
+      @if (CompareMode) {
+        <div class="rc-compare-panel" role="region" aria-label="Cross-version diff comparison">
+          <div class="rc-compare-toolbar">
+            <div class="rc-compare-slot">
+              <span class="rc-compare-badge rc-compare-badge--base">vA · Base</span>
+              <select
+                class="rc-compare-select"
+                aria-label="Base version vA"
+                [value]="CompareBaseChangeID ?? ''"
+                (change)="OnComparisonSelectChange('base', $event)">
+                <option value="__CURRENT__" [selected]="CompareBaseChangeID === '__CURRENT__'">Current Live Record</option>
+                @for (ver of GetPreviewableChanges(); track ver.ID) {
+                  <option [value]="ver.ID" [selected]="IsChangeSelectedAsCompareBase(ver)">
+                    {{ formatFullDateTime(ver.ChangedAt) }} — {{ getUserDisplayName(ver.User) }}
+                  </option>
+                }
+              </select>
+              @if (CompareBaseChange; as baseChange) {
+                <button
+                  type="button"
+                  class="rc-compare-action-btn"
+                  [class.active]="IsChangePreviewedInForm(baseChange)"
+                  (click)="OnToggleFormPreview(baseChange, $event)"
+                  aria-label="Preview base version in form">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+                @if (AllowRestore) {
+                  <button
+                    type="button"
+                    class="rc-compare-action-btn"
+                    (click)="OnRestoreVersion(baseChange, $event)"
+                    aria-label="Restore base version">
+                    <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+            </div>
+
+            <button
+              type="button"
+              class="rc-compare-swap-btn"
+              (click)="SwapComparisonVersions()"
+              aria-label="Swap comparison versions">
+              <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+            </button>
+
+            <div class="rc-compare-slot">
+              <span class="rc-compare-badge rc-compare-badge--target">vB · Target</span>
+              <select
+                class="rc-compare-select"
+                aria-label="Target version vB"
+                [value]="CompareTargetChangeID ?? ''"
+                (change)="OnComparisonSelectChange('target', $event)">
+                <option value="__CURRENT__" [selected]="CompareTargetChangeID === '__CURRENT__'">Current Live Record</option>
+                @for (ver of GetPreviewableChanges(); track ver.ID) {
+                  <option [value]="ver.ID" [selected]="IsChangeSelectedAsCompareTarget(ver)">
+                    {{ formatFullDateTime(ver.ChangedAt) }} — {{ getUserDisplayName(ver.User) }}
+                  </option>
+                }
+              </select>
+              @if (CompareTargetChange; as targetChange) {
+                <button
+                  type="button"
+                  class="rc-compare-action-btn"
+                  [class.active]="IsChangePreviewedInForm(targetChange)"
+                  (click)="OnToggleFormPreview(targetChange, $event)"
+                  aria-label="Preview target version in form">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+                @if (AllowRestore) {
+                  <button
+                    type="button"
+                    class="rc-compare-action-btn"
+                    (click)="OnRestoreVersion(targetChange, $event)"
+                    aria-label="Restore target version">
+                    <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+            </div>
           </div>
-        } @else if (RecordLabels.length === 0) {
-          <mj-empty-state class="rc-labels-empty" Size="compact"
-            Icon="" Title="No version labels for this record yet." />
-        } @else {
+
+          @if (GetComparisonDiffs(); as compDiffs) {
+            @if (compDiffs.length === 0) {
+              <div class="rc-compare-empty">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                <span>No field differences between {{ GetComparisonSlotLabel('base') }} and {{ GetComparisonSlotLabel('target') }}.</span>
+              </div>
+            } @else {
+              <div class="rc-compare-summary">
+                <span>{{ compDiffs.length }} field{{ compDiffs.length !== 1 ? 's' : '' }} differ between <strong>vA</strong> and <strong>vB</strong></span>
+              </div>
+              <div class="rc-compare-diff-list">
+                @for (fc of compDiffs; track fc.field) {
+                  <div class="rc-field-row">
+                    <div class="rc-field-label">{{ fc.displayName }}</div>
+                    <div class="rc-field-values">
+                      @if (fc.fieldType === 'boolean') {
+                        <div class="rc-bool-change">
+                          <span class="rc-bool-dot" [class.on]="fc.oldValue === 'true' || fc.oldValue === '1'" [class.off]="fc.oldValue !== 'true' && fc.oldValue !== '1'"></span>
+                          <span class="rc-bool-label old">{{ fc.oldValue === 'true' || fc.oldValue === '1' ? 'Yes' : 'No' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-bool-dot" [class.on]="fc.newValue === 'true' || fc.newValue === '1'" [class.off]="fc.newValue !== 'true' && fc.newValue !== '1'"></span>
+                          <span class="rc-bool-label new" [class.active]="fc.newValue === 'true' || fc.newValue === '1'" [class.inactive]="fc.newValue !== 'true' && fc.newValue !== '1'">{{ fc.newValue === 'true' || fc.newValue === '1' ? 'Yes' : 'No' }}</span>
+                        </div>
+                      } @else if (fc.fieldType === 'date' || fc.fieldType === 'number') {
+                        <div class="rc-atomic-change">
+                          <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                        </div>
+                      } @else if (fc.diffHtml) {
+                        <div class="rc-text-diff" [innerHTML]="fc.diffHtml"></div>
+                      } @else {
+                        <div class="rc-atomic-change">
+                          <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+
+      <!-- Collapsible Version Labels Tray (only takes vertical space when user opens it and labels exist) -->
+      @if (ShowLabelsTray && RecordLabels.length > 0) {
+        <div class="rc-labels-tray">
           <div class="rc-labels-list">
             @for (label of RecordLabels; track label.ID) {
               <div class="rc-label-chip" [title]="label.Description || label.Name">
@@ -47,8 +224,8 @@
               </div>
             }
           </div>
-        }
-      </div>
+        </div>
+      }
 
       @if (viewData.length === 0) {
         <!-- Empty state -->
@@ -63,20 +240,25 @@
           </div>
         </mj-empty-state>
       } @else {
-        <!-- Page Header -->
-        <div class="rc-page-header">
-          <div>
-            <h2 class="rc-page-title">Change History</h2>
-            <div class="rc-page-subtitle">{{ record.EntityInfo.Name }}</div>
-          </div>
-          <div class="rc-header-meta">
-            <div class="rc-entity-badge">
-              <i class="fa-solid fa-database" aria-hidden="true"></i>
-              {{ record.EntityInfo.Name }}
-            </div>
-            <div class="rc-change-count">{{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot; {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}</div>
-          </div>
-        </div>
+        <!-- Activity Over Time Burst-Aware Cluster Strip (Powered by @memberjunction/ng-ui-components) -->
+        <mj-burst-cluster-strip
+          Title="Editing sessions"
+          TitleIcon="fa-solid fa-wave-square"
+          AriaLabel="Change activity bursts over time"
+          ItemSingularNoun="change"
+          ItemPluralNoun="changes"
+          [Items]="BurstClusterItems"
+          [Categories]="BurstClusterCategories"
+          [Resolution]="BurstResolution"
+          [CoalesceStrategy]="BurstCoalesceStrategy"
+          [SessionGapHours]="BurstSessionGapHours"
+          [MaxClusters]="BurstMaxClusters"
+          [EraZoomThreshold]="BurstEraZoomThreshold"
+          [AllowZoom]="AllowBurstZoom"
+          [(SelectedClusterKey)]="SelectedBucketKey"
+          (AfterClustersRebuild)="OnBurstClustersRebuilt($event)"
+          (FilterChanged)="OnBurstFilterChanged($event)">
+        </mj-burst-cluster-strip>
 
         <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
              When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->
@@ -186,6 +368,7 @@
                     [class.expanded]="expandedItems.has(change.ID)"
                     [class.rc-card-restore]="isRestoreRow(change)"
                     [class.rc-card-highlight]="HighlightedChangeID === change.ID"
+                    [class.rc-card-previewing]="IsChangePreviewedInForm(change)"
                     [attr.tabindex]="0"
                     [attr.aria-expanded]="expandedItems.has(change.ID)"
                     [attr.aria-label]="getTimelineItemLabel(change)"
@@ -197,6 +380,13 @@
                         <span class="rc-card-type-badge"
                               [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
                         <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+
+                        @if (IsChangePreviewedInForm(change)) {
+                          <span class="rc-previewing-chip" title="This version is currently rendered inside the form">
+                            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                            Previewing in form
+                          </span>
+                        }
 
                         <!-- Lineage chip — visible when this row was produced by a restore -->
                         @if (isRestoreRow(change)) {
@@ -220,6 +410,26 @@
                         }
                       </div>
                       <div class="rc-card-meta">
+                        @if (CompareMode && change.FullRecordJSON && change.Type !== 'Delete') {
+                          <div class="rc-card-compare-pills">
+                            <button
+                              type="button"
+                              class="rc-card-compare-pill"
+                              [class.active]="IsChangeSelectedAsCompareBase(change)"
+                              (click)="SelectForComparison('base', change.ID, $event)"
+                              aria-label="Set as Base Version A">
+                              A
+                            </button>
+                            <button
+                              type="button"
+                              class="rc-card-compare-pill rc-card-compare-pill--target"
+                              [class.active]="IsChangeSelectedAsCompareTarget(change)"
+                              (click)="SelectForComparison('target', change.ID, $event)"
+                              aria-label="Set as Target Version B">
+                              B
+                            </button>
+                          </div>
+                        }
                         <div class="rc-card-user">
                           <div class="rc-avatar">{{ getUserInitials(change.User) }}</div>
                           {{ getUserDisplayName(change.User) }}
@@ -310,17 +520,32 @@
                           </div>
                         }
 
-                        <!-- Restore action: shown for Update, Create, and Snapshot rows.
+                        <!-- Restore & In-Form Preview actions: shown for Update, Create, and Snapshot rows.
                              Hidden on Delete rows (handled via the Recycle Bin path)
-                             and on the most recent change (restoring to current state is a no-op). -->
-                        @if (AllowRestore && change.Type !== 'Delete' && !isMostRecentChange(change)) {
+                             and on the most recent change (restoring/previewing current state is a no-op). -->
+                        @if (change.Type !== 'Delete' && !isMostRecentChange(change) && (AllowRestore || change.FullRecordJSON)) {
                           <div class="rc-restore-action">
-                            <button class="rc-restore-btn"
-                              (click)="OnRestoreVersion(change, $event)"
-                              title="Restore the entire record to its state at this version">
-                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                              Restore record to this version
-                            </button>
+                            @if (change.FullRecordJSON) {
+                              <button
+                                type="button"
+                                class="rc-preview-form-btn"
+                                [class.rc-preview-form-btn--active]="IsChangePreviewedInForm(change)"
+                                (click)="OnToggleFormPreview(change, $event)"
+                                title="Render this historical version's field values directly inside the form">
+                                <i class="fa-solid" [class.fa-eye]="!IsChangePreviewedInForm(change)" [class.fa-eye-slash]="IsChangePreviewedInForm(change)" aria-hidden="true"></i>
+                                {{ IsChangePreviewedInForm(change) ? 'Exit Form Preview' : 'Preview in Form' }}
+                              </button>
+                            }
+                            @if (AllowRestore) {
+                              <button
+                                type="button"
+                                class="rc-restore-btn"
+                                (click)="OnRestoreVersion(change, $event)"
+                                title="Restore the entire record to its state at this version">
+                                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                                Restore record to this version
+                              </button>
+                            }
                           </div>
                         }
                       </div>

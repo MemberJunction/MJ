@@ -12,8 +12,9 @@
  * @module @memberjunction/record-set-processor-base
  */
 
+import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
-import { IRecordProcessor } from './interfaces';
+import { IProcessRunTracker, IRecordProcessor } from './interfaces';
 
 /**
  * The per-run context handed to a registered factory. Carries the resolved Record Process fields the
@@ -39,6 +40,10 @@ export interface RecordProcessorBuildContext {
     RecordProcessName?: string;
     /** True when this is a dry-run (compute-only) pass — the factory should honor it when supported. */
     DryRun?: boolean;
+    /** The run's tracker, when one was supplied, so a processor paired with its own tracker can reach it. */
+    Tracker?: IProcessRunTracker;
+    /** The active metadata provider for building the processor. */
+    Provider?: IMetadataProvider;
     /**
      * The loaded Record Process record itself, as an opaque object. The engine passes the real
      * `MJRecordProcessEntity`; a factory that needs fields beyond those projected above can read them
@@ -57,6 +62,14 @@ export interface RecordProcessorBuildContext {
 export type RecordProcessorFactory = (context: RecordProcessorBuildContext) => IRecordProcessor | null | undefined;
 
 /**
+ * Builds the tracker a work type's processor is paired with. Registered here so every trigger (manual,
+ * scheduled, on-change) gets it, not just callers that know to pass one. `undefined` keeps the default.
+ */
+export type RecordProcessorTrackerFactory = (
+    context: RecordProcessorBuildContext,
+) => IProcessRunTracker | null | undefined;
+
+/**
  * Process-wide registry of work-type → processor factory, used by the engine's `buildProcessor()` to
  * resolve work types beyond its built-ins. A {@link BaseSingleton} so there is exactly one instance
  * across the process even when a bundler duplicates the module (per CLAUDE.md rule 7).
@@ -67,6 +80,9 @@ export type RecordProcessorFactory = (context: RecordProcessorBuildContext) => I
 export class RecordProcessorRegistry extends BaseSingleton<RecordProcessorRegistry> {
     /** work-type (normalized) → factory. */
     private readonly factories = new Map<string, RecordProcessorFactory>();
+
+    /** work-type (normalized) → the tracker its processor is paired with, when it has one. */
+    private readonly trackerFactories = new Map<string, RecordProcessorTrackerFactory>();
 
     /** @internal — use {@link RecordProcessorRegistry.Instance}. */
     protected constructor() {
@@ -95,6 +111,20 @@ export class RecordProcessorRegistry extends BaseSingleton<RecordProcessorRegist
             throw new Error('RecordProcessorRegistry.Register: workType must be a non-empty string');
         }
         this.factories.set(this.normalize(workType), factory);
+    }
+
+    /** Register the tracker a work type's processor is paired with. Optional, independent of {@link Register}. */
+    public RegisterTracker(workType: string, factory: RecordProcessorTrackerFactory): void {
+        if (!workType || !workType.trim()) {
+            throw new Error('RecordProcessorRegistry.RegisterTracker: workType must be a non-empty string');
+        }
+        this.trackerFactories.set(this.normalize(workType), factory);
+    }
+
+    /** The tracker registered for a work type, or undefined to use the engine's default. */
+    public ResolveTracker(context: RecordProcessorBuildContext): IProcessRunTracker | undefined {
+        const factory = this.trackerFactories.get(this.normalize(context.WorkType));
+        return factory?.(context) ?? undefined;
     }
 
     /** Whether a factory is registered for the given work type (case-insensitive). */

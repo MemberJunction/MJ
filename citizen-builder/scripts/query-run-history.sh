@@ -22,13 +22,13 @@ fi
 # - If first arg is non-empty string, treat as agent name filter: --list --agent "$1"
 # - If no args, list recent runs
 if [ $# -eq 0 ]; then
-  docker compose exec -T mj mj ai audit agent-run --list
+  docker compose exec -T -w /workspace mj mj ai audit agent-run --list
 elif [[ "$1" == -* ]]; then
-  docker compose exec -T mj mj ai audit agent-run "$@"
+  docker compose exec -T -w /workspace mj mj ai audit agent-run "$@"
 elif [[ "$1" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-  docker compose exec -T mj mj ai audit agent-run "$@"
+  docker compose exec -T -w /workspace mj mj ai audit agent-run "$@"
 else
   AGENT_NAME="$1"
   shift
-  docker compose exec -T mj mj ai audit agent-run --list --agent "$AGENT_NAME" "$@"
+  docker compose exec -T -w /workspace mj mj ai audit agent-run --list --agent "$AGENT_NAME" "$@"
 fi

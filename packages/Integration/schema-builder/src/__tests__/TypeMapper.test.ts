@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { SQLDialect, type ResolveTypeOptions } from '@memberjunction/sql-dialect';
 import { TypeMapper } from '../TypeMapper.js';
 import type { SourceFieldInfo } from '../interfaces.js';
 
@@ -87,6 +88,53 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('string', 'sqlserver', unboundedPk)).toBe('NVARCHAR(450)');
         });
 
+        it('gives an unbounded PRIMARY-KEY column a type PostgreSQL can create', () => {
+            // PostgreSQL has no index-key string cap, so the clamp above lands on Number.MAX_SAFE_INTEGER;
+            // VARCHAR(9007199254740991) is not a type PostgreSQL accepts. TEXT is, and it is indexable there.
+            const unboundedPk = MakeField({ MaxLength: -1, IsPrimaryKey: true });
+            expect(mapper.MapSourceType('string', 'postgresql', unboundedPk)).toBe('TEXT');
+        });
+
+        it('renders a source width at or past nvarchar(max) as each dialect\'s unbounded type', () => {
+            // netFORUM reports nvarchar(max) as MaxLength 2147483646; SQL Server's own count is 1073741823.
+            // Padding that by the 300 headroom gave VARCHAR(2147483946) on PostgreSQL, which caps VARCHAR(n)
+            // at 10485760, so the CREATE TABLE failed ("syntax error at or near 2147483946").
+            for (const MaxLength of [2147483646, 1073741823]) {
+                const field = MakeField({ MaxLength });
+                expect(mapper.MapSourceType('string', 'sqlserver', field)).toBe('NVARCHAR(MAX)');
+                expect(mapper.MapSourceType('string', 'postgresql', field)).toBe('TEXT');
+                const pk = MakeField({ MaxLength, IsPrimaryKey: true });
+                expect(mapper.MapSourceType('string', 'sqlserver', pk)).toBe('NVARCHAR(450)');
+                expect(mapper.MapSourceType('string', 'postgresql', pk)).toBe('TEXT');
+            }
+        });
+
+        describe('what the sizing policy asks the dialect for', () => {
+            /** The ResolveAbstractType options a non-key `string` column of this declared width produces. */
+            function RequestedType(maxLength: number | null): ResolveTypeOptions[] {
+                const spy = vi.spyOn(SQLDialect.prototype, 'ResolveAbstractType');
+                try {
+                    mapper.MapSourceType('string', 'postgresql', MakeField({ MaxLength: maxLength }));
+                    return spy.mock.calls.map(([options]) => options);
+                } finally {
+                    spy.mockRestore();
+                }
+            }
+
+            it('hands a declared width at or past nvarchar(max) on as unbounded, never padded', () => {
+                // The dialect then picks its own unbounded type, rather than being handed a width no dialect renders.
+                expect(RequestedType(2147483646)).toEqual([{ type: 'text' }]);
+                expect(RequestedType(1073741823)).toEqual([{ type: 'text' }]);
+            });
+
+            it('keeps the headroom and floor for every narrower width', () => {
+                expect(RequestedType(100)).toEqual([{ type: 'string', maxLength: 400 }]);
+                expect(RequestedType(null)).toEqual([{ type: 'string', maxLength: 255 }]);
+                expect(RequestedType(-1)).toEqual([{ type: 'text' }]);
+                expect(RequestedType(1073741822)).toEqual([{ type: 'string', maxLength: 1073742122 }]);
+            });
+        });
+
         it('should stay BOUNDED for a declared length comfortably under the ceiling (SQL Server)', () => {
             // 3000 + 300 headroom = 3300 ≤ 4000 → NVARCHAR(3300), bounded. The dialect only spills to
             // its OWN unbounded type when the sized value genuinely exceeds the dialect's bounded ceiling.
@@ -137,10 +185,17 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('uuid', 'postgresql', field)).toBe('UUID');
         });
 
-        it('should map json to NVARCHAR(MAX) / JSONB', () => {
+        it('should map json to NVARCHAR(MAX) / TEXT, the nvarchar its MJ field type declares', () => {
+            // MJ metadata reads the column as nvarchar, so CodeGen's CRUD functions take and write TEXT, and
+            // PostgreSQL rejects TEXT into a JSONB column. The column has to be the type the metadata says.
             const field = MakeField();
             expect(mapper.MapSourceType('json', 'sqlserver', field)).toBe('NVARCHAR(MAX)');
-            expect(mapper.MapSourceType('json', 'postgresql', field)).toBe('JSONB');
+            expect(mapper.MapSourceType('json', 'postgresql', field)).toBe('TEXT');
+            expect(mapper.GetMJFieldType('json')).toBe('nvarchar');
+            expect(mapper.GetAllMappings().find(m => m.SourceType === 'json')).toMatchObject({
+                SqlServerType: 'NVARCHAR(MAX)',
+                PostgresType: 'TEXT',
+            });
         });
 
         it('should floor low declared precision to 28 (defensive against narrow describe output)', () => {
@@ -178,6 +233,28 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('STRING', 'sqlserver', field)).toBe('NVARCHAR(255)');
             expect(mapper.MapSourceType('  Integer  ', 'sqlserver', field)).toBe('INT');
         });
+
+        it('should normalize persisted MJ catalog types (bit, datetimeoffset, int, uniqueidentifier) and connector aliases', () => {
+            const field = MakeField();
+            expect(mapper.MapSourceType('bit', 'sqlserver', field)).toBe('BIT');
+            expect(mapper.MapSourceType('bit', 'postgresql', field)).toBe('BOOLEAN');
+            expect(mapper.MapSourceType('datetimeoffset', 'sqlserver', field)).toBe('DATETIMEOFFSET');
+            expect(mapper.MapSourceType('datetimeoffset', 'postgresql', field)).toBe('TIMESTAMPTZ');
+            expect(mapper.MapSourceType('int', 'sqlserver', field)).toBe('INT');
+            expect(mapper.MapSourceType('number', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('currency', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('percent', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('double', 'sqlserver', field)).toBe('FLOAT');
+            expect(mapper.MapSourceType('uniqueidentifier', 'sqlserver', field)).toBe('UNIQUEIDENTIFIER');
+            expect(mapper.MapSourceType('picklist', 'sqlserver', field)).toBe('NVARCHAR(255)');
+        });
+
+        it('should cap Soft FK (IsForeignKey) and Organic Key (IsUniqueKey) string columns at 450 on SQL Server', () => {
+            const fkField = MakeField({ MaxLength: 450, IsForeignKey: true });
+            expect(mapper.MapSourceType('string', 'sqlserver', fkField)).toBe('NVARCHAR(450)');
+            const okField = MakeField({ MaxLength: 450, IsUniqueKey: true });
+            expect(mapper.MapSourceType('string', 'sqlserver', okField)).toBe('NVARCHAR(450)');
+        });
     });
 
     describe('GetMJFieldType', () => {
@@ -185,8 +262,12 @@ describe('TypeMapper', () => {
             expect(mapper.GetMJFieldType('string')).toBe('nvarchar');
         });
 
-        it('should return int for integer', () => {
+        it('should return int for integer and int', () => {
             expect(mapper.GetMJFieldType('integer')).toBe('int');
+            expect(mapper.GetMJFieldType('int')).toBe('int');
+            expect(mapper.GetMJFieldType('bit')).toBe('bit');
+            expect(mapper.GetMJFieldType('datetimeoffset')).toBe('datetimeoffset');
+            expect(mapper.GetMJFieldType('number')).toBe('decimal');
         });
 
         it('should return nvarchar for unknown types', () => {
@@ -201,5 +282,28 @@ describe('TypeMapper', () => {
             expect(mappings.find(m => m.SourceType === 'string')).toBeTruthy();
             expect(mappings.find(m => m.SourceType === 'integer')).toBeTruthy();
         });
+    });
+});
+
+// #3527: the catalog persists MJ field types (int, bit, datetimeoffset); they must map to typed columns,
+// not fall to the text fallback.
+describe('TypeMapper — MJ field-type aliases (#3527)', () => {
+    const mapper = new TypeMapper();
+    const field = MakeField({ Precision: 18, Scale: 4 });
+
+    it.each([
+        ['int', 'INT', 'INTEGER'],
+        ['bit', 'BIT', 'BOOLEAN'],
+        ['datetimeoffset', 'DATETIMEOFFSET', 'TIMESTAMPTZ'],
+        ['uniqueidentifier', 'UNIQUEIDENTIFIER', 'UUID'],
+        ['bigint', 'BIGINT', 'BIGINT'],
+    ])('%s maps to a typed column on both dialects', (type, sqlServer, postgres) => {
+        expect(mapper.MapSourceType(type, 'sqlserver', field)).toBe(sqlServer);
+        expect(mapper.MapSourceType(type, 'postgresql', field)).toBe(postgres);
+    });
+
+    it('decimal and numeric map to a decimal column', () => {
+        expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toMatch(/^DECIMAL/);
+        expect(mapper.MapSourceType('numeric', 'postgresql', field)).toMatch(/^NUMERIC/);
     });
 });

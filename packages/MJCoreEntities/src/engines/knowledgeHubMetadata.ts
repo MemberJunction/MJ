@@ -5,14 +5,15 @@ import {
     MJVectorIndexEntity,
     MJContentSourceEntity,
     MJContentTypeEntity,
+    MJContentTypeAttributeEntity,
     MJContentSourceTypeEntity,
     MJContentFileTypeEntity,
     MJFeaturePipelineTypeEntity
 } from "../generated/entity_subclasses";
 
 /**
- * Caches Knowledge Hub metadata: entity documents, content sources, content types, content source
- * types, content file types, and feature pipeline types.
+ * Caches Knowledge Hub metadata: entity documents, content sources, content types, content type
+ * attributes, content source types, content file types, and feature pipeline types.
  *
  * Vector indexes are NOT cached here — `AIEngineBase` (`@memberjunction/ai-engine-base`) owns the single
  * `MJ: Vector Indexes` cache, and {@link VectorIndexes} / {@link GetVectorIndexByID} proxy it.
@@ -40,6 +41,7 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     private _entityDocuments: MJEntityDocumentEntity[] = [];
     private _contentSources: MJContentSourceEntity[] = [];
     private _contentTypes: MJContentTypeEntity[] = [];
+    private _contentTypeAttributes: MJContentTypeAttributeEntity[] = [];
     private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
     private _contentFileTypes: MJContentFileTypeEntity[] = [];
     private _featurePipelineTypes: MJFeaturePipelineTypeEntity[] = [];
@@ -69,6 +71,12 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
                 Type: 'entity',
                 EntityName: 'MJ: Content Types',
                 PropertyName: '_contentTypes',
+                CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Type Attributes',
+                PropertyName: '_contentTypeAttributes',
                 CacheLocal: true
             },
             {
@@ -122,6 +130,11 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     /** All content types */
     public get ContentTypes(): MJContentTypeEntity[] {
         return this._contentTypes;
+    }
+
+    /** All content type attributes (custom extraction attributes per content type) */
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] {
+        return this._contentTypeAttributes;
     }
 
     /** All content source types (Web, RSS, Email, etc.) */
@@ -187,6 +200,12 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     public GetContentTypeByID(id: string): MJContentTypeEntity | undefined {
         if (!id) return undefined;
         return this.getIDIndex('contentTypes', this._contentTypes, t => t.ID).get(NormalizeUUID(id));
+    }
+
+    /** Find all content type attributes configured for a content type (case-insensitive UUID comparison). */
+    public GetContentTypeAttributes(contentTypeID: string): MJContentTypeAttributeEntity[] {
+        if (!contentTypeID) return [];
+        return this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
     }
 
     /** Find a content source type by ID (case-insensitive UUID comparison). O(1) after first hit. */

@@ -67,8 +67,8 @@ export function BuildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {})
 
   // Add error description if present
   if (options.errorDescription) {
-    // Escape quotes in the description
-    const escapedDescription = options.errorDescription.replace(/"/g, '\\"');
+    // Escape backslashes, then quotes, per the RFC 7230 quoted-string grammar
+    const escapedDescription = options.errorDescription.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     parts.push(`error_description="${escapedDescription}"`);
   }
 

@@ -136,7 +136,10 @@ Execute MemberJunction AI agents through A2A tasks:
 
 ### Server-Sent Events (SSE)
 
-Streaming support for long-running agent operations. Clients can subscribe to task updates via SSE for real-time status and message delivery.
+Streaming support for long-running agent operations. Clients can subscribe to task updates via SSE (`tasks/sendSubscribe`) for real-time status and message delivery:
+- **Event-Driven Updates**: `TaskStore` provides an event-driven pub/sub listener registration (`Subscribe` / `Notify`) so SSE streams push status and artifact updates immediately without polling timers.
+- **Task Cancellation Propagation**: Calling `/tasks/{id}/cancel` (or JSON-RPC `tasks/cancel`) triggers `TaskStore.CancelTask(taskId)`, which aborts the active `AbortController` token passed to `AgentOperations.executeAgent()` so in-flight agent runs terminate immediately.
+- **Cached Agent Card Discovery**: `/.well-known/agent.json` caches the generated `AgentCard` across requests (`GetAgentCard` / `InvalidateAgentCardCache`).
 
 ## A2A Protocol Endpoints
 
@@ -166,6 +169,15 @@ module.exports = {
     }
 };
 ```
+
+### Task store (`a2aServerSettings.taskStoreMode`)
+
+| Mode | Where tasks live | Who can call |
+|---|---|---|
+| `'memory'` (default) | In the server process. `tasks/get`, cancel and resubscribe must reach the replica that holds the task, and tasks are lost on restart. | Any authenticated caller. |
+| `'entity'` (opt in) | In `MJ: Tasks` rows filed under the `A2A Task` task type, so any replica can serve a task, cancel it, or stream it. | Every A2A caller needs **Create** and **Update** permission on `MJ: Tasks`. A caller without it gets `The task could not be saved`. |
+
+The `A2A Task` type ships as metadata (`metadata/task-types`). The durable store finds it by name and never creates it; without it every save is refused.
 
 Required environment variables:
 - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` -- Database connection

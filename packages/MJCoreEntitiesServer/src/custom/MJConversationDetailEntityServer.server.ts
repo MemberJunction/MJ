@@ -1,42 +1,34 @@
-import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, LogError, RunView } from "@memberjunction/core";
+import {
+    BaseEntity,
+    BaseEntityResult,
+    EntitySaveOptions,
+    IMetadataProvider,
+    LogError,
+    RunView,
+    WellKnownUserSource
+} from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { MJConversationDetailEntityExtended } from "@memberjunction/core-entities";
+import { MJConversationDetailEntityExtended, MJConversationEntity } from "@memberjunction/core-entities";
+import { InspectAndStampRestrictedFieldsForComment } from "./RestrictedFieldCommentClassifier";
 
 /**
- * Server-side subclass of MJConversationDetailEntity that automatically tracks
- * when the original message content has been modified, and checks the fork of
- * each new message.
- *
- * When a user edits their message after initial creation, the OriginalMessageChanged
- * flag is set to true, allowing the UI to display an "(Edited)" indicator. This is
- * also the edit signal for cross-turn conversation compaction
- * (plans/agent-conversation-compaction.md §6): a row edited after it was folded into
- * a persisted summary keeps the flag, Record Changes already holds the diff, and the
- * UI can derive "edited after summarization" from the flag plus the row's Sequence
- * being below the current summary boundary — no summary regeneration required (the
- * summary is explicitly lossy; agents page in exact rows via the retrieval tools).
- *
- * Extends {@link MJConversationDetailEntityExtended} rather than the generated entity
- * directly. Both classes register for `BaseEntity` under the key
- * `'MJ: Conversation Details'`, and `@RegisterClass` passes `priority = 0`, which routes
- * to the auto-increment branch — so whichever registers LAST wins outright. On the server
- * this package loads after `@memberjunction/core-entities`, which meant this class replaced
- * the Extended one and its `Save`/`Delete` permission gate never ran. That gate is the check
- * that only a conversation's owner may set `UserRating` / `UserFeedback`, and that a
- * non-owner without a resource grant cannot write at all — and it is explicitly designed to
- * run server-side (`ProviderType === 'Database'`), which is exactly where it was being
- * shadowed out. Inheriting composes the two behaviors instead: this class flags the edit,
- * then delegates to the permission gate via `super.Save`.
- *
- * A new row keeps the `BranchID` its writer set (null is Main). On create, a non-null `BranchID`
- * must name a fork of the same conversation; otherwise `Save` returns `false` with a result
- * entry and nothing is written.
+ * Server-side subclass of MJConversationDetailEntity that:
+ * 1. Automatically tracks when the original message content has been modified (`OriginalMessageChanged`).
+ * 2. Checks the fork (`BranchID`) of each new message on create.
+ * 3. Inspects comments posted on anchored conversations (`LinkedEntityID` + `LinkedRecordID`)
+ *    when the target entity has `FieldLevelSecurityApplies === true`:
+ *    - Runs two-stage restricted-field detection (deterministic field/label/value matching + semantic LLM classifier).
+ *    - Refuses the save if the authoring user is denied Read access on a restricted field referenced by their comment.
+ *    - Stamps any detected restricted field names into the parent conversation's
+ *      `AnchorMetadataObject.restrictedFields` so all subsequent reads filter deterministically in 0ms.
+ * 4. Delegates to {@link MJConversationDetailEntityExtended} for write-access, authorship,
+ *    server-authored reply validation, and `@mention` notification dispatch.
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
 export class MJConversationDetailEntityServer extends MJConversationDetailEntityExtended {
     /**
      * Sets the OriginalMessageChanged flag on a genuine message edit, checks a new row's fork,
-     * then calls super.Save(). Returns `false` without saving when the fork check fails.
+     * runs FLS restricted-field inspection for anchored conversations, then calls super.Save().
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.ShouldFlagOriginalMessageChanged()) {
@@ -47,7 +39,91 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
             this.recordCreateFailure(problem);
             return false;
         }
+        const checkFls =
+            this.CheckAndStampAnchoredRestrictedFields ??
+            MJConversationDetailEntityServer.prototype.CheckAndStampAnchoredRestrictedFields;
+        const flsRefusal = await checkFls.call(this);
+        if (flsRefusal) {
+            this.recordCreateFailure(flsRefusal, this.IsSaved ? 'update' : 'create');
+            return false;
+        }
         return super.Save(options);
+    }
+
+    /**
+     * When saving a message in an anchored conversation (`LinkedEntityID` + `LinkedRecordID`) whose
+     * target entity has `FieldLevelSecurityApplies === true`, runs {@link InspectAndStampRestrictedFieldsForComment}
+     * to block restricted-field probing by unauthorized authors and stamp `restrictedFields` onto the
+     * parent conversation's `AnchorMetadataObject`.
+     */
+    public async CheckAndStampAnchoredRestrictedFields(): Promise<string | null> {
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        if (provider?.ProviderType !== 'Database') {
+            return null;
+        }
+        const user = this.ContextCurrentUser;
+        if (!user || !this.ConversationID) {
+            return null;
+        }
+
+        // Only inspect on new messages or when Message text is being modified
+        if (this.IsSaved && !this.GetFieldByName('Message')?.Dirty) {
+            return null;
+        }
+
+        try {
+            const systemUser = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? user;
+            const conversation = await provider.GetEntityObject<MJConversationEntity>(
+                'MJ: Conversations',
+                systemUser
+            );
+            const loaded = await conversation.Load(this.ConversationID);
+            if (!loaded || !conversation.AnchorType || !conversation.LinkedEntityID || !conversation.LinkedRecordID) {
+                return null;
+            }
+
+            const entityInfo =
+                (typeof provider.EntityByID === 'function'
+                    ? provider.EntityByID(conversation.LinkedEntityID)
+                    : undefined) ??
+                provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
+                null;
+            if (!entityInfo) {
+                return null;
+            }
+
+            if (!WellKnownUserSource.Instance.IsSystemUser(user)) {
+                if (entityInfo.AllowRecordComments === false) {
+                    return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
+                }
+                if (typeof entityInfo.CanUserComment === 'function' && !entityInfo.CanUserComment(user)) {
+                    return `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`;
+                }
+            }
+
+            if (!entityInfo.FieldLevelSecurityApplies) {
+                return null;
+            }
+
+            const inspection = await InspectAndStampRestrictedFieldsForComment({
+                Provider: provider,
+                ContextUser: user,
+                Conversation: conversation,
+                EntityInfo: entityInfo,
+                MessageText: this.Message
+            });
+            if (!inspection.Allowed) {
+                return inspection.Reason ?? 'You do not have permission to comment on this restricted field.';
+            }
+            return null;
+        } catch (error) {
+            LogError(
+                `MJConversationDetailEntityServer.CheckAndStampAnchoredRestrictedFields failed on conversation ${this.ConversationID}: ${
+                    error instanceof Error ? error.message : String(error)
+                }`
+            );
+            return null;
+        }
     }
 
     /**
@@ -87,11 +163,11 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
         }
     }
 
-    /** Records a failed create in the result history, so callers see why nothing was written. */
-    private recordCreateFailure(message: string): void {
+    /** Records a failed create/save in the result history, so callers see why nothing was written. */
+    private recordCreateFailure(message: string, type: 'create' | 'update' = 'create'): void {
         const result = new BaseEntityResult();
         result.Success = false;
-        result.Type = 'create';
+        result.Type = type;
         result.Message = message;
         result.StartedAt = new Date();
         result.EndedAt = new Date();

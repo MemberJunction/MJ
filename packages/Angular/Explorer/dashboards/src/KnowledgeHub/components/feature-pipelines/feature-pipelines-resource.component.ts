@@ -55,6 +55,14 @@ import { ValidateStringParam, AgentToolResult } from '../../../shared/agent-tool
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
 
+/** The toast a finished Run shows. */
+export interface FeaturePipelineRunNotice {
+  Message: string;
+  Style: 'success' | 'warning' | 'error';
+  /** True only when the run's status is `Completed`. */
+  Completed: boolean;
+}
+
 @RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')
 @Component({
   standalone: false,
@@ -173,9 +181,10 @@ export class FeaturePipelinesResourceComponent
    * `PredictiveStudio.RunFeaturePipeline` Remote Operation through the active
    * provider. The op delegates to the Record Set Processing substrate — the same
    * batching/resume/audit path the rest of the platform uses.
+   * @returns the notice the run showed, or null when a run of the pipeline was already in flight
    */
-  public async OnRunPipeline(pipeline: FeaturePipelineSummary): Promise<void> {
-    if (this.RunningIDs.has(pipeline.ID)) return;
+  public async OnRunPipeline(pipeline: FeaturePipelineSummary): Promise<FeaturePipelineRunNotice | null> {
+    if (this.RunningIDs.has(pipeline.ID)) return null;
 
     this.RunningIDs.add(pipeline.ID);
     this.cdr.detectChanges();
@@ -191,13 +200,15 @@ export class FeaturePipelinesResourceComponent
         PredictiveStudioRunFeaturePipelineOutput
       >(RUN_FEATURE_PIPELINE_OP, input, { provider: this.ProviderToUse });
 
-      this.notifyRunResult(pipeline, result);
+      return this.notifyRunResult(pipeline, result);
     } catch (error) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `Failed to run "${pipeline.Name}": ${error instanceof Error ? error.message : String(error)}`,
-        'error',
-        5000,
-      );
+      const notice: FeaturePipelineRunNotice = {
+        Style: 'error',
+        Completed: false,
+        Message: `Failed to run "${pipeline.Name}": ${error instanceof Error ? error.message : String(error)}`,
+      };
+      MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, 5000);
+      return notice;
     } finally {
       this.RunningIDs.delete(pipeline.ID);
       // Refresh so the card reflects the new run / freshness.
@@ -313,24 +324,39 @@ export class FeaturePipelinesResourceComponent
     );
   }
 
+  /**
+   * The toast for a Run's result. The operation succeeding only means the run was carried out; a refused or failed
+   * run ends `Failed` with its error message, and a cancelled or paused run did not finish.
+   */
+  public static RunResultNotice(
+    pipelineName: string,
+    result: RemoteOpResult<PredictiveStudioRunFeaturePipelineOutput>,
+  ): FeaturePipelineRunNotice {
+    const out = result.Output;
+    if (!result.Success || !out) {
+      return { Style: 'error', Completed: false, Message: `"${pipelineName}" did not complete: ${result.ErrorMessage ?? 'unknown error'}` };
+    }
+    const reason = out.errorMessage || `the run ended with status ${out.status}`;
+    if (out.status === 'Failed') {
+      return { Style: 'error', Completed: false, Message: `"${pipelineName}" failed: ${reason}` };
+    }
+    if (out.status !== 'Completed') {
+      return { Style: 'warning', Completed: false, Message: `"${pipelineName}" did not finish: ${reason}` };
+    }
+    return {
+      Style: out.error > 0 ? 'warning' : 'success',
+      Completed: true,
+      Message: `"${pipelineName}" finished: ${out.processed} processed, ${out.written} succeeded, ${out.skipped} skipped unchanged, ${out.error} error(s).`,
+    };
+  }
+
   private notifyRunResult(
     pipeline: FeaturePipelineSummary,
     result: RemoteOpResult<PredictiveStudioRunFeaturePipelineOutput>,
-  ): void {
-    if (result.Success && result.Output) {
-      const out = result.Output;
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `"${pipeline.Name}" finished: ${out.written} written, ${out.processed} processed, ${out.error} error(s).`,
-        out.error > 0 ? 'warning' : 'success',
-        5000,
-      );
-    } else {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `"${pipeline.Name}" did not complete: ${result.ErrorMessage ?? 'unknown error'}`,
-        'error',
-        5000,
-      );
-    }
+  ): FeaturePipelineRunNotice {
+    const notice = FeaturePipelinesResourceComponent.RunResultNotice(pipeline.Name, result);
+    MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, 5000);
+    return notice;
   }
 
   // ---- Agent context + client tools (required for every dashboard) ----
@@ -394,8 +420,11 @@ export class FeaturePipelinesResourceComponent
           if (!r.pipeline.OnDemandEnabled) {
             return { Success: false, ErrorMessage: `"${r.pipeline.Name}" is not enabled for on-demand runs.` };
           }
-          await this.OnRunPipeline(r.pipeline);
-          return { Success: true, Data: { Pipeline: r.pipeline.Name } };
+          const notice = await this.OnRunPipeline(r.pipeline);
+          if (!notice?.Completed) {
+            return { Success: false, ErrorMessage: notice?.Message ?? `"${r.pipeline.Name}" is already running.` };
+          }
+          return { Success: true, Data: { Pipeline: r.pipeline.Name, Message: notice.Message } };
         },
       },
       {

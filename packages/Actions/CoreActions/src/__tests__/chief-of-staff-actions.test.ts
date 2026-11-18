@@ -14,6 +14,7 @@ const {
     getPolicyMock,
     setCachedPolicyMock,
     buildSummaryMock,
+    triggerWakeForWorkstreamMock,
 } = vi.hoisted(() => ({
     agentsList: [] as Array<{ ID: string; Name: string }>,
     canUserRunAgentMock: vi.fn(),
@@ -22,6 +23,7 @@ const {
     getPolicyMock: vi.fn(),
     setCachedPolicyMock: vi.fn(),
     buildSummaryMock: vi.fn(),
+    triggerWakeForWorkstreamMock: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -43,17 +45,25 @@ vi.mock('@memberjunction/actions-base', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@memberjunction/core')>()),
-    LogError: vi.fn(),
-    Metadata: class {
-        GetEntityObject = (...args: unknown[]) => getEntityObjectMock(...args);
-    },
-    RunView: class {
-        RunView = (...args: unknown[]) => runViewMock(...args);
-    },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class MockRunView {
+        public static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
+        public RunView = (...args: Parameters<typeof runViewMock>) => runViewMock(...args);
+    }
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        Metadata: class {
+            GetEntityObject = (...args: Parameters<typeof getEntityObjectMock>) => getEntityObjectMock(...args);
+        },
+        RunView: MockRunView,
+    };
+});
 
+const resolveRequestTypeMock = vi.fn(async (name: string) => (name === 'Approval' ? 'approval-type-id' : null));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
@@ -61,28 +71,55 @@ vi.mock('@memberjunction/aiengine', () => ({
             get Agents() {
                 return agentsList;
             },
-            CanUserRunAgent: (...args: unknown[]) => canUserRunAgentMock(...args),
+            CanUserRunAgent: (...args: Parameters<typeof canUserRunAgentMock>) => canUserRunAgentMock(...args),
+            ResolveAgentRequestTypeID: (name: string, user: UserInfo) => resolveRequestTypeMock(name, user),
         },
     },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    AgentUserPolicyEngine: {
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        AgentUserPolicyEngine: {
+            Instance: {
+                GetPolicyForAgentAndUser: (...args: Parameters<typeof getPolicyMock>) => getPolicyMock(...args),
+                ResolvePolicyForAgentAndUser: async (...args: Parameters<typeof getPolicyMock>) => {
+                    const res = await getPolicyMock(...args);
+                    if (res && typeof res === 'object' && 'status' in res) {
+                        return res;
+                    }
+                    return res ? { status: 'found', policy: res } : { status: 'none', policy: null };
+                },
+                SetCachedPolicy: (...args: Parameters<typeof setCachedPolicyMock>) => setCachedPolicyMock(...args),
+                ClearCache: vi.fn(),
+                BuildPromptPolicyContextBlock: (...args: Parameters<typeof buildSummaryMock>) => buildSummaryMock(...args),
+                SnapshotPolicy: (p: MJAIAgentUserPolicyEntity) => actual.AgentUserPolicyEngine.Instance.SnapshotPolicy(p),
+                DetectAgentPolicyWidening: (
+                    baseline: ReturnType<typeof actual.AgentUserPolicyEngine.Instance.SnapshotPolicy> | null,
+                    proposed: MJAIAgentUserPolicyEntity
+                ) => actual.AgentUserPolicyEngine.Instance.DetectAgentPolicyWidening(baseline, proposed),
+            },
+        },
+    };
+});
+
+vi.mock('@memberjunction/ai-agents', () => ({
+    AgentWakeTriggerService: {
         Instance: {
-            GetPolicyForAgentAndUser: (...args: unknown[]) => getPolicyMock(...args),
-            SetCachedPolicy: (...args: unknown[]) => setCachedPolicyMock(...args),
-            BuildPromptPolicyContextBlock: (...args: unknown[]) => buildSummaryMock(...args),
+            TriggerWakeForWorkstream: (...args: unknown[]) => triggerWakeForWorkstreamMock(...args),
         },
     },
 }));
 
 import { ScheduleNextAgentWakeAction } from '../custom/ai/schedule-next-agent-wake.action';
 import { ConfigureAgentUserPolicyAction } from '../custom/ai/configure-agent-user-policy.action';
-import { ChiefOfStaffInterAgentRequestAction } from '../custom/ai/chief-of-staff-inter-agent-request.action';
+import { SendInterAgentRequestAction, InterAgentCoordinationEnvelope } from '../custom/ai/send-inter-agent-request.action';
+import { TriggerAgentWakeAction } from '../custom/ai/trigger-agent-wake.action';
 import {
-    PrepareChiefOfStaffOutboundCallAction,
-    ChiefOfStaffOutboundCallBrief,
-} from '../custom/ai/prepare-chief-of-staff-outbound-call.action';
+    PrepareOutboundCallBriefAction,
+    OutboundCallBrief,
+} from '../custom/ai/prepare-outbound-call-brief.action';
 import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 
 interface TestableAction {
@@ -107,11 +144,17 @@ describe('Chief of Staff Actions Suite', () => {
         agentsList.length = 0;
         agentsList.push({ ID: 'cos-agent-id', Name: 'Chief of Staff' });
         canUserRunAgentMock.mockReset().mockReturnValue(true);
-        runViewMock.mockReset().mockResolvedValue({ Success: true, Results: [] });
+        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string }) => {
+            if (rvParams?.EntityName === 'MJ: Users') {
+                return { Success: true, Results: [{ ID: 'target-user', IsActive: true }] };
+            }
+            return { Success: true, Results: [] };
+        });
         getEntityObjectMock.mockReset();
         getPolicyMock.mockReset().mockResolvedValue(null);
         setCachedPolicyMock.mockReset();
         buildSummaryMock.mockReset().mockReturnValue('## User Policy Summary');
+        triggerWakeForWorkstreamMock.mockReset();
     });
 
     describe('ScheduleNextAgentWakeAction', () => {
@@ -150,7 +193,7 @@ describe('Chief of Staff Actions Suite', () => {
                     {
                         Name: 'WatchedEntities',
                         Type: 'Input',
-                        Value: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                        Value: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                     },
                     {
                         Name: 'WakeGate',
@@ -165,9 +208,10 @@ describe('Chief of Staff Actions Suite', () => {
             expect(routineStub.UserID).toBe('user-abc');
             expect(routineStub.RoutineType).toBe('AgentWake');
             expect(routineStub.ScheduleMode).toBe('Adaptive');
+            expect(routineStub.CronExpression).toBe('*/30 * * * *');
             expect(routineStub.WakeConfigurationObject?.workstreamKey).toBe('q4-okr-rollup');
             expect(routineStub.WakeConfigurationObject?.watchedEntities?.[0].entityName).toBe(
-                'MJ_BizApps_Tasks: Tasks'
+                'MJ: AI Agent Requests'
             );
             expect(params.Params.find((p: ActionParam) => p.Name === 'RoutineID')?.Value).toBe('routine-999');
         });
@@ -244,6 +288,73 @@ describe('Chief of Staff Actions Suite', () => {
         });
     });
 
+    describe('ScheduleNextAgentWakeAction — the declared parameter names', () => {
+        // The action's metadata declares NextWakeAt and DelayMinutes, and an agent that reads the
+        // declared parameters sends those. The code read only WakeAtISO / WakeInMinutes, so such a
+        // call failed with VALIDATION_ERROR and the agent had to guess the other names.
+        function routineStub() {
+            return {
+                ID: 'routine-777', UserID: '', Name: '', Description: null as string | null,
+                Status: 'Active' as MJUserRoutineEntity['Status'],
+                RoutineType: 'Standard' as MJUserRoutineEntity['RoutineType'],
+                ScheduleMode: 'OneShot' as MJUserRoutineEntity['ScheduleMode'],
+                TargetType: 'Agent' as MJUserRoutineEntity['TargetType'], TargetID: '', Timezone: 'UTC',
+                CronExpression: null as string | null, InitialMessage: null as string | null,
+                StartingPayload: null as string | null,
+                WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+                NextRunAt: null as Date | null, ConversationID: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+        }
+        function run(paramsIn: ActionParam[]) {
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'], ContextUser: makeUser('user-abc'), Filters: [], Params: paramsIn,
+            };
+            return { params, result: invokeAction(new ScheduleNextAgentWakeAction(), params) };
+        }
+
+        it('accepts NextWakeAt as the wake time and reports ScheduledWakeTime', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const { params, result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'OneShot' },
+                { Name: 'NextWakeAt', Type: 'Input', Value: '2026-11-02T15:00:00.000Z' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Remind Alice' },
+            ]);
+            expect((await result).Success).toBe(true);
+            expect(stub.NextRunAt?.toISOString()).toBe('2026-11-02T15:00:00.000Z');
+            expect(params.Params.find((p) => p.Name === 'ScheduledWakeTime')?.Value).toBe('2026-11-02T15:00:00.000Z');
+        });
+
+        it('accepts DelayMinutes as minutes from now', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const before = Date.now();
+            const { result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'OneShot' },
+                { Name: 'DelayMinutes', Type: 'Input', Value: 10 },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Check back' },
+            ]);
+            expect((await result).Success).toBe(true);
+            const delta = (stub.NextRunAt?.getTime() ?? 0) - before;
+            expect(delta).toBeGreaterThanOrEqual(10 * 60_000 - 1000);
+            expect(delta).toBeLessThanOrEqual(10 * 60_000 + 5000);
+        });
+
+        it('stores the Timezone a recurring wake is given', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const { result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                { Name: 'Timezone', Type: 'Input', Value: 'America/Chicago' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Daily briefing' },
+            ]);
+            expect((await result).Success).toBe(true);
+            expect(stub.Timezone).toBe('America/Chicago');
+        });
+    });
+
     describe('ConfigureAgentUserPolicyAction', () => {
         it('upserts the caller policy, stamps OnboardedAt, and refreshes AgentUserPolicyEngine cache', async () => {
             const policyStub = {
@@ -298,7 +409,7 @@ describe('Chief of Staff Actions Suite', () => {
         });
     });
 
-    describe('ChiefOfStaffInterAgentRequestAction', () => {
+    describe('SendInterAgentRequestAction', () => {
         it('refuses when sender policy has CoordinationMode=Observer', async () => {
             getPolicyMock.mockResolvedValueOnce({
                 Status: 'Active',
@@ -317,12 +428,12 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('POLICY_APPROVAL_REQUIRED');
         });
 
-        it('creates an MJAIAgentRequestEntity with InterAgentCoS delivery mode when target user has an active CoS policy', async () => {
+        it('creates an MJAIAgentRequestEntity with InterAgent delivery mode when target user has an active CoS policy', async () => {
             // 1st call: sender policy; 2nd call: target policy
             getPolicyMock
                 .mockResolvedValueOnce({
@@ -339,6 +450,7 @@ describe('Chief of Staff Actions Suite', () => {
             const requestStub = {
                 ID: 'req-555',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -362,15 +474,43 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
             expect(res.Success).toBe(true);
             expect(requestStub.RequestForUserID).toBe('user-target');
-            expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgentCoS');
+            // The Approval request type is resolved by name through the AI engine cache, never hardcoded.
+            expect(requestStub.RequestTypeID).toBe('approval-type-id');
+            expect(resolveRequestTypeMock).toHaveBeenCalledWith('Approval', params.ContextUser);
+            expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgent');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('req-555');
+        });
+
+        it('fails with REQUEST_TYPE_NOT_FOUND instead of saving when the Approval request type is not in metadata', async () => {
+            getPolicyMock
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' })
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' });
+            resolveRequestTypeMock.mockResolvedValueOnce(null);
+            const save = vi.fn().mockResolvedValue(true);
+            getEntityObjectMock.mockResolvedValue({ ID: 'req-556', Save: save });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-sender', 'Alice Executive'),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'user-target' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Q4 OKR Check-in' },
+                    { Name: 'Message', Type: 'Input', Value: 'Please share current metric for KR-2.' },
+                ],
+            };
+
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('REQUEST_TYPE_NOT_FOUND');
+            expect(save).not.toHaveBeenCalled();
         });
     });
 
-    describe('PrepareChiefOfStaffOutboundCallAction', () => {
+    describe('PrepareOutboundCallBriefAction', () => {
         it('blocks outbound calls when PhoneChannelMode is InboundOnly', async () => {
             getPolicyMock.mockResolvedValueOnce({
                 Status: 'Active',
@@ -388,7 +528,7 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new PrepareChiefOfStaffOutboundCallAction(), params);
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('POLICY_DENIED');
         });
@@ -403,6 +543,7 @@ describe('Chief of Staff Actions Suite', () => {
             const reqStub = {
                 ID: 'call-req-1',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -425,17 +566,425 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new PrepareChiefOfStaffOutboundCallAction(), params);
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
             expect(res.Success).toBe(true);
             expect(res.ResultCode).toBe('APPROVAL_REQUIRED');
             const brief = params.Params.find((p: ActionParam) => p.Name === 'CallBrief')
-                ?.Value as ChiefOfStaffOutboundCallBrief;
+                ?.Value as OutboundCallBrief;
             expect(brief.requireUpfrontAiDisclosure).toBe(true);
             expect(brief.mandatoryUpfrontDisclosure).toContain(
                 'I am Jarvis, an AI assistant calling on behalf of Alice Executive'
             );
             expect(params.Params.find((p: ActionParam) => p.Name === 'Status')?.Value).toBe('PENDING_APPROVAL');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('call-req-1');
+            expect(reqStub.RequestTypeID).toBe('approval-type-id');
+        });
+    });
+
+    describe('Multi-Agent Always-On Generalization (Phase 0)', () => {
+        beforeEach(() => {
+            agentsList.push({ ID: 'factory-agent-id', Name: 'Software Factory' });
+        });
+
+        it('ScheduleNextAgentWakeAction defaults to calling agent from params.Context.AgentID and normalizes legacy wake-gate fields', async () => {
+            const routineStub = {
+                ID: 'routine-factory-1',
+                UserID: '',
+                Name: '',
+                Description: '',
+                Status: 'Active' as MJUserRoutineEntity['Status'],
+                RoutineType: 'AgentWake' as MJUserRoutineEntity['RoutineType'],
+                ScheduleMode: 'Adaptive' as MJUserRoutineEntity['ScheduleMode'],
+                TargetType: 'Agent' as MJUserRoutineEntity['TargetType'],
+                TargetID: '',
+                Timezone: 'UTC',
+                CronExpression: null as string | null,
+                InitialMessage: null as string | null,
+                StartingPayload: null as string | null,
+                WakeConfigurationObject: null as Record<string, unknown> | null,
+                NextRunAt: null as Date | null,
+                ConversationID: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(routineStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'WorkstreamKey', Type: 'Input', Value: 'task-881' },
+                    {
+                        Name: 'WatchedEntities',
+                        Type: 'Input',
+                        Value: [
+                            {
+                                entityName: 'MJ_BizApps_Tasks: Tasks',
+                                filter: "ID = 'task-881'",
+                                trackChangesOnly: true,
+                            },
+                        ],
+                    },
+                    {
+                        Name: 'WakeGate',
+                        Type: 'Input',
+                        Value: {
+                            skipIfUnchanged: true,
+                            tier1Expression: 'TotalChangedRecords > 0',
+                            tier2DecisionQuestion: 'Did CI or review status change meaningfully?',
+                        },
+                    },
+                ],
+            };
+
+            const res = await invokeAction(new ScheduleNextAgentWakeAction(), params);
+            expect(res.Success).toBe(true);
+            expect(routineStub.TargetID).toBe('factory-agent-id');
+            expect(routineStub.Name).toBe('Software Factory — Wake (task-881)');
+            const watched = routineStub.WakeConfigurationObject?.['watchedEntities'] as Array<Record<string, unknown>>;
+            expect(watched).toEqual([
+                {
+                    entityName: 'MJ_BizApps_Tasks: Tasks',
+                    extraFilter: "ID = 'task-881'",
+                    includeRecordChanges: true,
+                },
+            ]);
+            const gate = routineStub.WakeConfigurationObject?.['wakeGate'] as Record<string, unknown>;
+            expect(gate).toEqual({
+                skipIfUnchanged: true,
+                tier1Expression: 'totalChangedCount > 0',
+                tier2Decision: { question: 'Did CI or review status change meaningfully?' },
+            });
+        });
+
+        it('ConfigureAgentUserPolicyAction defaults to calling agent from params.Context.AgentID instead of Chief of Staff', async () => {
+            const policyStub = {
+                ID: 'policy-factory-1',
+                AgentID: '',
+                UserID: '',
+                Status: 'Active' as MJAIAgentUserPolicyEntity['Status'],
+                OnboardingStatus: 'Completed' as MJAIAgentUserPolicyEntity['OnboardingStatus'],
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(policyStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'OnboardingStatus', Type: 'Input', Value: 'Completed' }],
+            };
+
+            const res = await invokeAction(new ConfigureAgentUserPolicyAction(), params);
+            expect(res.Success).toBe(true);
+            expect(policyStub.AgentID).toBe('factory-agent-id');
+            expect(policyStub.UserID).toBe('dev-1');
+        });
+
+        it('SendInterAgentRequestAction routes from calling agent to explicit TargetAgentName and accepts RequestBody alias', async () => {
+            getPolicyMock
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                })
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    AllowInterAgentCoordination: true,
+                });
+
+            const reqStub = {
+                ID: 'req-factory-to-cos',
+                AgentID: '',
+                RequestTypeID: null as string | null,
+                RequestedAt: null as Date | null,
+                RequestForUserID: null as string | null,
+                Status: 'Requested' as MJAIAgentRequestEntity['Status'],
+                Priority: 50,
+                Request: '',
+                Comments: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(reqStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'TargetAgentName', Type: 'Input', Value: 'Software Factory' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Cross-repo contract update' },
+                    { Name: 'RequestBody', Type: 'Input', Value: 'Shared schema PR is ready for review.' },
+                ],
+            };
+
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
+            expect(res.Success).toBe(true);
+            expect(reqStub.AgentID).toBe('factory-agent-id');
+            expect(reqStub.Request).toContain('[Software Factory Follow-Up from Dev One]');
+            const parsed = JSON.parse(reqStub.Comments ?? '{}') as InterAgentCoordinationEnvelope;
+            expect(parsed.senderAgentID).toBe('factory-agent-id');
+            expect(parsed.senderAgentName).toBe('Software Factory');
+            expect(parsed.targetAgentID).toBe('factory-agent-id');
+            expect(parsed.targetAgentName).toBe('Software Factory');
+            expect(parsed.deliveryMode).toBe('InterAgent');
+            expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
+        });
+
+        it('TriggerAgentWakeAction delegates to AgentWakeTriggerService.TriggerWakeForWorkstream for Owner/self wakes and rejects unauthorized cross-user wakes', async () => {
+            triggerWakeForWorkstreamMock.mockResolvedValueOnce({
+                triggered: true,
+                resultCode: 'WAKE_SCHEDULED',
+                reason: 'Scheduled immediate wake for task:t-100',
+                routineID: 'routine-100',
+                targetUserID: 'dev-1',
+                targetAgentID: 'factory-agent-id',
+                workstreamKey: 'task:t-100',
+                nextRunAtISO: '2026-11-09T18:00:00.000Z',
+            });
+
+            const ownerUser = makeUser('admin-1', 'Admin Owner');
+            ownerUser.Type = 'Owner';
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: ownerUser,
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'dev-1' },
+                    { Name: 'TargetAgentName', Type: 'Input', Value: 'Software Factory' },
+                    { Name: 'WorkstreamKey', Type: 'Input', Value: 'task:t-100' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Task assigned to Software Factory' },
+                    { Name: 'ResumeState', Type: 'Input', Value: { taskID: 't-100' } },
+                ],
+            };
+
+            const res = await invokeAction(new TriggerAgentWakeAction(), params);
+            expect(res.Success).toBe(true);
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(triggerWakeForWorkstreamMock).toHaveBeenCalledTimes(1);
+            expect(params.Params.find((p: ActionParam) => p.Name === 'RoutineID')?.Value).toBe('routine-100');
+            expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
+
+            // Non-owner cross-user wake is rejected
+            const nonOwnerRes = await invokeAction(new TriggerAgentWakeAction(), {
+                ...params,
+                ContextUser: makeUser('pm-1', 'Product Manager'),
+            });
+            expect(nonOwnerRes.Success).toBe(false);
+            expect(nonOwnerRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // Agent-invoked cross-user wake is rejected even when ContextUser is Owner
+            const agentCrossUserRes = await invokeAction(new TriggerAgentWakeAction(), {
+                ...params,
+                Context: { AgentID: 'factory-agent-id' },
+            });
+            expect(agentCrossUserRes.Success).toBe(false);
+            expect(agentCrossUserRes.ResultCode).toBe('PERMISSION_DENIED');
+        });
+
+        it('ConfigureAgentUserPolicyAction blocks cross-agent targeting, policy loosening by agents, and fails closed on lookup error', async () => {
+            // 1. Cross-agent targeting rejected when invoked by an agent
+            const crossAgentRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'AgentID', Type: 'Input', Value: 'cos-agent-id' }],
+            });
+            expect(crossAgentRes.Success).toBe(false);
+            expect(crossAgentRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // 2. Self-widening (unpausing or raising threshold) rejected when invoked by an agent
+            const existingPausedStub = {
+                ID: 'policy-paused',
+                AgentID: 'factory-agent-id',
+                UserID: 'dev-1',
+                Status: 'Paused' as MJAIAgentUserPolicyEntity['Status'],
+                CoordinationMode: 'Observer' as MJAIAgentUserPolicyEntity['CoordinationMode'],
+                AllowInterAgentCoordination: false,
+                DefaultDataAccessMode: 'ReadOnly' as MJAIAgentUserPolicyEntity['DefaultDataAccessMode'],
+                EmailChannelMode: 'DraftOnly' as MJAIAgentUserPolicyEntity['EmailChannelMode'],
+                PhoneChannelMode: 'Disabled' as MJAIAgentUserPolicyEntity['PhoneChannelMode'],
+                MessagingChannelMode: 'DraftOnly' as MJAIAgentUserPolicyEntity['MessagingChannelMode'],
+                CalendarChannelMode: 'ReadOnly' as MJAIAgentUserPolicyEntity['CalendarChannelMode'],
+                RequireApprovalForExternalComms: true,
+                RequireApprovalForFinancials: true,
+                RequireApprovalForDestructiveActions: true,
+                AutoApproveAmountThreshold: 100,
+                EntityAccessRulesObject: [],
+                ActionPolicyRulesObject: [],
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            const reloadPausedStub = {
+                ...existingPausedStub,
+                InnerLoad: vi.fn().mockResolvedValue(true),
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getPolicyMock.mockResolvedValueOnce(existingPausedStub);
+            getEntityObjectMock.mockResolvedValueOnce(reloadPausedStub);
+
+            const widenRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'Status', Type: 'Input', Value: 'Active' },
+                    { Name: 'AutoApproveAmountThreshold', Type: 'Input', Value: 5000 },
+                ],
+            });
+            expect(widenRes.Success).toBe(false);
+            expect(widenRes.ResultCode).toBe('PERMISSION_DENIED');
+            expect(widenRes.Message).toMatch(/Cannot widen|Cannot increase/);
+            expect(existingPausedStub.Status).toBe('Paused');
+            expect(existingPausedStub.Save).not.toHaveBeenCalled();
+            expect(reloadPausedStub.Save).not.toHaveBeenCalled();
+
+            // 2b. When ResolvePolicyForAgentAndUser returns a system-user-loaded policy, Configure reloads and saves as ContextUser (and enforces CanUpdate)
+            const sysLoadedExisting = {
+                ...existingPausedStub,
+                ID: 'policy-sys-loaded',
+                ContextCurrentUser: { ID: 'sys-user-id', Name: 'System' },
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            const userScopedStub = {
+                ...existingPausedStub,
+                ID: 'policy-sys-loaded',
+                ContextCurrentUser: { ID: 'dev-1', Name: 'Dev One' },
+                InnerLoad: vi.fn().mockResolvedValue(true),
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getPolicyMock.mockResolvedValueOnce(sysLoadedExisting);
+            getEntityObjectMock.mockResolvedValueOnce(userScopedStub);
+
+            const humanRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Filters: [],
+                Params: [{ Name: 'Status', Type: 'Input', Value: 'Active' }],
+            });
+            expect(humanRes.Success).toBe(true);
+            expect(sysLoadedExisting.Save).not.toHaveBeenCalled();
+            expect(userScopedStub.InnerLoad).toHaveBeenCalledTimes(1);
+            expect(userScopedStub.Save).toHaveBeenCalledTimes(1);
+
+            // 3. Policy lookup error fails closed
+            getPolicyMock.mockResolvedValueOnce({
+                status: 'error',
+                policy: null,
+                errorMessage: 'Database unavailable',
+            });
+            const errRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'DisplayNameOverride', Type: 'Input', Value: 'Builder' }],
+            });
+            expect(errRes.Success).toBe(false);
+            expect(errRes.ResultCode).toBe('POLICY_LOOKUP_FAILED');
+        });
+
+        it('SendInterAgentRequestAction blocks sender spoofing, inactive TargetUserID, and fails closed on lookup error', async () => {
+            // 1. Spoofed sender AgentName rejected when invoked by factory-agent-id
+            const spoofRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Spoof attempt' },
+                    { Name: 'Message', Type: 'Input', Value: 'Pretending to be Chief of Staff' },
+                ],
+            });
+            expect(spoofRes.Success).toBe(false);
+            expect(spoofRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // 2. Inactive or non-existent TargetUserID rejected
+            runViewMock.mockImplementationOnce(async () => ({
+                Success: true,
+                Results: [{ ID: 'reviewer-2', IsActive: false }],
+            }));
+            const inactiveRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(inactiveRes.Success).toBe(false);
+            expect(inactiveRes.ResultCode).toBe('VALIDATION_ERROR');
+
+            // 3. Policy lookup error fails closed
+            getPolicyMock.mockResolvedValueOnce({
+                status: 'error',
+                policy: null,
+                errorMessage: 'Policy query failed',
+            });
+            const lookupErrRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(lookupErrRes.Success).toBe(false);
+            expect(lookupErrRes.ResultCode).toBe('POLICY_LOOKUP_FAILED');
+
+            // 4. Non-system caller attempting to pass RequestForUserID has RequestForUserID pinned to ContextUser.ID
+            getPolicyMock
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                })
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    AllowInterAgentCoordination: true,
+                });
+            const pinnedReqStub = {
+                ID: 'req-pinned-1',
+                AgentID: '',
+                RequestTypeID: null as string | null,
+                RequestedAt: null as Date | null,
+                RequestForUserID: null as string | null,
+                Status: 'Requested' as MJAIAgentRequestEntity['Status'],
+                Priority: 50,
+                Request: '',
+                Comments: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValueOnce(pinnedReqStub);
+
+            const spoofRequestForUserRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'RequestForUserID', Type: 'Input', Value: 'unrelated-user-3' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(spoofRequestForUserRes.Success).toBe(true);
+            expect(pinnedReqStub.RequestForUserID).toBe('dev-1');
         });
     });
 });

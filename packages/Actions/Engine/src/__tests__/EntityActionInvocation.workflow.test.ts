@@ -514,9 +514,33 @@ describe('Durable AfterCreate with a queue submitter', () => {
             entityActionParams,
         );
         expect(submit).toHaveBeenCalledTimes(1);
-        const request = submit.mock.calls[0][0] as { RedactedParams: unknown };
+        const request = submit.mock.calls[0][0] as { RedactedParams: Record<string, string>; Provider?: object };
         expect(Array.isArray(request.RedactedParams)).toBe(false);
         expect(request.RedactedParams).toEqual({ TypeCode: 'SystemEvent' });
+        expect(request.Provider).toBeDefined();
+    });
+
+    it('defers inline fallback onto RunAfterCommit instead of nesting when Submit fails inside an open save transaction', async () => {
+        mockRedactParamsToRecord.mockReturnValue({});
+        durableRegistry.Submitter = { Submit: vi.fn().mockResolvedValue({ Success: false, ErrorMessage: 'Permission denied on MJ: Tasks' }) };
+
+        const runAfterCommit = vi.fn();
+        const entity = new RecordLikeEntity({ ID: 'rec-1', Amount: 42 });
+        const entityWithProvider = Object.assign(entity, {
+            ProviderToUse: { TransactionDepth: 1, RunAfterCommit: runAfterCommit },
+            EntityInfo: { ID: TARGET_ENTITY_ID, Name: 'People' },
+        });
+
+        await invocation.InvokeAction(invocationParams({
+            InvocationType: { ID: INVOCATION_TYPE_ID, Name: 'AfterCreate' },
+            EntityAction: { ...invocationParams().EntityAction, RunMode: 'Durable' },
+            EntityObject: entityWithProvider,
+        }));
+        const deferExecution = (mockRunAction.mock.calls[0][0] as DeferredRunArgs).DeferExecution!;
+        const fallbackResult = await deferExecution({ Params: [] });
+
+        expect(fallbackResult).toMatchObject({ ResultCode: 'DEFERRED_LOCAL' });
+        expect(runAfterCommit).toHaveBeenCalledTimes(1);
     });
 
     it('redacts against the engine\'s live ActionParam definitions, not the per-action collection', async () => {

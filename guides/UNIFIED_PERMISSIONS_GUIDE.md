@@ -39,7 +39,7 @@ flowchart TB
 
 > **Rule of thumb.** Gate a *button/feature* → **Authorization**. Filter a *list query* → **Entity RLS**. Check access to a *specific record* → **PermissionEngine**. Hide a *column* → **Field-Level Security**. They compose: e.g. the skill Share button is gated by the `Can Share Skills` **Authorization**, while who a skill is shared *with* is a **PermissionEngine** domain.
 
-> **Field-Level Security is off by default and opt-in per entity** (`Entity.EnableFieldLevelSecurity`), so it costs one boolean test on entities that have not enabled it. It is the **column** axis to Entity RLS's **row** axis, and unlike the other three it has **no exempt user** — not even the MJ system user. If you are building on an entity that has it enabled, read [its guide](FIELD_LEVEL_SECURITY_GUIDE.md) first: `BaseEntity.Get()` throws for a denied field, so display code must ask before it reads.
+> **Field-Level Security is off by default and opt-in per entity** (`Entity.EnableFieldLevelSecurity`), so it costs one boolean test on entities that have not enabled it. **IS-A children inherit it:** `EntityInfo.FieldLevelSecurityApplies` is true when the entity's own flag *or any ancestor's* is on, and every runtime gate tests that rather than the entity's own flag. A child's mirror of a parent field is denied wherever the parent denies that field, whether or not the child has the flag on itself; the child's own rules can add denials but never re-open one the parent made. Fields the child defines itself follow only the child's rules. It is the **column** axis to Entity RLS's **row** axis, and unlike the other three it has **no exempt user** — not even the MJ system user. If you are building on an entity that has it enabled, read [its guide](FIELD_LEVEL_SECURITY_GUIDE.md) first: `BaseEntity.Get()` throws for a denied field, so display code must ask before it reads.
 
 ---
 
@@ -209,6 +209,8 @@ Granting a parent implicitly grants descendants. Use this to gate **whether a us
 ### 5.2 Entity Permissions / Row-Level Security — CRUD row filtering
 
 `MJ: Entity Permissions` drives **`getRowLevelSecurityWhereClause(provider, entityName, userPayload, EntityPermissionType.Read|Create|Update|Delete, prefix)`** (`packages/MJServer/src/generic/ResolverBase.ts`), which injects a SQL `WHERE` clause into generated entity queries so users only see rows they're allowed to. This is **query-time, set-level** gating — orthogonal to "can I use this one record." (It's *also* surfaced through the unified model via `MJEntityPermissionProvider`, so entity-level grants show up in the Sharing Center too.)
+
+Each verb's filter belongs to its `Can<Op>` flag: saving a row with a flag cleared also clears that verb's filter (`ReadRLSFilterID` with `CanRead`, and so on). Ticking the flag again later grants that verb **unfiltered** until a filter is set again, so re-add the filter in the same save if the role should stay limited.
 
 ---
 

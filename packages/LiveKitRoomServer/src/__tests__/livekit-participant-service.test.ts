@@ -55,3 +55,12 @@ describe('LiveKitParticipantService.SetAgentVision', () => {
     expect(updateParticipant).not.toHaveBeenCalled();
   });
 });
+
+describe('LiveKitParticipantService.SetAgentAvatarAudioOnly', () => {
+  it("sets the bot's mj.agentAvatar attribute to audio-only with the reason", async () => {
+    const { client, updateParticipant } = makeClient();
+    const result = await new LiveKitParticipantService(CONFIG, client).SetAgentAvatarAudioOnly('room-1', 'agent-s1', 'publish-failed');
+    expect(result).toEqual({ Success: true });
+    expect(updateParticipant).toHaveBeenCalledWith('room-1', 'agent-s1', { attributes: { 'mj.agentAvatar': 'audio-only:publish-failed' } });
+  });
+});

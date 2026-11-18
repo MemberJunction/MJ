@@ -97,15 +97,31 @@ export class FakeEntity {
     }
 }
 
-/** Minimal EntityInfo shape the CRUD actions consume. */
-export interface FakeEntityInfo {
-    PrimaryKeys: Array<{ Name: string }>;
-    Fields: Array<{ Name: string }>;
+/** Minimal EntityFieldInfo shape: the flags the CRUD actions read when deciding whether a field is writable. */
+export interface FakeEntityField {
+    Name: string;
+    ReadOnly?: boolean;
+    IsVirtual?: boolean;
+    IsPrimaryKey?: boolean;
 }
 
-export const makeEntityInfo = (fieldNames: string[], pkNames: string[] = ['ID']): FakeEntityInfo => ({
+/** Minimal EntityInfo shape the CRUD actions consume. */
+export interface FakeEntityInfo {
+    Name: string;
+    PrimaryKeys: Array<{ Name: string }>;
+    FirstPrimaryKey: { Name: string };
+    Fields: FakeEntityField[];
+}
+
+export const makeEntityInfo = (
+    fields: Array<string | FakeEntityField>,
+    pkNames: string[] = ['ID'],
+    entityName: string = 'Widgets'
+): FakeEntityInfo => ({
+    Name: entityName,
     PrimaryKeys: pkNames.map((Name) => ({ Name })),
-    Fields: fieldNames.map((Name) => ({ Name })),
+    FirstPrimaryKey: { Name: pkNames[0] },
+    Fields: fields.map((f) => (typeof f === 'string' ? { Name: f } : f)),
 });
 
 export interface FakeProviderOpts {

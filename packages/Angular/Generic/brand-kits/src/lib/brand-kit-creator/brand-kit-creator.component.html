@@ -1,0 +1,468 @@
+<section class="mj-bkc-root" aria-label="New brand kit" data-testid="brand-kit-creator">
+  @if (SaveError) {
+    <div class="mj-bkc-banner mj-bkc-banner--error" role="alert" data-testid="bkc-save-error">
+      <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+      <span>{{ SaveError }}</span>
+    </div>
+  }
+
+  @if (SavedKitId) {
+    <div class="mj-bkc-banner mj-bkc-banner--success" role="status" data-testid="bkc-save-success">
+      <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+      <span>Brand kit saved.</span>
+    </div>
+  }
+
+  <div class="mj-bkc-grid">
+    <!-- Left column: Form -->
+    <div class="mj-bkc-form" data-testid="bkc-form">
+      <div class="mj-bkc-row-split">
+        <label class="mj-bkc-field">
+          <span class="mj-bkc-field-label">Name</span>
+          <input
+            type="text"
+            class="mj-bkc-input"
+            data-autofocus
+            data-testid="bkc-name-input"
+            placeholder="e.g., Association flagship"
+            [(ngModel)]="Name"
+            [disabled]="Saving"
+          />
+        </label>
+
+        <label class="mj-bkc-field">
+          <span class="mj-bkc-field-label">For</span>
+          <select
+            class="mj-bkc-select"
+            data-testid="bkc-company-select"
+            [(ngModel)]="SelectedCompanyId"
+            [disabled]="Saving"
+          >
+            <option value="">All companies</option>
+            @for (comp of AvailableCompanies; track comp.ID) {
+              <option [value]="comp.ID">{{ comp.Name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <label class="mj-bkc-switch-row">
+        <input
+          type="checkbox"
+          data-testid="bkc-default-checkbox"
+          [(ngModel)]="IsDefault"
+          [disabled]="Saving"
+        />
+        <span>Make this the default</span>
+      </label>
+
+      <!-- Logo upload -->
+      <div class="mj-bkc-section">
+        <div class="mj-bkc-section-header">
+          <span class="mj-bkc-section-title">Logo</span>
+          @if (PendingLogoFileName) {
+            <span class="mj-bkc-file-pill" data-testid="bkc-uploaded-logo-name">
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              <span>{{ PendingLogoFileName }}</span>
+            </span>
+          }
+        </div>
+        <div class="mj-bkc-upload-wrap" data-testid="bkc-logo-upload">
+          <mj-files-file-upload
+            [Provider]="Provider"
+            [Disabled]="Saving"
+            (FileUpload)="OnLogoFileUploaded($event)"
+          ></mj-files-file-upload>
+        </div>
+      </div>
+
+      <!-- Colors -->
+      <div class="mj-bkc-section">
+        <div class="mj-bkc-section-header">
+          <span class="mj-bkc-section-title">Colors</span>
+          <div class="mj-bkc-section-actions">
+            <button
+              type="button"
+              mjButton
+              Variant="secondary"
+              Size="sm"
+              data-testid="bkc-suggest-logo-colors-btn"
+              [disabled]="!LogoPreviewUrl || SuggestingColors || Saving"
+              (click)="SuggestColorsFromLogo()"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+              <span>{{ SuggestingColors ? 'Sampling…' : 'Suggest from logo' }}</span>
+            </button>
+            <button
+              type="button"
+              mjButton
+              Variant="secondary"
+              Size="sm"
+              data-testid="bkc-add-swatch-btn"
+              [disabled]="!CanAddSwatch || Saving"
+              (click)="AddSwatch()"
+            >
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span>Add color</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="mj-bkc-swatches-list" data-testid="bkc-swatches-list">
+          @for (swatch of Palette; track $index; let idx = $index) {
+            <div class="mj-bkc-swatch-row" data-testid="bkc-swatch-row">
+              <input
+                type="color"
+                class="mj-bkc-color-picker"
+                [attr.aria-label]="'Pick color for ' + (swatch.Name || 'swatch ' + (idx + 1))"
+                [attr.data-testid]="'bkc-swatch-picker-' + idx"
+                [ngModel]="NormalizeColorInputValue(swatch.Value)"
+                (ngModelChange)="OnSwatchColorPickerChange(idx, $event)"
+                [disabled]="Saving"
+              />
+              <input
+                type="text"
+                class="mj-bkc-input mj-bkc-swatch-hex"
+                [attr.aria-label]="'Hex color for ' + (swatch.Name || 'swatch ' + (idx + 1))"
+                [attr.data-testid]="'bkc-swatch-hex-' + idx"
+                [ngModel]="swatch.Value"
+                (ngModelChange)="OnSwatchHexTextChange(idx, $event)"
+                placeholder="#1e3a8a"
+                [disabled]="Saving"
+              />
+              <input
+                type="text"
+                class="mj-bkc-input mj-bkc-swatch-name"
+                [attr.aria-label]="'Name for swatch ' + (idx + 1)"
+                [attr.data-testid]="'bkc-swatch-name-' + idx"
+                [(ngModel)]="swatch.Name"
+                placeholder="Primary"
+                [disabled]="Saving"
+              />
+              <button
+                type="button"
+                mjButton
+                Variant="icon"
+                Size="sm"
+                [AriaLabel]="'Remove ' + (swatch.Name || 'color')"
+                [attr.data-testid]="'bkc-swatch-remove-' + idx"
+                [disabled]="Palette.length <= 1 || Saving"
+                (click)="RemoveSwatch(idx)"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Type -->
+      <div class="mj-bkc-section">
+        <span class="mj-bkc-section-title">Type</span>
+        <div class="mj-bkc-row-split">
+          <label class="mj-bkc-field">
+            <span class="mj-bkc-field-label">Heading font</span>
+            <input
+              type="text"
+              class="mj-bkc-input"
+              list="mj-bkc-font-list"
+              data-testid="bkc-heading-font-input"
+              [(ngModel)]="HeadingFontFamily"
+              placeholder="Inter"
+              [disabled]="Saving"
+            />
+          </label>
+
+          <label class="mj-bkc-field">
+            <span class="mj-bkc-field-label">Body font</span>
+            <input
+              type="text"
+              class="mj-bkc-input"
+              list="mj-bkc-font-list"
+              data-testid="bkc-body-font-input"
+              [(ngModel)]="BodyFontFamily"
+              placeholder="Inter"
+              [disabled]="Saving"
+            />
+          </label>
+        </div>
+        <datalist id="mj-bkc-font-list">
+          @for (font of FontSuggestions; track font) {
+            <option [value]="font"></option>
+          }
+        </datalist>
+      </div>
+
+      <!-- Voice and rules (optional, collapsed) -->
+      <details class="mj-bkc-details" data-testid="bkc-voice-rules-details">
+        <summary class="mj-bkc-details-summary">
+          <span>Voice and rules (optional)</span>
+        </summary>
+        <div class="mj-bkc-details-body">
+          <label class="mj-bkc-field">
+            <span class="mj-bkc-field-label">Imagery style</span>
+            <input
+              type="text"
+              class="mj-bkc-input"
+              data-testid="bkc-imagery-style-input"
+              [(ngModel)]="ImageryStyle"
+              placeholder="e.g., Warm editorial photography with crisp data overlays"
+              [disabled]="Saving"
+            />
+          </label>
+
+          <div class="mj-bkc-row-split">
+            <label class="mj-bkc-field">
+              <span class="mj-bkc-field-label">Keep (comma-separated)</span>
+              <input
+                type="text"
+                class="mj-bkc-input"
+                data-testid="bkc-keep-input"
+                [(ngModel)]="KeepItemsText"
+                placeholder="Clean charts, high contrast"
+                [disabled]="Saving"
+              />
+            </label>
+
+            <label class="mj-bkc-field">
+              <span class="mj-bkc-field-label">Avoid (comma-separated)</span>
+              <input
+                type="text"
+                class="mj-bkc-input"
+                data-testid="bkc-avoid-input"
+                [(ngModel)]="AvoidItemsText"
+                placeholder="Cluttered backgrounds, neon"
+                [disabled]="Saving"
+              />
+            </label>
+          </div>
+
+          <div class="mj-bkc-field">
+            <span class="mj-bkc-field-label">Facts never to invent</span>
+            @if (NeverInventItems.length > 0) {
+              <div class="mj-bkc-chips" data-testid="bkc-never-invent-chips">
+                @for (fact of NeverInventItems; track fact) {
+                  <span class="mj-bkc-chip" data-testid="bkc-never-invent-chip">
+                    <span>{{ fact }}</span>
+                    <button
+                      type="button"
+                      class="mj-bkc-chip-remove"
+                      [attr.aria-label]="'Remove ' + fact"
+                      (click)="RemoveNeverInventItem(fact)"
+                      [disabled]="Saving"
+                    >
+                      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                  </span>
+                }
+              </div>
+            }
+            <div class="mj-bkc-chip-input-row">
+              <input
+                type="text"
+                class="mj-bkc-input"
+                aria-label="New fact never to invent"
+                data-testid="bkc-never-invent-input"
+                [(ngModel)]="NewNeverInventInput"
+                (keydown)="OnNeverInventKeydown($event)"
+                placeholder="e.g., Member counts, revenue figures"
+                [disabled]="Saving"
+              />
+              <button
+                type="button"
+                mjButton
+                Variant="secondary"
+                Size="sm"
+                data-testid="bkc-never-invent-add-btn"
+                (click)="AddNeverInventItem()"
+                [disabled]="Saving"
+              >
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="mj-bkc-switches-group">
+            <label class="mj-bkc-switch-row">
+              <input
+                type="checkbox"
+                data-testid="bkc-allow-images-checkbox"
+                [(ngModel)]="AllowGeneratedImages"
+                [disabled]="Saving"
+              />
+              <span>Allow generated images</span>
+            </label>
+
+            <label class="mj-bkc-switch-row">
+              <input
+                type="checkbox"
+                data-testid="bkc-allow-video-checkbox"
+                [(ngModel)]="AllowGeneratedVideo"
+                [disabled]="Saving"
+              />
+              <span>Allow generated video</span>
+            </label>
+
+            <label class="mj-bkc-switch-row">
+              <input
+                type="checkbox"
+                data-testid="bkc-allow-synthetic-people-checkbox"
+                [(ngModel)]="AllowSyntheticPeople"
+                [disabled]="Saving"
+              />
+              <span>Allow synthetic people</span>
+            </label>
+          </div>
+
+          @if (AllowSyntheticPeople) {
+            <div
+              class="mj-bkc-banner mj-bkc-banner--warning"
+              role="note"
+              data-testid="bkc-synthetic-people-warning"
+            >
+              <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+              <span>{{ SyntheticPeopleWarning }}</span>
+            </div>
+          }
+        </div>
+      </details>
+    </div>
+
+    <!-- Right column: Live preview -->
+    <aside class="mj-bkc-preview-pane" aria-label="Brand kit live preview" data-testid="bkc-preview-pane">
+      <div class="mj-bkc-preview-section">
+        <span class="mj-bkc-preview-label">Gallery card</span>
+        <div class="mj-bkc-preview-card" data-testid="bkc-preview-card">
+          <div class="mj-bkc-preview-palette-strip" data-testid="bkc-preview-palette-strip">
+            @for (swatch of Palette; track $index) {
+              <div
+                class="mj-bkc-preview-swatch"
+                [style.background-color]="NormalizeColorInputValue(swatch.Value)"
+                [title]="(swatch.Name || 'Color') + ' (' + swatch.Value + ')'"
+              ></div>
+            }
+          </div>
+          <div class="mj-bkc-preview-card-body">
+            <div class="mj-bkc-preview-card-header">
+              <div class="mj-bkc-preview-card-title-group">
+                <div class="mj-bkc-preview-logo-thumb" data-testid="bkc-preview-card-logo">
+                  @if (LogoPreviewUrl) {
+                    <img [src]="LogoPreviewUrl" [alt]="PreviewDisplayName + ' logo'" />
+                  } @else {
+                    <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                  }
+                </div>
+                <span class="mj-bkc-preview-card-title" data-testid="bkc-preview-card-name">
+                  {{ PreviewDisplayName }}
+                </span>
+                @if (IsDefault) {
+                  <span class="mj-bkc-badge mj-bkc-badge--neutral" data-testid="bkc-preview-default-badge">
+                    <i class="fa-solid fa-star" aria-hidden="true"></i>
+                    <span>Default</span>
+                  </span>
+                }
+              </div>
+              <span class="mj-bkc-badge mj-bkc-badge--success">Active</span>
+            </div>
+            <div class="mj-bkc-preview-card-footer">
+              <span class="mj-bkc-preview-company" data-testid="bkc-preview-card-company">
+                <i class="fa-solid fa-building" aria-hidden="true"></i>
+                <span>{{ SelectedCompanyName }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mj-bkc-preview-section">
+        <span class="mj-bkc-preview-label">16:9 title frame</span>
+        <div
+          class="mj-bkc-title-frame"
+          data-testid="bkc-preview-title-frame"
+          [style.background]="
+            'linear-gradient(135deg, ' + PrimarySwatchColor + ' 0%, ' + SecondarySwatchColor + ' 100%)'
+          "
+        >
+          <div class="mj-bkc-title-frame-top">
+            <div class="mj-bkc-title-frame-logo">
+              @if (LogoPreviewUrl) {
+                <img [src]="LogoPreviewUrl" [alt]="PreviewDisplayName + ' logo'" />
+              } @else {
+                <i class="fa-solid fa-film" aria-hidden="true"></i>
+              }
+            </div>
+            <span
+              class="mj-bkc-title-frame-kicker"
+              [style.background-color]="AccentSwatchColor"
+              [style.font-family]="BodyFontFamily || 'inherit'"
+            >
+              {{ SelectedCompanyName }}
+            </span>
+          </div>
+
+          <div class="mj-bkc-title-frame-main">
+            <h4
+              class="mj-bkc-title-frame-heading"
+              data-testid="bkc-preview-frame-heading"
+              [style.font-family]="HeadingFontFamily || 'inherit'"
+            >
+              {{ PreviewDisplayName }}
+            </h4>
+            <p
+              class="mj-bkc-title-frame-sub"
+              data-testid="bkc-preview-frame-body"
+              [style.font-family]="BodyFontFamily || 'inherit'"
+            >
+              {{ HeadingFontFamily || 'Inter' }} · {{ BodyFontFamily || 'Inter' }}
+            </p>
+          </div>
+
+          <div
+            class="mj-bkc-title-frame-accent-bar"
+            [style.background-color]="AccentSwatchColor"
+          ></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Footer actions: Save left, Cancel right -->
+  <footer class="mj-bkc-footer">
+    <div class="mj-bkc-footer-left">
+      <button
+        type="button"
+        mjButton
+        Variant="primary"
+        data-testid="bkc-save-btn"
+        [disabled]="Saving"
+        (click)="Save()"
+      >
+        <span>{{ Saving ? 'Saving…' : 'Save' }}</span>
+      </button>
+
+      @if (SavedKitId) {
+        <button
+          type="button"
+          mjButton
+          Variant="secondary"
+          data-testid="bkc-more-settings-btn"
+          (click)="OnOpenMoreSettings()"
+        >
+          <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+          <span>More settings</span>
+        </button>
+      }
+    </div>
+
+    <button
+      type="button"
+      mjButton
+      Variant="secondary"
+      data-testid="bkc-cancel-btn"
+      [disabled]="Saving"
+      (click)="OnCancel()"
+    >
+      <span>{{ SavedKitId ? 'Done' : 'Cancel' }}</span>
+    </button>
+  </footer>
+</section>

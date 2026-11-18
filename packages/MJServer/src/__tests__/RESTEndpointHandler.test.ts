@@ -110,6 +110,7 @@ interface ReqShape {
     query?: Record<string, string>;
     body?: unknown;
     mjUser?: UserInfo;
+    timeZone?: string;
 }
 
 function makeReq(shape: ReqShape = {}): express.Request {
@@ -118,6 +119,7 @@ function makeReq(shape: ReqShape = {}): express.Request {
         query: shape.query ?? {},
         body: shape.body ?? {},
         mjUser: shape.mjUser ?? MJ_USER,
+        userPayload: { TimeZone: shape.timeZone },
     } as unknown as express.Request;
 }
 
@@ -212,13 +214,15 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(wildcard.isEntityAllowed('Users')).toBe(true);
     });
 
-    it('SECURITY GAP: a mixed-case exact exclusion silently fails to exclude', () => {
-        // isEntityAllowed lowercases the entity name but compares it with === against
-        // the RAW configured pattern (only the wildcard branch lowercases patterns).
-        // An operator writing excludeEntities: ['Secrets'] — the natural casing —
-        // gets NO exclusion. Pinned so a normalization fix flips this test.
+    it('a mixed-case exact exclusion excludes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ ExcludeEntities: ['Secrets'] });
-        expect(handler.isEntityAllowed('Secrets')).toBe(true); // exclusion ineffective!
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+    });
+
+    it('mixed-case schema lists match whatever casing the caller passes', () => {
+        expect(makeHandler({ ExcludeSchemas: ['VAULT'] }).isEntityAllowed('Secrets')).toBe(false);
+        expect(makeHandler({ IncludeSchemas: ['CRM'] }).isEntityAllowed('Users')).toBe(true);
     });
 
     it('exclusions override inclusions for the same entity', () => {
@@ -234,9 +238,10 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 
-    it('SECURITY GAP: a mixed-case exact inclusion fails to include (same raw-pattern comparison)', () => {
+    it('a mixed-case exact inclusion includes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ IncludeEntities: ['Users'] });
-        expect(handler.isEntityAllowed('Users')).toBe(false); // include list active, but never matches
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 });
 
@@ -540,6 +545,17 @@ describe('RESTEndpointHandler view routes', () => {
             expect(jsonBody()).toEqual({ Success: true, Results: [{ ID: '1' }] });
         });
 
+        it('drops fields only server code may set, takes the time zone from the header, and keeps the route\'s entity over the body\'s', async () => {
+            mockOpsRunView.mockResolvedValue({ success: true, result: { Success: true, Results: [] } });
+            const handler = makeHandler();
+            const req = makeReq({ params: { entityName: 'Users' }, body: { EntityName: 'Secrets', TimeZone: 'Asia/Tokyo', MaxRows: 5 }, timeZone: 'Europe/Paris' });
+            const { res } = makeRes();
+
+            await handler.runView(req, res);
+
+            expect(mockOpsRunView).toHaveBeenCalledWith({ EntityName: 'Users', MaxRows: 5, TimeZone: 'Europe/Paris' }, MJ_USER);
+        });
+
         it('maps view-layer failures to 400', async () => {
             mockOpsRunView.mockResolvedValue({ success: false, error: 'does not have permission' });
             const handler = makeHandler();
@@ -589,6 +605,18 @@ describe('RESTEndpointHandler view routes', () => {
             expect(filtered).toEqual([{ EntityName: 'Users' }]);
             expect(user).toBe(MJ_USER);
             expect(jsonBody()).toEqual([{ Success: true, Results: [] }]);
+        });
+
+        it('drops fields only server code may set from every batched view', async () => {
+            mockOpsRunViews.mockResolvedValue({ success: true, results: [{ Success: true, Results: [] }] });
+            const handler = makeHandler();
+            const req = makeReq({ body: { params: [{ EntityName: 'Users', TimeZone: 'Asia/Tokyo' }] }, timeZone: 'Europe/Paris' });
+            const { res } = makeRes();
+
+            await handler.runViews(req, res);
+
+            const [sent] = mockOpsRunViews.mock.calls[0] as [RunViewParams[], UserInfo];
+            expect(sent).toEqual([{ EntityName: 'Users', TimeZone: 'Europe/Paris' }]);
         });
 
         it('maps view-layer batch failures to 400', async () => {

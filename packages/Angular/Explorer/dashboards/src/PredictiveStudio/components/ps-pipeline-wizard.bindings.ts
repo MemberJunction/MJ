@@ -1,0 +1,240 @@
+/**
+ * The Prediction Unit and Evaluation Protocol a pipeline the wizard creates is bound to, so it can train: version 1 of
+ * each, mapped from the wizard's target the way the pipeline migration maps an existing pipeline
+ * (`LegacyPipelines`), written with Core's row writer (`ProtocolRows`) through the caller's provider. The pipeline row
+ * is saved last, already bound, so no unbound pipeline is left behind; when it fails to save, the unit and protocol it
+ * would have pointed at are deleted again. Browser-safe (L0): no router, no Explorer import.
+ */
+import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
+import type { MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
+import {
+  ADVERSE_CLASS_HOLD_REASON, JsonParse, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
+  type Actor, type LegacyProtocolOutcome, type LegacyStop, type OutcomeConfig, type PredictionUnitSpec, type UnitDraft,
+} from '@memberjunction/predictive-studio-core';
+import { UNIT_VERSION_FIELDS, type UnitVersionRow } from './versioned-list/lineage-reads';
+
+/** Why the wizard will not save a two-class target it cannot tell the adverse class of, naming the control that fixes it. */
+export const WIZARD_ADVERSE_CLASS_REASON =
+  'the target has two classes and neither its name nor its settings say which one is the adverse outcome: choose it under "Adverse outcome class" in step 1 (Goal & Target)';
+
+/** Rows per label page: an explicit page size, since a client view without one returns only the entity's default page. */
+const LABEL_PAGE_ROWS = 50_000;
+
+/** A target-entity row as a label page reads it: the target column and the primary key columns. */
+type LabelRow = Record<string, string | number | boolean | Date | null>;
+
+/** Which label page to read: after `Read` rows, by `AfterKey` (none on the first page) when paging by keyset. */
+interface LabelPageRequest {
+  readonly Keys: readonly string[];
+  readonly Read: number;
+  readonly Keyset: boolean;
+  readonly AfterKey: CompositeKey | undefined;
+}
+
+/** The unit draft and protocol inputs a new pipeline maps to. */
+export interface WizardBindingPlan {
+  readonly Kind: 'plan';
+  readonly Unit: UnitDraft;
+  readonly Protocol: Extract<LegacyProtocolOutcome, { readonly Kind: 'protocol' }>;
+}
+
+/** The pipeline columns the mapping reads, plus the target entity's name. */
+export type WizardPipelineFields = Pick<MJMLTrainingPipelineEntity, 'Name' | 'TargetVariable' | 'ProblemType' | 'AsOfStrategy' | 'ValidationStrategy' | 'LeakageGuard' | 'FeatureSteps' | 'Hyperparameters'> & {
+  readonly TargetEntity: string;
+};
+
+/** The label column a bound pipeline's Prediction Unit reads, or why there is none to restore. */
+export type BoundTargetRead = { readonly Ok: true; readonly Column: string } | { readonly Ok: false; readonly Reason: string };
+
+/** Saving a pipeline with its bindings: success, or why it was not saved. */
+export type WizardSaveResult = { readonly Ok: true } | { readonly Ok: false; readonly Reason: string };
+
+/** Binding the pipelines the wizard creates. */
+export class PipelineWizardBindings {
+  /** The name of the Evaluation Protocol a wizard pipeline is bound to: one rule, read by the save and the wizard's copy. */
+  public static ProtocolNameFor(pipelineName: string): string {
+    return `${pipelineName} — protocol`;
+  }
+
+  /** Pure: the unit and protocol a new pipeline maps to, or why it gets none (an undeclared binary target is held). */
+  public static Plan(p: WizardPipelineFields, labels: readonly string[], today: string): WizardBindingPlan | LegacyStop {
+    const outcome = LegacyPipelines.LegacyOutcomeCandidates({
+      FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: null, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
+    });
+    const unit = LegacyPipelines.LegacyUnitInputs(p, labels, today, outcome, 'wizard');
+    if (unit.Kind !== 'unit') return unit;
+    const protocol = LegacyPipelines.LegacyProtocolInputs(p.ValidationStrategy, p.LeakageGuard, unit.DateColumn, []);
+    if (protocol.Kind !== 'protocol') return protocol;
+    return { Kind: 'plan', Unit: unit.Draft, Protocol: protocol };
+  }
+
+  /**
+   * The two classes the user must choose the adverse one from: a two-class target whose name, styles and outcome config
+   * decide nothing (the case `Plan` holds). Empty when no choice is needed: a regression, a single class, three or more
+   * classes, or a target whose adverse class is already decided. Classes in the order the unit's task uses.
+   */
+  public static AdverseClassChoices(p: WizardPipelineFields, labels: readonly string[]): readonly string[] {
+    if (p.ProblemType !== 'classification') return [];
+    const [first, second, ...rest] = [...new Set(labels.map((l) => l.trim()).filter((l) => l.length > 0))].sort();
+    if (first === undefined || second === undefined || rest.length > 0) return [];
+    const candidates = LegacyPipelines.LegacyOutcomeCandidates({
+      FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: null, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
+    });
+    return LegacyPipelines.LegacyAdverseClass([first, second], candidates).Kind === 'undetermined' ? [first, second] : [];
+  }
+
+  /** The outcome config that declares `adverse` the adverse class of a two-class target: styled red, the other green. */
+  public static AdverseClassOutcomeConfig(adverse: string, classes: readonly string[]): OutcomeConfig {
+    const styles: NonNullable<OutcomeConfig['OutcomeStyles']> = {};
+    for (const c of classes) styles[c] = { BadgeColor: c === adverse ? 'red' : 'green' };
+    return { OutcomeStyles: styles };
+  }
+
+  /** The adverse class a saved FeatureSteps column declares (the class styled red), or '' when it declares none. */
+  public static AdverseClassFromFeatureSteps(featureSteps: string | null): string {
+    const parsed = JsonParse.ParseJsonText(featureSteps, 'FeatureSteps');
+    if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return '';
+    const config = JsonParse.JsonObjectField(parsed.Value, 'OutcomeConfig');
+    const styles = config === null ? null : JsonParse.JsonObjectField(config, 'OutcomeStyles');
+    if (styles === null) return '';
+    for (const [label, style] of Object.entries(styles)) {
+      if (JsonParse.IsJsonObject(style) && JsonParse.JsonString(style, 'BadgeColor') === 'red') return label;
+    }
+    return '';
+  }
+
+  /**
+   * The label column a pipeline bound to `unitId` was saved with. A bound pipeline's `TargetVariable` holds the unit's
+   * rule text (`bind()`), so the column comes from the unit's label rule: a column rule names it; any other rule has
+   * no column the wizard can offer. One keyed read of the unit version.
+   */
+  public static async ReadBoundTargetColumn(unitId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<BoundTargetRead> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<UnitVersionRow>({
+      EntityName: 'MJ: ML Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',  // pk-filter-ok: MJ core entity keyed by ID
+    }, user);
+    if (!r.Success) return { Ok: false, Reason: `reading its Prediction Unit failed: ${r.ErrorMessage}` };
+    const row = r.Results[0];
+    if (row === undefined) return { Ok: false, Reason: `its Prediction Unit ${unitId} was not found` };
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) return { Ok: false, Reason: `its Prediction Unit "${row.Name}" cannot be read: ${parsed.Errors.join('; ')}` };
+    return PipelineWizardBindings.TargetColumnOfUnit(parsed.Value);
+  }
+
+  /** Pure: the column a unit's label rule reads, or why its rule names none. */
+  public static TargetColumnOfUnit(unit: PredictionUnitSpec): BoundTargetRead {
+    const rule = unit.label.rule;
+    if (rule.kind === 'column') return { Ok: true, Column: rule.column };
+    return { Ok: false, Reason: `its Prediction Unit "${unit.name}" labels rows by a ${rule.kind} rule, not a column` };
+  }
+
+  /**
+   * The target's class labels for a classification (none for a regression), every row read in pages ordered by the
+   * primary key: keyset pages (`AfterKey`) on a single-column key, `StartRow` pages on a composite one. The row count
+   * comes from the first page; a read that ends short of it is refused rather than mapped from a sample.
+   */
+  public static async ReadClassLabels(p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined): Promise<string[]> {
+    if (p.ProblemType !== 'classification') return [];
+    const entity = provider.EntityByName(p.TargetEntity);
+    if (!entity) throw new Error(`Target entity "${p.TargetEntity}" is not registered`);
+    const keys = entity.PrimaryKeys.map((k) => k.Name);
+    const keyset = keys.length === 1;
+    const labels: string[] = [];
+    let afterKey: CompositeKey | undefined;
+    for (let read = 0, total = 1; read < total;) {
+      const page = await PipelineWizardBindings.readLabelPage(p, provider, user, { Keys: keys, Read: read, AfterKey: afterKey, Keyset: keyset });
+      if (read === 0) total = page.Total;
+      if (page.Rows.length === 0) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} returned ${read} of ${total} rows`);
+      labels.push(...page.Labels);
+      read += page.Rows.length;
+      if (keyset) afterKey = CompositeKey.FromEntityRecord(entity, page.Rows[page.Rows.length - 1]);
+    }
+    return labels;
+  }
+
+  /** One page of the target column after `Read` rows (by `AfterKey` when keyset): its rows, class labels and the view's total. */
+  private static async readLabelPage(
+    p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined, page: LabelPageRequest,
+  ): Promise<{ readonly Rows: LabelRow[]; readonly Labels: string[]; readonly Total: number }> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<LabelRow>({
+      EntityName: p.TargetEntity, Fields: [p.TargetVariable, ...page.Keys], OrderBy: page.Keys.join(', '), MaxRows: LABEL_PAGE_ROWS, ResultType: 'simple',
+      ...(page.Keyset ? { AfterKey: page.AfterKey } : { StartRow: page.Read }),
+    }, user);
+    if (!r.Success) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} failed: ${r.ErrorMessage}`);
+    const labels = r.Results.flatMap((row) => {
+      const label = TaskTypeRules.ClassLabel(row[p.TargetVariable]);
+      return label === null ? [] : [label];
+    });
+    // A view that reports no total has returned every row it holds.
+    return { Rows: r.Results, Labels: labels, Total: typeof r.TotalRowCount === 'number' ? r.TotalRowCount : page.Read + r.Results.length };
+  }
+
+  /**
+   * Saves a new pipeline bound to version 1 of its unit and protocol. Archive and hold outcomes save nothing and
+   * return the reason; a failed save deletes whatever this call created.
+   */
+  public static async SaveWithBindings(pipeline: MJMLTrainingPipelineEntity, targetEntity: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<WizardSaveResult> {
+    const fields: WizardPipelineFields = {
+      Name: pipeline.Name, TargetVariable: pipeline.TargetVariable, ProblemType: pipeline.ProblemType, AsOfStrategy: pipeline.AsOfStrategy,
+      ValidationStrategy: pipeline.ValidationStrategy, LeakageGuard: pipeline.LeakageGuard, FeatureSteps: pipeline.FeatureSteps,
+      Hyperparameters: pipeline.Hyperparameters, TargetEntity: targetEntity,
+    };
+    const plan = PipelineWizardBindings.Plan(fields, await PipelineWizardBindings.ReadClassLabels(fields, provider, user), UtcDay.UtcDayIso(new Date()));
+    if (plan.Kind !== 'plan') return { Ok: false, Reason: PipelineWizardBindings.stopReason(plan) };
+    const author: Actor = { kind: 'human', userId: user ? user.ID : provider.CurrentUser.ID };
+    const unit = await PipelineWizardBindings.saveUnit(plan.Unit, author, provider, user);
+    if (unit.Ok === false) return unit;
+    const protocol = await PipelineWizardBindings.saveProtocol(unit.Spec, plan.Protocol, PipelineWizardBindings.ProtocolNameFor(fields.Name), author, provider, user);
+    if (protocol.Ok === false) return PipelineWizardBindings.undo([unit.Row], protocol.Reason);
+    PipelineWizardBindings.bind(pipeline, unit.Spec, unit.Row.ID, protocol.Row.ID);
+    if (await pipeline.Save()) return { Ok: true };
+    return PipelineWizardBindings.undo([protocol.Row, unit.Row], `saving the pipeline: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`);
+  }
+
+  /** Why a pipeline gets no binding, in the wizard's words: an undecided adverse class names the control that decides it. */
+  private static stopReason(stop: LegacyStop): string {
+    if (stop.Kind === 'hold' && stop.Reason === ADVERSE_CLASS_HOLD_REASON) return WIZARD_ADVERSE_CLASS_REASON;
+    return `${stop.Kind === 'hold' ? 'the pipeline cannot be bound to a Prediction Unit yet' : 'the pipeline has no Prediction Unit form'}: ${stop.Reason}`;
+  }
+
+  /** Points the pipeline at both versions, with the target columns the server derives from the unit. */
+  private static bind(pipeline: MJMLTrainingPipelineEntity, unit: PredictionUnitSpec, unitId: string, protocolId: string): void {
+    pipeline.PredictionUnitID = unitId;
+    pipeline.EvaluationProtocolID = protocolId;
+    pipeline.TargetVariable = PredictionUnit.DescribeLabelRule(unit);
+    pipeline.ProblemType = TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome);
+  }
+
+  private static async saveUnit(
+    draft: UnitDraft, author: Actor, provider: IMetadataProvider, user: UserInfo | undefined,
+  ): Promise<{ readonly Ok: true; readonly Row: MJMLPredictionUnitEntity; readonly Spec: PredictionUnitSpec } | { readonly Ok: false; readonly Reason: string }> {
+    const row = await provider.GetEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', user);
+    row.NewRecord();
+    const id = ProtocolRows.NewVersionRowID();
+    ProtocolRows.ApplyPredictionUnitDraftToRow(row, draft, { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: author });
+    if (!(await row.Save())) return { Ok: false, Reason: `saving the Prediction Unit: ${row.LatestResult?.CompleteMessage || 'save failed'}` };
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) return PipelineWizardBindings.undo([row], `the saved Prediction Unit does not parse: ${parsed.Errors.join('; ')}`);
+    return { Ok: true, Row: row, Spec: parsed.Value };
+  }
+
+  private static async saveProtocol(
+    unit: PredictionUnitSpec, inputs: WizardBindingPlan['Protocol'], name: string, author: Actor, provider: IMetadataProvider, user: UserInfo | undefined,
+  ): Promise<{ readonly Ok: true; readonly Row: MJMLEvaluationProtocolEntity } | { readonly Ok: false; readonly Reason: string }> {
+    const row = await provider.GetEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', user);
+    row.NewRecord();
+    const id = ProtocolRows.NewVersionRowID();
+    ProtocolRows.ApplyProtocolDraftToRow(row, LegacyPipelines.LegacyProtocolDraft(unit, inputs, name), { ID: id, LineageRootID: id, Version: 1, AuthoredBy: author, Description: null });
+    if (await row.Save()) return { Ok: true, Row: row };
+    return { Ok: false, Reason: `saving the Evaluation Protocol: ${row.LatestResult?.CompleteMessage || 'save failed'}` };
+  }
+
+  /** Deletes rows this call created (newest first) and returns the reason, naming any row that could not be deleted. */
+  private static async undo(rows: readonly BaseEntity[], reason: string): Promise<{ readonly Ok: false; readonly Reason: string }> {
+    const left: string[] = [];
+    for (const row of rows) {
+      if (!(await row.Delete())) left.push(`${row.EntityInfo?.Name || 'row'} ${row.PrimaryKey.ToString()}: ${row.LatestResult?.CompleteMessage || 'delete failed'}`);
+    }
+    return { Ok: false, Reason: left.length === 0 ? reason : `${reason}; could not delete ${left.join(', ')}` };
+  }
+}

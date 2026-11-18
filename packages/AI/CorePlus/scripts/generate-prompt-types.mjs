@@ -15,20 +15,18 @@
 
 import ts from 'typescript';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve, dirname, isAbsolute } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PACKAGE_ROOT = resolve(__dirname, '..');
-const SRC_DIR = resolve(PACKAGE_ROOT, 'src');
-const OUTPUT_DIR = resolve(PACKAGE_ROOT, 'generated-for-prompt');
+const DEFAULT_PACKAGE_ROOT = resolve(__dirname, '..');
 
 /**
- * Configuration for each source file to process.
+ * Default configuration for `@memberjunction/ai-core-plus` when invoked with no CLI flags.
  * `supplementary` adds extra context below the type block — used for non-obvious patterns
  * that aren't expressible in the type signature alone.
  */
-const FILE_CONFIGS = [
+const DEFAULT_FILE_CONFIGS = [
     {
         src: 'response-forms.ts',
         supplementary: null,
@@ -77,6 +75,41 @@ const FILE_CONFIGS = [
         ].join('\n'),
     },
 ];
+
+function parseCliArgs(argv) {
+    let packageArg = null;
+    let configArg = null;
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
+        if (arg === '--package' && argv[i + 1]) {
+            packageArg = argv[++i];
+        } else if (arg.startsWith('--package=')) {
+            packageArg = arg.slice('--package='.length);
+        } else if (arg === '--config' && argv[i + 1]) {
+            configArg = argv[++i];
+        } else if (arg.startsWith('--config=')) {
+            configArg = arg.slice('--config='.length);
+        }
+    }
+    return { packageArg, configArg };
+}
+
+async function loadFileConfigs(packageRoot, configArg) {
+    if (!configArg) {
+        return DEFAULT_FILE_CONFIGS;
+    }
+    const candidateFromCwd = isAbsolute(configArg) ? configArg : resolve(process.cwd(), configArg);
+    const configPath = existsSync(candidateFromCwd)
+        ? candidateFromCwd
+        : resolve(packageRoot, configArg);
+
+    if (configPath.endsWith('.json')) {
+        const parsed = JSON.parse(readFileSync(configPath, 'utf-8'));
+        return Array.isArray(parsed) ? parsed : parsed.files;
+    }
+    const mod = await import(pathToFileURL(configPath).href);
+    return mod.FILE_CONFIGS ?? mod.default;
+}
 
 // ---------------------------------------------------------------------------
 // AST helpers
@@ -159,22 +192,45 @@ function emitPropertyType(typeNode, sourceFile, indent) {
 }
 
 /**
+ * Emit a single property or method signature member at the given indentation.
+ */
+function emitMember(member, sourceFile, memberIndent) {
+    if (ts.isPropertySignature(member)) {
+        const name = member.name.getText(sourceFile);
+        const opt = member.questionToken ? '?' : '';
+        const typeText = member.type
+            ? emitPropertyType(member.type, sourceFile, memberIndent)
+            : 'unknown';
+        const brief = getBriefDoc(member, sourceFile);
+        const comment = brief ? `  // ${brief}` : '';
+        return `${memberIndent}${name}${opt}: ${typeText};${comment}\n`;
+    }
+    if (ts.isMethodSignature(member)) {
+        const name = member.name.getText(sourceFile);
+        const opt = member.questionToken ? '?' : '';
+        const typeParams =
+            member.typeParameters && member.typeParameters.length > 0
+                ? '<' + member.typeParameters.map(tp => tp.getText(sourceFile)).join(', ') + '>'
+                : '';
+        const params = member.parameters.map(p => p.getText(sourceFile)).join(', ');
+        const retType = member.type
+            ? emitPropertyType(member.type, sourceFile, memberIndent)
+            : 'void';
+        const brief = getBriefDoc(member, sourceFile);
+        const comment = brief ? `  // ${brief}` : '';
+        return `${memberIndent}${name}${opt}${typeParams}(${params}): ${retType};${comment}\n`;
+    }
+    return '';
+}
+
+/**
  * Emit a TypeLiteral (anonymous object type) with brief inline comments.
  */
 function emitTypeLiteral(node, sourceFile, indent) {
     let result = '{\n';
+    const innerIndent = indent + '    ';
     for (const member of node.members) {
-        if (ts.isPropertySignature(member)) {
-            const name = member.name.getText(sourceFile);
-            const opt = member.questionToken ? '?' : '';
-            const innerIndent = indent + '    ';
-            const typeText = member.type
-                ? emitPropertyType(member.type, sourceFile, innerIndent)
-                : 'unknown';
-            const brief = getBriefDoc(member, sourceFile);
-            const comment = brief ? `  // ${brief}` : '';
-            result += `${innerIndent}${name}${opt}: ${typeText};${comment}\n`;
-        }
+        result += emitMember(member, sourceFile, innerIndent);
     }
     result += `${indent}}`;
     return result;
@@ -225,16 +281,7 @@ function emitInterface(node, sourceFile) {
     result += ' {\n';
 
     for (const member of node.members) {
-        if (ts.isPropertySignature(member)) {
-            const propName = member.name.getText(sourceFile);
-            const opt = member.questionToken ? '?' : '';
-            const typeText = member.type
-                ? emitPropertyType(member.type, sourceFile, '    ')
-                : 'unknown';
-            const brief = getBriefDoc(member, sourceFile);
-            const comment = brief ? `  // ${brief}` : '';
-            result += `    ${propName}${opt}: ${typeText};${comment}\n`;
-        }
+        result += emitMember(member, sourceFile, '    ');
     }
 
     result += '}';
@@ -267,8 +314,8 @@ function emitTypeAlias(node, sourceFile) {
 // File processing
 // ---------------------------------------------------------------------------
 
-function processFile(config) {
-    const filePath = resolve(SRC_DIR, config.src);
+function processFile(srcDir, config) {
+    const filePath = resolve(srcDir, config.src);
     const sourceText = readFileSync(filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(
         config.src,
@@ -302,21 +349,31 @@ function processFile(config) {
 // Main
 // ---------------------------------------------------------------------------
 
-function main() {
-    if (!existsSync(OUTPUT_DIR)) {
-        mkdirSync(OUTPUT_DIR, { recursive: true });
+async function main() {
+    const { packageArg, configArg } = parseCliArgs(process.argv.slice(2));
+    const packageRoot = packageArg
+        ? isAbsolute(packageArg)
+            ? packageArg
+            : resolve(process.cwd(), packageArg)
+        : DEFAULT_PACKAGE_ROOT;
+    const srcDir = resolve(packageRoot, 'src');
+    const outputDir = resolve(packageRoot, 'generated-for-prompt');
+    const fileConfigs = await loadFileConfigs(packageRoot, configArg);
+
+    if (!existsSync(outputDir)) {
+        mkdirSync(outputDir, { recursive: true });
     }
 
     console.log('Generating prompt-optimized type references...');
 
-    for (const config of FILE_CONFIGS) {
+    for (const config of fileConfigs) {
         const outputFile = `${config.src}.generated-for-prompt.md`;
-        const outputPath = resolve(OUTPUT_DIR, outputFile);
-        const content = processFile(config);
+        const outputPath = resolve(outputDir, outputFile);
+        const content = processFile(srcDir, config);
         writeFileSync(outputPath, content, 'utf-8');
 
         const lineCount = content.split('\n').length;
-        const srcPath = resolve(SRC_DIR, config.src);
+        const srcPath = resolve(srcDir, config.src);
         const srcLineCount = readFileSync(srcPath, 'utf-8').split('\n').length;
         console.log(`  ${config.src} (${srcLineCount} lines) → ${outputFile} (${lineCount} lines)`);
     }

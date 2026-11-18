@@ -108,6 +108,7 @@ describe('SearchAction', () => {
         it.each<[string, Record<string, unknown>]>([
             ['a tenant', { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: null }],
             ['a secondary dimension', { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } }],
+            ['host-assigned search scopes', { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, SearchScopeIDs: [TENANT] }],
         ])('refuses when the run carries %s, without searching, and points at Scoped Search', async (_label, runScope) => {
             const result = await run(scoped(runScope));
             expect(result.Success).toBe(false);

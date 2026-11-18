@@ -90,6 +90,8 @@ export interface SessionSnapshot {
     OwnerUserID: string;
     /** `Conversation.ExternalID` (anonymous scope id), or null. */
     ConversationExternalID: string | null;
+    /** Whether the caller could read the session's conversation. */
+    ConversationReadable: boolean;
     Status: 'Active' | 'Idle' | 'Closed';
     /** `AIAgentSession.Config` as stored. */
     ConfigRaw: string | null;
@@ -660,7 +662,7 @@ export class RealtimeSessionVerificationWorkflow {
             return notFound;
         }
         const decision = AuthorizeSessionAccess(
-            { SessionUserID: session.OwnerUserID, ConversationExternalID: session.ConversationExternalID },
+            { SessionUserID: session.OwnerUserID, ConversationExternalID: session.ConversationExternalID, ConversationReadable: session.ConversationReadable },
             caller.ContextUser,
         );
         if (decision.Allowed === false) {

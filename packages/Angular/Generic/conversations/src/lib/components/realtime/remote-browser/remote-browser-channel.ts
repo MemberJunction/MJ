@@ -1,11 +1,20 @@
 import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
-import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
+import {
+  IsSafeRasterImageDataUrl,
+  RemoteBrowserHumanInputEvent,
+  RemoteBrowserSnapshotView,
+  RemoteBrowserSurfaceComponent,
+  RemoteBrowserViewportSize,
+  type RemoteBrowserHistoryEntry,
+  type SerializedRemoteBrowserState,
+} from './remote-browser-surface.component';
+import { IsAllowedExternalMediaUrl } from '../media/media-channel-state';
 import {
   MapToolToAction,
   REMOTE_BROWSER_TOOL_DEFINITIONS,
@@ -24,16 +33,20 @@ const EXECUTE_REMOTE_BROWSER_ACTION_MUTATION = `
   mutation ExecuteRemoteBrowserAction(
     $agentSessionID: String!, $kind: String!, $url: String, $selector: String,
     $x: Float, $y: Float, $text: String, $key: String,
-    $deltaX: Float, $deltaY: Float, $ms: Float
+    $deltaX: Float, $deltaY: Float, $ms: Float,
+    $ref: String, $valuesJson: String
   ) {
     ExecuteRemoteBrowserAction(
       agentSessionID: $agentSessionID, kind: $kind, url: $url, selector: $selector,
       x: $x, y: $y, text: $text, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY, ms: $ms
+      deltaX: $deltaX, deltaY: $deltaY, ms: $ms,
+      ref: $ref, valuesJson: $valuesJson
     ) {
       Success
       CurrentUrl
       Detail
+      ObservationJson
+      FilledJson
     }
   }
 `;
@@ -44,6 +57,8 @@ interface ExecuteRemoteBrowserActionResult {
     Success: boolean;
     CurrentUrl: string | null;
     Detail: string | null;
+    ObservationJson?: string | null;
+    FilledJson?: string | null;
   } | null;
 }
 
@@ -175,6 +190,16 @@ const RELAY_HUMAN_INPUT_MUTATION = `
 `;
 
 /**
+ * VIEWPORT-RESIZE mutation — resizes the already-open remote browser page in place to match the usable
+ * drawer area below the toolbar, then pushes a fresh screencast frame without navigating or reloading.
+ */
+const RESIZE_VIEWPORT_MUTATION = `
+  mutation ResizeRemoteBrowserViewport($agentSessionID: String!, $width: Int!, $height: Int!) {
+    ResizeRemoteBrowserViewport(agentSessionID: $agentSessionID, width: $width, height: $height)
+  }
+`;
+
+/**
  * COPY-OUT query — reads the remote page's current text selection so the surface can write it to the LOCAL
  * clipboard on a `copy` / Cmd+C (the mirror of the `'text'` paste-in path). Returns `''` when nothing is
  * selected, no live browser exists, or the backend lacks `HumanTakeover`.
@@ -261,6 +286,10 @@ interface RemoteBrowserToolResult {
   currentUrl?: string;
   /** Human-readable detail (e.g. extracted page text for `browser_GetPageText`, or an error). */
   detail?: string;
+  /** Structured DOM observation when `browser_Inspect` succeeds. */
+  observation?: JSONValue;
+  /** Per-field fill verification results when `browser_Fill` succeeds. */
+  filled?: JSONValue;
   /** Error description when `success` is false. */
   error?: string;
 }
@@ -323,6 +352,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /** Subscription to the bound surface's `HumanInput` output, torn down on unbind/dispose. */
   private humanInputSub: Subscription | null = null;
 
+  /** Subscription to the bound surface's `ViewportResize` output, torn down on unbind/dispose. */
+  private viewportResizeSub: Subscription | null = null;
+
   /**
    * Whether the server confirmed it is PUSHING screencast frames for this session (`ScreenStreaming`
    * supported). When `true` the surface renders pushed frames on its canvas and skips its poll, and
@@ -343,6 +375,16 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * as somebody else navigating — the first page of a session was nobody's takeover.
    */
   private lastNotedUrl: string | null = null;
+  /** Sequential history of pages visited in this session (capped for compact persistence). */
+  private visitedHistory: RemoteBrowserHistoryEntry[] = [];
+  /** Latest bounded screenshot data URL captured for post-session review & resume. */
+  private lastScreenshotDataUrl: string | null = null;
+  /** Debounce timer for saving updated screenshots without hammering storage on 60fps streams. */
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private static readonly MAX_HISTORY_ENTRIES = 50;
+  private static readonly MAX_SAVED_SCREENSHOT_BYTES = 1_500_000;
+  private static readonly SCREENSHOT_SAVE_DEBOUNCE_MS = 1500;
 
   /**
    * How many browser operations the AGENT itself has in flight right now (#3496).
@@ -425,6 +467,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // Reading the page is what exposure limits: its text is the page's state, and what the vision model makes of the
       // screenshot (or where it finds an element) is derived from its pixels. A goal's result reports what the browser found.
       Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix, 'agent', {
+        [REMOTE_BROWSER_TOOL_NAMES.Inspect]: 'state',
         [REMOTE_BROWSER_TOOL_NAMES.GetPageText]: 'state',
         [REMOTE_BROWSER_TOOL_NAMES.DescribePage]: 'pixels',
         [REMOTE_BROWSER_TOOL_NAMES.LocateElement]: 'pixels',
@@ -464,7 +507,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   private ensureVideoBridge(): ChannelInboundVideoBridge | null {
     if (!this.videoBridge && this.Context) {
-      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
+      const descriptor = this.GetDescriptor();
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this, {
+        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+      });
     }
     if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
       this.videoBridge.Start?.();
@@ -492,12 +541,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
+    if (this.lastNotedUrl && !instance.CurrentUrl) {
+      instance.CurrentUrl = this.lastNotedUrl;
+    }
+    if (this.lastScreenshotDataUrl && !instance.ScreenshotDataUrl) {
+      instance.ScreenshotDataUrl = this.lastScreenshotDataUrl;
+    }
     instance.Fetch = () => this.fetchSnapshot();
     // Copy-out: the surface reads the remote selection through this on a local `copy` and writes it locally.
     instance.FetchSelection = () => this.fetchSelection();
     instance.Interactive = true;
     this.ensureVideoBridge();
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
+    this.viewportResizeSub = instance.ViewportResize?.subscribe((size) => this.relayViewportResize(size)) ?? null;
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
     void this.startScreencast(instance);
     void this.startAudioStream(instance);
@@ -511,8 +567,11 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override UnbindSurface(): void {
+    this.flushSaveState();
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.viewportResizeSub?.unsubscribe();
+    this.viewportResizeSub = null;
     this.audioMutedSub?.unsubscribe();
     this.audioMutedSub = null;
     void this.stopScreencast();
@@ -521,12 +580,16 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override Dispose(): void {
+    this.flushSaveState();
+    this.clearSaveTimer();
     this.clearScreencastTrailingTimer();
     this.pendingScreencastFrame = null;
     this.videoBridge?.Stop();
     this.videoBridge = null;
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.viewportResizeSub?.unsubscribe();
+    this.viewportResizeSub = null;
     this.audioMutedSub?.unsubscribe();
     this.audioMutedSub = null;
     void this.stopScreencast();
@@ -632,6 +695,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
 
     this.surface?.RenderFrame(dataBase64);
+    this.recordScreenshotFrame(`data:image/jpeg;base64,${dataBase64}`);
 
     const now = Date.now();
     const cadenceMs = this.getNegotiatedVideoCadenceMs();
@@ -772,6 +836,25 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   /**
+   * Relays the surface's measured usable viewport size (`{ Width, Height }`) to the server's
+   * {@link RESIZE_VIEWPORT_MUTATION}, which resizes the already-open Playwright page in place and pushes a
+   * fresh screencast frame without navigating or reloading. Best-effort and fire-and-forget.
+   *
+   * @param size The usable drawer viewport dimensions in CSS pixels.
+   */
+  private relayViewportResize(size: RemoteBrowserViewportSize): void {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId || size.Width <= 0 || size.Height <= 0) {
+      return;
+    }
+    void this.Context?.ExecuteServerAction(RESIZE_VIEWPORT_MUTATION, {
+      agentSessionID: sessionId,
+      width: Math.floor(size.Width),
+      height: Math.floor(size.Height),
+    });
+  }
+
+  /**
    * Reads the remote page's current selection for COPY-OUT — backs the surface's `FetchSelection`. Awaits
    * the `GetRemoteBrowserSelection` query and returns its text. Best-effort by contract
    * ({@link RemoteBrowserSelectionFetcher}): returns `''` when no session is live or the query fails, so a
@@ -817,8 +900,103 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
     const snapshot = data?.RemoteBrowserSnapshot ?? null;
+    if (snapshot?.ScreenshotBase64) {
+      this.recordScreenshotFrame(`data:image/png;base64,${snapshot.ScreenshotBase64}`);
+    }
     this.notePageChange(snapshot?.CurrentUrl ?? null, 'observed');
     return snapshot;
+  }
+
+  /** Returns a compact summary of the active remote browser URL and navigation history for surface notes and peek calls. */
+  public override GetState(): JSONObject {
+    return {
+      currentUrl: this.lastNotedUrl ?? null,
+      historyCount: this.visitedHistory.length,
+      recentUrls: this.visitedHistory.slice(-5).map((h) => h.Url),
+    };
+  }
+
+  /** Serializes the visited page history and latest bounded screenshot for review / resume. */
+  public override SerializeState(): string | null {
+    if (!this.lastNotedUrl && this.visitedHistory.length === 0 && !this.lastScreenshotDataUrl) {
+      return null;
+    }
+    const payload: SerializedRemoteBrowserState = {
+      V: 1,
+      CurrentUrl: this.lastNotedUrl,
+      History: this.visitedHistory,
+      ...(this.lastScreenshotDataUrl ? { ScreenshotDataUrl: this.lastScreenshotDataUrl } : {}),
+    };
+    return JSON.stringify(payload);
+  }
+
+  /** Restores saved URL history and screenshot metadata from a prior session leg. */
+  public override RestoreState(stateJson: string): boolean {
+    const parsed = SafeJSONParse<Partial<SerializedRemoteBrowserState>>(stateJson);
+    if (!parsed || typeof parsed !== 'object') {
+      return false;
+    }
+    const safeUrl =
+      typeof parsed.CurrentUrl === 'string' && IsAllowedExternalMediaUrl(parsed.CurrentUrl)
+        ? parsed.CurrentUrl.trim()
+        : null;
+    const history = Array.isArray(parsed.History)
+      ? parsed.History
+          .filter(
+            (h): h is RemoteBrowserHistoryEntry =>
+              h != null &&
+              typeof h === 'object' &&
+              typeof h.Url === 'string' &&
+              IsAllowedExternalMediaUrl(h.Url),
+          )
+          .slice(-RemoteBrowserChannel.MAX_HISTORY_ENTRIES)
+      : [];
+    const screenshot =
+      typeof parsed.ScreenshotDataUrl === 'string' &&
+      IsSafeRasterImageDataUrl(parsed.ScreenshotDataUrl) &&
+      parsed.ScreenshotDataUrl.length <= RemoteBrowserChannel.MAX_SAVED_SCREENSHOT_BYTES
+        ? parsed.ScreenshotDataUrl
+        : null;
+    if (!safeUrl && history.length === 0 && !screenshot) {
+      return false;
+    }
+    this.lastNotedUrl = safeUrl;
+    this.visitedHistory = history;
+    this.lastScreenshotDataUrl = screenshot;
+    return true;
+  }
+
+  private recordScreenshotFrame(dataUrl: string): void {
+    if (!IsSafeRasterImageDataUrl(dataUrl) || dataUrl.length > RemoteBrowserChannel.MAX_SAVED_SCREENSHOT_BYTES) {
+      return;
+    }
+    this.lastScreenshotDataUrl = dataUrl;
+    this.scheduleSaveState();
+  }
+
+  private scheduleSaveState(): void {
+    if (this.saveTimer !== null || !this.Context) {
+      return;
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.flushSaveState();
+    }, RemoteBrowserChannel.SCREENSHOT_SAVE_DEBOUNCE_MS);
+  }
+
+  private clearSaveTimer(): void {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+  }
+
+  private flushSaveState(): void {
+    this.clearSaveTimer();
+    const serialized = this.SerializeState();
+    if (serialized) {
+      this.Context?.RequestSave(serialized);
+    }
   }
 
   /**
@@ -856,8 +1034,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const firstSighting = this.lastNotedUrl === null;
     this.lastNotedUrl = next;
+    if (IsAllowedExternalMediaUrl(next)) {
+      const lastEntry = this.visitedHistory[this.visitedHistory.length - 1];
+      if (!lastEntry || lastEntry.Url !== next) {
+        this.visitedHistory = [
+          ...this.visitedHistory.slice(-(RemoteBrowserChannel.MAX_HISTORY_ENTRIES - 1)),
+          { Url: next, VisitedAt: new Date().toISOString() },
+        ];
+      }
+      this.flushSaveState();
+    }
     // A change seen WHILE the agent is driving is the agent's own, whichever feed spotted it first.
     const byAgent = cause === 'agent' || this.agentDrivingDepth > 0;
+    this.RecordChange({ Author: byAgent ? 'agent' : 'user', Perceive: false });
     this.Context?.SendContextNote(
       byAgent || firstSighting
         ? `[browser] current page: ${next}`
@@ -944,7 +1133,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
       // the live-view bar, which in streaming mode has no poll feeding it.
       this.notePageChange(result.CurrentUrl, 'agent');
-      return this.ok(result.CurrentUrl, result.Detail);
+      return this.ok(result.CurrentUrl, result.Detail, result.ObservationJson, result.FilledJson);
     });
   }
 
@@ -962,6 +1151,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       deltaX: action.DeltaX ?? null,
       deltaY: action.DeltaY ?? null,
       ms: action.Ms ?? null,
+      ...(action.Ref !== undefined ? { ref: action.Ref } : {}),
+      ...(action.ValuesJson !== undefined ? { valuesJson: action.ValuesJson } : {}),
     };
   }
 
@@ -1111,13 +1302,32 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   /** Builds a successful tool-result JSON string for the model. */
-  private ok(currentUrl: string | null, detail: string | null): string {
+  private ok(
+    currentUrl: string | null,
+    detail: string | null,
+    observationJson?: string | null,
+    filledJson?: string | null,
+  ): string {
     const result: RemoteBrowserToolResult = { success: true };
     if (currentUrl) {
       result.currentUrl = currentUrl;
     }
     if (detail) {
       result.detail = detail;
+    }
+    if (observationJson) {
+      try {
+        result.observation = JSON.parse(observationJson) as JSONValue;
+      } catch {
+        // Ignore malformed observation JSON
+      }
+    }
+    if (filledJson) {
+      try {
+        result.filled = JSON.parse(filledJson) as JSONValue;
+      } catch {
+        // Ignore malformed filled JSON
+      }
     }
     return JSON.stringify(result);
   }

@@ -83,6 +83,12 @@ export class MLModelScoreEnricher extends QueryResultEnricherBase {
       return rows;
     }
 
+    // The scorer reads every row through the caller's provider and has no global fallback, so a
+    // call without one is a wiring bug: say so plainly instead of failing deep inside the runner.
+    if (!provider) {
+      throw new Error('MLModelScoreEnricher: a provider is required to score query rows (RunQuery passes its own provider).');
+    }
+
     // Score WITHOUT write-back → ephemeral predictions. The model supplies the target
     // entity, so bare primary keys are a sufficient `records` scope.
     const result = await this.createRunner().run({

@@ -17,7 +17,8 @@ import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
-import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { StripUnsafeObjectKeys } from '../unsafe-object-keys';
 import { ActionResult } from '@memberjunction/actions-base';
 
 /**
@@ -395,6 +396,13 @@ export abstract class BaseAgentType {
                 response = promptResult.result as T;
             }
             
+            // Model output can carry injected text. Drop keys such as `__proto__` so no later walk of
+            // this object can follow them onto Object.prototype.
+            const removedKeys = StripUnsafeObjectKeys(response);
+            if (removedKeys.length > 0) {
+                LogStatus(`${this.constructor.name}: ignored unsafe keys in response: ${removedKeys.join(", ")}`);
+            }
+
             // Clean validation syntax from the response
             response = this._jsonValidator.cleanValidationSyntax<T>(response);
             

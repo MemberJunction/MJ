@@ -12,6 +12,7 @@ import {
     LogError,
     LogStatus,
     RunView,
+    SharedLoad,
     UserInfo,
 } from '@memberjunction/core';
 import { MJWebSearchProviderEntity } from '@memberjunction/core-entities';
@@ -84,7 +85,8 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
      * what was a read failure.
      */
     private _loadError: string | null = null;
-    private _loading: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _provider: IMetadataProvider | undefined;
 
     // Constructor must be public to satisfy BaseSingleton.getInstance()
@@ -110,7 +112,9 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
      * Load provider metadata and initialise every driver. Cheap no-op once loaded.
      *
      * Concurrent callers share one in-flight load rather than each issuing their own RunView —
-     * an agent fan-out can call `Config` from a dozen places in the same tick.
+     * an agent fan-out can call `Config` from a dozen places in the same tick. A `forceRefresh`
+     * call that arrives during a load gets one more load after it, never one alongside it, so an
+     * older read can't land after a newer one.
      *
      * @param forceRefresh - reload even if already configured (after an admin edits providers)
      */
@@ -125,15 +129,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
         if (this._loaded && !forceRefresh) {
             return;
         }
-        if (this._loading && !forceRefresh) {
-            return this._loading;
-        }
-        this._loading = this.loadProviders(contextUser);
-        try {
-            await this._loading;
-        } finally {
-            this._loading = null;
-        }
+        return this._load.Run(forceRefresh, () => this.loadProviders(contextUser));
     }
 
     /**

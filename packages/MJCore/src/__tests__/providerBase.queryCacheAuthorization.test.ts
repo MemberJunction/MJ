@@ -29,16 +29,18 @@ import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, RecordDependency } from '../generic/securityInfo';
 import { RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
-import { QueryInfo, QueryPermissionInfo } from '../generic/queryInfo';
+import { QueryDependencyInfo, QueryInfo, QueryPermissionInfo, QuerySQLInfo } from '../generic/queryInfo';
 import { Metadata } from '../generic/metadata';
 
 const FINANCE_ID = '11111111-1111-1111-1111-111111111111';
 const SALES_ID = '22222222-2222-2222-2222-222222222222';
 const DENIED_ID = '33333333-3333-3333-3333-333333333333';
+const OWNER_ID = '44444444-4444-4444-4444-444444444444';
+const DATED_ID = '55555555-5555-5555-5555-555555555555';
 
-/** QueryInfo-shaped stub: identity + category + a role-check verdict. */
-function queryStub(id: string, name: string, categoryPath: string, canRun: boolean): QueryInfo {
-    return { ID: id, Name: name, CategoryPath: categoryPath, UserCanRun: () => canRun } as unknown as QueryInfo;
+/** QueryInfo-shaped stub: identity + category + a role-check verdict (+ SQL for the Context scan). */
+function queryStub(id: string, name: string, categoryPath: string, canRun: boolean, sql = 'SELECT 1'): QueryInfo {
+    return { ID: id, Name: name, CategoryPath: categoryPath, SQL: sql, UserCanRun: () => canRun } as unknown as QueryInfo;
 }
 
 /**
@@ -50,12 +52,28 @@ class QueryAuthTestProvider extends ProviderBase {
         return this.ResolveQueryCacheAuthorization(params, user);
     }
 
+    /** The seam resolves from the provider's query metadata only when the provider loads it. */
+    public override get LoadsQueryMetadata(): boolean {
+        return true;
+    }
+
     public override get Queries(): QueryInfo[] {
         return [
             queryStub(FINANCE_ID, 'Revenue Summary', '/Finance/', true),
             queryStub(SALES_ID, 'Revenue Summary', '/Sales/', true),
             queryStub(DENIED_ID, 'Board Metrics', '/Finance/', false),
+            // Reads Context.UserID itself and composes Dated Rows, whose dialect variant reads Context.Today.
+            queryStub(OWNER_ID, 'Owner Rows', '/Finance/', true, 'SELECT * FROM {{query:"Finance/Dated Rows"}} d WHERE o = {{ Context.UserID }}'),
+            queryStub(DATED_ID, 'Dated Rows', '/Finance/', true),
         ];
+    }
+
+    public override get QueryDependencies(): QueryDependencyInfo[] {
+        return [{ QueryID: OWNER_ID.toLowerCase(), DependsOnQueryID: DATED_ID } as QueryDependencyInfo];
+    }
+
+    public override get QuerySQLs(): QuerySQLInfo[] {
+        return [{ QueryID: DATED_ID, SQL: "SELECT 1 WHERE d = '{{ Context.Today }}'" } as QuerySQLInfo];
     }
 
     // --- Required abstract implementations (unused by the seam under test) ---
@@ -100,7 +118,12 @@ describe('ProviderBase.ResolveQueryCacheAuthorization (B45/B46 cache-serve seam)
 
     it('resolves by QueryID and reports the canonical category path', () => {
         const r = provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, user);
-        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary', queryId: FINANCE_ID });
+        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary', contextTokens: [], queryId: FINANCE_ID });
+    });
+
+    it('reports the Context tokens the query reads, with what it composes and their dialect variants (#4789 A17)', () => {
+        const r = provider.auth({ QueryID: OWNER_ID } as RunQueryParams, user);
+        expect(r.contextTokens).toEqual(['Context.UserID', 'Context.Today']);
     });
 
     it('resolves by name case- and whitespace-insensitively', () => {
@@ -191,5 +214,19 @@ describe('ProviderBase.ResolveQueryCacheAuthorization uses its own query permiss
         const provider = new OwnPermissionsProvider();
 
         expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, otherUser).authorized).toBe(false);
+    });
+});
+
+describe('ProviderBase.ResolveQueryCacheAuthorization without loaded query metadata', () => {
+    class NoQueryMetadataProvider extends QueryAuthTestProvider {
+        public override get LoadsQueryMetadata(): boolean {
+            return false;
+        }
+    }
+
+    it('reports every request unresolvable, so the gate falls back to its warmer rule', () => {
+        const provider = new NoQueryMetadataProvider();
+        const user = new UserInfo(null as unknown as IMetadataProvider, { ID: 'user-1', Email: 'u@test' });
+        expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, user)).toEqual({ resolvable: false, authorized: false });
     });
 });

@@ -1,0 +1,252 @@
+/**
+ * BaseAgent and taint inside a task graph:
+ *
+ * - S2: a sub-agent starts tainted when its parent is (the same `SecurityEnvelope.IsRunTainted` seed a graph's
+ *   agent node uses), keeps the parent's node envelope, and the parent absorbs the child's taint back.
+ * - M1: a run under a task-graph envelope refuses a `disallowWhenTainted` action once it is tainted, whenever the
+ *   taint arrived — not only when it started tainted.
+ *
+ * The BaseAgent logic is real; the action engine and the sub-agent runner are the boundaries.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { UserInfo } from '@memberjunction/core';
+import {
+    TAINTED_EGRESS_BLOCKED,
+    TASK_SECURITY_ENVELOPE_VERSION,
+    type AgentAction,
+    type AgentSubAgentRequest,
+    type AgentTaintedSource,
+    type ExecuteAgentParams,
+    type MJAIAgentEntityExtended,
+    type MJAIAgentRunStepEntityExtended,
+    type TaskSecurityEnvelope,
+} from '@memberjunction/ai-core-plus';
+import type { MJActionEntityExtended } from '@memberjunction/actions-base';
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return { ...actual, LogError: vi.fn(), LogStatus: vi.fn(), LogStatusEx: vi.fn(), LogErrorEx: vi.fn(), IsVerboseLoggingEnabled: vi.fn(() => false) };
+});
+
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: {
+        get Instance() {
+            return { Config: async (): Promise<void> => undefined, Agents: [], AgentRelationships: [], AgentActions: [], GetSubAgents: (): unknown[] => [] };
+        },
+    },
+}));
+
+const h = vi.hoisted(() => ({
+    /** Every RunActionParams the mocked engine received. */
+    dispatched: [] as Array<Record<string, unknown>>,
+    /** Every ExecuteAgentParams the mocked sub-agent runner received. */
+    childRuns: [] as Array<Record<string, unknown>>,
+    /** What the next sub-agent run reports it ingested. */
+    childTaint: [] as AgentTaintedSource[],
+}));
+
+vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
+    ActionEngineServer: {
+        get Instance() {
+            return {
+                RunAction: async (input: Record<string, unknown>): Promise<Record<string, unknown>> => {
+                    h.dispatched.push(input);
+                    return { Success: true, ResultCode: 'SUCCESS', Message: 'ok', Params: [], RunParams: input };
+                },
+            };
+        },
+    },
+}));
+
+vi.mock('../AgentRunner', () => ({
+    AgentRunner: class {
+        RunAgent = async (input: Record<string, unknown>): Promise<Record<string, unknown>> => {
+            h.childRuns.push(input);
+            return { success: true, agentRun: { ID: 'child-run-id' }, payload: {}, taintedSources: [...h.childTaint] };
+        };
+    },
+}));
+
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { BaseAgent, CircuitBreakerActionResult, type ActionResultSummary } from '../base-agent';
+
+// Every action dispatch resolves the agent/user policy first; no policy here, so the gate under test decides.
+beforeEach(() => {
+    vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({ status: 'none', policy: null });
+});
+
+const CALLER = new UserInfo(undefined, { ID: 'aaaaaaaa-0000-4000-8000-0000000000c7', Name: 'Caller', Email: 'caller@test.mj', UserRoles: [] });
+const SEND_EMAIL = { ID: 'aaaaaaaa-0000-4000-8000-0000000000e1', Name: 'Send Email', Params: { Items: [] }, Config_Object: { disallowWhenTainted: true } } as unknown as MJActionEntityExtended;
+const SEARCH = { ID: 'aaaaaaaa-0000-4000-8000-0000000000e2', Name: 'Search', Params: { Items: [] }, Config_Object: null } as unknown as MJActionEntityExtended;
+const EMAIL: AgentAction = { name: 'Send Email', params: { To: 'someone@example.com' } };
+const CLEAN_NODE: TaskSecurityEnvelope = { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false };
+const SCOPED_NODE: TaskSecurityEnvelope = {
+    Version: TASK_SECURITY_ENVELOPE_VERSION,
+    IsRunTainted: false,
+    RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-1', SecondaryScopes: null },
+};
+
+function paramsWith(extra: Partial<ExecuteAgentParams> = {}): ExecuteAgentParams {
+    const agent = { ID: 'aaaaaaaa-0000-4000-8000-0000000000a1', Name: 'Parent' } as unknown as MJAIAgentEntityExtended;
+    return { agent, conversationMessages: [{ role: 'user', content: 'hello' }], contextUser: CALLER, ...extra };
+}
+
+/** A BaseAgent a test can taint and whose protected sub-agent call it can make. */
+class TaintableAgent extends BaseAgent {
+    public ReadUntrusted(): void {
+        this.recordTaintedSource(1, 'Web Page Fetch', 'Untrusted');
+    }
+
+    public FailureDirective(summary: ActionResultSummary): string {
+        return this.formatActionFailureDirective(summary);
+    }
+
+    public async CallSubAgent(params: ExecuteAgentParams): Promise<void> {
+        const child = { ID: 'child-agent-id', Name: 'Child', Status: 'Active' } as unknown as MJAIAgentEntityExtended;
+        const step = { ID: 'step-1', StepNumber: 3, TargetLogID: null } as unknown as MJAIAgentRunStepEntityExtended;
+        const request: AgentSubAgentRequest = { name: 'Child', message: 'go', terminateAfter: false };
+        await this.ExecuteSubAgent(params, request, child, step);
+    }
+}
+
+describe('BaseAgent sub-agents and taint (S2)', () => {
+    beforeEach(() => {
+        h.childRuns.length = 0;
+        h.childTaint.length = 0;
+    });
+
+    const childEnvelope = (): TaskSecurityEnvelope | undefined => h.childRuns[0].SecurityEnvelope as TaskSecurityEnvelope | undefined;
+
+    it('starts the sub-agent of a tainted run outside any graph tainted, with no envelope (T6)', async () => {
+        const parent = new TaintableAgent();
+        parent.ReadUntrusted();
+        await parent.CallSubAgent(paramsWith());
+        expect(childEnvelope()).toBeUndefined();
+        expect(h.childRuns[0].ParentRunTainted).toBe(true);
+    });
+
+    it("keeps the parent's node envelope for the sub-agent, tainted once the parent became tainted", async () => {
+        const parent = new TaintableAgent();
+        await parent.CallSubAgent(paramsWith({ SecurityEnvelope: SCOPED_NODE }));
+        expect(childEnvelope()).toEqual(SCOPED_NODE);
+
+        h.childRuns.length = 0;
+        parent.ReadUntrusted();
+        await parent.CallSubAgent(paramsWith({ SecurityEnvelope: SCOPED_NODE }));
+        expect(childEnvelope()).toEqual({ ...SCOPED_NODE, IsRunTainted: true });
+    });
+
+    it('gives a clean parent with no envelope a sub-agent with none, and no taint', async () => {
+        await new TaintableAgent().CallSubAgent(paramsWith());
+        expect(childEnvelope()).toBeUndefined();
+        expect(h.childRuns[0].ParentRunTainted).toBeUndefined();
+    });
+
+    it("absorbs the sub-agent's taint back into the parent", async () => {
+        const parent = new TaintableAgent();
+        h.childTaint.push({ stepNumber: 2, sourceName: 'Web Search', trustLevel: 'Untrusted' });
+        await parent.CallSubAgent(paramsWith());
+        expect(parent.IsRunTainted).toBe(true);
+        expect(parent.TaintedSources.map((s) => s.sourceName)).toEqual(['sub-agent:Child/Web Search']);
+    });
+});
+
+describe('BaseAgent egress gate on taint gained mid-run (M1)', () => {
+    beforeEach(() => {
+        h.dispatched.length = 0;
+    });
+
+    const send = (agent: BaseAgent, params: ExecuteAgentParams, entity: MJActionEntityExtended = SEND_EMAIL) =>
+        agent.ExecuteSingleAction(params, EMAIL, entity, CALLER, { skipCircuitBreaker: true });
+
+    it('refuses a disallowWhenTainted action once a graph node becomes tainted, without dispatching it', async () => {
+        const agent = new TaintableAgent();
+        expect((await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }))).Success).toBe(true);
+        agent.ReadUntrusted();
+        const refused = await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }));
+        expect(refused.Success).toBe(false);
+        expect(refused.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        expect(h.dispatched).toHaveLength(1);
+    });
+
+    it('still runs an action that is not disallowWhenTainted', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        expect((await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }), SEARCH)).Success).toBe(true);
+        expect(h.dispatched).toHaveLength(1);
+    });
+
+    it('locks a refused action out for the run, so the model is told to stop rather than retry (T9)', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        const params = paramsWith({ SecurityEnvelope: CLEAN_NODE });
+        const first = await agent.ExecuteSingleAction(params, EMAIL, SEND_EMAIL, CALLER);
+        expect(first.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        const directive = agent.FailureDirective({ actionName: EMAIL.name, success: false, params: [], resultCode: first.ResultCode, message: first.Message });
+        expect(directive).toContain('DO NOT call');
+
+        const retry = await agent.ExecuteSingleAction(params, { ...EMAIL, params: { To: 'someone-else@example.com' } }, SEND_EMAIL, CALLER);
+        expect(retry).toBeInstanceOf(CircuitBreakerActionResult);
+        expect((retry as CircuitBreakerActionResult).Reason).toBe('tainted');
+        expect(h.dispatched).toHaveLength(0);
+
+        // The model is told why: untrusted content needing a person's review, not a broken configuration.
+        for (const told of [directive, retry.Message ?? '']) {
+            expect(told).toContain('read untrusted content');
+            expect(told).toContain('a person reviews');
+            expect(told).not.toContain('configuration or credential');
+        }
+    });
+
+    it('leaves a run outside any task graph to its own policies', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        expect((await send(agent, paramsWith())).Success).toBe(true);
+    });
+});
+
+describe("BaseAgent sub-agents get the egress gate only under a graph's envelope (T6)", () => {
+    beforeEach(() => {
+        h.childRuns.length = 0;
+        h.dispatched.length = 0;
+    });
+
+    /** The child run as `Execute` would start it from the params its parent handed down. */
+    function startedChild(): { Agent: TaintableAgent; Params: ExecuteAgentParams } {
+        const params = { ...paramsWith(), ...h.childRuns[0] } as ExecuteAgentParams;
+        const agent = new TaintableAgent();
+        const seeds = agent as unknown as { seedTaintFromSecurityEnvelope(p: ExecuteAgentParams): void; seedTaintFromParentRun(p: ExecuteAgentParams): void };
+        seeds.seedTaintFromSecurityEnvelope(params);
+        seeds.seedTaintFromParentRun(params);
+        return { Agent: agent, Params: params };
+    }
+
+    const send = (agent: BaseAgent, params: ExecuteAgentParams) =>
+        agent.ExecuteSingleAction(params, EMAIL, SEND_EMAIL, CALLER, { skipCircuitBreaker: true });
+
+    it('lets the sub-agent of a tainted chat run call what the run itself may, while still starting it tainted', async () => {
+        const parent = new TaintableAgent();
+        parent.ReadUntrusted();
+        expect((await send(parent, paramsWith())).Success).toBe(true);
+
+        await parent.CallSubAgent(paramsWith());
+        const child = startedChild();
+        expect(child.Agent.IsRunTainted).toBe(true);
+        expect((await send(child.Agent, child.Params)).Success).toBe(true);
+        expect(h.dispatched).toHaveLength(2);
+    });
+
+    it("makes the sub-agent of a tainted graph node refuse what the node refuses", async () => {
+        const parent = new TaintableAgent();
+        parent.ReadUntrusted();
+        expect((await send(parent, paramsWith({ SecurityEnvelope: CLEAN_NODE }))).ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+
+        await parent.CallSubAgent(paramsWith({ SecurityEnvelope: CLEAN_NODE }));
+        const child = startedChild();
+        expect(child.Params.SecurityEnvelope).toEqual({ ...CLEAN_NODE, IsRunTainted: true });
+        expect(child.Agent.IsRunTainted).toBe(true);
+        expect((await send(child.Agent, child.Params)).ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        expect(h.dispatched).toHaveLength(0);
+    });
+});

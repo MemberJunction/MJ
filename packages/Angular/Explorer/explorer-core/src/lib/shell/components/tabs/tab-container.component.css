@@ -216,6 +216,13 @@ mj-tab-container .lm_stack.lm_maximised > .lm_items {
   height: 100% !important;
 }
 
+/* MOBILE records region: the GL runs headerless (HideHeaders, the record bar
+   replaces the strip), so the 38px header reservation above would be a dead
+   band at the bottom of every record. */
+mj-tab-container .records-region.records-mobile .lm_items {
+  height: 100% !important;
+}
+
 /* Target the anonymous ComponentItem div inside lm_items (has no class) */
 /* Created in golden-layout/src/ts/items/component-item.ts:51 without a class */
 /* NOTE: Do NOT set display here - GL uses display:none to hide inactive tabs */

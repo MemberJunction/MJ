@@ -70,5 +70,23 @@
       "lastModified": "2026-01-21T05:01:19.057Z",
       "checksum": "969351fa0b05ea0639652a4c3d12537aa5a396508dac4e8b5f37a43ea652f2d5"
     }
+  },
+  {
+    "fields": {
+      "Name": "Component",
+      "Description": "Display a registered interactive component, with its props mapped from the dashboard's properties and its events available to wires.",
+      "Icon": "fa-solid fa-cubes",
+      "DriverClass": "ComponentPanelRenderer",
+      "ConfigDialogClass": "ComponentPanelConfigDialog",
+      "SortOrder": 5,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D853C60E-B179-4B80-BFF3-B3BAF7A6559F"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:05.157Z",
+      "checksum": "85d53ec541f8cf99f6a26fed2b6a1feae90ce34ae58468fd79085a23867eae42"
+    }
   }
 ]

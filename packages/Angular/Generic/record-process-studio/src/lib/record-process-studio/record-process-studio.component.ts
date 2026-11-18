@@ -8,6 +8,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EntityActionUXHostComponent, type EntityActionUXContext, type EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { RecordProcessEditorComponent } from '../record-process-editor/record-process-editor.component';
@@ -19,9 +20,9 @@ interface ProcessRow {
     Description?: string;
     Entity: string;
     EntityID: string;
-    WorkType: string;
-    Status: string;
-    ScopeType: string;
+    WorkType: MJRecordProcessEntity['WorkType'];
+    Status: MJRecordProcessEntity['Status'];
+    ScopeType: MJRecordProcessEntity['ScopeType'];
     ScopeFilter?: string;
     ScopeViewID?: string;
     ScopeListID?: string;

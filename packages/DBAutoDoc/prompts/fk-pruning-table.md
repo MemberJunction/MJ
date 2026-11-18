@@ -29,6 +29,13 @@ These indexes exist on this table in the database. Developers index the columns 
 
 *A real FK target is normally unique. A target column with a unique index or primary key supports the FK; one without is weaker evidence (but the database may simply not declare it).*
 
+{% if seedExcerpt %}
+## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+{{ seedExcerpt }}
+
+{% endif %}
 ## What to look for when proposing removals:
 
 1. **Reverse direction**: FK goes from parent→child instead of child→parent. Example: `Department.DepartmentID → EmployeeDepartmentHistory.DepartmentID` is backwards — the history table should reference Department, not the other way around.

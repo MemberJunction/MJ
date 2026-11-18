@@ -1,16 +1,17 @@
 import { Command } from '@oclif/core';
-import { ListInstalledApps, GetLatestVersion } from '@memberjunction/open-app-engine';
+import { ListInstalledApps } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { BuildContextUser, BuildGitHubOptions } from '../../utils/open-app-context.js';
 import { CheckAppsForUpdates, FormatUpdateCheckReport, type UpdateCheckLine } from '../../utils/update-check.js';
+import { BuildAppVersionLookups } from '../../utils/app-source-lookups.js';
 import { GetValidatedConfig } from '../../config.js';
 
 /**
  * CLI command: `mj app check-updates`.
  *
- * Queries GitHub for the latest version tag of each installed Open App
- * and reports which apps have newer versions available.
+ * Reads the latest version of each installed Open App from its source (GitHub tags, or the
+ * mj-app.json of a local folder) and reports which apps have newer versions available.
  */
 export default class AppCheckUpdates extends Command {
   static description = 'Check for available upgrades for installed MJ Open Apps';
@@ -36,10 +37,10 @@ export default class AppCheckUpdates extends Command {
       // Same options `mj app install` / `upgrade` use, so a repo reachable there is reachable here.
       // A bare `{ Token }` dropped the per-repo TokenMap, and every private repo whose token lives
       // there reported "up to date" forever.
-      const githubOptions = BuildGitHubOptions(config);
-      const report = await CheckAppsForUpdates(apps, (repoUrl, subpath) =>
-        GetLatestVersion(repoUrl, githubOptions, subpath)
-      );
+      // Each app is read through its source: GitHub tags, or the mj-app.json of a local folder
+      // (a `file:` locator, relative to the repository root this command runs in).
+      const lookups = BuildAppVersionLookups(BuildGitHubOptions(config), process.cwd());
+      const report = await CheckAppsForUpdates(apps, lookups.LookupLatestVersion, lookups.DescribeUnresolved);
 
       spinner.stop();
 

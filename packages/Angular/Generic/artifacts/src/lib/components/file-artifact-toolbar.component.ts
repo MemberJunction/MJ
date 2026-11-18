@@ -16,7 +16,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
         @if (totalPages > 1) {
           <div class="file-toolbar__nav">
             <button class="file-toolbar__icon-btn" [disabled]="currentPage <= 1" (click)="prevPage.emit()" title="Previous page">
-              <i class="fas fa-chevron-left"></i>
+              <i class="fa-solid fa-chevron-left"></i>
             </button>
             <input
               class="file-toolbar__page-input"
@@ -30,7 +30,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
             />
             <span class="file-toolbar__page-of">/ {{ totalPages }}</span>
             <button class="file-toolbar__icon-btn" [disabled]="currentPage >= totalPages" (click)="nextPage.emit()" title="Next page">
-              <i class="fas fa-chevron-right"></i>
+              <i class="fa-solid fa-chevron-right"></i>
             </button>
           </div>
         }
@@ -38,13 +38,13 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
         @if (showZoom) {
           <div class="file-toolbar__zoom">
             <button class="file-toolbar__icon-btn" [disabled]="!canZoomOut" (click)="zoomOut.emit()" title="Zoom out">
-              <i class="fas fa-minus"></i>
+              <i class="fa-solid fa-minus"></i>
             </button>
             <button class="file-toolbar__zoom-level" (click)="zoomReset.emit()" title="Reset zoom to 100%">
               {{ zoomPercent }}%
             </button>
             <button class="file-toolbar__icon-btn" [disabled]="!canZoomIn" (click)="zoomIn.emit()" title="Zoom in">
-              <i class="fas fa-plus"></i>
+              <i class="fa-solid fa-plus"></i>
             </button>
           </div>
         }
@@ -57,15 +57,15 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
       <div class="file-toolbar__actions">
         @if (showPrint) {
           <button class="file-toolbar__btn" (click)="print.emit()" title="Print">
-            <i class="fas fa-print"></i>
+            <i class="fa-solid fa-print"></i>
             <span class="file-toolbar__btn-label">Print</span>
           </button>
         }
         <button class="file-toolbar__btn file-toolbar__btn--primary" (click)="download.emit()" [disabled]="isDownloading" title="Download file">
           @if (isDownloading) {
-            <i class="fas fa-spinner fa-spin"></i>
+            <i class="fa-solid fa-spinner fa-spin"></i>
           } @else {
-            <i class="fas fa-download"></i>
+            <i class="fa-solid fa-download"></i>
           }
           <span class="file-toolbar__btn-label">Download</span>
         </button>

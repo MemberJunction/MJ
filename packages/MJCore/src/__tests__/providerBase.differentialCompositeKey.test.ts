@@ -224,4 +224,57 @@ describe('processSingleSmartCacheResult — differential merge on a composite-ke
         expect(runViewSpy).toHaveBeenCalledTimes(1);
         expect(runViewSpy.mock.calls[0][0]).toMatchObject({ EntityName: 'Not In Metadata', BypassCache: true, CacheLocal: false });
     });
+
+    it('repopulates the invalidated LocalCacheManager slot when ApplyDifferentialUpdate declines a narrowing/subset slot', async () => {
+        const narrowedParam: RunViewParams = {
+            EntityName: ENTITY_NAME,
+            Fields: ['OrderID', 'LineNo'],
+            ResultType: 'simple',
+            CacheLocal: true,
+        };
+        const narrowedFp = seams.clientCacheFingerprint(narrowedParam);
+        await LocalCacheManager.Instance.SetRunViewResult(
+            narrowedFp,
+            narrowedParam,
+            cachedRows(),
+            '2026-01-01T00:00:00.000Z',
+        );
+
+        const refreshedRows = [
+            line('order-a', 1, 'Widget v2'),
+            line('order-b', 1, 'Sprocket v2'),
+        ];
+        const fresh: RunViewResult<Record<string, unknown>> = {
+            Success: true,
+            Results: refreshedRows,
+            RowCount: 2,
+            TotalRowCount: 2,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+        };
+        const runViewSpy = vi.spyOn(provider, 'RunView').mockResolvedValue(fresh);
+        const checkResult: RunViewWithCacheCheckResult<Record<string, unknown>> = {
+            viewIndex: 0,
+            status: 'differential',
+            differentialData: {
+                updatedRows: [line('order-a', 1, 'Widget v2')],
+                deletedRecordIDs: ['OrderID|order-a||LineNo|2', 'OrderID|order-b||LineNo|2'],
+            },
+            maxUpdatedAt: '2026-01-03T00:00:00.000Z',
+            rowCount: 2,
+        };
+
+        const outcome = await seams.processSingleSmartCacheResult(narrowedParam, 0, checkResult, new Map(), user);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(outcome.cacheMiss).toBe(true);
+        expect(runViewSpy).toHaveBeenCalledTimes(1);
+
+        const repopulated = await LocalCacheManager.Instance.GetRunViewResult(narrowedFp);
+        expect(repopulated).not.toBeNull();
+        expect(repopulated?.rowCount).toBe(2);
+        expect(repopulated?.maxUpdatedAt).toBe('2026-01-03T00:00:00.000Z');
+        expect(repopulated?.results).toEqual(refreshedRows);
+    });
 });

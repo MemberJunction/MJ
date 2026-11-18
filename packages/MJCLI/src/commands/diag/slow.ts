@@ -1,0 +1,42 @@
+import { Args, Command, Flags } from '@oclif/core';
+import {
+    LoadAndVerifyDiagnosticBundle,
+    FindSlowBundleOperations,
+    DiagPrivateKeyFlags,
+    ResolveDiagnosticPrivateKey,
+} from '../../utils/diag-utils.js';
+
+export default class DiagSlow extends Command {
+    static description = 'List slow client/server spans and SQL queries from a .mjdiag bundle';
+
+    static args = {
+        file: Args.string({
+            description: 'Path to the .mjdiag bundle archive',
+            required: true,
+        }),
+    };
+
+    static flags = {
+        threshold: Flags.integer({
+            char: 't',
+            description: 'Minimum duration in milliseconds',
+            default: 500,
+        }),
+        ...DiagPrivateKeyFlags,
+    };
+
+    public async run(): Promise<void> {
+        const { args, flags } = await this.parse(DiagSlow);
+        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, ResolveDiagnosticPrivateKey(flags));
+        const slowOps = FindSlowBundleOperations(loaded.Data, flags.threshold);
+
+        if (slowOps.length === 0) {
+            this.log(`No operations found exceeding ${flags.threshold}ms.`);
+            return;
+        }
+
+        for (const op of slowOps) {
+            this.log(`${String(op.DurationMs.toFixed(1)).padStart(8)}ms | ${op.Source.padEnd(11)} | ${op.Label}`);
+        }
+    }
+}

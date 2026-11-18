@@ -17,8 +17,12 @@ function fakeSip(over: Partial<Record<keyof SipClientLike, unknown>> = {}): SipC
   } as unknown as SipClientLike;
 }
 
-function fakeRooms(participants: Array<{ identity: string; name?: string; kind?: number; state: number; attributes?: Record<string, string> }>): RoomServiceClientLike {
+function fakeRooms(
+  participants: Array<{ identity: string; name?: string; kind?: number; state: number; attributes?: Record<string, string> }>,
+  rooms: Array<{ name: string }> = [],
+): RoomServiceClientLike {
   return {
+    listRooms: vi.fn(async () => rooms),
     listParticipants: vi.fn(async () => participants.map((p) => ({ name: '', kind: 0, attributes: {}, ...p }))),
     removeParticipant: vi.fn(async () => undefined),
   } as unknown as RoomServiceClientLike;
@@ -64,6 +68,13 @@ describe('LiveKitSipService', () => {
       const rooms = fakeRooms([]);
       await new LiveKitSipService(CONFIG, undefined, rooms).RemoveParticipant('room', 'sip_1');
       expect(rooms.removeParticipant).toHaveBeenCalledWith('room', 'sip_1');
+    });
+
+    it('lists active room names and filters by prefix when given', async () => {
+      const rooms = fakeRooms([], [{ name: 'call-101' }, { name: 'meeting-202' }, { name: 'call-102' }]);
+      const service = new LiveKitSipService(CONFIG, undefined, rooms);
+      expect(await service.ListRooms()).toEqual(['call-101', 'meeting-202', 'call-102']);
+      expect(await service.ListRooms('call-')).toEqual(['call-101', 'call-102']);
     });
   });
 

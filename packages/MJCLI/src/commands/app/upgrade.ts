@@ -16,6 +16,7 @@ export default class AppUpgrade extends Command {
   static examples = [
     '<%= config.bin %> app upgrade acme-crm',
     '<%= config.bin %> app upgrade acme-crm --version 1.3.0',
+    '<%= config.bin %> app upgrade analytics --reapply',
   ];
 
   static args = {
@@ -27,6 +28,11 @@ export default class AppUpgrade extends Command {
 
   static flags = {
     version: Flags.string({ description: 'Specific version to upgrade to (default: latest)' }),
+    reapply: Flags.boolean({
+      description:
+        'Run the upgrade even when the app is already at the target version. Applies new migrations, packages, config and hooks from a local app folder without a version bump. A lower version is still refused.',
+      default: false,
+    }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
     'non-interactive': Flags.boolean({
       description: 'Skip interactive prompts; post-upgrade hooks use environment variables / defaults (for CI/headless upgrades)',
@@ -41,6 +47,7 @@ export default class AppUpgrade extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppUpgrade);
     const spinner = ora();
+    let failed = false;
 
     try {
       const context = await BuildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
@@ -49,6 +56,7 @@ export default class AppUpgrade extends Command {
         {
           AppName: args.name,
           Version: flags.version,
+          Reapply: flags.reapply,
           Verbose: flags.verbose,
           AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
         },
@@ -62,12 +70,17 @@ export default class AppUpgrade extends Command {
         }
       } else {
         spinner.fail(chalk.red(`Upgrade failed: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Upgrade failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }

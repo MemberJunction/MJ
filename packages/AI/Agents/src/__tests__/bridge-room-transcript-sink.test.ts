@@ -3,21 +3,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock the core module so the sink's `new RunView()` + loggers are controllable. RunView is the only
 // runtime value the sink pulls from core (UserInfo/IMetadataProvider are type-only).
 const { runViewMock } = vi.hoisted(() => ({ runViewMock: vi.fn() }));
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
-    UserInfo: class {},
-    RunView: class {
-        RunView = runViewMock;
-    },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        LogStatus: vi.fn(),
+        UserInfo: class {},
+        RunView: class {
+            RunView = runViewMock;
+        },
+    };
+});
 
 import { CreateBridgeRoomTranscriptSink, type BridgeTranscriptLineInput } from '../realtime/bridge-room-transcript-sink';
 
 /** A minimal fake BaseEntity that records assigned fields as own properties + a settable id. */
 function makeFakeEntity(id: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { ID: id, NewRecord: vi.fn(), Save: vi.fn(async () => true), LatestResult: { CompleteMessage: '' } } as any;
+    return { ID: id, NewRecord: vi.fn(), MarkServerAuthoredReply: vi.fn(), Save: vi.fn(async () => true), LatestResult: { CompleteMessage: '' } } as any;
 }
 
 /** Provider that returns the same Conversation entity but a FRESH detail per GetEntityObject (no cross-test bleed). */
@@ -57,7 +61,7 @@ describe('CreateBridgeRoomTranscriptSink', () => {
         await sink(line, user, provider);
 
         expect(conv.NewRecord).toHaveBeenCalledOnce();
-        expect(conv.Type).toBe('Meeting Room');
+        expect(conv.TypeID).toBe('2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926');
         expect(conv.ApplicationScope).toBe('Application'); // default scope hides it from the main list
         expect(conv.ExternalID).toBe('room-X');
         expect(conv.UserID).toBe('user-1');

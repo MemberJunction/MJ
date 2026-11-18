@@ -1,12 +1,27 @@
 export { gql } from 'graphql-request';
 export { SetupGraphQLClient, setupGraphQLClient, ConnectGraphQLClient } from './config';
 export { PACKAGE_VERSION } from './version.generated';
-export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
-export type { AuthenticationErrorCallback, ExecuteGQLOptions, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
+export {
+    GraphQLDataProvider,
+    GraphQLProviderConfigData,
+    RegisterNetworkDiagnosticObserver,
+    RegisterResponseHeaderObserver,
+} from './graphQLDataProvider';
+export type {
+    AuthenticationErrorCallback,
+    ExecuteGQLOptions,
+    SocketConnectionState,
+    TaskGraphFrameEvent,
+    NetworkDiagnosticObservation,
+    NetworkDiagnosticObserver,
+    GraphQLResponseHeaders,
+    ResponseHeaderObserver,
+} from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
-export { IsGraphQLMutation } from './graphQLOperationKind';
+export { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from './graphQLOperationKind';
+export type { GraphQLOperationKind } from './graphQLOperationKind';
 export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
@@ -25,7 +40,9 @@ export type {
     EmbedTextParams,
     EmbedTextResult,
     RunAIAgentFromConversationDetailParams,
+    AgentReplyAcknowledgement,
     AutotagPipelineResult,
+    MergeTagsResult,
     VectorizeEntityParams,
     VectorizeEntityResult,
     DuplicateEntryCheckParams,
@@ -156,3 +173,94 @@ export type {
   MeetingResult,
   StartMeetingResult,
 } from './graphQLMeetingClient';
+
+export { ClientTabInvalidationMultiplexer } from './ClientTabInvalidationMultiplexer';
+export type {
+    TabMultiplexerEnvironment,
+    BroadcastChannelLike,
+    WebLocksLike,
+    SharedWorkerLike,
+    TabInvalidationMessage,
+    CacheInvalidationEventData,
+    TabMultiplexerCallbacks,
+    ClientTabInvalidationMultiplexerOptions,
+} from './ClientTabInvalidationMultiplexer';
+
+export { SharedTabKernelClient } from './SharedTabKernelClient';
+export type {
+    SharedTabKernelMode,
+    SharedWorkerFactory,
+    SharedTabKernelCatchUpPayload,
+    SharedTabKernelClientOptions,
+    KernelRunViewSlotAcquisition,
+    KernelRunViewSlotFollowUp,
+} from './SharedTabKernelClient';
+
+export {
+    SharedTabKernelHost,
+    ComputeKernelContentDigest,
+    StartSharedTabKernelWorker,
+} from './SharedTabKernelHost';
+
+export { SharedTabKernelStorageProvider } from './SharedTabKernelStorageProvider';
+
+export {
+    WrapNativeMessagePortForKernel,
+    WrapNativeSharedWorkerForKernel,
+    WrapNativeSharedWorkerGlobalScope,
+    WrapGraphQLWsClient,
+    AttachTabPortMessageListener,
+    CloneKernelValue,
+    CanonicalizeKernelRequestKey,
+    IsLegacyTabInvalidationMessage,
+} from './SharedTabKernelProtocol';
+export type {
+    KernelPortMessageEventLike,
+    TabPortLike,
+    TabKernelWorkerLike,
+    SharedWorkerConnectEventLike,
+    SharedWorkerGlobalScopeLike,
+    KernelWsSink,
+    KernelWsSubscribePayload,
+    KernelWsClientConfig,
+    KernelWsClientLike,
+    SharedTabKernelEnvironment,
+    SharedTabKernelHostOptions,
+    SharedTabKernelStats,
+    KernelSubscriptionKind,
+    KernelStorageOperation,
+    KernelHelloMessage,
+    KernelHelloAckMessage,
+    KernelHeartbeatMessage,
+    KernelHeartbeatAckMessage,
+    KernelDisconnectMessage,
+    KernelTokenUpdateMessage,
+    KernelTokenSyncedMessage,
+    KernelRefreshTokenRequestMessage,
+    KernelRefreshTokenResponseMessage,
+    KernelCoordinateRefreshRequestMessage,
+    KernelCoordinateRefreshResultMessage,
+    KernelAuthErrorMessage,
+    KernelSubscribeMessage,
+    KernelUnsubscribeMessage,
+    KernelSubscriptionEventMessage,
+    KernelSocketStateMessage,
+    KernelForceReconnectMessage,
+    KernelInvalidationPushMessage,
+    KernelCatchUpRequestMessage,
+    KernelCatchUpDelegateMessage,
+    KernelCatchUpDelegateResultMessage,
+    KernelCatchUpResultMessage,
+    KernelWatermarkSyncMessage,
+    KernelMutationNoticeMessage,
+    KernelRunViewAcquireMessage,
+    KernelRunViewAcquireAckMessage,
+    KernelRunViewCompleteMessage,
+    KernelStorageRequestMessage,
+    KernelStorageResponseMessage,
+    KernelStatsRequestMessage,
+    KernelStatsResponseMessage,
+    KernelClientToHostMessage,
+    KernelHostToClientMessage,
+} from './SharedTabKernelProtocol';
+

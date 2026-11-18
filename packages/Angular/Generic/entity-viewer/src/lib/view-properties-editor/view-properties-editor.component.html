@@ -1,0 +1,132 @@
+<div class="vpe">
+  <p class="vpe-intro">
+    A property is a named input that adds one filter on a field when a run gives it a value or it has a default.
+    Turn off <strong>Allow override</strong> to let only server code set it.
+  </p>
+
+  @for (property of Properties; track $index; let i = $index) {
+    <div class="vpe-card">
+      <div class="vpe-row">
+        <div class="vpe-field">
+          <label [attr.for]="'vpe-name-' + i">Name</label>
+          <input [id]="'vpe-name-' + i" type="text" class="vpe-input" [ngModel]="property.Name" (ngModelChange)="Update(i, { Name: $event })" [disabled]="Disabled" />
+        </div>
+        <div class="vpe-field vpe-narrow">
+          <label [attr.for]="'vpe-type-' + i">Type</label>
+          <select [id]="'vpe-type-' + i" class="vpe-input" [ngModel]="property.Type" (ngModelChange)="SetType(i, $event)" [disabled]="Disabled">
+            @for (type of Types; track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+        </div>
+        <button mjButton variant="icon" size="sm" class="vpe-remove" (click)="RemoveProperty(i)" [disabled]="Disabled" [attr.aria-label]="'Remove property ' + property.Name" title="Remove property">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+
+      <div class="vpe-field">
+        <label [attr.for]="'vpe-desc-' + i">Description</label>
+        <input [id]="'vpe-desc-' + i" type="text" class="vpe-input" [ngModel]="property.Description ?? ''" (ngModelChange)="Update(i, { Description: $event || undefined })" [disabled]="Disabled" />
+      </div>
+
+      <div class="vpe-row">
+        <div class="vpe-field">
+          <label [attr.for]="'vpe-target-' + i">Filters field</label>
+          <select [id]="'vpe-target-' + i" class="vpe-input" [ngModel]="property.Target.Field" (ngModelChange)="SetField(i, $event)" [disabled]="Disabled">
+            @for (field of FieldOptions; track field.Name) {
+              <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+            }
+          </select>
+        </div>
+        <div class="vpe-field vpe-narrow">
+          <label [attr.for]="'vpe-op-' + i">Operator</label>
+          <select [id]="'vpe-op-' + i" class="vpe-input" [ngModel]="property.Target.Operator" (ngModelChange)="SetOperator(i, $event)" [disabled]="Disabled">
+            @for (op of OperatorsFor(property.Type); track op) {
+              <option [value]="op">{{ op }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="vpe-row">
+        <div class="vpe-field vpe-narrow">
+          <label [attr.for]="'vpe-default-mode-' + i">Default</label>
+          <select [id]="'vpe-default-mode-' + i" class="vpe-input" [ngModel]="DefaultMode(property)" (ngModelChange)="SetDefaultMode(i, $event)" [disabled]="Disabled">
+            <option value="none">None</option>
+            <option value="value">Fixed value</option>
+            <option value="token">Context token</option>
+          </select>
+        </div>
+        @if (DefaultMode(property) === 'value') {
+          <div class="vpe-field">
+            <label [attr.for]="'vpe-default-' + i">Value</label>
+            @if (property.Type === 'boolean') {
+              <select [id]="'vpe-default-' + i" class="vpe-input" [ngModel]="DefaultText(property)" (ngModelChange)="SetDefaultValue(i, $event)" [disabled]="Disabled">
+                <option value="">(none)</option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            } @else {
+              <input [id]="'vpe-default-' + i" class="vpe-input"
+                [type]="property.Type === 'number' ? 'number' : property.Type === 'date' ? 'date' : 'text'"
+                [ngModel]="DefaultText(property)" (ngModelChange)="SetDefaultValue(i, $event ?? '')" [disabled]="Disabled" />
+            }
+          </div>
+        }
+        @if (DefaultMode(property) === 'token') {
+          <div class="vpe-field">
+            <label [attr.for]="'vpe-token-' + i">Token</label>
+            <select [id]="'vpe-token-' + i" class="vpe-input" [ngModel]="property.Default?.Token" (ngModelChange)="SetToken(i, $event)" [disabled]="Disabled">
+              @for (token of Tokens; track token) {
+                <option [value]="token">{{ token }}</option>
+              }
+            </select>
+          </div>
+          @if (TakesOffset(property)) {
+            <div class="vpe-field vpe-offset">
+              <label [attr.for]="'vpe-offset-' + i">Offset</label>
+              <div class="vpe-offset-inputs">
+                <input [id]="'vpe-offset-' + i" type="number" step="1" class="vpe-input" [ngModel]="property.Default?.Offset?.Amount ?? null"
+                  (ngModelChange)="SetOffset(i, $event, property.Default?.Offset?.Unit ?? 'day')" [disabled]="Disabled" />
+                <select class="vpe-input" aria-label="Offset unit" [ngModel]="property.Default?.Offset?.Unit ?? 'day'"
+                  (ngModelChange)="SetOffset(i, property.Default?.Offset?.Amount ?? null, $event)" [disabled]="Disabled || !property.Default?.Offset">
+                  @for (unit of OffsetUnits; track unit) {
+                    <option [value]="unit">{{ unit }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="vpe-flags">
+        <label class="vpe-check">
+          <input type="checkbox" [ngModel]="property.IsRequired === true" (ngModelChange)="Update(i, { IsRequired: $event })" [disabled]="Disabled" />
+          Required
+        </label>
+        <label class="vpe-check">
+          <input type="checkbox" [ngModel]="property.AllowOverride !== false" (ngModelChange)="Update(i, { AllowOverride: $event })" [disabled]="Disabled" />
+          Allow override
+          @if (property.AllowOverride === false) {
+            <span class="vpe-hint"><i class="fa-solid fa-lock" aria-hidden="true"></i> only server code sets it</span>
+          }
+        </label>
+      </div>
+    </div>
+  } @empty {
+    <p class="vpe-empty">This view has no properties.</p>
+  }
+
+  <button mjButton variant="outline" size="sm" (click)="AddProperty()" [disabled]="Disabled || FieldOptions.length === 0">
+    <i class="fa-solid fa-plus"></i> Add property
+  </button>
+
+  @if (Problems.length > 0) {
+    <ul class="vpe-problems" role="alert">
+      @for (problem of Problems; track problem) {
+        <li>{{ problem }}</li>
+      }
+    </ul>
+  }
+</div>

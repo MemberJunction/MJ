@@ -15,6 +15,12 @@ export interface ShellChromeFlags {
   appSwitcher: boolean;
   appSwitcherStyle: AppSwitcherStyle;
   appNav: boolean;
+  /**
+   * The floating chat overlay bubble explorer-app renders over the shell. Baselined from
+   * `Shell.ChatOverlay.Enabled`; a host that owns its own AI surface for some audience (a learner
+   * portal, say) narrows it here instead of hiding the bubble with route-scoped CSS.
+   */
+  chatOverlay: boolean;
   recordOpenStyle: RecordOpenStyle;
 }
 
@@ -75,6 +81,7 @@ export function ApplyShellChromePolicy(baseline: ShellChromeFlags, policy: BaseS
     appSwitcher: baseline.appSwitcher && answer.appSwitcher,
     appSwitcherStyle: answer.appSwitcherStyle ?? baseline.appSwitcherStyle,
     appNav: baseline.appNav && answer.appNav,
+    chatOverlay: baseline.chatOverlay && answer.chatOverlay,
     recordOpenStyle: baseline.recordOpenStyle,
   };
 }

@@ -69,4 +69,16 @@ describe('MJAIAgentRunFormComponentExtended Result panel', () => {
     it('hides the Result panel for a run with neither column', () => {
         expect(makeForm({}).ShowResultPanel).toBe(false);
     });
+
+    it('memoizes StartingPayloadObject and FinalPayloadObject across repeated reads', () => {
+        const record = new MJAIAgentRunEntityExtended(AGENT_RUN_ENTITY);
+        record.FinalPayload = PAYLOAD;
+        const form = TestBed.runInInjectionContext(() => new MJAIAgentRunFormComponentExtended());
+        form.record = record;
+
+        const first = form.FinalPayloadObject;
+        const second = form.FinalPayloadObject;
+        expect(first).toEqual({ answer: 42 });
+        expect(first).toBe(second);
+    });
 });

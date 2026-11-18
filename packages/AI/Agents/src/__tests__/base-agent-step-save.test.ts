@@ -7,8 +7,11 @@
  * stubbed. This locks in the ordering + non-fatal-failure contract that had no coverage before.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { ChatMessage } from '@memberjunction/ai';
 import { BaseAgent } from '../base-agent';
+import { AgentDataPreloader } from '../AgentDataPreloader';
 import { PriorTurnToolResultCache } from '../prior-turn-tool-result-cache';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 /** The fire-and-forget save queue's Flush result shape. */
 type FlushResult = { failures: number; rejections: number };
@@ -32,9 +35,12 @@ class MockStep {
   public OutputData: string | null = null;
   public PayloadAtStart: string | null = null;
   public PayloadAtEnd: string | null = null;
+  public FinalPayloadValidationResult: string | null = null;
+  public FinalPayloadValidationMessages: string | null = null;
+  public PromptRun: unknown = null;
   public LatestResult: { CompleteMessage: string } | null = null;
 
-  public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = []; // options seen per Save() call
+  public saveOptions: Array<{ IgnoreDirtyState?: boolean; SaveReturnMode?: string } | undefined> = []; // options seen per Save() call
 
   private callIndex = 0;
   constructor(
@@ -47,7 +53,7 @@ class MockStep {
     this.ID = `${this.name}-id`; // client-generated PK available immediately, before the INSERT lands
   }
 
-  async Save(options?: { IgnoreDirtyState?: boolean }): Promise<boolean> {
+  async Save(options?: { IgnoreDirtyState?: boolean; SaveReturnMode?: string }): Promise<boolean> {
     const n = ++this.callIndex;
     this.saveOptions.push(options);
     this.log.push(`${this.name}:start:${n}`);
@@ -288,10 +294,12 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     const created = await internals(agent).createStepEntity({ stepType: 'Actions', stepName: 'Run Action', contextUser: ctx });
     await internals(agent).finalizeStepEntity(created, true, undefined, { result: 'ok' });
     await pending();
-    // Two Save() calls: INSERT plain (no options), UPDATE forced (IgnoreDirtyState=true).
+    // Two Save() calls: INSERT non-forced (IgnoreDirtyState=false, datestamps_only), UPDATE forced (IgnoreDirtyState=true, datestamps_only).
     expect(step.saveOptions).toHaveLength(2);
-    expect(step.saveOptions[0]?.IgnoreDirtyState).toBeUndefined();
+    expect(step.saveOptions[0]?.IgnoreDirtyState).toBe(false);
+    expect(step.saveOptions[0]?.SaveReturnMode).toBe('datestamps_only');
     expect(step.saveOptions[1]?.IgnoreDirtyState).toBe(true);
+    expect(step.saveOptions[1]?.SaveReturnMode).toBe('datestamps_only');
     expect(step.Status).toBe('Completed');
   });
 });
@@ -454,4 +462,342 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
     expect(order.indexOf('agentRun:save')).toBe(2);
   });
 });
+
+describe('BaseAgent guardrail & validation step saves — queue sequencing and OutputData preservation', () => {
+  const ctx = { ID: 'u1', Name: 'Tester' } as never;
+
+  it('checkExecutionGuardrails queues its update after the INSERT and finalizeStepEntity preserves guardrailExceeded in OutputData', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'Execute Agent Prompt',
+      contextUser: ctx,
+    });
+
+    const a = agent as unknown as {
+      hasExceededAgentRunGuardrails: () => Promise<{
+        exceeded: boolean;
+        type?: string;
+        limit?: number;
+        current?: number;
+        reason?: string;
+      }>;
+      checkExecutionGuardrails: (
+        params: Record<string, unknown>,
+        nextStep: Record<string, unknown>,
+        currentPayload: Record<string, unknown>,
+        agentRun: Record<string, unknown>,
+        currentStep: MockStep,
+      ) => Promise<Record<string, unknown>>;
+    };
+
+    a.hasExceededAgentRunGuardrails = vi.fn(async () => ({
+      exceeded: true,
+      type: 'MaxTokens',
+      limit: 1000,
+      current: 1500,
+      reason: 'Max tokens exceeded (1500 > 1000)',
+    }));
+
+    const modifiedStep = await a.checkExecutionGuardrails(
+      { agent: { ID: 'a1', Name: 'TestAgent' }, contextUser: ctx },
+      { step: 'Retry', terminate: false },
+      { status: 'running' },
+      { ID: 'run-1' },
+      created,
+    );
+
+    expect(modifiedStep.step).toBe('Failed');
+    expect(modifiedStep.terminate).toBe(true);
+
+    // Subsequent finalizeStepEntity with step outputData must NOT overwrite guardrailExceeded
+    await internals(agent).finalizeStepEntity(created, true, undefined, {
+      nextStep: modifiedStep,
+    });
+    await pending();
+
+    // All saves were sequenced (INSERT completes before queued UPDATEs)
+    expect(log[0]).toBe('s:start:1');
+    expect(log[1]).toBe('s:end:1');
+    const output = JSON.parse(created.OutputData as string) as Record<string, unknown>;
+    expect(output.guardrailExceeded).toMatchObject({
+      type: 'MaxTokens',
+      limit: 1000,
+      current: 1500,
+      reason: 'Max tokens exceeded (1500 > 1000)',
+    });
+    expect(output.nextStep).toBeDefined();
+  });
+
+  it('handleFinalPayloadValidationFailure queues validation fields via queueStepSave and preserves them across finalizeStepEntity', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'Execute Agent Prompt',
+      contextUser: ctx,
+    });
+
+    const a = agent as unknown as {
+      handleFinalPayloadValidationFailure: (
+        params: Record<string, unknown>,
+        nextStep: Record<string, unknown>,
+        currentPayload: Record<string, unknown>,
+        mode: string,
+        errorMessages: string[],
+        agentRun: Record<string, unknown>,
+        currentStep: MockStep,
+      ) => Promise<Record<string, unknown>>;
+    };
+
+    const resultStep = await a.handleFinalPayloadValidationFailure(
+      { agent: { ID: 'a1', Name: 'TestAgent', FinalPayloadValidationMaxRetries: 3 }, contextUser: ctx },
+      { step: 'Success', terminate: true },
+      { total: -1 },
+      'Fail',
+      ['total must be non-negative'],
+      { ID: 'run-1' },
+      created,
+    );
+
+    expect(resultStep.step).toBe('Failed');
+    expect(created.FinalPayloadValidationResult).toBe('Fail');
+    expect(created.FinalPayloadValidationMessages).toBe('total must be non-negative');
+
+    await internals(agent).finalizeStepEntity(created, true, undefined, { nextStep: resultStep });
+    await pending();
+
+    expect(log[0]).toBe('s:start:1');
+    expect(log[1]).toBe('s:end:1');
+    expect(created.FinalPayloadValidationResult).toBe('Fail');
+    expect(created.FinalPayloadValidationMessages).toBe('total must be non-negative');
+  });
+});
+
+describe('BaseAgent.compactMessage (AI Summary) — shared prompt runner, tree budget, and queued step saves', () => {
+  const ctx = { ID: 'u1', Name: 'Tester' } as never;
+
+  it('reuses _promptRunner, records usage in AgentTreeBudget, links PromptRun/TargetLogID, and queues Compaction step saves', async () => {
+    const log: string[] = [];
+    const step = new MockStep('compaction', log);
+    const { agent, pending } = makeAgent([step]);
+    const promptId = '11111111-2222-3333-4444-555555555555';
+    const promptRunId = '99999999-8888-7777-6666-555555555555';
+    const fakePromptEntity = { ID: promptId, Name: 'Compact Agent Message' };
+
+    const a = agent as unknown as {
+      _promptRunner: { ExecutePrompt: ReturnType<typeof vi.fn> };
+      _treeBudget?: {
+        totalPromptIterations: number;
+        totalTokens: number;
+        totalCost: number;
+        totalSteps: number;
+      };
+      compactMessage: (
+        message: Record<string, unknown>,
+        metadata: {
+          compactMode: 'First N Chars' | 'AI Summary';
+          compactLength: number;
+          compactPromptId: string;
+          originalLength: number;
+        },
+        params: Record<string, unknown>,
+      ) => Promise<string>;
+    };
+
+    const fakePromptRun = {
+      ID: promptRunId,
+      TokensPrompt: 120,
+      TokensCompletion: 30,
+      TotalCost: 0.0045,
+      Cost: 0.0045,
+    };
+
+    const executePromptMock = vi.fn(async (promptParams: { onPromptRunCreated?: (id: string) => Promise<void> }) => {
+      if (promptParams.onPromptRunCreated) {
+        await promptParams.onPromptRunCreated(promptRunId);
+      }
+      return {
+        success: true,
+        result: { summary: 'Concise summary of tool output.' },
+        promptRun: fakePromptRun,
+        promptTokens: 120,
+        completionTokens: 30,
+        cost: 0.0045,
+      };
+    });
+    a._promptRunner = { ExecutePrompt: executePromptMock };
+
+    const aiEngineMod = await import('@memberjunction/aiengine');
+    vi.spyOn(aiEngineMod.AIEngine, 'Instance', 'get').mockReturnValue({
+      Prompts: [fakePromptEntity],
+    } as never);
+
+    const summaryText = await a.compactMessage(
+      {
+        role: 'user',
+        content: 'Long action output '.repeat(50),
+        metadata: { messageType: 'action-result', turnAdded: 1, tokensSaved: 180 },
+      },
+      {
+        compactMode: 'AI Summary',
+        compactLength: 200,
+        compactPromptId: promptId,
+        originalLength: 950,
+      },
+      {
+        agent: { ID: 'a1', Name: 'TestAgent' },
+        contextUser: ctx,
+        conversationMessages: [],
+      },
+    );
+
+    await pending();
+
+    expect(executePromptMock).toHaveBeenCalledOnce();
+    expect(summaryText).toContain('Concise summary of tool output.');
+    expect(step.StepType).toBe('Compaction');
+    expect(step.StepNumber).toBe(1);
+    expect(step.TargetID).toBe(promptId);
+    expect(step.TargetLogID).toBe(promptRunId);
+    expect(step.PromptRun).toBe(fakePromptRun);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+    expect(internals(agent)._agentRun.Steps).toContain(step);
+
+    // INSERT completes before queued UPDATE(s)
+    expect(log[0]).toBe('compaction:start:1');
+    expect(log[1]).toBe('compaction:end:1');
+    expect(step.saveOptions.some((opt) => opt?.IgnoreDirtyState === true)).toBe(true);
+
+    // Tree budget reflects both the Compaction step and the prompt execution tokens/cost
+    expect(a._treeBudget?.totalSteps).toBe(1);
+    expect(a._treeBudget?.totalTokens).toBe(150);
+    expect(a._treeBudget?.totalCost).toBeCloseTo(0.0045, 6);
+  });
+});
+
+/**
+ * MJAPI's event-loop stall warning names the agent runs "in flight" from AgentRunWatchdog's tracked
+ * set (MJ #5510). A run must leave that set as soon as its terminal state is saved, or the warning
+ * names runs that finished minutes ago (the periodic prune only runs every 5 minutes).
+ */
+describe('BaseAgent terminal saves — release the run from the watchdog', () => {
+  const RUN_ID = 'a1b2c3d4-0000-4000-8000-000000005510';
+  const trackedSet = () => (AgentRunWatchdog.Instance as unknown as { _trackedRuns: Map<string, unknown> | Set<string> })._trackedRuns;
+
+  function trackedAgent(saveResult = true) {
+    const made = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    made.run.ID = RUN_ID.toUpperCase(); // SQL Server hands IDs back upper-case
+    made.run.Save = async () => { made.run.saved = true; return saveResult; };
+    (made.agent as unknown as { startPostTurnCompaction(): void }).startPostTurnCompaction = () => undefined;
+    const ts = trackedSet();
+    if (ts instanceof Set) {
+      ts.add(RUN_ID.toLowerCase());
+    } else if (ts instanceof Map) {
+      ts.set(RUN_ID.toLowerCase(), {} as never);
+    }
+    return made;
+  }
+  const isTracked = () => AgentRunWatchdog.Instance.TrackedRunIDs.includes(RUN_ID.toLowerCase());
+
+  it('a Completed run is no longer tracked once finalize saves it', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a Failed final step is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Failed', errorMessage: 'boom' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a cancelled run is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createCancelledResult(m: string): Promise<unknown> }).createCancelledResult('stop');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a run ended by createFailureResult is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createFailureResult(m: string): Promise<unknown> }).createFailureResult('bad');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('stays tracked when the final save fails', async () => {
+    const { agent } = trackedAgent(false);
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(true);
+  });
+});
+
+describe('Wave 5.1 preloadAgentData single-write step & messageFingerprint memoization', () => {
+  it('preloadAgentData records Data Source Preloading via a single INSERT', async () => {
+    const log: string[] = [];
+    const step = new MockStep('preload', log);
+    const { agent, pending } = makeAgent([step]);
+
+    const preloadSpy = vi.spyOn(AgentDataPreloader.Instance, 'PreloadAgentData').mockResolvedValueOnce({
+      data: { ALL_ENTITIES: [{ Name: 'Users' }] },
+      context: {},
+      payload: {},
+      loadedSources: ['ALL_ENTITIES'],
+      failedSources: [],
+    });
+
+    try {
+      const preloadFn = Reflect.get(agent, 'preloadAgentData') as (params: {
+        agent: { ID: string; Name: string };
+        contextUser: { ID: string; Name: string };
+        conversationMessages: ChatMessage[];
+        data: Record<string, string | object>;
+        payload: Record<string, string | object>;
+      }) => Promise<void>;
+
+      await preloadFn.call(agent, {
+        agent: { ID: 'a1', Name: 'TestAgent' },
+        contextUser: { ID: 'u1', Name: 'Tester' },
+        conversationMessages: [],
+        data: {},
+        payload: {},
+      });
+      await pending();
+    } finally {
+      preloadSpy.mockRestore();
+    }
+
+    expect(log).toEqual(['preload:start:1', 'preload:end:1']);
+    expect(step.saveOptions).toHaveLength(1);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+  });
+
+  it('BaseAgent.messageFingerprint memoizes unchanged ChatMessage instances via WeakMap and invalidates on mutation', () => {
+    const msg: ChatMessage = { role: 'user', content: 'hello world' };
+    const stringifySpy = vi.spyOn(JSON, 'stringify');
+
+    try {
+      const fingerprintFn = Reflect.get(BaseAgent, 'messageFingerprint') as (m: ChatMessage) => string;
+      const fp1 = fingerprintFn.call(BaseAgent, msg);
+      const fp2 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp1).toBe(fp2);
+      expect(stringifySpy).toHaveBeenCalledTimes(1);
+
+      msg.content = 'updated';
+      const fp3 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp3).not.toBe(fp1);
+      expect(stringifySpy).toHaveBeenCalledTimes(2);
+    } finally {
+      stringifySpy.mockRestore();
+    }
+  });
+});
+
+
 

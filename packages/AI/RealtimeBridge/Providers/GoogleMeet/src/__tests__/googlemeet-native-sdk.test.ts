@@ -8,6 +8,12 @@
  * specifier / addon absent).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
+
+vi.mock('@memberjunction/dynamic-packages', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/dynamic-packages')>();
+    return { ...actual, ImportFromHost: vi.fn(actual.ImportFromHost) };
+});
 import {
     GoogleMeetNativeMeetingSdk,
     BindGoogleMeetNative,
@@ -266,6 +272,13 @@ describe('GoogleMeetNativeMeetingSdk — config + errors', () => {
         await expect(DefaultNativeLoader('@nonexistent/meet-native-addon-xyz')).rejects.toThrow(
             /could not load the native Meet media bot addon/,
         );
+    });
+
+    it('DefaultNativeLoader loads a bare specifier through ImportFromHost (#3741)', async () => {
+        const mod = { createClient: () => ({}) };
+        vi.mocked(ImportFromHost).mockResolvedValueOnce(mod);
+        await expect(DefaultNativeLoader('@host/native-addon')).resolves.toBe(mod);
+        expect(ImportFromHost).toHaveBeenCalledWith('@host/native-addon');
     });
 
     it('BindGoogleMeetNative builds a working factory from a loose Configuration map', async () => {

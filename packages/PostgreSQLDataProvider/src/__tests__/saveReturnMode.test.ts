@@ -3,8 +3,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import type { BaseEntity, EntitySaveOptions } from '@memberjunction/core';
-import type { SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import type { BaseEntity, EntitySaveOptions, RecordChangePayload } from '@memberjunction/core';
+import type { SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
 
 type Host = {
     WrapSaveCallForResult: (
@@ -12,18 +12,37 @@ type Host = {
         entity: BaseEntity,
         spName: string,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ) => SaveSQLFragment;
+    ProjectSaveCallToDatestamps: (
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
+    ) => SaveSQLFragment;
+    WrapSaveCallWithRecordChange: (
+        saveSQL: SaveSQLFragment,
+        binding: SaveCallBinding,
+        payload: RecordChangePayload,
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ) => SaveSQLFragment;
+    buildRecordIDFromCTE: (entityInfo: BaseEntity['EntityInfo'], cteName: string) => string;
+    _schemaName: string;
 };
 
 function makeHost(): Host {
-    return Object.create(PostgreSQLDataProvider.prototype) as Host;
+    const host = Object.create(PostgreSQLDataProvider.prototype) as Host;
+    host._schemaName = '__mj';
+    return host;
 }
 
 function makeEntity(saveReturnMode: 'full' | 'datestamps_only'): BaseEntity {
     const datestampFields = [
-        { Name: 'ID', IsPrimaryKey: true },
-        { Name: '__mj_CreatedAt', IsPrimaryKey: false },
-        { Name: '__mj_UpdatedAt', IsPrimaryKey: false },
+        { Name: 'ID', CodeName: 'ID', IsPrimaryKey: true },
+        { Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', IsPrimaryKey: false },
+        { Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', IsPrimaryKey: false },
     ];
     return {
         EntityInfo: {
@@ -63,5 +82,27 @@ describe('PostgreSQLDataProvider.WrapSaveCallForResult — SaveReturnMode', () =
         const entity = makeEntity('datestamps_only');
         const res = makeHost().WrapSaveCallForResult(binding, entity, 'spCreateWidget');
         expect(res.sql).toBe('SELECT * FROM "__mj"."spCreateWidget"(p_id => $1, p_name => $2)');
+    });
+
+    it('WrapSaveCallWithRecordChange projects finalSelectColumnsSQL from save_result when effectiveReturnMode is datestamps_only', () => {
+        const entity = makeEntity('full');
+        const saveOpts = { SaveReturnMode: 'datestamps_only' } as EntitySaveOptions;
+        const host = makeHost();
+        const saveSQL = host.WrapSaveCallForResult(binding, entity, 'spUpdateWidget', saveOpts);
+        const payload: RecordChangePayload = {
+            entityID: 'ent-1',
+            recordID: 'ID|uuid-1',
+            userID: 'usr-1',
+            type: 'Update',
+            source: 'Internal',
+            changesJSON: '{"Name":{"oldValue":"A","newValue":"B"}}',
+            changesDescription: 'Name changed',
+            fullRecordJSON: '{"ID":"uuid-1","Name":"B"}',
+            restoredFromID: null,
+            restoreReason: null,
+        };
+        const wrapped = host.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, saveOpts);
+        expect(wrapped.sql).toContain('SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM "__mj"."spUpdateWidget"(p_id => $1, p_name => $2)');
+        expect(wrapped.sql.trim().endsWith('SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM save_result')).toBe(true);
     });
 });

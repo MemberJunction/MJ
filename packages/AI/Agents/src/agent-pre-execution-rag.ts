@@ -16,6 +16,11 @@
  *   4. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
  *      (MaxResults, MinScore, FusionWeightsOverride), the agent's multi-tenant context
  *      (PrimaryScopeRecordID, SecondaryScopes) and the run's audience (`SearchParams.Audience`).
+ *      The engine fuses every lane the scope runs — vector, full-text, entity and the Semantic Graph
+ *      lane (`GraphSearchProvider`, available once MJAPI registers the graph expansion service; a global
+ *      scope runs it, a bounded scope runs it when it lists that provider). The audience reaches the graph
+ *      lane as `ScopeConstraints.AudienceReaders`, so its traversal never passes through a node a reader
+ *      cannot see; with no active graph the lane returns nothing.
  *   5. Cross-scope RRF when multiple scopes produced results.
  *   6. Format results as a `<retrieved_context>` system message and return.
  *
@@ -143,6 +148,14 @@ export class AgentPreExecutionRAG {
      */
     public async Execute(params: AgentPreExecutionRAGParams): Promise<AgentPreExecutionRAGResult | null> {
         if (!params.agent?.ID) return null;
+        if (typeof SearchEngineBase.Instance.HasActiveAgentScopes === 'function') {
+            const hasScopes = await SearchEngineBase.Instance.HasActiveAgentScopes(
+                params.agent.ID,
+                'PreExecution',
+                params.contextUser
+            );
+            if (!hasScopes) return null;
+        }
         await SearchEngineBase.Instance.Config(false, params.contextUser);
 
         // 1. Load active PreExecution/Both scope rows for this agent (sorted by priority)
@@ -158,12 +171,12 @@ export class AgentPreExecutionRAG {
         const principal = await this.resolveSkillPrincipal(params);
         if (!principal.ok) return null;
 
-        // 2–4. For each agent-scope row, check permission, render the query and run scoped search.
-        const perScopeResults: ScopeSearchResult[] = [];
-        for (const row of agentScopeRows) {
-            const r = await this.searchOneAgentScope(row, params, searchContext, hasContext, principal.skill);
-            if (r) perScopeResults.push(r);
-        }
+        // 2–4. For each agent-scope row, check permission, render the query and run scoped search in parallel
+        // while preserving Priority order (agentScopeRows is pre-sorted by Priority ascending).
+        const settledResults = await Promise.all(
+            agentScopeRows.map(row => this.searchOneAgentScope(row, params, searchContext, hasContext, principal.skill))
+        );
+        const perScopeResults: ScopeSearchResult[] = settledResults.filter((r): r is ScopeSearchResult => r !== null);
         if (perScopeResults.length === 0) return null;
 
         // 5. Cross-scope RRF when multiple scopes contributed
@@ -637,7 +650,7 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { ContextUser: params.contextUser });
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }
@@ -684,6 +697,7 @@ export class AgentPreExecutionRAG {
             ExtraFilter: `TemplateID='${templateID}'`,
             OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
         const content = cResult.Success && cResult.Results.length > 0 ? cResult.Results[0] : null;

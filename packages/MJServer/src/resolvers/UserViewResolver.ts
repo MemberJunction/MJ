@@ -5,6 +5,7 @@ import { MJUserView_, MJUserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
 import { MJUserViewEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 
 @Resolver(MJUserView_)
 export class UserViewResolver extends MJUserViewResolverBase {
@@ -63,7 +64,7 @@ export class UserViewResolver extends MJUserViewResolverBase {
     await viewEntity.UpdateWhereClause(true); // force regeneration regardless of dirty state — that is the whole point of this endpoint
 
     if (await viewEntity.Save()) {
-      return viewEntity.GetAll();
+      return ProjectEntityObjectForCaller(viewEntity, u, p);
     } else {
       throw new Error('Failed to update where clause');
     }

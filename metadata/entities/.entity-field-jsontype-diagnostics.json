@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Diagnostic Sessions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDiagnosticSessionScope",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions&Name=ScopeJSON"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.643Z",
+            "checksum": "f8ef6aead802072532cf466e79219eb8d57680679877b6be90361d1d18025635"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Diagnostic Bundles"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDiagnosticBundleManifest",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=ManifestJSON"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.656Z",
+            "checksum": "2ebcac0f33903637078e4d96c8aed8c12e21820da57a5c022a616a8ecfe3525e"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IDiagnosticScrubReport",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=ScrubReportJSON"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.666Z",
+            "checksum": "3713ba3cbc25f9e5c1bb356f00d509e6c447035e6d0b68b4768916d2227d3f24"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IDiagnosticFinding",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=FindingsJSON"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.676Z",
+            "checksum": "61a3e13930ae3e0b4a8406196ad59144f58945caec079a4922b17fa87c1eb1df"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles"
+    }
+  }
+]

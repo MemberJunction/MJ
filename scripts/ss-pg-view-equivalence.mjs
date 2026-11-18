@@ -37,9 +37,10 @@
  *   SQLGLOT_PYTHON python with sqlglot     (default: /tmp/sqlglot-venv/bin/python3)
  *
  * Output: summary JSON to stdout; full report (incl. each diff's two
- * definitions) to /tmp/ss-pg-view-equiv-report.json.
+ * definitions) to <tmpdir>/ss-pg-view-equiv-XXXXXX/report.json (path printed as fullReport).
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -51,7 +52,7 @@ const DB = process.env.EQUIV_DB;
 const CONTAINER = process.env.PG_CONTAINER || 'postgres-claude';
 const PG_USER = process.env.PG_USER || 'mj_admin';
 const PG_PASSWORD = process.env.PG_PASSWORD || 'Claude2Pg99';
-const REPORT_PATH = '/tmp/ss-pg-view-equiv-report.json';
+const REPORT_PATH = join(mkdtempSync(join(tmpdir(), 'ss-pg-view-equiv-')), 'report.json');
 
 if (!DB) {
   console.error('EQUIV_DB env var is required (target PG database name)');

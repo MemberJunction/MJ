@@ -216,6 +216,7 @@ export class MjFormPlacementPreviewComponent extends BaseAngularComponent implem
                 Fields: nameField && !keyFields.includes(nameField) ? [...keyFields, nameField] : keyFields,
                 OrderBy: nameField ? `${nameField} ASC` : '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             }, provider.CurrentUser);
             const row = result.Success ? result.Results?.[0] : undefined;

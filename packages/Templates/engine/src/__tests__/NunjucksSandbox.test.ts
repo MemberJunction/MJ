@@ -183,6 +183,18 @@ describe('member access', () => {
             r: { Name: 'Ada', __mj_UpdatedAt: '2026-10-08', tags: ['x'] },
         })).toBe('Ada|2026-10-08|x');
     });
+
+    it('evaluates property getters only once per member lookup', () => {
+        let getterCallCount = 0;
+        const obj = {
+            get Computed(): string {
+                getterCallCount++;
+                return 'val';
+            },
+        };
+        expect(renderPlain('{{ r.Computed }}', { r: obj })).toBe('val');
+        expect(getterCallCount).toBe(1);
+    });
 });
 
 describe('bare names', () => {

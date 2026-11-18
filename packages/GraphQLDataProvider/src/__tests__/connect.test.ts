@@ -112,6 +112,18 @@ describe('ConnectGraphQLClient (real provider)', () => {
 
         expect(provider.sessionId).toBe(sessionId);
     });
+
+    it('generates a fresh per-runtime sessionId even when LocalStorageProvider has a stored sessionId', async () => {
+        const provider = await ConnectGraphQLClient(makeConfig());
+        vi.spyOn(provider, 'GetStoredSessionID').mockResolvedValue('shared-localstorage-session-id');
+
+        const uuid1 = await provider.GetPreferredUUID();
+        const uuid2 = await provider.GetPreferredUUID();
+
+        expect(uuid1).not.toBe('shared-localstorage-session-id');
+        expect(uuid2).not.toBe('shared-localstorage-session-id');
+        expect(uuid1).not.toBe(uuid2);
+    });
 });
 
 describe('a separate-connection provider refreshed later (#4887)', () => {

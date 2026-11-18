@@ -7,43 +7,10 @@ import {
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { LogError } from '@memberjunction/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJMediaPlayerComponent } from '../media-player/media-player.component';
 import { MediaTrack, MediaTranscriptCue } from '../media-player.types';
-
-/** Shape of the `CreateMediaAccessToken` server mutation result (one file). */
-interface CreateMediaAccessTokenResult {
-  Success: boolean;
-  Token?: string | null;
-  Url?: string | null;
-  ExpiresAt?: string | null;
-  MimeType?: string | null;
-  /**
-   * Optional precomputed waveform peaks (normalized `0..1`, one per bar) read from a `peaks.json`
-   * sidecar beside the file. When present, the player renders the real waveform instantly with NO
-   * client-side fetch/decode of the audio. Absent → the player falls back to client-side extraction.
-   */
-  Peaks?: number[] | null;
-  ErrorMessage?: string | null;
-}
-
-/**
- * The exact GraphQL mutation this wrapper consumes. Mints a short-lived signed token (after a
- * server-side per-user permission check) and returns the authenticated `/media/<fileId>?token=`
- * streaming URL — which `<audio>`/`<video>` stream natively with HTTP Range (seek-before-download).
- */
-const CREATE_MEDIA_ACCESS_TOKEN_MUTATION = `mutation CreateMediaAccessToken($fileId: String!) {
-  CreateMediaAccessToken(fileId: $fileId) {
-    Success
-    Url
-    ExpiresAt
-    MimeType
-    Peaks
-    ErrorMessage
-  }
-}`;
+import { MintMediaAccessUrl } from './media-access';
 
 /**
  * `mj-storage-media-player` — an MJStorage-bound wrapper around {@link MJMediaPlayerComponent}.
@@ -106,6 +73,27 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     return this._fileIDs;
   }
   private _fileIDs: string[] = [];
+
+  /** Optional poster image file id in MJ Storage, assigned to `PosterUrl` on the first video track. */
+  @Input()
+  set PosterFileID(value: string | null) {
+    if (value !== this._posterFileID) {
+      this._posterFileID = value;
+      this._cachedPosterFileID = null;
+      this._cachedPosterUrl = null;
+      this._cachedPosterExpiresAtMs = null;
+      if (this._initialized) {
+        void this.resolveTracks();
+      }
+    }
+  }
+  get PosterFileID(): string | null {
+    return this._posterFileID;
+  }
+  private _posterFileID: string | null = null;
+  private _cachedPosterFileID: string | null = null;
+  private _cachedPosterUrl: string | null = null;
+  private _cachedPosterExpiresAtMs: number | null = null;
 
   /** Transcript cues forwarded to the generic player. */
   @Input() Transcript: MediaTranscriptCue[] | null = null;
@@ -186,11 +174,25 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     const tracks: MediaTrack[] = [];
     let firstError: string | null = null;
 
-    for (const id of ids) {
-      const result = await this.mintAccessToken(id);
-      if (token !== this._resolveToken) {
-        return; // a newer resolution superseded this one
-      }
+    const posterFileId = this._posterFileID;
+    const needPoster = Boolean(
+      posterFileId &&
+        (this._cachedPosterFileID !== posterFileId ||
+          !this._cachedPosterUrl ||
+          this.isCachedPosterExpired()),
+    );
+    const [trackResults, posterResult] = await Promise.all([
+      Promise.all(ids.map(id => MintMediaAccessUrl(this.ProviderToUse, id))),
+      needPoster && posterFileId ? MintMediaAccessUrl(this.ProviderToUse, posterFileId) : Promise.resolve(null),
+    ]);
+
+    if (token !== this._resolveToken) {
+      return; // a newer resolution superseded this one
+    }
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const result = trackResults[i];
       if (result && result.Success && result.Url) {
         tracks.push(this.buildTrack(id, result.Url, result.MimeType ?? null, result.Peaks ?? null));
       } else if (!firstError) {
@@ -198,8 +200,22 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
       }
     }
 
-    if (token !== this._resolveToken) {
-      return;
+    if (posterFileId && needPoster) {
+      if (posterResult && posterResult.Success && posterResult.Url) {
+        this._cachedPosterFileID = posterFileId;
+        this._cachedPosterUrl = posterResult.Url;
+        const parsedExpiry = posterResult.ExpiresAt ? Date.parse(posterResult.ExpiresAt) : NaN;
+        this._cachedPosterExpiresAtMs = Number.isFinite(parsedExpiry) ? parsedExpiry : null;
+      } else {
+        this._cachedPosterFileID = null;
+        this._cachedPosterUrl = null;
+        this._cachedPosterExpiresAtMs = null;
+      }
+    }
+
+    const firstVideoTrack = tracks.find(t => t.Kind === 'video');
+    if (posterFileId && firstVideoTrack && this._cachedPosterFileID === posterFileId && this._cachedPosterUrl) {
+      firstVideoTrack.PosterUrl = this._cachedPosterUrl;
     }
 
     this._resolvedTracks = tracks;
@@ -209,17 +225,13 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     this.cdr.markForCheck();
   }
 
-  /** Mints an authenticated streaming-URL token for one file id via the active provider. */
-  private async mintAccessToken(fileId: string): Promise<CreateMediaAccessTokenResult | null> {
-    try {
-      const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
-      const data = await provider.ExecuteGQL(CREATE_MEDIA_ACCESS_TOKEN_MUTATION, { fileId });
-      const payload = data?.CreateMediaAccessToken as CreateMediaAccessTokenResult | undefined;
-      return payload ?? null;
-    } catch (err) {
-      LogError(`CreateMediaAccessToken failed for file '${fileId}': ${err instanceof Error ? err.message : String(err)}`);
-      return { Success: false, ErrorMessage: 'Unable to load this recording.' };
+  private static readonly POSTER_EXPIRY_MARGIN_MS = 60_000;
+
+  private isCachedPosterExpired(): boolean {
+    if (this._cachedPosterExpiresAtMs == null) {
+      return false;
     }
+    return Date.now() >= this._cachedPosterExpiresAtMs - MJStorageMediaPlayerComponent.POSTER_EXPIRY_MARGIN_MS;
   }
 
   /**

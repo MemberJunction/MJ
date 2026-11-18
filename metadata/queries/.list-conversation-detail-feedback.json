@@ -12,12 +12,297 @@
       "ExecutionCostRank": 2,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/list-conversation-detail-feedback.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "468F5491-94EB-4003-A844-E7041BAFA527"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.757Z",
+            "checksum": "7765c1f13522e7254867a5b6abc524cd48419f1282990332fd0987d0644374ae"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "StartDate",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01T00:00:00Z",
+            "Description": "ISO date string lower bound on __mj_UpdatedAt. Guarded by truthiness check — empty value will omit the filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "16E0E0AF-166C-424D-B06C-E3309656692D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EndDate",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-12-31T23:59:59Z",
+            "Description": "ISO date string upper bound on __mj_UpdatedAt. Guarded by truthiness check — empty value will omit the filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9A5745A7-DE47-4C65-B2EC-BB942D2B3EA7"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MinRating",
+            "Type": "number",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "1",
+            "Description": "Integer lower bound (1‑10) for UserRating. Guarded by truthiness check — value 0 will skip this clause.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BC2152C8-7AB8-42F6-9FAE-9A0240A0B30A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MaxRating",
+            "Type": "number",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "10",
+            "Description": "Integer upper bound (1‑10) for UserRating. Guarded by truthiness check — value 0 will skip this clause.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9C8D7132-222B-4943-99B0-E7B44E4058FD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+            "Description": "Scope to a single agent via its uniqueidentifier. Guarded by truthiness check — empty value will omit the filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EC6BA779-E2A9-4327-A3CC-F6BE21DA73AE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SearchText",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "great service",
+            "Description": "Case‑insensitive substring used to match comments, message text, agent name, rater name, and rater email. Guarded by truthiness check — empty string will omit the filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EAF23B8B-006F-4776-BC4A-E2CEE09BF071"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "RatingID",
+            "Description": "Identifier of the rating record.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "01CB2CB8-AE84-477E-A90D-2839D141AED1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Rating",
+            "Description": "Numeric rating given by the user.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CA0F3BC7-568B-4599-9A91-9FC4CD476CA1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Comments",
+            "Description": "Free‑form feedback left by the user.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "995ACE0F-0B9D-4AE0-80A8-888F16BCE0AF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RatedAt",
+            "Description": "Timestamp when the rating was recorded.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "73CF3188-AF75-466A-B8FF-C54CFE5E51C1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RaterUserID",
+            "Description": "User ID of the conversation owner who provided the rating.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5ABFA44F-4E7C-45A3-B550-4B5680F734A6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RaterName",
+            "Description": "Display name of the rater.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0B79AA18-53F3-4D6A-B51F-FB65FDC429B4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RaterEmail",
+            "Description": "Email address of the rater.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3C67F3F9-F9C5-4C75-8ABD-9E30CAC7B76D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationDetailID",
+            "Description": "Identifier of the conversation detail (message) row.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7790AD6F-B669-4177-BB04-8CBADC2E9357"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Description": "Identifier of the parent conversation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4AE44559-35C9-49C5-A765-FE3E1D52E2BD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MessageText",
+            "Description": "Content of the message.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ADF3BD7D-D1E6-4C98-AB39-059F2C1E0F48"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MessageRole",
+            "Description": "Role of the message (e.g., user, assistant).",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B567D1EC-9CCE-4ED2-A109-9432B37C7C3C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MessageCreatedAt",
+            "Description": "Timestamp when the message was created.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "79CE57DA-837C-4AEE-83A3-03F3E636E1AA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationName",
+            "Description": "Human‑readable name of the conversation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DAA64DA5-AAAB-4A64-ABAA-4A042EE1D262"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "AgentID",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E35E8705-D16C-4094-9878-EA00E6821839"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentName",
+            "Description": "Name (aliased as AgentName)",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F69286FD-DCA5-4335-AA74-5547BBAC8738"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "FACEF5AC-C979-4944-B41F-2BD2A20BEAE7"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:07:43.573Z",
-      "checksum": "5812631e1ed91706b838debacbf811937dde19802591a4d4e694cb8afc611ebc"
+      "lastModified": "2026-10-28T22:14:02.179Z",
+      "checksum": "6f272a1f19a16488539449bc931a72ca97fec0625413922b3d33a1d75997accf"
     }
   }
 ]

@@ -9,6 +9,7 @@
 
 import { KeyedSerialTaskQueue, SerialTaskFlushResult } from '@memberjunction/global';
 import { BaseEntity } from './baseEntity';
+import type { EntitySaveReturnMode } from './entityConfiguration';
 import { EntitySaveOptions } from './interfaces';
 import { LogError } from './logging';
 
@@ -22,14 +23,28 @@ import { LogError } from './logging';
 export class BaseEntitySaveQueue {
     private readonly queue = new KeyedSerialTaskQueue();
     private readonly onError?: (message: string) => void;
+    private readonly saveReturnMode?: EntitySaveReturnMode;
+    private readonly detachFromTransaction: boolean;
 
     /**
      * @param opts.onError Optional handler for a failed save's diagnostic message. Defaults to the
      *   global `LogError`. Consumers with structured logging (e.g. a category/metadata logger) pass
      *   their own so failures stay in their log stream.
+     * @param opts.saveReturnMode Optional {@link EntitySaveReturnMode} forwarded to every queued
+     *   `entity.Save(options)` call (e.g. `'datestamps_only'` for high-write execution log queues
+     *   whose wide JSON/text payload columns are already in memory).
+     * @param opts.detachFromTransaction When true, each save runs outside the enqueuer's transaction
+     *   (see `IEntityDataProvider.RunOutsideAmbientTransaction`) and commits on its own. Default false:
+     *   a save queued by a transaction member joins that transaction. Turn it on only for a queue that
+     *   nobody awaits before the transaction commits AND whose rows reference only committed rows. A
+     *   queue its owner `Flush()`es inside the transaction, with a foreign key to a row that transaction
+     *   wrote, must stay attached: detached, its INSERT waits on the transaction's lock while the owner
+     *   waits on the INSERT.
      */
-    constructor(opts?: { onError?: (message: string) => void }) {
+    constructor(opts?: { onError?: (message: string) => void; saveReturnMode?: EntitySaveReturnMode; detachFromTransaction?: boolean }) {
         this.onError = opts?.onError;
+        this.saveReturnMode = opts?.saveReturnMode;
+        this.detachFromTransaction = opts?.detachFromTransaction === true;
     }
 
     /**
@@ -38,7 +53,8 @@ export class BaseEntitySaveQueue {
      */
     public Insert(entity: BaseEntity): void {
         const label = this.labelFor('Insert', entity);
-        void this.queue.enqueue(entity, () => this.runSave(entity, label), { isOk: (ok) => ok === true, label });
+        const options = this.buildSaveOptions(false);
+        void this.queue.enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label });
     }
 
     /**
@@ -48,7 +64,21 @@ export class BaseEntitySaveQueue {
      */
     public InsertAfter(entity: BaseEntity, dependency: BaseEntity): void {
         const label = this.labelFor('Insert', entity);
-        void this.queue.enqueue(entity, () => this.runSave(entity, label), { isOk: (ok) => ok === true, label, after: dependency });
+        const options = this.buildSaveOptions(false);
+        void this.queue.enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label, after: dependency });
+    }
+
+    /**
+     * Fire-and-forget INSERT that runs only after `ready` resolves. Use this when the row has a foreign
+     * key to a row that **another** queue is still writing: pass that queue's {@link Settled} for the
+     * parent. The INSERT is queued at once (so {@link Flush} waits for it) and the caller never waits;
+     * only the save itself is held back. ({@link InsertAfter} is the same wait when both rows share this
+     * queue.)
+     */
+    public InsertWhen(entity: BaseEntity, ready: Promise<void>): void {
+        const label = this.labelFor('Insert', entity);
+        const options = this.buildSaveOptions(false);
+        void this.queue.Enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label, ready });
     }
 
     /**
@@ -59,9 +89,32 @@ export class BaseEntitySaveQueue {
      */
     public Update(entity: BaseEntity, applyMutation?: (entity: BaseEntity) => void): void {
         const label = this.labelFor('Update', entity);
-        const options = new EntitySaveOptions();
-        options.IgnoreDirtyState = true;
+        const options = this.buildSaveOptions(true);
         void this.queue.enqueue(entity, () => this.runSave(entity, label, options, applyMutation), { isOk: (ok) => ok === true, label });
+    }
+
+    private buildSaveOptions(ignoreDirtyState: boolean): EntitySaveOptions | undefined {
+        if (!ignoreDirtyState && !this.saveReturnMode) {
+            return undefined;
+        }
+        const options = new EntitySaveOptions();
+        if (ignoreDirtyState) {
+            options.IgnoreDirtyState = true;
+        }
+        if (this.saveReturnMode) {
+            options.SaveReturnMode = this.saveReturnMode;
+        }
+        return options;
+    }
+
+    /**
+     * Resolves once every save queued so far for `entity` has settled (at once when none is pending);
+     * never rejects — a failed save is already logged here. For a caller that holds the entity's ID and
+     * must write a dependent row (a foreign key to it) from a *different* queue: `InsertAfter` only
+     * orders writes within this queue.
+     */
+    public Settled(entity: BaseEntity): Promise<void> {
+        return this.queue.Settled(entity);
     }
 
     /** Awaits all pending saves and returns failure diagnostics. Call at the run/goal finalize boundary. */
@@ -79,7 +132,7 @@ export class BaseEntitySaveQueue {
             if (applyMutation) {
                 applyMutation(entity);
             }
-            const ok = await entity.Save(options);
+            const ok = await this.save(entity, options);
             if (!ok) {
                 this.logFailure(`${label} failed: ${this.saveError(entity)}`);
             }
@@ -88,6 +141,15 @@ export class BaseEntitySaveQueue {
             this.logFailure(`${label} threw: ${e instanceof Error ? e.message : String(e)}`);
             return false;
         }
+    }
+
+    /** Saves the entity, outside the enqueuer's transaction when the queue was built with `detachFromTransaction`. */
+    private save(entity: BaseEntity, options?: EntitySaveOptions): Promise<boolean> {
+        const provider = entity.ProviderToUse;
+        if (this.detachFromTransaction && provider?.RunOutsideAmbientTransaction) {
+            return provider.RunOutsideAmbientTransaction(() => entity.Save(options));
+        }
+        return entity.Save(options);
     }
 
     /** Routes a failure message to the caller-supplied handler, or the global `LogError` by default. */

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S9.5",
+    "Description": "Gate G0.5 (owner PR 2, phase 0, dataset W1, criterion S9.5): the At-Risk list (\"Send to a list\") built from the W1-signal s42 record-process scores holds every record at or above the 40% risk floor (126 of the NA 2024 scope), at most 200, all present in the truth file, and its mean true renewal probability (TrueP from the truth file) is at least 0.15 below the population mean. The measured gap is about 0.29; 0.15 is the margin, so a list picked by a score with no signal (expected gap 0) fails.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.5\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S9.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The At-Risk list (every record at or above the risk floor, at most 200; 126 for W1 s42) has a mean TrueP at least 0.15 below the population mean."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s9-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "348424BF-1174-4EC1-A951-195FBDCBFC3F"
+  }
+}

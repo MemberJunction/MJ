@@ -11,6 +11,13 @@ You are performing a final review of proposed primary key removals across a data
 - {{ tbl.schema }}.{{ tbl.name }}{% if tbl.pk %} (PK: {{ tbl.pk }}){% endif %}{% if tbl.description %} — {{ tbl.description }}{% endif %}
 {% endfor %}
 
+{% if seedExcerpt %}
+## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+{{ seedExcerpt }}
+
+{% endif %}
 ## Your Task:
 Review each proposed removal. Consider:
 1. Would removing this PK leave the table without any primary key?

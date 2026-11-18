@@ -25,9 +25,10 @@ import {
 } from '@memberjunction/ng-auth-services';
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
-import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
-import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
+import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap/types';
+import { ValidateExplorerEnvironment } from './environment-validation';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
+import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -48,6 +49,7 @@ const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
 const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
 
 import { CarryAdditionalContext, SurfaceContextTracker } from './app-context-snapshot';
+import { IsStandaloneRoute } from './standalone-routes';
 
 /**
  * A surface tool result without its images (`Media`), for the realtime session: a voice model reads a
@@ -259,8 +261,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public set showValidationOnly(value) {
     this.ShowValidationOnly = value;
   }
-  /** True when the current URL is the OAuth callback route - used for conditional rendering */
+  /** True when the current URL is the OAuth callback route */
   public IsOAuthCallback = false;
+  /**
+   * True on a route that renders on its own, with no shell or login screen (the OAuth callback and the
+   * Excel add-in's connect page). Drives the template; follows navigation, since some identity providers
+   * return to the page through the router rather than by reloading it.
+   */
+  public IsStandaloneRoute = false;
 
   /** @deprecated Use {@link IsOAuthCallback}. */
   public get isOAuthCallback() {
@@ -285,6 +293,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
+
+  /**
+   * True when the active resource surface publishes `SuppressChatOverlay: true` in its agent
+   * context because it hosts its own right-edge conversation slide-in, preventing two right-edge
+   * chat entry points from appearing at the same time.
+   */
+  public get IsChatOverlaySuppressedBySurface(): boolean {
+    const additional = this.AppContextSnapshot?.AdditionalContext;
+    if (!additional || typeof additional !== 'object') {
+      return false;
+    }
+    const record = additional as Record<string, unknown>;
+    return record['SuppressChatOverlay'] === true;
+  }
+
 
   /**
    * Instance-config chrome flags, resolved once and cached. The getters below are
@@ -312,9 +335,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return flags;
   }
 
-  /** Instance Config gate for the floating chat overlay bubble. */
+  /**
+   * Gate for the floating chat overlay bubble. With the shell rendered this is the shell's
+   * RESOLVED answer — Instance Config narrowed by the host's chrome policy (LXP P4: a learner
+   * portal that owns its own AI surface hides the bubble per audience, not with CSS). The shell
+   * marks for check when its policy changes, and that marks this parent dirty too, so the bubble
+   * follows.
+   *
+   * The Instance Config fallback is live in exactly one state: the shell is gone (`HasError`, or
+   * a pre-shell guard) while `IsChatOverlayReady` is already true — the error screen after a
+   * workspace that had loaded. There it keeps the pre-policy behaviour (the key alone decides),
+   * which is what shipped before the overlay followed the policy. On a normal load the overlay
+   * is gated on workspace init, which comes after the shell, so the shell always answers.
+   */
   public get ShowChatOverlay(): boolean {
-    return this.chromeFlags.chatOverlay;
+    return this.shellRef()?.ChromeFlags.chatOverlay ?? this.chromeFlags.chatOverlay;
   }
 
   /** Instance Config gate for the service-worker update toast. */
@@ -344,6 +379,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** The offline banner above the shell header; absent until the shell renders. */
   private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+  /** The shell, when rendered — the source of the resolved chrome flags (see {@link ShowChatOverlay}). */
+  private readonly shellRef = viewChild(ShellComponent);
 
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
@@ -389,8 +426,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private environmentInjector: EnvironmentInjector,
     private viewContainerRef: ViewContainerRef,
     @Optional() @Inject(MJ_AUTH_PROVIDER_RESOLUTION) private authResolution: AuthProviderResolution | null,
+    private themeService: ThemeService,
   ) {
     super();
+    // Before anything renders: put the persisted org brand overlay back so the sign-in page and
+    // the shell's loading screen paint branded on a cold load, instead of waiting for workspace
+    // bootstrap to re-emit the overlay (which is a session Blob and does not survive a reload).
+    this.themeService.RestorePersistedBrandOverlay();
     this.registerClientTools();
   }
 
@@ -545,7 +587,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Navigate to the initial route. A deep link is replayed through the router;
         // a bare '/' is left to the router's default route (the Home app).
         if (this.initialPath !== '/') {
-          this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
+          this.router.navigateByUrl(this.initialPath, { replaceUrl: true })?.catch(() => {
+            void this.router.navigateByUrl('/', { replaceUrl: true });
+          });
         }
       } else if (result.error) {
         // Handle errors based on type
@@ -604,14 +648,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
             if (token) {
               await this.HandleLogin(token, userInfo);
             } else {
-              // Token expired or missing — attempt a full refresh which will
-              // redirect to the identity provider if interaction is required.
+              // Token expired or missing — attempt a fast refresh which will
+              // immediately redirect to the identity provider if interaction is required.
               console.warn('User info available but no token found, attempting refresh...');
+              this.SubHeaderText = 'Session expired — redirecting to sign in...';
+              this.cdr.detectChanges();
               try {
                 const refreshedToken = await this.AuthBase.refreshToken();
                 await this.HandleLogin(refreshedToken.idToken, userInfo);
               } catch (e) {
                 console.error('Token refresh failed, redirecting to login:', e);
+                this.SubHeaderText = 'Your session has expired. Redirecting to sign in...';
+                this.cdr.detectChanges();
                 // refreshToken() normally redirects (and never returns) when
                 // interaction is required.  If we reach here, force login as
                 // a last-resort safety net.
@@ -669,9 +717,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // channel can source video is decided at mint. Hosts that do not call this keep state-only perception.
     EnableChannelFrameCapture();
 
-    // Check if this is the OAuth callback route - used for conditional rendering in template
+    // Standalone routes (OAuth callback, Excel connect page) render without the shell or login screen.
     // Note: We still run setupAuth() to restore the user's session
     this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+    this.IsStandaloneRoute = IsStandaloneRoute(window.location.pathname, new URL(document.baseURI).pathname);
 
     // Resume sign-in when a picker choice required a provider switch (and therefore a reload),
     // so switching providers stays a single user action.
@@ -685,6 +734,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       )
       .subscribe((event) => {
         const url = (event as NavigationEnd).urlAfterRedirects || (event as NavigationEnd).url;
+        this.updateStandaloneRoute(url);
         const nowChatRoute = url.includes('/chat') || url.includes('/conversations');
         const activeConvoId = this.bridge.ActiveConversationID$.value;
         // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
@@ -747,6 +797,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
     this.SetupAuth();
+  }
+
+  /** Re-evaluates {@link IsStandaloneRoute} after a navigation; router URLs never carry the base href. */
+  private updateStandaloneRoute(url: string): void {
+    const standalone = IsStandaloneRoute(url);
+    if (standalone !== this.IsStandaloneRoute) {
+      this.IsStandaloneRoute = standalone;
+      this.cdr.detectChanges();
+    }
   }
 
   ngOnDestroy() {
@@ -1331,90 +1390,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Validates that required environment variables are present before auth initialization.
    * Surfaces clear error messages via SystemValidationService instead of letting the app
    * crash with cryptic runtime errors like "can't read endsWith() on undefined".
+   * A provider resolved from the server's catalog supplies its own settings (see
+   * {@link ValidateExplorerEnvironment}).
    */
   private validateEnvironment(): boolean {
-    const env = this.environment;
-    let valid = true;
-
-    const requiredFields: { key: keyof MJEnvironmentConfig; label: string }[] = [
-      { key: 'GRAPHQL_URI', label: 'GraphQL HTTP endpoint URL' },
-      { key: 'GRAPHQL_WS_URI', label: 'GraphQL WebSocket endpoint URL' },
-      { key: 'AUTH_TYPE', label: 'Authentication provider type (msal or auth0)' },
-      { key: 'MJ_CORE_SCHEMA_NAME', label: 'MJ Core schema name' },
-    ];
-
-    for (const field of requiredFields) {
-      if (!env[field.key]) {
-        this.validationService.addIssue({
-          id: `env-missing-${String(field.key)}`,
-          message: `Missing required environment variable: ${String(field.key)}`,
-          severity: 'error',
-          details: `The "${String(field.key)}" property is empty or missing in your environment configuration file.`,
-          help: `Add ${String(field.key)} (${field.label}) to your environment.ts file. Example files are in src/environments/.`
-        });
-        valid = false;
-      }
+    const issues = ValidateExplorerEnvironment(this.environment, !!this.authResolution?.active);
+    for (const issue of issues) {
+      this.validationService.addIssue(issue);
     }
-
-    // Conditionally required based on AUTH_TYPE
-    const authType = env.AUTH_TYPE?.toLowerCase();
-    if (authType === 'msal') {
-      valid = this.validateMsalFields(env) && valid;
-    } else if (authType === 'auth0') {
-      valid = this.validateAuth0Fields(env) && valid;
-    }
-
-    return valid;
-  }
-
-  private validateMsalFields(env: MJEnvironmentConfig): boolean {
-    let valid = true;
-    if (!env.CLIENT_ID) {
-      this.validationService.addIssue({
-        id: 'env-missing-CLIENT_ID',
-        message: 'Missing required environment variable: CLIENT_ID',
-        severity: 'error',
-        details: 'MSAL authentication requires CLIENT_ID (Azure AD/Entra Application Client ID).',
-        help: 'Add your Azure AD Application (client) ID to the environment file.'
-      });
-      valid = false;
-    }
-    if (!env.TENANT_ID) {
-      this.validationService.addIssue({
-        id: 'env-missing-TENANT_ID',
-        message: 'Missing required environment variable: TENANT_ID',
-        severity: 'error',
-        details: 'MSAL authentication requires TENANT_ID (Azure AD/Entra Tenant ID).',
-        help: 'Add your Azure AD Directory (tenant) ID to the environment file.'
-      });
-      valid = false;
-    }
-    return valid;
-  }
-
-  private validateAuth0Fields(env: MJEnvironmentConfig): boolean {
-    let valid = true;
-    if (!env.AUTH0_DOMAIN) {
-      this.validationService.addIssue({
-        id: 'env-missing-AUTH0_DOMAIN',
-        message: 'Missing required environment variable: AUTH0_DOMAIN',
-        severity: 'error',
-        details: 'Auth0 authentication requires AUTH0_DOMAIN.',
-        help: 'Add your Auth0 domain (e.g. myapp.us.auth0.com) to the environment file.'
-      });
-      valid = false;
-    }
-    if (!env.AUTH0_CLIENTID) {
-      this.validationService.addIssue({
-        id: 'env-missing-AUTH0_CLIENTID',
-        message: 'Missing required environment variable: AUTH0_CLIENTID',
-        severity: 'error',
-        details: 'Auth0 authentication requires AUTH0_CLIENTID.',
-        help: 'Add your Auth0 Client ID to the environment file.'
-      });
-      valid = false;
-    }
-    return valid;
+    return issues.length === 0;
   }
 
   /**

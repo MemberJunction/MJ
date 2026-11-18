@@ -1,11 +1,12 @@
 import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormMode, FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent, MjRecordPreviewPopoverService } from '@memberjunction/ng-base-forms';
 import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 import { Subscription } from 'rxjs';
 import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
 import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 
 /**
  * Explorer-side host for a single entity record in the main tab area.
@@ -31,6 +32,19 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
+  /**
+   * `'standard'` asks the host for the CodeGen form even when a custom form is
+   * registered (MJ#4755). The mount-time mode; later changes go through
+   * {@link SwitchFormMode} so the host's unsaved-work guard applies.
+   */
+  @Input() public FormMode: EntityFormMode = 'default';
+
+  /**
+   * Re-emitted host `FormModeChange`: the mode changed inside the host — the
+   * strip, a {@link SwitchFormMode} call, or an interactive-variant pick
+   * (which returns to `'default'`).
+   */
+  @Output() public FormModeChange: EventEmitter<EntityFormMode> = new EventEmitter<EntityFormMode>();
 
   /** @deprecated Use {@link NewRecordValues}. */
   @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {
@@ -89,7 +103,22 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
    */
   @Output() public CompositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
 
+  /**
+   * Emitted when the user clicks "Ask AI" in the record form toolbar.
+   * Also requests expansion of the floating chat overlay via ConversationsRuntime.
+   */
+  @Output() public AskAIRequested: EventEmitter<void> = new EventEmitter<void>();
+
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
+
+  /**
+   * Switch the mounted form between custom and standard (MJ#4755) through the
+   * host's guarded switch. False when refused (unsaved work — the host has
+   * already raised a warning) or when no host is mounted yet.
+   */
+  public SwitchFormMode(mode: EntityFormMode): boolean {
+    return this.formHost?.SwitchFormMode(mode) ?? false;
+  }
 
   /**
    * True while the hosted form is in edit mode. The host already exposes the
@@ -108,6 +137,17 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
   private cdr = inject(ChangeDetectorRef);
+
+  constructor() {
+    super();
+    if (!MjRecordPreviewPopoverService.FallbackNavigationHandler) {
+      MjRecordPreviewPopoverService.FallbackNavigationHandler = (event: FormNavigationEvent) => {
+        if (event.Kind === 'record') {
+          this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
+        }
+      };
+    }
+  }
 
   /**
    * True once another user (another session) has deleted the record shown here.
@@ -198,6 +238,11 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
 
   OnEditModeChanged(editing: boolean): void {
     this.EditModeChanged.emit(editing);
+  }
+
+  OnAskAIRequested(): void {
+    this.AskAIRequested.emit();
+    ConversationsRuntime.Instance.Bridge.RequestExpandOverlay();
   }
 
   OnNotification(event: FormNotificationEvent): void {

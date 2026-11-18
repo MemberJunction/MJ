@@ -193,6 +193,7 @@ export class MCPToolAction extends BaseAction {
             ExtraFilter: `MCPServerID='${tool.MCPServerID}' AND Status='Active'`,
             OrderBy: '__mj_CreatedAt ASC',  // Use oldest connection as default
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, params.ContextUser);
 

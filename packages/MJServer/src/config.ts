@@ -5,6 +5,17 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import { ArtifactGuestSharingEnabledDefault } from './magicLinkConfigUnits.js';
+import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
+import {
+  AgentRunWatchdogDefaultsFromEnv,
+  AgentRunWatchdogSchema,
+  AgentSessionsDefaultsFromEnv,
+  AgentSessionsSchema,
+  ConversationDetailReconcilerDefaultsFromEnv,
+  ConversationDetailReconcilerSchema,
+} from './backgroundSweepConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -59,9 +70,20 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  concurrencyCheck: z.enum(['off', 'log', 'enforce']).optional().default('off'),
+  deltaUpdates: z.boolean().optional().default(true),
+  /**
+   * Load the saved-query metadata into the metadata object, for code that still reads the
+   * deprecated `Metadata.Queries`, `QueryFields`, … getters. Off by default: `QueryEngine` is the
+   * source of query metadata, and saving a query then refreshes no metadata. Removed in 7.0. Every
+   * server sharing a metadata cache should use the same setting.
+   */
+  loadQueryMetadata: z.boolean().optional().default(false),
+  typedQueryDrift: z.enum(['warn', 'throw']).optional().default('warn'),
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),
+    readOnlyMax: z.number().optional(),
     idleTimeoutMillis: z.number().optional().default(30000),
     acquireTimeoutMillis: z.number().optional().default(30000),
   }).optional().default({}),
@@ -159,12 +181,41 @@ const componentRegistrySchema = z.object({
   headers: z.record(z.string()).optional(),
 }).passthrough(); // Allow additional fields
 
+/**
+ * Unified notification delivery (#5983). Each names a configured Communication Provider; unset falls back to the
+ * NOTIFICATION_EMAIL_PROVIDER / NOTIFICATION_SMS_PROVIDER environment variables, then SendGrid / Twilio.
+ */
+const notificationsSchema = z.object({
+  emailProvider: z.string().optional(),
+  smsProvider: z.string().optional(),
+}).passthrough();
+
 const scheduledJobsSchema = z.object({
   enabled: z.boolean().optional().default(false),
   systemUserEmail: z.string().optional().default('system@memberjunction.org'),
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+  /**
+   * Longest the scheduler sleeps when nothing is due, and how often it re-reads the user routine
+   * index (#6217). Without Redis, a routine saved on another server reaches this one only through
+   * that re-read, and a scheduled job added or moved earlier without a cache event only at the next
+   * wake, so this bounds how late such a change applies. Minimum 1.
+   */
+  routineIndexRefreshMinutes: z.number().min(1).optional().default(60),
+});
+
+/**
+ * Event-loop stall monitor (MJ #5510). MJAPI serves HTTP, WebSockets, scheduled jobs and agent runs
+ * from one event loop, so a synchronous phase of background work stalls every interactive user.
+ * When a sampling window's worst event-loop delay reaches `warnThresholdMs`, one warning is logged
+ * with the lag, the heap and the agent runs / scheduled jobs in flight; `/healthcheck` reports the
+ * latest window's lag (not the heap: `/healthcheck` is unauthenticated).
+ */
+const eventLoopMonitorSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  warnThresholdMs: z.number().optional().default(1000),
+  sampleIntervalMs: z.number().optional().default(5000),
 });
 
 /**
@@ -247,6 +298,14 @@ const cacheSettingsSchema = z.object({
   maxMemoryMB: z.number().optional().default(150),
   /** Maximum percentage of total cache memory that any single entity can occupy. Default: 50. Set to 0 to disable. */
   maxPercentOfCachePerEntity: z.number().optional().default(50),
+  /**
+   * Ceiling on any ONE cache entry. 'auto' (the default) derives it from maxMemoryMB, so the
+   * largest entity the server caches scales with the memory the cache was given; a number is an
+   * explicit stricter percentage of maxMemoryMB; 0 removes the ceiling. Leave it on 'auto' unless
+   * a specific entry must be kept out of the cache — an entry declined by the ceiling is re-read
+   * from the database on every call, and the server logs which maxMemoryMB would admit it.
+   */
+  maxEntryPercentOfCache: z.union([z.number(), z.literal('auto')]).optional().default('auto'),
   /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
   defaultTTLSeconds: z.number().optional().default(0),
   /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
@@ -283,6 +342,13 @@ const cacheSettingsSchema = z.object({
    */
   sharedCacheTTLSeconds: z.number().int().nonnegative().optional(),
   /**
+   * Longest a read from the shared Redis cache waits, in milliseconds, before it is answered as a
+   * cache miss and the server reads the database instead. Writes and invalidations have no limit.
+   * The REDIS_READ_TIMEOUT_MS environment variable overrides it. 0 waits without a limit. When
+   * neither is set, 2000.
+   */
+  redisReadTimeoutMs: z.number().int().nonnegative().optional(),
+  /**
    * How often, in seconds, loaded engines compare their rows with the database and reload what
    * changed without an MJ event (direct SQL, other applications). With a shared cache one server
    * does it per interval. 0 = disabled. Default: 300 (5 minutes).
@@ -308,6 +374,45 @@ const cacheSettingsSchema = z.object({
    * for it. 0 disables the turn-taking. Default: 30.
    */
   startupWarmupLeaseSeconds: z.number().int().nonnegative().optional().default(30),
+  /**
+   * Pluggable cache invalidation broadcast topology configuration.
+   * Defaults to `'SequencedRoleBucket'` (Topology 1 Monotonic Sequence Ring Buffer + Topology 2
+   * Role-Fingerprint $O(\text{Roles})$ evaluation & shaping memoizer).
+   */
+  broadcast: z
+    .object({
+      provider: z.string().optional().default('SequencedRoleBucket'),
+      ringBufferSize: z.number().int().positive().optional().default(5000),
+      excludedEntities: z.array(z.string()).optional().default([]),
+      azureWebPubSub: z
+        .object({
+          endpoint: z.string().optional(),
+          hubName: z.string().optional(),
+          accessKey: z.string().optional(),
+          tokenTtlMinutes: z.number().positive().optional(),
+        })
+        .optional(),
+      awsIoTCore: z
+        .object({
+          endpoint: z.string().optional(),
+          region: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          accessKeyId: z.string().optional(),
+          secretAccessKey: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+      gcpPubSub: z
+        .object({
+          projectId: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          gatewayUrl: z.string().optional(),
+          signingSecret: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 const loggingSettingsSchema = z.object({
@@ -355,6 +460,19 @@ const startupSchema = z.object({
   mode: z.enum(['full', 'task']).optional(),
 });
 
+/** One per-route limiter's settings; defaults come from {@link DEFAULT_ROUTE_RATE_LIMITS}. */
+function routeRateLimitSchema(name: RouteRateLimitName) {
+  const defaults = DEFAULT_ROUTE_RATE_LIMITS[name];
+  return z.object({
+    /** When false, the route has no per-route limiter. */
+    enabled: z.boolean().default(defaults.enabled),
+    /** Window length in milliseconds. */
+    windowMs: z.number().default(defaults.windowMs),
+    /** Requests allowed per IP per window. */
+    maxRequests: z.number().default(defaults.maxRequests),
+  }).default({});
+}
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -378,6 +496,18 @@ const rateLimitSchema = z.object({
     /** Maximum GraphQL operations per window per IP. */
     maxRequests: z.number().default(100),
   }).default({}),
+  /**
+   * Per-route limiters on MJAPI's unauthenticated / capability-token routes. Independent of the
+   * `enabled` master switch above: these are ON by default with generous budgets (see
+   * `DEFAULT_ROUTE_RATE_LIMITS`). Set `<name>.enabled: false` when a gateway in front of MJAPI
+   * already limits the route.
+   */
+  routes: z.object({
+    oauthCallback: routeRateLimitSchema('oauthCallback'),
+    oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
+    mediaUpload: routeRateLimitSchema('mediaUpload'),
+    mediaRead: routeRateLimitSchema('mediaRead'),
+  }).default({}),
 });
 
 const feedbackGithubSettingsSchema = z.object({
@@ -394,6 +524,35 @@ const feedbackSettingsSchema = z.object({
   enabled: z.boolean().optional().default(true),
   /** Optional GitHub-specific settings used by the feedback resolver. */
   github: feedbackGithubSettingsSchema.optional(),
+  /**
+   * How `ClassifyFeedback` picks a category and severity: `Prompt` (the chat-completion classifier
+   * only), `Shadow` (the classifier answers; a decision runs beside it and records whether they
+   * agreed) or `Decision` (two Choice questions answer; the classifier runs only when the decision
+   * cannot). Case-insensitive; anything else reads as the default, `Decision`. Choices pick the
+   * most likely option, so they need no calibration. Env: `MJ_FEEDBACK_DECISION_MODE`.
+   */
+  decisionMode: z.string().optional().default(process.env.MJ_FEEDBACK_DECISION_MODE || 'Decision'),
+});
+
+/**
+ * Modes for closed-set calls MJServer owns that a decision model can answer (see `RunDecisionUse` in
+ * `@memberjunction/ai-prompts`). Each is `Prompt`, `Shadow` or `Decision`, case-insensitive; anything
+ * else reads as that use's default. Feedback classification's mode lives in `feedbackSettings`.
+ */
+const decisionsSchema = z.object({
+  /**
+   * The semantic stage of the anchored-comment restricted-field check. Default `Shadow`: switch to
+   * `Decision` only once a calibration for `restricted-field-classifier` / `discusses` is fitted on the
+   * answering model. Env: `MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE`.
+   */
+  restrictedFieldClassifier: z.string().optional().default(process.env.MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE || 'Shadow'),
+  /**
+   * A tag keyword whose best match scores just under the match threshold (`TagEngine`'s suggestion
+   * band). Default `Shadow`: the keyword is queued for review as before and the decision's answer is
+   * recorded. `Decision` applies the tag at a calibrated 0.8 or above, once a `tag-match` / `same`
+   * calibration is fitted. Env: `MJ_TAG_MATCH_DECISION_MODE`.
+   */
+  tagMatch: z.string().optional().default(process.env.MJ_TAG_MATCH_DECISION_MODE || 'Shadow'),
 });
 
 const magicLinkSchema = z.object({
@@ -458,6 +617,34 @@ const magicLinkSchema = z.object({
    * returns the token as JSON. Append `?format=json` to force JSON regardless.
    */
   explorerUrl: z.string().optional(),
+  /**
+   * Explicit frontend origins permitted for per-invite `RedirectUrl` targets (in addition to
+   * `explorerUrl` and concrete non-wildcard entries in `cors.allowedOrigins`). Wildcard `'*'`
+   * entries are always ignored so deployments using the default `cors.allowedOrigins: ['*']`
+   * never expose an open redirect carrying session tokens.
+   */
+  allowedRedirectOrigins: z.array(z.string()).optional(),
+  /**
+   * Configuration for external anonymous `resource-share` Magic Links scoped to Frozen artifacts.
+   * Default-disabled (`enabled: false`) so public redemption & guest share minting stay off unless
+   * explicitly opted in.
+   */
+  artifactGuestSharing: z.object({
+    /** Explicit opt-in switch enabling external Frozen artifact guest share links. Default false unless MJ_ARTIFACT_GUEST_SHARING_ENABLED is set truthy. */
+    enabled: zodBooleanWithTransforms().default(() => ArtifactGuestSharingEnabledDefault(process.env.MJ_ARTIFACT_GUEST_SHARING_ENABLED)),
+    /** Maximum allowed expiration window in hours for newly issued guest share links. Default 720 (30 days). */
+    maxExpiresInHours: z.coerce.number().positive().optional().default(720),
+    /** Maximum redemption uses permitted per guest share link. Default 100. */
+    maxUses: z.coerce.number().int().positive().optional().default(100),
+    /** Optional MJ Authorization name checked before issuing an external guest share link. */
+    requiredAuthorizationName: z.string().optional(),
+    /** Explicit MJ Application name bound onto resource-share invites. Fails closed if not found. */
+    applicationName: z.string().optional().default('Chat'),
+    /** Explicit MJ Role name bound onto resource-share invites (defaults to magicLink.restrictedRoleName; fails closed if not found). */
+    roleName: z.string().optional(),
+    /** Explicit MJ Resource Type name bound onto resource-share invites. Fails closed if not found. */
+    resourceTypeName: z.string().optional().default('Artifacts'),
+  }).optional().default({}),
 }).passthrough();
 
 /**
@@ -823,6 +1010,44 @@ const identityVerificationSchema = z.object({
   }).optional().default({}),
 }).passthrough();
 
+/**
+ * Remote browsers a TEXT conversation opens (`<mj-conversation-chat-area [AllowRemoteBrowser]>`), whose
+ * agents drive them through the `browser_*` tools. Realtime calls' browsers are not affected.
+ *
+ * Off by default: until `enabled` is true, every remote-browser operation on a conversation is refused,
+ * since each browser is a server Chromium process or a billed hosted session.
+ */
+const conversationBrowserSchema = z.object({
+  /** Master switch. When false, no conversation can open a browser. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Also let anonymous principals (public widget guests, anonymous magic links) open one. */
+  allowAnonymous: zodBooleanWithTransforms().default(false),
+  /** Most conversation browsers one user (or one anonymous guest) may hold at once. Default 2. */
+  maxPerUser: z.coerce.number().int().positive().optional().default(2),
+  /**
+   * Most conversation browsers all anonymous guests together may hold at once, since a guest can start a
+   * new guest scope cheaply (limited only by the per-IP rate limit). Applies only with `allowAnonymous`. Default 4.
+   */
+  maxAnonymousTotal: z.coerce.number().int().positive().optional().default(4),
+  /**
+   * Minutes unused after which a conversation browser is ended (a reloaded or closed tab never ends its own).
+   * Used means an agent or the user acts on it, or its open drawer polls for a snapshot; a drawer showing a
+   * pushed screencast with nothing else happening counts as unused. Default 15.
+   */
+  idleMinutes: z.coerce.number().positive().optional().default(15),
+  /**
+   * Private hosts a conversation browser may still reach, as `host` or `host:port` (e.g. `localhost:4200`).
+   * Every other loopback, link-local or private-network HOSTNAME is refused (private IPv4 and IPv6 ranges,
+   * `localhost`, names under `.local`, `.localdomain`, `.internal`, `.intranet`, `.lan`, `.corp`, `.home`,
+   * `.home.arpa`, `.private` and `.svc`, and the Docker, Kubernetes and cloud-metadata names), including where
+   * a main-frame redirect lands, and in popups the page opens. This is a best-effort hostname check. Gets through: a public name that resolves to a
+   * private address, WebSockets, service-worker fetches, an iframe whose source redirects to a private
+   * host, redirects of the page's own requests, and the redirect request itself (only where it lands is
+   * refused). For real isolation, run the browsers under network egress rules. Default none.
+   */
+  allowedPrivateHosts: z.array(z.string()).optional().default([]),
+}).passthrough();
+
 const realtimeSchema = z.object({
   /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
   enabled: zodBooleanWithTransforms().default(true),
@@ -833,11 +1058,21 @@ const realtimeSchema = z.object({
    * is assembled anyway as `Partial` (gaps become silence). Defaults to 90.
    */
   recordingAssemblyGraceSeconds: z.coerce.number().positive().optional().default(90),
+  /** Remote browsers that text conversations open (off by default). */
+  conversationBrowser: conversationBrowserSchema.optional().default({}),
+}).passthrough();
+
+const devAuthSchema = z.object({
+  /** Master switch for local-only development JWT auth (`MJ_DEV_AUTH_ENABLED=true`). Forbidden when NODE_ENV=production. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Optional default email for `/auth/dev-login` when no email is specified in the request body. */
+  defaultEmail: z.string().optional(),
 }).passthrough();
 
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
+  devAuth: devAuthSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
   realtime: realtimeSchema.optional().default({}),
@@ -848,6 +1083,11 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  eventLoopMonitor: eventLoopMonitorSchema.optional().default({}),
+  notifications: notificationsSchema.optional().default({}),
+  agentSessions: AgentSessionsSchema.optional().default({}),
+  agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
+  conversationDetailReconciler: ConversationDetailReconcilerSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
@@ -858,6 +1098,7 @@ const configInfoSchema = z.object({
   loggingSettings: loggingSettingsSchema.optional().default({}),
   aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
+  decisions: decisionsSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),
@@ -897,13 +1138,24 @@ const configInfoSchema = z.object({
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
   mjCoreSchema: z.string(),
+  /**
+   * Server execution role for horizontal scaling:
+   * - `'all'` (default): runs both interactive HTTP/GraphQL/WebSocket handlers and background worker loops.
+   * - `'api'`: runs interactive HTTP/GraphQL/WebSocket handlers only; background worker loops are skipped.
+   * - `'worker'`: runs background worker loops (`ScheduledJobsService`, `IntegrationSyncWorkerService`,
+   *   `StartTaskGraphDispatcher`, `StartWorkQueueHost`, `SessionJanitor`, reconcilers).
+   */
+  serverRole: z.enum(['all', 'api', 'worker']).optional().default('all'),
 });
+
+export type { ServerRole };
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
 export type RealtimeConfig = z.infer<typeof realtimeSchema>;
+export type ConversationBrowserConfig = z.infer<typeof conversationBrowserSchema>;
 export type IdentityVerificationConfig = z.infer<typeof identityVerificationSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
@@ -918,6 +1170,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type EventLoopMonitorConfig = z.infer<typeof eventLoopMonitorSchema>;
 export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
@@ -927,6 +1180,7 @@ export type ServerExtensionConfig = z.infer<typeof ServerExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type AIPromptRunsConfig = z.infer<typeof aiPromptRunsSchema>;
+export type DecisionsConfig = z.infer<typeof decisionsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;
@@ -968,6 +1222,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   enableIntrospection: process.env.ENABLE_INTROSPECTION === 'true',
   apiKey: process.env.MJ_API_KEY,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE ? parseInt(process.env.WEBSITE_RUN_FROM_PACKAGE, 10) : undefined,
+  serverRole: ResolveServerRole(process.env.MJ_SERVER_ROLE),
 
   // User handling defaults
   userHandling: {
@@ -1002,6 +1257,10 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
       ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
       : 180000,
+    concurrencyCheck: 'off',
+    deltaUpdates: true,
+    loadQueryMetadata: false,
+    typedQueryDrift: 'warn',
     connectionPool: {
       max: 50,
       min: 5,
@@ -1044,8 +1303,26 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
-    staleLockCleanupInterval: 300000
+    staleLockCleanupInterval: 300000,
+    routineIndexRefreshMinutes: 60
   },
+
+  // Event-loop stall monitor defaults (MJ #5510) — on; warns on a >=1s stall, 5s sampling window
+  eventLoopMonitor: {
+    enabled: true,
+    warnThresholdMs: 1000,
+    sampleIntervalMs: 5000
+  },
+
+  // Background sweeps that query the database on a timer (session janitor, bridge and conversation-
+  // detail reconcilers, agent-run watchdog). Defaults are the values MJAPI always used; each has an
+  // env override (MJ_SESSION_JANITOR_*, MJ_BRIDGE_RECONCILER_*, MJ_CONVERSATION_DETAIL_RECONCILER_*,
+  // MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS), read here rather than in the schema because this object
+  // is the merge base (see the telemetry note below). A bad value fails startup, naming the variable.
+  // guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md lists every switch.
+  agentSessions: AgentSessionsDefaultsFromEnv(process.env),
+  conversationDetailReconciler: ConversationDetailReconcilerDefaultsFromEnv(process.env),
+  agentRunWatchdog: AgentRunWatchdogDefaultsFromEnv(process.env),
 
   // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
   integrationSyncWorker: {
@@ -1079,6 +1356,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   cacheSettings: {
     maxMemoryMB: 150,
     maxPercentOfCachePerEntity: 50,
+    maxEntryPercentOfCache: 'auto',
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
@@ -1178,6 +1456,16 @@ export function LoadConfig() {
     LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
     throw new Error('Configuration validation failed');
   }
+
+  const rawDevAuthEnv = process.env.MJ_DEV_AUTH_ENABLED?.trim().toLowerCase();
+  const isDevAuthEnabled =
+    rawDevAuthEnv === 'true' || rawDevAuthEnv === '1' || configParsing.data.devAuth?.enabled === true;
+  if (isDevAuthEnabled && process.env.NODE_ENV?.trim().toLowerCase() === 'production') {
+    throw new Error(
+      '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
+    );
+  }
+
   return configParsing.data;
 }
 

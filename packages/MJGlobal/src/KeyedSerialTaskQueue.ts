@@ -53,14 +53,25 @@ export class KeyedSerialTaskQueue {
      * @param opts.after Optional dependency key — the task waits for this key's latest task to settle
      *   before running, in addition to waiting for its own key's prior tasks. Use this to honour
      *   cross-instance ordering constraints like self-referencing foreign keys (e.g. a child step's
-     *   INSERT must land after its parent step's INSERT).
+     *   INSERT must land after its parent step's INSERT). This is the in-queue form of the wait; when the
+     *   dependent write lives in a *different* queue, use {@link Settled} instead.
+     * @param opts.ready Optional promise the task also waits for. Use it when the task depends on work
+     *   outside this queue — typically another queue's {@link Settled}, so a child row waits for a parent
+     *   row that a different queue is writing. The task is queued (and counted by {@link Flush}) at once;
+     *   only its start is held back, so the caller never waits. A rejected `ready` still runs the task,
+     *   the same as a failed prior task: the task's own outcome is what gets tallied.
      */
-    public Enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
+    public Enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object; ready?: Promise<void> }): Promise<T | undefined> {
         const prior = this.tails.get(key) ?? Promise.resolve();
         const dependency = opts?.after ? (this.tails.get(opts.after) ?? Promise.resolve()) : Promise.resolve();
 
-        // Run the task exactly once, after `prior` AND `dependency` settle, collapsing to a never-rejecting outcome.
-        const gate = Promise.all([prior, dependency]);
+        // Settle `ready` to a never-rejecting promise first. `prior` and `dependency` are tails, which never
+        // reject; a rejecting `ready` would make Promise.all settle early and start the task before its
+        // key's prior task finished, breaking the per-key order this class exists to guarantee.
+        const ready = opts?.ready ? opts.ready.then(() => undefined, () => undefined) : Promise.resolve();
+
+        // Run the task exactly once, after `prior`, `dependency` AND `ready` settle, collapsing to a never-rejecting outcome.
+        const gate = Promise.all([prior, dependency, ready]);
         const settled = gate.then(() => task(), () => task()).then(
             (value) => ({ value: value as T | undefined, ok: opts?.isOk ? !!opts.isOk(value) : true, rejected: false, err: undefined as unknown }),
             (err: unknown) => ({ value: undefined as T | undefined, ok: false, rejected: true, err }),
@@ -87,8 +98,20 @@ export class KeyedSerialTaskQueue {
         return settled.then((o) => (o.ok ? o.value : undefined));
     }
 
+    /**
+     * Resolves once every task enqueued so far for `key` has settled — at once when the key has no
+     * pending task. The cross-queue form of `Enqueue`'s `after` option: `after` can only see keys in this
+     * instance, so a caller that must order a write in another queue behind this key awaits this instead.
+     *
+     * A pure read: it never rejects (a failed task is already tallied and routed to `onError`), and it
+     * neither enqueues anything nor delays later tasks. Tasks enqueued after the call are not awaited.
+     */
+    public Settled(key: object): Promise<void> {
+        return this.tails.get(key) ?? Promise.resolve();
+    }
+
     /** @deprecated Use {@link Enqueue}. */
-    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
+    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object; ready?: Promise<void> }): Promise<T | undefined> {
         return this.Enqueue(key, task, opts);
     }
 
