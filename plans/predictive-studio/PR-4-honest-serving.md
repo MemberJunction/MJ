@@ -3083,7 +3083,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611150901__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611170733__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -10405,11 +10405,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611150901__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611170733__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->10<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->10<!-- /gen:checks -->
-- Head: <!-- gen:head -->7487991cef<!-- /gen:head -->
+- Head: <!-- gen:head -->9afd63f8bf<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11917,6 +11917,50 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   carry-forward; the allowlist rig comment); the M4b task boxes; `pr-body.mjs`; `milestone-exit.mjs --milestone M4b`.
 - **Next:** the controller commits and pushes the checkpoint; M5 starts (it owns `ml-model-inference-processor.ts`,
   OF4-32).
+- **Merge-of-next pass, M5 start (2026-11-17, `m5-merge-next-report.md`):** merged next @320f991c9f (270 commits past
+  `67e7255873`; it had moved 60 commits past the brief's `6ed4a90018`, and the checks were re-run on it: the same eight
+  conflicts, the same five migrations with 0 hits for `spDeleteEntityWithCoreDependencies|MLModel|MLOutputBinding|FeatureValue|spCreateRecordChange`,
+  0 PS source paths, 6 it-metadata files; `V202611161547` seeds three Widget Guest row filters, none on a PS entity;
+  merge commit `9afd63f8bf`), migration retimed V202611150901 → V202611170733 (after next's `V202611170732`; the
+  references in `gate-test-store.ts:325`, `governance.adversarial.db.test.ts:1251` and
+  `serving-schema.adversarial.db.test.ts:928` follow the rename). Eight conflicts: `check-registry.test.ts` hand-merged
+  (ours 253 + next's five bundles = 258, measured: `check-registry.test.ts (390 tests)`); the four
+  `mj-class-registrations.ts`, MJUser `form.component.{ts,html}` and MJServer `graphql-schemas/__mj.ts` taken `--theirs`,
+  then regenerated (the root build's manifest step; `codegen --skipdb`, since a full run emits only dirty or missing
+  schema files, `schema-emit.ts:122`), no interim file needed; the server manifests hold `MJMLOutputBindingEntityServer` 2
+  and `SignOffModel` 2 each. Both databases rebuilt from clean with RCSI: `190 applied`; the D4-89 tail check
+  (`codegen --skipfiles` on the fresh install) emitted only **OF4-34**, deleted under the controller's ruling (review's
+  copy identical but for the new `EntityUniqueKey` row ID); sync push `195/129/16668/5`, 0 errors, 73 write-backs
+  restored on each; the post-sync file only OF4-9's two `SubtypeSelector` UPDATEs (review's byte-identical), deleted;
+  `truth:provision` 47 entities; it-metadata `"created":756`, 0 errors, on each; C1 corpus on claude (the M4 counts, 279
+  immutable fields). Identity proof `IDENTITY-IDENTICAL` (entities 509, fields 7916, relationships 1024, flyway 189
+  versioned, the nine `PredictiveStudio.*` remote ops, 12 `owner:PR4` gate rows, Registry and Gate 9, Containment 12,
+  Pending 1 (W1 → S9.3), Deterministic 156, pstruth 47, ML Models name fields 0). Health on claude: root build 0 (351/351,
+  322/322); Core 531; Engine 1704; CorePlus 1306 (+4, next's `edge-pre-discovery` 7, `agent-run-step-save-queue` +2,
+  `decision-calibration` −5); MJCoreEntitiesServer 1604 (+90, next's nine new test files 74 and its edits 16) after
+  three of PR 4's `ExpectedConsole` tests were re-aimed at next's post-save fingerprint (stubs given `RunViews`; the
+  approval line reworded `was approved but` → `saved, but`); dashboards 3140 (+18, next's) / PS 260; TruthSuite 152;
+  integration-test-suite 1079 (+32: check-registry +16, next's `calibration-fit-args` 6 and `server-cache-row-delta` 10)
+  + `tsconfig.rigs.json` 0; Agents 5152; MJServer 3816 (66 skipped); DB lane 7 files / 79; sidecar pytest 495; truth
+  pytest 24 + mypy clean; `check:guards`, `check:ui`, `check:changeset`, entityfield-sequence 0;
+  `check:codegen-tail` OK (808 migrations); `check:standards` 0 errors (14784 warnings). Registry and Gate
+  (`RUN_MUTATION_TESTS=1`) 9/9 (`91465A87-…`); Containment 12/12 (`3A929B27-…`; G0.2 published 0 of 60 (≤ 6),
+  consistent 60; G0.3 published 0, leakageDecided 2); census before = after each, 0 PSTruth rows, storage 0 (Feature
+  Pipeline Version Steward runs from its 15-minute schedule excluded by name). Deterministic PR lane `126/156 passed,
+  26 skipped` (`616058E5-…`), RD9 / DSL4 / DSLC3 ✓, six ✗, none PR 4's: ABV3 (OF4-8); DSLC5/DSLC6, next's IT171 needs
+  `MJ_ARTIFACT_GUEST_SHARING_ENABLED=true` on MJAPI (`integration.yml:636`), which the local form does not set; MSQ7,
+  next changed the `get-artifact-versions-by-id`, `get-conversation-complete` and `get-conversation-artifacts-for-agent`
+  SQL after its last cold nightly, and a fresh install's first push stamps `DefinitionFingerprint` before it writes the
+  new QuerySQL row (34 ms later on both databases), so the second push changes it (IT140 re-run 10/10; next's CI ran on a
+  warm snapshot); PB7, Sage now has `decisionDiscovery: true` (next's decision adoption) and discovery's `LLMDecision`
+  chat call (14 ms, the harness `TestLLM`) took PB7's first scripted reply (Sage P:3/A:2), PB18 following from PB7's
+  pointer counts. Benchmark logs restored; PSD2's notification `DD7832A1-…` deleted (OF4-33); 10 detached Process Runs
+  of next's `record-process` / `field-rules-bulk-update` bundles left (not PS rows). Repo gate
+  `--mode pre-push --skip-commands` → `# checks 24 · failed 0`; `pr-body.mjs` → `gen:head` `9afd63f8bf`. State left
+  behind: both databases fresh at `V202611170733`; MJAPI and the truth sidecar stopped by pgid; the review sidecar
+  not started; no suite lock; working tree = the pass commit's files + the owner's seven. **Next step = M5 Task M5.1.**
+  - **OF4-34:** next's `V202611161958` ships its entity without the unique-key and name-field-map tail statements; every
+    fresh install's CodeGen emits them; PR 4 excludes them from its tail check; a next fix belongs to next.
 
 ## 12. Refresh log (append-only)
 

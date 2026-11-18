@@ -145,7 +145,7 @@ import { MJUserViewEntityServer } from '../custom/MJUserViewEntityServer.server'
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { ExpectedConsole } from './helpers/expected-console';
 
-ExpectedConsole.Install([/^\[MJUserViewEntityServer\] View \"Fixture\" was approved but its fingerprint could not be computed: unexpected getter throw$/]);
+ExpectedConsole.Install([/^\[MJUserViewEntityServer\] View \"Fixture\" saved, but its fingerprint could not be computed: unexpected getter throw$/]);
 
 const PENDING = { ApprovedByUserID: null, ApprovedAt: null, ApprovedFingerprint: null };
 

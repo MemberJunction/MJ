@@ -45,7 +45,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public LatestResult = { CompleteMessage: '', Errors: [] as Error[] };
         public RegisterResultHistoryEntry = vi.fn();
         public get ProviderToUse() { return { Entities: [] }; }
-        public get RunViewProviderToUse() { return {}; }
+        // The post-save fingerprint reads the stored SQL and parameter rows; this query has none.
+        public get RunViewProviderToUse() { return { RunViews: async () => [{ Success: true, Results: [] }, { Success: true, Results: [] }] }; }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: true }; }
         public GetPlatformSQL(_platform: DatabasePlatform): string | null { return this.SQL; }
         public async Save(): Promise<boolean> {
