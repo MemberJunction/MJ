@@ -75,7 +75,8 @@ CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spTaskGraphMarkWaiting]
     @Marker NVARCHAR(100),
     @DueAt DATETIMEOFFSET NULL,
     @CorrelationKey NVARCHAR(400) NULL,
-    @PayloadAtStart NVARCHAR(MAX) NULL
+    @PayloadAtStart NVARCHAR(MAX) NULL,
+    @InputTainted BIT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -83,25 +84,35 @@ BEGIN
     -- so whatever completes the step later — a clock, a signal, a provider — hands the WHOLE payload
     -- on, plus its own output. A waiting step that emitted only its own output would silently drop
     -- everything upstream from every step after it.
-    UPDATE [${flyway:defaultSchema}].[Task]
+    --
+    -- Whether that payload was tainted is kept beside it (runtime.isInputTainted). The step's own
+    -- output taint is decided from it when the step completes, and nothing runs in between that
+    -- could recompute it.
+    --
+    -- One statement, computed from the row as it stands: a signal held on the step concurrently
+    -- (runtime.pendingSignal) must survive this write, so the configuration is never read first and
+    -- written back later.
+    UPDATE t
     SET [ClaimedBy] = @Marker,
         [StartedAt] = COALESCE([StartedAt], SYSDATETIMEOFFSET()),
         [DueAt] = COALESCE(@DueAt, [DueAt]),
         [CorrelationKey] = COALESCE(@CorrelationKey, [CorrelationKey]),
-        [Configuration] = CASE
-            WHEN ISJSON(@PayloadAtStart) = 1 THEN JSON_MODIFY(
-                CASE
-                    WHEN ISJSON([Configuration]) = 1 AND JSON_QUERY([Configuration], '$.runtime') IS NOT NULL THEN [Configuration]
-                    WHEN ISJSON([Configuration]) = 1 THEN JSON_MODIFY([Configuration], '$.runtime', JSON_QUERY(N'{}'))
-                    ELSE N'{"runtime":{}}'
-                END,
-                '$.runtime.payloadAtStart', JSON_QUERY(@PayloadAtStart))
-            ELSE [Configuration]
-        END
-    WHERE [ID] = @TaskID
-      AND [Status] = 'Pending'
-      AND [ClaimedBy] IS NULL
-      AND [StepType] IN ('External', 'Wait', 'Human');
+        [Configuration] = JSON_MODIFY(
+            CASE
+                WHEN ISJSON(@PayloadAtStart) = 1 THEN JSON_MODIFY(x.[WithRuntime], '$.runtime.payloadAtStart', JSON_QUERY(@PayloadAtStart))
+                ELSE x.[WithRuntime]
+            END,
+            '$.runtime.isInputTainted', CAST(COALESCE(@InputTainted, 1) AS BIT))
+    FROM [${flyway:defaultSchema}].[Task] t
+    CROSS APPLY (SELECT CASE
+            WHEN ISJSON(t.[Configuration]) = 1 AND JSON_QUERY(t.[Configuration], '$.runtime') IS NOT NULL THEN t.[Configuration]
+            WHEN ISJSON(t.[Configuration]) = 1 THEN JSON_MODIFY(t.[Configuration], '$.runtime', JSON_QUERY(N'{}'))
+            ELSE N'{"runtime":{}}'
+        END AS [WithRuntime]) x
+    WHERE t.[ID] = @TaskID
+      AND t.[Status] = 'Pending'
+      AND t.[ClaimedBy] IS NULL
+      AND t.[StepType] IN ('External', 'Wait', 'Human');
     SELECT @@ROWCOUNT AS [AffectedRows];
 END;
 GO
@@ -129,7 +140,8 @@ CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spTaskGraphCompleteWaitingS
     @Status NVARCHAR(20),
     @OutputPayload NVARCHAR(MAX),
     @ErrorMessage NVARCHAR(MAX),
-    @SignalJSON NVARCHAR(MAX)
+    @SignalJSON NVARCHAR(MAX),
+    @OutputTainted BIT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -160,7 +172,17 @@ BEGIN
             [CompletedAt] = SYSDATETIMEOFFSET(),
             [PercentComplete] = CASE WHEN @Status = 'Complete' THEN 100 ELSE 0 END,
             [ClaimedBy] = NULL,
-            [ClaimExpiresAt] = NULL
+            [ClaimExpiresAt] = NULL,
+            -- What the step hands on is recorded as tainted or not, exactly as a runner's output is,
+            -- so the steps after it are gated by what actually reached them. Absent, the taint check
+            -- reads a step that finished outside a runner as tainted, whatever fed it.
+            [Configuration] = CASE
+                WHEN ISJSON([Configuration]) = 1 AND JSON_QUERY([Configuration], '$.runtime') IS NOT NULL
+                    THEN JSON_MODIFY([Configuration], '$.runtime.isOutputTainted', CAST(COALESCE(@OutputTainted, 1) AS BIT))
+                WHEN ISJSON([Configuration]) = 1
+                    THEN JSON_MODIFY([Configuration], '$.runtime', JSON_QUERY(N'{"isOutputTainted":' + CASE WHEN COALESCE(@OutputTainted, 1) = 1 THEN N'true' ELSE N'false' END + N'}'))
+                ELSE N'{"runtime":{"isOutputTainted":' + CASE WHEN COALESCE(@OutputTainted, 1) = 1 THEN N'true' ELSE N'false' END + N'}}'
+            END
         WHERE [ID] = @TaskID;
         COMMIT;
         SELECT 1 AS [AffectedRows], 'Completed' AS [Outcome];
@@ -200,17 +222,25 @@ GO
 CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spTaskGraphCompleteDueWait]
     @TaskID UNIQUEIDENTIFIER,
     @Marker NVARCHAR(100),
-    @OutputPayload NVARCHAR(MAX)
+    @OutputPayload NVARCHAR(MAX),
+    @OutputTainted BIT
 AS
 BEGIN
     SET NOCOUNT ON;
+    -- A Wait hands on exactly what it was reached with, so its output is as tainted as its input.
+    -- The row was marked waiting first, so its runtime object exists.
     UPDATE [${flyway:defaultSchema}].[Task]
     SET [Status] = 'Complete',
         [OutputPayload] = @OutputPayload,
         [CompletedAt] = SYSDATETIMEOFFSET(),
         [PercentComplete] = 100,
         [ClaimedBy] = NULL,
-        [ClaimExpiresAt] = NULL
+        [ClaimExpiresAt] = NULL,
+        [Configuration] = CASE
+            WHEN ISJSON([Configuration]) = 1 AND JSON_QUERY([Configuration], '$.runtime') IS NOT NULL
+                THEN JSON_MODIFY([Configuration], '$.runtime.isOutputTainted', CAST(COALESCE(@OutputTainted, 1) AS BIT))
+            ELSE [Configuration]
+        END
     WHERE [ID] = @TaskID
       AND [StepType] = 'Wait'
       AND [Status] = 'Pending'

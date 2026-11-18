@@ -3000,7 +3000,18 @@ export class TaskGraphDispatcher implements IShutdownable {
             : null;
         const payload = this.mergedPayload(authored, this.extractDependencyOutputsFromGraph(entity.ID, graph));
         const owner = graph.parentMetadata.submittedByUserID ?? null;
-        await this.waitingSteps.Reach({ Task: entity, Payload: payload, OwnerUserID: owner }, provider);
+        // The same taint a runner would be given for this node. A waiting step runs nothing, but it
+        // hands its input on, so the steps after it must be gated by what reached it — and a
+        // security refusal on the node reads as tainted, as it does everywhere else.
+        const context = await this.graphContext(provider, entity, { parentTask: graph.parent, parentMetadata: graph.parentMetadata });
+        const envelope = this.nodeEnvelope(entity, context, {
+            upstreamTasks: this.upstreamTasksInGraph(entity.ID, graph),
+            upstreamOf: this.upstreamLookupInGraph(graph),
+        });
+        await this.waitingSteps.Reach(
+            { Task: entity, Payload: payload, OwnerUserID: owner, InputTainted: this.inputTaintOf(envelope) },
+            provider,
+        );
     }
 
     /**

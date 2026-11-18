@@ -30,6 +30,7 @@ import {
     WAITING_STEP_MARKER,
     WaitingStepDueAt,
     WaitingStepKindOf,
+    WaitingStepOutputTaint,
 } from './waiting-steps';
 
 /** How many times a provider's transient raise failure is retried inline before the step fails. */
@@ -45,6 +46,11 @@ export type ReachedWaitingStep = {
     Payload: Record<string, unknown>;
     /** The user who submitted the workflow, when recorded. A provider's fallback owner. */
     OwnerUserID: string | null;
+    /**
+     * Whether `Payload` is tainted, as the dispatcher computes it for any node it would run. Recorded
+     * on the row, so the step's output taint can be decided when it completes.
+     */
+    InputTainted: boolean;
 };
 
 export class WaitingStepRunner {
@@ -80,10 +86,14 @@ export class WaitingStepRunner {
             'Value' in due ? due.Value : null,
             'Value' in key ? key.Value : null,
             JSON.stringify(step.Payload),
+            step.InputTainted,
             this.contextUser(),
         );
         if (!won) return false;   // another instance reached it, or it is no longer Pending
         task.ClaimedBy = WAITING_STEP_MARKER;
+        // The procedure wrote the start payload and input taint to the row; keep the in-memory copy
+        // in step, so a held signal applied below decides its taint from the same record.
+        config.runtime = { ...(config.runtime ?? {}), payloadAtStart: step.Payload, isInputTainted: step.InputTainted };
 
         // Unresolvable settings fail the step loudly rather than guessing. A Wait whose moment was
         // "now" because a payload value was missing would take a wrong turn nobody could see.
@@ -94,7 +104,7 @@ export class WaitingStepRunner {
             const raised = await this.raiseWithProvider(task, config, step, due.Value, provider);
             if (raised) return raised;
         }
-        return this.applyHeldSignal(provider, task, step.Payload);
+        return this.applyHeldSignal(provider, task, config);
     }
 
     /**
@@ -118,7 +128,7 @@ export class WaitingStepRunner {
                 if (isDue && (await this.completeDueWait(provider, task))) changed++;
                 continue;
             }
-            if (await this.applyHeldSignal(provider, task, undefined)) {
+            if (await this.applyHeldSignal(provider, task, ParseStepConfiguration(task.Configuration))) {
                 changed++;
                 continue;
             }
@@ -200,30 +210,38 @@ export class WaitingStepRunner {
 
     // ── settle helpers ─────────────────────────────────────────────────────
 
-    /** Applies a signal that arrived before the step was reached. True when it settled the step. */
+    /**
+     * Applies a signal that arrived before the step was reached. True when it settled the step.
+     *
+     * @param config the step's configuration as it now stands, carrying the start payload and input
+     *        taint recorded when it was reached
+     */
     private async applyHeldSignal(
         provider: IMetadataProvider,
         task: MJTaskEntity,
-        payloadAtStart: Record<string, unknown> | undefined,
+        config: ReturnType<typeof ParseStepConfiguration>,
     ): Promise<boolean> {
-        const config = ParseStepConfiguration(task.Configuration);
         const signal = PendingSignalOf(config);
         if (!signal) return false;
-        const start = payloadAtStart ?? PayloadAtStartOf(config);
-        const output = signal.status === 'Complete' ? JSON.stringify(ComposeWaitingStepOutput(start, signal.payload)) : null;
+        const output = signal.status === 'Complete'
+            ? JSON.stringify(ComposeWaitingStepOutput(PayloadAtStartOf(config), signal.payload))
+            : null;
         const outcome = await this.claims.TryCompleteWaitingStep(
             provider, task.ID, WAITING_STEP_MARKER, signal.status, output,
             signal.errorMessage ?? (signal.status === 'Failed' ? 'The signal reported a failure.' : null),
-            '{}', this.contextUser(),
+            '{}', WaitingStepOutputTaint(config, signal.payload), this.contextUser(),
         );
         return outcome === 'Completed';
     }
 
     private async completeDueWait(provider: IMetadataProvider, task: MJTaskEntity): Promise<boolean> {
-        const start = PayloadAtStartOf(ParseStepConfiguration(task.Configuration));
+        const config = ParseStepConfiguration(task.Configuration);
         const waitedUntil = task.DueAt ? new Date(task.DueAt).toISOString() : this.now().toISOString();
-        const output = JSON.stringify(ComposeWaitingStepOutput(start, { waitedUntil }));
-        return this.claims.TryCompleteDueWait(provider, task.ID, WAITING_STEP_MARKER, output, this.contextUser());
+        const output = JSON.stringify(ComposeWaitingStepOutput(PayloadAtStartOf(config), { waitedUntil }));
+        // No payload of its own: a Wait is exactly as tainted as what reached it.
+        return this.claims.TryCompleteDueWait(
+            provider, task.ID, WAITING_STEP_MARKER, output, WaitingStepOutputTaint(config, null), this.contextUser(),
+        );
     }
 
     /** Fails the graph's overdue External / provider-Human steps, and tells providers to withdraw. */
@@ -255,7 +273,8 @@ export class WaitingStepRunner {
     private async fail(provider: IMetadataProvider, task: MJTaskEntity, message: string): Promise<boolean> {
         LogError(`[TaskGraph] ${message}`);
         const outcome = await this.claims.TryCompleteWaitingStep(
-            provider, task.ID, WAITING_STEP_MARKER, 'Failed', null, message, '{}', this.contextUser(),
+            // A failed step hands nothing on; recorded tainted so nothing could ever read it as clean.
+            provider, task.ID, WAITING_STEP_MARKER, 'Failed', null, message, '{}', true, this.contextUser(),
         );
         if (outcome !== 'Completed') {
             LogError(`[TaskGraph] Could not record the failure of step ${task.ID} (${outcome ?? 'statement did not run'}).`);

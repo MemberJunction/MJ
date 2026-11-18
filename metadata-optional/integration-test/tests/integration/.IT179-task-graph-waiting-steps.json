@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT179 - Task Graph Waiting Steps",
+    "Description": "Waiting steps on the durable dispatcher against the live database, bundle 'task-graph-waiting-steps', WS1-WS7. External, Wait and provider-Human steps are never claimed by a runner: the dispatcher reaches them, marks them waiting, and something else completes them. WS1: a Wait step holds the graph for its duration and then hands on the WHOLE payload it was reached with (a waiting step that emitted only its own output would silently drop everything upstream). WS2: an External step waits for a signal by correlation key, and the signal's payload becomes the step output and reaches the next step. WS3: a signal sent before the step is reached is held on the step and applied when it is, rather than lost. WS4: an External step past its expiresInHours fails and the graph settles instead of waiting forever. WS5: a Human step naming a plugged-in BaseHumanTaskProvider is raised with that provider exactly once (however many polls pass), receives its instructions, configuration and payload, is completed through TaskGraphWaitingSteps.CompleteWaitingStep, and raises no built-in inbox request. WS6: submission refuses a Human step naming a provider no package registered, by name, and a Wait step refuses to be signalled. WS7: a signal that only releases an External step (no payload) adds no taint. Taint is asserted in WS1, WS2 and WS7 from the security envelope each downstream step was handed: a Wait passes its input taint on unchanged, a signal carrying a payload taints what follows (outside content), and a release with no payload does not. A stub agent runner stands in for the agent framework, so no model calls are made. Mutation-class throughout: creates Tasks, Task Dependencies and (if absent) a Task Type, and deletes all of them.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Wait steps complete on their clock and pass the payload through; External steps complete on a signal by key (held when early) or fail at their deadline; provider-Human steps are raised once with the provider and completed through the shared completion path; unregistered providers and signals to Wait steps are refused by name."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "task-graph-waiting-steps"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EEA244A1-9794-4907-86D9-9031C8DF2C3B"
+  }
+}

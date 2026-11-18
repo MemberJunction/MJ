@@ -890,6 +890,7 @@ export class TaskClaimStore {
         dueAt: Date | null,
         correlationKey: string | null,
         payloadAtStart: string | null,
+        inputTainted: boolean,
         contextUser: UserInfo,
     ): Promise<boolean> {
         return this.guardedWrite(provider, 'spTaskGraphMarkWaiting', [
@@ -898,6 +899,7 @@ export class TaskClaimStore {
             { Name: 'DueAt', Value: dueAt },
             { Name: 'CorrelationKey', Value: correlationKey },
             { Name: 'PayloadAtStart', Value: payloadAtStart },
+            { Name: 'InputTainted', Value: inputTainted },
         ], contextUser);
     }
 
@@ -918,6 +920,7 @@ export class TaskClaimStore {
         outputPayload: string | null,
         errorMessage: string | null,
         signalJSON: string,
+        outputTainted: boolean,
         contextUser: UserInfo,
     ): Promise<WaitingStepWriteOutcome | null> {
         const rows = await this.callProc<{ AffectedRows: number; Outcome: string }>(provider, 'spTaskGraphCompleteWaitingStep', [
@@ -927,6 +930,7 @@ export class TaskClaimStore {
             { Name: 'OutputPayload', Value: outputPayload },
             { Name: 'ErrorMessage', Value: errorMessage },
             { Name: 'SignalJSON', Value: signalJSON },
+            { Name: 'OutputTainted', Value: outputTainted },
         ], contextUser);
         if (rows === null) return null;
         const outcome = String(rows[0]?.Outcome ?? 'Refused');
@@ -943,12 +947,14 @@ export class TaskClaimStore {
         taskID: string,
         marker: string,
         outputPayload: string,
+        outputTainted: boolean,
         contextUser: UserInfo,
     ): Promise<boolean> {
         return this.guardedWrite(provider, 'spTaskGraphCompleteDueWait', [
             { Name: 'TaskID', Value: taskID },
             { Name: 'Marker', Value: marker },
             { Name: 'OutputPayload', Value: outputPayload },
+            { Name: 'OutputTainted', Value: outputTainted },
         ], contextUser);
     }
 

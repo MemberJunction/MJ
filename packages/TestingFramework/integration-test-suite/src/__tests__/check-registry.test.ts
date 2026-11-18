@@ -91,6 +91,7 @@ import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks'
 import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { TaskGraphWaitingStepChecks } from '../checks/task-graph-waiting-steps.checks';
 import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
@@ -255,6 +256,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // so it triggers the same run-half `defer` verdict through an unreadable run instead. Every
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
+        ['task-graph-waiting-steps', TaskGraphWaitingStepChecks, 7], // WS1-WS7 External / Wait / provider-Human steps on the live dispatcher (IT179)
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
         ['fls-enforcement', FlsEnforcementChecks, 27], // FLS1-FLS27 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS25-FLS27 related rows, constraint errors and re-enable, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
@@ -585,6 +587,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'task-graph-security': 10,
+        'task-graph-waiting-steps': 7,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-group-concurrency-client': 4,
@@ -627,7 +630,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(248);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(249);
     });
 });
 
@@ -1109,6 +1112,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-security.TGS7',
         'task-graph-security.TGS8',
         'task-graph-security.TGS9',
+        'task-graph-waiting-steps.WS1',
+        'task-graph-waiting-steps.WS2',
+        'task-graph-waiting-steps.WS3',
+        'task-graph-waiting-steps.WS4',
+        'task-graph-waiting-steps.WS5',
+        'task-graph-waiting-steps.WS6',
+        'task-graph-waiting-steps.WS7',
         'transaction-group-concurrency-client.TGC1',
         'transaction-group-concurrency-client.TGC2',
         'transaction-group-concurrency-client.TGC3',

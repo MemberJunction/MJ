@@ -1180,10 +1180,11 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (16 classes)
+// @memberjunction/task-graph (17 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -2470,6 +2471,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -2594,11 +2596,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
-    AssignUserRolesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
@@ -2798,11 +2800,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     StewardFeaturePipelineVersionAction,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
-    ProduceVideoAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
     VideoStudioArtDirectorAgent,
@@ -2843,7 +2845,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1223;
+export const CLASS_REGISTRATIONS_COUNT = 1224;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

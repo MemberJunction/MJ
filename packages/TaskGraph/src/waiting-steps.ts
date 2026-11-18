@@ -172,6 +172,29 @@ export function ComposeWaitingStepOutput(
     return mergeDeep(payloadAtStart ?? {}, own ?? {});
 }
 
+/**
+ * Whether what a waiting step hands on is tainted — recorded on completion as a runner's output is,
+ * so the steps after it are gated by what actually reached them.
+ *
+ * - A **Wait** hands on exactly what it was reached with: its input taint, nothing added.
+ * - An **External** or **provider-Human** step adds the signal's payload. A payload is content from
+ *   outside the graph — a webhook body, another app's record — so it taints. A signal that only
+ *   releases the step (no payload) adds nothing.
+ *
+ * A provider's completion never CLEARS taint, even when it names the person who decided: only the
+ * server-verified review of the built-in inbox does (`HumanReviewClearsTaint`), and a provider's
+ * account of who decided is code's word, not the server's.
+ *
+ * An input taint that was never recorded reads as tainted. Fail closed.
+ */
+export function WaitingStepOutputTaint(
+    config: TaskStepConfiguration,
+    signalPayload: Record<string, unknown> | null | undefined,
+): boolean {
+    const inputTainted = config.runtime?.isInputTainted !== false;
+    return inputTainted || (!!signalPayload && Object.keys(signalPayload).length > 0);
+}
+
 /** A signal held on a step that was not reached yet; applied the moment the dispatcher reaches it. */
 export type PendingWaitingSignal = {
     status: 'Complete' | 'Failed';

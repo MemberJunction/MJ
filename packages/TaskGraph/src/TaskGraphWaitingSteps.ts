@@ -23,6 +23,7 @@ import {
     PayloadAtStartOf,
     WAITING_STEP_MARKER,
     WaitingStepKindOf,
+    WaitingStepOutputTaint,
     type PendingWaitingSignal,
 } from './waiting-steps';
 
@@ -178,7 +179,8 @@ async function completeOne(
     const outcome = await claims.TryCompleteWaitingStep(
         provider, task.ID, WAITING_STEP_MARKER, status, output,
         status === 'Failed' ? (request.ErrorMessage ?? 'The step was reported as failed.') : null,
-        JSON.stringify(signal), contextUser,
+        // Only used when the step is completed now; a held signal decides its taint when applied.
+        JSON.stringify(signal), WaitingStepOutputTaint(config, request.Payload), contextUser,
     );
     recordOutcome(task, outcome, result);
 }

@@ -13,6 +13,7 @@ import {
     ResolveWaitDueAt,
     WaitingStepDueAt,
     WaitingStepKindOf,
+    WaitingStepOutputTaint,
 } from '../waiting-steps';
 
 const NOW = new Date('2026-11-18T12:00:00.000Z');
@@ -159,5 +160,33 @@ describe('held signals and the starting payload', () => {
     it('reads the payload the step was reached with', () => {
         expect(PayloadAtStartOf({ runtime: { payloadAtStart: { a: 1 } } })).toEqual({ a: 1 });
         expect(PayloadAtStartOf({})).toBeUndefined();
+    });
+});
+
+describe('WaitingStepOutputTaint', () => {
+    const clean = { runtime: { isInputTainted: false } };
+    const dirty = { runtime: { isInputTainted: true } };
+
+    it('a Wait (no payload of its own) is exactly as tainted as what reached it', () => {
+        expect(WaitingStepOutputTaint(clean, null)).toBe(false);
+        expect(WaitingStepOutputTaint(dirty, null)).toBe(true);
+    });
+
+    it('a signal that only releases the step adds nothing', () => {
+        expect(WaitingStepOutputTaint(clean, {})).toBe(false);
+        expect(WaitingStepOutputTaint(clean, undefined)).toBe(false);
+    });
+
+    it('a signal carrying a payload taints: it is content from outside the graph', () => {
+        expect(WaitingStepOutputTaint(clean, { approved: true })).toBe(true);
+    });
+
+    it('never clears taint, whoever the signal says decided', () => {
+        expect(WaitingStepOutputTaint(dirty, { completedByUserID: 'someone' })).toBe(true);
+    });
+
+    it('fails closed when the input taint was never recorded', () => {
+        expect(WaitingStepOutputTaint({}, null)).toBe(true);
+        expect(WaitingStepOutputTaint({ runtime: {} }, null)).toBe(true);
     });
 });

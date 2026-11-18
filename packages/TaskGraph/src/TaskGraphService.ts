@@ -486,13 +486,27 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     // `expiresInHours` as well as instructions: dropping it here is what would leave the deadline in
     // the spec and out of the row the dispatcher actually reads, so the request would be raised with
     // no ExpiresAt and the author's timeout would silently not exist.
+    //
+    // `provider` and `providerConfiguration` for the same reason: dropped, a Human step meant for a
+    // plugged-in provider silently fell back to the built-in inbox, raised an ask nobody watches, and
+    // never reached the provider at all.
     const human = ConfigOf(node, 'Human');
-    if (human?.instructions || human?.expiresInHours) {
-        config.human = { instructions: human.instructions, expiresInHours: human.expiresInHours };
+    if (human?.instructions || human?.expiresInHours || human?.provider || human?.providerConfiguration) {
+        config.human = {
+            instructions: human.instructions,
+            expiresInHours: human.expiresInHours,
+            ...(human.provider ? { provider: human.provider } : {}),
+            ...(human.providerConfiguration ? { providerConfiguration: human.providerConfiguration } : {}),
+        };
     }
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    // A Wait's moment. Without it the row says "Wait" and nothing else, and the dispatcher can only
+    // fail the step — which it does, by name, rather than continue immediately.
+    const wait = ConfigOf(node, 'Wait');
+    if (wait) config.wait = wait;
 
     // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
     // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.

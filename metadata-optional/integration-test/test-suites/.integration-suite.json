@@ -483,6 +483,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT75 - Entity Actions",
             "Sequence": 41,
             "Status": "Active"
