@@ -19,7 +19,7 @@ import type { NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { PendingAttachment } from '@memberjunction/ng-composer';
 import { filter, takeUntil } from 'rxjs';
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
-import type { DashboardEditorComponent, DashboardEditorLoadError, ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import type { DashboardEditorComponent, DashboardEditorLoadError, ShareDialogResult } from '@memberjunction/ng-dashboards/dashboard-editor.module';
 import { ExtractPanelsFromLayout } from '@memberjunction/ng-dashboard-viewer';
 import type { DashboardConfig as DashboardLayoutConfig, DashboardNavRequestEvent, DashboardViewerComponent } from '@memberjunction/ng-dashboard-viewer';
 import { BuildDashboardTabAgentContext, BuildDashboardTabAgentTools, SummarizeDashboardPanels } from './dashboard-tab-agent';
