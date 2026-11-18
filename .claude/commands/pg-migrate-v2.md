@@ -18,8 +18,10 @@ are delegated to Claude Code running inside the container.
 `mj migrate convert --split` classifies each migration and transpiles only the
 ~2% hand-written DDL via the sqlglot AST dialect. CodeGen objects (views / sprocs
 / triggers / grants) are **baked inline** into each new migration at conversion
-time (`--bake-codegen`, see Step 1d); mj-sync metadata is re-seeded by `mj sync
-push`. One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
+time (`--bake-codegen`, see Step 1d). A whole mj-sync log (`…Metadata_Sync.sql`) is
+**converted inline** (one `DO $mj$` block per save, the same output the legacy path gives),
+so an Open App installed by migrations alone gets its seed rows; metadata DML inside a
+schema migration is still re-seeded by `mj sync push`. One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
 counterpart; baselines already have committed `.pg.sql` counterparts and are
 **not** reconverted.
 
@@ -252,6 +254,8 @@ Summarize for the user: clean conversions, `needs-hand-authoring` routines, and
 `/* Set field properties for entity */`, `/* Set categories for N fields */`
 `UPDATE __mj."EntityField" …`) are re-seeded by `mj sync push` in Phase 3 — they
 are NOT blockers. Genuine blockers are the `needs-hand-authoring` routines.
+A `Metadata_Sync` file is not Category-M residue: it converts inline, and any `SYNC-LOG-*`
+entry (a save that did not convert) IS a blocker.
 
 If there are zero `.needs-hand` files, skip Phase 2.
 
