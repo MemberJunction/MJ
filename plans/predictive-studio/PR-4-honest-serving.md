@@ -6641,7 +6641,7 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
 **Interfaces:** the response keeps `predictions` with `probabilities` in `classOrder` (`:181`, `:251`); a 400's `detail`
 names the columns
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```python
   def test_predict_without_feature_schema_is_refused(client, legacy_artifact):
       r = client.post("/predict", json=PredictBody(legacy_artifact, feature_schema=None))
@@ -6656,13 +6656,13 @@ names the columns
       body = client.post("/predict", json=PredictBody(w9_artifact)).json()
       assert all(len(p["probabilities"]) == len(body["classOrder"]) for p in body["predictions"])
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- tests/test_predict_schema_refusals.py`
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- tests/test_predict_schema_refusals.py`
   → the first two fail (200 with the fallback).
-- [ ] Step 3: Implement in `predict`; `git grep -n "fall back to declared output columns" -- packages/AI/PredictiveStudio/Sidecar`
+- [x] Step 3: Implement in `predict`; `git grep -n "fall back to declared output columns" -- packages/AI/PredictiveStudio/Sidecar`
   → 0 hits.
-- [ ] Step 4: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python` → 488 passed on `599c288dee`'s tree
+- [x] Step 4: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python` → 488 passed on `599c288dee`'s tree
   (2026-11-10) + the new cases, 0 failed; `pnpm test` → 0 failed.
-- [ ] Step 5: Runtime: `curl -s -o /dev/null -w '%{http_code}' -X POST "$PREDICTIVE_STUDIO_SIDECAR_URL/predict" -H 'content-type: application/json' -d @predict-no-schema.json`
+- [x] Step 5: Runtime: `curl -s -o /dev/null -w '%{http_code}' -X POST "$PREDICTIVE_STUDIO_SIDECAR_URL/predict" -H 'content-type: application/json' -d @predict-no-schema.json`
   (a sidecar started in remote mode, `PREDICTIVE_STUDIO_SIDECAR_URL` as `Sidecar/src/__tests__/ml-sidecar.test.ts:102` uses it; the body is G5.2's
   request with `feature_schema` removed)
   → `400`.
@@ -10169,6 +10169,25 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `featureName`, `CreateScoringProcess` names the feature after the pipeline (§5.8.6's rule); the op's contract
   fingerprint changed, so external clients rebuild. M5.3 Step 5 ran as the plan's rule for that suite says: Feature
   Pipelines → 0 / 5 / 0, environment-blocked (D3-78: bizapps-common not installed), at M5.
+- **D4-154 · A v2 artifact's stored feature columns are its stored schema** (M5.7 report, concern 2). `/predict` on a
+  v2 artifact scores from the feature columns the artifact stores and ignores the request's `feature_schema`; a request
+  without one is not refused there, because the artifact holds what it was trained on. The "no stored feature schema"
+  400 is a legacy (v1) model's refusal: it has no schema of its own beyond the request's. A row whose columns do not
+  match the schema is refused on both paths, with each missing and each unknown column named. Task M5.10's G5.2 runs its
+  removed-schema half on a legacy-envelope model fixture and its renamed-feature half on the W1-signal v2 model. The
+  sidecar's `main.py`, `preprocessing.py`, `tests/test_predict_schema_refusals.py` and `tests/tools/legacy_envelope.py`
+  join TruthSuite's strict mypy set (`run-pytest.mjs`: 52 files, clean). pytest 495 → 503.
+- **D4-155 · A legacy model scores with its own stored preprocessing** (M5.7 review RF1, fix round 2). `/predict` on a
+  legacy envelope uses the envelope's stored `fitted_preprocessing` for the column check and the transform. A request
+  copy that differs from it (compared as parsed structure) is a 400 naming the difference, and the request copy is used
+  only when the envelope stores none. A feature-count `ValueError` from the estimator is a 400 naming both counts,
+  never a 500. Consequence, accepted: a stored legacy model whose `MLModel.FittedPreprocessing` has drifted from its
+  artifact's copy is refused rather than scored with the drifted copy, which is the refusal this task exists for. A
+  row that lacks a key other rows carry is scored with that value missing under the model's own missing-value rule
+  (the training-time imputation), not refused (review Minor, parked).
+  A request copy used because the envelope stores none is shape-checked first
+  (`preprocessing.validate_fitted_preprocessing`): an op lacking a key it reads, or an unknown op, is a 400 naming the
+  op and the key, never a 500 (review RF2, closed by the controller after the fix-round cap; pytest 516).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not

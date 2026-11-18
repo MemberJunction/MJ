@@ -31,7 +31,7 @@ if (process.platform === 'darwin') {
 }
 
 // The sidecar's trainer contract, its column encoding, its missing-value rule, its snapshot loading, its inner-validation folds, its estimator
-// factories, its proper scores and secondary metrics, holdout intervals, the publishing gate, calibration, candidate selection, the baselines, the restricted artifact loader and the predictor artifacts, the selection stage, its CodeVersion, the holdout stage and the run, the leakage audit, permutation importance, the time-series evaluation, the forecast backtest, the gate parity test, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
+// factories, its proper scores and secondary metrics, holdout intervals, the publishing gate, calibration, candidate selection, the baselines, the restricted artifact loader and the predictor artifacts, the selection stage, its CodeVersion, the holdout stage and the run, the leakage audit, permutation importance, the time-series evaluation, the forecast backtest, the gate parity test, the prediction endpoint and its input preprocessing with their refusal tests, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
 const SIDECAR_TYPED_MODULES = [
   'app/trainer_schemas.py',
   'app/failures.py',
@@ -58,10 +58,14 @@ const SIDECAR_TYPED_MODULES = [
   'app/importance.py',
   'app/temporal.py',
   'app/forecast.py',
+  'app/preprocessing.py',
+  'app/main.py',
   'tests/test_gate_parity.py',
   'tests/tools/gate_parity.py',
   'tests/tools/trainer_fixture.py',
+  'tests/test_predict_schema_refusals.py',
   'tests/tools/trainer_scaffold.py',
+  'tests/tools/legacy_envelope.py',
 ].map((m) => path.join('..', 'Sidecar', 'src', 'python', m));
 
 const rawArgs = process.argv.slice(2);

@@ -15,7 +15,7 @@ from __future__ import annotations
 import base64
 import binascii
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import AbstractSet, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -23,12 +23,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from . import algorithms, artifacts, preprocessing
+from .array_types import FArr, IntArr
 from .artifacts_v2 import PredictorEnvelope
 from .failures import RequestRefused
 from .run import run_trainer
 from .trainer import DriverBaseline, TrainedPredictor, single_coef_row, top_signed_drivers
 from .trainer_schemas import TrainerRequest
 from .schemas import (
+    Cell,
     HealthResponse,
     PredictRequest,
     PredictResponse,
@@ -69,7 +71,7 @@ def trainer(req: TrainerRequest) -> JSONResponse:
     return JSONResponse(result.model_dump(mode="json"))
 
 
-def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
+def _positive_scores(estimator: Any, X: FArr) -> FArr:
     """Best available continuous score for classification metrics/predictions.
 
     Prefers calibrated ``predict_proba``, then ``decision_function``, then the
@@ -77,9 +79,9 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
     derivable from whatever the estimator supports.
     """
     if hasattr(estimator, "predict_proba"):
-        return np.asarray(estimator.predict_proba(X))
+        return np.asarray(estimator.predict_proba(X), dtype=np.float64)
     if hasattr(estimator, "decision_function"):
-        return np.asarray(estimator.decision_function(X))
+        return np.asarray(estimator.decision_function(X), dtype=np.float64)
     return np.asarray(estimator.predict(X), dtype=float)
 
 
@@ -94,33 +96,45 @@ def predict(req: PredictRequest) -> PredictResponse:
     presence of the train-time label-decode map stashed on the estimator, so the
     response shape needs no out-of-band flag.
 
+    A legacy model scores with the fitted preprocessing stored in its artifact: a request copy that differs from it is
+    refused, and the request copy is used only when the artifact stores none. It scores only against the feature
+    schema stored with it: a request without one is refused
+    ("no stored feature schema"), never scored against the fitted output columns; a request schema that differs from
+    the artifact's (its stored schema and the columns its fitted preprocessing reads) is refused naming each column
+    the request lacks and each the artifact does not know, before any row is transformed; and rows that lack a schema
+    column are refused with every missing column and every row column the schema does not name (a renamed feature
+    shows as one of each), never scored with the column's value filled in.
+
     Raises:
         HTTPException: 400 for a missing artifact/cache key, missing
-            ``fitted_preprocessing`` (with ``output_columns``), or a transform error.
+            ``fitted_preprocessing`` (with ``output_columns``), a request ``fitted_preprocessing`` that differs from
+            the artifact's stored copy, no stored feature schema, a request schema that
+            differs from the artifact's, rows that do not carry
+            the schema's columns, or a transform error.
     """
     v2 = _load_v2(req.artifact_b64)
     if v2 is not None:
         return _predict_v2(v2[0], v2[1], req)
     try:
-        estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
+        estimator, envelope = artifacts.load_estimator(req.artifact_b64, req.model_id)
     except (ValueError, artifacts.ArtifactRefusedError) as exc:
         # ArtifactRefusedError is a ValueError too; named here so the intent is visible:
         # a refused or malformed artifact is the caller's error, never a 500.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not req.fitted_preprocessing or "output_columns" not in req.fitted_preprocessing:
+    fitted = _resolve_fitted_preprocessing(envelope, req.fitted_preprocessing)
+
+    if not req.feature_schema:
         raise HTTPException(
             status_code=400,
-            detail="fitted_preprocessing (with output_columns) is required at /predict.",
+            detail="no stored feature schema: a legacy model scores only against the feature schema stored with it.",
         )
-
-    feature_cols = [fs.Name for fs in req.feature_schema] if req.feature_schema else (
-        # fall back to declared output columns when no schema travels with predict
-        list(req.fitted_preprocessing["output_columns"])
-    )
+    feature_cols = [fs.Name for fs in req.feature_schema]
+    _refuse_schema_the_artifact_does_not_match(feature_cols, envelope, fitted)
+    _refuse_unmatched_columns(feature_cols, set(feature_cols), req.rows)
 
     try:
-        X = preprocessing.transform(req.rows, req.fitted_preprocessing, feature_cols)
+        X = preprocessing.transform(req.rows, fitted, feature_cols)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -130,7 +144,7 @@ def predict(req: PredictRequest) -> PredictResponse:
     is_classification = label_classes is not None
     # The transformed matrix X is aligned to the fitted output columns; those names align with a linear
     # model's coef_ for per-record contributions (P1-5). Absent/mismatched → contributions degrade to None.
-    output_cols = list(req.fitted_preprocessing.get("output_columns") or [])
+    output_cols = list(fitted.get("output_columns") or [])
     predictions = _build_predictions(estimator, X, is_classification, label_classes, output_cols)
     return PredictResponse(predictions=predictions, classOrder=list(label_classes) if label_classes else None)
 
@@ -158,9 +172,7 @@ def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: P
     the predicted class's probability. A linear predictor's rows carry signed drivers measured from the envelope's
     training mean; an envelope without one gives no driver."""
     names = [c.name for c in envelope.featureColumns if c.encoding.kind != "identifier"]
-    missing = sorted(n for n in names if not any(n in r for r in req.rows))
-    if req.rows and missing:
-        raise HTTPException(status_code=400, detail=f"rows lack the model's feature columns: {missing}")
+    _refuse_unmatched_columns(names, {c.name for c in envelope.featureColumns}, req.rows)
     frame = pd.DataFrame([{n: r.get(n) for n in names} for r in req.rows], columns=names)
     try:
         out = np.asarray(predictor.predict(frame), dtype=np.float64)
@@ -182,6 +194,95 @@ def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: P
     return PredictResponse(predictions=preds, classOrder=list(order))
 
 
+def _resolve_fitted_preprocessing(
+    envelope: Mapping[str, Any], requested: Dict[str, Any]
+) -> preprocessing.FittedPreprocessing:
+    """The fitted preprocessing a legacy model scores with: the copy its artifact stores, when it stores one (with
+    ``output_columns``); else the request's. A request copy beside a stored one must equal it as parsed structure
+    (key order and JSON spelling do not matter), so a drifted copy never scores.
+
+    Raises:
+        HTTPException: 400 when the request copy differs from the stored one, when neither copy carries
+            ``output_columns``, or when the request copy is malformed (an op lacking a key it needs, an unknown op).
+    """
+    stored = envelope.get("fitted_preprocessing")
+    if isinstance(stored, dict) and "output_columns" in stored:
+        if requested and requested != stored:
+            raise HTTPException(
+                status_code=400,
+                detail="the request's fitted preprocessing differs from the model's stored copy; "
+                       "a legacy model scores only with the preprocessing it was trained with.",
+            )
+        return stored
+    if not requested or "output_columns" not in requested:
+        raise HTTPException(
+            status_code=400,
+            detail="fitted_preprocessing (with output_columns) is required at /predict.",
+        )
+    try:
+        preprocessing.validate_fitted_preprocessing(requested)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return requested
+
+
+def _stored_schema_names(envelope: Mapping[str, Any]) -> List[str]:
+    """The feature names a legacy envelope stores in its ``feature_schema`` ([] when it stores none)."""
+    stored = envelope.get("feature_schema")
+    if not isinstance(stored, list):
+        return []
+    return [str(e["Name"]) for e in stored if isinstance(e, dict) and "Name" in e]
+
+
+def _refuse_schema_the_artifact_does_not_match(
+    request_cols: Sequence[str], envelope: Mapping[str, Any], fitted: Mapping[str, Any]
+) -> None:
+    """Refuse (400) a request feature schema that differs from the legacy artifact's: the artifact's columns are its
+    stored ``feature_schema`` together with every raw column its fitted preprocessing reads
+    (``preprocessing.source_columns``), so no fitted column reaches the transform without a request column behind it.
+
+    Raises:
+        HTTPException: 400 naming every artifact column the request schema lacks and every request column the
+            artifact does not know.
+    """
+    artifact_cols = _stored_schema_names(envelope)
+    for col in preprocessing.source_columns(dict(fitted)):
+        if col not in artifact_cols:
+            artifact_cols.append(col)
+    requested, known = set(request_cols), set(artifact_cols)
+    missing = [c for c in artifact_cols if c not in requested]
+    unknown = [c for c in request_cols if c not in known]
+    if not missing and not unknown:
+        return
+    parts: List[str] = []
+    if missing:
+        parts.append(f"the request's feature schema lacks the model's columns: {missing}")
+    if unknown:
+        parts.append(f"the model does not know the request's columns: {unknown}")
+    raise HTTPException(status_code=400, detail="; ".join(parts))
+
+
+def _refuse_unmatched_columns(
+    expected: Sequence[str], known: AbstractSet[str], rows: Sequence[Mapping[str, Cell]]
+) -> None:
+    """Refuse (400) rows that do not carry a model's feature columns: the detail names every `expected` column no
+    row carries and every row column outside `known` (a renamed feature shows as one of each). Rows that carry every
+    expected column pass, with or without columns the model does not read; no rows pass (nothing to score).
+
+    Raises:
+        HTTPException: 400 naming the missing columns and the unmatched row columns.
+    """
+    present = {k for r in rows for k in r}
+    missing = sorted(n for n in expected if n not in present)
+    if not rows or not missing:
+        return
+    detail = f"rows lack the model's feature columns: {missing}"
+    unmatched = sorted(present - known)
+    if unmatched:
+        detail += f"; row columns the model's feature schema does not name: {unmatched}"
+    raise HTTPException(status_code=400, detail=detail)
+
+
 def _envelope_driver_baseline(envelope: PredictorEnvelope) -> Optional[DriverBaseline]:
     """The training mean a v2 envelope carries with its encoded column names, or None when either is absent."""
     if envelope.driverBaseline is None or envelope.transformedColumns is None:
@@ -190,8 +291,8 @@ def _envelope_driver_baseline(envelope: PredictorEnvelope) -> Optional[DriverBas
 
 
 def _row_contributions(
-    estimator: Any, X: np.ndarray, feature_names: List[str], top_k: int = 5
-) -> List[Optional[List[Dict[str, Any]]]]:
+    estimator: Any, X: FArr, feature_names: List[str], top_k: int = 5
+) -> List[Optional[List[PredictionContribution]]]:
     """Top signed per-record feature contributions for a LINEAR model (P1-5), else all-None.
 
     For a linear model the contribution of feature j to row i's output, measured from the mean development row
@@ -211,10 +312,10 @@ def _row_contributions(
         if coef is None or baseline is None or X.ndim != 2 or X.shape[1] != coef.shape[0] \
                 or len(feature_names) != coef.shape[0] or baseline.shape[0] != coef.shape[0]:
             return [None] * n_rows
-        out: List[Optional[List[Dict[str, Any]]]] = []
+        out: List[Optional[List[PredictionContribution]]] = []
         for i in range(n_rows):
             drivers = top_signed_drivers(coef * (np.asarray(X[i], dtype=float) - baseline), feature_names, top_k)
-            out.append(None if drivers is None else [{"feature": f, "value": v} for f, v in drivers])
+            out.append(None if drivers is None else [PredictionContribution(feature=f, value=v) for f, v in drivers])
         return out
     except Exception:  # never let the explanation layer break scoring
         return [None] * n_rows
@@ -222,7 +323,7 @@ def _row_contributions(
 
 def _build_predictions(
     estimator: Any,
-    X: np.ndarray,
+    X: FArr,
     is_classification: bool,
     label_classes: Optional[List[str]] = None,
     feature_names: Optional[List[str]] = None,
@@ -240,8 +341,11 @@ def _build_predictions(
     contribs = _row_contributions(estimator, X, feature_names or [])
     if is_classification:
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
-        encoded_labels = estimator.predict(X)
-        scores = _positive_scores(estimator, X)
+        try:
+            encoded_labels = estimator.predict(X)
+            scores = _positive_scores(estimator, X)
+        except ValueError as exc:
+            raise _estimator_refusal(estimator, X, exc) from exc
         out = [
             _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
             for i in range(X.shape[0])
@@ -250,18 +354,33 @@ def _build_predictions(
             for i, pred in enumerate(out):
                 pred.probabilities = [float(v) for v in scores[i]]  # every class, in label order
         return out
-    values = np.asarray(estimator.predict(X), dtype=float)
+    try:
+        values = np.asarray(estimator.predict(X), dtype=float)
+    except ValueError as exc:
+        raise _estimator_refusal(estimator, X, exc) from exc
     return [
         Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])
     ]
 
 
+def _estimator_refusal(estimator: Any, X: FArr, exc: ValueError) -> HTTPException:
+    """The 400 for an estimator that refuses the transformed matrix: the feature count it was fitted on beside the
+    count the rows carry (the usual cause: preprocessing that emits other columns than training did), never a 500."""
+    expected = getattr(estimator, "n_features_in_", None)
+    received = int(X.shape[1]) if X.ndim == 2 else 0
+    expected_text = "an unrecorded number of" if expected is None else str(int(expected))
+    return HTTPException(
+        status_code=400,
+        detail=f"the model expects {expected_text} feature columns but the transformed rows carry {received}: {exc}",
+    )
+
+
 def _classification_prediction(
-    scores: np.ndarray,
-    encoded_labels: np.ndarray,
-    label_classes: List[str],
+    scores: FArr,
+    encoded_labels: IntArr,
+    label_classes: Optional[List[str]],
     i: int,
-    contributions: Optional[List[Dict[str, Any]]] = None,
+    contributions: Optional[List[PredictionContribution]] = None,
 ) -> Prediction:
     """Assemble the i-th classification :class:`Prediction` (decoded label + score).
 
@@ -288,4 +407,4 @@ def _classification_prediction(
         score = float(scores[i][0])
     else:
         score = float(np.ravel(scores)[i])
-    return Prediction(score=score, contributions=contributions, **{"class": label})
+    return Prediction.model_validate({"score": score, "class": label, "contributions": contributions})
