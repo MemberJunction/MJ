@@ -7,6 +7,7 @@ import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { PostgreSQLAutoQuoteAuditor } from '@memberjunction/sql-dialect';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { ImportResolverModules } from './resolverModuleImport.js';
@@ -557,6 +558,7 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
     const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
+    PostgreSQLAutoQuoteAuditor.Instance.Configure({ Enabled: configInfo.databaseSettings.pgAutoQuoteAudit });
 
     const pgEndpoint = ResolvePostgreSQLEndpoint();
     const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;

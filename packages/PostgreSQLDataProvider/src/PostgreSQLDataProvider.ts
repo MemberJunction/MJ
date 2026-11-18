@@ -15,6 +15,7 @@ import {
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
+    LogStatusEx,
     TransactionGroupBase,
     IMetadataProvider,
     RunQuerySQLFilterManager,
@@ -47,7 +48,7 @@ import {
 } from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
-import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers, AutoQuotePostgreSQLIdentifiersAudited } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
@@ -1763,10 +1764,14 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      * are quoted by one implementation rather than two hand-synced copies. See
      * {@link AutoQuotePostgreSQLIdentifiers} for the quoting rule and its rationale.
      *
+     * A statement the shim changes is logged once at verbose level when the auto-quote audit is on
+     * (`PostgreSQLAutoQuoteAuditor`, #4435): that log is the inventory of SQL that still depends on
+     * the shim. The returned SQL is the same either way.
+     *
      * Public so it can be unit-tested directly.
      */
     public AutoQuoteIdentifiers(sql: string): string {
-        return AutoQuotePostgreSQLIdentifiers(sql);
+        return AutoQuotePostgreSQLIdentifiersAudited(sql, 'runtime', (message) => LogStatusEx({ message, verboseOnly: true }));
     }
 
     /** @deprecated Use {@link AutoQuoteIdentifiers}. */

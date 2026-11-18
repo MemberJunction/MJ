@@ -2994,7 +2994,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ? [...params.Fields].map(f => f.trim().toLowerCase()).sort().join(',')
                 : '*';
             const rlsClause = entityInfo && typeof entityInfo.GetEffectiveRowFilterWhereClause === 'function'
-                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')
+                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', this.PlatformKey)
                 : `user:${user.ID ?? ''}`;
             const roleKey = user.UserRoles && user.UserRoles.length > 0
                 ? user.UserRoles.map(r => (r.RoleID ?? '').trim().toLowerCase()).sort().join(',')
@@ -3373,7 +3373,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // 5. Row-Level Security — role RLS AND API-key row filters (GetEffectiveRowFilterWhereClause; the role-RLS exemption applies only to the role layer)
-            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', this.PlatformKey);
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
                 bHasWhere = true;
@@ -5063,7 +5063,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', this.PlatformKey);
         if (rlsWhereClause && rlsWhereClause.length > 0) {
             whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
@@ -5263,7 +5263,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * MJ-DB entity either. Called from the external RunView and Load dispatch points.
      */
     protected assertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', this.PlatformKey);
         if (rlsWhereClause && rlsWhereClause.length > 0) {
             throw new Error(
                 `Entity '${entityInfo.Name}' is backed by an external data source and has Row-Level Security that applies ` +
@@ -7814,7 +7814,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Append Read row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
         let fullWhere = where;
         if (user) {
-            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', this.PlatformKey);
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
             }
@@ -7895,7 +7895,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, type, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, type, '', this.PlatformKey);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -7930,7 +7930,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Create, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Create, '', this.PlatformKey);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -7960,7 +7960,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '', this.PlatformKey);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -8162,7 +8162,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (fieldSecurityRefusal) {
             return { Filter: filter, RowFilter: '', Refusal: fieldSecurityRefusal };
         }
-        return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+        return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, '', this.PlatformKey), Refusal: null };
     }
 
     /**

@@ -69,6 +69,12 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  /**
+   * PostgreSQL only: log, once per distinct statement and at verbose level, every statement the
+   * identifier auto-quote shim changes (#4435). The log is the inventory of stored and code-written
+   * SQL that still depends on the shim. Unset: on unless `NODE_ENV` is `production`.
+   */
+  pgAutoQuoteAudit: z.boolean().optional(),
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),

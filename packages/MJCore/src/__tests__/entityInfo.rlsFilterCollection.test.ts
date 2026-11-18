@@ -61,11 +61,17 @@ function buildEntityInfo(permissions: EntityPermissionInfo[]): EntityInfo {
 
 const filter1 = buildRLSFilter(FILTER_1_ID, "OrganizationID = '{{UserOrganizationID}}'");
 const filter2 = buildRLSFilter(FILTER_2_ID, "UserID = '{{UserID}}'");
+const FILTER_3_ID = 'F0000000-0000-0000-0000-000000000003';
+const filter3 = new RowLevelSecurityFilterInfo({
+    ID: FILTER_3_ID, Name: 'Filter-platform', Description: 'Test filter with a PostgreSQL variant',
+    FilterText: "[UserID] = '{{UserID}}'",
+    PlatformVariants: JSON.stringify({ FilterText: { postgresql: `"UserID" = '{{UserID}}'` } }),
+});
 
 let savedProvider: typeof Metadata.Provider;
 beforeAll(() => {
     savedProvider = Metadata.Provider;
-    Metadata.Provider = { Entities: [], RowLevelSecurityFilters: [filter1, filter2] } as unknown as ProviderBase;
+    Metadata.Provider = { Entities: [], RowLevelSecurityFilters: [filter1, filter2, filter3] } as unknown as ProviderBase;
 });
 afterAll(() => {
     Metadata.Provider = savedProvider;
@@ -183,5 +189,27 @@ describe('Deny rows never read as grants (their Can* flags are denials)', () => 
         expect(buildPermission({ RoleID: ROLE_A_ID, Type: ' DENY ' }).IsDeny).toBe(true);
         expect(buildPermission({ RoleID: ROLE_A_ID, Type: '' }).IsDeny).toBe(false);
         expect(buildPermission({ RoleID: ROLE_A_ID, Type: 'Allow' }).IsDeny).toBe(false);
+    });
+});
+
+// #4435 phase 1: a provider passes its platform, and each filter renders its PlatformVariants text
+// for that platform. Without a platform, or without a variant, the base FilterText is used as before.
+describe('the RLS clause renders the platform variant of each filter', () => {
+    const entity = (): EntityInfo => buildEntityInfo([buildPermission({ RoleID: ROLE_A_ID, ReadRLSFilterID: FILTER_3_ID })]);
+
+    it('uses the PostgreSQL variant when the platform is postgresql', () => {
+        const clause = entity().GetEffectiveRowFilterWhereClause(buildUser([ROLE_A_ID]), EntityPermissionType.Read, '', 'postgresql');
+        expect(clause).toBe(`(("UserID" = '${USER_ID}'))`);
+    });
+
+    it('uses the base text for sqlserver and when no platform is given', () => {
+        const user = buildUser([ROLE_A_ID]);
+        expect(entity().GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', 'sqlserver')).toBe(`(([UserID] = '${USER_ID}'))`);
+        expect(entity().GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')).toBe(`(([UserID] = '${USER_ID}'))`);
+    });
+
+    it('a filter with no variant renders its base text on postgresql', () => {
+        const e = buildEntityInfo([buildPermission({ RoleID: ROLE_A_ID, ReadRLSFilterID: FILTER_2_ID })]);
+        expect(e.GetUserRowLevelSecurityWhereClause(buildUser([ROLE_A_ID]), EntityPermissionType.Read, '', 'postgresql')).toBe(`(UserID = '${USER_ID}')`);
     });
 });

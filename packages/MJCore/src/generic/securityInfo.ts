@@ -568,11 +568,14 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
     /**
      * Replaces user-specific tokens in the filter text with actual user values.
      * Tokens are in the format {{UserFieldName}} where FieldName is any property of the UserInfo object.
+     * When `options.platform` is given, the platform's `PlatformVariants` text is marked up instead of
+     * the base `FilterText` (see {@link GetPlatformFilterText}); a row with no variant for that
+     * platform marks up the base text, exactly as without a platform.
      * @param {UserInfo} user - The user whose properties will be substituted into the filter text
      * @returns {string} The filter text with all user tokens replaced with actual values
      */
     public MarkupFilterText(user: UserInfo, options?: MarkupFilterOptions): string {
-        let ret = this.FilterText
+        let ret = options?.platform ? this.GetPlatformFilterText(options.platform) : this.FilterText
         if (user) {
             const keys = Object.keys(user)
             for (let i = 0; i < keys.length; i++) {
@@ -672,6 +675,11 @@ export interface MarkupFilterOptions {
      *   expression's operator shapes.
      */
     unresolvedBehavior?: 'legacy' | 'match-nothing';
+    /**
+     * The database platform the clause is rendered for. When set, the filter's `PlatformVariants`
+     * text for that platform is used in place of `FilterText` (#4435). Omitted: `FilterText`.
+     */
+    platform?: DatabasePlatform;
 }
 
 /**
