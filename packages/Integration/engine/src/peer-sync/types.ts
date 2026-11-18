@@ -22,7 +22,7 @@ export type PeerSyncCadenceMode = 'ScheduledOnly' | 'RealtimeWithScheduledFallba
  * Configuration stored in `CompanyIntegration.Configuration` for `MemberJunctionConnector`.
  */
 export interface PeerSyncConfiguration {
-    /** Remote MemberJunction peer's GraphQL endpoint URL (e.g., `https://peer.example.com/graphql`). */
+    /** Remote MemberJunction peer's GraphQL endpoint URL (reserved for Phase 1b network transport; unused by `InProcessPeerSyncTransport`). */
     PeerGraphQLUrl: string;
     /** Optional explicit instance ID of the local or remote peer. */
     PeerInstanceID?: string;
@@ -199,7 +199,7 @@ export interface PeerRecordChangeEntry {
     ChangedAt: string;
     ChangesJSON: string | null;
     FullRecordJSON: string | null;
-    /** Optional email of the user who authored this change on the origin deployment. */
+    /** Optional email of the user who authored this change on the origin deployment (populated when the change feed enriches user emails in Phase 1b). */
     UserEmail?: string | null;
 }
 

@@ -1715,6 +1715,10 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                             recordedContexts.push({ entityName, context: activeSyncCtx });
                             return true;
                         }),
+                        Delete: vi.fn(async () => {
+                            recordedContexts.push({ entityName: `${entityName}:Delete`, context: activeSyncCtx });
+                            return true;
+                        }),
                     };
                 }),
             } as unknown as IMetadataProvider;
@@ -1804,6 +1808,47 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
             expect(recordedContexts[2].context?.OriginChangeIDs).toEqual(['chg-comp-1', 'chg-comp-2']);
             expect(recordedContexts[2].context?.OriginUserEmail).toBe('editor@peer-b.com');
             expect(rowsByEntity.get('Companies::comp-100')?.['PrimaryContactID']).toBe('cont-100');
+
+            // Also verify PeerSyncApplier.applyDelete forwards Integration.ID (not CompanyIntegration.ID)
+            const applier = new PeerSyncApplier();
+            const deleteRes = await applier.ApplyBatch(
+                {
+                    PairingID: ComputePairingID(INSTANCE_A, INSTANCE_B),
+                    SenderInstanceID: INSTANCE_B,
+                    RunID: 'run-del-fk',
+                    EntityName: 'Contacts',
+                    Changes: [
+                        {
+                            EntityName: 'Contacts',
+                            SourceRecordID: 'cont-100',
+                            Operation: 'Delete',
+                            RecordData: { ID: 'cont-100' },
+                            AncestorData: null,
+                            ChangedFields: [],
+                            LatestChangedAt: '2026-04-20T12:05:00.000Z',
+                            LatestChangeID: 'chg-del-1',
+                            OriginChangeIDs: ['chg-del-1'],
+                            OriginUserEmail: 'deleter@peer-b.com',
+                        },
+                    ],
+                    PreservePrimaryKeys: true,
+                },
+                {
+                    CompanyIntegrationID: 'ci-company-row-id',
+                    IntegrationID: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                    PreservePrimaryKeys: true,
+                    DuplicateThreshold: 0.92,
+                    PotentialMatchThreshold: 0.75,
+                    ContextUser: serviceAccountUser,
+                    MetadataProvider: metadataProvider,
+                    RunViewProvider: runViewProvider,
+                }
+            );
+            expect(deleteRes.Response.DeletedCount).toBe(1);
+            const deleteCtxEntry = recordedContexts.find(c => c.entityName === 'Contacts:Delete');
+            expect(deleteCtxEntry?.context?.IntegrationID).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+            expect(deleteCtxEntry?.context?.OriginChangeIDs).toEqual(['chg-del-1']);
+            expect(deleteCtxEntry?.context?.OriginUserEmail).toBe('deleter@peer-b.com');
         });
 
         it('flushes Push Pass 2 deferred FKs on the remote endpoint, isolates queues per RunID, and attributes Push Pass 2 errors', async () => {

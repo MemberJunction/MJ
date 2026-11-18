@@ -291,6 +291,11 @@ export class PeerSyncEndpointService {
                 if (this.pendingDeferredFKsByRun.size >= PeerSyncEndpointService.MAX_TRACKED_DEFERRED_RUNS) {
                     const oldestKey = this.pendingDeferredFKsByRun.keys().next().value;
                     if (oldestKey !== undefined) {
+                        const evicted = this.pendingDeferredFKsByRun.get(oldestKey);
+                        console.warn(
+                            `[PeerSyncEndpointService] Evicting ${evicted?.updates.length ?? 0} unflushed deferred FK update(s) ` +
+                            `for run '${oldestKey}' because MAX_TRACKED_DEFERRED_RUNS (${PeerSyncEndpointService.MAX_TRACKED_DEFERRED_RUNS}) was exceeded.`
+                        );
                         this.pendingDeferredFKsByRun.delete(oldestKey);
                     }
                 }

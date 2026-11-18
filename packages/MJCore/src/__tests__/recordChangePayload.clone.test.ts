@@ -4,6 +4,12 @@ import { BaseEntity, CloneContext, RestoreContext, SyncContext, SerializeSyncCha
 import { EntityInfo, UserInfo } from '../index';
 
 class ConcreteTestProvider extends DatabaseProviderBase {
+    public LastSiblingArgs: {
+        source?: string;
+        changeContext?: string | null;
+        integrationID?: string | null;
+    } | null = null;
+
     protected get UUIDFunctionPattern(): RegExp { return /^\s*newid\s*\(\s*\)$/i; }
     protected get DBDefaultFunctionPattern(): RegExp { return /^\s*getdate\s*\(\s*\)$/i; }
     public QuoteIdentifier(name: string): string { return `[${name}]`; }
@@ -14,12 +20,44 @@ class ConcreteTestProvider extends DatabaseProviderBase {
     protected async GenerateSaveSQL() { return { fullSQL: '' }; }
     protected GenerateDeleteSQL() { return { fullSQL: '' }; }
     protected BuildRecordChangeSQL() { return null; }
-    protected BuildSiblingRecordChangeSQL(): string { return ''; }
+    protected BuildSiblingRecordChangeSQL(
+        _varName: string,
+        _entityInfo: EntityInfo,
+        _safeChangesJSON: string,
+        _safeChangesDesc: string,
+        _safePKValue: string,
+        _safeUserId: string,
+        source?: string,
+        changeContext?: string | null,
+        integrationID?: string | null,
+    ): string {
+        this.LastSiblingArgs = { source, changeContext, integrationID };
+        return 'SELECT 1;';
+    }
     async ExecuteSQL<T>(): Promise<Array<T>> { return []; }
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
     protected async InternalExecuteQueryFromSpec() { throw new Error('Not supported'); }
+
+    public async TestPropagateSibling(
+        parentInfo: EntityInfo,
+        source: 'Internal' | 'Clone' | 'Sync',
+        changeContext: string | null,
+        integrationID: string | null,
+    ): Promise<void> {
+        await this.PropagateRecordChangesToSiblings(
+            parentInfo,
+            { changesJSON: '{}', changesDescription: 'test' },
+            'pk-1',
+            'u-1',
+            undefined,
+            undefined,
+            source,
+            changeContext,
+            integrationID,
+        );
+    }
 
     // Exposure for testing protected method
     public TestBuildRecordChangePayload(
@@ -226,5 +264,32 @@ describe('BuildRecordChangePayload — CloneContext & SyncContext (§10.3)', () 
             },
         });
         expect('OriginUserEmail' in serialized.Sync).toBe(false);
+    });
+
+    it('forwards integrationID through PropagateRecordChangesToSiblings into BuildSiblingRecordChangeSQL', async () => {
+        const siblingChild = {
+            ID: 'CHILD-ENT-1',
+            Name: 'SiblingChild',
+            TrackRecordChanges: true,
+            ChildEntities: [],
+        } as unknown as EntityInfo;
+        const overlappingParent = {
+            ID: 'PARENT-ENT-1',
+            Name: 'OverlappingParent',
+            TrackRecordChanges: true,
+            ChildEntities: [siblingChild],
+        } as unknown as EntityInfo;
+
+        await provider.TestPropagateSibling(
+            overlappingParent,
+            'Sync',
+            SerializeSyncChangeContext(sampleSyncContext),
+            sampleSyncContext.IntegrationID ?? null,
+        );
+        expect(provider.LastSiblingArgs).toEqual({
+            source: 'Sync',
+            changeContext: SerializeSyncChangeContext(sampleSyncContext),
+            integrationID: 'INT-MJ-PEER',
+        });
     });
 });

@@ -816,7 +816,7 @@ PR #6502 delivers the database schema migration, core/provider `SyncContext` pro
 
 | Component | Package / File | Description |
 |---|---|---|
-| `RecordChange` T-SQL migration & `MJ_BASE_BEFORE_SQL.sql` | `migrations/v6/V202611171600__v6.3.x__RecordChange_Sync_Source_And_IntegrationID.sql`, `SQL Scripts/MJ_BASE_BEFORE_SQL.sql` | Widens `CHK_RecordChange_Source` with `'Sync'`, adds `IX_RecordChange_EntityID_ChangedAt`, and adds `@IntegrationID` to `spCreateRecordChange_Internal` (plus CodeGen output) |
+| `RecordChange` T-SQL migration & `MJ_BASE_BEFORE_SQL.sql` | `migrations/v6/V202611181700__v6.3.x__RecordChange_Sync_Source_And_IntegrationID.sql`, `SQL Scripts/MJ_BASE_BEFORE_SQL.sql` | Widens `CHK_RecordChange_Source` with `'Sync'`, adds `IX_RecordChange_EntityID_ChangedAt`, and adds `@IntegrationID` to `spCreateRecordChange_Internal` (plus CodeGen output) |
 | `IRecordChangeSyncContext` | `metadata/entities/JSONType-interfaces/IRecordChangeContext.ts`, `packages/MJCoreEntities/src/generated/entities/__mj.ts` | Structured `Kind: 'Sync'` provenance JSON schema on `MJ: Record Changes.ChangeContext` (with optional `OriginUserEmail` for service accounts) |
 | `SyncContext` & `BaseEntity.SetSyncContext` | `packages/MJCore/src/generic/baseEntity.ts`, `packages/MJCore/src/generic/databaseProviderBase.ts` | Server-only provenance setter (`Source = 'Sync'`, `ChangeContext`, `IntegrationID`) stripped from client input via `ClientInputTransportKeys` |
 | Provider `Sync` SQL rendering | `packages/GenericDatabaseProvider`, `packages/SQLServerDataProvider`, `packages/PostgreSQLDataProvider` | Threads `entity.SyncContext` and `@IntegrationID` / `"IntegrationID"` through save, delete, and IS-A sibling record-change logging |
