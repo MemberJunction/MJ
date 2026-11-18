@@ -80,7 +80,7 @@ pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bu
 ```
 Unit tests passing is **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen. Details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
-**Repo-wide gates**: `check:guards` (required) and `check:standards` (not required, so a red one merges and breaks `next`) must pass. A hook runs both before `git push` / `gh pr create`.
+**Repo-wide gates**: `check:guards` (required) and `check:standards` (not required, so a red one merges and breaks `next`) must pass. Claude Code runs both via a hook in `.claude/settings.json`; all other agents must run both commands explicitly before pushing or opening a PR.
 
 ---
 
@@ -175,6 +175,8 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 
 ### Skills — discovered via `.agents/skills.json` + `.agents/skills/`
 
+Harnesses without `skills.json` support (such as Codex) should read `.claude/skills/<name>/SKILL.md` directly when invoked.
+
 `debug-build-failures` (build/Turbo/deps), `playwright-cli` (browser automation), `scaffold-mj-dashboard` (Explorer dashboard), `bootstrap-clean-db` (private DB), `mj-field-security` (FLS checklist), `analyze-diagnostic-bundle` (`.mjdiag` analysis), `author-regression-test` (UI change → new test), `regression-replay-pr` (suite run → replay PR), `source-command-design-ux` (6-phase UX workflow).
 
 ### Project-wide standards
@@ -205,7 +207,9 @@ npm run check:codegen-tail # new-table migrations ship their generated entity (a
 
 ## Where new guidance goes
 
-Keep [`CLAUDE.md`](CLAUDE.md) and `AGENTS.md` in lockstep (`npm run check:claude-md` enforces routing parity and byte budgets):
+<!-- Note: AGENTS.md intentionally keeps three extra always-on rules (field-derived types, UserInfoEngine,
+     polymorphic FKs) that Claude Code auto-loads via .claude/rules/ and metadata/CLAUDE.md. -->
+Keep [`CLAUDE.md`](CLAUDE.md) and `AGENTS.md` routing tables in lockstep (`npm run check:claude-md` enforces routing parity and byte budgets):
 
 1. **Unrecoverable if violated or true on every task?** → both root [`CLAUDE.md`](CLAUDE.md) and `AGENTS.md`.
 2. **Applies to a file type?** (`.ts`, `.scss`) → `.claude/rules/` + listed in both routing tables.

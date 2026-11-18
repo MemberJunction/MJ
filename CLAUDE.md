@@ -169,7 +169,7 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 
 ### Skills — load only when invoked
 
-`debug-build-failures` (build/Turbo/deps), `playwright-cli` (browser automation), `scaffold-mj-dashboard` (Explorer dashboard), `bootstrap-clean-db` (private DB), `mj-field-security` (FLS checklist), `analyze-diagnostic-bundle` (`.mjdiag` analysis), `author-regression-test` (UI change → new test), `regression-replay-pr` (suite run → replay PR).
+`debug-build-failures`, `playwright-cli`, `scaffold-mj-dashboard`, `bootstrap-clean-db`, `mj-field-security`, `analyze-diagnostic-bundle`, `author-regression-test`, `regression-replay-pr` (descriptions auto-load at session start).
 
 ### Project-wide standards
 
@@ -201,7 +201,7 @@ npm run check:codegen-tail # new-table migrations ship their generated entity (a
 
 ## Where new guidance goes
 
-Keep `CLAUDE.md` and [`AGENTS.md`](AGENTS.md) in lockstep (`npm run check:claude-md` enforces parity). Route new guidance before adding it here:
+Keep `CLAUDE.md` and [`AGENTS.md`](AGENTS.md) routing tables in lockstep (`npm run check:claude-md` enforces routing parity and byte budgets). Route new guidance before adding it here:
 
 1. **Unrecoverable if violated?** (destroys work, bypasses review, ships a breaking change) → both root files, so it survives `/compact`.
 2. **True on literally every task?** → both root files.

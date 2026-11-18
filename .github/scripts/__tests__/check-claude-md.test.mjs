@@ -438,10 +438,15 @@ describe('check-claude-md', () => {
             expect(err).toContain('.claude/rules/scoped.md');
         });
 
-        it('fails when GEMINI.md omits @./AGENTS.md or duplicates full content over its byte cap', () => {
+        it('fails when GEMINI.md is missing, omits @./AGENTS.md, or exceeds its byte cap', () => {
             enableMultiAgentFixture();
-            put('GEMINI.md', '# Gemini without import directive\n');
+            rmSync(join(root, 'GEMINI.md'));
             let res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('GEMINI.md is missing');
+
+            put('GEMINI.md', '# Gemini without import directive\n');
+            res = run();
             expect(res.code).toBe(1);
             expect(res.err).toContain('@./AGENTS.md');
 
@@ -449,6 +454,24 @@ describe('check-claude-md', () => {
             res = run();
             expect(res.code).toBe(1);
             expect(res.err).toMatch(/GEMINI\.md.*byte ceiling/i);
+        });
+
+        it('fails when .agents/skills.json is missing, invalid JSON, or omits .claude/skills', () => {
+            enableMultiAgentFixture();
+            rmSync(join(root, '.agents/skills.json'));
+            let res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('.agents/skills.json is missing');
+
+            put('.agents/skills.json', '{ not json');
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('not valid JSON');
+
+            put('.agents/skills.json', JSON.stringify({ entries: [] }));
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('must include { "path": ".claude/skills" }');
         });
 
         it('fails when .agents/skills/<name> shadows .claude/skills/<name>', () => {
