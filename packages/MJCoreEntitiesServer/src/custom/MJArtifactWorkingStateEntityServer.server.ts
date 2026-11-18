@@ -27,12 +27,56 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     BytesToBase64,
+    GetGlobalObjectStore,
     IsByteArray,
     NormalizeUUID,
     RegisterClass,
     UUIDsEqual
 } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
+import {
+    BuildSqlArtifactReadablePredicateAsync,
+    EmptyPostRunViewResult,
+    FinalizePostRunViewResult,
+    GetGlobalWeakSet,
+    PrepareScopedPreRunView,
+    QualifyOuterEntityColumnAsync,
+    ShouldBypassPostRunViewAsync,
+    StripSyntheticFieldsFromRow
+} from './ArtifactSecurityHookHelpers';
+
+const WORKING_STATE_ENTITY_NAME = 'MJ: Artifact Working States';
+const GLOBAL_KEY_INTERNAL_WS_PARAMS = '__MJ_INTERNAL_WORKING_STATE_PARAMS__';
+const GLOBAL_KEY_ORIGINAL_WS_FIELDS = '__MJ_ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_WS_PARAMS = '__MJ_SQL_SCOPED_WORKING_STATE_PARAMS__';
+
+function getOriginalWorkingStateFieldsMap(): WeakMap<RunViewParams, string[]> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[GLOBAL_KEY_ORIGINAL_WS_FIELDS];
+        if (existing instanceof WeakMap) {
+            return existing;
+        }
+        const created = new WeakMap<RunViewParams, string[]>();
+        store[GLOBAL_KEY_ORIGINAL_WS_FIELDS] = created;
+        return created;
+    }
+    return new WeakMap<RunViewParams, string[]>();
+}
+
+type WorkingStateRowValue = string | number | boolean | Date | Uint8Array | Buffer | null | undefined;
+
+interface WorkingStateRawRow {
+    ID?: string | null;
+    id?: string | null;
+    ArtifactID?: string | null;
+    YjsState?: string | Uint8Array | Buffer | null;
+    LastModifiedByUserID?: string | null;
+    [key: string]: WorkingStateRowValue;
+}
+
+type WorkingStateViewRow = BaseEntity | WorkingStateRawRow;
+type SqlBindingValue = string | number | boolean | Date | Buffer | Uint8Array;
 
 function isServerSystemUser(user: UserInfo | undefined | null): boolean {
     if (!user) {
@@ -81,55 +125,54 @@ function resolveProviderForUser(contextUser: UserInfo): IMetadataProvider | null
     return resolveMetadataProvider(undefined, contextUser);
 }
 
-function readWorkingStateArtifactId(row: unknown): string | null {
+function readWorkingStateArtifactId(row: WorkingStateViewRow | null | undefined): string | null {
     if (!row || typeof row !== 'object') {
         return null;
     }
     if (row instanceof MJArtifactWorkingStateEntity) {
         return row.ArtifactID || null;
     }
-    const candidate = (row as Record<string, unknown>)['ArtifactID'];
+    const candidate = (row as WorkingStateRawRow).ArtifactID;
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
-const ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS = new WeakMap<RunViewParams, string[]>();
-
-function stripSyntheticWorkingStateArtifactId(row: unknown): unknown {
+function stripSyntheticWorkingStateArtifactId(row: WorkingStateViewRow): WorkingStateViewRow {
     if (!row || typeof row !== 'object' || row instanceof BaseEntity) {
         return row;
     }
     if (!Object.prototype.hasOwnProperty.call(row, 'ArtifactID')) {
         return row;
     }
-    const copy = { ...(row as Record<string, unknown>) };
-    delete copy['ArtifactID'];
+    const copy: WorkingStateRawRow = { ...(row as WorkingStateRawRow) };
+    delete copy.ArtifactID;
     return copy;
 }
 
-export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
+export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
-): RunViewParams => {
-    const provider = resolveMetadataProvider(hookProvider, contextUser);
-    if (
-        !params ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
-        isServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
-    ) {
-        return params;
-    }
-    if (
-        Array.isArray(params.Fields) &&
-        params.Fields.length > 0 &&
-        !params.Fields.some((f) => typeof f === 'string' && f.trim().toLowerCase() === 'artifactid')
-    ) {
-        ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS.set(params, [...params.Fields]);
-        params.Fields = [...params.Fields, 'ArtifactID'];
-    }
-    return params;
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
+        params,
+        {
+            TargetEntityName: WORKING_STATE_ENTITY_NAME,
+            RequiredFields: ['ArtifactID'],
+            IdColumnName: 'ArtifactID',
+            InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
+            OriginalFieldsMap: getOriginalWorkingStateFieldsMap(),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS),
+            BuildSqlPredicateAsync: async (prov, user, entityInfo, runViewParams, collectionCache) =>
+                BuildSqlArtifactReadablePredicateAsync(
+                    await QualifyOuterEntityColumnAsync(entityInfo, 'vwArtifactWorkingStates', 'ArtifactID', prov, runViewParams, user),
+                    prov,
+                    user,
+                    { precomputedCollectionCache: collectionCache }
+                )
+        },
+        contextUser,
+        hookProvider
+    );
 };
 
 /**
@@ -147,80 +190,54 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    if (
-        !results?.Success ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Working States'
-    ) {
-        return results;
-    }
-
-    const shouldStripSyntheticArtifactId = ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS.has(params);
-
-    if (isServerSystemUser(contextUser)) {
+    if (!results?.Success) {
         return results;
     }
 
     const provider = resolveMetadataProvider(hookProvider, contextUser);
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
+        params,
+        WORKING_STATE_ENTITY_NAME,
+        GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
+        getOriginalWorkingStateFieldsMap(),
+        contextUser,
+        provider
+    );
+    if (bypass) {
+        sqlScopedSet.delete(params);
+        if (originalFields && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: (results.Results as WorkingStateViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
+            };
+        }
+        return results;
+    }
 
-    if (!contextUser) {
-        // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke
-        // PostRunView hooks with contextUser === undefined after MJServer has already enforced
-        // server-side CanRead (`DSLC2`). On a server DatabaseProviderBase (`ProviderType === 'Database'`)
-        // or when no provider is configured, missing `contextUser` MUST fail closed (`R6-3`) because
-        // `DatabaseProviderBase.InternalRunView` falls back to `this.CurrentUser` and
-        // `ProviderBase.RunView`'s `LocalCacheManager` cache-hit path skips `CheckUserReadPermissions`.
+    if (!contextUser || !provider || provider.ProviderType !== 'Database') {
+        sqlScopedSet.delete(params);
         if (provider !== null && provider.ProviderType !== 'Database') {
-            if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            if (originalFields && Array.isArray(results.Results)) {
                 return {
                     ...results,
-                    Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
+                    Results: (results.Results as WorkingStateViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
                 };
             }
             return results;
         }
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (!provider) {
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (provider.ProviderType !== 'Database') {
-        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
-            return {
-                ...results,
-                Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
-            };
-        }
-        return results;
+        return EmptyPostRunViewResult(results);
     }
 
     if (!Array.isArray(results.Results) || results.Results.length === 0) {
-        if (params.ResultType === 'count_only' && (results.TotalRowCount ?? 0) > 0) {
-            return {
-                ...results,
-                RowCount: 0,
-                TotalRowCount: 0
-            };
-        }
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
+    const rawRows = results.Results as WorkingStateViewRow[];
     const readAllowedByArtifact = new Map<string, boolean>();
-    const keptRows: unknown[] = [];
+    const keptRows: WorkingStateViewRow[] = [];
 
-    for (const row of results.Results) {
+    for (const row of rawRows) {
         const artifactId = readWorkingStateArtifactId(row);
         if (!artifactId) {
             continue;
@@ -246,23 +263,11 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
             readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
-            keptRows.push(
-                shouldStripSyntheticArtifactId ? stripSyntheticWorkingStateArtifactId(row) : row
-            );
+            keptRows.push(StripSyntheticFieldsFromRow(row, originalFields));
         }
     }
 
-    if (keptRows.length === results.Results.length && !shouldStripSyntheticArtifactId) {
-        return results;
-    }
-
-    const removedCount = results.Results.length - keptRows.length;
-    return {
-        ...results,
-        Results: keptRows,
-        RowCount: keptRows.length,
-        TotalRowCount: Math.max(0, (results.TotalRowCount ?? results.Results.length) - removedCount)
-    };
+    return FinalizePostRunViewResult(params, results, keptRows, rawRows.length, sqlScopedSet);
 };
 
 /**
@@ -402,12 +407,12 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                     ? this.LastModifiedByUserID
                     : null;
 
-            const extractRowId = (row: Record<string, unknown> | undefined): string => {
-                if (typeof row?.['ID'] === 'string' && row['ID'].trim().length > 0) {
-                    return row['ID'].trim();
+            const extractRowId = (row: WorkingStateRawRow | undefined): string => {
+                if (typeof row?.ID === 'string' && row.ID.trim().length > 0) {
+                    return row.ID.trim();
                 }
-                if (typeof row?.['id'] === 'string' && row['id'].trim().length > 0) {
-                    return row['id'].trim();
+                if (typeof row?.id === 'string' && row.id.trim().length > 0) {
+                    return row.id.trim();
                 }
                 return '';
             };
@@ -415,14 +420,14 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
             // Always read from BaseView (`vwArtifactWorkingStates`) because SQL Server `cdp_Integration`
             // holds SELECT on views and EXECUTE on generated sprocs, never raw base-table permissions.
             const probeSql = `SELECT ${colId} FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
-            const existingRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+            const existingRows = await dbProvider.ExecuteSQL<WorkingStateRawRow>(
                 probeSql,
                 [this.ArtifactID],
                 { isMutation: false },
                 actor
             );
 
-            let sprocReturnedRows: Record<string, unknown>[] | undefined;
+            let sprocReturnedRows: WorkingStateRawRow[] | undefined;
 
             if (dbProvider.PlatformKey === 'sqlserver') {
                 const spCreateRef = dbProvider.QuoteSchemaAndView(
@@ -436,8 +441,8 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
 
                 const executeSqlServerUpdate = async (
                     targetId: string
-                ): Promise<Record<string, unknown>[]> => {
-                    const updateParams: unknown[] = [targetId, this.ArtifactID];
+                ): Promise<WorkingStateRawRow[]> => {
+                    const updateParams: SqlBindingValue[] = [targetId, this.ArtifactID];
                     const argClauses: string[] = [
                         `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
                         `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`
@@ -466,7 +471,7 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                     }
 
                     const updateSql = `EXEC ${spUpdateRef} ${argClauses.join(', ')}`;
-                    return dbProvider.ExecuteSQL<Record<string, unknown>>(
+                    return dbProvider.ExecuteSQL<WorkingStateRawRow>(
                         updateSql,
                         updateParams,
                         { isMutation: true },
@@ -476,8 +481,8 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
 
                 const executeSqlServerCreate = async (
                     recordId: string
-                ): Promise<Record<string, unknown>[]> => {
-                    const createParams: unknown[] = [recordId, this.ArtifactID];
+                ): Promise<WorkingStateRawRow[]> => {
+                    const createParams: SqlBindingValue[] = [recordId, this.ArtifactID];
                     const argClauses: string[] = [
                         `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
                         `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`
@@ -498,7 +503,7 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                     }
 
                     const createSql = `EXEC ${spCreateRef} ${argClauses.join(', ')}`;
-                    return dbProvider.ExecuteSQL<Record<string, unknown>>(
+                    return dbProvider.ExecuteSQL<WorkingStateRawRow>(
                         createSql,
                         createParams,
                         { isMutation: true },
@@ -522,7 +527,7 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                                 msg
                             )
                         ) {
-                            const racedRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                            const racedRows = await dbProvider.ExecuteSQL<WorkingStateRawRow>(
                                 probeSql,
                                 [this.ArtifactID],
                                 { isMutation: false },
@@ -542,7 +547,7 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 }
             } else {
                 const executePgUpdate = async (): Promise<void> => {
-                    const updateParams: unknown[] = [];
+                    const updateParams: SqlBindingValue[] = [];
                     const setClauses: string[] = [];
 
                     if (yjsBytes !== null) {
@@ -580,7 +585,7 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 } else {
                     const recordId =
                         this.ID && this.ID.trim().length > 0 ? this.ID : randomUUID();
-                    const insertParams: unknown[] = [recordId, this.ArtifactID];
+                    const insertParams: SqlBindingValue[] = [recordId, this.ArtifactID];
                     const valExprs: string[] = [
                         dbProvider.BuildParameterPlaceholder(0),
                         dbProvider.BuildParameterPlaceholder(1)
@@ -620,16 +625,19 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 }
             }
 
-            const selectSql = `SELECT * FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
-            const rows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
-                selectSql,
-                [this.ArtifactID],
-                { isMutation: false },
-                actor
-            );
-            const hydratedRow = rows?.[0] ?? sprocReturnedRows?.[0];
+            let hydratedRow: WorkingStateRawRow | undefined = sprocReturnedRows?.[0];
+            if (!hydratedRow) {
+                const selectSql = `SELECT * FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
+                const rows = await dbProvider.ExecuteSQL<WorkingStateRawRow>(
+                    selectSql,
+                    [this.ArtifactID],
+                    { isMutation: false },
+                    actor
+                );
+                hydratedRow = rows?.[0];
+            }
             if (hydratedRow) {
-                const normalizedRow: Record<string, unknown> = {};
+                const normalizedRow: WorkingStateRawRow = {};
                 for (const [key, value] of Object.entries(hydratedRow)) {
                     normalizedRow[key] = IsByteArray(value) ? BytesToBase64(value) : value;
                 }
@@ -673,13 +681,13 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 let targetId = this.ID && this.ID.trim().length > 0 ? this.ID.trim() : '';
                 if (!targetId && this.ArtifactID && this.ArtifactID.trim().length > 0) {
                     const probeSql = `SELECT ${colId} FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
-                    const probeRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                    const probeRows = await dbProvider.ExecuteSQL<WorkingStateRawRow>(
                         probeSql,
                         [this.ArtifactID],
                         { isMutation: false },
                         actor
                     );
-                    const rawId = probeRows?.[0]?.['ID'] ?? probeRows?.[0]?.['id'];
+                    const rawId = probeRows?.[0]?.ID ?? probeRows?.[0]?.id;
                     targetId = typeof rawId === 'string' ? rawId.trim() : '';
                     if (!targetId) {
                         this.NewRecord();
@@ -696,25 +704,25 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 await dbProvider.ExecuteSQL(deleteSql, [targetId], { isMutation: true }, actor);
             } else {
                 const predicates: string[] = [];
-                const params: unknown[] = [];
+                const params: SqlBindingValue[] = [];
 
                 if (this.ID && this.ID.trim().length > 0) {
                     predicates.push(
                         `${colId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
                     );
-                    params.push(this.ID);
+                    params.push(this.ID.trim());
                 }
                 if (this.ArtifactID && this.ArtifactID.trim().length > 0) {
                     predicates.push(
                         `${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
                     );
-                    params.push(this.ArtifactID);
+                    params.push(this.ArtifactID.trim());
                 }
                 if (predicates.length === 0) {
                     throw new Error('ID or ArtifactID is required to delete MJ: Artifact Working States.');
                 }
 
-                const sql = `DELETE FROM ${table} WHERE ${predicates.join(' OR ')}`;
+                const sql = `DELETE FROM ${table} WHERE ${predicates.join(' AND ')}`;
                 await dbProvider.ExecuteSQL(sql, params, { isMutation: true }, actor);
             }
 

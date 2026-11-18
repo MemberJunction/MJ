@@ -82,6 +82,7 @@ describe('pull of a parent with a collection, twice (#5053)', () => {
       })),
       calculateChecksum: vi.fn().mockImplementation(checksum),
       calculateChecksumWithFileContent: vi.fn().mockImplementation(async (payload: unknown) => checksum(payload)),
+      CalculateChecksumWithFileContent: vi.fn().mockImplementation(async (payload: unknown) => checksum(payload)),
     } as unknown as SyncEngine;
     processor = new RecordProcessor(mockSync, {} as UserInfo);
     vi.useFakeTimers();

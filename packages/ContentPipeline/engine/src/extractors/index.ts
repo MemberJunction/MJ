@@ -6,6 +6,7 @@
  */
 export * from './PlainTextExtractor.js';
 export * from './ArchiveExtractor.js';
+export * from './ManifestExtractor.js';
 
 /** Static import target that keeps the built-in extractors in the bundle. */
 export function LoadContentPipelineExtractors(): void {

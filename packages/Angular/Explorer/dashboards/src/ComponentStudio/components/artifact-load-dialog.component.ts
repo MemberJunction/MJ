@@ -317,16 +317,37 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
         return;
       }
 
+      const currentUser = this.metadata.CurrentUser;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJCollectionEntity>({
-        EntityName: 'MJ: Collections',
-        ExtraFilter: `UserID = '${currentUserId}' OR ID IN (
-          SELECT CollectionID FROM __mj.vwCollectionPermissions
-          WHERE UserID = '${currentUserId}' AND CanRead = 1
-        )`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      });
+      const permRes = await rv.RunView<{ CollectionID?: string | null }>(
+        {
+          EntityName: 'MJ: Collection Permissions',
+          ExtraFilter: `UserID = '${currentUserId}' AND CanRead = 1`,
+          Fields: ['CollectionID'],
+          ResultType: 'simple'
+        },
+        currentUser
+      );
+      const sharedIds = Array.from(
+        new Set(
+          (permRes.Success && permRes.Results ? permRes.Results : [])
+            .map((r) => (r.CollectionID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      const permClause = sharedIds.length > 0
+        ? ` OR ID IN (${sharedIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
+        : '';
+
+      const result = await rv.RunView<MJCollectionEntity>(
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `UserID = '${currentUserId}'${permClause}`,
+          OrderBy: 'Name',
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
 
       if (result.Success) {
         this.Collections = result.Results || [];
@@ -352,20 +373,63 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
     this.ArtifactVersions = [];
     this.cdr.detectChanges();
 
-    // Load artifacts in this collection
+    // Load artifacts in this collection (two-step lookup without protected subqueries)
     try {
+      const currentUser = this.metadata.CurrentUser;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJArtifactEntity>({
-        EntityName: 'MJ: Artifacts',
-        ExtraFilter: `ID IN (
-          SELECT DISTINCT av.ArtifactID
-          FROM __mj.vwArtifactVersions av
-          INNER JOIN __mj.vwCollectionArtifacts ca ON ca.ArtifactVersionID = av.ID
-          WHERE ca.CollectionID = '${collection.ID}'
-        )`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      });
+      const colLinksRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID = '${collection.ID}'`,
+          Fields: ['ArtifactVersionID'],
+          ResultType: 'simple'
+        },
+        currentUser
+      );
+      const versionIds = Array.from(
+        new Set(
+          (colLinksRes.Success && colLinksRes.Results ? colLinksRes.Results : [])
+            .map((r) => (r.ArtifactVersionID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (versionIds.length === 0) {
+        this.CollectionArtifacts = [];
+        return;
+      }
+
+      const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      const versionsRes = await rv.RunView<{ ArtifactID?: string | null }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${quotedVersionIds})`,
+          Fields: ['ArtifactID'],
+          ResultType: 'simple'
+        },
+        currentUser
+      );
+      const artifactIds = Array.from(
+        new Set(
+          (versionsRes.Success && versionsRes.Results ? versionsRes.Results : [])
+            .map((r) => (r.ArtifactID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (artifactIds.length === 0) {
+        this.CollectionArtifacts = [];
+        return;
+      }
+
+      const quotedArtifactIds = artifactIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      const result = await rv.RunView<MJArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID IN (${quotedArtifactIds})`,
+          OrderBy: 'Name',
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
 
       if (result.Success) {
         this.CollectionArtifacts = result.Results || [];

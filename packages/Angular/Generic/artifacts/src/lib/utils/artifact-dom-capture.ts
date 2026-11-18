@@ -1,3 +1,4 @@
+import { type IMetadataProvider } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   IsValidThumbnailDataUrl,
@@ -214,14 +215,17 @@ export async function CaptureRenderedElementThumbnail(
 
 /**
  * Encodes an exported SVG string (such as `BuildWhiteboardExportSvg(state)`) into a
- * base64 `data:image/svg+xml;base64,...` URI validated against size caps.
+ * base64 `data:image/svg+xml;base64,...` URI validated for basic structural safety and size.
  */
 export function SerializeSvgToDataUrl(svg: string | null | undefined): string | null {
   if (!svg || typeof svg !== 'string') {
     return null;
   }
   const trimmed = svg.trim();
-  if (!trimmed.includes('<svg')) {
+  if (!trimmed.startsWith('<svg') && !trimmed.includes('<svg')) {
+    return null;
+  }
+  if (/<script\b|<foreignObject\b|\bon[a-z]+\s*=|javascript:/i.test(trimmed)) {
     return null;
   }
   try {
@@ -233,7 +237,7 @@ export function SerializeSvgToDataUrl(svg: string | null | undefined): string | 
       binary += String.fromCharCode(...slice);
     }
     const dataUrl = `data:image/svg+xml;base64,${btoa(binary)}`;
-    return IsValidThumbnailDataUrl(dataUrl) ? dataUrl : null;
+    return dataUrl.length <= 250_000 ? dataUrl : null;
   } catch {
     return null;
   }
@@ -247,8 +251,15 @@ export async function CaptureThumbnailForDriverIfAllowed(
   driverClass: string,
   rootElement: HTMLElement | null | undefined,
   artifactTypeId?: string | null,
+  provider?: IMetadataProvider | null,
 ): Promise<{ Policy: ArtifactTypeThumbnailPolicy; CapturedThumbnailDataUrl: string | null }> {
-  const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+  const mdEngine = provider
+    ? (ArtifactMetadataEngine.GetProviderInstance(
+        provider,
+        ArtifactMetadataEngine,
+      ) as ArtifactMetadataEngine)
+    : ArtifactMetadataEngine.Instance;
+  const allTypes = mdEngine.ArtifactTypes ?? [];
   const typeEntity =
     (artifactTypeId
       ? allTypes.find((t) => UUIDsEqual(t.ID, artifactTypeId))

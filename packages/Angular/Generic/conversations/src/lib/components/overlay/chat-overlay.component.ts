@@ -18,11 +18,9 @@ import {
     Component,
     EventEmitter,
     Input,
-    OnChanges,
     OnDestroy,
     OnInit,
     Output,
-    SimpleChanges,
     ChangeDetectorRef,
     inject
 } from '@angular/core';
@@ -59,6 +57,69 @@ export interface OverlayConversationSwitchedEvent {
     NewConversationID: string | null;
 }
 
+/** JSON-compatible primitive for overlay app context values. */
+export type OverlayContextPrimitive = string | number | boolean | null | undefined;
+
+/** JSON-compatible value within overlay app context objects. */
+export type OverlayContextValue =
+    | OverlayContextPrimitive
+    | OverlayContextValue[]
+    | { [key: string]: OverlayContextValue };
+
+/** Typed `AdditionalContext.Form.RecordState` payload from Explorer forms. */
+export interface OverlayRecordStateContext {
+    RecordDisplayName?: string | null;
+    EditMode?: boolean;
+    Dirty?: boolean;
+    DirtyFieldNames?: string[];
+    HasExternalUpdateConflict?: boolean;
+    PreviewingHistoricalChangeID?: string | null;
+    [key: string]: OverlayContextValue;
+}
+
+/** Typed `AdditionalContext.Form.Links` summary counts. */
+export interface OverlayFormLinksContext {
+    TotalCount?: number;
+    OutgoingCount?: number;
+    IncomingCount?: number;
+    [key: string]: OverlayContextValue;
+}
+
+/** Typed `AdditionalContext.Form` payload exposed to the overlay. */
+export interface OverlayFormContext {
+    Entity?: string;
+    RecordPrimaryKey?: string | null;
+    RecordState?: OverlayRecordStateContext;
+    Links?: OverlayFormLinksContext;
+    [key: string]: OverlayContextValue | OverlayRecordStateContext | OverlayFormLinksContext;
+}
+
+/** Typed `AdditionalContext.ArtifactEditor` payload for inline artifact Ask AI requests. */
+export interface OverlayArtifactEditorContext {
+    ArtifactID?: string | null;
+    ArtifactTitle?: string;
+    ArtifactKind?: string;
+    ContextLabel?: string;
+    TargetSegmentID?: string | null;
+    TargetSlideID?: string | null;
+    TargetSheetID?: string | null;
+    TargetCellRange?: string | null;
+    SuggestingMode?: boolean;
+}
+
+/** Typed `AppContext.AdditionalContext` payload consumed by the chat overlay. */
+export interface OverlayAdditionalContext {
+    Form?: OverlayFormContext;
+    ArtifactEditor?: OverlayArtifactEditorContext;
+    [key: string]: OverlayContextValue | OverlayFormContext | OverlayArtifactEditorContext;
+}
+
+/** Typed application context snapshot passed into `<mj-chat-agents-overlay>`. */
+export interface OverlayAppContext {
+    AdditionalContext?: OverlayAdditionalContext;
+    [key: string]: OverlayContextValue | OverlayAdditionalContext | object;
+}
+
 /** Summary of the active record context extracted from `AppContext.AdditionalContext.Form` */
 export interface OverlayActiveRecordContextSummary {
     Entity: string;
@@ -90,7 +151,7 @@ interface OverlayPrefs {
     templateUrl: './chat-overlay.component.html',
     styleUrls: ['./chat-overlay.component.css']
 })
-export class ChatAgentsOverlayComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
+export class ChatAgentsOverlayComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
     private cdr = inject(ChangeDetectorRef);
     private bridge = inject(ConversationBridgeService);
     private agentClient = inject(AgentClientService);
@@ -140,7 +201,21 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     @Input() EnvironmentId!: string;
 
     /** Application context snapshot for AI agent awareness. Updated by the host app on navigation transitions. */
-    @Input() AppContext: Record<string, unknown> | null = null;
+    private _appContext: OverlayAppContext | null = null;
+
+    @Input()
+    set AppContext(value: OverlayAppContext | null) {
+        if (this._appContext === value) {
+            return;
+        }
+        this._appContext = value;
+        if (this.initialized) {
+            void this.syncActiveRecordBinding();
+        }
+    }
+    get AppContext(): OverlayAppContext | null {
+        return this._appContext;
+    }
 
     /** Greeting message shown in the empty state when no conversation is active */
     @Input() EmptyStateGreeting: string = 'How can I help you?';
@@ -243,7 +318,10 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     public ArtifactAiProposalApplied = false;
     /** Pre-filled draft prompt routed to the chat composer when an Inline AI request arrives. */
     public ArtifactAiComposerDraft: string | null = null;
+    /** Conversation ID that owns the current Inline AI artifact request (pins proposals strictly to that conversation). */
+    public ArtifactAiConversationId: string | null = null;
 
+    private initialized = false;
     private unregisterArtifactAiHandler: (() => void) | null = null;
 
     /** Tracks the `(entityId:recordId)` currently bound to the overlay */
@@ -272,6 +350,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     // --- Lifecycle ---
 
     ngOnInit(): void {
+        this.initialized = true;
         this.resolveDefaults();
         this.loadPreferences();
         this.subscribeToBridgeEvents();
@@ -280,12 +359,6 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             this.HandleArtifactAiRequest(request)
         );
         void this.syncActiveRecordBinding();
-    }
-
-    ngOnChanges(changes: SimpleChanges): void {
-        if (changes['AppContext']) {
-            void this.syncActiveRecordBinding();
-        }
     }
 
     ngOnDestroy(): void {
@@ -365,6 +438,9 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this._conversationId = event.conversation.ID;
         this.Conversation = event.conversation;
         this.IsNewConversation = false;
+        if (this.ActiveArtifactAiRequest && !this.ArtifactAiConversationId) {
+            this.ArtifactAiConversationId = event.conversation.ID;
+        }
 
         const isRecordBound = Boolean(
             event.conversation.LinkedEntityID ||
@@ -418,6 +494,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
      */
     public HandleArtifactAiRequest(request: ArtifactAskAiRequest): void {
         this.ActiveArtifactAiRequest = request;
+        this.ArtifactAiConversationId = this.ConversationId ?? null;
         this.ArtifactAiSuggestingMode = request.SuggestingModeDefault;
         this.ArtifactAiLatestProposal = '';
         this.ArtifactAiProposalApplied = false;
@@ -455,6 +532,20 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         if (!this.ActiveArtifactAiRequest) {
             return;
         }
+        const msgConversationId = event.message?.ConversationID ?? null;
+        if (
+            this.ArtifactAiConversationId &&
+            msgConversationId &&
+            !UUIDsEqual(this.ArtifactAiConversationId, msgConversationId)
+        ) {
+            return;
+        }
+        if (!this.ArtifactAiConversationId && msgConversationId) {
+            if (this.ConversationId && !UUIDsEqual(this.ConversationId, msgConversationId)) {
+                return;
+            }
+            this.ArtifactAiConversationId = msgConversationId;
+        }
         const messageText = typeof event.message?.Message === 'string' ? event.message.Message.trim() : '';
         const payloadText =
             typeof event.agentResult?.payload === 'string' ? event.agentResult.payload.trim() : '';
@@ -481,6 +572,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
 
     public DismissArtifactAiContext(): void {
         this.ActiveArtifactAiRequest = null;
+        this.ArtifactAiConversationId = null;
         this.ArtifactAiLatestProposal = '';
         this.ArtifactAiProposalApplied = false;
         this.ArtifactAiComposerDraft = null;
@@ -739,13 +831,12 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
      * Merges host `AppContext` with active Inline AI artifact context when an editor
      * request is open so backend agents receive structured selection/range metadata.
      */
-    public get EffectiveAppContext(): Record<string, unknown> | null {
+    public get EffectiveAppContext(): OverlayAppContext | null {
         const req = this.ActiveArtifactAiRequest;
         if (!req) {
             return this.AppContext;
         }
-        const existingAdditional =
-            (this.AppContext?.['AdditionalContext'] as Record<string, unknown> | undefined) ?? {};
+        const existingAdditional: OverlayAdditionalContext = this.AppContext?.AdditionalContext ?? {};
         return {
             ...(this.AppContext ?? {}),
             AdditionalContext: {
@@ -770,30 +861,30 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
      * `AppContext.AdditionalContext.Form` when the user is viewing a record.
      */
     public get ActiveRecordContext(): OverlayActiveRecordContextSummary | null {
-        const additional = this.AppContext?.['AdditionalContext'] as Record<string, unknown> | undefined;
-        const form = additional?.['Form'] as Record<string, unknown> | undefined;
-        if (!form || typeof form['Entity'] !== 'string' || !form['Entity']) {
+        const additional = this.AppContext?.AdditionalContext;
+        const form = additional?.Form;
+        if (!form || typeof form.Entity !== 'string' || !form.Entity) {
             return null;
         }
-        const recordState = form['RecordState'] as Record<string, unknown> | undefined;
-        const links = form['Links'] as Record<string, unknown> | undefined;
-        const dirtyFieldNames = Array.isArray(recordState?.['DirtyFieldNames'])
-            ? (recordState['DirtyFieldNames'] as unknown[]).filter((f): f is string => typeof f === 'string')
+        const recordState = form.RecordState;
+        const links = form.Links;
+        const dirtyFieldNames = Array.isArray(recordState?.DirtyFieldNames)
+            ? recordState.DirtyFieldNames.filter((f): f is string => typeof f === 'string')
             : [];
         return {
-            Entity: form['Entity'] as string,
-            RecordPrimaryKey: typeof form['RecordPrimaryKey'] === 'string' ? (form['RecordPrimaryKey'] as string) : null,
-            RecordDisplayName: typeof recordState?.['RecordDisplayName'] === 'string' ? (recordState['RecordDisplayName'] as string) : null,
-            EditMode: recordState?.['EditMode'] === true,
-            Dirty: recordState?.['Dirty'] === true,
+            Entity: form.Entity,
+            RecordPrimaryKey: typeof form.RecordPrimaryKey === 'string' ? form.RecordPrimaryKey : null,
+            RecordDisplayName: typeof recordState?.RecordDisplayName === 'string' ? recordState.RecordDisplayName : null,
+            EditMode: recordState?.EditMode === true,
+            Dirty: recordState?.Dirty === true,
             DirtyFieldNames: dirtyFieldNames,
-            HasExternalUpdateConflict: recordState?.['HasExternalUpdateConflict'] === true,
-            PreviewingHistoricalChangeID: typeof recordState?.['PreviewingHistoricalChangeID'] === 'string'
-                ? (recordState['PreviewingHistoricalChangeID'] as string)
+            HasExternalUpdateConflict: recordState?.HasExternalUpdateConflict === true,
+            PreviewingHistoricalChangeID: typeof recordState?.PreviewingHistoricalChangeID === 'string'
+                ? recordState.PreviewingHistoricalChangeID
                 : null,
-            TotalLinksCount: typeof links?.['TotalCount'] === 'number' ? (links['TotalCount'] as number) : 0,
-            OutgoingLinksCount: typeof links?.['OutgoingCount'] === 'number' ? (links['OutgoingCount'] as number) : 0,
-            IncomingLinksCount: typeof links?.['IncomingCount'] === 'number' ? (links['IncomingCount'] as number) : 0,
+            TotalLinksCount: typeof links?.TotalCount === 'number' ? links.TotalCount : 0,
+            OutgoingLinksCount: typeof links?.OutgoingCount === 'number' ? links.OutgoingCount : 0,
+            IncomingLinksCount: typeof links?.IncomingCount === 'number' ? links.IncomingCount : 0,
         };
     }
 

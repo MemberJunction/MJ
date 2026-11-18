@@ -2,9 +2,9 @@ import {
     EntityInfo,
     IMetadataProvider,
     IRunQueryProvider,
+    LogError,
     Metadata,
     ProjectEntityValueRowsForUser,
-    QueryInfo,
     RunQuery,
     RunQueryParams,
     RunView,
@@ -12,15 +12,45 @@ import {
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
+import { QueryEngine } from '../engines/QueryEngine';
+import type { MJQueryEntityExtended } from './MJQueryEntityExtended';
+
+/**
+ * Strongly-typed scalar/object value stored inside live block rows, parameters, and specs.
+ */
+export type BlockDataValue = string | number | boolean | Date | object | null | undefined;
+
+/**
+ * Strongly-typed row/parameter record used across {@link DocumentLiveBlockEngine}.
+ */
+export type BlockRecord = Record<string, BlockDataValue>;
+
+/**
+ * Target domain for an anchored artifact comment or suggestion (`NW-3`).
+ */
+export type ArtifactCommentAnchorDomain = 'doc' | 'sheet' | 'slide' | 'whiteboard';
+
+/**
+ * Typed anchor payload shared across Markdown docs, Spreadsheets, Presentations, and Whiteboards (`NW-3`).
+ */
+export interface ArtifactCommentAnchor {
+    Domain: ArtifactCommentAnchorDomain;
+    SegmentID?: string;
+    BlockID?: string;
+    SheetID?: string;
+    Range?: string;
+    SlideID?: string;
+    RegionID?: string;
+}
 
 /**
  * Extracted tabular/chart dataset returned by a registered spreadsheet chart extractor (`D5`).
  */
 export interface SpreadsheetChartExtractResult {
     Columns: DocumentBlockColumn[];
-    Rows: Array<Record<string, unknown>>;
+    Rows: BlockRecord[];
 }
 
 /**
@@ -34,6 +64,60 @@ export type SpreadsheetChartExtractorFn = (
     chartId: string | undefined,
     sheetRange: string | undefined
 ) => SpreadsheetChartExtractResult | null;
+
+export type SpreadsheetChartExtractorAsyncFn = (
+    content: string,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined,
+    options?: { skipEvaluate?: boolean }
+) => Promise<SpreadsheetChartExtractResult | null>;
+
+/**
+ * Callback registered by host/storage layers so `DocumentLiveBlockEngine` and `SpreadsheetEngine`
+ * can load binary bytes for `ContentMode = 'File'` artifacts (e.g., `.xlsx` workbooks) without a
+ * direct storage-package dependency inside `@memberjunction/core-entities`.
+ */
+export type ArtifactFileBytesLoaderFn = (
+    fileId: string,
+    user: UserInfo,
+    provider: IMetadataProvider
+) => Promise<Uint8Array | ArrayBuffer | null>;
+
+/**
+ * Callback registered by `SpreadsheetEngine` to extract a chart or cell-range dataset directly
+ * from binary `.xlsx` file bytes (`ContentMode = 'File'`).
+ */
+export type SpreadsheetXlsxChartExtractorFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined
+) => SpreadsheetChartExtractResult | null;
+
+export type SpreadsheetXlsxChartExtractorAsyncFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined
+) => Promise<SpreadsheetChartExtractResult | null>;
+
+/**
+ * Callback registered by `SpreadsheetEngine` to parse binary `.xlsx` file bytes into a serialized
+ * `WorkbookSpec` JSON string for `ContentMode = 'File'` artifact execution.
+ */
+export type SpreadsheetXlsxWorkbookExtractorFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null
+) => string | null;
+
+export type SpreadsheetXlsxWorkbookExtractorAsyncFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null
+) => Promise<string | null>;
 
 /**
  * Discriminator for the 5 canonical block types embeddable across MJ Docs, Slides, and Sheets.
@@ -85,6 +169,93 @@ export interface DocumentBlockColumn {
 }
 
 /**
+ * Identity binding stored inside a {@link FrozenBlockSnapshot} and covered by its HMAC-SHA256
+ * signature so a signed snapshot from one block/query/artifact cannot be transplanted into another (`S3`).
+ */
+export interface FrozenSnapshotIdentityBinding {
+    /** Normalized host `MJ: Artifacts.ID` when bound to a persisted artifact. */
+    ArtifactID?: string;
+    /** Block ID or Spreadsheet live table ID that owns this snapshot. */
+    BlockID?: string;
+    /** Block or live table kind (`SavedQuery`, `EntityView`, `DashboardPart`, `InteractiveComponent`, `Artifact`, etc.). */
+    Kind?: string;
+    /** Canonical target identifier (`QueryID`/`QueryName`, `ViewID`/`EntityName`, `DashboardID`, `ComponentID`, or `ArtifactID`). */
+    SourceTargetID?: string;
+}
+
+/**
+ * Normalizes a {@link FrozenSnapshotIdentityBinding} for deterministic HMAC hashing and comparison.
+ */
+export function NormalizeFrozenSnapshotIdentityBinding(
+    binding: FrozenSnapshotIdentityBinding | null | undefined
+): FrozenSnapshotIdentityBinding | undefined {
+    if (!binding || typeof binding !== 'object') {
+        return undefined;
+    }
+    const out: FrozenSnapshotIdentityBinding = {};
+    if (typeof binding.ArtifactID === 'string' && binding.ArtifactID.trim().length > 0) {
+        out.ArtifactID = NormalizeUUID(binding.ArtifactID);
+    }
+    if (typeof binding.BlockID === 'string' && binding.BlockID.trim().length > 0) {
+        out.BlockID = binding.BlockID.trim();
+    }
+    if (typeof binding.Kind === 'string' && binding.Kind.trim().length > 0) {
+        out.Kind = binding.Kind.trim();
+    }
+    if (typeof binding.SourceTargetID === 'string' && binding.SourceTargetID.trim().length > 0) {
+        out.SourceTargetID = NormalizeUUID(binding.SourceTargetID);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Builds the canonical {@link FrozenSnapshotIdentityBinding} for a {@link DocumentBlockSpec} (`S3`).
+ */
+export function BuildBlockIdentityBinding(
+    spec: Pick<
+        DocumentBlockSpec,
+        | 'BlockID'
+        | 'Kind'
+        | 'QueryID'
+        | 'QueryName'
+        | 'ViewID'
+        | 'ViewName'
+        | 'EntityName'
+        | 'DashboardID'
+        | 'DashboardName'
+        | 'ComponentID'
+        | 'ComponentName'
+        | 'ArtifactID'
+    >,
+    hostArtifactId?: string | null
+): FrozenSnapshotIdentityBinding {
+    let sourceTargetId: string | undefined;
+    switch (spec.Kind) {
+        case 'SavedQuery':
+            sourceTargetId = spec.QueryID?.trim() || spec.QueryName?.trim() || undefined;
+            break;
+        case 'EntityView':
+            sourceTargetId = spec.ViewID?.trim() || spec.EntityName?.trim() || spec.ViewName?.trim() || undefined;
+            break;
+        case 'DashboardPart':
+            sourceTargetId = spec.DashboardID?.trim() || spec.DashboardName?.trim() || undefined;
+            break;
+        case 'InteractiveComponent':
+            sourceTargetId = spec.ComponentID?.trim() || spec.ComponentName?.trim() || undefined;
+            break;
+        case 'Artifact':
+            sourceTargetId = spec.ArtifactID?.trim() || undefined;
+            break;
+    }
+    return NormalizeFrozenSnapshotIdentityBinding({
+        ...(hostArtifactId && hostArtifactId.trim().length > 0 ? { ArtifactID: hostArtifactId } : {}),
+        BlockID: spec.BlockID,
+        Kind: spec.Kind,
+        ...(sourceTargetId ? { SourceTargetID: sourceTargetId } : {})
+    }) ?? {};
+}
+
+/**
  * Static snapshot stored inside a block when `Mode === 'Frozen'` (`O5`).
  *
  * Freezing bakes the freezing user's visible rows into the artifact payload so any user
@@ -101,7 +272,7 @@ export interface FrozenBlockSnapshot {
     /** Projected column definitions at freeze time. */
     Columns: DocumentBlockColumn[];
     /** Projected data rows at freeze time (already FLS-filtered for the freezing user). */
-    Rows: Array<Record<string, unknown>>;
+    Rows: BlockRecord[];
     /** Total row count at freeze time. */
     TotalRowCount: number;
     /** Serialized artifact content snapshot when freezing an `Artifact` block (e.g., Whiteboard JSON). */
@@ -110,7 +281,9 @@ export interface FrozenBlockSnapshot {
     ArtifactTypeSnapshot?: string;
     /** Must be `true` to confirm the user accepted the RLS/FLS visibility warning modal (`O5`). */
     SecurityWarningAcknowledged: boolean;
-    /** Deterministic SHA-256 content hash over the snapshot payload computed at freeze time (`B7`). */
+    /** Optional identity binding covered by `SnapshotContentHash` to stop snapshot transplants (`S3`). */
+    Binding?: FrozenSnapshotIdentityBinding;
+    /** Deterministic HMAC-SHA256 content hash over the snapshot payload computed at freeze time (`B7`). */
     SnapshotContentHash?: string;
 }
 
@@ -152,7 +325,7 @@ export interface DocumentBlockSpec {
     /** Optional query category path for disambiguation when `Kind === 'SavedQuery'`. */
     CategoryPath?: string;
     /** User-supplied query parameters (`IsServerSet` parameters are stripped automatically). */
-    Parameters?: Record<string, unknown>;
+    Parameters?: BlockRecord;
     /** Chart type when `DisplayMode === 'chart'`. */
     ChartType?: 'bar' | 'line' | 'pie' | 'area';
 
@@ -170,7 +343,7 @@ export interface DocumentBlockSpec {
     /** Target component name when `Kind === 'InteractiveComponent'`. */
     ComponentName?: string;
     /** Serialized component specification/inputs when `Kind === 'InteractiveComponent'`. */
-    ComponentSpec?: Record<string, unknown>;
+    ComponentSpec?: BlockRecord;
 
     // --- OLE Artifact Configuration (§ 3.4.1) ---
     /** Target `MJ: Artifacts` ID when `Kind === 'Artifact'`. */
@@ -247,7 +420,7 @@ export interface DocumentBlockExecutionResult {
     /** Visible columns after FLS projection. */
     Columns: DocumentBlockColumn[];
     /** Visible rows after RLS + FLS projection. */
-    Rows: Array<Record<string, unknown>>;
+    Rows: BlockRecord[];
     /** Total matching rows. */
     TotalRowCount: number;
     /** Names of any client-supplied parameters that were stripped because `IsServerSet === true`. */
@@ -297,7 +470,7 @@ export abstract class BaseDocumentBlock {
         spec: DocumentBlockSpec,
         provider: IMetadataProvider,
         user: UserInfo,
-        serverParameters?: Record<string, unknown>
+        serverParameters?: BlockRecord
     ): Promise<DocumentBlockExecutionResult>;
 }
 
@@ -358,7 +531,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
                 const matchedView = viewLookup.Results[0];
                 targetEntityName = (matchedView.Entity ?? '').trim();
                 if (!targetEntityName && matchedView.EntityID) {
-                    const matchedEntity = provider.Entities?.find((e) => UUIDsEqual(e.ID, matchedView.EntityID!));
+                    const matchedEntity = provider.EntityByID(matchedView.EntityID);
                     if (matchedEntity) {
                         targetEntityName = matchedEntity.Name;
                     }
@@ -369,9 +542,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
             }
         }
 
-        const entityInfo = targetEntityName
-            ? provider.Entities?.find((e) => e.Name.trim().toLowerCase() === targetEntityName.toLowerCase())
-            : undefined;
+        const entityInfo = targetEntityName ? provider.EntityByName(targetEntityName) : undefined;
 
         if (!entityInfo) {
             return buildErrorResult(spec, `Entity '${targetEntityName || spec.ViewName || spec.ViewID}' was not found.`);
@@ -482,16 +653,14 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
             ResultType: 'simple'
         };
 
-        const viewResult = await rv.RunView<Record<string, unknown>>(runParams, user);
+        const viewResult = await rv.RunView<BlockRecord>(runParams, user);
         if (!viewResult.Success) {
             return buildErrorResult(spec, viewResult.ErrorMessage || `Failed to run view on ${entityInfo.Name}.`);
         }
 
         const rawRows = viewResult.Results ?? [];
         // fls-guard: project EntityView live block rows for viewer FLS
-        const projectedRows = (ProjectEntityValueRowsForUser(provider, entityInfo, rawRows, user) ?? []) as Array<
-            Record<string, unknown>
-        >;
+        const projectedRows = (ProjectEntityValueRowsForUser(provider, entityInfo, rawRows, user) ?? []) as BlockRecord[];
 
         const columns: DocumentBlockColumn[] = visibleFieldNames.map((fieldName) => {
             const fInfo = entityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
@@ -551,7 +720,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
  * Handler for `Kind === 'SavedQuery'` live blocks.
  * Enforces query execution permissions, strips `SERVER_ONLY_RUN_QUERY_PARAMS` and any parameter
  * marked `IsServerSet === true` on `MJ: Query Parameters`, and applies FLS output projection
- * across any entities referenced by the query (`QueryInfo.Entities`).
+ * across any entities referenced by the query (its `QueryEntities` rows).
  */
 @RegisterClass(BaseDocumentBlock, 'SavedQuery')
 export class SavedQueryDocumentBlock extends BaseDocumentBlock {
@@ -571,7 +740,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
         spec: DocumentBlockSpec,
         provider: IMetadataProvider,
         user: UserInfo,
-        serverParameters?: Record<string, unknown>
+        serverParameters?: BlockRecord
     ): Promise<DocumentBlockExecutionResult> {
         if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
@@ -582,8 +751,21 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
             return buildErrorResult(spec, validation.ErrorMessage ?? 'Invalid SavedQuery specification.');
         }
 
-        const queryInfo = resolveQueryInfo(provider, spec.QueryID, spec.QueryName, spec.CategoryPath);
-        if (queryInfo && !queryInfo.UserCanRun(user)) {
+        const queryInfo = await resolveSavedQuery(provider, user, spec.QueryID, spec.QueryName, spec.CategoryPath);
+        if (!queryInfo) {
+            return {
+                BlockID: spec.BlockID,
+                Kind: spec.Kind,
+                Mode: 'Live',
+                Success: false,
+                AccessDenied: true,
+                ErrorMessage: 'SavedQuery was not found or access is denied.',
+                Columns: [],
+                Rows: [],
+                TotalRowCount: 0
+            };
+        }
+        if (!queryInfo.UserCanRun(user).canRun) {
             return {
                 BlockID: spec.BlockID,
                 Kind: spec.Kind,
@@ -600,9 +782,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
         const { cleanParameters, strippedNames } = sanitizeClientQueryParameters(queryInfo, spec.Parameters);
 
         const baseRunParams = StripServerOnlyRunQueryParams({
-            QueryID: spec.QueryID,
-            QueryName: spec.QueryName,
-            CategoryPath: spec.CategoryPath,
+            QueryID: queryInfo.ID,
             Parameters: cleanParameters,
             MaxRows: clampBlockMaxRows(spec.MaxRows)
         });
@@ -612,7 +792,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
                 ? { ...baseRunParams, ServerParameters: serverParameters }
                 : baseRunParams;
 
-        const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+        const rq = new RunQuery(resolveRunQueryProvider(provider));
         const queryResult = await rq.RunQuery(finalRunParams, user);
         if (!queryResult.Success) {
             return {
@@ -628,7 +808,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
             };
         }
 
-        let rows = (queryResult.Results ?? []) as Array<Record<string, unknown>>;
+        let rows = (queryResult.Results ?? []) as BlockRecord[];
 
         // Apply FLS output projection for every entity referenced by the query
         const referencedEntities = resolveReferencedEntitiesForQuery(provider, queryInfo);
@@ -637,12 +817,22 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
             // fls-guard: project SavedQuery live block rows against referenced entity FLS
             if (entityInfo.FieldLevelSecurityApplies) {
                 for (const denied of entityInfo.GetDeniedReadFields(user)) {
-                    deniedColumnNames.add(denied);
+                    deniedColumnNames.add(denied.trim().toLowerCase());
                 }
-                rows = (ProjectEntityValueRowsForUser(provider, entityInfo, rows, user) ?? []) as Array<
-                    Record<string, unknown>
-                >;
+                rows = (ProjectEntityValueRowsForUser(provider, entityInfo, rows, user) ?? []) as BlockRecord[];
             }
+        }
+
+        if (deniedColumnNames.size > 0) {
+            rows = rows.map((row) => {
+                const filteredRow: BlockRecord = {};
+                for (const [k, v] of Object.entries(row)) {
+                    if (!deniedColumnNames.has(k.trim().toLowerCase())) {
+                        filteredRow[k] = v;
+                    }
+                }
+                return filteredRow;
+            });
         }
 
         const firstRow = rows[0] ?? {};
@@ -807,8 +997,8 @@ export class InteractiveComponentDocumentBlock extends BaseDocumentBlock {
 
     public async Execute(
         spec: DocumentBlockSpec,
-        _provider: IMetadataProvider,
-        _user: UserInfo
+        provider: IMetadataProvider,
+        user: UserInfo
     ): Promise<DocumentBlockExecutionResult> {
         if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
@@ -817,13 +1007,69 @@ export class InteractiveComponentDocumentBlock extends BaseDocumentBlock {
         if (!validation.Valid) {
             return buildErrorResult(spec, validation.ErrorMessage ?? 'Invalid InteractiveComponent specification.');
         }
+
+        const compEntity = provider.EntityByName('MJ: Components');
+        if (compEntity) {
+            const perms = compEntity.GetUserPermisions(user);
+            if (!perms?.CanRead) {
+                return {
+                    BlockID: spec.BlockID,
+                    Kind: spec.Kind,
+                    Mode: 'Live',
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: 'You do not have permission to access MJ: Components.',
+                    Columns: [],
+                    Rows: [],
+                    TotalRowCount: 0
+                };
+            }
+        }
+
+        let resolvedComponentId: string | null = spec.ComponentID ?? null;
+        let resolvedComponentName: string = spec.ComponentName ?? 'Interactive Component';
+
+        if (spec.ComponentID || spec.ComponentName) {
+            const rv = RunView.FromMetadataProvider(provider);
+            const filter = spec.ComponentID
+                ? `ID='${EscapeSQLString(spec.ComponentID)}'`
+                : `Name='${EscapeSQLString(spec.ComponentName!)}'`;
+            const compResult = await rv.RunView<{ ID: string; Name?: string | null }>(
+                {
+                    EntityName: 'MJ: Components',
+                    ExtraFilter: filter,
+                    Fields: ['ID', 'Name'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const matchedComp = compResult.Success ? compResult.Results?.[0] : undefined;
+            if (!compResult.Success || !matchedComp) {
+                return {
+                    BlockID: spec.BlockID,
+                    Kind: spec.Kind,
+                    Mode: 'Live',
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: `Interactive component '${spec.ComponentName || spec.ComponentID}' was not found or access is denied.`,
+                    Columns: [],
+                    Rows: [],
+                    TotalRowCount: 0
+                };
+            }
+            resolvedComponentId = matchedComp.ID;
+            resolvedComponentName = matchedComp.Name ?? resolvedComponentName;
+        }
+
         return {
             BlockID: spec.BlockID,
             Kind: spec.Kind,
             Mode: 'Live',
             Success: true,
             Columns: [{ Name: 'ComponentName', DisplayName: 'Component' }],
-            Rows: [{ ComponentID: spec.ComponentID ?? null, ComponentName: spec.ComponentName ?? 'Interactive Component' }],
+            Rows: [{ ComponentID: resolvedComponentId, ComponentName: resolvedComponentName }],
             TotalRowCount: 1
         };
     }
@@ -895,7 +1141,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
                     EntityName: 'MJ: Artifact Versions',
                     ExtraFilter: versionFilter,
                     OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content', 'Configuration'],
+                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'ContentMode', 'FileID', 'Content', 'Configuration'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -907,7 +1153,14 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
         const artifactRow = (artifactRes.Results?.[0] as { ID: string; Name: string; Type: string } | undefined) ?? null;
         const versionRow =
             (versionRes.Results?.[0] as
-                | { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
+                | {
+                      ID: string;
+                      VersionNumber: number;
+                      ContentMode?: string | null;
+                      FileID?: string | null;
+                      Content?: string | null;
+                      Configuration?: string | null;
+                  }
                 | undefined) ?? null;
 
         if (!artifactRow) {
@@ -915,33 +1168,115 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
         }
 
         const resolvedType = artifactRow.Type || spec.ArtifactType || '';
-        if (
-            (spec.SheetChartID || spec.SheetRange || resolvedType === 'Excel Spreadsheet') &&
-            (spec.SheetChartID || spec.SheetRange)
-        ) {
-            const dataset = DocumentLiveBlockEngine.Instance.ExtractSpreadsheetChartDataset(
-                versionRow?.Content ?? '',
-                versionRow?.Configuration ?? null,
-                spec.SheetID,
-                spec.SheetChartID,
-                spec.SheetRange
-            );
-            if (dataset) {
+        let resolvedContent = versionRow?.Content ?? '';
+        let skipChartReEvaluate = false;
+        if (versionRow?.ContentMode === 'File' && !resolvedContent) {
+            const fileBytes = versionRow.FileID
+                ? await DocumentLiveBlockEngine.Instance.LoadArtifactFileBytes(versionRow.FileID, user, provider)
+                : null;
+            if (fileBytes) {
+                if (spec.SheetChartID || spec.SheetRange) {
+                    const dataset = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxChartDatasetAsync(
+                        fileBytes,
+                        versionRow.Configuration ?? null,
+                        spec.SheetID,
+                        spec.SheetChartID,
+                        spec.SheetRange
+                    );
+                    if (!dataset) {
+                        return buildErrorResult(
+                            spec,
+                            `Requested spreadsheet chart or range (${spec.SheetChartID || spec.SheetRange}) could not be extracted from File-backed workbook.`
+                        );
+                    }
+                    const slicedPayload = JSON.stringify({
+                        Kind: 'SpreadsheetSlice',
+                        SheetID: spec.SheetID ?? null,
+                        ChartID: spec.SheetChartID ?? null,
+                        Range: spec.SheetRange ?? null,
+                        Columns: dataset.Columns,
+                        Rows: dataset.Rows
+                    });
+                    return {
+                        BlockID: spec.BlockID,
+                        Kind: spec.Kind,
+                        Mode: 'Live',
+                        Success: true,
+                        Columns: dataset.Columns,
+                        Rows: dataset.Rows,
+                        TotalRowCount: dataset.Rows.length,
+                        ArtifactContent: slicedPayload,
+                        ArtifactType: resolvedType,
+                        ArtifactName: artifactRow.Name,
+                        ArtifactVersionNumber: versionRow.VersionNumber ?? 1,
+                        CanEditArtifact: perms.CanEdit && !spec.VersionID
+                    };
+                }
+                const materializedJson = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxWorkbookJsonAsync(
+                    fileBytes,
+                    versionRow.Configuration ?? null
+                );
+                if (materializedJson) {
+                    resolvedContent = materializedJson;
+                    skipChartReEvaluate = true;
+                }
+            }
+            if (!resolvedContent) {
                 return {
                     BlockID: spec.BlockID,
                     Kind: spec.Kind,
                     Mode: 'Live',
-                    Success: true,
-                    Columns: dataset.Columns,
-                    Rows: dataset.Rows,
-                    TotalRowCount: dataset.Rows.length,
-                    ArtifactContent: versionRow?.Content ?? '',
+                    Success: false,
+                    ErrorMessage:
+                        'File-backed artifact versions (ContentMode=File) cannot be embedded or sliced inline without materialized content.',
+                    Columns: [],
+                    Rows: [],
+                    TotalRowCount: 0,
                     ArtifactType: resolvedType,
                     ArtifactName: artifactRow.Name,
-                    ArtifactVersionNumber: versionRow?.VersionNumber ?? 1,
+                    ArtifactVersionNumber: versionRow.VersionNumber ?? 1,
                     CanEditArtifact: perms.CanEdit && !spec.VersionID
                 };
             }
+        }
+
+        if (spec.SheetChartID || spec.SheetRange) {
+            const dataset = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetChartDatasetAsync(
+                resolvedContent,
+                versionRow?.Configuration ?? null,
+                spec.SheetID,
+                spec.SheetChartID,
+                spec.SheetRange,
+                skipChartReEvaluate ? { skipEvaluate: true } : undefined
+            );
+            if (!dataset) {
+                return buildErrorResult(
+                    spec,
+                    `Requested spreadsheet chart or range (${spec.SheetChartID || spec.SheetRange}) could not be extracted.`
+                );
+            }
+            const slicedPayload = JSON.stringify({
+                Kind: 'SpreadsheetSlice',
+                SheetID: spec.SheetID ?? null,
+                ChartID: spec.SheetChartID ?? null,
+                Range: spec.SheetRange ?? null,
+                Columns: dataset.Columns,
+                Rows: dataset.Rows
+            });
+            return {
+                BlockID: spec.BlockID,
+                Kind: spec.Kind,
+                Mode: 'Live',
+                Success: true,
+                Columns: dataset.Columns,
+                Rows: dataset.Rows,
+                TotalRowCount: dataset.Rows.length,
+                ArtifactContent: slicedPayload,
+                ArtifactType: resolvedType,
+                ArtifactName: artifactRow.Name,
+                ArtifactVersionNumber: versionRow?.VersionNumber ?? 1,
+                CanEditArtifact: perms.CanEdit && !spec.VersionID
+            };
         }
 
         return {
@@ -996,6 +1331,12 @@ export interface ParsedDocumentSegment {
  */
 export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngine> {
     private _spreadsheetChartExtractor: SpreadsheetChartExtractorFn | null = null;
+    private _spreadsheetChartExtractorAsync: SpreadsheetChartExtractorAsyncFn | null = null;
+    private _spreadsheetXlsxChartExtractor: SpreadsheetXlsxChartExtractorFn | null = null;
+    private _spreadsheetXlsxChartExtractorAsync: SpreadsheetXlsxChartExtractorAsyncFn | null = null;
+    private _spreadsheetXlsxWorkbookExtractor: SpreadsheetXlsxWorkbookExtractorFn | null = null;
+    private _spreadsheetXlsxWorkbookExtractorAsync: SpreadsheetXlsxWorkbookExtractorAsyncFn | null = null;
+    private _artifactFileBytesLoader: ArtifactFileBytesLoaderFn | null = null;
     private _signingSecret: string | null = null;
 
     protected constructor() {
@@ -1068,6 +1409,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     }
 
     /**
+     * Registers an async worker-isolated spreadsheet chart/range dataset extractor (`R9-2`).
+     */
+    public RegisterSpreadsheetChartExtractorAsync(fn: SpreadsheetChartExtractorAsyncFn | null): void {
+        this._spreadsheetChartExtractorAsync = fn;
+    }
+
+    /**
      * Invokes the registered spreadsheet chart/range dataset extractor if available (`D5`).
      */
     public ExtractSpreadsheetChartDataset(
@@ -1081,6 +1429,130 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             return null;
         }
         return this._spreadsheetChartExtractor(content, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
+     * Async worker-isolated chart/range dataset extraction (`R9-2`).
+     */
+    public async ExtractSpreadsheetChartDatasetAsync(
+        content: string,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string,
+        options?: { skipEvaluate?: boolean }
+    ): Promise<SpreadsheetChartExtractResult | null> {
+        if (this._spreadsheetChartExtractorAsync) {
+            return this._spreadsheetChartExtractorAsync(content, configuration, sheetId, chartId, sheetRange, options);
+        }
+        return this.ExtractSpreadsheetChartDataset(content, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
+     * Registers a binary `.xlsx` chart/range dataset extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxChartExtractor(fn: SpreadsheetXlsxChartExtractorFn | null): void {
+        this._spreadsheetXlsxChartExtractor = fn;
+    }
+
+    /**
+     * Registers an async binary `.xlsx` chart/range dataset extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxChartExtractorAsync(fn: SpreadsheetXlsxChartExtractorAsyncFn | null): void {
+        this._spreadsheetXlsxChartExtractorAsync = fn;
+    }
+
+    /**
+     * Extracts a chart or range dataset from `.xlsx` binary bytes using the registered extractor.
+     */
+    public ExtractSpreadsheetXlsxChartDataset(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string
+    ): SpreadsheetChartExtractResult | null {
+        if (!this._spreadsheetXlsxChartExtractor) {
+            return null;
+        }
+        return this._spreadsheetXlsxChartExtractor(bytes, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
+     * Async worker-isolated extraction of a chart or range dataset from `.xlsx` bytes (`R6-1`).
+     */
+    public async ExtractSpreadsheetXlsxChartDatasetAsync(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string
+    ): Promise<SpreadsheetChartExtractResult | null> {
+        if (this._spreadsheetXlsxChartExtractorAsync) {
+            return this._spreadsheetXlsxChartExtractorAsync(bytes, configuration, sheetId, chartId, sheetRange);
+        }
+        return this.ExtractSpreadsheetXlsxChartDataset(bytes, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
+     * Registers a binary `.xlsx` workbook-JSON extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxWorkbookExtractor(fn: SpreadsheetXlsxWorkbookExtractorFn | null): void {
+        this._spreadsheetXlsxWorkbookExtractor = fn;
+    }
+
+    /**
+     * Registers an async binary `.xlsx` workbook-JSON extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxWorkbookExtractorAsync(fn: SpreadsheetXlsxWorkbookExtractorAsyncFn | null): void {
+        this._spreadsheetXlsxWorkbookExtractorAsync = fn;
+    }
+
+    /**
+     * Materializes serialized workbook JSON from `.xlsx` binary bytes using the registered extractor.
+     */
+    public ExtractSpreadsheetXlsxWorkbookJson(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null
+    ): string | null {
+        if (!this._spreadsheetXlsxWorkbookExtractor) {
+            return null;
+        }
+        return this._spreadsheetXlsxWorkbookExtractor(bytes, configuration);
+    }
+
+    /**
+     * Async worker-isolated materialization of serialized workbook JSON from `.xlsx` bytes (`R6-1`).
+     */
+    public async ExtractSpreadsheetXlsxWorkbookJsonAsync(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null
+    ): Promise<string | null> {
+        if (this._spreadsheetXlsxWorkbookExtractorAsync) {
+            return this._spreadsheetXlsxWorkbookExtractorAsync(bytes, configuration);
+        }
+        return this.ExtractSpreadsheetXlsxWorkbookJson(bytes, configuration);
+    }
+
+    /**
+     * Registers a host loader callback for `ContentMode = 'File'` binary artifact payloads (`MJ: Files`).
+     */
+    public RegisterArtifactFileBytesLoader(fn: ArtifactFileBytesLoaderFn | null): void {
+        this._artifactFileBytesLoader = fn;
+    }
+
+    /**
+     * Loads binary bytes for `fileId` via the registered host file-bytes loader, or `null` when unset.
+     */
+    public async LoadArtifactFileBytes(
+        fileId: string,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<Uint8Array | ArrayBuffer | null> {
+        if (!this._artifactFileBytesLoader || !fileId) {
+            return null;
+        }
+        return this._artifactFileBytesLoader(fileId, user, provider);
     }
 
     /**
@@ -1114,7 +1586,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         spec: DocumentBlockSpec,
         user: UserInfo,
         provider?: IMetadataProvider | null,
-        serverParameters?: Record<string, unknown>
+        serverParameters?: BlockRecord
     ): Promise<DocumentBlockExecutionResult> {
         if (!user) {
             return buildErrorResult(spec, 'Authenticated user context is required to execute a block.');
@@ -1144,7 +1616,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         user: UserInfo,
         acknowledgeSecurityWarning: boolean,
         provider?: IMetadataProvider | null,
-        signingSecret?: string
+        signingSecret?: string,
+        hostArtifactId?: string | null
     ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
         if (!acknowledgeSecurityWarning) {
             return {
@@ -1163,6 +1636,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             };
         }
 
+        const binding = BuildBlockIdentityBinding(spec, hostArtifactId);
         const snapshotBase: FrozenBlockSnapshot = {
             FrozenAt: new Date().toISOString(),
             FrozenByUserID: user.ID,
@@ -1172,7 +1646,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             TotalRowCount: result.TotalRowCount,
             ArtifactContentSnapshot: result.ArtifactContent,
             ArtifactTypeSnapshot: result.ArtifactType,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: binding
         };
         const snapshot: FrozenBlockSnapshot = {
             ...snapshotBase,
@@ -1219,22 +1694,33 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         const lockDirectiveRe = /^\s*<!--\s*mj-lock\s*:\s*([a-zA-Z0-9_-]+)(?:\s+user=([^\s>]+))?\s*-->\s*$/i;
         const unlockDirectiveRe = /^\s*<!--\s*\/mj-lock\s*-->\s*$/i;
         const headingRe = /^(#{1,6})\s+([^\n]*)$/;
-        let inCodeFence: '`' | '~' | null = null;
+        const openFenceRe = /^\s*(`{3,}|~{3,})/;
+        const advanceFenceState = (
+            line: string,
+            current: { char: '`' | '~'; len: number } | null
+        ): { next: { char: '`' | '~'; len: number } | null; isFenceBoundary: boolean } => {
+            const trimmed = line.trim();
+            if (!current) {
+                const m = openFenceRe.exec(trimmed);
+                if (m) {
+                    const ch = m[1][0] === '~' ? '~' : '`';
+                    return { next: { char: ch, len: m[1].length }, isFenceBoundary: true };
+                }
+                return { next: null, isFenceBoundary: false };
+            }
+            const closeRe = new RegExp(`^\\s*${current.char}{${current.len},}\\s*$`);
+            if (closeRe.test(trimmed)) {
+                return { next: null, isFenceBoundary: true };
+            }
+            return { next: current, isFenceBoundary: false };
+        };
 
+        let inCodeFence: { char: '`' | '~'; len: number } | null = null;
         let i = 0;
         while (i < lines.length) {
-            const trimmed = lines[i].trim();
-            if (!inCodeFence && (trimmed.startsWith('```') || trimmed.startsWith('~~~'))) {
-                inCodeFence = trimmed[0] === '`' ? '`' : '~';
-                i++;
-                continue;
-            }
-            if (inCodeFence && trimmed.startsWith(inCodeFence.repeat(3))) {
-                inCodeFence = null;
-                i++;
-                continue;
-            }
-            if (inCodeFence) {
+            const fenceStep = advanceFenceState(lines[i], inCodeFence);
+            inCodeFence = fenceStep.next;
+            if (fenceStep.isFenceBoundary || inCodeFence) {
                 i++;
                 continue;
             }
@@ -1250,9 +1736,15 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             const lockedByUserId = match[2]?.trim() || undefined;
             const startLine = i + 1;
 
-            // Check if there is a closing <!-- /mj-lock --> ahead
+            // Check if there is a closing <!-- /mj-lock --> ahead (ignoring code fences)
             let explicitCloseIdx = -1;
+            let scanFence: { char: '`' | '~'; len: number } | null = null;
             for (let j = i + 1; j < lines.length; j++) {
+                const innerStep = advanceFenceState(lines[j], scanFence);
+                scanFence = innerStep.next;
+                if (innerStep.isFenceBoundary || scanFence) {
+                    continue;
+                }
                 if (unlockDirectiveRe.test(lines[j])) {
                     explicitCloseIdx = j;
                     break;
@@ -1281,7 +1773,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             if (headingMatch) {
                 const headingLevel = headingMatch[1].length;
                 let endIdx = lines.length - 1;
+                let headingFence: { char: '`' | '~'; len: number } | null = null;
                 for (let j = nextIdx + 1; j < lines.length; j++) {
+                    const innerStep = advanceFenceState(lines[j], headingFence);
+                    headingFence = innerStep.next;
+                    if (innerStep.isFenceBoundary || headingFence) {
+                        continue;
+                    }
                     const h = headingRe.exec(lines[j]);
                     if (h && h[1].length <= headingLevel) {
                         endIdx = j - 1;
@@ -1302,7 +1800,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
 
             if (nextLine.trim().startsWith(':::mj-block')) {
                 let endIdx = nextIdx;
+                let blockFence: { char: '`' | '~'; len: number } | null = null;
                 for (let j = nextIdx + 1; j < lines.length; j++) {
+                    const innerStep = advanceFenceState(lines[j], blockFence);
+                    blockFence = innerStep.next;
+                    if (innerStep.isFenceBoundary || blockFence) {
+                        continue;
+                    }
                     if (lines[j].trim() === ':::') {
                         endIdx = j;
                         break;
@@ -1398,29 +1902,38 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         const nextLines = nextNormalized.split('\n');
         const nextLocks = this.ParseDocumentLocks(nextNormalized);
 
+        // Enforce ordered 1-to-1 multiplicity matching so duplicate locked sections cannot be
+        // removed, reordered, or stripped of lock directives/scope.
+        let searchFromIdx = 0;
         for (const lock of originalLocks) {
             if (this.CanActorEditLockedRange(lock, actorUserId, ownerUserId, isEditor)) {
                 continue;
             }
             const lockedSlice = origLines.slice(lock.StartLine - 1, lock.EndLine).join('\n');
-            if (!nextNormalized.includes(lockedSlice)) {
-                return {
-                    Allowed: false,
-                    ViolationReason: `Cannot modify locked region '${lock.Label}' (${lock.Scope}): owner-only protection.`,
-                    ViolatedLock: lock
-                };
-            }
-            const matchingNextLock = nextLocks.find((nl) => {
+            let matchedIdx = -1;
+            for (let k = searchFromIdx; k < nextLocks.length; k++) {
+                const nl = nextLocks[k];
+                if (
+                    nl.Kind !== lock.Kind ||
+                    nl.Scope !== lock.Scope ||
+                    !UUIDsEqual(nl.LockedByUserID ?? null, lock.LockedByUserID ?? null)
+                ) {
+                    continue;
+                }
                 const nlSlice = nextLines.slice(nl.StartLine - 1, nl.EndLine).join('\n');
-                return nlSlice === lockedSlice;
-            });
-            if (!matchingNextLock) {
+                if (nlSlice === lockedSlice) {
+                    matchedIdx = k;
+                    break;
+                }
+            }
+            if (matchedIdx < 0) {
                 return {
                     Allowed: false,
-                    ViolationReason: `Cannot alter or unlock protected region '${lock.Label}' (${lock.Scope}).`,
+                    ViolationReason: `Cannot modify, reorder, or unlock protected region '${lock.Label}' (${lock.Scope}).`,
                     ViolatedLock: lock
                 };
             }
+            searchFromIdx = matchedIdx + 1;
         }
 
         return { Allowed: true };
@@ -1428,12 +1941,15 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
 
     /**
      * Toggles `<!-- mj-lock: owner-only -->` immediately above a 1-based heading line in Markdown (`§6.2`).
+     * Removing an existing lock requires `CanActorEditLockedRange` permission (throws on unauthorized removal).
      */
     public ToggleHeadingLockInMarkdown(
         markdown: string,
         headingLineNumber: number,
         locked: boolean,
-        actorUserId?: string
+        actorUserId?: string,
+        ownerUserId?: string,
+        isEditor = false
     ): string {
         const lines = (markdown ?? '').replace(/\r\n/g, '\n').split('\n');
         const idx = headingLineNumber - 1;
@@ -1448,9 +1964,62 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
                 : '<!-- mj-lock: owner-only -->';
             lines.splice(idx, 0, directive);
         } else if (!locked && prevIsLock) {
+            const existingLocks = this.ParseDocumentLocks(markdown);
+            const targetLock =
+                existingLocks.find((l) => l.StartLine === idx) ??
+                existingLocks.find((l) => headingLineNumber >= l.StartLine && headingLineNumber <= l.EndLine);
+            if (targetLock && !this.CanActorEditLockedRange(targetLock, actorUserId, ownerUserId, isEditor)) {
+                throw new Error(
+                    `Unauthorized: user cannot remove lock on '${targetLock.Label}' (${targetLock.Scope}).`
+                );
+            }
             lines.splice(idx - 1, 1);
         }
         return lines.join('\n');
+    }
+
+    /**
+     * Parses structured comment/suggestion anchor metadata across Markdown, Spreadsheet,
+     * Presentation, and Whiteboard artifacts (`NW-3`).
+     */
+    public ParseArtifactCommentAnchor(raw: BlockRecord | string | null | undefined): ArtifactCommentAnchor | null {
+        if (!raw) {
+            return null;
+        }
+        let parsed: BlockRecord | null = null;
+        if (typeof raw === 'string') {
+            try {
+                const candidate = JSON.parse(raw) as BlockDataValue;
+                if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+                    parsed = candidate as BlockRecord;
+                }
+            } catch {
+                return null;
+            }
+        } else if (typeof raw === 'object' && !Array.isArray(raw)) {
+            parsed = raw;
+        }
+        if (!parsed) {
+            return null;
+        }
+        const rawDomain = typeof parsed.Domain === 'string' ? parsed.Domain : typeof parsed.domain === 'string' ? parsed.domain : '';
+        const domainLower = rawDomain.trim().toLowerCase();
+        if (domainLower !== 'doc' && domainLower !== 'sheet' && domainLower !== 'slide' && domainLower !== 'whiteboard') {
+            return null;
+        }
+        const readStr = (pascal: string, camel: string): string | undefined => {
+            const val = parsed![pascal] ?? parsed![camel];
+            return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
+        };
+        return {
+            Domain: domainLower,
+            SegmentID: readStr('SegmentID', 'segmentId'),
+            BlockID: readStr('BlockID', 'blockId'),
+            SheetID: readStr('SheetID', 'sheetId'),
+            Range: readStr('Range', 'range'),
+            SlideID: readStr('SlideID', 'slideId'),
+            RegionID: readStr('RegionID', 'regionId')
+        };
     }
 
     /**
@@ -1645,7 +2214,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
  */
 export function ValidateFrozenBlockSnapshot(
     snap: FrozenBlockSnapshot | null | undefined,
-    signingSecret?: string
+    signingSecret?: string,
+    expectedBinding?: FrozenSnapshotIdentityBinding
 ): {
     Valid: boolean;
     SnapshotVerified: boolean;
@@ -1692,35 +2262,90 @@ export function ValidateFrozenBlockSnapshot(
         };
     }
 
+    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
+    if (!secret) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage:
+                'Cannot verify FrozenSnapshot HMAC signature: MJ_FROZEN_BLOCK_HMAC_SECRET is not configured or shorter than 32 bytes.'
+        };
+    }
+
     if (
         typeof snap.SnapshotContentHash !== 'string' ||
         !snap.SnapshotContentHash.startsWith('hmac-sha256:')
     ) {
         return {
-            Valid: true,
-            SnapshotVerified: false
-        };
-    }
-
-    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
-    if (!secret) {
-        return {
-            Valid: true,
-            SnapshotVerified: false
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'FrozenSnapshot HMAC signature is required when a signing secret is configured.'
         };
     }
 
     const expectedHash = ComputeFrozenSnapshotHash(snap, secret);
     const snapshotVerified = constantTimeStringEqual(snap.SnapshotContentHash, expectedHash);
+    if (!snapshotVerified) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'FrozenSnapshot HMAC verification failed: snapshot payload may have been tampered.'
+        };
+    }
+
+    if (expectedBinding) {
+        const normExpected = NormalizeFrozenSnapshotIdentityBinding(expectedBinding);
+        const normActual = NormalizeFrozenSnapshotIdentityBinding(snap.Binding);
+        if (normExpected) {
+            if (!normActual) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot is missing required identity Binding metadata.'
+                };
+            }
+            if (normExpected.ArtifactID) {
+                if (!normActual.ArtifactID || !UUIDsEqual(normExpected.ArtifactID, normActual.ArtifactID)) {
+                    return {
+                        Valid: false,
+                        SnapshotVerified: false,
+                        ErrorMessage: 'FrozenSnapshot ArtifactID binding mismatch.'
+                    };
+                }
+            }
+            if (normExpected.BlockID && normActual.BlockID !== normExpected.BlockID) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot BlockID binding mismatch.'
+                };
+            }
+            if (normExpected.Kind && normActual.Kind !== normExpected.Kind) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot Kind binding mismatch.'
+                };
+            }
+            if (normExpected.SourceTargetID !== normActual.SourceTargetID) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot SourceTargetID binding mismatch.'
+                };
+            }
+        }
+    }
+
     return {
         Valid: true,
-        SnapshotVerified: snapshotVerified
+        SnapshotVerified: true
     };
 }
 
 /**
  * Computes an HMAC-SHA256 signature (`'hmac-sha256:<hex>'`) over the canonical payload of a
- * {@link FrozenBlockSnapshot}, including `FrozenByUserName` (`B7`).
+ * {@link FrozenBlockSnapshot}, including `FrozenByUserName` (`B7`) and optional identity `Binding` (`S3`).
  */
 export function ComputeFrozenSnapshotHash(
     snap: Pick<
@@ -1734,6 +2359,7 @@ export function ComputeFrozenSnapshotHash(
         | 'ArtifactContentSnapshot'
         | 'ArtifactTypeSnapshot'
         | 'SecurityWarningAcknowledged'
+        | 'Binding'
     >,
     signingSecret?: string
 ): string {
@@ -1743,6 +2369,7 @@ export function ComputeFrozenSnapshotHash(
             'MJ_FROZEN_BLOCK_HMAC_SECRET (>= 32 bytes) must be configured on the server before signing or verifying frozen block snapshots.'
         );
     }
+    const normalizedBinding = NormalizeFrozenSnapshotIdentityBinding(snap.Binding);
     const payload = canonicalizeForHash({
         FrozenAt: snap.FrozenAt,
         FrozenByUserID: snap.FrozenByUserID,
@@ -1752,7 +2379,8 @@ export function ComputeFrozenSnapshotHash(
         TotalRowCount: snap.TotalRowCount,
         ArtifactContentSnapshot: snap.ArtifactContentSnapshot ?? null,
         ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? null,
-        SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true
+        SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true,
+        ...(normalizedBinding ? { Binding: normalizedBinding } : {})
     });
     return `hmac-sha256:${hmacSha256HexUtf8(secret, payload)}`;
 }
@@ -1908,7 +2536,7 @@ function constantTimeStringEqual(a: string, b: string): boolean {
     return diff === 0;
 }
 
-function canonicalizeForHash(value: unknown): string {
+function canonicalizeForHash(value: BlockDataValue): string {
     if (value === null || value === undefined) {
         return 'null';
     }
@@ -1916,10 +2544,10 @@ function canonicalizeForHash(value: unknown): string {
         return JSON.stringify(value);
     }
     if (Array.isArray(value)) {
-        return `[${value.map((item) => canonicalizeForHash(item)).join(',')}]`;
+        return `[${value.map((item) => canonicalizeForHash(item as BlockDataValue)).join(',')}]`;
     }
     if (typeof value === 'object') {
-        const rec = value as Record<string, unknown>;
+        const rec = value as BlockRecord;
         const keys = Object.keys(rec)
             .filter((k) => rec[k] !== undefined)
             .sort();
@@ -2097,6 +2725,35 @@ function validateEntityViewOrderBy(
     return { Valid: true };
 }
 
+function hasQualifiedSqlIdentifier(maskedSql: string): boolean {
+    let searchFrom = 0;
+    while (searchFrom < maskedSql.length) {
+        const dotIdx = maskedSql.indexOf('.', searchFrom);
+        if (dotIdx === -1) {
+            return false;
+        }
+        let left = dotIdx - 1;
+        while (left >= 0 && /\s/.test(maskedSql[left])) {
+            left--;
+        }
+        let right = dotIdx + 1;
+        while (right < maskedSql.length && /\s/.test(maskedSql[right])) {
+            right++;
+        }
+        if (left >= 0 && right < maskedSql.length && /[A-Za-z_]/.test(maskedSql[right])) {
+            let identStart = left;
+            while (identStart > 0 && /[A-Za-z0-9_]/.test(maskedSql[identStart - 1])) {
+                identStart--;
+            }
+            if (/[A-Za-z_]/.test(maskedSql[identStart]) && identStart <= left) {
+                return true;
+            }
+        }
+        searchFrom = dotIdx + 1;
+    }
+    return false;
+}
+
 function validateEntityViewExtraFilter(
     extraFilter: string,
     entityInfo?: EntityInfo,
@@ -2203,7 +2860,7 @@ function validateEntityViewExtraFilter(
     }
 
     // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID), dbo.Users.ID, or [dbo].[Users]) and SQL function calls
-    if (/(?:[A-Za-z_][A-Za-z0-9_]*|__BRACKET_ID_\d+__)\s*\.\s*(?:[A-Za-z_]|__BRACKET_ID_\d+__)/.test(masked)) {
+    if (hasQualifiedSqlIdentifier(masked)) {
         return {
             Valid: false,
             ErrorMessage: 'Schema- or table-qualified identifiers and user-defined functions are not permitted in ExtraFilter.'
@@ -2309,7 +2966,11 @@ function validateEntityViewExtraFilter(
 }
 
 function buildFrozenExecutionResult(spec: DocumentBlockSpec): DocumentBlockExecutionResult {
-    const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+    const validation = ValidateFrozenBlockSnapshot(
+        spec.FrozenSnapshot,
+        undefined,
+        BuildBlockIdentityBinding(spec)
+    );
     if (!validation.Valid || !spec.FrozenSnapshot) {
         return {
             BlockID: spec.BlockID,
@@ -2365,29 +3026,43 @@ function buildErrorResult(spec: DocumentBlockSpec, message: string): DocumentBlo
     };
 }
 
-function resolveQueryInfo(
+function resolveRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | null {
+    if ('RunQuery' in provider && typeof (provider as Partial<IRunQueryProvider>).RunQuery === 'function') {
+        return provider as IMetadataProvider & IRunQueryProvider;
+    }
+    return null;
+}
+
+/**
+ * The saved query a block names — by ID, else by name (narrowed by category path when given) — from the
+ * `QueryEngine` bound to `provider`, loaded as `user`. Returns `undefined` when the engine cannot load, so
+ * the block fails closed with the same result as a query that does not exist.
+ */
+async function resolveSavedQuery(
     provider: IMetadataProvider,
+    user: UserInfo,
     queryId?: string,
     queryName?: string,
     categoryPath?: string
-): QueryInfo | undefined {
-    const queries = provider.Queries ?? [];
+): Promise<MJQueryEntityExtended | undefined> {
+    const engine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    try {
+        await engine.Config(false, user, provider);
+    } catch (error: unknown) {
+        LogError(`DocumentLiveBlockEngine: saved queries could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+        return undefined;
+    }
+    const queries = engine.Queries;
     if (queryId) {
-        const byId = queries.find((q) => UUIDsEqual(q.ID, queryId));
-        if (byId) {
-            return byId;
-        }
+        return queries.find((q) => UUIDsEqual(q.ID, queryId));
     }
     if (queryName) {
         const lowerName = queryName.trim().toLowerCase();
         if (categoryPath) {
             const lowerCat = categoryPath.trim().toLowerCase();
-            const byCat = queries.find(
+            return queries.find(
                 (q) => q.Name.trim().toLowerCase() === lowerName && (q.CategoryPath ?? '').trim().toLowerCase() === lowerCat
             );
-            if (byCat) {
-                return byCat;
-            }
         }
         return queries.find((q) => q.Name.trim().toLowerCase() === lowerName);
     }
@@ -2395,23 +3070,23 @@ function resolveQueryInfo(
 }
 
 function sanitizeClientQueryParameters(
-    queryInfo: QueryInfo | undefined,
-    rawParameters: Record<string, unknown> | undefined
-): { cleanParameters: Record<string, unknown>; strippedNames: string[] } {
+    queryInfo: MJQueryEntityExtended | undefined,
+    rawParameters: BlockRecord | undefined
+): { cleanParameters: BlockRecord; strippedNames: string[] } {
     if (!rawParameters || typeof rawParameters !== 'object') {
         return { cleanParameters: {}, strippedNames: [] };
     }
 
     const serverSetNamesLower = new Set<string>(['context']);
-    if (queryInfo && Array.isArray(queryInfo.Parameters)) {
-        for (const param of queryInfo.Parameters) {
+    if (queryInfo) {
+        for (const param of queryInfo.QueryParameters) {
             if (param.IsServerSet) {
                 serverSetNamesLower.add(param.Name.trim().toLowerCase());
             }
         }
     }
 
-    const cleanParameters: Record<string, unknown> = {};
+    const cleanParameters: BlockRecord = {};
     const strippedNames: string[] = [];
 
     for (const [key, value] of Object.entries(rawParameters)) {
@@ -2425,8 +3100,8 @@ function sanitizeClientQueryParameters(
     return { cleanParameters, strippedNames };
 }
 
-function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInfo: QueryInfo | undefined): EntityInfo[] {
-    if (!queryInfo || !Array.isArray(queryInfo.Entities) || !provider.Entities) {
+function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInfo: MJQueryEntityExtended | undefined): EntityInfo[] {
+    if (!queryInfo || !provider.Entities) {
         return [];
     }
     const entityById = IndexByUUID(provider.Entities);
@@ -2435,7 +3110,7 @@ function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInf
         entityByName.set(e.Name, e);
     }
     const results: EntityInfo[] = [];
-    for (const qe of queryInfo.Entities) {
+    for (const qe of queryInfo.QueryEntities) {
         const found = (qe.EntityID ? entityById.Get(qe.EntityID) : undefined) ?? entityByName.get(qe.Entity);
         if (found) {
             results.push(found);

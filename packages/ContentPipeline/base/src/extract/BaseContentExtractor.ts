@@ -6,7 +6,7 @@
 
 import { MJGlobal } from '@memberjunction/global';
 import { ResolvedConfidenceScale } from '../ConfidenceScale.js';
-import { PipelineStageRequest } from '../discover/SourceDriver.js';
+import { DiscoveredField, PipelineStageRequest } from '../discover/SourceDriver.js';
 import { ResolvedPipelineTuning } from '../PipelineTuning.js';
 
 /** Mutable tree-wide budget shared across a top-level archive and any nested archives unpacked inside it. */
@@ -37,6 +37,12 @@ export interface ExtractRequest {
     Tuning?: ResolvedPipelineTuning;
     /** Shared tree-wide budget when unpacking an archive or a nested archive member. */
     ArchiveBudget?: ArchiveBudget;
+    /**
+     * This extractor's own settings: `ExtractorOptions[<extractor key>]` from the Content Source Type's
+     * Configuration, then the Content Source's type-specific settings, then its Configuration, then the run's
+     * `Options`, each layer overriding the last. Empty when none is set.
+     */
+    Options?: Readonly<Record<string, unknown>>;
     /** Fires when the run is asked to stop. */
     Signal: AbortSignal;
     /** Report progress during a long read. */
@@ -51,6 +57,12 @@ export interface ContentBlock {
     Content?: Uint8Array;
     /** The block's identity within its parent (e.g. an archive member path), appended to the parent's URL. */
     Key?: string;
+    /**
+     * The child's own address, when it has one (a manifest row's link). The child is then identified by it
+     * instead of the parent's URL plus {@link Key}, and a child with no text and no bytes is fetched from it
+     * by its own Extract, through the source's fetch and Access path.
+     */
+    URL?: string;
     /** A title the extractor could determine from the block's own structure. */
     Title?: string;
     /** How much the extractor trusts that title. Omitted means it has no opinion. */
@@ -63,6 +75,11 @@ export interface ContentBlock {
     Columns?: Record<string, unknown>;
     /** Explicit request for downstream pipeline work on the child record this block produces. */
     Request?: PipelineStageRequest;
+    /**
+     * Well-known fields the block determined directly (a manifest row's title, date or decorator), each with
+     * its confidence. A `Date` here replaces the date the child would otherwise inherit from its parent.
+     */
+    Fields?: DiscoveredField[];
 }
 
 /** What an extractor returned. */
@@ -75,6 +92,11 @@ export interface ExtractResult {
     Columns?: Record<string, unknown>;
     /** Explicit request for downstream pipeline work on the item being extracted. */
     Request?: PipelineStageRequest;
+    /**
+     * The item is a container: every block becomes a child item, even when there is one. Without it a
+     * single text block is the item's own text, which for a one-row manifest would make the manifest that row.
+     */
+    IsContainer?: boolean;
 }
 
 /**

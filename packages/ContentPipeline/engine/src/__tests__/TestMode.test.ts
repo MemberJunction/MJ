@@ -102,9 +102,12 @@ describe('the per-stage wall-clock budget', () => {
         expect(result.ErrorMessage).toContain('budget');
     });
 
-    it('commits Failed, not Complete, for a budget-expired record', async () => {
+    it('commits a budget-expired record as a Retry, not Complete: still ready, after a wait', async () => {
         await build({ Stages: ['BudgetTestSlow'], StageBudgetMs: 30 }).ProcessRecord(ref, rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'Failed', false);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), expect.anything(), null, false, {
+            RetryBackoffBaseMs: 60_000,
+            RetryBackoffMaxMs: 3_600_000,
+        });
     });
 
     it('leaves a stage that finishes within budget alone', async () => {

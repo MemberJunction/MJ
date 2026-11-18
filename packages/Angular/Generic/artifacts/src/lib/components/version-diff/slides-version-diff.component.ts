@@ -3,10 +3,9 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject,
 } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import {
   MJArtifactVersionEntity,
   type SlideDeckThemeSpec,
@@ -46,7 +45,7 @@ import {
 
         @if (DiffResult.DeckDeltas.length > 0) {
           <div class="mj-slides-vdiff__deck-deltas">
-            <strong><i class="fas fa-palette"></i> Deck & Theme Changes:</strong>
+            <strong><i class="fa-solid fa-palette"></i> Deck & Theme Changes:</strong>
             @for (d of DiffResult.DeckDeltas; track d.Label) {
               <span class="mj-slides-vdiff__deck-delta-pill">
                 {{ d.Label }}: <del>{{ d.OldValue }}</del> → <strong>{{ d.NewValue }}</strong>
@@ -128,6 +127,12 @@ import {
                                 {{ reg.BigNumberValue }}
                               </div>
                               <div class="mj-slides-vdiff__bignum-lbl">{{ reg.BigNumberLabel }}</div>
+                            } @else if (reg.Kind === 'image' && reg.ImageUrl) {
+                              <div class="mj-slides-vdiff__reg-md">{{ reg.ImageAlt || reg.Label }} ({{ reg.ImageUrl }})</div>
+                            } @else if (reg.Kind === 'quote') {
+                              <div class="mj-slides-vdiff__reg-md">“{{ reg.MarkdownContent }}” @if (reg.QuoteAttribution) { — {{ reg.QuoteAttribution }} }</div>
+                            } @else if (reg.Kind === 'mj-block' && reg.BlockSpec) {
+                              <div class="mj-slides-vdiff__reg-md">[Live Block: {{ reg.BlockSpec.Kind }}] {{ reg.MarkdownContent }}</div>
                             } @else {
                               <div class="mj-slides-vdiff__reg-md">{{ reg.MarkdownContent }}</div>
                             }
@@ -137,7 +142,7 @@ import {
                     </div>
                   } @else {
                     <div class="mj-slides-vdiff__slide-placeholder mj-slides-vdiff__slide-placeholder--added">
-                      <i class="fas fa-plus-circle"></i>
+                      <i class="fa-solid fa-plus-circle"></i>
                       <span>New slide added in v{{ TargetVersion.VersionNumber }}</span>
                     </div>
                   }
@@ -176,6 +181,12 @@ import {
                                 {{ reg.BigNumberValue }}
                               </div>
                               <div class="mj-slides-vdiff__bignum-lbl">{{ reg.BigNumberLabel }}</div>
+                            } @else if (reg.Kind === 'image' && reg.ImageUrl) {
+                              <div class="mj-slides-vdiff__reg-md">{{ reg.ImageAlt || reg.Label }} ({{ reg.ImageUrl }})</div>
+                            } @else if (reg.Kind === 'quote') {
+                              <div class="mj-slides-vdiff__reg-md">“{{ reg.MarkdownContent }}” @if (reg.QuoteAttribution) { — {{ reg.QuoteAttribution }} }</div>
+                            } @else if (reg.Kind === 'mj-block' && reg.BlockSpec) {
+                              <div class="mj-slides-vdiff__reg-md">[Live Block: {{ reg.BlockSpec.Kind }}] {{ reg.MarkdownContent }}</div>
                             } @else {
                               <div class="mj-slides-vdiff__reg-md">{{ reg.MarkdownContent }}</div>
                             }
@@ -185,7 +196,7 @@ import {
                     </div>
                   } @else {
                     <div class="mj-slides-vdiff__slide-placeholder mj-slides-vdiff__slide-placeholder--removed">
-                      <i class="fas fa-trash-can"></i>
+                      <i class="fa-solid fa-trash-can"></i>
                       <span>Slide removed in v{{ TargetVersion.VersionNumber }}</span>
                     </div>
                   }
@@ -194,7 +205,7 @@ import {
 
               <!-- Word-Level Redline Breakdown for Regions & Speaker Notes -->
               <div class="mj-slides-vdiff__redlines">
-                <h5><i class="fas fa-highlighter"></i> Slide Redline Details</h5>
+                <h5><i class="fa-solid fa-highlighter"></i> Slide Redline Details</h5>
 
                 <div class="mj-slides-vdiff__redline-card">
                   <div class="mj-slides-vdiff__redline-lbl">Slide Title</div>
@@ -227,7 +238,7 @@ import {
                 @if (sel.SpeakerNotesChanged) {
                   <div class="mj-slides-vdiff__redline-card">
                     <div class="mj-slides-vdiff__redline-lbl">
-                      <span><i class="fas fa-comment-dots"></i> Speaker Notes</span>
+                      <span><i class="fa-solid fa-comment-dots"></i> Speaker Notes</span>
                       <span class="mj-sv-badge" data-status="modified">modified</span>
                     </div>
                     <div class="mj-slides-vdiff__redline-text">@for (sp of sel.SpeakerNotesRedline; track $index) {@if (sp.Type === 'delete') {<del class="mj-s-del">{{ sp.Text }}</del>} @else if (sp.Type === 'insert') {<ins class="mj-s-ins">{{ sp.Text }}</ins>} @else {{{ sp.Text }}}}</div>
@@ -236,7 +247,7 @@ import {
               </div>
             } @else {
               <div class="mj-slides-vdiff__empty">
-                <i class="fas fa-circle-check"></i>
+                <i class="fa-solid fa-circle-check"></i>
                 <span>No changed slides match the current filter.</span>
               </div>
             }
@@ -621,22 +632,46 @@ import {
     `,
   ],
 })
-export class SlidesVersionDiffComponent implements IArtifactVersionDiffViewer, OnChanges {
+export class SlidesVersionDiffComponent implements IArtifactVersionDiffViewer {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  @Input() BaseVersion!: MJArtifactVersionEntity;
-  @Input() TargetVersion!: MJArtifactVersionEntity;
+  private baseVersion!: MJArtifactVersionEntity;
+  private targetVersion!: MJArtifactVersionEntity;
+
+  @Input() public Provider?: IMetadataProvider | null = null;
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      this.recomputeDiff();
+    }
+  }
 
   public DiffResult: SlidesVisualDiffResult | null = null;
   public SelectedSlide: SlideVisualDiffItem | null = null;
   public ChangedSlidesOnly = false;
 
-  ngOnChanges(_changes: SimpleChanges): void {
-    if (this.BaseVersion && this.TargetVersion) {
+  private recomputeDiff(): void {
+    if (this.baseVersion && this.targetVersion) {
       this.DiffResult = this.diffService.ComputeSlidesVisualDiff(
-        this.BaseVersion.Content,
-        this.TargetVersion.Content,
+        this.baseVersion.Content,
+        this.targetVersion.Content,
       );
       const firstChanged = this.DiffResult.Slides.find((s) => s.Status !== 'unchanged');
       this.SelectedSlide = firstChanged ?? this.DiffResult.Slides[0] ?? null;

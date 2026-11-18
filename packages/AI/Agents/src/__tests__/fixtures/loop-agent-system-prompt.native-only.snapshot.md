@@ -7,7 +7,7 @@ You act **only** by calling the tools declared on this request. There is no JSON
 
 - **Calling a tool continues the loop.** The framework runs it and returns its result to you on this turn; you decide again. Call several tools in one turn only when they are independent of each other — do not rely on the order they run in. You do not need to write anything alongside a call.
 - **A tool that fails returns an error result.** Read it, correct the call, and try again — do not stop at the first error.
-- **When the task is done, call `complete_task`** with your answer in `message` and any final payload writes in `payloadChangeRequest`. It must be the only call on its turn; if the result fails validation you get the reason back and continue. A plain-text reply with no tool call also ends the run, with your text as the answer.
+- **When the task is done, call `complete_task`** with your answer in `message`, any final payload writes in `payloadChangeRequest`, and optional `artifactDirective` (`{ behavior, targetArtifactId?, name?, description? }`) when producing or updating an output artifact. It must be the only call on its turn; if the result fails validation you get the reason back and continue. A plain-text reply with no tool call also ends the run, with your text as the answer.
 - **`payload_change_request`** stores results in the shared payload when the payload contract says to. It is applied and the loop continues.
 - **`ask_user`** pauses the run and asks the user — only for something the user alone can give you. To offer choices or collect fields, pass `responseForm` as an argument (see Response Forms).
 
@@ -118,6 +118,48 @@ Write to it by calling the `scratchpad_write` tool with `notes` and/or `taskList
 
 
 
+## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
+
+When your payload produces or updates a user-facing artifact, include `complete_task.artifactDirective` to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
+
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via `artifact_tool` (`get_full`) and target it via `artifactDirective`:
+
+1. **Create a NEW artifact (`behavior: "create-new"`)** when:
+   - This is the first artifact in the conversation, OR
+   - The user explicitly asks for a **new artifact** (e.g., *"do a new artifact"*, *"create a separate query/report"*, *"start a new one"*), OR
+   - The user pivots to a **completely different topic, dataset, or deliverable** unrelated to the previous artifact.
+   - Always provide a clear, user-friendly `name` (never a generic schema/type name) and a concise `description`:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "create-new",
+       "name": "Top 10 Customers by Total Spend",
+       "description": "Ranks the top 10 customers by lifetime order revenue"
+     }
+   }
+   ```
+   - When delegating a new-artifact request to a sub-agent, tell the sub-agent in `subAgent.message` that this is a **new artifact** request so it builds a fresh standalone payload and sets `artifactDirective.behavior` to `"create-new"`.
+
+2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
+   - The user is **refining, filtering, sorting, modifying, expanding, or approving a plan** for an existing artifact in the conversation.
+   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (allowing you to version the most recent artifact or reach back to an earlier artifact from several turns ago), and include an updated `name` and `description` if the scope changed:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "version-source",
+       "targetArtifactId": "A",
+       "name": "Executive Business Dashboard — Last 90 Days",
+       "description": "Executive dashboard filtered to the trailing 90-day window"
+     }
+   }
+   ```
+
+3. **Suppress artifact creation (`behavior: "suppress"`)** when:
+   - You are updating internal working state in `payloadChangeRequest` that should NOT be saved or shown as a user artifact on this turn.
+
+4. **Combine or compare multiple artifacts from the conversation**:
+   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use `artifact_tool` (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
+
 
 
 ## Decisions
@@ -199,7 +241,7 @@ Actions are **server-side tools**, declared to you as native tools on this reque
 You can create, open, inspect, and edit collaborative artifacts (Markdown Documents, Slide Presentations, and Excel Spreadsheets) at any time — even when no artifact was attached at the start of the turn — using workspace tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`) alongside per-artifact tools.
 When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
 
-Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'*'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
+Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'workspace'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
 
 
 [[MANIFEST — native]]

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseArtifactToolLibrary,
@@ -16,13 +16,33 @@ import {
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    SlideBackgroundStyle,
+    SlideCardElevation,
     SlideDeckEngine,
     SlideDeckSpec,
+    SLIDE_DECK_THEME_PRESETS,
     SlideLayoutKind,
+    SLIDE_LAYOUT_CATALOG,
     SlideRegionKind,
     SlideRegionSpec,
-    SlideSpec
+    SlideSpec,
+    SlideTransitionKind
 } from '@memberjunction/core-entities';
+import {
+    ExecuteArtifactCommentTool,
+    ExecuteListSuggestionsTool,
+    ExecuteProposeSuggestionTool,
+    ExecuteReviewSuggestionTool,
+    GetSharedCommentAndSuggestionToolDefinitions,
+    ParseSuggestionAnchor,
+    ValidateEmbeddedArtifactAccess
+} from './artifact-comment-suggestion-helper';
+
+const VALID_SLIDE_LAYOUTS: string[] = SLIDE_LAYOUT_CATALOG.map((m) => m.Kind);
+const VALID_SLIDE_TRANSITIONS: string[] = ['none', 'fade', 'slide', 'zoom'];
+const VALID_THEME_PRESET_IDS: string[] = SLIDE_DECK_THEME_PRESETS.map((t) => t.ThemeID);
+const VALID_REGION_KINDS: string[] = ['rich-text', 'mj-block', 'callout', 'table', 'image', 'big-number', 'quote'];
+const VALID_CALLOUT_TONES: string[] = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'];
 
 /**
  * Server-side and agent tool library for `Presentation` (`Slide Deck`) artifacts (`MJ Slides`, § 3.6 & § 5).
@@ -77,17 +97,27 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 }
             },
             {
+                name: 'list_design_options',
+                description:
+                    'Returns the catalog of all supported slide layouts (all 16 layouts with region slots and recommended usage), all 8 designer theme presets (colors, cardElevation, backgroundStyle), valid transitions, and region kinds.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
                 name: 'add_slide',
                 description:
-                    'Adds a new slide to the presentation with a canonical layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank).',
+                    'Adds a new slide to the presentation with a canonical layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).',
                 inputSchema: {
                     type: 'object',
                     properties: {
                         slideId: { type: 'string', description: 'Optional explicit SlideID.' },
                         layout: {
                             type: 'string',
+                            enum: VALID_SLIDE_LAYOUTS,
                             description:
-                                'Canonical slide layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank).'
+                                'Canonical slide layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).'
                         },
                         title: { type: 'string', description: 'Slide title.' },
                         subtitle: { type: 'string', description: 'Optional slide subtitle.' },
@@ -118,13 +148,21 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         slideId: { type: 'string', description: 'Target SlideID to update.' },
                         title: { type: 'string', description: 'New slide title.' },
                         subtitle: { type: 'string', description: 'New slide subtitle.' },
-                        layout: { type: 'string', description: 'New canonical layout.' },
+                        layout: {
+                            type: 'string',
+                            enum: VALID_SLIDE_LAYOUTS,
+                            description: 'New canonical layout.'
+                        },
                         markdownContent: {
                             type: 'string',
                             description: 'Optional updated Markdown content for the primary region of this slide.'
                         },
                         speakerNotes: { type: 'string', description: 'Updated speaker notes.' },
-                        transition: { type: 'string', description: 'Slide transition (none, fade, slide).' },
+                        transition: {
+                            type: 'string',
+                            enum: VALID_SLIDE_TRANSITIONS,
+                            description: 'Slide transition (none, fade, slide, zoom).'
+                        },
                         hidden: { type: 'boolean', description: 'Whether the slide is hidden during presentation.' },
                         expectedRevisionHash: {
                             type: 'string',
@@ -200,6 +238,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         label: { type: 'string', description: 'Optional region label.' },
                         kind: {
                             type: 'string',
+                            enum: VALID_REGION_KINDS,
                             description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).'
                         },
                         markdownContent: { type: 'string', description: 'Markdown content for this region.' },
@@ -212,6 +251,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         calloutTone: {
                             type: 'string',
                             description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).'
+                        },
+                        revealStep: {
+                            type: 'number',
+                            description: 'Optional 1-based progressive reveal step for Present mode.'
                         },
                         mjBlock: {
                             type: 'object',
@@ -235,7 +278,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         slideId: { type: 'string', description: 'Target SlideID.' },
                         regionId: { type: 'string', description: 'Target RegionID.' },
                         label: { type: 'string', description: 'Optional region label.' },
-                        kind: { type: 'string', description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).' },
+                        kind: {
+                            type: 'string',
+                            enum: VALID_REGION_KINDS,
+                            description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).'
+                        },
                         markdownContent: { type: 'string', description: 'Replacement Markdown content.' },
                         imageUrl: { type: 'string', description: 'Image URL or data URI when kind is image.' },
                         imageAlt: { type: 'string', description: 'Accessible alt text / caption when kind is image.' },
@@ -243,7 +290,15 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         bigNumberLabel: { type: 'string', description: 'Metric label when kind is big-number.' },
                         bigNumberDelta: { type: 'string', description: 'Metric delta when kind is big-number.' },
                         quoteAttribution: { type: 'string', description: 'Attribution when kind is quote.' },
-                        calloutTone: { type: 'string', description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).' },
+                        calloutTone: {
+                            type: 'string',
+                            enum: VALID_CALLOUT_TONES,
+                            description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).'
+                        },
+                        revealStep: {
+                            type: 'number',
+                            description: 'Optional 1-based progressive reveal step during Present Mode (0 or omit for immediate).'
+                        },
                         mjBlock: { type: 'object', description: 'Optional MJ block descriptor.' },
                         expectedRevisionHash: {
                             type: 'string',
@@ -314,13 +369,15 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'apply_theme',
                 description:
-                    'Applies a preset theme (mj-default, executive-slate, emerald-growth, crimson-bold) or derives a new theme from organization brand color seeds (Accept #4).',
+                    'Applies a preset theme (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint) or derives a new theme from organization brand color seeds (Accept #4).',
                 inputSchema: {
                     type: 'object',
                     properties: {
                         themeId: {
                             type: 'string',
-                            description: 'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold).'
+                            enum: VALID_THEME_PRESET_IDS,
+                            description:
+                                'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
                         },
                         organizationName: { type: 'string', description: 'Optional organization name for brand seeds.' },
                         primaryColor: { type: 'string', description: 'Organization brand primary hex color.' },
@@ -336,6 +393,58 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 }
             },
             {
+                name: 'apply_design_preset',
+                description:
+                    'Applies a designer visual preset (themeId + optional cardElevation, backgroundStyle, and deck-wide transition across unlocked slides) in one atomic step.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        themeId: {
+                            type: 'string',
+                            enum: VALID_THEME_PRESET_IDS,
+                            description:
+                                'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
+                        },
+                        transition: {
+                            type: 'string',
+                            enum: ['none', 'fade', 'slide', 'zoom'],
+                            description: 'Optional transition applied across unlocked slides.'
+                        },
+                        cardElevation: {
+                            type: 'string',
+                            enum: ['flat', 'soft', 'glass'],
+                            description: 'Optional card surface elevation.'
+                        },
+                        backgroundStyle: {
+                            type: 'string',
+                            enum: ['solid', 'gradient', 'mesh', 'accent-strip'],
+                            description: 'Optional slide backdrop style.'
+                        },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
+                        }
+                    },
+                    required: ['themeId']
+                }
+            },
+            {
+                name: 'beautify_slide',
+                description:
+                    'Polishes a target slide deterministically: improves scannable bullet hierarchy, assigns progressive reveal steps, sets smooth transitions, and upgrades bullet KPI metrics into a KpiStrip layout when appropriate without losing any data or blocks.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID to polish.' },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
+                        }
+                    },
+                    required: ['slideId']
+                }
+            },
+            {
                 name: 'generate_deck_from_markdown',
                 description:
                     'Converts a Markdown document (headings, lists, tables, callouts, and embedded :::mj-block directives including Live MJ Blocks and OLE Whiteboards) into a structured SlideDeckSpec ("make a deck from this doc", § 5.2).',
@@ -344,7 +453,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     properties: {
                         markdown: { type: 'string', description: 'Source Markdown document text.' },
                         deckTitle: { type: 'string', description: 'Optional title for the generated presentation.' },
-                        themeId: { type: 'string', description: 'Optional theme preset ID.' },
+                        themeId: {
+                            type: 'string',
+                            enum: VALID_THEME_PRESET_IDS,
+                            description: 'Optional theme preset ID.'
+                        },
                         expectedRevisionHash: {
                             type: 'string',
                             description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
@@ -352,7 +465,108 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     },
                     required: ['markdown']
                 }
-            }
+            },
+            {
+                name: 'duplicate_region',
+                description: 'Duplicates an existing region on a slide with a new unique regionId.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID.' },
+                        regionId: { type: 'string', description: 'Source RegionID to duplicate.' },
+                        newRegionId: { type: 'string', description: 'Optional explicit ID for the duplicated region.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['slideId', 'regionId']
+                }
+            },
+            {
+                name: 'align_distribute_regions',
+                description: 'Reorders or redistributes regions within a slide cleanly while respecting lock permissions.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID.' },
+                        orderedRegionIds: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Desired RegionID order; unmentioned regions stay appended in relative order.'
+                        },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['slideId', 'orderedRegionIds']
+                }
+            },
+            {
+                name: 'upsert_speaker_notes',
+                description: 'Sets or appends presenter speaker notes on a slide.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID.' },
+                        speakerNotes: { type: 'string', description: 'Speaker notes text to set or append.' },
+                        append: { type: 'boolean', description: 'When true, appends to existing speaker notes instead of replacing them.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['slideId', 'speakerNotes']
+                }
+            },
+            {
+                name: 'batch_mutate_slides',
+                description: 'Atomically updates multiple slides (title, subtitle, layout, speakerNotes, hidden) after checking all slide locks upfront.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        operations: {
+                            type: 'array',
+                            minItems: 1,
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    slideId: { type: 'string', minLength: 1 },
+                                    title: { type: 'string' },
+                                    subtitle: { type: 'string' },
+                                    layout: { type: 'string', enum: VALID_SLIDE_LAYOUTS },
+                                    speakerNotes: { type: 'string' },
+                                    hidden: { type: 'boolean' }
+                                },
+                                required: ['slideId']
+                            },
+                            description: 'Array of { slideId, title?, subtitle?, layout?, speakerNotes?, hidden? } updates.'
+                        },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['operations']
+                }
+            },
+            {
+                name: 'set_lock',
+                description: 'Locks a slide (or specific region when regionId is supplied) to owner/locker.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID to lock.' },
+                        regionId: { type: 'string', description: 'Optional RegionID to lock instead of the whole slide.' },
+                        allowEditors: { type: 'boolean', description: 'When true, artifact editors may still edit the locked target (default false).' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['slideId']
+                }
+            },
+            {
+                name: 'release_lock',
+                description: 'Unlocks a locked slide or region if the actor is the locker or artifact owner.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID to unlock.' },
+                        regionId: { type: 'string', description: 'Optional RegionID to unlock.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
+                    },
+                    required: ['slideId']
+                }
+            },
+            ...GetSharedCommentAndSuggestionToolDefinitions('slides')
         ];
     }
 
@@ -365,15 +579,17 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
 
         switch (toolName) {
+            case 'list_design_options':
+                return this.handleListDesignOptions();
             case 'read_deck':
             case 'get_deck_outline':
                 return this.handleReadDeck(contentStr, input);
             case 'get_slide':
                 return this.handleGetSlide(contentStr, input);
             case 'add_slide':
-                return this.handleAddSlide(contentStr, input, context);
+                return await this.handleAddSlide(contentStr, input, context);
             case 'update_slide':
-                return this.handleUpdateSlide(contentStr, input, context);
+                return await this.handleUpdateSlide(contentStr, input, context);
             case 'delete_slide':
                 return this.handleDeleteSlide(contentStr, input, context);
             case 'duplicate_slide':
@@ -385,23 +601,60 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 return this.handleUpsertSlideElement(contentStr, input, context);
             case 'delete_slide_element':
                 return this.handleDeleteSlideElement(contentStr, input, context);
+            case 'duplicate_region':
+                return this.handleDuplicateRegion(contentStr, input, context);
+            case 'align_distribute_regions':
+                return this.handleAlignDistributeRegions(contentStr, input, context);
             case 'update_speaker_notes':
                 return this.handleUpdateSpeakerNotes(contentStr, input, context);
+            case 'upsert_speaker_notes':
+                return this.handleUpsertSpeakerNotes(contentStr, input, context);
+            case 'batch_mutate_slides':
+                return this.handleBatchMutateSlides(contentStr, input, context);
             case 'update_deck_metadata':
                 return this.handleUpdateDeckMetadata(contentStr, input, context);
             case 'apply_theme':
                 return this.handleApplyTheme(contentStr, input, context);
+            case 'apply_design_preset':
+                return this.handleApplyDesignPreset(contentStr, input, context);
+            case 'beautify_slide':
+                return this.handleBeautifySlide(contentStr, input, context);
             case 'generate_deck_from_markdown':
                 return this.handleGenerateDeckFromMarkdown(contentStr, input, context);
+            case 'set_lock':
+                return this.handleToggleSlideLock(contentStr, input, true, context);
+            case 'release_lock':
+                return this.handleToggleSlideLock(contentStr, input, false, context);
+            case 'list_comments':
+            case 'add_comment':
+            case 'reply_comment':
+            case 'resolve_comment':
+                return ExecuteArtifactCommentTool({
+                    toolName,
+                    input,
+                    context,
+                    domain: 'slides'
+                });
+            case 'list_suggestions':
+                return ExecuteListSuggestionsTool({
+                    domain: 'slides',
+                    artifactContent: contentStr,
+                    input,
+                    context
+                });
+            case 'propose_suggestion':
+                return this.handleProposeSuggestion(contentStr, input, context);
+            case 'review_suggestion':
+                return this.handleReviewSuggestion(contentStr, input, context);
             default:
                 return { success: false, data: null, errorMessage: `Unknown SlideDeckToolLibrary tool: "${toolName}"` };
         }
     }
 
-    private normalizeArtifactBlocksInMarkdown(
+    private async normalizeArtifactBlocksInMarkdown(
         markdown: string,
         context?: ArtifactToolExecutionContext
-    ): { ok: true; markdown: string; errorMessage?: never } | { ok: false; markdown?: never; errorMessage: string } {
+    ): Promise<{ ok: true; markdown: string; errorMessage?: never } | { ok: false; markdown?: never; errorMessage: string }> {
         const parsedSegs = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
         let updated = markdown;
         for (const seg of parsedSegs) {
@@ -425,10 +678,23 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 }
                 resolvedVersionId = verResult.versionId;
             }
-            if (resolved.artifactId !== seg.BlockSpec.ArtifactID || resolvedVersionId !== seg.BlockSpec.VersionID) {
+            const access = await ValidateEmbeddedArtifactAccess({
+                targetArtifactId: resolved.artifactId,
+                targetVersionId: resolvedVersionId ?? null,
+                context
+            });
+            if (!access.Ok) {
+                return { ok: false, errorMessage: access.ErrorMessage || `Cannot embed artifact '${resolved.artifactId}'.` };
+            }
+            if (
+                resolved.artifactId !== seg.BlockSpec.ArtifactID ||
+                resolvedVersionId !== seg.BlockSpec.VersionID ||
+                (!seg.BlockSpec.ArtifactType && access.ArtifactTypeName)
+            ) {
                 const normalizedDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective({
                     ...seg.BlockSpec,
                     ArtifactID: resolved.artifactId,
+                    ArtifactType: seg.BlockSpec.ArtifactType ?? access.ArtifactTypeName,
                     VersionID: resolvedVersionId
                 });
                 updated = updated.replace(seg.RawText, () => normalizedDirective);
@@ -485,6 +751,50 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         return createHash('sha256').update(content ?? '', 'utf8').digest('hex');
     }
 
+    private handleListDesignOptions(): ArtifactToolResult {
+        return {
+            success: true,
+            data: {
+                layouts: SLIDE_LAYOUT_CATALOG,
+                themes: SLIDE_DECK_THEME_PRESETS,
+                transitions: VALID_SLIDE_TRANSITIONS,
+                cardElevations: ['flat', 'soft', 'glass'],
+                backgroundStyles: ['solid', 'gradient', 'mesh', 'accent-strip'],
+                regionKinds: VALID_REGION_KINDS
+            }
+        };
+    }
+
+    private validateLayoutInput(rawLayout: ArtifactJsonValue | undefined): string | null {
+        if (rawLayout === undefined) {
+            return null;
+        }
+        if (typeof rawLayout !== 'string' || !VALID_SLIDE_LAYOUTS.includes(rawLayout)) {
+            return `Invalid slide layout '${String(rawLayout)}'. Must be one of: ${VALID_SLIDE_LAYOUTS.join(', ')}.`;
+        }
+        return null;
+    }
+
+    private validateTransitionInput(rawTransition: ArtifactJsonValue | undefined): string | null {
+        if (rawTransition === undefined) {
+            return null;
+        }
+        if (typeof rawTransition !== 'string' || !VALID_SLIDE_TRANSITIONS.includes(rawTransition)) {
+            return `Invalid slide transition '${String(rawTransition)}'. Must be one of: ${VALID_SLIDE_TRANSITIONS.join(', ')}.`;
+        }
+        return null;
+    }
+
+    private validateThemePresetInput(rawThemeId: ArtifactJsonValue | undefined): string | null {
+        if (rawThemeId === undefined) {
+            return null;
+        }
+        if (typeof rawThemeId !== 'string' || !VALID_THEME_PRESET_IDS.includes(rawThemeId.trim())) {
+            return `Unknown themeId '${String(rawThemeId)}'. Valid presets: ${VALID_THEME_PRESET_IDS.join(', ')}. Call list_design_options for preset swatches.`;
+        }
+        return null;
+    }
+
     private handleReadDeck(contentStr: string, input: ArtifactToolArgs): ArtifactToolResult {
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
         const outline = SlideDeckEngine.Instance.BuildDeckOutline(deck);
@@ -527,27 +837,52 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleAddSlide(
+    private async handleAddSlide(
         contentStr: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
         if (revError) {
             return { success: false, data: null, errorMessage: revError };
         }
 
+        const layoutError = this.validateLayoutInput(input.layout);
+        if (layoutError) {
+            return { success: false, data: null, errorMessage: layoutError };
+        }
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
         const title = typeof input.title === 'string' && input.title.trim() ? input.title.trim() : 'New Slide';
         const subtitle = typeof input.subtitle === 'string' ? input.subtitle : undefined;
         const layout = (typeof input.layout === 'string' ? input.layout : 'TitleAndBody') as SlideLayoutKind;
         const speakerNotes = typeof input.speakerNotes === 'string' ? input.speakerNotes : '';
         const slideId = typeof input.slideId === 'string' && input.slideId.trim() ? input.slideId.trim() : undefined;
-        const insertAtIndex = typeof input.insertAtIndex === 'number' ? input.insertAtIndex : undefined;
+        const insertAtIndex = typeof input.insertAtIndex === 'number' ? Math.trunc(input.insertAtIndex) : undefined;
+
+        if (insertAtIndex !== undefined && insertAtIndex >= 0 && insertAtIndex < deck.Slides.length) {
+            const lockContext = this.extractLockContext(context);
+            for (const shiftedSlide of deck.Slides.slice(insertAtIndex)) {
+                const perm = SlideDeckEngine.Instance.CanActorEditSlide(
+                    shiftedSlide,
+                    lockContext.ActorUserID,
+                    lockContext.OwnerUserID,
+                    lockContext.IsEditor
+                );
+                if (!perm.Allowed) {
+                    return {
+                        success: false,
+                        data: null,
+                        errorMessage:
+                            perm.Reason ||
+                            `Cannot insert slide at index ${insertAtIndex} because locked slide '${shiftedSlide.SlideID}' would be renumbered.`
+                    };
+                }
+            }
+        }
 
         let initialRegions: SlideRegionSpec[] | undefined;
         if (typeof input.markdownContent === 'string' && input.markdownContent.trim()) {
-            const normalized = this.normalizeArtifactBlocksInMarkdown(input.markdownContent, context);
+            const normalized = await this.normalizeArtifactBlocksInMarkdown(input.markdownContent, context);
             if (!normalized.ok) {
                 return { success: false, data: null, errorMessage: normalized.errorMessage };
             }
@@ -581,11 +916,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpdateSlide(
+    private async handleUpdateSlide(
         contentStr: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
         if (revError) {
             return { success: false, data: null, errorMessage: revError };
@@ -594,6 +929,14 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
         if (!slideId) {
             return { success: false, data: null, errorMessage: 'update_slide requires a non-empty slideId.' };
+        }
+        const layoutError = this.validateLayoutInput(input.layout);
+        if (layoutError) {
+            return { success: false, data: null, errorMessage: layoutError };
+        }
+        const transitionError = this.validateTransitionInput(input.transition);
+        if (transitionError) {
+            return { success: false, data: null, errorMessage: transitionError };
         }
 
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
@@ -611,7 +954,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     SpeakerNotes: typeof input.speakerNotes === 'string' ? input.speakerNotes : undefined,
                     Transition:
                         typeof input.transition === 'string'
-                            ? (input.transition as 'none' | 'fade' | 'slide')
+                            ? (input.transition as SlideTransitionKind)
                             : undefined,
                     Hidden: typeof input.hidden === 'boolean' ? input.hidden : undefined
                 },
@@ -633,7 +976,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
 
         let finalDeck: SlideDeckSpec = afterMeta;
         if (typeof input.markdownContent === 'string') {
-            const normalized = this.normalizeArtifactBlocksInMarkdown(input.markdownContent, context);
+            const normalized = await this.normalizeArtifactBlocksInMarkdown(input.markdownContent, context);
             if (!normalized.ok) {
                 return { success: false, data: null, errorMessage: normalized.errorMessage };
             }
@@ -814,11 +1157,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpsertSlideElement(
+    private async handleUpsertSlideElement(
         contentStr: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
         if (revError) {
             return { success: false, data: null, errorMessage: revError };
@@ -859,6 +1202,20 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 resolvedVersionId = verResult.versionId;
             } else if (rawBlock.VersionID === null) {
                 resolvedVersionId = null;
+            }
+            let resolvedArtifactType = typeof rawBlock.ArtifactType === 'string' ? rawBlock.ArtifactType : undefined;
+            if ((blockKind === 'Artifact' || resolvedArtifactId) && resolvedArtifactId) {
+                const access = await ValidateEmbeddedArtifactAccess({
+                    targetArtifactId: resolvedArtifactId,
+                    targetVersionId: resolvedVersionId ?? null,
+                    context
+                });
+                if (!access.Ok) {
+                    return { success: false, data: null, errorMessage: access.ErrorMessage || `Cannot embed artifact '${resolvedArtifactId}'.` };
+                }
+                if (!resolvedArtifactType && access.ArtifactTypeName) {
+                    resolvedArtifactType = access.ArtifactTypeName;
+                }
             }
             const rawFields = Array.isArray(rawBlock.Fields)
                 ? rawBlock.Fields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
@@ -923,7 +1280,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 ComponentName: typeof rawBlock.ComponentName === 'string' ? rawBlock.ComponentName : undefined,
                 ComponentSpec: rawComponentSpec,
                 ArtifactID: resolvedArtifactId,
-                ArtifactType: typeof rawBlock.ArtifactType === 'string' ? rawBlock.ArtifactType : undefined,
+                ArtifactType: resolvedArtifactType,
                 VersionID: resolvedVersionId,
                 EmbedMode: (typeof rawBlock.EmbedMode === 'string' ? rawBlock.EmbedMode : 'Inline') as ArtifactEmbedMode,
                 HeightPx:
@@ -946,7 +1303,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             kind = 'mj-block';
             markdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(blockSpec);
         } else if (typeof markdownContent === 'string' && markdownContent.includes(':::mj-block')) {
-            const normalized = this.normalizeArtifactBlocksInMarkdown(markdownContent, context);
+            const normalized = await this.normalizeArtifactBlocksInMarkdown(markdownContent, context);
             if (!normalized.ok) {
                 return { success: false, data: null, errorMessage: normalized.errorMessage };
             }
@@ -975,6 +1332,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     CalloutTone:
                         typeof input.calloutTone === 'string'
                             ? (input.calloutTone as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION')
+                            : undefined,
+                    RevealStep:
+                        typeof input.revealStep === 'number' && Number.isFinite(input.revealStep)
+                            ? Math.max(0, Math.floor(input.revealStep))
                             : undefined
                 },
                 lockContext
@@ -1031,16 +1392,6 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
         }
         const lockContext = this.extractLockContext(context);
-        const targetRegion = slide.Regions.find((r) => r.RegionID === regionId);
-        if (!targetRegion && slide.Regions.length !== 1) {
-            return {
-                success: false,
-                data: null,
-                errorMessage: `Region "${regionId}" was not found on slide "${slideId}".`
-            };
-        }
-        const effectiveRegion = targetRegion ?? slide.Regions[0];
-
         const slidePerm = SlideDeckEngine.Instance.CanActorEditSlide(
             slide,
             lockContext.ActorUserID,
@@ -1050,10 +1401,12 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         if (!slidePerm.Allowed) {
             return { success: false, data: null, errorMessage: slidePerm.Reason };
         }
-        if (effectiveRegion) {
+        const targetRegion = slide.Regions.find((r) => r.RegionID === regionId);
+        const regionForLockCheck = targetRegion ?? (slide.Regions.length === 1 ? slide.Regions[0] : undefined);
+        if (regionForLockCheck) {
             const regionPerm = SlideDeckEngine.Instance.CanActorEditRegion(
                 slide,
-                effectiveRegion,
+                regionForLockCheck,
                 lockContext.ActorUserID,
                 lockContext.OwnerUserID,
                 lockContext.IsEditor
@@ -1061,6 +1414,13 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             if (!regionPerm.Allowed) {
                 return { success: false, data: null, errorMessage: regionPerm.Reason };
             }
+        }
+        if (!targetRegion) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: `Region "${regionId}" was not found on slide "${slideId}".`
+            };
         }
 
         if (slide.Regions.length > 1) {
@@ -1070,7 +1430,14 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 ...slide.Regions[0],
                 Kind: 'rich-text',
                 MarkdownContent: '',
-                BlockSpec: undefined
+                BlockSpec: undefined,
+                ImageUrl: undefined,
+                ImageAlt: undefined,
+                BigNumberValue: undefined,
+                BigNumberLabel: undefined,
+                BigNumberDelta: undefined,
+                QuoteAttribution: undefined,
+                CalloutTone: undefined
             };
         }
 
@@ -1235,7 +1602,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 TextColor: typeof input.textColor === 'string' ? input.textColor : undefined
             });
         } else {
-            const themeId = typeof input.themeId === 'string' ? input.themeId : 'mj-default';
+            const themeErr = this.validateThemePresetInput(input.themeId);
+            if (themeErr) {
+                return { success: false, data: null, errorMessage: themeErr };
+            }
+            const themeId = typeof input.themeId === 'string' ? input.themeId.trim() : 'mj-default';
             updatedDeck = SlideDeckEngine.Instance.ApplyTheme(deck, themeId);
         }
 
@@ -1250,11 +1621,109 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleGenerateDeckFromMarkdown(
+    private handleApplyDesignPreset(
         contentStr: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
     ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const lockContext = this.extractLockContext(context);
+        const lockErr = this.assertDeckUnlockedForGlobalEdit(deck, lockContext);
+        if (lockErr) {
+            return { success: false, data: null, errorMessage: lockErr };
+        }
+
+        const themeErr = this.validateThemePresetInput(input.themeId);
+        if (themeErr) {
+            return { success: false, data: null, errorMessage: themeErr };
+        }
+        const transitionErr = this.validateTransitionInput(input.transition);
+        if (transitionErr) {
+            return { success: false, data: null, errorMessage: transitionErr };
+        }
+        const themeId = typeof input.themeId === 'string' && input.themeId.trim() ? input.themeId.trim() : 'mj-default';
+        const transition =
+            typeof input.transition === 'string' && ['none', 'fade', 'slide', 'zoom'].includes(input.transition)
+                ? (input.transition as SlideTransitionKind)
+                : undefined;
+        const cardElevation =
+            typeof input.cardElevation === 'string' && ['flat', 'soft', 'glass'].includes(input.cardElevation)
+                ? (input.cardElevation as SlideCardElevation)
+                : undefined;
+        const backgroundStyle =
+            typeof input.backgroundStyle === 'string' &&
+            ['solid', 'gradient', 'mesh', 'accent-strip'].includes(input.backgroundStyle)
+                ? (input.backgroundStyle as SlideBackgroundStyle)
+                : undefined;
+
+        const updatedDeck = SlideDeckEngine.Instance.ApplyDesignPreset(deck, themeId, {
+            Transition: transition,
+            CardElevation: cardElevation,
+            BackgroundStyle: backgroundStyle
+        });
+        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+        return {
+            success: true,
+            data: {
+                theme: updatedDeck.Theme,
+                transitionApplied: transition,
+                revisionHash: this.ComputeRevisionHash(updatedContent),
+                updatedContent
+            }
+        };
+    }
+
+    private handleBeautifySlide(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        if (!slideId) {
+            return { success: false, data: null, errorMessage: 'beautify_slide requires slideId.' };
+        }
+
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const lockContext = this.extractLockContext(context);
+        try {
+            const res = SlideDeckEngine.Instance.BeautifySlide(deck, slideId, lockContext);
+            if (!res.UpdatedSlide) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Slide "${slideId}" was not found in the presentation.`
+                };
+            }
+            const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(res.Deck);
+            return {
+                success: true,
+                data: {
+                    updatedSlide: res.UpdatedSlide,
+                    improvements: res.Improvements,
+                    revisionHash: this.ComputeRevisionHash(updatedContent),
+                    updatedContent
+                }
+            };
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
+    }
+
+    private async handleGenerateDeckFromMarkdown(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
         if (revError) {
             return { success: false, data: null, errorMessage: revError };
@@ -1290,7 +1759,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const rawMarkdown = typeof input.markdown === 'string' ? input.markdown : contentStr;
-        const normalized = this.normalizeArtifactBlocksInMarkdown(rawMarkdown, context);
+        const normalized = await this.normalizeArtifactBlocksInMarkdown(rawMarkdown, context);
         if (!normalized.ok) {
             return { success: false, data: null, errorMessage: normalized.errorMessage };
         }
@@ -1317,6 +1786,456 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 updatedContent
             }
         };
+    }
+
+    private handleDuplicateRegion(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        const regionId = typeof input.regionId === 'string' ? input.regionId.trim() : '';
+        if (!slideId || !regionId) {
+            return { success: false, data: null, errorMessage: 'duplicate_region requires slideId and regionId.' };
+        }
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const slide = deck.Slides.find((s) => s.SlideID === slideId);
+        if (!slide) {
+            return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
+        }
+        const sourceIdx = slide.Regions.findIndex((r) => r.RegionID === regionId);
+        if (sourceIdx < 0) {
+            return { success: false, data: null, errorMessage: `Region "${regionId}" was not found on slide "${slideId}".` };
+        }
+        const lockContext = this.extractLockContext(context);
+        const slidePerm = SlideDeckEngine.Instance.CanActorEditSlide(
+            slide,
+            lockContext.ActorUserID,
+            lockContext.OwnerUserID,
+            lockContext.IsEditor
+        );
+        if (!slidePerm.Allowed) {
+            return { success: false, data: null, errorMessage: slidePerm.Reason };
+        }
+        const existingIds = new Set(slide.Regions.map((r) => r.RegionID));
+        const requestedId = typeof input.newRegionId === 'string' ? input.newRegionId.trim() : '';
+        let mintedId = requestedId || `${regionId}-copy-${randomUUID().slice(0, 6)}`;
+        if (existingIds.has(mintedId)) {
+            if (requestedId) {
+                return { success: false, data: null, errorMessage: `RegionID '${requestedId}' already exists on slide '${slideId}'.` };
+            }
+            while (existingIds.has(mintedId)) {
+                mintedId = `${regionId}-copy-${randomUUID().slice(0, 6)}`;
+            }
+        }
+        const source = slide.Regions[sourceIdx];
+        const cloned: SlideRegionSpec = {
+            ...source,
+            RegionID: mintedId,
+            Locked: false,
+            LockedByUserID: undefined,
+            BlockSpec: source.BlockSpec ? { ...source.BlockSpec, BlockID: `${source.BlockSpec.BlockID}-${randomUUID().slice(0, 4)}` } : undefined
+        };
+        slide.Regions.splice(sourceIdx + 1, 0, cloned);
+        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(deck);
+        return {
+            success: true,
+            data: {
+                slideId,
+                sourceRegionId: regionId,
+                regionId: mintedId,
+                duplicatedRegion: cloned,
+                revisionHash: this.ComputeRevisionHash(updatedContent),
+                updatedContent
+            }
+        };
+    }
+
+    private handleAlignDistributeRegions(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        const orderedRaw = Array.isArray(input.orderedRegionIds)
+            ? input.orderedRegionIds.filter((r): r is string => typeof r === 'string' && r.trim().length > 0).map((r) => r.trim())
+            : [];
+        if (!slideId || orderedRaw.length === 0) {
+            return { success: false, data: null, errorMessage: 'align_distribute_regions requires slideId and orderedRegionIds.' };
+        }
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const slide = deck.Slides.find((s) => s.SlideID === slideId);
+        if (!slide) {
+            return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
+        }
+        const lockContext = this.extractLockContext(context);
+        const slidePerm = SlideDeckEngine.Instance.CanActorEditSlide(
+            slide,
+            lockContext.ActorUserID,
+            lockContext.OwnerUserID,
+            lockContext.IsEditor
+        );
+        if (!slidePerm.Allowed) {
+            return { success: false, data: null, errorMessage: slidePerm.Reason };
+        }
+        for (const r of slide.Regions) {
+            const regPerm = SlideDeckEngine.Instance.CanActorEditRegion(
+                slide,
+                r,
+                lockContext.ActorUserID,
+                lockContext.OwnerUserID,
+                lockContext.IsEditor
+            );
+            if (!regPerm.Allowed) {
+                return { success: false, data: null, errorMessage: regPerm.Reason };
+            }
+        }
+        const byId = new Map(slide.Regions.map((r) => [r.RegionID, r]));
+        const reordered: SlideRegionSpec[] = [];
+        const seen = new Set<string>();
+        for (const rid of orderedRaw) {
+            const match = byId.get(rid);
+            if (!match) {
+                return { success: false, data: null, errorMessage: `Region '${rid}' was not found on slide '${slideId}'.` };
+            }
+            if (!seen.has(rid)) {
+                seen.add(rid);
+                reordered.push(match);
+            }
+        }
+        for (const r of slide.Regions) {
+            if (!seen.has(r.RegionID)) {
+                reordered.push(r);
+            }
+        }
+        slide.Regions = reordered;
+        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(deck);
+        return {
+            success: true,
+            data: {
+                slideId,
+                regionOrder: reordered.map((r) => r.RegionID),
+                revisionHash: this.ComputeRevisionHash(updatedContent),
+                updatedContent
+            }
+        };
+    }
+
+    private handleUpsertSpeakerNotes(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        if (input.append !== true) {
+            return this.handleUpdateSpeakerNotes(contentStr, input, context);
+        }
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        const addition = typeof input.speakerNotes === 'string' ? input.speakerNotes : '';
+        if (!slideId) {
+            return { success: false, data: null, errorMessage: 'upsert_speaker_notes requires slideId.' };
+        }
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const slide = deck.Slides.find((s) => s.SlideID === slideId);
+        if (!slide) {
+            return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
+        }
+        const combined = slide.SpeakerNotes?.trim() ? `${slide.SpeakerNotes.trimEnd()}\n\n${addition}` : addition;
+        return this.handleUpdateSpeakerNotes(
+            contentStr,
+            { ...input, speakerNotes: combined },
+            context
+        );
+    }
+
+    private handleBatchMutateSlides(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+        const rawOps = Array.isArray(input.operations) ? input.operations : [];
+        if (rawOps.length === 0) {
+            return { success: false, data: null, errorMessage: 'batch_mutate_slides requires a non-empty operations array.' };
+        }
+        let deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const lockContext = this.extractLockContext(context);
+
+        const validatedOps: Array<{
+            slideId: string;
+            patch: {
+                Title?: string;
+                Subtitle?: string;
+                Layout?: SlideLayoutKind;
+                SpeakerNotes?: string;
+                Hidden?: boolean;
+            };
+        }> = [];
+        for (const item of rawOps) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+            const op = item as ArtifactToolArgs;
+            const slideId = typeof op.slideId === 'string' ? op.slideId.trim() : '';
+            if (!slideId) {
+                return { success: false, data: null, errorMessage: 'Each operation in batch_mutate_slides requires slideId.' };
+            }
+            const layoutErr = this.validateLayoutInput(op.layout);
+            if (layoutErr) {
+                return { success: false, data: null, errorMessage: layoutErr };
+            }
+            const slide = deck.Slides.find((s) => s.SlideID === slideId);
+            if (!slide) {
+                return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
+            }
+            const perm = SlideDeckEngine.Instance.CanActorEditSlide(
+                slide,
+                lockContext.ActorUserID,
+                lockContext.OwnerUserID,
+                lockContext.IsEditor
+            );
+            if (!perm.Allowed) {
+                return { success: false, data: null, errorMessage: perm.Reason };
+            }
+            validatedOps.push({
+                slideId,
+                patch: {
+                    Title: typeof op.title === 'string' ? op.title : undefined,
+                    Subtitle: typeof op.subtitle === 'string' ? op.subtitle : undefined,
+                    Layout: typeof op.layout === 'string' ? (op.layout as SlideLayoutKind) : undefined,
+                    SpeakerNotes: typeof op.speakerNotes === 'string' ? op.speakerNotes : undefined,
+                    Hidden: typeof op.hidden === 'boolean' ? op.hidden : undefined
+                }
+            });
+        }
+
+        for (const op of validatedOps) {
+            const res = SlideDeckEngine.Instance.UpdateSlideMetadata(deck, op.slideId, op.patch, lockContext);
+            deck = res.Deck;
+        }
+        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(deck);
+        return {
+            success: true,
+            data: {
+                updatedSlideIds: validatedOps.map((o) => o.slideId),
+                updatedCount: validatedOps.length,
+                revisionHash: this.ComputeRevisionHash(updatedContent),
+                updatedContent
+            }
+        };
+    }
+
+    private handleToggleSlideLock(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        locked: boolean,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        if (!slideId) {
+            return { success: false, data: null, errorMessage: 'set_lock / release_lock requires slideId.' };
+        }
+        const regionId = typeof input.regionId === 'string' && input.regionId.trim() ? input.regionId.trim() : undefined;
+        const allowEditors = input.allowEditors === true;
+        const lockContext = this.extractLockContext(context);
+        const actorUserId = lockContext.ActorUserID ?? lockContext.OwnerUserID ?? 'system';
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+
+        try {
+            if (regionId) {
+                const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.SetRegionLock(
+                    deck,
+                    slideId,
+                    regionId,
+                    locked,
+                    actorUserId,
+                    allowEditors,
+                    lockContext.OwnerUserID
+                );
+                if (!UpdatedRegion) {
+                    return { success: false, data: null, errorMessage: `Slide '${slideId}' or region '${regionId}' not found.` };
+                }
+                const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+                return {
+                    success: true,
+                    data: {
+                        slideId,
+                        regionId,
+                        locked: UpdatedRegion.Locked,
+                        revisionHash: this.ComputeRevisionHash(updatedContent),
+                        updatedContent
+                    }
+                };
+            }
+            const { Deck: updatedDeck, UpdatedSlide } = SlideDeckEngine.Instance.SetSlideLock(
+                deck,
+                slideId,
+                locked,
+                actorUserId,
+                allowEditors,
+                lockContext.OwnerUserID
+            );
+            if (!UpdatedSlide) {
+                return { success: false, data: null, errorMessage: `Slide '${slideId}' not found.` };
+            }
+            const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+            return {
+                success: true,
+                data: {
+                    slideId,
+                    locked: UpdatedSlide.Locked,
+                    revisionHash: this.ComputeRevisionHash(updatedContent),
+                    updatedContent
+                }
+            };
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
+    }
+
+    private resolveTargetSlideFromAnchor(deck: SlideDeckSpec, slideId?: string, slideNumber?: number): SlideSpec | undefined {
+        if (slideId) {
+            const byId = deck.Slides.find((s) => s.SlideID === slideId);
+            if (byId) return byId;
+        }
+        if (typeof slideNumber === 'number' && Number.isFinite(slideNumber)) {
+            return deck.Slides.find((s) => s.SlideNumber === slideNumber) ?? deck.Slides[slideNumber - 1];
+        }
+        return undefined;
+    }
+
+    private async handleProposeSuggestion(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        return ExecuteProposeSuggestionTool({
+            domain: 'slides',
+            artifactContent: contentStr,
+            input,
+            context,
+            validateTarget: (anchor, originalSlice) => {
+                const targetRegionId = anchor.RegionId ?? anchor.ElementId;
+                const slide =
+                    this.resolveTargetSlideFromAnchor(deck, anchor.SlideId, anchor.SlideNumber) ??
+                    (targetRegionId
+                        ? deck.Slides.find((s) => s.Regions.some((r) => r.RegionID === targetRegionId))
+                        : undefined);
+                if (!slide) {
+                    return {
+                        ok: false,
+                        errorMessage: `Target slide '${anchor.SlideId ?? String(anchor.SlideNumber ?? targetRegionId ?? '')}' was not found.`
+                    };
+                }
+                if (targetRegionId) {
+                    const region = slide.Regions.find((r) => r.RegionID === targetRegionId);
+                    if (!region) {
+                        return { ok: false, errorMessage: `Target region '${targetRegionId}' was not found on slide '${slide.SlideID}'.` };
+                    }
+                    if (originalSlice && !region.MarkdownContent.includes(originalSlice)) {
+                        return {
+                            ok: false,
+                            errorMessage: `originalSlice was not found inside region '${targetRegionId}' on slide '${slide.SlideID}'.`
+                        };
+                    }
+                }
+                return {
+                    ok: true,
+                    resolvedAnchor: {
+                        ...anchor,
+                        SlideId: slide.SlideID,
+                        SlideNumber: slide.SlideNumber,
+                        ...(targetRegionId && !anchor.RegionId ? { RegionId: targetRegionId } : {})
+                    }
+                };
+            }
+        });
+    }
+
+    private async handleReviewSuggestion(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        return ExecuteReviewSuggestionTool({
+            domain: 'slides',
+            artifactContent: contentStr,
+            input,
+            context,
+            applyAcceptedSuggestion: async (suggestion) => {
+                const targetAnchor = ParseSuggestionAnchor(suggestion.Anchor, 'slides');
+                const slide = this.resolveTargetSlideFromAnchor(
+                    deck,
+                    targetAnchor.SlideId,
+                    targetAnchor.SlideNumber
+                );
+                if (!slide) {
+                    return { ok: false, errorMessage: 'Suggestion target slide was not found.' };
+                }
+                const lockContext = this.extractLockContext(context);
+                const targetRegionId = targetAnchor.RegionId ?? targetAnchor.ElementId;
+                try {
+                    if (targetRegionId) {
+                        const region = slide.Regions.find((r) => r.RegionID === targetRegionId);
+                        if (!region) {
+                            return { ok: false, errorMessage: `Suggestion target region '${targetRegionId}' was not found.` };
+                        }
+                        if (suggestion.OriginalSlice && !region.MarkdownContent.includes(suggestion.OriginalSlice)) {
+                            return { ok: false, errorMessage: `originalSlice is stale for region '${targetRegionId}'.` };
+                        }
+                        const nextMarkdown = suggestion.OriginalSlice
+                            ? region.MarkdownContent.replace(suggestion.OriginalSlice, () => suggestion.ProposedReplacement)
+                            : suggestion.ProposedReplacement;
+                        const { Deck: updatedDeck } = SlideDeckEngine.Instance.UpsertSlideRegion(
+                            deck,
+                            slide.SlideID,
+                            { RegionID: targetRegionId, MarkdownContent: nextMarkdown },
+                            lockContext
+                        );
+                        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+                        return {
+                            ok: true,
+                            updatedContent,
+                            revisionHash: this.ComputeRevisionHash(updatedContent),
+                            extra: { slideId: slide.SlideID, regionId: targetRegionId }
+                        };
+                    }
+                    const nextTitle =
+                        suggestion.OriginalSlice && slide.Title.includes(suggestion.OriginalSlice)
+                            ? slide.Title.replace(suggestion.OriginalSlice, () => suggestion.ProposedReplacement)
+                            : suggestion.ProposedReplacement;
+                    const { Deck: updatedDeck } = SlideDeckEngine.Instance.UpdateSlideMetadata(
+                        deck,
+                        slide.SlideID,
+                        { Title: nextTitle },
+                        lockContext
+                    );
+                    const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+                    return {
+                        ok: true,
+                        updatedContent,
+                        revisionHash: this.ComputeRevisionHash(updatedContent),
+                        extra: { slideId: slide.SlideID }
+                    };
+                } catch (err) {
+                    return { ok: false, errorMessage: err instanceof Error ? err.message : String(err) };
+                }
+            }
+        });
     }
 }
 

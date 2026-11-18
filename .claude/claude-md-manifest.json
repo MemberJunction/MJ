@@ -26,6 +26,13 @@
     "maxBytes": 18000,
     "note": "Anthropic guidance is ~200 lines per CLAUDE.md. Ceiling set slightly above the achieved result (190 lines) to allow small additions without churn. Raising it requires justifying why the content is unrecoverable-if-violated or true-on-every-task."
   },
+  "agentsMd": {
+    "maxLines": 260,
+    "maxBytes": 20000,
+    "maxGeminiMdBytes": 1000,
+    "requireRuleRouting": true,
+    "note": "Antigravity truncates rule files above 24,000 bytes. Keep AGENTS.md under 20,000 bytes with full routing parity (every nested CLAUDE.md and every .claude/rules/*.md listed in both CLAUDE.md and AGENTS.md), GEMINI.md lightweight (<1 KB) importing @./AGENTS.md for standalone gemini-cli without duplicating tokens in Antigravity, and .agents/skills.json mounting .claude/skills without shadowed duplicates."
+  },
   "knownBrokenReferences": {
     "$comment": [
       "Broken links and dead heading-anchors that predate the CLAUDE.md refactor and sit outside",

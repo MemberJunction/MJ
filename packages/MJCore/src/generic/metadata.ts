@@ -160,22 +160,22 @@ export class Metadata {
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
-    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     public get Queries(): QueryInfo[] {
         return Metadata.Provider.Queries;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
-    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     public get QueryFields(): QueryFieldInfo[] {
         return Metadata.Provider.QueryFields;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
-    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return Metadata.Provider.QueryCategories;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
-    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return Metadata.Provider.QueryPermissions;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }

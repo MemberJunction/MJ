@@ -649,6 +649,16 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
       VersionNumber: { value: 1, enumerable: true },
     });
     sheetViewer.artifactVersion = ver;
+    sheetViewer.readonly = false;
+    sheetViewer.Permissions = {
+      ArtifactID: '55555555-5555-4555-8555-555555555555',
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      CanDelete: true,
+      Source: 'Owner',
+      Reason: 'Owner',
+    };
 
     const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Governed Sheet');
     const liveTable = {
@@ -710,6 +720,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     });
 
     const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.readonly = false;
     viewer.HasEditPermission = true;
     const paragraph = 'First sentence. Target phrase here. Third sentence.';
     viewer.OnMarkdownChanged(paragraph, true);
@@ -1778,11 +1789,28 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         }
         return Object.create(null);
       },
+      RunView: async (q: RunViewParams): Promise<RunViewResult> => {
+        if (q.EntityName === 'MJ: Conversation Detail Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              { ID: 'cda-1', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-1' },
+              { ID: 'cda-2', ConversationDetailID: 'detail-on-path', ArtifactVersionID: 'ver-2' },
+              { ID: 'cda-999', ConversationDetailID: 'detail-other-branch', ArtifactVersionID: 'ver-out-of-scope-999' },
+            ],
+            RowCount: 3,
+            TotalRowCount: 3,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+      },
       RunViews: async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
         executedBatches.push(queries);
         return queries.map((q) => {
-          // Scoped version list query (lightweight fields, no Content)
-          if (q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
+          // Version list query (lightweight fields, no Content)
+          if (q.EntityName === 'MJ: Artifact Versions' && q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
             const v2Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
             Object.defineProperties(v2Scoped, {
               ID: { value: 'ver-2', enumerable: true },
@@ -1799,28 +1827,30 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
               Name: { value: 'Version 1', enumerable: true },
               Description: { value: 'v1 in scope', enumerable: true },
             });
+            const v999Off = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v999Off, {
+              ID: { value: 'ver-out-of-scope-999', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 999, enumerable: true },
+              Name: { value: 'Off-branch 999', enumerable: true },
+              Description: { value: 'v999 sibling branch', enumerable: true },
+            });
             return {
               Success: true,
-              Results: [v2Scoped, v1Scoped],
-              RowCount: 2,
-              TotalRowCount: 2,
+              Results: [v999Off, v2Scoped, v1Scoped],
+              RowCount: 3,
+              TotalRowCount: 3,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
           }
-          // ID-only query for all versions of artifact
-          if (q.Fields && q.Fields.length === 1 && q.Fields[0] === 'ID') {
-            const v1Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v1Id, { ID: { value: 'ver-1', enumerable: true } });
-            const v2Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v2Id, { ID: { value: 'ver-2', enumerable: true } });
-            const v999Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v999Id, { ID: { value: 'ver-out-of-scope-999', enumerable: true } });
+          // Scoped Conversation Details IDs query
+          if (q.EntityName === 'MJ: Conversation Details') {
             return {
               Success: true,
-              Results: [v1Id, v2Id, v999Id],
-              RowCount: 3,
-              TotalRowCount: 3,
+              Results: [{ ID: 'detail-on-path' }],
+              RowCount: 1,
+              TotalRowCount: 1,
               ExecutionTime: 1,
               ErrorMessage: '',
             };
@@ -1863,14 +1893,14 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     panel.canEdit = true;
     panel.Scope = scope;
     panel.ViewContext = 'conversation';
-    const artifactEntity = Object.create(MJArtifactEntity.prototype) as MJArtifactEntity;
+    const artifactEntity = Object.create(null) as MJArtifactEntity;
     Object.defineProperties(artifactEntity, {
       ID: { value: artifactId, enumerable: true },
       Name: { value: 'Scoped Test Artifact', enumerable: true },
     });
     panel.Artifact = artifactEntity;
 
-    const v1Initial = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    const v1Initial = Object.create(null) as MJArtifactVersionEntity;
     Object.defineProperties(v1Initial, {
       ID: { value: 'ver-1', enumerable: true },
       ArtifactID: { value: artifactId, enumerable: true },
@@ -1888,21 +1918,19 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     const batch = executedBatches[0];
     expect(batch).toHaveLength(3);
 
-    const [scopedListQuery, allIdsQuery, singleVerQuery] = batch;
+    const [listQuery, detailsQuery, singleVerQuery] = batch;
 
-    // (a) Scoped list query has conversation scope filter, simple result type, and lightweight fields without Content
-    expect(scopedListQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(scopedListQuery.ResultType).toBe('simple');
-    expect(scopedListQuery.ExtraFilter).toBe(
-      ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
-    );
-    expect(scopedListQuery.Fields).toBeDefined();
-    expect(scopedListQuery.Fields).not.toContain('Content');
+    // (a) Unscoped lightweight list query (never uses vwConversationDetails base-view subquery)
+    expect(listQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(listQuery.ResultType).toBe('simple');
+    expect(listQuery.ExtraFilter).toBe(`ArtifactID='${artifactId}'`);
+    expect(listQuery.Fields).toBeDefined();
+    expect(listQuery.Fields).not.toContain('Content');
 
-    // (b) ID query for maintaining artifactVersionIds
-    expect(allIdsQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(allIdsQuery.Fields).toEqual(['ID']);
-    expect(allIdsQuery.ResultType).toBe('simple');
+    // (b) First-class MJ: Conversation Details query for branch scoping
+    expect(detailsQuery.EntityName).toBe('MJ: Conversation Details');
+    expect(detailsQuery.Fields).toEqual(['ID']);
+    expect(detailsQuery.ExtraFilter).toBe(ConversationEngine.ScopeFilter(scope));
 
     // (c) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
     expect(singleVerQuery.EntityName).toBe('MJ: Artifact Versions');
@@ -1964,13 +1992,14 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     selectionStart = text.length,
     selectionEnd = selectionStart,
   ): HTMLElement {
-    return {
+    const mockEl: Partial<HTMLTextAreaElement> = {
       textContent: text,
       selectionStart,
       selectionEnd,
       focus: () => {},
       contains: () => false,
-    } as unknown as HTMLElement;
+    };
+    return mockEl as HTMLTextAreaElement as HTMLElement;
   }
 
   function makeKeyEvent(
@@ -1979,7 +2008,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     mods: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
   ): { event: KeyboardEvent; prevented: () => boolean } {
     let defaultPrevented = false;
-    const event = {
+    const mockEvent: Partial<KeyboardEvent> = {
       key,
       shiftKey: Boolean(mods.shiftKey),
       metaKey: Boolean(mods.metaKey),
@@ -1989,8 +2018,8 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       preventDefault: () => {
         defaultPrevented = true;
       },
-    } as unknown as KeyboardEvent;
-    return { event, prevented: () => defaultPrevented };
+    };
+    return { event: mockEvent as KeyboardEvent, prevented: () => defaultPrevented };
   }
 
   it('pressing Enter at the end of a heading commits the heading and creates a focused draft paragraph below', () => {
@@ -2046,7 +2075,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     const para0 = viewer.DocumentSegments[0];
     viewer.OnEditableBlockInput(para0, {
       target: makeMockEditableElement('## Key Milestones'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
     expect(viewer.DocumentSegments[0].HeadingLevel).toBe(2);
     expect(viewer.DocumentSegments[0].HeadingText).toBe('Key Milestones');
@@ -2056,7 +2085,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     expect(viewer.DocumentSegments).toHaveLength(2);
     viewer.OnEditableBlockInput(viewer.DocumentSegments[1], {
       target: makeMockEditableElement('- Ship fluid block flow'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[1].BlockKind).toBe('list');
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[1])).toEqual([
       {
@@ -2071,7 +2100,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.AppendOrFocusTrailingParagraph();
     viewer.OnEditableBlockInput(viewer.DocumentSegments[2], {
       target: makeMockEditableElement('[] Verify smoke tests'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[2].BlockKind).toBe('list');
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].IsTask).toBe(true);
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].Text).toBe('Verify smoke tests');
@@ -2080,7 +2109,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.AppendOrFocusTrailingParagraph();
     viewer.OnEditableBlockInput(viewer.DocumentSegments[3], {
       target: makeMockEditableElement('> Important rollout note'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[3].BlockKind).toBe('callout');
     expect(viewer.GetParsedCallout(viewer.DocumentSegments[3])).toEqual({
       CalloutType: 'NOTE',
@@ -2421,7 +2450,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
 
     docViewer.CommitEditableHeading(docViewer.DocumentSegments[0], {
       target: makeMockEditableElement('Heading Renamed'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(docViewer.DocumentSegments.length).toBe(3);
     expect(docViewer.DocumentSegments[0].RawMarkdown).toBe('## Heading Renamed');
     expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body paragraph');
@@ -2429,15 +2458,14 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
 
     docViewer.CommitEditableParagraph(docViewer.DocumentSegments[1], {
       target: makeMockEditableElement('Body edited'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(docViewer.DocumentSegments.length).toBe(3);
     expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body edited');
     expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
 
     // 3. Real DOM nodes (instanceof Node) must have stale selectionStart/selectionEnd expandos
     //    stripped on focus so window.getSelection() is never shadowed by a frozen 0 offset.
-    const globalWithNode = globalThis as unknown as { Node?: unknown };
-    const originalNode = globalWithNode.Node;
+    const originalNode: typeof Node | undefined = Reflect.get(globalThis, 'Node');
     class FakeDomNode {
       public textContent = 'Focused bullet';
       public selectionStart: number | undefined = 0;
@@ -2447,39 +2475,31 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
         this.focused = true;
       }
     }
-    const viewerInternal = listViewer as unknown as {
-      hostElement?: {
-        nativeElement?: {
-          querySelector: (selector: string) => HTMLElement | null;
-          querySelectorAll: (selector: string) => HTMLElement[];
-        };
-      };
-    };
-    const originalHostElement = viewerInternal.hostElement;
+    const originalHostElement: object | undefined = Reflect.get(listViewer, 'hostElement');
     try {
-      globalWithNode.Node = FakeDomNode;
+      Reflect.set(globalThis, 'Node', FakeDomNode);
       const domNode = new FakeDomNode();
       const targetSegId = listViewer.DocumentSegments[0].SegmentID;
-      viewerInternal.hostElement = {
+      Reflect.set(listViewer, 'hostElement', {
         nativeElement: {
           querySelector: (selector: string): HTMLElement | null =>
             selector === `[data-testid="list-item-text-${targetSegId}-0"]`
-              ? (domNode as unknown as HTMLElement)
+              ? (domNode as Partial<HTMLElement> as HTMLElement)
               : null,
           querySelectorAll: (): HTMLElement[] => [],
         },
-      };
+      });
       listViewer.FocusEditableSegment(targetSegId, 'start', 0);
       expect(domNode.focused).toBe(true);
       expect('selectionStart' in domNode).toBe(false);
       expect('selectionEnd' in domNode).toBe(false);
     } finally {
-      globalWithNode.Node = originalNode;
-      viewerInternal.hostElement = originalHostElement;
+      Reflect.set(globalThis, 'Node', originalNode);
+      Reflect.set(listViewer, 'hostElement', originalHostElement);
     }
   });
 
-  it('supports progressive disclosure toolbar pins, 6-pin cap, formatting ribbon pin, and UserInfoEngine persistence', async () => {
+  it('supports calm Option A progressive disclosure toolbar pins, 4-pin cap, formatting ribbon pin, Cmd+K palette, and UserInfoEngine persistence', async () => {
     const store = new Map<string, string>();
     const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
     const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
@@ -2490,7 +2510,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     const viewer = createEditableDocsViewer('# Progressive Toolbar\n\nBody paragraph.');
     try {
       expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
-      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'insert-block', 'outline']);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format']);
       expect(viewer.PinnedRightToolbarItems.map((i) => i.Key)).toEqual(['comments']);
       expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(false);
       expect(viewer.HasCustomToolbarSettings).toBe(false);
@@ -2498,12 +2518,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       // Pin + Section and confirm persistence to UserInfoEngine
       viewer.ToggleToolbarItemPin('add-section');
       expect(viewer.PinnedToolbarKeys).toContain('add-section');
-      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual([
-        'format',
-        'insert-block',
-        'add-section',
-        'outline',
-      ]);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'add-section']);
       expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(true);
       expect(viewer.HasCustomToolbarSettings).toBe(true);
       expect(setSpy).toHaveBeenCalledWith(
@@ -2511,14 +2526,21 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
         expect.stringContaining('"add-section"'),
       );
 
-      // Hit the 6-pin cap: pin 'suggest-mode' (6th pin), then try a 7th ('blocks-mode')
+      // Hit the 4-pin cap: pin 'suggest-mode' (4th pin), then try a 5th ('blocks-mode')
       viewer.ToggleToolbarItemPin('suggest-mode');
-      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.PinnedToolbarItemsCount).toBe(4);
       expect(viewer.CanPinMoreToolbarItems).toBe(false);
       expect(viewer.IsToolbarItemPinnedOverCap('blocks-mode')).toBe(true);
       viewer.ToggleToolbarItemPin('blocks-mode');
-      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.PinnedToolbarItemsCount).toBe(4);
       expect(viewer.IsToolbarItemPinned('blocks-mode')).toBe(false);
+
+      // Cmd+K palette exposes mode switches and overflow commands
+      viewer.OpenCommandPalette();
+      expect(viewer.ShowCommandPalette).toBe(true);
+      expect(viewer.DocsCommandPaletteItems.some((c) => c.Id === 'mode:preview')).toBe(true);
+      viewer.ExecuteDocsPaletteCommand('mode:preview');
+      expect(viewer.ViewMode).toBe('preview');
 
       // Visibility preferences: pin formatting ribbon, toggle Block Studio, toggle Outline Rail
       viewer.ToggleFormattingRibbonPinned();
@@ -2539,7 +2561,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       restoredViewer.markdownContent = '# Restored Doc\n\nHello.';
       restoredViewer.ngOnInit();
       expect(restoredViewer.PinnedToolbarKeys).toContain('add-section');
-      expect(restoredViewer.PinnedToolbarItemsCount).toBe(6);
+      expect(restoredViewer.PinnedToolbarItemsCount).toBe(4);
       expect(restoredViewer.FormattingRibbonPinned).toBe(true);
       expect(restoredViewer.ShowFormattingRibbon).toBe(true);
       expect(restoredViewer.EditingStyle).toBe('blocks');
