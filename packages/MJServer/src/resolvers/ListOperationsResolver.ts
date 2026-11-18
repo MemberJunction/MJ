@@ -4,8 +4,10 @@ import type {
   ApplyResult as CoreApplyResult,
   ListDelta as CoreListDelta,
   ListDeltaWarning as CoreListDeltaWarning,
+  ListRefreshPreview as CoreListRefreshPreview,
   ListShareSummary,
   ListSource as CoreListSource,
+  ListSourceChange as CoreListSourceChange,
   MaterializeOptions as CoreMaterializeOptions,
   SetOpKind,
   SharePermissionLevel,
@@ -94,6 +96,30 @@ export class ListDeltaType {
   @Field(() => String) DeltaToken!: string;
 }
 
+@ObjectType('ListSourceChangeType', {
+  description: 'The source query or view of a list changed after the list was linked to it, or after its owner last approved it.',
+})
+export class ListSourceChangeType {
+  @Field(() => String, { description: 'view | query' }) SourceKind!: 'view' | 'query';
+  @Field(() => String) SourceID!: string;
+  @Field(() => String) SourceName!: string;
+  @Field(() => Date, { nullable: true, description: 'When the source was last saved, if known.' }) ChangedAt?: Date | null;
+  @Field(() => String) LinkedFingerprint!: string;
+  @Field(() => String) CurrentFingerprint!: string;
+}
+
+@ObjectType('ListRefreshPreviewType', {
+  description: 'What refreshing a list from its source would change. Apply its Delta with ApplyListRefresh.',
+})
+export class ListRefreshPreviewType {
+  @Field(() => Boolean) Success!: boolean;
+  @Field(() => String) ResultCode!: string;
+  @Field(() => String) Message!: string;
+  @Field(() => ListDeltaType, { nullable: true }) Delta?: ListDeltaType;
+  @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
+  SourceChange?: ListSourceChangeType;
+}
+
 @ObjectType('ApplyListResultType')
 export class ApplyListResultType {
   @Field(() => Boolean) Success!: boolean;
@@ -105,6 +131,8 @@ export class ApplyListResultType {
   @Field(() => Int, { nullable: true }) RemovedCount?: number;
   @Field(() => Int, { nullable: true }) FailedCount?: number;
   @Field(() => [String], { nullable: true }) Errors?: string[];
+  @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
+  SourceChange?: ListSourceChangeType;
 }
 
 @InputType('ComputeDeltaInput')
@@ -304,7 +332,42 @@ export function FromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
     RemovedCount: r.Counts?.Removed,
     FailedCount: r.Counts?.Failed,
     Errors: r.Errors,
+    SourceChange: r.SourceChange ? FromCoreSourceChange(r.SourceChange) : undefined,
   };
+}
+
+export function FromCoreRefreshPreview(p: CoreListRefreshPreview): ListRefreshPreviewType {
+  return {
+    Success: p.Success,
+    ResultCode: p.ResultCode,
+    Message: p.Message,
+    Delta: p.Delta ? FromCoreDelta(p.Delta) : undefined,
+    SourceChange: p.SourceChange ? FromCoreSourceChange(p.SourceChange) : undefined,
+  };
+}
+
+export function FromCoreSourceChange(c: CoreListSourceChange): ListSourceChangeType {
+  return {
+    SourceKind: c.SourceKind,
+    SourceID: c.SourceID,
+    SourceName: c.SourceName,
+    ChangedAt: c.ChangedAt,
+    LinkedFingerprint: c.LinkedFingerprint,
+    CurrentFingerprint: c.CurrentFingerprint,
+  };
+}
+
+/**
+ * Parses the optional JSON object of source query parameter values sent to ApproveListSource.
+ * Returns undefined for a missing or blank value; throws on anything but a JSON object.
+ */
+export function ParseSourceParameters(json: string | null | undefined): Record<string, unknown> | undefined {
+  if (!json?.trim()) return undefined;
+  const parsed: unknown = JSON.parse(json);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('ParametersJSON must be a JSON object of query parameter values');
+  }
+  return parsed as Record<string, unknown>;
 }
 
 /** @deprecated Use {@link FromCoreApplyResult}. */
@@ -483,10 +546,14 @@ export class ListOperationsResolver extends ResolverBase {
     }
   }
 
-  @Mutation(() => ApplyListResultType)
+  @Mutation(() => ApplyListResultType, {
+    description:
+      "Refresh a list from its linked source. With no mode, the list's own RefreshMode applies. " +
+      'Returns SOURCE_CHANGED, applying nothing, when the source changed since it was approved.',
+  })
   async RefreshListFromSource(
     @Arg('listId', () => String) listId: string,
-    @Arg('mode', () => String) mode: 'Additive' | 'Sync',
+    @Arg('mode', () => String, { nullable: true }) mode: 'Additive' | 'Sync' | null | undefined,
     @Arg('confirmDrops', () => Boolean) confirmDrops: boolean,
     @Ctx() ctx: AppContext,
   ): Promise<ApplyListResultType> {
@@ -496,6 +563,74 @@ export class ListOperationsResolver extends ResolverBase {
       return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'RefreshListFromSource');
+    }
+  }
+
+  @Query(() => ListRefreshPreviewType, {
+    description:
+      'Preview refreshing a list from its linked source (view or query). Never mutates. With acceptCurrentSource ' +
+      "(owner only), previews a changed source's current definition, optionally with new query parameter values.",
+  })
+  async PreviewListRefresh(
+    @Arg('listId', () => String) listId: string,
+    @Arg('mode', () => String, { nullable: true }) mode: 'Additive' | 'Sync' | null | undefined,
+    @Arg('acceptCurrentSource', () => Boolean, { nullable: true }) acceptCurrentSource: boolean | null | undefined,
+    @Arg('parametersJSON', () => String, { nullable: true }) parametersJSON: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ListRefreshPreviewType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const preview = await ops.PreviewRefreshFromSource(listId, {
+        Mode: mode,
+        AcceptCurrentSource: acceptCurrentSource ?? false,
+        Parameters: ParseSourceParameters(parametersJSON),
+      });
+      return FromCoreRefreshPreview(preview);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'PreviewListRefresh');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      'Apply a delta from PreviewListRefresh. Re-checks the source first, stamps the list and writes a refresh audit row.',
+  })
+  async ApplyListRefresh(
+    @Arg('input', () => ApplyDeltaInput) input: ApplyDeltaInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.ApplyRefreshPreview(RebuildDeltaFromInput(input), {
+        ConfirmDrops: input.ConfirmDrops,
+        DeltaToken: input.DeltaToken,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'ApplyListRefresh');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      "The list owner approves its source's current definition (and, for a query, optionally new parameter " +
+      'values), resumes a paused refresh routine, and refreshes the list right away.',
+  })
+  async ApproveListSource(
+    @Arg('listId', () => String) listId: string,
+    @Arg('confirmDrops', () => Boolean) confirmDrops: boolean,
+    @Arg('parametersJSON', () => String, { nullable: true }) parametersJSON: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.ApproveListSource(listId, {
+        ConfirmDrops: confirmDrops,
+        Parameters: ParseSourceParameters(parametersJSON),
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'ApproveListSource');
     }
   }
 

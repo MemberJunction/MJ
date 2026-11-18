@@ -314,6 +314,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     // The detector received the observed counts.
     expect(drift.lastContext?.lastScoredRowCount).toBe(1234);
     expect(drift.lastContext?.modelId).toBe('m1');
+    expect(drift.lastContext?.recordProcessId).toBe('rp-1');
   });
 
   it('does NOT consult the drift detector when driftEnabled is false', async () => {

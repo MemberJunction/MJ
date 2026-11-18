@@ -86,10 +86,14 @@ vi.mock('../auth/AuthProviderFactory', () => ({
   AuthProviderFactory: { getInstance: vi.fn(() => ({ getByIssuer: vi.fn() })) },
 }));
 
-vi.mock('../cache', () => ({
-  AuthCache: new Map(),
+vi.mock('../cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../cache.js')>();
+  return {
+    AuthCache: new Map(),
     get authCache() { return this.AuthCache; },
-}));
+    HashAuthToken: actual.HashAuthToken,
+  };
+});
 
 vi.mock('@memberjunction/core', () => ({
   DatabaseProviderBase: class {},
@@ -106,7 +110,7 @@ vi.mock('@memberjunction/core', () => ({
 // Inline the actual implementation here so the env-var-handling tests below
 // exercise the genuine behavior (they're testing this function).
 vi.mock('@memberjunction/generic-database-provider', () => ({
-  UserCache: { Instance: { Users: [], GetSystemUser: vi.fn() } },
+  UserCache: { Instance: { Users: [], UserByID: vi.fn(), GetSystemUser: vi.fn() } },
   resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
     const raw = process.env[envVarName];
     if (raw === undefined) return undefined;

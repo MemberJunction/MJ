@@ -568,6 +568,32 @@ BEGIN
 END
 ```
 
+### Foreign Key Indexes
+
+With FK auto-indexing on (the default), CodeGen emits one create-if-absent index per foreign key column, named `IDX_AUTO_MJ_FKEY_{Table}_{Column}` (PostgreSQL: `idx_auto_mj_fkey_<table>_<column>`), and one `IDX_AUTO_MJ_SOFTPK_*` index on a soft primary key. The guard is written into the SQL, so a capture replayed on another database decides against that database's indexes: the statement is skipped when the generated name already exists **or** when another enabled, unfiltered (non-partial) index on the table already has the column(s) as its leading key columns, in order. Included columns do not count.
+
+Existing duplicates created before this guard are left in place; dropping one is the operator's choice. This query lists every SQL Server table where an `IDX_AUTO_MJ_FKEY_*` index has the same key columns as another index:
+
+```sql
+WITH keys AS (
+  SELECT i.object_id, i.index_id, i.name AS idx, SCHEMA_NAME(o.schema_id) AS sch, o.name AS tbl,
+         (SELECT STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal)
+            FROM sys.index_columns ic
+            JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+           WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+             AND ic.is_included_column = 0) AS keylist
+  FROM sys.indexes i
+  JOIN sys.objects o ON o.object_id = i.object_id AND o.type = 'U'
+  WHERE i.type_desc = 'NONCLUSTERED' AND i.has_filter = 0
+)
+SELECT sch, tbl, keylist, COUNT(*) AS n, STRING_AGG(idx, ' | ') AS indexes
+FROM keys
+GROUP BY sch, tbl, keylist
+HAVING COUNT(*) > 1
+   AND SUM(CASE WHEN idx LIKE 'IDX[_]AUTO[_]MJ[_]FKEY[_]%' THEN 1 ELSE 0 END) >= 1
+ORDER BY sch, tbl;
+```
+
 ## AI-Powered Advanced Generation
 
 When `advancedGeneration.enableAdvancedGeneration` is enabled, CodeGen uses AI prompts (stored in the database as AI Prompt entities) to enhance the generation process:
@@ -614,7 +640,9 @@ flowchart TD
 - **Stability** — an entity that already has exactly one valid `IsNameField` keeps it; AI proposals never move an established winner.
 - **Repair** — when multiple fields are flagged (historical accumulation), the field literally named `Name` wins, else the first eligible flagged field in sequence order. All other auto-updatable flags are cleared.
 - **Fresh pick** — when nothing valid is flagged, the first *eligible* AI candidate wins.
-- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen; `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime if a pinned conflict exists.
+- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen, and a pinned flagged field always wins, even one that is not eligible (a virtual name field). Any auto-flagged second field beside a pin is cleared on the next analysis pass. With several pinned, the literal `Name` wins, else the first in sequence order; the integrity check warns about any entity with more than one `IsNameField = 1`.
+
+**Pin a name field that is not called `Name`.** When an entity has no `Name` column, the fresh pick above comes from the AI's ranked candidates, so two databases with the same schema can end with different name fields (or none), and with them different related-entity name columns in every view that joins to the entity. Set the flag and pin it in the entity's metadata (or with SQL against `EntityField`): `IsNameField = 1, AutoUpdateIsNameField = 0` on the intended field. A pinned field always wins, so later runs keep it.
 
 Why this matters: with multiple flags, the FK-name pick silently drifted between CodeGen runs as flags accumulated (observed: a related entity's name column flipping from one field to another, reshaping every view that joins to it).
 
@@ -1500,11 +1528,19 @@ mj codegen
 
 # Skip database operations, only regenerate code files from existing metadata
 mj codegen --skipdb
+
+# Re-emit every schema's generated files after rebuilding a database from migrations
+mj codegen --all-schemas
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--skipdb` | Skip all database operations (metadata sync, SQL object generation). Only regenerates TypeScript entities, Angular components, and GraphQL resolvers from existing metadata. |
+| `--all-schemas` | Re-emit the generated files of every schema, not only schemas with a new or modified entity. Files are still written only when their content changes. Same as `fileEmit.dirtySchemaOnly: false`, for one run. |
+
+#### Rebuilding generated files from a fresh database
+
+A database run re-emits only the schemas that contain a new or modified entity, plus any schema whose generated file is missing. A database rebuilt from migrations has no new or modified entities, so files that exist but are stale (for example after switching branches) are left as they are. Run `mj codegen --all-schemas` once after the rebuild to refresh every schema; unchanged files keep their content and timestamps.
 
 #### Verbose Mode
 

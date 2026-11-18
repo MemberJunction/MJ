@@ -387,20 +387,18 @@ describe('InstagramSchedulePostAction', () => {
     expect(result.Message).toBe('Posts cannot be scheduled more than 75 days in the future');
   });
 
-  it('should store scheduling data locally without calling the Instagram API', async () => {
+  it('refuses with NOT_SUPPORTED instead of reporting a schedule it never stored (#3790)', async () => {
     const valid = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', ScheduledTime: valid, MediaUrls: ['https://img/1.jpg'], Content: 'Later' }),
     );
 
-    expect(result.Success).toBe(true);
-    expect(result.ResultCode).toBe('SUCCESS');
-    expect(result.Message).toBe('Instagram post scheduled successfully');
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('NOT_SUPPORTED');
+    expect(result.Message).toContain('Instagram has no scheduling API');
     expect(http.instance.Request).not.toHaveBeenCalled();
-    const data = JSON.parse(String(outParam(result, 'ResultData'))) as { schedulingId: string; mediaCount: number };
-    expect(data.schedulingId).toBeTruthy();
-    expect(data.mediaCount).toBe(1);
+    expect(outParam(result, 'ResultData')).toBeUndefined();
   });
 });
 

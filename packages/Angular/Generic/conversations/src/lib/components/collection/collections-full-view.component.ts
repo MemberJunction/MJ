@@ -1,7 +1,13 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
+import {
+  MJCollectionEntity,
+  MJArtifactEntity,
+  MJArtifactVersionEntity,
+  MJCollectionArtifactEntity,
+  UserInfoEngine,
+} from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -26,20 +32,20 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
         <div class="collections-breadcrumb">
           <button class="btn-icon nav-toggle" (click)="toggleNavigator()"
             [class.active]="showNavigator" title="Toggle collections panel">
-            <i class="fas fa-bars"></i>
+            <i class="fa-solid fa-bars"></i>
           </button>
           <div class="breadcrumb-item"
             [class.drag-over]="dragOverTargetId === 'root'"
             (dragover)="onCrumbDragOver(null, $event)"
             (dragleave)="onDragLeave('root')"
             (drop)="onCrumbDrop(null, $event)">
-            <i class="fas fa-home"></i>
+            <i class="fa-solid fa-home"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
           @if (breadcrumbs.length > 0) {
             <span class="breadcrumb-path">
               @for (crumb of breadcrumbs; track crumb; let last = $last) {
-                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
                 <a class="breadcrumb-link"
                   [class.active]="last"
                   [class.drag-over]="dragOverTargetId === 'crumb:' + crumb.id"
@@ -60,7 +66,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
           <button class="btn-icon"
             (click)="toggleViewMode()"
             [title]="viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'">
-            <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-list' : 'fa-th'"></i>
+            <i class="fa-solid" [ngClass]="viewMode === 'grid' ? 'fa-list' : 'fa-th'"></i>
           </button>
     
           <!-- Select mode toggle -->
@@ -68,7 +74,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
             [class.active]="isSelectMode"
             (click)="toggleSelectMode()"
             [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
-            <i class="fas fa-check-square"></i>
+            <i class="fa-solid fa-check-square"></i>
           </button>
     
           <!-- Sort dropdown (grid view only) -->
@@ -77,26 +83,26 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
               <button class="btn-icon"
                 (click)="showSortDropdown = !showSortDropdown"
                 title="Sort options">
-                <i class="fas fa-sort"></i>
+                <i class="fa-solid fa-sort"></i>
               </button>
               @if (showSortDropdown) {
                 <div class="dropdown-menu">
                   <button class="dropdown-item"
                     [class.active]="sortBy === 'name'"
                     (click)="setSortBy('name')">
-                    <i class="fas fa-sort-alpha-down"></i>
+                    <i class="fa-solid fa-sort-alpha-down"></i>
                     <span>Sort by Name</span>
                   </button>
                   <button class="dropdown-item"
                     [class.active]="sortBy === 'date'"
                     (click)="setSortBy('date')">
-                    <i class="fas fa-calendar"></i>
+                    <i class="fa-solid fa-calendar"></i>
                     <span>Sort by Date</span>
                   </button>
                   <button class="dropdown-item"
                     [class.active]="sortBy === 'type'"
                     (click)="setSortBy('type')">
-                    <i class="fas fa-tag"></i>
+                    <i class="fa-solid fa-tag"></i>
                     <span>Sort by Type</span>
                   </button>
                 </div>
@@ -106,7 +112,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
     
           <!-- Search -->
           <div class="search-container">
-            <i class="fas fa-search"></i>
+            <i class="fa-solid fa-search"></i>
             <input type="text"
               class="search-input"
               placeholder="Search..."
@@ -116,7 +122,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
               <button class="search-clear"
                 (click)="searchQuery = ''; onSearchChange('')"
                 title="Clear search">
-                <i class="fas fa-times"></i>
+                <i class="fa-solid fa-times"></i>
               </button>
             }
           </div>
@@ -129,21 +135,21 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                 <button class="btn-icon"
                   (click)="shareCurrentCollection()"
                   [title]="'Share: ' + currentCollection.Name">
-                  <i class="fas fa-share-nodes"></i>
+                  <i class="fa-solid fa-share-nodes"></i>
                 </button>
               }
               @if (canEditCurrent()) {
                 <button class="btn-icon"
                   (click)="editCurrentCollection()"
                   [title]="'Edit: ' + currentCollection.Name">
-                  <i class="fas fa-pen-to-square"></i>
+                  <i class="fa-solid fa-pen-to-square"></i>
                 </button>
               }
               @if (canDeleteCurrent()) {
                 <button class="btn-icon btn-icon-danger"
                   (click)="deleteCurrentCollection()"
                   [title]="'Delete: ' + currentCollection.Name">
-                  <i class="fas fa-trash"></i>
+                  <i class="fa-solid fa-trash"></i>
                 </button>
               }
             </div>
@@ -154,20 +160,20 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
             <div class="dropdown-container">
               <button class="btn-primary"
                 (click)="showNewDropdown = !showNewDropdown">
-                <i class="fas fa-plus"></i>
+                <i class="fa-solid fa-plus"></i>
                 <span>New</span>
-                <i class="fas fa-chevron-down"></i>
+                <i class="fa-solid fa-chevron-down"></i>
               </button>
               @if (showNewDropdown) {
                 <div class="dropdown-menu dropdown-menu-right">
                   <button class="dropdown-item" (click)="createCollection()">
-                    <i class="fas fa-folder-plus"></i>
+                    <i class="fa-solid fa-folder-plus"></i>
                     <span>New Collection</span>
                   </button>
                   <button class="dropdown-item"
                     (click)="addArtifact()"
                     [disabled]="!currentCollectionId">
-                    <i class="fas fa-file-plus"></i>
+                    <i class="fa-solid fa-file-plus"></i>
                     <span>New Artifact</span>
                   </button>
                 </div>
@@ -177,7 +183,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
     
           <!-- Refresh button -->
           <button class="btn-icon" (click)="refresh()" title="Refresh">
-            <i class="fas fa-sync"></i>
+            <i class="fa-solid fa-sync"></i>
           </button>
         </div>
       </div>
@@ -191,7 +197,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
           <div class="selection-actions">
             <div class="dropdown-container">
               <button class="btn-toolbar" (click)="openBulkMove($event)">
-                <i class="fas fa-folder-tree"></i>
+                <i class="fa-solid fa-folder-tree"></i>
                 Move to…
               </button>
               @if (showBulkMovePopover) {
@@ -203,7 +209,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                     @for (node of navigatorNodes; track node.collection.ID) {
                       <button class="dropdown-item" [style.paddingLeft.px]="12 + node.depth * 12"
                         (click)="bulkMoveTo(node.collection)">
-                        <i class="fas fa-folder" [style.color]="node.collection.Color || null"></i>
+                        <i class="fa-solid fa-folder" [style.color]="node.collection.Color || null"></i>
                         <span>{{ node.collection.Name }}</span>
                       </button>
                     }
@@ -212,15 +218,15 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
               }
             </div>
             <button class="btn-toolbar" (click)="stageSelected()" title="Add to the staging shelf to move later">
-              <i class="fas fa-layer-group"></i>
+              <i class="fa-solid fa-layer-group"></i>
               Stage
             </button>
             <button class="btn-toolbar" (click)="clearSelection()">
-              <i class="fas fa-times"></i>
+              <i class="fa-solid fa-times"></i>
               Clear
             </button>
             <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
-              <i class="fas fa-trash"></i>
+              <i class="fa-solid fa-trash"></i>
               Delete
             </button>
           </div>
@@ -240,7 +246,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                 (dragover)="onCrumbDragOver(null, $event)"
                 (dragleave)="onDragLeave('root')"
                 (drop)="onCrumbDrop(null, $event)">
-                <i class="fas fa-home"></i>
+                <i class="fa-solid fa-home"></i>
                 <span>All Collections</span>
               </button>
               @for (node of navigatorNodes; track node.collection.ID) {
@@ -253,7 +259,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                   (dragleave)="onDragLeave('nav:' + node.collection.ID)"
                   (drop)="onNavigatorDrop(node.collection, $event)"
                   [title]="node.collection.Name">
-                  <i class="fas fa-folder" [style.color]="node.collection.Color || null"></i>
+                  <i class="fa-solid fa-folder" [style.color]="node.collection.Color || null"></i>
                   <span class="nav-row-name">{{ node.collection.Name }}</span>
                 </button>
               }
@@ -310,7 +316,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                 <!-- Selection checkbox (hover-reveal — no explicit select mode needed) -->
                 <div class="item-checkbox"
                   (click)="onCheckboxClick(item, $event)">
-                  <i class="fas"
+                  <i class="fa-solid"
                   [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
                 </div>
                 <!-- Folder item -->
@@ -319,10 +325,10 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                     class="grid-item-content"
                     [title]="item.description || item.name">
                     <div class="grid-icon folder-icon">
-                      <i class="fas fa-folder"></i>
+                      <i class="fa-solid fa-folder"></i>
                       @if (item.isShared) {
                         <div class="shared-badge" title="Shared">
-                          <i class="fas fa-users"></i>
+                          <i class="fa-solid fa-users"></i>
                         </div>
                       }
                     </div>
@@ -340,7 +346,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                       }
                       @if (item.isShared && item.owner) {
                         <div class="grid-owner">
-                          <i class="fas fa-user"></i>
+                          <i class="fa-solid fa-user"></i>
                           {{ item.owner }}
                         </div>
                       }
@@ -353,7 +359,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                     class="grid-item-content"
                     [title]="item.description || item.name">
                     <div class="grid-icon artifact-icon">
-                      <i class="fas" [ngClass]="item.icon"></i>
+                      <i class="fa-solid" [ngClass]="item.icon"></i>
                     </div>
                     <div class="grid-info">
                       <div class="grid-name">{{ item.name }}</div>
@@ -393,13 +399,13 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                   [disabled]="CurrentPage === 1"
                   (click)="GoToPage(1)"
                   title="First page">
-                  <i class="fas fa-angles-left"></i>
+                  <i class="fa-solid fa-angles-left"></i>
                 </button>
                 <button class="pagination-btn"
                   [disabled]="CurrentPage === 1"
                   (click)="GoToPage(CurrentPage - 1)"
                   title="Previous page">
-                  <i class="fas fa-chevron-left"></i>
+                  <i class="fa-solid fa-chevron-left"></i>
                 </button>
                 <span class="pagination-page-info">
                   Page {{ CurrentPage }} of {{ TotalPages }}
@@ -408,13 +414,13 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                   [disabled]="CurrentPage === TotalPages"
                   (click)="GoToPage(CurrentPage + 1)"
                   title="Next page">
-                  <i class="fas fa-chevron-right"></i>
+                  <i class="fa-solid fa-chevron-right"></i>
                 </button>
                 <button class="pagination-btn"
                   [disabled]="CurrentPage === TotalPages"
                   (click)="GoToPage(TotalPages)"
                   title="Last page">
-                  <i class="fas fa-angles-right"></i>
+                  <i class="fa-solid fa-angles-right"></i>
                 </button>
               </div>
             </div>
@@ -430,37 +436,37 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
               <thead>
                 <tr>
                   <th class="col-checkbox">
-                    <i class="fas"
+                    <i class="fa-solid"
                       [ngClass]="selectedItems.size === unifiedItems.length && unifiedItems.length > 0 ? 'fa-check-square' : 'fa-square'"
                     (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
                   </th>
                   <th class="col-name sortable" (click)="setSortBy('name')">
                     <span>Name</span>
                     @if (sortBy !== 'name') {
-                      <i class="fas fa-sort"></i>
+                      <i class="fa-solid fa-sort"></i>
                     }
                     @if (sortBy === 'name') {
-                      <i class="fas"
+                      <i class="fa-solid"
                       [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
                     }
                   </th>
                   <th class="col-type sortable" (click)="setSortBy('type')">
                     <span>Type</span>
                     @if (sortBy !== 'type') {
-                      <i class="fas fa-sort"></i>
+                      <i class="fa-solid fa-sort"></i>
                     }
                     @if (sortBy === 'type') {
-                      <i class="fas"
+                      <i class="fa-solid"
                       [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
                     }
                   </th>
                   <th class="col-modified sortable" (click)="setSortBy('date')">
                     <span>Modified</span>
                     @if (sortBy !== 'date') {
-                      <i class="fas fa-sort"></i>
+                      <i class="fa-solid fa-sort"></i>
                     }
                     @if (sortBy === 'date') {
-                      <i class="fas"
+                      <i class="fa-solid"
                       [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
                     }
                   </th>
@@ -485,18 +491,18 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
                     <td class="col-checkbox">
-                      <i class="fas"
+                      <i class="fa-solid"
                         [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
                       (click)="onCheckboxClick(item, $event)"></i>
                     </td>
                     <td class="col-name">
                       <div class="list-name-cell">
-                        <i class="fas"
+                        <i class="fa-solid"
                         [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
                         <span>{{ item.name }}</span>
                         @if (item.isShared) {
                           <span class="shared-indicator" title="Shared">
-                            <i class="fas fa-users"></i>
+                            <i class="fa-solid fa-users"></i>
                             Shared
                           </span>
                         }
@@ -542,13 +548,13 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                   [disabled]="CurrentPage === 1"
                   (click)="GoToPage(1)"
                   title="First page">
-                  <i class="fas fa-angles-left"></i>
+                  <i class="fa-solid fa-angles-left"></i>
                 </button>
                 <button class="pagination-btn"
                   [disabled]="CurrentPage === 1"
                   (click)="GoToPage(CurrentPage - 1)"
                   title="Previous page">
-                  <i class="fas fa-chevron-left"></i>
+                  <i class="fa-solid fa-chevron-left"></i>
                 </button>
                 <span class="pagination-page-info">
                   Page {{ CurrentPage }} of {{ TotalPages }}
@@ -557,13 +563,13 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                   [disabled]="CurrentPage === TotalPages"
                   (click)="GoToPage(CurrentPage + 1)"
                   title="Next page">
-                  <i class="fas fa-chevron-right"></i>
+                  <i class="fa-solid fa-chevron-right"></i>
                 </button>
                 <button class="pagination-btn"
                   [disabled]="CurrentPage === TotalPages"
                   (click)="GoToPage(TotalPages)"
                   title="Last page">
-                  <i class="fas fa-angles-right"></i>
+                  <i class="fa-solid fa-angles-right"></i>
                 </button>
               </div>
             </div>
@@ -576,16 +582,16 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
       @if (shelf.length > 0) {
         <div class="staging-shelf">
           <div class="shelf-info">
-            <i class="fas fa-layer-group"></i>
+            <i class="fa-solid fa-layer-group"></i>
             <span>{{ shelf.length }} staged</span>
           </div>
           <div class="shelf-chips">
             @for (entry of shelf; track entry.item.id) {
               <span class="shelf-chip" [title]="entry.item.name">
-                <i class="fas" [ngClass]="entry.item.type === 'folder' ? 'fa-folder' : entry.item.icon"></i>
+                <i class="fa-solid" [ngClass]="entry.item.type === 'folder' ? 'fa-folder' : entry.item.icon"></i>
                 <span class="shelf-chip-name">{{ entry.item.name }}</span>
                 <button class="shelf-chip-x" (click)="removeFromShelf(entry.item.id)" title="Remove">
-                  <i class="fas fa-times"></i>
+                  <i class="fa-solid fa-times"></i>
                 </button>
               </span>
             }
@@ -595,7 +601,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
               (click)="dropShelfHere()"
               [disabled]="!currentCollectionId"
               [title]="currentCollectionId ? 'Move staged items into this collection' : 'Open a collection to move items here'">
-              <i class="fas fa-arrow-down"></i>
+              <i class="fa-solid fa-arrow-down"></i>
               Move here
             </button>
             <button class="btn-toolbar" (click)="clearShelf()">Clear</button>
@@ -612,26 +618,26 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
         [style.top.px]="contextMenuPosition.y">
         @if (contextMenuItem.type === 'folder' && contextMenuItem.collection) {
           <button class="context-menu-item" (click)="onContextMenuAction('open')">
-            <i class="fas fa-folder-open"></i>
+            <i class="fa-solid fa-folder-open"></i>
             <span>Open</span>
           </button>
           <div class="context-menu-divider"></div>
           @if (canShare(contextMenuItem.collection)) {
             <button class="context-menu-item" (click)="onContextMenuAction('share')">
-              <i class="fas fa-share-nodes"></i>
+              <i class="fa-solid fa-share-nodes"></i>
               <span>Share</span>
             </button>
           }
           @if (canEdit(contextMenuItem.collection)) {
             <button class="context-menu-item" (click)="onContextMenuAction('edit')">
-              <i class="fas fa-pen-to-square"></i>
+              <i class="fa-solid fa-pen-to-square"></i>
               <span>Edit</span>
             </button>
           }
           @if (canDelete(contextMenuItem.collection)) {
             <div class="context-menu-divider"></div>
             <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('delete')">
-              <i class="fas fa-trash"></i>
+              <i class="fa-solid fa-trash"></i>
               <span>Delete</span>
             </button>
           }
@@ -639,12 +645,12 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
         @if (contextMenuItem.type === 'artifact') {
           @if (showMoveSubmenu) {
             <button class="context-menu-item" (click)="closeMoveSubmenu($event)">
-              <i class="fas fa-chevron-left"></i>
+              <i class="fa-solid fa-chevron-left"></i>
               <span>Move to Collection</span>
             </button>
             <div class="context-menu-divider"></div>
             @if (isLoadingMoveTargets) {
-              <div class="context-menu-note"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
+              <div class="context-menu-note"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
             } @else if (moveTargets.length === 0) {
               <div class="context-menu-note">No other collections</div>
             } @else {
@@ -652,7 +658,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                 @for (t of moveTargets; track t.collection.ID) {
                   <button class="context-menu-item" [style.paddingLeft.px]="14 + t.depth * 12"
                           (click)="moveArtifactToCollection(t.collection)">
-                    <i class="fas fa-folder" [style.color]="t.collection.Color || null"></i>
+                    <i class="fa-solid fa-folder" [style.color]="t.collection.Color || null"></i>
                     <span>{{ t.collection.Name }}</span>
                   </button>
                 }
@@ -660,22 +666,22 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
             }
           } @else {
             <button class="context-menu-item" (click)="onContextMenuAction('view')">
-              <i class="fas fa-eye"></i>
+              <i class="fa-solid fa-eye"></i>
               <span>View</span>
             </button>
             <button class="context-menu-item" (click)="onContextMenuAction('openConversation')">
-              <i class="fas fa-comments"></i>
+              <i class="fa-solid fa-comments"></i>
               <span>Open source conversation</span>
             </button>
             @if (canEditCurrent()) {
               <button class="context-menu-item" (click)="openMoveSubmenu($event)">
-                <i class="fas fa-folder-tree"></i>
+                <i class="fa-solid fa-folder-tree"></i>
                 <span>Move to Collection</span>
-                <i class="fas fa-chevron-right submenu-arrow"></i>
+                <i class="fa-solid fa-chevron-right submenu-arrow"></i>
               </button>
               <div class="context-menu-divider"></div>
               <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
-                <i class="fas fa-times-circle"></i>
+                <i class="fa-solid fa-times-circle"></i>
                 <span>Remove from Collection</span>
               </button>
             }
@@ -2288,18 +2294,18 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
 
     try {
-      // Load saved view preferences from localStorage
-      const savedMode = localStorage.getItem('collections-view-mode');
+      // Load saved view preferences from server-backed UserInfoEngine
+      const savedMode = UserInfoEngine.Instance.GetSetting('collections-view-mode');
       if (savedMode === 'grid' || savedMode === 'list') {
         this.ViewMode = savedMode;
       }
 
-      const savedSortBy = localStorage.getItem('collections-sort-by');
+      const savedSortBy = UserInfoEngine.Instance.GetSetting('collections-sort-by');
       if (savedSortBy === 'name' || savedSortBy === 'date' || savedSortBy === 'type') {
         this.SortBy = savedSortBy;
       }
 
-      const savedSortOrder = localStorage.getItem('collections-sort-order');
+      const savedSortOrder = UserInfoEngine.Instance.GetSetting('collections-sort-order');
       if (savedSortOrder === 'asc' || savedSortOrder === 'desc') {
         this.SortOrder = savedSortOrder;
       }
@@ -2318,22 +2324,45 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
+  private async buildAccessibleCollectionFilter(
+    rv: ReturnType<typeof RunView.FromMetadataProvider>,
+    baseFilter: string,
+    bypassCache: boolean = false
+  ): Promise<string> {
+    const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
+    const permRes = await rv.RunView<{ CollectionID?: string | null }>(
+      {
+        EntityName: 'MJ: Collection Permissions',
+        ExtraFilter: `UserID='${this.CurrentUser.ID}'`,
+        Fields: ['CollectionID'],
+        ResultType: 'simple',
+        BypassCache: bypassCache
+      },
+      this.CurrentUser
+    );
+    const sharedIds = Array.from(
+      new Set(
+        (permRes.Success && permRes.Results ? permRes.Results : [])
+          .map((row) => (row.CollectionID ?? '').trim())
+          .filter((id) => id.length > 0)
+      )
+    );
+    if (sharedIds.length === 0) {
+      return `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter})`;
+    }
+    const quotedIds = sharedIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+    return `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ID IN (${quotedIds}))`;
+  }
+
   private async loadCollections(bypassCache: boolean = false): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
-      // Load collections where user is owner OR has permissions
-      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-      const permissionSubquery = `ID IN (
-        SELECT CollectionID
-        FROM [__mj].[vwCollectionPermissions]
-        WHERE UserID='${this.CurrentUser.ID}'
-      )`;
-
+      // Load collections where user is owner OR has permissions (two-step lookup without protected view subqueries)
       const baseFilter = `EnvironmentID='${this.EnvironmentId}'` +
                          (this.CurrentCollectionId ? ` AND ParentID='${this.CurrentCollectionId}'` : ' AND ParentID IS NULL');
 
-      const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+      const filter = await this.buildAccessibleCollectionFilter(rv, baseFilter, bypassCache);
 
       const result = await rv.RunView<MJCollectionEntity>(
         {
@@ -2748,7 +2777,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         await this.LoadAllCollections(true);
       } catch (error) {
         console.error('Error deleting collection:', error);
-        await this.dialogService.alert('Error', `An error occurred while deleting the collection: ${error}`);
+        await this.dialogService.Alert('Error', `An error occurred while deleting the collection: ${error}`);
       }
     }
   }
@@ -2782,7 +2811,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     await this.permissionService.deleteAllPermissions(collectionId, this.CurrentUser);
 
     // Step 3: Delete all artifact links for this collection
-    const artifactsResult = await rv.RunView<any>(
+    const artifactsResult = await rv.RunView<MJCollectionArtifactEntity>(
       {
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${collectionId}'`,
@@ -2914,11 +2943,11 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           await this.loadArtifacts(true);
           this.buildUnifiedItemList();
         } else {
-          await this.dialogService.alert('Error', 'Collection artifact link not found.');
+          await this.dialogService.Alert('Error', 'Collection artifact link not found.');
         }
       } catch (error) {
         console.error('Error removing artifact version:', error);
-        await this.dialogService.alert('Error', 'Failed to remove artifact version from collection.');
+        await this.dialogService.Alert('Error', 'Failed to remove artifact version from collection.');
       }
     }
   }
@@ -2957,7 +2986,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
     const permission = this.UserPermissions.get(collection.ID);
     if (!permission) {
-      await this.dialogService.alert(
+      await this.dialogService.Alert(
         'Permission Denied',
         'You do not have permission to perform this action.'
       );
@@ -2971,7 +3000,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
     if (!hasPermission) {
       const permissionName = requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1);
-      await this.dialogService.alert(
+      await this.dialogService.Alert(
         'Permission Denied',
         `You do not have ${permissionName} permission for this collection.`
       );
@@ -3227,8 +3256,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    */
   public ToggleViewMode(): void {
     this.ViewMode = this.ViewMode === 'grid' ? 'list' : 'grid';
-    // Save preference to localStorage
-    localStorage.setItem('collections-view-mode', this.ViewMode);
+    UserInfoEngine.Instance.SetSettingDebounced('collections-view-mode', this.ViewMode);
   }
 
   /** @deprecated Use {@link ToggleViewMode}. */
@@ -3241,8 +3269,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    */
   public SetViewMode(mode: CollectionViewMode): void {
     this.ViewMode = mode;
-    // Save preference to localStorage
-    localStorage.setItem('collections-view-mode', mode);
+    UserInfoEngine.Instance.SetSettingDebounced('collections-view-mode', mode);
   }
 
   /** @deprecated Use {@link SetViewMode}. */
@@ -3292,9 +3319,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       this.SortOrder = 'asc';
     }
 
-    // Save sort preferences to localStorage
-    localStorage.setItem('collections-sort-by', this.SortBy);
-    localStorage.setItem('collections-sort-order', this.SortOrder);
+    UserInfoEngine.Instance.SetSettingDebounced('collections-sort-by', this.SortBy);
+    UserInfoEngine.Instance.SetSettingDebounced('collections-sort-order', this.SortOrder);
 
     // Close dropdown and rebuild list
     this.ShowSortDropdown = false;
@@ -3424,7 +3450,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error deleting selected items:', error);
-      await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
+      await this.dialogService.Alert('Error', `An error occurred while deleting: ${error}`);
     }
   }
 
@@ -3659,11 +3685,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-      const permissionSubquery = `ID IN (
-        SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
-      )`;
-      const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+      const filter = await this.buildAccessibleCollectionFilter(rv, `EnvironmentID='${this.EnvironmentId}'`);
 
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
@@ -3764,7 +3786,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving artifact:', error);
-      await this.dialogService.alert('Error', 'Failed to move artifact. Please try again.');
+      await this.dialogService.Alert('Error', 'Failed to move artifact. Please try again.');
     }
   }
 
@@ -3830,7 +3852,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     if (conversationId) {
       this.OpenConversationRequested.emit({ conversationId });
     } else {
-      await this.dialogService.alert('No Source Conversation', 'This artifact is not linked to a conversation.');
+      await this.dialogService.Alert('No Source Conversation', 'This artifact is not linked to a conversation.');
     }
   }
 
@@ -4087,7 +4109,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving items:', error);
-      await this.dialogService.alert('Error', 'Failed to move item(s). Please try again.');
+      await this.dialogService.Alert('Error', 'Failed to move item(s). Please try again.');
     }
   }
 
@@ -4134,11 +4156,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   public async LoadAllCollections(bypassCache: boolean = false): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-    const permissionSubquery = `ID IN (
-      SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
-    )`;
-    const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    const filter = await this.buildAccessibleCollectionFilter(rv, `EnvironmentID='${this.EnvironmentId}'`, bypassCache);
     const result = await rv.RunView<MJCollectionEntity>({
       EntityName: 'MJ: Collections',
       ExtraFilter: filter,
@@ -4321,7 +4339,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving staged items:', error);
-      await this.dialogService.alert('Error', 'Failed to move staged items. Please try again.');
+      await this.dialogService.Alert('Error', 'Failed to move staged items. Please try again.');
     }
   }
 

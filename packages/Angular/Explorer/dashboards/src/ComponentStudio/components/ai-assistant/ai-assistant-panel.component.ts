@@ -272,10 +272,30 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
         }
     }
 
-    public OnArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): void {
-        const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-        const paramKey = event.type === 'conversation' ? 'conversationId' : 'collectionId';
-        void this.navigationService.OpenNavItemByName(navItemName, { [paramKey]: event.id });
+    public async OnArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): Promise<void> {
+        if (event.type === 'conversation') {
+            await this.navigationService.OpenNavItemByName(
+                'Conversations',
+                { conversationId: event.id },
+                undefined,
+                { queryParams: { conversationId: event.id } }
+            );
+            return;
+        }
+        const opened = await this.navigationService.OpenNavItemByName(
+            'Library',
+            { collectionId: event.id },
+            undefined,
+            { queryParams: { collectionId: event.id } }
+        );
+        if (!opened) {
+            await this.navigationService.OpenNavItemByName(
+                'Collections',
+                { collectionId: event.id },
+                undefined,
+                { queryParams: { collectionId: event.id } }
+            );
+        }
     }
 
     public OnConversationRenamed(event: { conversationId: string; name: string; description: string }): void {

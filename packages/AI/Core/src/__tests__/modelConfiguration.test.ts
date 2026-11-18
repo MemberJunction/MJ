@@ -231,6 +231,15 @@ describe('LLM control-flow knobs', () => {
         expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 
+    it('takes ChatCompletionsToolsRequireNoReasoning from the vendor row over the model layer (#6210)', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: { ChatCompletionsToolsRequireNoReasoning: true } }
+        );
+        expect(merged?.LLM?.ChatCompletionsToolsRequireNoReasoning).toBe(true);
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+
     it('an explicit null at a higher layer REPLACES (tri-state), it does not inherit', () => {
         const merged = ResolveEffectiveModelConfiguration(
             { LLM: { NativeControlFlow: 'implicit' } },

@@ -15,6 +15,8 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './agent-instance';
+export * from './repeated-failing-step';
 export * from './bound-action-params';
 export * from './unsafe-object-keys';
 export * from './decision-discovery';
@@ -39,6 +41,10 @@ export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
 export * from './AgentDecisionService';
+export * from './AgentTreeBudgetTracker';
+export * from './AgentFeedbackCoordinator';
+export * from './AgentContextAssembler';
+export * from './AgentStepDispatcher';
 export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
@@ -55,6 +61,13 @@ export * from './artifact-tools/DocxToolLibrary';
 export * from './artifact-tools/SearchResultSetToolLibrary';
 export * from './artifact-tools/CSVToolLibrary';
 export * from './artifact-tools/GenericBinaryToolLibrary';
+export * from './artifact-tools/DocumentToolLibrary';
+export * from './artifact-tools/WhiteboardToolLibrary';
+export * from './artifact-tools/SlideDeckToolLibrary';
+export * from './artifact-tools/SpreadsheetToolLibrary';
+export * from './artifact-presence-locator';
+export * from './GovernedArtifactService';
+export * from './realtime/artifact-workspace-channel-server';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
@@ -65,6 +78,7 @@ export * from './agent-pre-execution-rag';
 export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
+export * from './memory-decision-uses';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './AgentWakeTriggerService';
@@ -77,6 +91,7 @@ export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
 export * from './realtime/bridge-session-transcript-sink';
 export * from './realtime/realtime-turn-moderator';
+export * from './realtime/realtime-moderator-decision';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
@@ -107,16 +122,8 @@ export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
 export * from './realtime/realtime-recording-ledger';
 export * from './realtime/realtime-recording-opus-assembly';
+export * from './realtime/realtime-artifact-helpers';
 
-// Re-export from ai-reranker for backward compatibility
-export {
-  RerankerService,
-  RerankerConfiguration,
-  parseRerankerConfiguration,
-  RerankServiceResult,
-  RerankObservabilityOptions,
-  LLMReranker,
-} from '@memberjunction/ai-reranker';
 export * from './native-tools/action-tool-builder';
 export * from './native-tools/action-param-schema';
 export * from './native-tools/dual-channel';

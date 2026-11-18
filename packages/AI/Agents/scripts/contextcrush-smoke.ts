@@ -6,7 +6,7 @@
  * the server-bootstrap manifest, then exercises:
  *
  *   P1 — structural JSON compression (BaseAgent action-result crush via resolveActionResultCrush +
- *        formatParamValueForResult + CrushJSON): a 200-row array-of-objects (raw OR JSON-string) is
+ *        AgentStepDispatcher.FormatParamValueForResult + CrushJSON): a 200-row array-of-objects (raw OR JSON-string) is
  *        crushed to tabular "$t" form with a context-crush legend; opt-out + below-threshold verbatim.
  *
  *   P2 — cache-aware expiration (BaseAgent.pruneAndCompactExpiredMessages + PartitionStablePrefix):
@@ -17,12 +17,12 @@
  *        still expires. The stable prefix is byte-identical before/after every prune.
  *
  *   P3 — AST-aware code crushing (BaseAgent action-result crush via resolveActionResultCrush +
- *        formatParamValueForResult + CrushCode): with crushCodeLang='sql', a >600-char SQL VALUES
+ *        AgentStepDispatcher.FormatParamValueForResult + CrushCode): with crushCodeLang='sql', a >600-char SQL VALUES
  *        action-result string is collapsed to "… value tuples elided"; opt-out + below-threshold
  *        paths fall back to verbatim.
  *
- *   P4 — mine failed runs for corrective memory (MemoryManagerAgent.LoadInstructiveFailedAgentRuns +
- *        ExtractNotesFromFailedRuns): seeds a real Failed AIAgentRun whose ErrorMessage carries a
+ *   P4 — mine failed runs for corrective memory (MemoryManagerAgent.loadInstructiveFailedAgentRuns +
+ *        extractNotesFromFailedRuns): seeds a real Failed AIAgentRun whose ErrorMessage carries a
  *        generalizable lesson, confirms the selector finds it, then runs the LIVE-LLM corrective
  *        extraction and asserts an Issue/Context note candidate tagged Ephemeral (never Constraint).
  *
@@ -39,9 +39,9 @@ import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjuncti
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { Metadata, RunView, UserInfo, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { MemoryManagerAgent } from '@memberjunction/ai-agents';
+import { AgentStepDispatcher, MemoryManagerAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentChatMessage } from '@memberjunction/ai-core-plus';
 
 const SMOKE_MARKER = `[contextcrush-smoke ${new Date().toISOString()}]`;
@@ -114,28 +114,26 @@ class SmokeHarness extends MemoryManagerAgent {
         return this.pruneAndCompactExpiredMessages(params, currentTurn);
     }
 
-    /** P1/P3: set the crush config from params, then format a single action-result param value (real path). */
+    /**
+     * P1/P3: format a single action-result param value the way BaseAgent formats an action's output
+     * params: the run's crush config from resolveActionResultCrush, then the step dispatcher's
+     * FormatParamValueForResult (crush on, no length cap).
+     */
     public CrushValue(value: unknown, params: ExecuteAgentParams): string {
-        const self = this as unknown as {
-            _actionResultCrush: unknown;
-            resolveActionResultCrush(p: ExecuteAgentParams): unknown;
-            formatParamValueForResult(v: unknown, maxLength?: number): string;
-        };
-        self._actionResultCrush = self.resolveActionResultCrush(params);
-        return self.formatParamValueForResult(value);
+        return new AgentStepDispatcher().FormatParamValueForResult(value, 0, true, this.resolveActionResultCrush(params));
     }
 
     /** P4: the failed-run selector. */
     public LoadFailed(since: Date | null, user: UserInfo): Promise<FailedRunLite[]> {
-        const self = this as unknown as { LoadInstructiveFailedAgentRuns(s: Date | null, u: UserInfo): Promise<FailedRunLite[]> };
-        return self.LoadInstructiveFailedAgentRuns(since, user);
+        const self = this as unknown as { loadInstructiveFailedAgentRuns(s: Date | null, u: UserInfo): Promise<FailedRunLite[]> };
+        return self.loadInstructiveFailedAgentRuns(since, user);
     }
 
     /** P4: the corrective-extraction (live LLM). */
     public ExtractFromFailed(runs: FailedRunLite[], user: UserInfo): Promise<ExtractedNoteLite[]> {
         (this as unknown as { _verbose: boolean })._verbose = true;
-        const self = this as unknown as { ExtractNotesFromFailedRuns(r: FailedRunLite[], u: UserInfo): Promise<ExtractedNoteLite[]> };
-        return self.ExtractNotesFromFailedRuns(runs, user);
+        const self = this as unknown as { extractNotesFromFailedRuns(r: FailedRunLite[], u: UserInfo): Promise<ExtractedNoteLite[]> };
+        return self.extractNotesFromFailedRuns(runs, user);
     }
 }
 
@@ -308,7 +306,7 @@ async function seedAndMine(
     const md = new Metadata(); // global-provider-ok: single-connection CLI smoke harness
     let seededRunId: string | null = null;
     try {
-        const run = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+        const run = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
         run.NewRecord();
         run.AgentID = agentId;
         run.Status = 'Failed';
@@ -332,7 +330,7 @@ async function seedAndMine(
         return { selected: !!mine, candidates };
     } finally {
         if (seededRunId) {
-            const run = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+            const run = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
             if (await run.Load(seededRunId)) {
                 const deleted = await run.Delete();
                 LogStatus(`  ${deleted ? 'deleted' : 'FAILED to delete'} seeded run ${seededRunId}`);

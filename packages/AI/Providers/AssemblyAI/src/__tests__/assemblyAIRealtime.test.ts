@@ -790,6 +790,40 @@ describe('AssemblyAIRealtimeSession guard rails', () => {
         expect(carrying(socket2)[0].type).toBe('session.update'); // the late-result note rides the system prompt
         await session.Close();
     });
+
+    it('replaces StateKey notes in system_prompt (using MemoryText) and omits Ephemeral progress notes across reconnects', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+
+        session.SendContextNote('[app-context]\nlocation: Explorer › Screen 1', {
+            StateKey: 'app-context',
+            MemoryText: '[app-context]\nlocation: Explorer › Screen 1\nsections: Home, Accounts',
+        });
+        session.SendContextNote('[app-context]\nlocation: Explorer › Screen 2', {
+            StateKey: 'app-context',
+            MemoryText: '[app-context]\nlocation: Explorer › Screen 2\nsections: Home, Screen 1',
+        });
+        session.SendContextNote('[delegated-agent progress] step 1', { Ephemeral: true });
+        session.SendContextNote('[delegated-agent progress] step 2', { Ephemeral: true });
+
+        const livePrompt = String(driver.Socket.SentFrames().at(-1)?.session?.system_prompt ?? '');
+        expect(livePrompt).toContain('Screen 2');
+        expect(livePrompt).not.toContain('Explorer › Screen 1\n');
+        expect(livePrompt).toContain('step 2');
+        expect(livePrompt).not.toContain('step 1');
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        const resumedPrompt = String(socket2.SentFrames().find((f) => f.type === 'session.update')?.session?.system_prompt ?? '');
+        expect(resumedPrompt).toContain('Screen 2');
+        expect(resumedPrompt).not.toContain('step 2');
+        await session.Close();
+    });
 });
 
 

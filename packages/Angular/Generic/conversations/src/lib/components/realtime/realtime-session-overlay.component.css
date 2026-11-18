@@ -425,9 +425,11 @@
   overflow: hidden;
 }
 
-/* The review recording pane body: the evidence player fills its host (:host height:100%),
-   so its template-based pane needs a filling, constrained frame. */
-.review-recording-host {
+/* The review recording, Docs, Media, and Browser pane bodies fill their template-based pane slots cleanly. */
+.review-recording-host,
+.review-docs-host,
+.review-media-host,
+.review-browser-host {
   display: flex;
   flex-direction: column;
   flex: 1;

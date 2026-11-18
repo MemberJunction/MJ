@@ -1,5 +1,134 @@
 # @memberjunction/integration-engine
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- d4350c0: Integration engine fixes, with two migrations (minor).
+  - Connection Configuration `batchSize`, `maxBatchesPerMap` and `watermarkLookbackSeconds`. Reaching the page cap fails the run with `BATCH_CAP_REACHED`; any Critical error fails the run; stale CRUD procedures stop the object after one error (`SchemaNotGeneratedError.Reason = 'Stale'`); monotonic timestamp watermarks re-read a short overlap (300 s for external-data-source connectors).
+  - SoftDelete on an entity without tombstone columns is refused with `SOFT_DELETE_UNSUPPORTED` instead of counting a delete that never happened. Entity-map `sourceDeleteField` / `sourceDeleteValue` follow `DeleteBehavior` for sources that flag deletions. New `CompanyIntegrationRecordMap.Origin` (`Created` / `Adopted`); neither the orphan sweep nor a source delete flag under HardDelete hard-deletes an adopted row. A flagged row under HardDelete prunes its record map once deleted, and a matched row already gone counts as skipped, not errored.
+  - New index `IX_CompanyIntegrationRun_CompanyIntegrationID_StartedAt`; `vwCompanyIntegrations` finds the latest run with `OUTER APPLY`.
+  - Staging columns keep declared integer, decimal, float, boolean and date types for new columns; CodeGen re-selects a created row NULL-safely on nullable key columns.
+  - The Integration Connections Create Tables panel shows a listing failure with Retry.
+
+### Patch Changes
+
+- 2b4969f: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `TrimTrailingChars`, `TrimLeadingChars`, `TrimChars` and `IsEmailShaped` helpers in `@memberjunction/global`, used for URL, path and base64 trims and email-shape checks, plus index scans for Markdown fences and Slack link conversion. Results are unchanged for every input.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/integration-engine-base@6.3.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.3.0-edge.1
+  - @memberjunction/integration-progress-artifacts@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 3615622: Pull entity maps can now drop source records and resolve parent references, both declared on the entity map's `Configuration` (#5254).
+  - **`recordFilter`** — conditions on the source record's own fields, e.g. `{"recordFilter":[{"field":"accountType","notIn":["Heading","Total","Begin-Total","End-Total"]}]}`. Every condition must hold for a record to be kept. Excluded records count as skipped, not errored, and are still seen by orphan detection. Deletes are never filtered. A malformed filter fails the map before anything is fetched.
+  - **`resolveReferences`** — destination foreign-key fields whose mapped value is the parent's external id, e.g. `{"resolveReferences":["DimensionID"]}`. The engine swaps each value for the parent's MJ id through this company integration's record maps for the field's related entity (written when the parent's map synced, which the dependency layers run first). A value with no record map is a `MATCH_RESOLUTION_ERROR` on that record, which is not written. A field that is not a foreign key fails the map.
+  - New sync log event `sync.entity-map.filtered`. New exports from `RecordFilter` and `ReferenceResolver`.
+
+- d693139: A pull entity map with no field maps is no longer synced, and the post-restart apply builds field maps from the connection's persisted catalog.
+  - **Engine.** A pull map with no active field maps is skipped right after its field maps load, before the watermark read and before any fetch. The skip records one Critical `CONFIGURATION_ERROR` (the run's ErrorLog is written from it), puts the object on `IncompleteObjects`, emits an `ENTITY_MAP_HAS_NO_FIELD_MAPS` warning and a `sync.entity-map.skipped` event, and counts no records. Before this, the engine fetched the object in full: a soft-key table refused every record (`KEYLESS_RECORD_REFUSED`) and any other table got empty rows. A failed field-map read now throws `FIELD_MAPS_UNREADABLE` and fails that map, instead of reading as "no field maps".
+  - **Server.** After an apply's restart, each object's field maps come from the connection's persisted ACTIVE field rows (`LoadScopedFieldsForBuild`, now narrowable to named objects). The connector's `IntrospectSchema` runs only for objects with no persisted fields, and only those objects are warmed. Before this, every object was introspected, which is a live re-discovery on a connector whose introspection calls the vendor. A map that still ends with no field maps is logged with `console.error('[RSU] NO FIELD MAPS for …')`, is not counted as mapped, and fails the run's CreateEntityMaps stage with the objects named. Field-map save failures are logged with the entity's error.
+
+- 66fcfde: Preserve native SQL column types (`INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `DECIMAL(p,s)`, `FLOAT`, `BIT`/`BOOLEAN`, `DATE`, `DATETIMEOFFSET`/`TIMESTAMPTZ`, `TIME`, `UNIQUEIDENTIFIER`/`UUID`) and `Precision`/`Scale` across `IntegrationSchemaSync` and `TypeMapper` instead of falling back to `NVARCHAR`/`NVARCHAR(MAX)`, while warning and skipping cross-family `ALTER COLUMN` conversions (such as `NVARCHAR` to `INT` or `DECIMAL`) on existing columns in `SchemaEvolution.DiffSchema` to prevent conversion failures or precision loss on existing data. Add idempotent non-unique auto-indexing for Soft PKs (`IX_*_PK`), Soft FKs (`IX_*_FK_*`), and Organic Keys (`IX_*_OK_*`) across runtime `CREATE TABLE` and `SchemaEvolution` `ALTER TABLE` with SQL Server key-width capping (`<= 450` chars) and `sys.index_columns` key-tuple deduplication.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/integration-engine-base@6.3.0-edge.0
+  - @memberjunction/integration-pk-classifier@6.3.0-edge.0
+  - @memberjunction/integration-progress-artifacts@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, TrimChars } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -2083,7 +2083,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     try {
       // Construct source path and normalize it
       const rawSourcePath = this.constructItemPath(this.ItemToCopyToProvider);
-      const sourcePath = rawSourcePath.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+      const sourcePath = TrimChars(rawSourcePath, '/').replace(/\/+/g, '/');
       console.log('[FileGrid] Cross-account copy sourcePath:', { raw: rawSourcePath, normalized: sourcePath });
 
       // Copy to each selected account

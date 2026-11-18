@@ -54,6 +54,7 @@ type EntityFieldSequenceRow = {
     EntityID: string;
     Name: string;
     Sequence: number;
+    IsNameField?: boolean | number | null;
 };
 
 /** One column of a base view as the database catalog reports it. */
@@ -162,7 +163,7 @@ export class SystemIntegrityBase {
     protected static async CheckEntityFieldSequencesInternal(pool: CodeGenConnection, filter: string): Promise<IntegrityCheckResult> {
         try {
             const schema = MjCoreSchema();
-            const sSQL = `SELECT ${qi('ID')}, ${qi('Entity')}, ${qi('SchemaName')}, ${qi('BaseView')}, ${qi('EntityID')}, ${qi('Name')}, ${qi('Sequence')} FROM ${qi(schema)}.${qi('vwEntityFields')} ${filter} ORDER BY ${qi('Entity')}, ${qi('Sequence')}`;
+            const sSQL = `SELECT ${qi('ID')}, ${qi('Entity')}, ${qi('SchemaName')}, ${qi('BaseView')}, ${qi('EntityID')}, ${qi('Name')}, ${qi('Sequence')}, ${qi('IsNameField')} FROM ${qi(schema)}.${qi('vwEntityFields')} ${filter} ORDER BY ${qi('Entity')}, ${qi('Sequence')}`;
             const resultResult = await pool.query(sSQL);
             const result = (resultResult.recordset ?? []) as EntityFieldSequenceRow[];
             if (result.length === 0) {
@@ -188,6 +189,10 @@ export class SystemIntegrityBase {
             const messages: string[] = [];
             const warnings: string[] = [];
             for (const fields of byEntity.values()) {
+                const nameFieldWarning = SystemIntegrityBase.CheckSingleNameField(fields);
+                if (nameFieldWarning) {
+                    warnings.push(nameFieldWarning);
+                }
                 const entityMessage = SystemIntegrityBase.CheckSingleEntity(fields, catalog, excludedViewFields);
                 if (entityMessage) {
                     messages.push(entityMessage);
@@ -377,6 +382,22 @@ export class SystemIntegrityBase {
         const extra = columns.slice(comparable.length);
         return `Entity ${fields[0].Entity} has ${extra.length} base view column(s) in ${qi(schemaName)}.${qi(baseView)} with no entity field: ${extra.join(', ')}. ` +
             `Creates and updates on this entity fail until the fields exist (run CodeGen against the schema) or the columns leave the view.`;
+    }
+
+    /**
+     * An entity has at most one name field (#6554). Every related-entity name column joins to the
+     * name field, so with two flagged the join target depends on which one a reader picks. CodeGen's
+     * name-field pass repairs an auto-flagged second field on its next analysis run; two PINNED
+     * fields (`AutoUpdateIsNameField = 0`) need a person to unpin one.
+     * @returns an empty string when the entity has zero or one name field, otherwise the warning text
+     */
+    protected static CheckSingleNameField(fields: EntityFieldSequenceRow[]): string {
+        const flagged = fields.filter(f => f.IsNameField === true || f.IsNameField === 1);
+        if (flagged.length <= 1) {
+            return '';
+        }
+        return `Entity ${fields[0].Entity} has ${flagged.length} name fields (IsNameField = 1): ${flagged.map(f => f.Name).join(', ')}. ` +
+            `Related-entity name columns join to only one of them; clear the extra flag (and AutoUpdateIsNameField = 0 on the one to keep).`;
     }
 
     /**

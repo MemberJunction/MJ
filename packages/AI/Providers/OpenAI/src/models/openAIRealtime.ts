@@ -31,6 +31,7 @@ import {
     type RealtimeInputFrame,
     type RealtimeMemorySeed,
     type RealtimeReconnectContext,
+    type RealtimeContextNoteOptions,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeWireUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -1388,10 +1389,11 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
      *
      * @param text The context note to append to the conversation.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
         const item: RealtimeConversationItemSystemMessage = {
             type: 'message',
@@ -1581,7 +1583,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         if (!this.connectionFactory) {
             throw new Error(`[${this.profile.providerKey}Realtime] No connection factory available for Reconnect`);
         }
-        const factoryResult = this.connectionFactory(context.ResumptionHandle);
+        const factoryResult = this.connectionFactory(
+            context.UseNativeResumption ? (context.ResumptionHandle ?? undefined) : undefined
+        );
         const nextConn = factoryResult instanceof Promise ? await factoryResult : factoryResult;
         const earlyFrames = await this.waitUntilReplacementReady(nextConn);
         // Stopped in the same synchronous run as the swap below, so no frame falls between collecting and listening.

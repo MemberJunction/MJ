@@ -2,9 +2,31 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { OverlayModule } from '@angular/cdk/overlay';
+import { AngularSplitModule } from 'angular-split';
 
 // MJ UI Components
-import { MJButtonDirective, MJClickableDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJClickableDirective,
+  MJDatepickerComponent,
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule,
+  MJFilterChipComponent,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+  MJPageHeaderInteriorComponent,
+  MJTabNavComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent,
+} from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -50,6 +72,12 @@ import { CollectionTreeComponent } from './components/collection/collection-tree
 import { CollectionViewComponent } from './components/collection/collection-view.component';
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
 import { LibraryFullViewComponent } from './components/library/library-full-view.component';
+import { LibraryWorkspaceComponent } from './components/library/library-workspace.component';
+import { LibraryRemoteDrivePaneComponent } from './components/library/library-remote-drive-pane.component';
+import {
+  LibraryCreateDialogComponent,
+  LibraryExportDriveDialogComponent,
+} from './components/library/library-create-dialog.component';
 import { CollectionFormModalComponent } from './components/collection/collection-form-modal.component';
 import { ArtifactCreateModalComponent } from './components/collection/artifact-create-modal.component';
 import { CollectionsFullViewComponent } from './components/collection/collections-full-view.component';
@@ -94,6 +122,8 @@ import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
 import { LoadRealtimeInteractiveComponentChannel } from './components/realtime/interactive-component/interactive-component-channel';
 import { RealtimeInteractiveComponentSurfaceComponent } from './components/realtime/interactive-component/realtime-interactive-component-surface.component';
+import { LoadRealtimeArtifactWorkspaceChannel } from './components/realtime/artifact-workspace/artifact-workspace-channel';
+import { RealtimeArtifactWorkspaceSurfaceComponent } from './components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
@@ -122,6 +152,8 @@ LoadRealtimeRemoteBrowserChannel();
 LoadRealtimeMediaChannel();
 // Interactive Component channel plugin — ClientPluginClass 'RealtimeInteractiveComponentChannel'.
 LoadRealtimeInteractiveComponentChannel();
+// Artifact Workspace channel plugin — ClientPluginClass 'RealtimeArtifactWorkspaceChannel'.
+LoadRealtimeArtifactWorkspaceChannel();
 LoadClientContextChannel();
 LoadIdentityVerificationChannel();
 // The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
@@ -158,6 +190,10 @@ const COMPONENTS = [
   CollectionViewComponent,
   CollectionArtifactCardComponent,
   LibraryFullViewComponent,
+  LibraryWorkspaceComponent,
+  LibraryRemoteDrivePaneComponent,
+  LibraryCreateDialogComponent,
+  LibraryExportDriveDialogComponent,
   CollectionFormModalComponent,
   ArtifactCreateModalComponent,
   CollectionsFullViewComponent,
@@ -196,6 +232,7 @@ const COMPONENTS = [
     TaskGraphEditorModule,
     ReactiveFormsModule,
     OverlayModule,
+    AngularSplitModule,
     MJButtonDirective,
     MJClickableDirective,
     MJDatepickerComponent,
@@ -205,6 +242,17 @@ const COMPONENTS = [
     MJAlertComponent,
     MJAccordionModule,
     MJFilterChipComponent,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageHeaderInteriorComponent,
+    MJTabNavComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
@@ -236,6 +284,7 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeInteractiveComponentSurfaceComponent,
+    RealtimeArtifactWorkspaceSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
     AgentHandoffCardComponent
   ],

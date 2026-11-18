@@ -1,5 +1,208 @@
 # @memberjunction/ai-prompts
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- e5a392f: Fix the prompt failover loop's bookkeeping (#3789, #5963) and remove its dead code (#4907).
+  - After a `VendorValidationError` or `Authentication` error drops a vendor's candidates, the loop now calls the candidate that slid into the failed slot instead of skipping it, and no longer stops early when one candidate is left.
+  - A returned failure that is not eligible for failover now counts as a failover attempt, like a thrown one. `FailoverAttempts` on a run that failed this way is 1, not 0.
+  - A failed result after an earlier failover is recorded as a failure: the run's `ModelID` / `VendorID` stay on the model it started with instead of moving to the model that failed.
+  - The error result built after every candidate fails now records the last attempt's `ToolCallingMode`, so those prompt runs no longer save NULL. A thrown model error carries the tool-calling decision for this.
+  - Removed `transitionToNextCandidate`, `shouldAttemptFailover`, `selectFailoverCandidates` and `calculateFailoverDelay`, which had no callers. A subclass that overrode them was never called.
+  - The `MJ: AI Prompts.FailoverStrategy` field description now says that the chat runner only tells `None` from the other values (metadata).
+  - IT129's native tool-calling checks report each prompt call's `Success` next to its mode.
+
+- 5c0fba9: Add `AIPrompt.TimeoutMS`, a per-prompt bound on each model call (#3064, #3133).
+  - New nullable `TimeoutMS` column on `MJ: AI Prompts` (migration + CodeGen: entity, GraphQL and form field). It must be positive; NULL means the prompt sets no bound.
+  - The runner resolves the timeout as the caller's `AIPromptParams.timeoutMS`, then the prompt's `TimeoutMS`, then the runner's `DefaultPromptTimeoutMS`. A caller passing `0` opts that call out of any bound.
+  - The parallel coordinator applies the prompt's `TimeoutMS` to each task in place of its default backstop.
+  - `getEffectiveTimeoutMS` now takes the prompt as its first argument; a subclass that calls or overrides it must pass the prompt.
+
+- 2006748: Groq: recover a tool call from a `tool_use_failed` rejection instead of falling back to the envelope (#5847).
+  - Groq checks tool arguments against the declared schema and refuses a call whose types do not match (a boolean sent as the string "true"), although MJ's argument coercion would accept it. The Groq driver now reads the call out of the rejection's `failed_generation` (the Qwen `<function=…><parameter=…>` form and the JSON `{name, arguments}` form) and returns it as an ordinary tool-call result, when every call names a tool the request declared. Otherwise it rethrows as before.
+  - New optional `ChatResult.ToolCallsRecovered` flag marks such results.
+  - New `ToolCallingMode` value `'NativeRecovered'` on `MJ: AI Prompt Runs` and `MJ: AI Agent Run Steps` (migration + CodeGen). The prompt runner records it for a recovered hybrid `Native` turn; a `NativeImplicit` turn keeps its mode. Agent steps count tool calls on `NativeRecovered` turns.
+
+- 7a3333e: Model catalog fixes.
+  - Nano Banana 2.1 was defined twice and both rows were active (#6121). The row in `.gemini-image-models.json` stays; the later duplicate in `.ai-models.json` is retired (inactive, renamed "Nano Banana 2.1 (retired duplicate)", vendor rows Inactive, cost row Expired). Both rows shipped only in edge builds and nothing in `metadata/` references either; a deployment that pointed a prompt at the duplicate by ID should repoint it. A new catalog test fails when two active models share a name.
+  - `MJ: AI Models.APIName`, `DriverClass` and `DriverImportPath` now say that they come from the model's top-priority Active Inference Provider row and describe only that vendor (#3066).
+  - New catalog flag `LLM.ChatCompletionsToolsRequireNoReasoning` (#6210). When set on a model vendor row, the prompt runner passes `ChatParams.toolsRequireNoReasoning` and the OpenAI driver sends `reasoning_effort: 'none'` on the first request that declares tools, instead of learning it from a 400. Set on GPT-6 Luna's OpenAI row; the 400 fallback stays for unmarked models.
+
+- 0f4d357: Embedding attribution.
+  - A tag saved through the entity is embedded with the same model as TagEngine's tag index, under the "Tag Semantic Matching" prompt, and a stored vector is stale only when it came from another model (#4922). New `TagEngine.EmbedTagText` and `TagEngine.ResolveTagEmbeddingModelID`; the local helper is used only when TagEngine resolves no model.
+  - New carrier prompts "Vector Sync Embedding", "Duplicate Detection Embedding" and "Vector Search Embedding" (Embedding type, no model bindings). Vector sync, duplicate detection and vector search run their embeddings under them through the new `EmbeddingRunParams.PromptName`, so cost reports can tell the three apart (#4923). An embedding call that names no prompt now runs under "Content Embedding" when it exists, else the first active Embedding prompt by name, instead of whichever prompt the engine loaded first.
+
+- 1351528: ElevenLabs text-to-speech sends all five voice settings in the SDK's camelCase shape, so `similarity_boost` and `use_speaker_boost` are no longer dropped (#4863), and reports its usage as the input text's characters (#4865). New price unit type `Per 1K Characters` (`Linear`, Characters, 1,000 per billing unit). ElevenLabs cost rows are not added yet: the rate depends on the account's plan.
+- b076358: The native tool-calling decision and the sent-prefix fingerprint that the prompt runner records on a request or result are now kept in the Global Object Store, shared by every physical copy of this package in a process. A pnpm consumer can install more than one copy (one per peer-dependency variant), and since ClassFactory keeps the first registered copy of a class, the Loop agent type that reads the decision could come from a different copy than the runner that recorded it. The lookup then found nothing and native tool results silently stopped going back as tool turns: the model never saw its own calls, repeated them, and nothing was prompt-cached.
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- 0fcfce3: A prompt run whose model turn answered only with tool calls no longer records `ErrorMessage` "Failed to parse result into expected format; raw output saved instead". Such a turn has no text to parse, so the empty result is expected. Every native tool-calling agent turn used to carry the message, which hid real errors when debugging. An empty text-only turn still records it.
+- 1864853: A Loop agent's relocated specialization now renders with the same native tool-calling flags as the system prompt. The agent pre-renders a relocated child prompt into the trailing runtime-state message before a model is selected, so it rendered without `_NATIVE_TOOL_CALLING` / `_NATIVE_CONTROL_FLOW`, which the prompt runner sets from the selected model's tool-calling decision: a child prompt worded for the native or envelope path got the envelope wording while the system prompt got the native one. `AIPromptParams` gains an optional `OnTemplateDataFinalized` callback that the runner calls once the flags are set and before the prompt renders; the agent uses it to render the trailing message again and swaps it in when the text changed (keeping the first build if the re-render fails). A failover attempt whose decision differs still re-renders only the system prompt.
+
+### Patch Changes
+
+- b5c4a3c: Computer Use runs on the agent run's API keys (#4807): `ComputerUseAction` passes the run's `RuntimeAPIKeyResolver` and `CredentialScope` to the engine, which hands them to its controller, judge and heal prompts. `AIPromptParams.APIKeyResolver` is consulted in the legacy key tier after explicit `apiKeys` and before environment keys, and is inherited by internal prompts with the rest of the execution scope.
+- 2d938cf: Prompt output parsing: an object reply holding one complete JSON value followed by a stray fragment now uses the value and logs the dropped text (#3065, new exported `ExtractLeadingJSONValue`); a prompt with `ValidationBehavior: 'None'` no longer has its reply keys rewritten by validation-syntax cleaning unless `cleanValidationSyntax` is set, and keys that clean to the same name are kept as written instead of one overwriting the other (#4827); the "your … here" / "insert … here" placeholder check scans linearly (#4819).
+- 46173bd: Unified telemetry lifecycle, health signal catalog, live verification probes, consent-gated share layer, and OpenTelemetry spine:
+  - In `@memberjunction/core`, extend `TelemetryManager.Instance.OnEvent` with lifecycle phase options (`TelemetryOnEventOptions` supporting `Phases?: readonly ('start' | 'end')[]`), balanced start/end emission across suppression boundaries, and automatic `'end'` eviction notification on active event cap so span bridges do not leak open spans. Add `TotalInputTokens` and `TotalOutputTokens` to `TelemetryEvent`.
+  - In `@memberjunction/ai-prompts`, wire `AIPromptRunner.ExecutePrompt` to `TelemetryManager.Instance.StartEvent('AI', ...)` and `EndEvent(...)` with `inputTokens` and `outputTokens` for runtime prompt observability.
+  - Introduce `@memberjunction/health` package containing:
+    - Pluggable health signal catalog and probe engine (`BaseHealthProbe`, `MJHealthEngine`) with point-in-time and continuous evaluation of database connectivity, metadata cache parity, queue worker heartbeats, OpenApp fleet statuses, runtime event loop lag, and AI provider readiness.
+    - Deterministic agent remediation playbooks (`YellowPlaybook`, `RedPlaybook`) for every signal with bounded autonomous action limits and human escalation runbooks.
+    - Live transactional entity CRUD probes (`LiveEntityCrudProbe`, `BaseLiveCrudVerifier`) with guaranteed rollback on transactional database writes.
+    - In-process telemetry signal bridge (`LocalTelemetrySignalBridge`) rolling execution counts, durations, and token metrics into bounded time buckets with zero network egress.
+    - Consent-gated share layer (`ShareLayerPackager`, `BaseTelemetrySink`) and closed compile-time/runtime schema allowlist DSL (`TelemetrySchemaDsl`) enforcing that customer data, raw SQL text, prompt text, completions, and user IDs can never leave the deployment boundary.
+    - Full OpenTelemetry spine (`OtelSdk`, `OtelSpanBridge`, `OtelMetrics`, `OtelHttpPropagation`) providing zero-overhead opt-in distributed tracing, semantic conventions (`db.*`, `gen_ai.*`), W3C `traceparent` context propagation, and runtime/health metric instruments.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [c75494d]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/credentials@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/templates@6.3.0-edge.1
+  - @memberjunction/templates-base-types@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-engine-base@6.3.0-edge.0
+  - @memberjunction/templates-base-types@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

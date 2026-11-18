@@ -1,5 +1,24 @@
 # @memberjunction/video-studio-render-worker
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 05100bd: Video Studio audio and timing: the render worker now builds the soundtrack from a mix plan (music ducked about -7.5 dB under every narration line, honoring `MusicDuck`/`MusicSwell` cues), normalizes loudness with two-pass `loudnorm` (-14 LUFS, -1.5 dBTP, LRA 11, configurable), and runs deterministic audio checks before the critic (loudness, true peak, clipping, narration-to-music ratio, unexplained pauses inside a narration line, missing audio). Adds opt-in procedural audio (synthesized Whoosh/Click/Tick/Impact/Chime/Riser effects and a synthesized music bed, disclosed as synthesized), brand-kit pronunciation rules plus built-in defaults (`A.I.` → `AI`) applied before TTS with captions unchanged, word-anchored composition timing via `mj/narration-cues.js` and `window.mjCue`, per-line `PauseBeforeSeconds`/`PauseAfterSeconds`, and configurable parallel HyperFrames capture workers (`videoStudio.render.workers`, `VIDEO_STUDIO_RENDER_WORKERS`).
+
+### Patch Changes
+
+- Updated dependencies [05100bd]
+  - @memberjunction/video-studio-core@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- de3d6f9: Tests: raise the wall-clock ceiling on the "pathological 50,000-character input" checks from 200 ms to 2000 ms. They guard against quadratic/backtracking scans, not machine speed; one failed the v6.3.0-edge.0 publish gate at 211 ms on a CI runner.
+- Updated dependencies [de3d6f9]
+  - @memberjunction/video-studio-core@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

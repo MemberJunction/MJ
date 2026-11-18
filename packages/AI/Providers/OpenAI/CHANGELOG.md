@@ -1,5 +1,89 @@
 # Change Log - @memberjunction/ai-openai
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 7a3333e: Model catalog fixes.
+  - Nano Banana 2.1 was defined twice and both rows were active (#6121). The row in `.gemini-image-models.json` stays; the later duplicate in `.ai-models.json` is retired (inactive, renamed "Nano Banana 2.1 (retired duplicate)", vendor rows Inactive, cost row Expired). Both rows shipped only in edge builds and nothing in `metadata/` references either; a deployment that pointed a prompt at the duplicate by ID should repoint it. A new catalog test fails when two active models share a name.
+  - `MJ: AI Models.APIName`, `DriverClass` and `DriverImportPath` now say that they come from the model's top-priority Active Inference Provider row and describe only that vendor (#3066).
+  - New catalog flag `LLM.ChatCompletionsToolsRequireNoReasoning` (#6210). When set on a model vendor row, the prompt runner passes `ChatParams.toolsRequireNoReasoning` and the OpenAI driver sends `reasoning_effort: 'none'` on the first request that declares tools, instead of learning it from a 400. Set on GPT-6 Luna's OpenAI row; the 400 fallback stays for unmarked models.
+
+### Patch Changes
+
+- 9d82caa: Embedding drivers no longer send `dimensions` to a model that rejects it when the requested width is the model's own, and they refuse a width the model can't produce before making the call (#5234). Entity vector sync and duplicate detection pass the vector index's `Dimensions` on every call, and MJ stamps one on every index it creates. OpenAI's text-embedding-ada-002 and Bedrock's Titan Embed Text V1 reject `dimensions`, so a call that named them with their own width was rejected, and the driver degraded that to an empty result.
+  - `BaseEmbeddings` has a shared rule, `DimensionsParam(model, dimensions)`, driven by a per-driver table of models (`EmbeddingModels`, of `EmbeddingModelInfo`: native width, whether the model accepts `dimensions`, and optionally the widths it supports). A model that rejects `dimensions` is sent nothing when the width is its own. A model not in the table gets the width as requested.
+  - A width a listed model can't produce throws `EmbeddingDimensionsError` before any API call. It carries an `InvalidRequest` / `Fatal` classification with no failover, which `ErrorAnalyzer` keeps, so `AIEmbeddingRunner` fails the call with the cause instead of making a paid call, recording "No vectors returned" as retriable and failing over.
+  - OpenAI lists text-embedding-3-large (up to 3072), text-embedding-3-small (up to 1536) and ada-002 (1536 only). `GetEmbeddingModels` reports `AcceptsDimensions`.
+  - Azure lists its default model, `text-embedding-ada-002` (1536 only). Any other named model is a deployment, which could serve any model, so its width is sent as requested.
+  - Bedrock lists Titan Embed Text V1 (1536 only) and V2 (256, 512 or 1024). The Cohere path never sends `dimensions` and is unchanged.
+  - On the per-text path, a refusal is neither retried through the backoff nor degraded to an empty result. `EmbedTexts`' error contract still degrades an ordinary per-text failure, and still rethrows a cancellation; a refused width now joins the cancellation as the second exception, because degrading it is exactly what the refusal replaces.
+  - The OpenAI change reaches deployments whose ada-002 model or vendor row sets `APIName` to `text-embedding-ada-002`. The stock rows leave `APIName` empty, so the driver is called with no model name and uses its default, `text-embedding-3-small` (#5237).
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 70b5e38: Price a realtime run's audio tokens at their own rates. `Realtime.Pricing.AudioInput` / `AudioOutput` (per 1M tokens) in the model configuration price each direction's audio tokens on an `Audio` cost line, taken out of the default line; without an audio price the default line keeps today's figure and is marked `Blended`. The OpenAI-protocol and OpenAI Live browser clients now report the per-modality token split, through a shared `MapRealtimeUsageModalityDetail` in `@memberjunction/ai`. Cached input is priced at the cost row's cache-read rate: the record keeps `CachedAudioTokens` (OpenAI's `cached_tokens_details.audio_tokens`), the audio input line prices only the uncached audio, and an audio line never prices more tokens than left the default line.
+- 755b210: Realtime long-call reconnect fixes from the final review of #6462.
+  - Security: a relay session (Vertex, HuggingFace) now persists only routing fields on its `MJ: AI Agent Sessions` row, so its owner, including a `Widget Guest`, can no longer read the system prompt, tools or initial context the relay keeps from the browser. A relay refresh that reaches an MJAPI instance without the in-memory snapshot is refused with a clear error instead of minting from the persisted copy. A direct session's persisted copy drops the duplicate provider config.
+  - A credential refresh re-authorizes the agent the session was minted for, from server-written state, not from the editable `Config.targetAgentID`.
+  - A failed planned move that goes back to the old connection now mints at most one credential per reconnect cycle, so a provider outage during the soft window no longer exhausts the per-session mint limit.
+  - A loss of the old connection while the call waits on it, or while an attempt is in flight, goes to the running reconnect at once: input is held from that moment, Gemini no longer ends the call, and OpenAI-protocol drivers no longer go back to a dead transport.
+  - The wait on the old connection follows a goAway, a shrinking connection limit and early timers; a host state handler that throws while the call goes back no longer wedges the cycle.
+  - A credential that a refresh replaced after the attempt connected still gets its move before it expires (Gemini).
+  - OpenAI Live reports `listening` again after a move; HuggingFace keeps the call when its old socket closes during a move; Gemini holds a reply owed to speech held during a failed attempt.
+  - Server sessions (OpenAI family, OpenAI Live, ElevenLabs, AssemblyAI, Inworld) hold a tool result sent during a reconnect and deliver it once on the new connection. The server OpenAI session keeps user turns in order and no longer merges two utterances, keeps frames that arrive with `session.created` on a reconnect, and no longer leaves an unhandled rejection when it discards a connecting socket.
+  - Overlapping `CloseSession` calls are shared on the normalized session ID, and the runtime skips its page-close beacon only after its own close succeeded.
+
+- 28cec7d: Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
+  - **4-Layer ModelConfiguration & Timing Cascade (`@memberjunction/ai`, `@memberjunction/ai-engine-base`, `@memberjunction/ai-agents`):** Add `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` to `RealtimeConfigurationSettings` (`IAIConfiguration.ts` and `modelConfiguration.ts`), propagate them through `REALTIME_SHARED_CONFIG_KEYS`, `ScrubRealtimeSharedConfigKeys`, `ExtractRealtimeTimingConfig`, `ResolveRealtimeTiming`, and `GetModelCatalogSessionSettings`, and seed realtime models (`Gemini 3.8 Live`, `Gemini 3.8 Live Extended Thinking`, `Gemini 3.1 Flash Live`, `Grok Voice` family, `GPT Realtime` family, `GPT-Live 1`, `ElevenLabs Agents`, `Eleven Realtime`) in `.ai-models.json`.
+  - **Shared Conversation Memory & Reconnect Controller (`@memberjunction/ai`):** Promote `RealtimeConversationMemory`, `RenderRealtimeMemorySeed`, `RenderRealtimeMemorySeedAsContextNote`, `RenderLateToolResultNote`, `ResumePreamble`, and the unified I/O-free `RealtimeReconnectController` into `@memberjunction/ai` so every server and browser realtime driver shares bounded FIFO turn/tool memory (`MaxSeedChars = 24,000`), soft/hard connection-duration timers, credential refresh scheduling, per-attempt abort signals, native-to-seed fallback, and rapid-reconnect circuit-breaking (`reconnect-loop-breaker`).
+  - **Server-Side Orchestration, Protected Session Snapshot & Relay Continuity (`@memberjunction/ai`, `@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/server`):** Add `CallDurationSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, `TrustsNativeResumption`, proactive timer orchestration, and `ReconnectSession` on `BaseRealtimeModel` / `BaseRealtimeSession`; persist `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` behind `RunWithTrustedSessionConfigWrites` (`PROTECTED_SESSION_CONFIG_KEYS`); add `RealtimeProxyRegistry.Instance.ExtendRelaySession` and timer rescheduling in `RealtimeRelayTunnel` so relayed calls survive past the 30-minute relay lease; seed `RealtimeSessionRunner`'s re-opened session from `RealtimeConversationMemory` (`InitialContext`); clear Gemini's uncompressed-video connection limit when the last bridged video source ends (`@memberjunction/ai-bridge-server`); add rate-limited `RefreshRealtimeClientSessionToken` in `RealtimeClientSessionResolver`.
+  - **Browser Runtime, Client Drivers & Continuous Recording (`@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`):** Add `ApplySessionConfigTiming`, proactive timer arming on `'listening'`, `ScheduleCredentialRefresh`, and `Reconnect(context)` across `BaseRealtimeClient` and all client/server drivers (`Gemini`, `Vertex`, `OpenAI`, `OpenAI Live`, `xAI`, `ElevenLabs`, `Eleven`, `AssemblyAI`, `Inworld`, `HuggingFace`); wire `SetTokenRefreshCallback` in `RealtimeSessionRuntime`; update `RealtimeAudioRecorder.AttachRemoteStream` so WebRTC reconnects rebind replacement remote audio streams into a single continuous recording file without gaps.
+
+- b9fda3f: Preserve conversation continuity across long-call realtime reconnects and xAI transport drops.
+  - Separate replaceable ambient state snapshots (`StateKey`, bounded by `MaxStateChars = 4,000`) and wire-only operational status notes (`Ephemeral: true`) from durable spoken turns and tool calls in `RealtimeConversationMemory`, and pin opening user/assistant turns (`MaxPinnedHeadChars = 2,400`) when middle conversation entries must be evicted on ultra-long calls.
+  - Coalesce and delta-diff live `AppContext$` updates in `ClientContextChannel` via `DiffAppContextSnapshot` (sending compact deltas on the wire while storing only the single latest full screen snapshot under `StateKey: 'app-context'`), and tag interactive channel state snapshots (`BaseRealtimeChannelClient`), video-source transitions (`VideoSourceArbiter`), media-kit summaries (`MediaChannelServer`), and delegation/drop narration (`RealtimeDelegationNarrator`, `RealtimeSessionRunner`) with replaceable `StateKey` or `Ephemeral: true`.
+  - Default xAI Grok Voice client, server, and model metadata (`Grok Voice`, `Grok Voice Think Fast 2.0`, `Grok Voice 3.0`) to `TrustNativeResumption: false` so every xAI reconnect replays full `RealtimeConversationMemory` instead of relying on lossy `?conversation_id=` resumption; make native-resumption lineage breaks sticky across the session in `RealtimeSessionResumption` and preserve native resumption handles across local offline outages (`IsNetworkOnline`).
+  - Propagate `RealtimeContextNoteOptions` across all client and server realtime drivers, fixing AssemblyAI mid-reconnect context loss and multi-reconnect `system_prompt` duplication.
+
+### Patch Changes
+
+- 9c4f458: Realtime drivers apply the normalized `turnDetection` setting where their provider can express it and warn at launch for the settings they cannot: Inworld maps `Eagerness` (semantic VAD) and `Threshold` / `SilenceDurationMs` (server VAD); AssemblyAI maps `Threshold` onto `vad_threshold`; GPT-Live has no turn-detection field and warns for every requested setting.
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -1,5 +1,591 @@
 # @memberjunction/integration-test-suite
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 2b07be4: A refused completion's payload change is now held instead of discarded. Since 6.2, a completion refused by Success validation (minimum executions, `FinalPayloadValidation`, a self-check) had its `payloadChangeRequest` thrown away and the model was asked to send it again. Models answer a refusal with the correction, not the whole change, so the next completion was validated against a payload that had lost the rest of it and was refused again for fields it had already sent. Now the change is held: the next prompt sees the payload with it applied, the next completion is applied on top of it, and both are committed when a completion is accepted. Held changes are dropped if the run ends without an accepted completion, so the final payload still never contains an unaccepted change. A resent change identical to a held one (key order aside) is not applied twice. The refusal tells the model the change is held and to send only corrections. The step's `OutputData` records `payloadChangeHeld` (previously `payloadChangeDiscarded`). Integration check NTL14 is updated for this.
+- e5a392f: Fix the prompt failover loop's bookkeeping (#3789, #5963) and remove its dead code (#4907).
+  - After a `VendorValidationError` or `Authentication` error drops a vendor's candidates, the loop now calls the candidate that slid into the failed slot instead of skipping it, and no longer stops early when one candidate is left.
+  - A returned failure that is not eligible for failover now counts as a failover attempt, like a thrown one. `FailoverAttempts` on a run that failed this way is 1, not 0.
+  - A failed result after an earlier failover is recorded as a failure: the run's `ModelID` / `VendorID` stay on the model it started with instead of moving to the model that failed.
+  - The error result built after every candidate fails now records the last attempt's `ToolCallingMode`, so those prompt runs no longer save NULL. A thrown model error carries the tool-calling decision for this.
+  - Removed `transitionToNextCandidate`, `shouldAttemptFailover`, `selectFailoverCandidates` and `calculateFailoverDelay`, which had no callers. A subclass that overrode them was never called.
+  - The `MJ: AI Prompts.FailoverStrategy` field description now says that the chat runner only tells `None` from the other values (metadata).
+  - IT129's native tool-calling checks report each prompt call's `Success` next to its mode.
+
+- 4ffdf7c: Content pipeline: a Content Item's `EmbeddingStatus` now follows its chunks. Embed runs over chunks, so until now an item stayed at the `Pending` that Extract set, even after every chunk was embedded, and anything that read the item to ask "is this document embedded?" got the wrong answer. After each Embed page the pipeline reads the live chunks of the items that page touched and, once none has embedding work left, sets the item: `Failed` if any chunk failed, `Skipped` if every chunk was skipped, `Complete` (with `LastEmbeddedAt`) otherwise. An item Segment is due to cut again, or one being deleted, is left alone. When Segment ends an item without chunks (it failed, or there was nothing to cut) the item's `EmbeddingStatus` takes the same value in that commit. A new `SettleItemEmbedding` stage and the `Content Pipeline — Settle Item Embedding` Record Process settle an item an Embed page missed (a process stopped between committing the chunks and settling the item). `RollUpItemEmbedding` and `ItemEmbeddingRollup` are exported. Because items now reach `Complete`, a metadata change marks the item `MetadataOnly` along with its chunks, and the rollup returns it to `Complete` once they are refreshed.
+- 880a114: Chat search panel: debounce typed queries (250 ms), keep only the newest search's results, and look up artifact collections with two batched reads instead of one query per artifact.
+
+  Conversation export: every format now writes the output artifacts of each message (name, type, version, stored text content capped at 20,000 characters; MIME type for file-backed versions), with a deep link when the host supplies one. The export button is disabled when there is no conversation to export.
+
+  Conversations: only the server changes a saved conversation's owner (`UserID`); the owner is refused too, because messages with no `UserID` follow the owner.
+
+  Folders: the UI role can create, rename, move and delete its own folders (Private or Shared), bound to the new "UI: Own Projects" row-level filter (migration + entity-permission metadata). Deleting a folder moves its subfolders and conversations out as the system user in the delete's transaction. The folder dialog offers Public, and the sidebar offers Rename/Delete, only where the user's folder writes allow it.
+
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- c51c6f3: Add `GeminiDecision`, a `BaseDecision` driver for Google's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`), and the `Gemini Decision 1` model (type Decision, `PowerRank` 61, $0.10 per million input tokens, no output charge; up to 1,000 questions, 255 Choice options and 255 Score levels per call, 262,144 input tokens) with two Inference Provider routes: Google direct (`GeminiDecision`, `gemini-decision-1`, preferred) and OpenRouter (`OpenRouterDecision`, pinned `google/gemini-decision-1-20261111`). Gemini's questions and answers use the System One shape, so `GeminiDecision` extends `BaseHostedSystemOneDecision` and adapts the `x-goog-api-key` header, `input` in place of `state`, `total_input_tokens`/`total_output_tokens` usage, and `prompt_feedback.block_reason` input-filter blocks (which fail with the block reason as a failover-eligible `ModelError`). Google's `400` (`INVALID_ARGUMENT` and `invalid_request`) and `403 PERMISSION_DENIED` responses are pinned to failover-eligible `ModelError`, keeping `Default Decision`'s failover loop running while leaving `401` a fatal `Authentication` error. MJ sends text only. `Gemini Decision 1` is not bound to `Default Decision` (which selects `Jev` or `LLM Decision` first), but as an active `Decision` model it joins `Default Decision`'s power-matched fallback list on hosts with a `Google` or `OpenRouter` vendor credential (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`); set `Status = 'Inactive'` on the corresponding model-vendor row to keep `Default Decision` off it.
+- a9e640a: Lists: refresh from a saved view or query, safely and on a schedule.
+  - Queries and User Views store a `DefinitionFingerprint` on every save. A list stores the fingerprint of the source it was linked against (`SourceFingerprint`); a refresh whose source changed since then applies nothing, returns `SOURCE_CHANGED` and pauses the list's routine until the owner approves the change (`ApproveListSource`). Approving, and linking a source, fill the list straight away.
+  - A list can refresh from a saved query (`SourceQueryID`, `SourceQueryParameters`, `SourceQueryKeyField`).
+  - "Refresh automatically" (`List.AutoRefresh`) creates a User Routine that runs "Refresh List From Source" on the Lists app's default schedule (application settings `Lists.Refresh.DefaultCron` and `Lists.Refresh.DefaultTimezone`). Only the list's owner can link a source or turn it on.
+  - `RefreshFromSource` (and so linking, approving and scheduled refreshes) no longer signs a delta token, so it works on a server without `MJ_LIST_DELTA_SECRET`; previews and `ApplyDelta` still need the secret.
+  - New list operations `PreviewRefreshFromSource` / `ApplyRefreshPreview` (GraphQL `PreviewListRefresh` / `ApplyListRefresh`) preview a refresh from any source before applying it. Each refresh that changes a list writes a "List Refreshed" audit row; source changes and approvals write their own.
+  - The List form gains a Source & refresh card, a source-change review with a SQL or filter diff from Record Changes, a link-source dialog and a Refresh history section. The Lists app gains refresh status on the browse page and a Refreshes page.
+  - New deterministic integration test IT175 (`list-refresh` bundle, LR1–LR7) covers the fingerprint stamp, fill on link, the routine's lifecycle, a stopped refresh on a changed source, and approval.
+
+- 687393c: Widget Guest row filters on MJ: AI Agent Requests, MJ: Conversation Skills (read and update) and MJ: Conversation Detail Artifacts (read), so a widget guest reads and updates only the rows of its own session. The existing run-entity read filters on MJ: AI Agent Runs, MJ: AI Agent Run Steps and MJ: AI Prompt Runs now also apply to updates.
+
+### Patch Changes
+
+- e768fd4: API-key scope checks fail closed and follow out-of-process changes. `CheckAPIKeyScopeAndLog` now enforces the application-active ceiling (shared decision path with `CheckAPIKeyScope`); `RESTEndpointHandler` normalizes its include/exclude lists to lowercase; `APIKeysEngineBase` re-reads its cached tables from the database every `scopeCacheTTLMs` (set by `APIKeyEngine`), so a scope removed or an application deactivated by another process stops granting within one TTL. `BaseEngine` expiry timers no longer keep a Node process alive.
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- eaba2bc: Rename the Chat application's `ChatCollectionsResource` navigation tab and default resource display label from `Collections` to `Library`.
+- add9e8f: CodeGen output fixes:
+  - A stored validator with real line breaks and `\"` escapes is unescaped when only that form parses; one that parses neither way is written unchanged with a warning naming the entity and validator (#6510).
+  - Search-flag hygiene filters by `includeSchemas` and the authored `excludeSchemas`, never the compiled exclude list, so an Open App capture no longer touches entities in other schemas (#6384).
+  - The auto FK and soft-PK index guards skip the index when another unfiltered index already leads with the column(s), on SQL Server and PostgreSQL. Every entity's index file is rewritten once. Integration check MC4 accepts such an index (#6466).
+  - A pinned name field (`AutoUpdateIsNameField = 0`) always wins, so CodeGen no longer flags a second one; the integrity check warns about entities with more than one name field (#6554).
+  - `mj codegen --all-schemas` re-emits the generated files of every schema for one run (#5163).
+
+- 0fdcb51: Only a conversation's owner, a user with an Owner-level grant, or a user in the Developer or Integration role can delete a conversation. The server refuses everyone else (`MJConversationEntityServer.Delete`), `ConversationEngine` refuses before removing the conversation from the list and reports refused conversations by name, and the conversation list disables Delete with the reason. Previously any user who could load a conversation could delete it for everyone.
+- 16a66fc: Tests only: field-level security integration checks for related rows, constraint-error redaction and the enable snapshot (#5981, #5982, #5988), and a provider-level test that a failed save hides the SQL and quoted values from a caller denied a field.
+- 51972e3: Integration suite: every `metadata-sync-push` check bounds its push at 120 s, and the driver rolls back a transaction a check leaves open on the shared provider (failing that check with "left a transaction open"), so one hung check no longer stalls the rest of the run (#5389).
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- 0af123e: Check `TransactionGroup` updates for concurrent changes, as single-record saves already are. An update queued with `ConcurrencyCheck` of `'log'` or `'enforce'` (per save, or the provider-wide setting) now gets a locked read of its row inside the group's transaction, before any of the group's statements run; in `'enforce'` mode a conflict rolls back the whole group, `Submit()` returns `false`, and the conflicting entity's `LatestResult.ConcurrencyConflict` names the fields. Groups with checking off do no extra work, and batched submits stay batched. Grouped saves from the browser now send each update's old values, and `ExecuteTransactionGroup` checks them the way the single-record update mutation does, so a form that saves child records alongside its main record no longer silently overwrites another user's change. Adds integration test IT173.
+- fff3a52: Waves 5.4, 5.5, and 5.6 performance & bundle-splitting improvements:
+  - **Wave 5.4**: Lazy `EntityInfo.Fields` / `EntityFieldInfo` instantiation on first field access, native structured-clone IndexedDB metadata caching in `ProviderBase` / `BrowserIndexedDBStorageProvider`, and `IT128 PB20` hydration benchmarks.
+  - **Wave 5.5**: Added `@memberjunction/ng-bootstrap/types` secondary entry point to decouple `ng-explorer-app` from eager dashboard registrations, switched `MarkdownArtifactViewerComponent` to `ChangeDetectionStrategy.OnPush`, and extended `check-browser-manifest-leakage.mjs` with bundle-splitting regression guards.
+  - **Wave 5.6**: Added `@memberjunction/ng-auth-services/preload` lightweight entry point for `MJExplorer/src/main.ts` and decoupled `@memberjunction/core-entities/schemas` Zod schemas from entity classes (with CodeGen support).
+- 74ba8f2: Backfill single-write `__mj_UpdatedAt = GETUTCDATE()` into all core `spUpdate*` stored procedures and guard all `trgUpdate*` triggers with `IF NOT UPDATE([__mj_UpdatedAt])` (`V202611121645__v6.3.x__Single_Write_spUpdate_And_Trigger_Guard.sql`), and add the `metadata-consistency.MC9` catalog + live integration test.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [1be3915]
+- Updated dependencies [ae69eec]
+- Updated dependencies [2b07be4]
+- Updated dependencies [019fd49]
+- Updated dependencies [8e41e43]
+- Updated dependencies [1618217]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [367a259]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [fcf255e]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [f064047]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [e2390f0]
+- Updated dependencies [91403f1]
+- Updated dependencies [804537f]
+- Updated dependencies [f49a2e1]
+- Updated dependencies [add9e8f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [7ffe806]
+- Updated dependencies [4ffdf7c]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [041b645]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [c75494d]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [cb20f0f]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [5563937]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [6f1109b]
+- Updated dependencies [86326f2]
+- Updated dependencies [51972e3]
+- Updated dependencies [9532ed3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [4761d50]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [5882617]
+- Updated dependencies [9d82caa]
+- Updated dependencies [74950be]
+- Updated dependencies [f671eff]
+- Updated dependencies [4262206]
+- Updated dependencies [e9472ef]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [0bad3a4]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [c17c7be]
+- Updated dependencies [31c2439]
+- Updated dependencies [ed13b2e]
+- Updated dependencies [442014c]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [45d6c34]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [a78d855]
+- Updated dependencies [7747b73]
+- Updated dependencies [c705137]
+- Updated dependencies [579ff91]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/feature-pipelines@6.3.0-edge.1
+  - @memberjunction/feature-pipelines-engine@6.3.0-edge.1
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/communication-types@6.3.0-edge.1
+  - @memberjunction/notifications@6.3.0-edge.1
+  - @memberjunction/communication-ms-graph@6.3.0-edge.1
+  - @memberjunction/core-entities-server@6.3.0-edge.1
+  - @memberjunction/server@6.3.0-edge.1
+  - @memberjunction/storage@6.3.0-edge.1
+  - @memberjunction/scheduling-engine@6.3.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.1
+  - @memberjunction/work-queue-engine@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/ai-agents@6.3.0-edge.1
+  - @memberjunction/task-graph@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/integration-engine@6.3.0-edge.1
+  - @memberjunction/integration-schema-builder@6.3.0-edge.1
+  - @memberjunction/codegen-lib@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-anthropic@6.3.0-edge.1
+  - @memberjunction/ai-gemini@6.3.0-edge.1
+  - @memberjunction/unit-testing@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.1
+  - @memberjunction/search-engine@6.3.0-edge.1
+  - @memberjunction/ai-agent-harness@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/api-keys@6.3.0-edge.1
+  - @memberjunction/livekit-room-server@6.3.0-edge.1
+  - @memberjunction/ai-bridge-server@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/metadata-sync@6.3.0-edge.1
+  - @memberjunction/testing-integration@6.3.0-edge.1
+  - @memberjunction/content-pipeline@6.3.0-edge.1
+  - @memberjunction/content-pipeline-base@6.3.0-edge.1
+  - @memberjunction/content-autotagging@6.3.0-edge.1
+  - @memberjunction/record-set-processor-base@6.3.0-edge.1
+  - @memberjunction/record-set-processor@6.3.0-edge.1
+  - @memberjunction/credentials@6.3.0-edge.1
+  - @memberjunction/rubrics@6.3.0-edge.1
+  - @memberjunction/testing-engine@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/ai-openrouter@6.3.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.1
+  - @memberjunction/lists@6.3.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.1
+  - @memberjunction/open-app-engine@6.3.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.3.0-edge.1
+  - @memberjunction/video-studio@6.3.0-edge.1
+  - @memberjunction/conversations-runtime@6.3.0-edge.1
+  - @memberjunction/external-data-sources@6.3.0-edge.1
+  - @memberjunction/communication-gmail@6.3.0-edge.1
+  - @memberjunction/predictive-studio-core@6.3.0-edge.1
+  - @memberjunction/telephony-adapters@6.3.0-edge.1
+  - @memberjunction/video-studio-core@6.3.0-edge.1
+  - @memberjunction/redis-provider@6.3.0-edge.1
+  - @memberjunction/templates@6.3.0-edge.1
+  - @memberjunction/predictive-studio@6.3.0-edge.1
+  - @memberjunction/diagnostics-server@6.3.0-edge.1
+  - @memberjunction/encryption@6.3.0-edge.1
+  - @memberjunction/communication-engine@6.3.0-edge.1
+  - @memberjunction/communication-expo-push@6.3.0-edge.1
+  - @memberjunction/communication-sendgrid@6.3.0-edge.1
+  - @memberjunction/communication-twilio@6.3.0-edge.1
+  - @memberjunction/a2aserver@6.3.0-edge.1
+  - @memberjunction/predictive-studio-truth-suite@6.3.0-edge.1
+  - @memberjunction/work-queue-server@6.3.0-edge.1
+  - @memberjunction/ai-bridge-base@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/auth-providers@6.3.0-edge.1
+  - @memberjunction/queue@6.3.0-edge.1
+  - @memberjunction/query-processor@6.3.0-edge.1
+  - @memberjunction/rubrics-base@6.3.0-edge.1
+  - @memberjunction/schema-engine@6.3.0-edge.1
+  - @memberjunction/templates-base-types@6.3.0-edge.1
+  - @memberjunction/testing-engine-base@6.3.0-edge.1
+  - @memberjunction/ai-cloudflare@6.3.0-edge.1
+  - @memberjunction/ai-inception@6.3.0-edge.1
+  - @memberjunction/ai-systemone@6.3.0-edge.1
+  - @memberjunction/diagnostics@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+  - @memberjunction/work-queue-core@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+- 6fd9fb7: Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
+  as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+  saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+  (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
+  Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
+  signal), stores that decision with its reason on the run, and renders the trust verdict from it.
+
+  The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+  not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+  seeded-random holdout, so nothing deployed re-carves.
+
+  An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
+  An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+  - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
+    pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
+    `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate
+    record, the `gate` member of the `ps-run-results/v2` envelope). `TrustVerdicts.DeriveTrustVerdict` takes
+    `{ ValidationResults, Lineage }` and renders the stored gate decision; `TrustGrade`, `TrustModelInput`,
+    `MajorityBaselineFinding`, `TrustVerdicts.TrustDots` and the free functions `DeriveTrustVerdict`,
+    `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
+  - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
+    decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
+    and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+    `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+    renamed `trustTitle` / `headline`;
+    `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+    The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+    `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
+  - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
+    `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+    `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+    `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
+    the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
+    `buildImprovePrompt` are removed.
+  - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
+    (`test:gate-parity`, `test:gate-parity-refpipe`).
+  - `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+    Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+    values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+    and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+    baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+    before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+    minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
+  - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+    interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+    (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+    `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
+  - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
+
+  Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
+  version 1 of each, and the training path without them is removed.
+  - `@memberjunction/predictive-studio-core`: `ProtocolRows`, `ProtocolEdits`, `UnitEdits` (one owner of the unit and
+    protocol row writes, the next-version rules and the label version bump) and `LegacyPipelines` (the migration's
+    mapping from a pipeline's columns to a unit and a protocol, or the archive or hold reason). Stored rows whose date is
+    not a calendar day fail parse (`UtcDay.IsIsoDay`). `TrainRequest` and the `/train` contract are removed. New refusal
+    code `TIME_HOLDOUT_REQUIRED`.
+  - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
+    each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
+    (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+    legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
+    time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
+    after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
+    only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
+    assembly day only when no change history covers that day. A parent record hard-deleted after the decision date
+    is read from its Record Changes (its stored fields from its Delete row) and is uncovered from its Delete on; a
+    missing record with no Delete still refuses `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
+    `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
+    gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
+    `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
+    input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
+  - `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+    `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
+  - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+    Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+    protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+  - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+    its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+    row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+    setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+    a cloud provider.
+  - `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+    provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+    the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+    provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+    from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+    `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+    `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+    `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+    deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+    (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+    artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+    `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+    over its own storage. The local-disk model
+    artifact store and loader, and their active-provider lookup, are removed.
+  - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+    `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+    generated GraphQL schema, class registrations and record forms for the three new entities.
+  - `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+    `MJ: ML Evaluation Protocols` forms.
+  - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
+    protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
+    pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
+    aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
+    bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
+    PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+    `ChatEnvironmentId` from `PSResourceBase`.
+  - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+    `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+    key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
+  - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
+    pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
+    `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+    `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+    `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+    Provider on.
+  - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+  Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+  not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+  action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+  with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+  (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+  through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+  refused.
+  - Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`), a grouped non-forecast unit accepts only `cluster-bootstrap` intervals (`intervals-not-clustered`), and a migrated legacy pipeline bound to a grouped unit gets grouped folds (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error (`@memberjunction/predictive-studio`).
+  - Round 4 (2026-11-08): a grouped unit refuses any inner validation without its group key, `blocked-time` without a key included (`@memberjunction/predictive-studio-core`); the as-of history covers only the requested keys, a Delete in force wins on both readers before the created-after check, the not-updatable path included, an unreached history excludes under exclude-and-count on the stored-value reader as it already did on the replay reader, and a stored `__mj_CreatedAt` later than an earlier change row other than the history's opening Create dates a re-creation and is ignored (`@memberjunction/predictive-studio`); two standing matrix tests pin reader agreement on existence and which sidecar fold builders keep a group together (`@memberjunction/predictive-studio`, `@memberjunction/predictive-studio-sidecar`); a member × period unit naming no group key is grouped by its grain record, so it gets grouped folds and clustered intervals by default and refuses stratified folds (`@memberjunction/predictive-studio-core`), and a windowed aggregate counts a child hard-deleted after the decision day as its Delete row recorded it (`@memberjunction/predictive-studio`); change rows of one record at one instant are ordered by whether the record continues after that instant, which the next change row proves unless it is a Create and, at its last instant, a current row (a Delete ends the instant of a record that is gone, and precedes the Create of one that was re-created, so a record re-created at one instant and hard-deleted later reads its second incarnation between the two, and one created and deleted at one instant and re-created later reads deleted between the two), a windowed aggregate's child history is loaded once so coverage counts each child record once, and a child row or a join-key unit row deleted and re-created after the decision day is read from the Delete row that ended the incarnation standing then (`@memberjunction/predictive-studio`).
+
+### Patch Changes
+
+- 7ed32af: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- 0d484c2: CodeGen base views: display-label joins (related-entity name fields) and the embedded-record geo join are always `LEFT OUTER JOIN`, regardless of the foreign key's nullability, so an unmatched related row yields a NULL label instead of removing the row from the view (#4533). IS-A parent joins stay `INNER`. Ships a migration that regenerates the affected core base views. The display-name fields those joins feed are now typed `string | null` in the generated entity classes, and the call sites that read them handle the null.
+- a01e840: Add cloud agent harness execution (`CloudSandboxProvider`, `BaseCloudHarnessAdapter`) with `bounded-poll` and `adaptive-wake` async continuation handoff, plus four new registered harness adapters (`AntigravityCliAdapter`, `AntigravityCloudAdapter`, `ClaudeCodeCloudAdapter`, `CodexCloudAdapter`) and their `MJ: AI Agent Harnesses` metadata seeds.
+- d073171: Computer Use and Agent Eval tests accept weighted judge criteria (`{ criterion, weight }`) in `judgeValidationCriteria`. The Computer Use driver reads them with the judge oracles' rules (`ReadJudgeCriteriaList`, now exported with `JudgeCriterionInput`) and passes their texts to the in-run judge; the oracles apply the weights.
+- 66fcfde: Preserve native SQL column types (`INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `DECIMAL(p,s)`, `FLOAT`, `BIT`/`BOOLEAN`, `DATE`, `DATETIMEOFFSET`/`TIMESTAMPTZ`, `TIME`, `UNIQUEIDENTIFIER`/`UUID`) and `Precision`/`Scale` across `IntegrationSchemaSync` and `TypeMapper` instead of falling back to `NVARCHAR`/`NVARCHAR(MAX)`, while warning and skipping cross-family `ALTER COLUMN` conversions (such as `NVARCHAR` to `INT` or `DECIMAL`) on existing columns in `SchemaEvolution.DiffSchema` to prevent conversion failures or precision loss on existing data. Add idempotent non-unique auto-indexing for Soft PKs (`IX_*_PK`), Soft FKs (`IX_*_FK_*`), and Organic Keys (`IX_*_OK_*`) across runtime `CREATE TABLE` and `SchemaEvolution` `ALTER TABLE` with SQL Server key-width capping (`<= 450` chars) and `sys.index_columns` key-tuple deduplication.
+- d6c233c: Adds a schema-mutating test rig (`rigs/schema-mutating/`). It creates a private database, runs `mj migrate`, `mj sync push --dir=metadata` and `mj codegen --skipfiles` on it, runs field-level security reconciliation scenarios that add columns, a foreign key and view columns, narrow a custom view, and run CodeGen after each, and drops the database. A nightly CI job runs it.
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [8fb8a07]
+- Updated dependencies [76dc1bb]
+- Updated dependencies [064f9a9]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [ed5c6e2]
+- Updated dependencies [6555a44]
+- Updated dependencies [c3a1be6]
+- Updated dependencies [7bbc72f]
+- Updated dependencies [1ce1b80]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [5850233]
+- Updated dependencies [9cd37bd]
+- Updated dependencies [a0079ce]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [d073171]
+- Updated dependencies [7edd599]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [ebd9132]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [83b1293]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [38de1af]
+- Updated dependencies [6bd8271]
+- Updated dependencies [5d88ccb]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [1ff0bd4]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [2aa1c10]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [1ef6a72]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [7069bfe]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [de3d6f9]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/api-keys@6.3.0-edge.0
+  - @memberjunction/open-app-engine@6.3.0-edge.0
+  - @memberjunction/codegen-lib@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/ai-agent-harness@6.3.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.0
+  - @memberjunction/server@6.3.0-edge.0
+  - @memberjunction/storage@6.3.0-edge.0
+  - @memberjunction/search-engine@6.3.0-edge.0
+  - @memberjunction/testing-engine@6.3.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/postgresql-dataprovider@6.3.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.0
+  - @memberjunction/core-entities-server@6.3.0-edge.0
+  - @memberjunction/scheduling-engine@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/content-pipeline@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/testing-integration@6.3.0-edge.0
+  - @memberjunction/a2aserver@6.3.0-edge.0
+  - @memberjunction/feature-pipelines@6.3.0-edge.0
+  - @memberjunction/feature-pipelines-engine@6.3.0-edge.0
+  - @memberjunction/predictive-studio@6.3.0-edge.0
+  - @memberjunction/task-graph@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/redis-provider@6.3.0-edge.0
+  - @memberjunction/integration-schema-builder@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/predictive-studio-core@6.3.0-edge.0
+  - @memberjunction/predictive-studio-truth-suite@6.3.0-edge.0
+  - @memberjunction/ai-engine-base@6.3.0-edge.0
+  - @memberjunction/ai-openai@6.3.0-edge.0
+  - @memberjunction/ai-gemini@6.3.0-edge.0
+  - @memberjunction/ai-bridge-server@6.3.0-edge.0
+  - @memberjunction/schema-engine@6.3.0-edge.0
+  - @memberjunction/query-processor@6.3.0-edge.0
+  - @memberjunction/rubrics@6.3.0-edge.0
+  - @memberjunction/video-studio@6.3.0-edge.0
+  - @memberjunction/work-queue-engine@6.3.0-edge.0
+  - @memberjunction/video-studio-core@6.3.0-edge.0
+  - @memberjunction/record-set-processor@6.3.0-edge.0
+  - @memberjunction/telephony-adapters@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-bridge-base@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/auth-providers@6.3.0-edge.0
+  - @memberjunction/communication-types@6.3.0-edge.0
+  - @memberjunction/communication-engine@6.3.0-edge.0
+  - @memberjunction/notifications@6.3.0-edge.0
+  - @memberjunction/communication-ms-graph@6.3.0-edge.0
+  - @memberjunction/communication-expo-push@6.3.0-edge.0
+  - @memberjunction/communication-gmail@6.3.0-edge.0
+  - @memberjunction/communication-sendgrid@6.3.0-edge.0
+  - @memberjunction/communication-twilio@6.3.0-edge.0
+  - @memberjunction/content-autotagging@6.3.0-edge.0
+  - @memberjunction/content-pipeline-base@6.3.0-edge.0
+  - @memberjunction/conversations-runtime@6.3.0-edge.0
+  - @memberjunction/diagnostics-server@6.3.0-edge.0
+  - @memberjunction/encryption@6.3.0-edge.0
+  - @memberjunction/external-data-sources@6.3.0-edge.0
+  - @memberjunction/livekit-room-server@6.3.0-edge.0
+  - @memberjunction/queue@6.3.0-edge.0
+  - @memberjunction/metadata-sync@6.3.0-edge.0
+  - @memberjunction/record-set-processor-base@6.3.0-edge.0
+  - @memberjunction/rubrics-base@6.3.0-edge.0
+  - @memberjunction/templates-base-types@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+  - @memberjunction/testing-engine-base@6.3.0-edge.0
+  - @memberjunction/unit-testing@6.3.0-edge.0
+  - @memberjunction/work-queue-server@6.3.0-edge.0
+  - @memberjunction/ai-anthropic@6.3.0-edge.0
+  - @memberjunction/ai-cloudflare@6.3.0-edge.0
+  - @memberjunction/ai-inception@6.3.0-edge.0
+  - @memberjunction/ai-openrouter@6.3.0-edge.0
+  - @memberjunction/ai-systemone@6.3.0-edge.0
+  - @memberjunction/diagnostics@6.3.0-edge.0
+  - @memberjunction/work-queue-core@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

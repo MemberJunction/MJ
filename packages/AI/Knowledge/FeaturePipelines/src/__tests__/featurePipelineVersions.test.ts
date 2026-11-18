@@ -224,11 +224,15 @@ function viewResult(rows: MJFeaturePipelineVersionEntityExtended[]): RunViewResu
  * count the registry makes); any other read returns every row.
  */
 function featureValueResult(params: RunViewParams): RunViewResult<FeatureValueRow> {
+    const filterChampion = (params.ExtraFilter ?? '').includes("Role = 'Champion'");
+    const visible = filterChampion
+        ? featureValueRows.filter((r) => (r as { Role?: string }).Role !== 'Challenger')
+        : featureValueRows;
     if (params.ResultType === 'count_only') {
-        const unversioned = featureValueRows.filter((r) => r.PipelineVersion === null).length;
+        const unversioned = visible.filter((r) => r.PipelineVersion === null).length;
         return { Success: true, Results: [], RowCount: 0, TotalRowCount: unversioned, ExecutionTime: 0, ErrorMessage: '' };
     }
-    const rows = featureValueRows.map((r) => ({ ...r }));
+    const rows = visible.map((r) => ({ ...r }));
     return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
 }
 
@@ -584,10 +588,12 @@ describe('FeaturePipelineVersionService.PlanUnattended', () => {
         featureValueRows.push({ RecordID: P1, PipelineVersion: null, ComputedAt: at(1) }, { RecordID: P2, PipelineVersion: null, ComputedAt: at(1) },
             { RecordID: P2, PipelineVersion: 1, ComputedAt: at(2) });
         expect(await plan(pinA)).toEqual({ Kind: 'backfill', Version: 1, RecordIDs: [P1] });
-        // the read keeps the unversioned rows: it filters on the pipeline and the source only
+        // the read keeps the unversioned Champion rows: it filters on the pipeline, source, and Champion role
         const valueReads = provider.Views.filter((v) => v.EntityName === 'MJ: Feature Values' && v.ResultType !== 'count_only');
-        expect(valueReads.map((v) => [v.ExtraFilter, v.Fields])).toEqual([["RecordProcessID = 'RP' AND Source = 'Pipeline'", ['RecordID', 'PipelineVersion', 'ComputedAt']]]);
+        expect(valueReads.map((v) => [v.ExtraFilter, v.Fields])).toEqual([["RecordProcessID = 'RP' AND Source = 'Pipeline' AND Role = 'Champion'", ['RecordID', 'PipelineVersion', 'ComputedAt']]]);
         versionRow(1).BackfilledAt = new Date();
+        // A newer unversioned Challenger row on P2 must not trigger backfill
+        featureValueRows.push({ RecordID: P2, PipelineVersion: null, ComputedAt: at(10), Role: 'Challenger' } as FeatureValueRow);
         expect(await plan(pinA)).toEqual({ Kind: 'none', Version: 1 });
     });
 

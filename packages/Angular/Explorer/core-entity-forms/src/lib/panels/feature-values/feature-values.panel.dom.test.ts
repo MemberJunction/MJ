@@ -62,12 +62,12 @@ const saved: RecordDouble = { IsSaved: true, EntityInfo: { ID: 'ent-1' }, Primar
 afterEach(() => vi.restoreAllMocks());
 
 describe('FeatureValuesPanel (DOM)', () => {
-  it('queries Feature Values once with an escaped entity/record filter', async () => {
+  it('queries Feature Values once with an escaped entity/record filter and Role=Champion (R8)', async () => {
     const calls = stubRunView([]);
     await render(saved);
     expect(calls).toHaveLength(1);
     expect(calls[0].EntityName).toBe('MJ: Feature Values');
-    expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='rec''1'");
+    expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='rec''1' AND Role='Champion'");
     expect(calls[0].OrderBy).toBe('ComputedAt DESC');
     expect(calls[0].MaxRows).toBe(500);
     expect(calls[0].ResultType).toBe('simple');
@@ -76,7 +76,7 @@ describe('FeatureValuesPanel (DOM)', () => {
   it('uses the compact composite key segment for a two-column key', async () => {
     const calls = stubRunView([]);
     await render({ IsSaved: true, EntityInfo: { ID: 'ent-1' }, PrimaryKey: { ToCompactURLSegment: () => 'OrderID|11||LineNo|3' } });
-    expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='OrderID|11||LineNo|3'");
+    expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='OrderID|11||LineNo|3' AND Role='Champion'");
   });
 
   it('Refresh button runs a second RunView, disabled and spinning while it loads', async () => {

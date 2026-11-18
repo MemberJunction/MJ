@@ -137,8 +137,26 @@ The engine resolves delivery channels with this priority:
 | Channel | How It Works |
 |---------|-------------|
 | **In-App** | Creates a `UserNotification` entity record in the database. Synchronous, instant. |
-| **Email** | Renders the notification type's `EmailTemplateID` via `TemplateEngineServer`, then sends through `CommunicationEngine` using SendGrid. Fire-and-forget (async). |
-| **SMS** | Renders the notification type's `SMSTemplateID` via `TemplateEngineServer`, then sends through `CommunicationEngine` using Twilio. Fire-and-forget (async). |
+| **Email** | Renders the notification type's `EmailTemplateID` via `TemplateEngineServer`, then sends through `CommunicationEngine` using the configured email provider (SendGrid by default). Fire-and-forget (async). |
+| **SMS** | Renders the notification type's `SMSTemplateID` via `TemplateEngineServer`, then sends through `CommunicationEngine` using the configured SMS provider (Twilio by default). Fire-and-forget (async). |
+
+### Choosing the email and SMS provider
+
+The provider is a Communication Provider name, taken from the first of:
+
+| Channel | `mj.config.cjs` | Environment variable | Default |
+|---|---|---|---|
+| Email | `notifications.emailProvider` | `NOTIFICATION_EMAIL_PROVIDER` | `SendGrid` |
+| SMS | `notifications.smsProvider` | `NOTIFICATION_SMS_PROVIDER` | `Twilio` |
+
+A name that is not a configured Communication Provider fails the send with a message naming the setting it came from. A Microsoft 365 deployment sets the email provider to `MSGraph`; MS Graph sends as the From mailbox, so `NOTIFICATION_FROM_EMAIL` must be a mailbox the app registration is allowed to send as.
+
+### Scoped configs: locks, malformed rows and uncached recipients
+
+- A `Deny` on a locked row turns the channel off regardless of specificity, and the recipient's own preference cannot turn it back on.
+- `Priority` is reserved. Rows are sorted by it inside a specificity level, but a `Deny` beats an `Allow` at the same level whatever their order, so it decides nothing today.
+- A row whose `SecondaryScopes` is not a JSON object is skipped and logged once; saving such a row is refused.
+- A recipient missing from the user cache has their roles read from `MJ: User Roles`. If that read fails, every role-scoped locked `Deny` for the type applies.
 
 ## Type Definitions
 

@@ -7,3 +7,4 @@ import './generated/class-registrations-manifest.js';
 export * from './Server.js';
 export * from './config.js';
 export * from './AgentCard.js';
+export * from './TaskStore.js';

@@ -43,6 +43,7 @@ import {
 import { BuildRuntimeStatus, IsRuntimeSettled, NormalizeRuntimeState } from './task-graph-runtime-source';
 import type { TaskGraphDebugOverlay, TaskGraphRuntimeStatus } from './task-graph-canvas-adapter';
 import type { TaskGraphSelectionChangedEventArgs } from './task-graph-editor-events';
+import { StepIDOfTask } from './remembered-breakpoints';
 import type {
     FlowAfterContextMenuActionEventArgs,
     FlowBeforeContextMenuEventArgs,
@@ -258,6 +259,15 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Output() public ConnectionSelected = new EventEmitter<TaskGraphRunConnectionSelectedEvent>();
     /** Intent only — the host owns `SetBreakpoints`. */
     @Output() public BreakpointToggled = new EventEmitter<{ TaskID: string; Enabled: boolean }>();
+    /**
+     * Step IDs the person keeps as breakpoints for future runs of this workflow (#3798). Shown in the step's
+     * context menu; empty (and the menu item hidden) unless a host remembers breakpoints.
+     */
+    @Input() public RememberedStepIDs: readonly string[] = [];
+    /** Whether the host offers "remember for future runs" at all. */
+    @Input() public AllowRememberBreakpoints: boolean = false;
+    /** Intent only — the host stores the remembered set. */
+    @Output() public RememberBreakpointToggled = new EventEmitter<{ TaskID: string; StepID: string; Remember: boolean }>();
     /** Intent only — the host owns `OverrideEdge`. */
     @Output() public EdgeOverrideRequested = new EventEmitter<{
         EdgeID: string;
@@ -440,6 +450,11 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         return [...this.taskByID.values()];
     }
 
+    /** The stable step ID of a task on the canvas, from its `Configuration.stepId`; null for rows submitted before it. */
+    public StepIDOf(taskID: string): string | null {
+        return StepIDOfTask(this.taskByID.get(taskID)?.Configuration);
+    }
+
     public OnToggleSelectedBreakpoint(): void {
         if (!this.AllowBreakpointEditing || !this.SelectedTaskID) return;
         this.BreakpointToggled.emit({
@@ -462,6 +477,15 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 Icon: 'fa-circle',
                 Shortcut: 'F9',
             }];
+            const stepID = this.AllowRememberBreakpoints ? this.StepIDOf(event.Node.ID) : null;
+            if (stepID) {
+                const remembered = this.RememberedStepIDs.includes(stepID);
+                event.Items.push({
+                    ID: 'toggle-remember-breakpoint',
+                    Label: remembered ? 'Stop Remembering Breakpoint' : 'Remember Breakpoint for Future Runs',
+                    Icon: remembered ? 'fa-bookmark' : 'fa-regular fa-bookmark',
+                });
+            }
             return;
         }
         if (event.Target === 'connection' && event.Connection?.Condition?.trim()) {
@@ -488,6 +512,17 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 TaskID: event.Node.ID,
                 Enabled: !this.hasBreakpoint(event.Node.ID),
             });
+            return;
+        }
+        if (event.ActionID === 'toggle-remember-breakpoint' && event.Node) {
+            const stepID = this.StepIDOf(event.Node.ID);
+            if (stepID) {
+                this.RememberBreakpointToggled.emit({
+                    TaskID: event.Node.ID,
+                    StepID: stepID,
+                    Remember: !this.RememberedStepIDs.includes(stepID),
+                });
+            }
             return;
         }
         const edgeID = typeof event.Connection?.Data?.['EdgeID'] === 'string'

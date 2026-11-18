@@ -155,6 +155,7 @@ vi.mock('@memberjunction/ai', () => {
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
         ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
         CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
+        CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
         // Narrows a `tool` role to the classic trio; the driver relies on it, so use the real one.
         toClassicChatMessageRole: actualToClassicChatMessageRole,
         BaseLLM,
@@ -516,6 +517,73 @@ describe('GroqLLM', () => {
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
             // The abort reaches BaseLLM's stream loop, which reports the request as cancelled.
             expect(stream).toBe(sdkStream);
+        });
+    });
+
+    describe('tool_use_failed recovery (#5847)', () => {
+        type RecoveredResult = {
+            success: boolean;
+            ToolCallsRecovered?: boolean;
+            data: { choices: Array<{ finish_reason: string; message: { content: string; toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }> } }> };
+        };
+        const callNonStreaming = async (params: Record<string, unknown>): Promise<RecoveredResult> => {
+            return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params) as Promise<RecoveredResult>;
+        };
+        /** The shape groq-sdk throws for a 400: the response body is kept on `error`. */
+        const toolUseFailed = (failedGeneration: string): Error & { status: number; error: unknown } =>
+            Object.assign(new Error('400 tool call validation failed'), {
+                status: 400,
+                error: { error: { message: 'tool call validation failed', type: 'invalid_request_error', code: 'tool_use_failed', failed_generation: failedGeneration } }
+            });
+        const withTools = {
+            model: 'qwen/qwen3.6-27b',
+            messages: [{ role: ChatMessageRole.user, content: 'Draw a chart' }],
+            tools: [{ name: 'create_svg_chart', inputSchema: { type: 'object', properties: { ShowGrid: { type: 'boolean' } } } }]
+        };
+        const qwenGeneration = '<tool_call>\n<function=create_svg_chart>\n<parameter=ChartType>\nbar\n</parameter>\n<parameter=ShowGrid>\ntrue\n</parameter>\n</function>\n</tool_call>';
+
+        it('returns the rejected call as a tool call flagged ToolCallsRecovered', async () => {
+            mockCreate.mockRejectedValue(toolUseFailed(qwenGeneration));
+
+            const result = await callNonStreaming(withTools);
+
+            expect(result.success).toBe(true);
+            expect(result.ToolCallsRecovered).toBe(true);
+            const choice = result.data.choices[0];
+            expect(choice.finish_reason).toBe('tool_calls');
+            expect(choice.message.toolCalls).toHaveLength(1);
+            expect(choice.message.toolCalls?.[0].name).toBe('create_svg_chart');
+            // The model's own values: coercion is the action layer's job, not the driver's.
+            expect(choice.message.toolCalls?.[0].arguments).toEqual({ ChartType: 'bar', ShowGrid: 'true' });
+            expect(choice.message.toolCalls?.[0].id).toMatch(/^call_recovered_/);
+        });
+
+        it('rethrows when the rejected call names a tool the request did not declare', async () => {
+            const error = toolUseFailed('{"name": "json", "arguments": {"answer": 1}}');
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
+        });
+
+        it('rethrows when the request declared no tools', async () => {
+            const error = toolUseFailed(qwenGeneration);
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming({ ...withTools, tools: undefined })).rejects.toBe(error);
+        });
+
+        it('rethrows a 400 that is not tool_use_failed', async () => {
+            const error = Object.assign(new Error('400 bad'), { status: 400, error: { error: { code: 'invalid_request', failed_generation: qwenGeneration } } });
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
+        });
+
+        it('rethrows when the failed generation cannot be parsed', async () => {
+            const error = toolUseFailed('I would like to draw a chart but cannot.');
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
         });
     });
 });

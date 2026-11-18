@@ -82,14 +82,14 @@ function trackLineState(line: string, state: ParseState): ParseState {
  * NOTE: SET is intentionally excluded — it would split UPDATE...SET into two
  * statements. Standalone SET commands (SET NOEXEC, SET ANSI_NULLS, etc.) are
  * already handled by preprocessor/postprocessor removal rules. */
-const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s|DROP\s|DECLARE\s+@)/i;
+const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|IF\s+COL_LENGTH|EXEC\s|CREATE\s|DROP\s|DECLARE\s+@)/i;
 
 /** IF conditionals whose next top-level keyword is the single-statement body.
  * T-SQL allows IF without BEGIN/END for single-statement bodies:
  *   IF NOT EXISTS (...) CREATE INDEX ...
  *   IF EXISTS (...) EXEC sp_dropextendedproperty ...
  * The sub-splitter must keep these as one batch. */
-const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|@@)/i;
+const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|COL_LENGTH|@@)/i;
 
 /**
  * Sub-split a compound batch into individual statements.
@@ -107,8 +107,11 @@ export function SubSplitCompoundBatch(batch: string): string[] {
   const upperNoComments = stripLeadingComments(batch).trimStart().toUpperCase();
 
   // Don't sub-split CREATE VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
-  if (/^CREATE\s+(VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
-  if (/^CREATE\s+PROC\s/i.test(upperNoComments)) return [batch];
+  // The OR ALTER form too: splitting a CREATE OR ALTER TRIGGER at the IF/INSERT statements in its
+  // body scattered the routine into fragments, most of them passed through as live T-SQL
+  // (issue #5364 item 7).
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?(VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?PROC\s/i.test(upperNoComments)) return [batch];
 
   // CREATE TABLE blocks: keep together UNLESS followed by ALTER TABLE or other
   // top-level DDL/DML. Splitting ensures the follow-up ALTER TABLE statements

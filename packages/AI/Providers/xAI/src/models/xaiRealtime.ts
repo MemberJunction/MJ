@@ -189,8 +189,14 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
         return 7200;
     }
 
+    /**
+     * False by default: live probing against `wss://api.x.ai/v1/realtime` confirmed that resuming via
+     * `?conversation_id=<id>` drops all client-created `conversation.item.create` `message` items
+     * (`SendContextNote`, `SendText`, and any history seeded after a network drop), whereas `ConversationMemory`
+     * text seeding is lossless (~0.9 s). Explicit `Config.trustNativeResumption = true` still opts in.
+     */
     public override get TrustsNativeResumption(): boolean {
-        return true;
+        return false;
     }
 
     /**
@@ -247,5 +253,9 @@ export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violati
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
         return this.model?.DefaultCallDurationSeconds ?? 7200;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return this.model?.TrustsNativeResumption ?? false;
     }
 }
