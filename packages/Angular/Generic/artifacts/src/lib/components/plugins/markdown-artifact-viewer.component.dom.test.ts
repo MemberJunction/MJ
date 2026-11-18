@@ -16,6 +16,7 @@ import { MJ_EMBEDDED_ARTIFACT_ANCESTORS, MJ_MAX_EMBED_DEPTH } from '../artifact-
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactCommandPaletteComponent } from './artifact-command-palette.component';
 import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
@@ -324,6 +325,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -925,13 +927,14 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       const rightBar = root.querySelector('.mj-docs-toolbar__right')!;
       const moreMenu = root.querySelector<HTMLElement>('[data-testid="docs-more-tools-menu"]')!;
 
-      // Calm default toolbar buttons
+      // Calm Option A default toolbar buttons (format & comments pinned; outline & insert-block stay inside More / Cmd+K)
       expect(leftBar.querySelector('[data-testid="mode-preview-btn"]')).not.toBeNull();
       expect(leftBar.querySelector('[data-testid="mode-edit-btn"]')).not.toBeNull();
-      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).toBeNull();
       expect(leftBar.querySelector('[data-testid="toggle-format-ribbon-btn"]')).not.toBeNull();
-      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).toBeNull();
       expect(rightBar.querySelector('[data-testid="toggle-comments-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="docs-cmdk-btn"]')).not.toBeNull();
       expect(rightBar.querySelector('[data-testid="save-doc-version-btn"]')).not.toBeNull();
       expect(rightBar.querySelector('[data-testid="toggle-more-tools-btn"]')).not.toBeNull();
 
@@ -1536,6 +1539,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1868,6 +1872,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1911,6 +1916,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1946,6 +1952,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],

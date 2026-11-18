@@ -1,4 +1,5 @@
 import type { Type } from '@angular/core';
+import type { Subscription } from 'rxjs';
 import type { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   REALTIME_CHANNEL_CONTRACT_VERSION,
@@ -133,6 +134,8 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   public Config: ArtifactWorkspaceConfig = { ...DEFAULT_ARTIFACT_WORKSPACE_CONFIG };
   private surface: RealtimeArtifactWorkspaceSurfaceComponent | null = null;
   private pendingRehydration: Promise<void> | null = null;
+  private engineChangedSub: Subscription | null = null;
+  private suppressStateSave = false;
   private disposed = false;
 
   public get ChannelName(): string {
@@ -170,6 +173,18 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
 
   public override GetDescriptor(): RealtimeChannelDescriptor {
     const verbs: RealtimeChannelVerb[] = [
+      {
+        Name: 'get_state',
+        Description:
+          'Read-only peek at currently open workspace artifacts, active tab, current view mode, and active slide/selection state.',
+        ParametersSchema: {
+          type: 'object',
+          properties: {
+            artifactId: { type: 'string', description: 'Optional specific Artifact ID to inspect.' },
+          },
+        },
+        InvokableBy: 'agent',
+      },
       {
         Name: 'focus',
         Description: 'Brings an already-open workspace artifact tab into the foreground.',
@@ -317,6 +332,12 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   protected override OnInitialize(): void {
     this.Config = parseArtifactWorkspaceConfig(this.Context?.ChannelConfig);
     this.Engine.SetMaxInstances(this.Config.MaxInstances);
+    this.engineChangedSub?.unsubscribe();
+    this.engineChangedSub = this.Engine.Changed$.subscribe((change) => {
+      if (!this.suppressStateSave && change.Kind !== 'refresh' && change.Kind !== 'rehydrating') {
+        this.persistWorkspaceState();
+      }
+    });
     if (ChannelFrameCapture.Instance.Capturer) {
       this.EnableVisualPerception({ GetLatestFrame: () => this.CaptureActiveFrame() });
     }
@@ -412,9 +433,16 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
 
   public override Dispose(): void {
     this.disposed = true;
+    this.engineChangedSub?.unsubscribe();
+    this.engineChangedSub = null;
     this.surface = null;
     this.Engine.Dispose();
     super.Dispose();
+  }
+
+  private persistWorkspaceState(): void {
+    const serialized = this.SerializeState() ?? JSON.stringify({ activeArtifactId: null, instances: [] });
+    this.Context?.RequestSave(serialized);
   }
 
   public override SerializeState(): string | null {
@@ -453,18 +481,23 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     if (validItems.length === 0) {
       return false;
     }
-    for (const existing of [...this.Engine.Instances]) {
-      this.Engine.Remove(existing.InstanceID);
-    }
-    for (const item of validItems) {
-      // Force CanEdit: false until async rehydration verifies permissions against the backend
-      this.Engine.AddOrFocus({ ...item, CanEdit: false });
-    }
-    if (parsed.activeArtifactId) {
-      const active = this.Engine.FindByArtifact(parsed.activeArtifactId);
-      if (active) {
-        this.Engine.SetActive(active.InstanceID);
+    this.suppressStateSave = true;
+    try {
+      for (const existing of [...this.Engine.Instances]) {
+        this.Engine.Remove(existing.InstanceID);
       }
+      for (const item of validItems) {
+        // Force CanEdit: false until async rehydration verifies permissions against the backend
+        this.Engine.AddOrFocus({ ...item, CanEdit: false });
+      }
+      if (parsed.activeArtifactId) {
+        const active = this.Engine.FindByArtifact(parsed.activeArtifactId);
+        if (active) {
+          this.Engine.SetActive(active.InstanceID);
+        }
+      }
+    } finally {
+      this.suppressStateSave = false;
     }
     const provider = this.Context?.Provider;
     if (provider?.CurrentUser) {
@@ -504,18 +537,23 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         if (this.disposed) {
           return;
         }
-        if ('Success' in resolved) {
-          this.Engine.Remove(record.InstanceID);
-          continue;
+        this.suppressStateSave = true;
+        try {
+          if ('Success' in resolved) {
+            this.Engine.Remove(record.InstanceID);
+            continue;
+          }
+          this.Engine.UpdateRecordMetadata(record.InstanceID, {
+            ArtifactVersionID: resolved.ArtifactVersionID,
+            VersionNumber: resolved.VersionNumber,
+            Name: resolved.Name,
+            ArtifactTypeName: resolved.ArtifactTypeName,
+            DriverClass: resolved.DriverClass,
+            CanEdit: resolved.CanEdit,
+          });
+        } finally {
+          this.suppressStateSave = false;
         }
-        this.Engine.UpdateRecordMetadata(record.InstanceID, {
-          ArtifactVersionID: resolved.ArtifactVersionID,
-          VersionNumber: resolved.VersionNumber,
-          Name: resolved.Name,
-          ArtifactTypeName: resolved.ArtifactTypeName,
-          DriverClass: resolved.DriverClass,
-          CanEdit: resolved.CanEdit,
-        });
       }
     } finally {
       if (!this.disposed) {
@@ -712,6 +750,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       resolved.VersionNumber,
       resolved.Name,
     );
+    this.Engine.SetActive(existing.InstanceID);
     this.EmitChannelEvent(
       'version_changed',
       {
@@ -732,6 +771,30 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     instanceId?: string,
   ): Promise<RealtimeChannelVerbResult> {
     const normalized = verb.trim().toLowerCase();
+    if (normalized === 'get_state' || normalized === 'peek') {
+      const requestedArtifactId =
+        typeof args['artifactId'] === 'string' ? args['artifactId'].trim() : '';
+      const state = this.GetState();
+      if (requestedArtifactId) {
+        const artifacts = (state['artifacts'] ?? {}) as JSONObject;
+        const match =
+          Object.entries(artifacts).find(
+            ([, entry]) =>
+              entry &&
+              typeof entry === 'object' &&
+              !Array.isArray(entry) &&
+              (entry as JSONObject)['artifactId'] === requestedArtifactId,
+          ) ?? null;
+        return {
+          Success: true,
+          Result: {
+            ...state,
+            requestedArtifact: match ? { instanceId: match[0], ...(match[1] as JSONObject) } : null,
+          },
+        };
+      }
+      return { Success: true, Result: state };
+    }
     const record = this.resolveTargetRecord(args, instanceId);
     if (!record) {
       return failure('unknown_instance', 'No matching workspace artifact tab is open.');

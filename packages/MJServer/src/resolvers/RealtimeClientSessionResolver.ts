@@ -2536,30 +2536,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return null;
         }
         try {
-            const loaded = await LoadSessionForAccess(lastSessionId, contextUser, provider);
-            if (!loaded) {
-                LogError(`StartRealtimeClientSession: prior session ${lastSessionId} not found — skipping channel-state restore.`);
-                return null;
-            }
-            const access = AuthorizeSessionAccess(
-                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
-                contextUser,
-            );
-            if (!access.Allowed) {
-                LogError(
-                    `StartRealtimeClientSession: prior session ${lastSessionId} is not owned by user ${contextUser.ID} (${access.Reason}) — ` +
-                        'skipping channel-state restore.',
-                );
+            const legIDs = await this.collectOwnedPriorLegIDs(lastSessionId, contextUser, provider);
+            if (legIDs.length === 0) {
                 return null;
             }
 
-            const safeID = lastSessionId.replace(/'/g, "''");
             const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ Channel: string; Config: string | null }>(
+            const filter =
+                legIDs.length === 1
+                    ? `AgentSessionID='${EscapeSQLString(legIDs[0])}'`
+                    : `AgentSessionID IN (${legIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`;
+            const result = await rv.RunView<{ AgentSessionID?: string; Channel: string; Config: string | null }>(
                 {
                     EntityName: SESSION_CHANNEL_ENTITY,
-                    ExtraFilter: `AgentSessionID='${safeID}'`,
-                    Fields: ['Channel', 'Config'],
+                    ExtraFilter: filter,
+                    Fields: ['AgentSessionID', 'Channel', 'Config'],
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -2569,10 +2560,86 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return null;
             }
 
-            const states = this.collectChannelStates(result.Results ?? [], lastSessionId);
+            // Sort rows newest-leg-first using legIDs order (legIDs[0] is lastSessionId). Rows
+            // lacking AgentSessionID (e.g. minimal single-leg mocks) default to rank 0 (newest).
+            const legRank = new Map(legIDs.map((id, index) => [id.trim().toLowerCase(), index]));
+            const sortedRows = [...(result.Results ?? [])].sort((a, b) => {
+                const rankA = a.AgentSessionID ? (legRank.get(a.AgentSessionID.trim().toLowerCase()) ?? legIDs.length) : 0;
+                const rankB = b.AgentSessionID ? (legRank.get(b.AgentSessionID.trim().toLowerCase()) ?? legIDs.length) : 0;
+                return rankA - rankB;
+            });
+
+            const states = this.collectChannelStates(sortedRows, lastSessionId);
+            const hasWorkspaceState = Object.keys(states).some((k) => k.trim().toLowerCase() === 'artifactworkspace');
+            if (!hasWorkspaceState) {
+                const fallbackWorkspace = await this.loadPriorArtifactWorkspaceFallback(legIDs, contextUser, provider);
+                if (fallbackWorkspace) {
+                    const currentTotal = Object.values(states).reduce((sum, v) => sum + v.length, 0);
+                    if (currentTotal + fallbackWorkspace.length <= MAX_CHANNEL_STATE_CHARS) {
+                        states['ArtifactWorkspace'] = fallbackWorkspace;
+                    }
+                }
+            }
             return Object.keys(states).length > 0 ? JSON.stringify(states) : null;
         } catch (error) {
             LogError(`StartRealtimeClientSession: channel-state restore failed for prior session ${lastSessionId}: ${(error as Error).message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Backstop for sessions that created/edited collaborative artifacts via delegated runs
+     * (linked in `MJ: Conversation Detail Artifacts`) without a saved `ArtifactWorkspace`
+     * channel-state row — synthesizes `ArtifactWorkspace` restore JSON so resuming opens those
+     * workspace tabs immediately alongside the rest of the session's restored channels.
+     */
+    private async loadPriorArtifactWorkspaceFallback(
+        legIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (legIDs.length === 0) {
+            return null;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const idList = legIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const detailRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `AgentSessionID IN (${idList})`,
+                    Fields: ['ID'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    MaxRows: 200,
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const detailIDs = (detailRes.Success ? (detailRes.Results ?? []) : [])
+                .map((r) => r.ID)
+                .filter((id) => typeof id === 'string' && id.length > 0);
+            if (detailIDs.length === 0) {
+                return null;
+            }
+            const artifacts = await this.loadConversationArtifacts(rv, detailIDs, contextUser, provider);
+            const collaborative = artifacts.filter(
+                (a) => (a.Type ?? '').trim().toLowerCase() !== 'component',
+            );
+            if (collaborative.length === 0) {
+                return null;
+            }
+            const instances = collaborative.map((a) => ({
+                ArtifactID: a.ArtifactID,
+                ...(a.LatestVersionID ? { ArtifactVersionID: a.LatestVersionID } : {}),
+                ...(typeof a.LatestVersionNumber === 'number' ? { VersionNumber: a.LatestVersionNumber } : {}),
+                Name: a.Name,
+                ...(a.Type ? { ArtifactTypeName: a.Type } : {}),
+            }));
+            return JSON.stringify({
+                activeArtifactId: instances[instances.length - 1].ArtifactID,
+                instances,
+            });
+        } catch {
             return null;
         }
     }
@@ -2997,9 +3064,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         lastSessionId: string,
     ): Record<string, string> {
         const states: Record<string, string> = {};
+        const seenChannels = new Set<string>();
         let totalChars = 0;
         for (const row of rows) {
             if (!row.Channel || !row.Config) {
+                continue;
+            }
+            // Rows arrive newest-leg-first; once a newer leg supplies valid non-empty state for a
+            // channel, older legs' entries for that channel are superseded.
+            const normalizedChannel = row.Channel.trim().toLowerCase();
+            if (seenChannels.has(normalizedChannel)) {
                 continue;
             }
             if (row.Config.length > MAX_CHANNEL_STATE_CHARS || totalChars + row.Config.length > MAX_CHANNEL_STATE_CHARS) {
@@ -3010,6 +3084,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 continue;
             }
             states[row.Channel] = row.Config;
+            seenChannels.add(normalizedChannel);
             totalChars += row.Config.length;
         }
         return states;

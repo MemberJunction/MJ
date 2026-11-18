@@ -11,15 +11,17 @@ export interface EmbeddingSettings {
   LocalURL?: string;
 }
 
-/** Embed texts with a model. Resolves with one vector per text, in order. */
+/** Embed texts with a model. Resolves with one vector per text, in order, and the tokens consumed. */
 export interface EmbedCall {
   Kind: 'embed';
   Model: string;
   Texts: string[];
+  /** Truncate each text to this many tokens before embedding; the model's own limit applies when unset. */
+  MaxInputTokens?: number;
   Settings: EmbeddingSettings;
 }
 
-/** Drop the worker's loaded pipelines. Resolves with no vectors. */
+/** Drop the worker's loaded models and release their ONNX sessions once their in-flight calls finish. Resolves with no vectors. */
 export interface ClearCall {
   Kind: 'clear';
 }

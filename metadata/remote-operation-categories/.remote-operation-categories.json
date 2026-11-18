@@ -161,6 +161,10 @@
     },
     "primaryKey": {
       "ID": "6EF20000-A2CF-4516-8003-7CEF32803326"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:24:52.146Z",
+      "checksum": "ab4e601c84e2fd75f6e8871b6dc27898521c18b7d90102aa146cb535960b9a74"
     }
   },
   {
