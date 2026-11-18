@@ -1,0 +1,4 @@
+{
+  "$comment": "Overrides for DEFAULT_SETTINGS in src/settings.ts; thresholds and limits are policy (D18)",
+  "Sandbox": { "PnpmVersion": "10.33.0" }
+}

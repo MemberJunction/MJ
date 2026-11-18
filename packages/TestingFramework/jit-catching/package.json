@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/jit-catching",
+  "license": "BUSL-1.1",
+  "version": "6.2.0",
+  "private": true,
+  "description": "Catching JiTTests for MemberJunction: generates throwaway tests on a PR's base, runs them on base and head, and reports tests that pass on base and fail on head. Repo-local tool; not published.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": { "jit-catch": "bin/jit-catch.js" },
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.318",
+    "@anthropic-ai/sdk": "^0.93.0",
+    "@memberjunction/ai": "6.2.0",
+    "@memberjunction/ai-anthropic": "6.2.0",
+    "@memberjunction/ai-gemini": "6.2.0",
+    "@memberjunction/ai-openai": "6.2.0",
+    "@memberjunction/global": "6.2.0",
+    "@memberjunction/rubrics": "6.2.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@memberjunction/unit-testing": "6.2.0",
+    "vitest": "^4.0.18"
+  },
+  "repository": { "type": "git", "url": "https://github.com/MemberJunction/MJ" }
+}

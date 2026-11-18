@@ -1,0 +1,14 @@
+# Sandbox image for untrusted code (D28). Built on the host by Sandbox.EnsureImage; run with --network none.
+FROM node:24-bookworm-slim
+# A global install, not corepack: corepack keeps its cache under /root (unreadable under `--user`) and its shim
+# reads a PR's `packageManager` field before pnpm starts, which would try the network.
+RUN npm install -g pnpm@10.33.0
+# git is needed by turbo for hashing and by pnpm for some workspace operations.
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+# The runner's uid is passed at `docker run --user`; no user is created here. Sandbox mounts a passwd and
+# group file naming that uid over /etc/passwd and /etc/group, so os.userInfo() (oclif manifest) resolves.
+WORKDIR /work
+# pnpm must not follow a PR's `packageManager` field (no network anyway), and installs read the
+# store the host filled with `pnpm fetch`, mounted at /pnpm-store. Bind mounts cannot hard-link
+# into the worktree, so pnpm copies.
+ENV CI=1 TZ=UTC npm_config_manage_package_manager_versions=false npm_config_store_dir=/pnpm-store npm_config_package_import_method=copy
