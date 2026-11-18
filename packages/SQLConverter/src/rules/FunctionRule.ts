@@ -3,7 +3,7 @@ import {
   ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
   ConvertStringConcat, ConvertTopToLimit, ConvertIIF,
   RemoveNPrefix, ConvertCommonFunctions, EmitDropOverloadsBlock,
-  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema, ConvertApplyToLateral,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 
@@ -67,6 +67,10 @@ export class FunctionRule implements IConversionRule {
 
     // Common functions
     result = ConvertCommonFunctions(result);
+    // MJ 6.3 CodeGen's hierarchy TVFs (fn<Table><Field>_GetHierarchyMeta) count children with
+    // `OUTER APPLY (...) ch`; only ViewRule rewrote APPLY, so the function body reached PG as T-SQL
+    // (`syntax error at or near "OUTER"`, V202611170731).
+    result = ConvertApplyToLateral(result);
     result = ConvertTopToLimit(result);
     result = ConvertStringConcat(result, context.TableColumns);
     result = ConvertDateFunctions(result);

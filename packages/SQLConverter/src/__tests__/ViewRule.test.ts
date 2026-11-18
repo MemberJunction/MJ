@@ -65,6 +65,8 @@ CROSS APPLY (SELECT TOP 1 [Val] FROM [__mj].[Bar] WHERE [FooID] = f.[ID]) b`;
       const result = convert(sql);
       expect(result).toContain('CROSS JOIN LATERAL');
       expect(result).not.toMatch(/CROSS\s+APPLY/i);
+      // A CROSS join takes no condition: `ON TRUE` after one is a PG syntax error.
+      expect(result).not.toMatch(/\)\s*b\s+ON\s+TRUE/i);
     });
   });
 
