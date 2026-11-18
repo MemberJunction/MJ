@@ -107,6 +107,7 @@
                   [src]="renderUrl"
                   [style.transform]="'scale(' + ImageZoom + ')'"
                   [alt]="active.DisplayName"
+                  (error)="OnMediaElementError(active)"
                 />
               }
               @case ('pdf') {

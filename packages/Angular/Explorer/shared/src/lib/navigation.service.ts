@@ -124,6 +124,11 @@ export class NavigationService implements OnDestroy {
     this.setupGlobalShiftKeyDetection();
   }
 
+  /** Exposes the injected ApplicationManager for resources resolving DriverClass targets. */
+  public get AppManager(): ApplicationManager {
+    return this.appManager;
+  }
+
   /**
    * Get the neutral color used for system-wide resources (entities, views, dashboards)
    * Returns a light neutral gray

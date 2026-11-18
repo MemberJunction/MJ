@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- a1c367b: `ChatResult` `finish_reason` now means the same on every driver (#4335): new `NormalizeFinishReason` maps Anthropic `end_turn`/`stop_sequence`, Gemini `STOP` and similar to `'stop'`, `max_tokens`/`MAX_TOKENS` to `'length'`, refusals and safety blocks to `'content_filter'` and `tool_use` to `'tool_calls'`; unknown values pass through. Anthropic (which reported `"completed"`), Gemini, Mistral, Bedrock, Ollama and LM Studio use it in streaming and non-streaming results. LM Studio streaming now reads the finished prediction's stats: a prediction LM Studio stopped or whose model it unloaded is a retriable failure instead of a truncated answer, and token counts come from the stats; non-streaming also fails on `modelUnloaded` (#5651). The tool-calling conformance kit drops its `OrdinaryFinishReason` knob and expects `'stop'`.
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

@@ -710,4 +710,13 @@ export interface IRemoteBrowserSession {
    * @returns The goal outcome (success, status, step count, final URL).
    */
   RunComputerUseGoal(goal: string, options?: RunComputerUseGoalOptions): Promise<RemoteBrowserGoalResult>;
+
+  /**
+   * Resizes the active browser page's viewport in place without navigating or reloading,
+   * then pushes a fresh screencast frame when streaming.
+   *
+   * @param width Target viewport width in CSS pixels.
+   * @param height Target viewport height in CSS pixels.
+   */
+  ResizeViewport?(width: number, height: number): Promise<void>;
 }

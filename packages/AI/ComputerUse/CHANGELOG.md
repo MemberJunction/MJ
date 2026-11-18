@@ -1,5 +1,58 @@
 # @memberjunction/computer-use
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- b5c4a3c: Computer Use runs on the agent run's API keys (#4807): `ComputerUseAction` passes the run's `RuntimeAPIKeyResolver` and `CredentialScope` to the engine, which hands them to its controller, judge and heal prompts. `AIPromptParams.APIKeyResolver` is consulted in the legacy key tier after explicit `apiKeys` and before environment keys, and is inherited by internal prompts with the rest of the execution scope.
+- 0bad3a4: Resize the remote Chromium browser viewport in place to match the usable drawer area below the toolbar instead of scaling a fixed 1280 × 720 desktop frame, render the canvas and cursor overlay edge-to-edge at the frame's aspect ratio, re-arm standby `browser_*` tools after closing the drawer with `CloseRemoteBrowserPanel()`, and keep `HideRemoteBrowserPanel()` separate when toggling the header Browser button.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

@@ -505,7 +505,7 @@ export class RealtimeToolBroker {
      * @param error The thrown error or message.
      * @returns The serialized error result (always `Success: false`).
      */
-    private serializeError(error: unknown): ExecutedToolCall {
+    private serializeError(error: Error | string | number | boolean | object | null | undefined): ExecutedToolCall {
         const message = error instanceof Error ? error.message : String(error);
         return { ResultJson: JSON.stringify({ success: false, error: message }), Success: false };
     }
@@ -516,7 +516,7 @@ export class RealtimeToolBroker {
      * @param error The thrown error or message.
      * @param operation A short description of what was being attempted.
      */
-    private logError(error: unknown, operation: string): void {
+    private logError(error: Error | string | number | boolean | object | null | undefined, operation: string): void {
         const message = error instanceof Error ? error.message : String(error);
         this.deps.LogError?.(`RealtimeToolBroker error while ${operation}: ${message}`);
     }

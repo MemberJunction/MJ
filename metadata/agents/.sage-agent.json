@@ -26,7 +26,9 @@
         "includeScratchpadDocs": true,
         "includeMessageExpansionDocs": false,
         "enableTaskGraphs": true,
-        "enableHandoff": true
+        "enableHandoff": true,
+        "decisionsEnabled": true,
+        "decisionDiscovery": true
       },
       "RerankerConfiguration": {
         "enabled": true,
@@ -38,7 +40,7 @@
       "TypeConfiguration": {
         "realtime": {
           "video": {
-            "enabled": true,
+            "enabled": false,
             "avatarId": "Ben"
           },
           "directActions": {
@@ -547,7 +549,7 @@
             "ID": "D2AC0C24-0EEA-4355-AD3F-972870682DBF"
           },
           "sync": {
-            "lastModified": "2026-11-15T14:43:20.478Z",
+            "lastModified": "2026-11-18T00:24:47.365Z",
             "checksum": "ec935fc6573efac0226117962fd8dd9ddf4f44733cf1dd077a3f07a1500b9c34"
           }
         },
@@ -561,7 +563,7 @@
             "ID": "B91508F2-4456-4178-B1D8-C33A302FF167"
           },
           "sync": {
-            "lastModified": "2026-11-15T14:43:20.493Z",
+            "lastModified": "2026-11-18T00:24:47.379Z",
             "checksum": "aa7cb156da674a9ff36278666b5faf9c8d175c5c81d86f1609e993d6cc3d0bff"
           }
         },
@@ -575,7 +577,7 @@
             "ID": "92CFA9CA-E688-48DD-BDCE-5F6C17FE31B0"
           },
           "sync": {
-            "lastModified": "2026-11-15T14:43:20.509Z",
+            "lastModified": "2026-11-18T00:24:47.393Z",
             "checksum": "655b7653331c0a44aabc9282bf8b5fef41b9b209201b886702a691e885ef3511"
           }
         },
@@ -589,7 +591,7 @@
             "ID": "38FF5C60-CE87-4F63-88B9-91255BE3490F"
           },
           "sync": {
-            "lastModified": "2026-11-15T14:43:20.523Z",
+            "lastModified": "2026-11-18T00:24:47.409Z",
             "checksum": "cf5f1824bdcb573d9d4c437cf0a0345c0f94a23ced571c3791cba3780dad8c11"
           }
         }
@@ -1078,8 +1080,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-11-15T14:43:20.460Z",
-      "checksum": "889c0f0e8fce7096d20ba06712793ed16a86fb491a6fc05c610c8355dc97ed4c"
+      "lastModified": "2026-11-18T00:24:47.343Z",
+      "checksum": "ccbb2da4321ec48e4e416a14df967b903bb4026562ce842e5ee9196a2c043c5e"
     }
   }
 ]

@@ -8,7 +8,45 @@
       "IsActive": true,
       "SpeedRank": 0,
       "CostRank": 0,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "Calibrations": [
+            {
+              "Use": "conversation-routing",
+              "Question": "continues",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 1.6508,
+              "B": -0.3989,
+              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29, via Cerebras: 301 scored points, 5 repeats. Out of fold: balanced accuracy 0.796 raw → 0.861 calibrated, ECE 0.195 → 0.081. Fitted at the corpus mix (42% continue), then B shifted by logit(0.9) − logit(127/301) = +2.5121 to a chat's 90%-continue mix (B at the corpus mix: -2.911)."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "agent",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 1.4301,
+              "B": -0.0755,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats (GPT-OSS-120B answered all 774 runs). At a calibrated 0.85: at least 16.0% coverage at 92.6% precision."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "anyApplies",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 0.7114,
+              "B": 0.9073,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats; Likelihood against whether the request was meant for an agent."
+            },
+            {
+              "Use": "duplicate-detection",
+              "Question": "duplicate",
+              "ResolvedModel": "GPT-OSS-120B",
+              "A": 0.9918,
+              "B": -1.4843,
+              "FittedOn": "Duplicate-check measurement, 2026-09-29: 160 labelled new MJ: Actions records; the stored runs don't record the resolved model, this is the LLM Decision prompt's first binding that day."
+            }
+          ]
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -39,8 +77,8 @@
       "ID": "ECE88C9A-14C9-412C-8675-1CB8325C9B1C"
     },
     "sync": {
-      "lastModified": "2026-09-28T23:23:48.456Z",
-      "checksum": "0e1358b474ae22c2ef15587057392ec90dd34e3e0b4d29a77dfac767b42c4d38"
+      "lastModified": "2026-11-18T00:23:28.201Z",
+      "checksum": "2993552f8f17f9283914b1f2727c9a9035cbc06732e2c455f0b3675c491dda69"
     }
   }
 ]

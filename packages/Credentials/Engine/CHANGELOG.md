@@ -1,5 +1,68 @@
 # @memberjunction/credentials
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- fa811cc: A peer server's cache event no longer leaves an engine holding encrypted field values. Server caches store encrypted fields as ciphertext and only the cache-read path decrypts them, but `BaseEngine` applied a peer's `set` or `row_delta` rows without decrypting whenever they carried a newer version than the engine held. With two or more servers on one Redis, `CredentialEngine` then held `Values` as `$ENC$…` and `GetCredential` returned empty values as a success, until that server's next save of the credential. An engine now reloads instead of applying a payload that carries ciphertext on an encrypted field; the reload reads the same slot and decrypts it. In a three-process reproduction on MJ 6.2.1, 20 of 20 targeted trials, 3 of 20 runs of a two-saves-then-read pattern and 8 of 20 key rotations left a server holding ciphertext; with the fix, none did. `CredentialEngine` also stops reading unparseable `Values` as `{}`: it throws `CredentialValuesUnreadableError` (with `StillEncrypted` set for ciphertext), and its message no longer quotes the start of the stored value.
+- c75494d: `CredentialEngine` saves `LastUsedAt` and `LastValidatedAt` at most once per credential per minute from each process (`TimestampTouchIntervalMs`, default 60000; 0 restores a save on every use), as `APIKeyEngine` already does for API keys. Each touch is a full-row save, so a server reading a credential per request wrote a full row and a Record Change per request, and while a touch ran it could revert a change another server committed to the same row (issue #4339). In a multi-process reproduction with two MJAPIs, a key rotated through one MJAPI was reverted by another server's touch in 13 of 20 trials; with the throttle, 0 of 20. The throttle narrows that window but does not close it. A touch that fails to save no longer holds its slot, so the next read retries it.
+
+### Patch Changes
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

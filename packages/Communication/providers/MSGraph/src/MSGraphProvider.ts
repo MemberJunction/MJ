@@ -581,6 +581,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      * Retrieves email messages from a mailbox via MS Graph.
      *
      * @requires MS Graph Scope: Mail.Read (Application), or Mail.ReadWrite if using ContextData.MarkAsRead option
+     *
+     * `ContextData.Filter` narrows the request alongside the other filters; `ContextData.Expand` is sent
+     * as `$expand` (for example `singleValueExtendedProperties($filter=id eq 'String 0x1042')`).
      */
     public async GetMessages(
         params: GetMessagesParams<Record<string, unknown>>,
@@ -622,8 +625,15 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
         // Use email address directly in API path
         const messagesPath: string = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
-        const response = await client.api(messagesPath)
-            .filter(filter).top(top).get();
+        // ContextData.Expand is an OData $expand, passed through as given. Activity Sync uses it to read
+        // the reply headers and sensitivity as singleValueExtendedProperties in the same request,
+        // instead of one more call per message. Absent or blank, the request is exactly as before.
+        let request = client.api(messagesPath).filter(filter).top(top);
+        const expand = typeof contextData?.Expand === 'string' ? contextData.Expand.trim() : '';
+        if (expand) {
+            request = request.expand(expand);
+        }
+        const response = await request.get();
 
         if (!response) {
             return {

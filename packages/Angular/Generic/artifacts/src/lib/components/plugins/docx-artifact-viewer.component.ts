@@ -1,10 +1,11 @@
-import { Component, OnInit, ChangeDetectorRef, SecurityContext, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, SecurityContext, inject } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
-import { EscapeHtml, FetchArrayBuffer } from '../previews/office-preview.logic';
+import { FetchArrayBuffer } from '../previews/office-preview.logic';
+import { PrintHtmlInSandboxedIframe } from '../../utils/html-sandbox.util';
 
 /**
  * Viewer plugin for Word (DOCX) artifact versions stored in MJStorage.
@@ -32,12 +33,12 @@ import { EscapeHtml, FetchArrayBuffer } from '../previews/office-preview.logic';
       <div class="docx-viewer__body">
         @if (!ArrayBuffer && !errorMessage) {
           <div class="docx-viewer__state">
-            <i class="fas fa-spinner fa-spin"></i>
+            <i class="fa-solid fa-spinner fa-spin"></i>
             <span>Loading document…</span>
           </div>
         } @else if (errorMessage) {
           <div class="docx-viewer__state docx-viewer__state--error">
-            <i class="fas fa-exclamation-triangle"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i>
             <span>{{ errorMessage }}</span>
           </div>
         } @else {
@@ -79,7 +80,7 @@ import { EscapeHtml, FetchArrayBuffer } from '../previews/office-preview.logic';
   ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DocxArtifactViewerPlugin')
-export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
+export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
   public IsDownloading = false;
 
   /** @deprecated Use {@link IsDownloading}. */
@@ -105,6 +106,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** Raw HTML produced by mammoth — kept for print. Set when the preview reports it loaded. */
   private rawHtml = '';
   private downloadUrl = '';
+  private isObjectUrl = false;
   /** The document's bytes, handed to the shared preview once downloaded. */
   public ArrayBuffer: ArrayBuffer | null = null;
 
@@ -121,6 +123,17 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   async ngOnInit(): Promise<void> {
     await this.loadDocument();
+  }
+
+  ngOnDestroy(): void {
+    this.revokeObjectUrl();
+  }
+
+  private revokeObjectUrl(): void {
+    if (this.isObjectUrl && this.downloadUrl) {
+      URL.revokeObjectURL(this.downloadUrl);
+    }
+    this.isObjectUrl = false;
   }
 
   public async OnDownload(): Promise<void> {
@@ -165,9 +178,10 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     try {
       let arrayBuffer: ArrayBuffer;
 
+      this.revokeObjectUrl();
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
-        this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+        this.downloadUrl = await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.Provider);
         arrayBuffer = await FetchArrayBuffer(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
@@ -176,12 +190,13 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           this.ShowError('Artifact has no content.');
           return;
         }
-        arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
+        arrayBuffer = this.fileService.DataUrlToArrayBuffer(content);
         // Create an object URL for download support
-        this.downloadUrl = this.fileService.dataUrlToObjectUrl(
+        this.downloadUrl = this.fileService.DataUrlToObjectUrl(
           content,
           this.artifactVersion.MimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         );
+        this.isObjectUrl = true;
       }
 
       this.ArrayBuffer = arrayBuffer;
@@ -206,32 +221,12 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * into it is sanitized as the display path sanitizes it, and the file name is escaped before it sits in `<title>`.
    */
   private openPrintWindow(html: string): void {
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      console.warn('[DocxViewer] Popup was blocked — cannot print');
-      return;
-    }
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>${EscapeHtml(this.artifactVersion?.FileName ?? 'Document')}</title>
-          <style>
-            body { font-family: Georgia, serif; font-size: 13pt; line-height: 1.6; margin: 2cm; color: #000; }
-            table { border-collapse: collapse; width: 100%; }
-            td, th { border: 1px solid #999; padding: 4px 8px; }
-            th { background: #eee; font-weight: bold; }
-            img { max-width: 100%; }
-          </style>
-        </head>
-        <body>${this.sanitizer.sanitize(SecurityContext.HTML, html) ?? ''}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    const cleanHtml = this.sanitizer.sanitize(SecurityContext.HTML, html) ?? '';
+    PrintHtmlInSandboxedIframe(cleanHtml, {
+      Title: this.artifactVersion?.FileName ?? 'Document',
+      TrustedPrintCss:
+        'body { font-family: Georgia, serif; font-size: 13pt; line-height: 1.6; margin: 2cm; color: #000; } table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid #999; padding: 4px 8px; } th { background: #eee; font-weight: bold; } img { max-width: 100%; }',
+    });
   }
 
   public ShowError(message: string): void {

@@ -26,6 +26,9 @@ vi.mock('@memberjunction/core', () => ({
         public static Provider = { Entities: [], Queries: [] };
     },
 }));
+vi.mock('@memberjunction/core-entities', () => ({
+    QueryEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), Queries: [] } },
+}));
 
 import { MentionAutocomplete } from '../mentions/MentionAutocomplete';
 
@@ -38,5 +41,6 @@ describe('MentionAutocomplete — a permission-constrained engine', () => {
         expect(engine.IsInitialized).toBe(true);
         expect(engine.GetAvailableAgents()).toEqual([]);
         expect(engine.getSuggestions('', false, '@').filter((s) => s.type === 'agent')).toEqual([]);
+        expect(engine.GetAvailableQueries()).toEqual([]);
     });
 });

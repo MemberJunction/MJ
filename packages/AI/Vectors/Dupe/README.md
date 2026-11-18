@@ -271,7 +271,7 @@ All reasoning configuration lives on the `MJ: Entity Documents` record, per enti
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `EnableLLMReasoning` | `boolean` | `false` | Master switch. Off = vector-only behavior, unchanged. |
-| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` | Which provider runs (see below). |
+| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` (column default) | Which provider runs (see below). **Recommended: `'DecisionThenPrompt'`** -- see [Choosing a mode](#choosing-a-reasoning-mode). |
 | `ReasoningThreshold` | `number \| null` | `null` | Vector-score gate (0–1). LLM runs only when the set's top score clears this. `null` = reason over any non-empty set. |
 | `ReasoningPromptID` | `string \| null` | -- | The AI Prompt to use in `'Prompt'` mode. Falls back to the seeded "Duplicate Resolution" prompt. |
 | `ReasoningAgentID` | `string \| null` | -- | The AI Agent to use in `'Agent'` mode. Falls back to the seeded "Duplicate Resolution Agent". |
@@ -285,7 +285,7 @@ Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolve
 |---|---|---|---|
 | `PromptReasoningProvider` | `PROMPT_REASONING_PROVIDER_KEY` (`'Prompt'`) | `@memberjunction/ai-vector-dupe` | Single-shot AI Prompt. Persists `AIPromptRunID`. |
 | `DuplicateReasoningAgentProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
-| `DecisionReasoningProvider` | `DECISION_REASONING_PROVIDER_KEY` (`'Decision'`) | `@memberjunction/ai-vector-dupe` | One decision call per set, with one Likelihood per candidate. The probability is **calibrated** per decision model (`DUPLICATE_DECISION_CALIBRATION`; override `CalibrationFor` for another model). Recommends only: `Uncertain` (flagged for review) at or above its threshold (a calibrated `0.7` by default, `DEFAULT_UNCERTAIN_ABOVE`), else `NotDuplicate`. A candidate with no calibrated probability (no answer, or a model with no calibration) is `Uncertain`. Never `Merge`, so it never auto-merges. Persists `AIPromptRunID`. |
+| `DecisionReasoningProvider` | `DECISION_REASONING_PROVIDER_KEY` (`'Decision'`) | `@memberjunction/ai-vector-dupe` | One decision call per set, with one Likelihood per candidate. The probability is **calibrated** per decision model, from the answering model's `ModelConfiguration.Decision.Calibrations` (use `duplicate-detection`, question `duplicate`); override `CalibrationFor` to supply another. Recommends only: `Uncertain` (flagged for review) at or above its threshold (a calibrated `0.7` by default, `DEFAULT_UNCERTAIN_ABOVE`), else `NotDuplicate`. A candidate with no calibrated probability (no answer, or a model with no calibration) is `Uncertain`. Never `Merge`, so it never auto-merges. Persists `AIPromptRunID`. |
 | `DecisionThenPromptReasoningProvider` | `DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY` (`'DecisionThenPrompt'`) | `@memberjunction/ai-vector-dupe` | The decision drops candidates below its pre-filter threshold (a calibrated `0.3`, `PRE_FILTER_UNCERTAIN_ABOVE`, which keeps recall), then the `'Prompt'` provider reasons over the survivors and may recommend `Merge`. A candidate with no calibrated probability is kept. A dropped candidate reads `NotDuplicate` and its row points at the decision run. With no survivors the prompt never runs; if the decision fails, every candidate goes to the prompt. Both stages resolve through the class factory, so overrides of `'Decision'` and `'Prompt'` apply inside the chain. |
 
 > The Agent provider lives in `@memberjunction/ai-agents`, **not** this package, because `ai-agents` depends on `ai-vector-dupe` -- importing `AgentRunner` here would create a build cycle. It registers against the seam under the `'Agent'` key, so the detector resolves it via the class factory with no static import back into the pipeline. Registration is handled by the class-registration manifest (no `Load*()` helper needed).
@@ -312,6 +312,21 @@ export class MyReasoningProvider extends DuplicateReasoningProvider {
     }
 }
 ```
+
+### Choosing a reasoning mode
+
+**Use `'DecisionThenPrompt'` for new entity documents.** It keeps the prompt's precision (and its
+ability to recommend `Merge`) while the decision clears the obvious non-duplicates first, so most sets
+cost one input-only decision call instead of a chat completion. Its pre-filter is recall-oriented
+(a calibrated `0.3`), a candidate with no calibration is kept, and a failed decision sends every
+candidate to the prompt, so it never does worse than `'Prompt'` on recall. It also turns on the
+[entry-time check](#entry-time-check).
+
+The column still defaults to `'Prompt'`. That default lives in the database
+(`DF_EntityDocument_ReasoningMode` on `__mj.EntityDocument`), not in this package: the detector runs
+whatever mode the document names and cannot tell a chosen `'Prompt'` from a defaulted one, so the
+package does not override it. Changing the default for new rows is a schema change, and an existing
+document moves only when someone sets its `ReasoningMode`.
 
 ### Per-candidate verdicts
 
