@@ -11974,6 +11974,10 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   not started; no suite lock; working tree = the pass commit's files + the owner's seven. **Next step = M5 Task M5.1.**
   - **OF4-34:** next's `V202611161958` ships its entity without the unique-key and name-field-map tail statements; every
     fresh install's CodeGen emits them; PR 4 excludes them from its tail check; a next fix belongs to next.
+  - **Controller rulings (be79a4567c):** MSQ7 recorded as **OF4-35**, PB7/PB18 as **OF4-36** (§9.4); DSLC5/DSLC6 came
+    from this pass's MJAPI form, which omitted `MJ_ARTIFACT_GUEST_SHARING_ENABLED=true` (next's `integration.yml` sets
+    it), and later passes set it. `MJQueryEntityServer.usesTemplate.test.ts` (modified by PR 4) had 3 type errors in
+    next's lines (`:129` missing `platform`, `:177`/`:178` stub fields); fixed, tsc 0, MJCoreEntitiesServer 1604/1604.
 
 ## 12. Refresh log (append-only)
 
