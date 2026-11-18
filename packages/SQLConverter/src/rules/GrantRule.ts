@@ -1,5 +1,80 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, ConvertObjectIdCalls, NeedsHandAuthoring, StripComments } from './ExpressionHelpers.js';
+
+/** A guard read from `IF …` in front of a grant, as the PostgreSQL condition that replaces it. */
+type GrantGuard = { Condition: string } | { Problem: string };
+
+/** Offset of the `)` closing the `(` at `open`, skipping string literals; -1 when unbalanced. */
+function closingParen(sql: string, open: number): number {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'") {
+      if (inString && sql[i + 1] === "'") { i++; continue; }
+      inString = !inString;
+    } else if (!inString) {
+      if (ch === '(') depth++;
+      else if (ch === ')' && --depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Read the guard of a T-SQL guarded grant and return the PostgreSQL condition for it:
+ * - `[NOT] EXISTS (… sys.database_principals … name = 'r' …)` → `[NOT] EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'r')`
+ * - `OBJECT_ID('s.v'[, 'V' | 'U']) IS [NOT] NULL` → `to_regclass('s."v"') IS [NOT] NULL`
+ * Returns the guard's text end in `End`; anything else is a Problem.
+ */
+function readGrantGuard(code: string): { Guard: GrantGuard; End: number } | null {
+  const exists = code.match(/^IF\s+(NOT\s+)?EXISTS\s*\(/i);
+  if (exists) {
+    const close = closingParen(code, exists[0].length - 1);
+    if (close < 0) return null;
+    const inner = code.slice(exists[0].length, close);
+    const role = inner.match(/\bname\s*=\s*N?'([^']+)'/i);
+    if (!/\bsys\.database_principals\b/i.test(inner) || !role) {
+      return { Guard: { Problem: 'only a sys.database_principals name check converts' }, End: close + 1 };
+    }
+    const not = exists[1] ? 'NOT ' : '';
+    return { Guard: { Condition: `${not}EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role[1]}')` }, End: close + 1 };
+  }
+  const objectId = code.match(/^IF\s+(OBJECT_ID\s*\(\s*N?'[^']+'\s*(?:,\s*N?'(\w+)'\s*)?\))\s*IS\s+(NOT\s+)?NULL/i);
+  if (objectId) {
+    const type = (objectId[2] ?? 'V').toUpperCase();
+    if (type !== 'V' && type !== 'U') {
+      return { Guard: { Problem: `OBJECT_ID type '${type}' has no to_regclass equivalent` }, End: objectId[0].length };
+    }
+    const not = objectId[3] ? 'NOT ' : '';
+    return { Guard: { Condition: `${ConvertObjectIdCalls(objectId[1])} IS ${not}NULL` }, End: objectId[0].length };
+  }
+  return null;
+}
+
+/**
+ * The grant statements in a guarded body: optional `BEGIN … END`, then either plain
+ * GRANT/REVOKE statements or `EXEC [sys.]sp_executesql N'…'` / `EXEC (N'…')` carrying them.
+ * Returns null when the body holds anything else.
+ */
+function readGuardedGrants(body: string): string[] | null {
+  let text = body.trim().replace(/;\s*$/, '').trim();
+  const block = text.match(/^BEGIN\b([\s\S]*)\bEND$/i);
+  if (block) text = block[1].trim();
+  const statements: string[] = [];
+  const dynamic = /EXEC(?:UTE)?\s+(?:sys\.)?sp_executesql\s+N?'((?:[^']|'')*)'\s*;?|EXEC(?:UTE)?\s*\(\s*N?'((?:[^']|'')*)'\s*\)\s*;?/gi;
+  const plain = text.replace(dynamic, (_m, a: string | undefined, b: string | undefined) => {
+    statements.push(...splitStatements((a ?? b ?? '').replace(/''/g, "'")));
+    return '';
+  });
+  statements.push(...splitStatements(plain));
+  if (statements.length === 0 || !statements.every((st) => /^(?:GRANT|REVOKE)\s/i.test(st))) return null;
+  return statements;
+}
+
+function splitStatements(text: string): string[] {
+  return text.split(';').map((st) => st.trim()).filter((st) => st.length > 0);
+}
 
 export class GrantRule implements IConversionRule {
   Name = 'GrantRule';
@@ -10,7 +85,51 @@ export class GrantRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL GRANT EXEC → PG GRANT EXECUTE renaming, plus wrapping each GRANT in DO $ EXCEPTION blocks so the grant tolerates missing roles or functions during fresh installs. sqlglot does not apply this idempotency wrapping or rename EXEC → EXECUTE.';
 
-  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
+  PostProcess(sql: string, originalSQL: string, _context: ConversionContext): string {
+    const code = StripComments(sql).trim();
+    if (/^IF\b/i.test(code) || /\bsp_executesql\b/i.test(code)) {
+      return this.convertGuardedGrant(code, originalSQL);
+    }
+    return this.convertGrant(sql);
+  }
+
+  /**
+   * A grant behind a T-SQL guard (issue #5567). CodeGen writes
+   * `IF OBJECT_ID('[s].[vwX]', 'V') IS NOT NULL BEGIN EXEC sp_executesql N'GRANT SELECT ON [s].[vwX] TO [r]' END`
+   * for layered base views; role-guarded grants use `IF EXISTS (… sys.database_principals …)`.
+   * Both become a DO block whose IF tests the PostgreSQL equivalent. Before, the classifier
+   * skipped these batches and the grants were lost without a gap; a shape this cannot read is
+   * now a counted NEEDS HAND AUTHORING gap.
+   */
+  private convertGuardedGrant(code: string, originalSQL: string): string {
+    const guard = /^IF\b/i.test(code) ? readGrantGuard(code) : { Guard: { Condition: '' }, End: 0 };
+    if (!guard) {
+      return NeedsHandAuthoring('GUARDED GRANT', 'the guard is not an OBJECT_ID or sys.database_principals check', originalSQL);
+    }
+    if ('Problem' in guard.Guard) {
+      return NeedsHandAuthoring('GUARDED GRANT', guard.Guard.Problem, originalSQL);
+    }
+    const grants = readGuardedGrants(code.slice(guard.End));
+    if (!grants) {
+      return NeedsHandAuthoring('GUARDED GRANT', 'the guarded body holds more than GRANT/REVOKE statements', originalSQL);
+    }
+    const converted = grants.map((g) => this.convertGrant(g).trim());
+    if (converted.some((g) => g.startsWith('--'))) {
+      return NeedsHandAuthoring('GUARDED GRANT', 'a guarded grant has no PostgreSQL equivalent', originalSQL);
+    }
+    if (!guard.Guard.Condition) return converted.join('\n') + '\n';
+    return [
+      'DO $$',
+      'BEGIN',
+      `    IF ${guard.Guard.Condition} THEN`,
+      ...converted.map((g) => `        ${g}`),
+      '    END IF;',
+      'END $$;',
+    ].join('\n') + '\n';
+  }
+
+  /** Convert one plain GRANT / REVOKE statement. */
+  private convertGrant(sql: string): string {
     let result = ConvertIdentifiers(sql);
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
