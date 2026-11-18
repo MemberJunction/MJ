@@ -48,7 +48,7 @@ import {
 } from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewChannelTab } from './realtime-surface-tabs.model';
-import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
+import { ChannelTabSortOrder, ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { SafeJSONParse } from '@memberjunction/global';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
@@ -2087,13 +2087,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewChannelTabs(channels);
+    const ordered = [...channels].sort(
+      (a, b) => ChannelTabSortOrder(a.ChannelName) - ChannelTabSortOrder(b.ChannelName)
+    );
     let newlyUsedSurface = false;
-    for (const plugin of channels) {
+    let firstSurfacedKey: string | null = null;
+    for (const plugin of ordered) {
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
       if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
         continue; // not the whiteboard and not used yet — it earns its tab on first activity.
+      }
+      if (!firstSurfacedKey) {
+        firstSurfacedKey = plugin.ChannelName;
       }
       if (!this.surfacedLiveChannelKeys.has(plugin.ChannelName)) {
         this.surfacedLiveChannelKeys.add(plugin.ChannelName);
@@ -2102,10 +2109,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.registerPluginChannelTab(plugin);
     }
     // Resuming a prior session restores used channels before live tools fire; auto-open the
-    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Browser/Media)
-    // pick up visibly where the previous session left off.
+    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Whiteboard/Browser/Media)
+    // keep their canonical order and pick up visibly where the previous session left off.
     if (newlyUsedSurface && this.realtime.IsActive && !this.IsReviewing && !this.DetailsPeek) {
       this.DetailsPeek = true;
+      if (!this.pendingRevealKey && firstSurfacedKey) {
+        this.pendingRevealKey = firstSurfacedKey;
+      }
       this.recomputeUi();
     }
     this.cdr.markForCheck();

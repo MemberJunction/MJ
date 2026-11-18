@@ -24,8 +24,8 @@
             "ID": "2c658d35-ad53-453c-a52a-57ddb7a036b6"
           },
           "sync": {
-            "lastModified": "2026-04-29T05:22:40.653Z",
-            "checksum": "03c4169b7bee4e3aa00eaac34ca91cc2cd59a29fd9df1f2eaa18566726c314ab"
+            "lastModified": "2026-11-18T00:24:48.755Z",
+            "checksum": "47af54c64de27411edec4cf54f3afc28f600cb7cefe4cd0177a90c8d18283679"
           }
         }
       ]
@@ -314,8 +314,8 @@
       "ID": "A1B2C3D4-E5F6-4789-ABCD-123456789ABC"
     },
     "sync": {
-      "lastModified": "2026-10-28T22:14:02.081Z",
-      "checksum": "25f284c337a6742f8420a402079b68fef9455020feac6d1285b580bd9b53f468"
+      "lastModified": "2026-11-18T00:24:48.746Z",
+      "checksum": "cec126b5e70d7266cf611763c25ec8e3b581d8808213369e2907d65033de81d8"
     }
   }
 ]

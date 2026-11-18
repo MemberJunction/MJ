@@ -1063,6 +1063,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         })),
         calculateChecksum: vi.fn().mockReturnValue('cs-1'),
         calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
+        CalculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
       } as unknown as SyncEngine;
       const processor = new RecordProcessor(mockSync, {} as UserInfo);
       const mockOwner = new MockEntity('Orders', { ID: 'ord-1' }, ['ID'], ['ID']);

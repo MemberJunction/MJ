@@ -1,0 +1,20 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Hand-authored counterpart (v6.3.0-edge.1 release build)
+-- ============================================================================
+
+-- PG-EMPTY-BY-DESIGN: on PostgreSQL spUpdateExistingEntityFieldsFromSchema is CodeGen output,
+-- not migration content.
+--
+-- The SQL Server migration (#4534) is a single CREATE OR ALTER PROC of
+-- spUpdateExistingEntityFieldsFromSchema that adds one DELETE from #uef_fk: a component of a
+-- multi-column foreign key keeps its RelatedEntityID only when the column it references is unique
+-- on its own (single-column primary key, or sole key of an unfiltered unique index).
+--
+-- PostgreSQL maintains this routine in
+-- packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts, and the same
+-- commit that added this migration (f49a2e161f, "composite FK components need a unique target")
+-- changed that file too: the PG routine already has the equivalent
+--     DELETE FROM _uef_fk fk WHERE EXISTS (sibling component) AND NOT EXISTS (_uef_pk, KeyColumnCount = 1)
+--                                  AND NOT EXISTS (_uef_uk)
+-- Same precedent as V202609081500 / V202608260829 (Heal_SPs).

@@ -19,7 +19,7 @@ import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjuncti
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 
 // Lazy loading infrastructure
-import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
+import { LazyModuleRegistry, LAZY_FEATURE_CONFIG, LIVEKIT_LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
 
 // Import lite class registrations manifest (excludes lazy-loaded dashboard and settings packages)
 import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
@@ -35,12 +35,6 @@ import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrati
 const combinedClasses = [...CLASS_REGISTRATIONS, ...LOCAL_CLASSES];
 
 //***********************************************************
-//MSAL
-//***********************************************************
-import { MsalGuardConfiguration } from '@azure/msal-angular';
-import { InteractionType } from '@azure/msal-browser';
-
-//***********************************************************
 // Project stuff
 //***********************************************************
 import { AppComponent } from './app.component';
@@ -51,16 +45,6 @@ import { RegisterSharedTabKernelWorker } from './shared-tab-kernel-bootstrap';
 // Register browser SharedWorker factory before AuthServicesModule / WorkspaceInitializer
 // instantiate GraphQLDataProvider so Tab 1..N multiplex a single WebSocket, L1 cache, and IDB owner.
 RegisterSharedTabKernelWorker();
-
-/**
- * Set your default interaction type for MSALGuard here. If you have any
- * additional scopes you want the user to consent upon login, add them here as well.
- */
-export function MSALGuardConfigFactory(): MsalGuardConfiguration {
-  return {
-    interactionType: InteractionType.Redirect,
-  };
-}
 
 /**
  * Initialize auth provider before Angular routing starts
@@ -113,7 +97,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     {
       provide: APP_INITIALIZER,
       useFactory: (lazyRegistry: LazyModuleRegistry) => () => {
-        lazyRegistry.RegisterBulk(LAZY_FEATURE_CONFIG);
+        lazyRegistry.RegisterBulk({ ...LAZY_FEATURE_CONFIG, ...LIVEKIT_LAZY_FEATURE_CONFIG });
         lazyRegistry.WireToClassFactory();
       },
       deps: [LazyModuleRegistry],

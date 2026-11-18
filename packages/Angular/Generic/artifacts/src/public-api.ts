@@ -97,6 +97,7 @@ export * from './lib/components/plugins/video-production/video-production-review
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
 export * from './lib/components/presence/artifact-agent-presence-bar.component';
 export * from './lib/components/presence/artifact-agent-region-indicator.component';
+export * from './lib/components/plugins/artifact-command-palette.component';
 export {
   SanitizeHtmlForSandboxedFrame,
   SanitizeSvgForSandboxedFrame,
