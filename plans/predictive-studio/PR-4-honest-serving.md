@@ -6171,7 +6171,7 @@ Replaced: number }`; `FeatureValueRecordRef.RecordProcessID: string | null` and 
 (§5.2's sketch); the four readers filter `Role = 'Champion'`, and a Human row with no Record Process is read and written
 by `(EntityID, RecordID, FeatureName, Source, MLModelScoringBindingID)`
 
-- [ ] Step 1: Write the failing tests (the file's existing view and entity fakes; `ModelRef()` builds the params):
+- [x] Step 1: Write the failing tests (the file's existing view and entity fakes; `ModelRef()` builds the params):
   ```ts
   it('writes one Model row per record keyed by binding, record, as-of instant and role', async () => {
     const out = await svc.RecordModelValues(ModelRef({ Rows: [Row('r1', 0.7), Row('r2', 0.2)] }));
@@ -6198,9 +6198,9 @@ by `(EntityID, RecordID, FeatureName, Source, MLModelScoringBindingID)`
     expect(await svc.GetLatestValue({ ...PipelineRef('Tier'), Source: 'Pipeline' })).toBeNull();
   });
   ```
-- [ ] Step 2: `cd packages/AI/Knowledge/FeaturePipelines && pnpm vitest run src/__tests__/model-values.test.ts` → fails
+- [x] Step 2: `cd packages/AI/Knowledge/FeaturePipelines && pnpm vitest run src/__tests__/model-values.test.ts` → fails
   to compile (`RecordModelValues` does not exist; `RecordProcessID: null` not assignable to `string`).
-- [ ] Step 3: Implement in `FeatureValueCacheService.ts`: `public async RecordModelValues(params: RecordModelValuesParams):
+- [x] Step 3: Implement in `FeatureValueCacheService.ts`: `public async RecordModelValues(params: RecordModelValuesParams):
   Promise<RecordModelValuesOutcome>` — one batched read of the existing rows for `(MLModelScoringBindingID, EntityID,
   RecordID IN (…), EffectiveAsOf, Role)` through `RunView.FromMetadataProvider(params.Provider)`, then one save per row
   in the caller's transaction (`Source = 'Model'`, `ValueKeyHash` null, `ComputedAt` the write time; a failed save throws
@@ -6210,9 +6210,9 @@ by `(EntityID, RecordID, FeatureName, Source, MLModelScoringBindingID)`
   otherwise (`UUIDsEqual`-normalised IDs through `EscapeSQLString`); `readLatestPipelineRows`, `LoadByKeyHashes`,
   `GetLatestValue` and `RetireHumanValue` add ` AND Role = 'Champion'` (the filters #6180 added to the same four
   readers, on `next` since `fa33e94dbe`: M5.3 re-reads them at its start, D-069); a `RecordProcessID` null without a binding ID throws (a structured `FeatureValueKeyError` with
-  `Field: 'MLModelScoringBindingID'`). No `@deprecated` alias exists in the file (`git grep -n "@deprecated" origin/next --
-  packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts` → 0 hits).
-- [ ] Step 4: Step 2's command → passes; `cd packages/AI/Knowledge/FeaturePipelines && pnpm test` → 285 (measured on
+  `Field: 'MLModelScoringBindingID'`). The file's one `@deprecated` alias, next's `computeCacheKey` (its only callers are
+  `cache.test.ts`), is next's public API and stays (D4-152).
+- [x] Step 4: Step 2's command → passes; `cd packages/AI/Knowledge/FeaturePipelines && pnpm test` → 285 (measured on
   `599c288dee`'s tree, 14 files) + the new cases, 0 failed; `pnpm run build` → exit 0.
 - [ ] Step 5: PR 1's gates unchanged: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`
   → 0 failed (§4.2 keep row; count measured at M5).
@@ -10138,6 +10138,17 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   reads (seek, `IX_FeatureValue_Binding_AsOf`, D4-149); population-wide read of one feature (100,000 rows) 403–545 ms
   (clustered scan, D-078's residual). Warning 1945 on `UQ_FeatureValue_ModelRow` (1,882 bytes). The binding editor's
   default `RetentionDays` is null.
+- **D4-152 · M5.3 as built** (M5.3 report). The four readers already carried #6180's `Role = 'Champion'` filter at
+  HEAD, so M5.3 adds none. The key rule is enforced both ways: a Feature Value write names exactly one of
+  `RecordProcessID` and `MLModelScoringBindingID`, or `FeatureValueKeyError` names the field; `RecordFeatureValues`
+  refuses `Source = 'Model'` (that is `RecordModelValues`'s) and a `Pipeline` row with no Record Process.
+  `RecordModelValues` refuses a batch naming one record twice (case-insensitive) before any read, because two rows on
+  one key would fail `UQ_FeatureValue_ModelRow` partway through. next's `computeCacheKey` alias stays. M5.5's DB tests
+  cover the `EffectiveAsOf` ISO filter against `DATETIMEOFFSET` and the unchunked `RecordID IN (…)` read at the
+  caller's batch size. A binding-scoped Human row's `ValueKeyHash` includes its `MLModelScoringBindingID` (set only
+  then, so Record-Process-scoped hashes are byte-identical to before), so `UQ_FeatureValue_ValueKey (RecordProcessID,
+  ValueKeyHash)`, whose NULLs compare equal, cannot collide across bindings (review M1). The package's test tree
+  type-checks (21 errors in four of next's test files fixed to the current types, D-082 caller maintenance).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
