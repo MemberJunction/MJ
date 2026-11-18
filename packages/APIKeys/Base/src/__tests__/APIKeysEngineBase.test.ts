@@ -11,7 +11,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@memberjunction/core', () => {
   class FakeBaseEngine {
     _loaded = false;
-    async Load() { this._loaded = true; }
+    LoadCalls: Array<{ Configs: Array<Record<string, unknown>>; ForceRefresh?: boolean; ContextUser?: unknown }> = [];
+    async Load(configs: Array<Record<string, unknown>>, _provider?: unknown, forceRefresh?: boolean, contextUser?: unknown) {
+      this.LoadCalls.push({ Configs: configs, ForceRefresh: forceRefresh, ContextUser: contextUser });
+      this._loaded = true;
+    }
+    get Loaded() { return this._loaded; }
+    get ContextUser() { return { ID: 'system-user' }; }
+    async RefreshItem(_propertyName: string) { /* the real one re-reads the table */ }
     TryThrowIfNotLoaded() {}
     static getInstance<T>(): T {
       return new (this as unknown as { new(): T })();
@@ -23,6 +30,7 @@ vi.mock('@memberjunction/core', () => {
     IMetadataProvider: class {},
     UserInfo: class { ID = 'user-1'; },
     RegisterForStartup: () => (target: unknown) => target,
+    LogError: vi.fn(),
   };
 });
 
@@ -258,5 +266,84 @@ describe('APIKeysEngineBase', () => {
       expect(engine.IsKeyAuthorizedForApplication('key-2', 'app-1')).toBe(true);
       expect(engine.IsKeyAuthorizedForApplication('key-2', 'app-2')).toBe(true);
     });
+  });
+});
+
+describe('APIKeysEngineBase refresh interval', () => {
+  type LoadCall = { Configs: Array<Record<string, unknown>>; ForceRefresh?: boolean; ContextUser?: unknown };
+  const loadCalls = (e: APIKeysEngineBase): LoadCall[] => (e as unknown as { LoadCalls: LoadCall[] }).LoadCalls;
+
+  it('loads every table with the local cache and no expiry when no interval is set (browser default)', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    await engine.Config(false, undefined);
+
+    const configs = loadCalls(engine)[0].Configs;
+    expect(configs).toHaveLength(5);
+    for (const c of configs) {
+      expect(c.CacheLocal).toBe(true);
+      expect(c.Expiration).toBeUndefined();
+    }
+    expect(engine.RefreshIntervalMs).toBeUndefined();
+  });
+
+  it('gives every table an expiry equal to the interval and skips the local cache', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    engine.SetRefreshInterval(15000);
+    await engine.Config(false, undefined);
+
+    const configs = loadCalls(engine)[0].Configs;
+    expect(configs.map(c => c.EntityName)).toEqual([
+      'MJ: API Scopes',
+      'MJ: API Applications',
+      'MJ: API Application Scopes',
+      'MJ: API Key Applications',
+      'MJ: API Key Scopes',
+    ]);
+    for (const c of configs) {
+      expect(c.Expiration).toBe(15000);
+      expect(c.CacheLocal).toBe(false);
+    }
+  });
+
+  it('treats 0 or a negative interval as no timed refresh', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    engine.SetRefreshInterval(0);
+    expect(engine.RefreshIntervalMs).toBeUndefined();
+    engine.SetRefreshInterval(-5);
+    expect(engine.RefreshIntervalMs).toBeUndefined();
+  });
+
+  it('reloads once, as the engine context user, when the interval changes after load', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    await engine.Config(false, undefined);
+    engine.SetRefreshInterval(30000);
+    await Promise.resolve();
+
+    const calls = loadCalls(engine);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].ForceRefresh).toBe(true);
+    expect(calls[1].ContextUser).toEqual({ ID: 'system-user' });
+    expect(calls[1].Configs[0].Expiration).toBe(30000);
+
+    // Same interval again: no further reload.
+    engine.SetRefreshInterval(30000);
+    await Promise.resolve();
+    expect(loadCalls(engine)).toHaveLength(2);
+  });
+});
+
+describe('APIKeysEngineBase timed refresh rebuilds the lookup maps', () => {
+  it('serves the re-read application row by ID and name after RefreshItem', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    (engine as unknown as Record<string, unknown>)['_scopes'] = [];
+    (engine as unknown as Record<string, unknown>)['_applications'] = [{ ID: 'app-1', Name: 'WebApp', IsActive: true }];
+    await engine.RefreshItem('_applications');
+    expect(engine.GetApplicationById('app-1')).toMatchObject({ IsActive: true });
+
+    // Simulates the re-read returning the row after another process deactivated it.
+    (engine as unknown as Record<string, unknown>)['_applications'] = [{ ID: 'app-1', Name: 'WebApp', IsActive: false }];
+    await engine.RefreshItem('_applications');
+    expect(engine.GetApplicationById('app-1')).toMatchObject({ IsActive: false });
+    expect(engine.GetApplicationByName('webapp')).toMatchObject({ IsActive: false });
   });
 });

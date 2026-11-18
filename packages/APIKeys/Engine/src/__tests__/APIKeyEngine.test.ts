@@ -56,11 +56,13 @@ vi.mock('@memberjunction/api-keys-base', () => ({
             GetScopeByPath: vi.fn().mockReturnValue(null),
             GetApplicationScopeRules: vi.fn().mockReturnValue([]),
             GetKeyScopeRules: vi.fn().mockReturnValue([]),
+            SetRefreshInterval: vi.fn().mockResolvedValue(undefined),
         }
     },
 }));
 
 import { cosmiconfigSync } from 'cosmiconfig';
+import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import {
     APIKeyEngine,
     GetAPIKeyEngine,
@@ -222,6 +224,30 @@ describe('GetAPIKeyEngine / ResetAPIKeyEngine', () => {
     it('should accept config on first call', () => {
         const engine = GetAPIKeyEngine({ enforcementEnabled: false });
         expect(engine).toBeDefined();
+    });
+});
+
+describe('scope-table refresh (out-of-process changes)', () => {
+    const setRefreshInterval = vi.mocked(APIKeysEngineBase.Instance.SetRefreshInterval);
+
+    beforeEach(() => {
+        setRefreshInterval.mockClear();
+    });
+
+    it('sets the base engine refresh interval to scopeCacheTTLMs (default 60 s)', () => {
+        new APIKeyEngine();
+        expect(setRefreshInterval).toHaveBeenLastCalledWith(60000);
+        new APIKeyEngine({ scopeCacheTTLMs: 5000 });
+        expect(setRefreshInterval).toHaveBeenLastCalledWith(5000);
+        new APIKeyEngine({ scopeCacheTTLMs: 0 });
+        expect(setRefreshInterval).toHaveBeenLastCalledWith(0);
+    });
+
+    it('SetScopeCacheTTL updates the TTL and the base engine refresh interval', async () => {
+        const e = new APIKeyEngine();
+        await e.SetScopeCacheTTL(2500);
+        expect(e.ScopeCacheTTLMs).toBe(2500);
+        expect(setRefreshInterval).toHaveBeenLastCalledWith(2500);
     });
 });
 
