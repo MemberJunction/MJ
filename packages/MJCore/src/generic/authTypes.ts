@@ -87,6 +87,13 @@ export interface AuthProviderConfig {
   authority?: string;
   
   /**
+   * Server only. When true, a token from this provider is refused unless it carries
+   * `email_verified: true`. When false or unset (the default), only a token that states
+   * `email_verified: false` is refused, because several providers never send the claim.
+   */
+  requireEmailVerified?: boolean;
+
+  /**
    * Allow provider-specific configuration fields
    */
   [key: string]: any;

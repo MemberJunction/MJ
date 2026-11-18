@@ -214,6 +214,29 @@ module.exports = {
 > omit email, which MJ keys users on) and matching the `aud` claim. The full walkthrough is in
 > **[WORKOS.md](WORKOS.md)**.
 
+### Email verification (`requireEmailVerified`)
+
+MJ matches a login to a user by the token's email, so it checks the OIDC `email_verified` claim on every verified token before it looks up or creates the user:
+
+| `email_verified` in the token | `requireEmailVerified: false` (default) | `requireEmailVerified: true` |
+| ----------------------------- | --------------------------------------- | ---------------------------- |
+| `true` (or `"true"`)          | accepted                                | accepted                     |
+| `false` (or `"false"`)        | refused                                 | refused                      |
+| absent                        | accepted                                | refused                      |
+
+```javascript
+{
+  name: 'customer-auth0',
+  type: 'auth0',
+  // ...
+  requireEmailVerified: true,
+}
+```
+
+Set it per provider. Turn it on for providers that send the claim; leave it off for providers that never send it (Entra ID / MSAL, some Okta and Cognito token types), or every login from that provider is refused. Where several providers share an issuer, the setting applies to the issuer if any of them turns it on. For a provider defined in the `MJ: Authentication Providers` catalog, put `"requireEmailVerified": true` in its `AdditionalConfiguration` JSON.
+
+A refused login gets an authentication error, and the server logs the issuer and the reason (never the token or the email). The check is `CheckEmailVerified(payload, requireEmailVerified)`; `AuthProviderFactory.Instance.RequiresEmailVerified(iss)` resolves the setting for an issuer. MJServer applies it to every bearer token, and the MCP server applies it to upstream identity-provider tokens.
+
 > **Multiple audiences on the same issuer.** When two MJ apps share an Auth0 domain but use different client IDs, register both as separate entries — `AuthProviderFactory.getAllByIssuer()` returns every match so the validator can try each audience.
 
 ## Usage
@@ -325,6 +348,7 @@ interface IAuthProvider {
   audience: string;
   jwksUri: string;
   clientId?: string;
+  RequireEmailVerified?: boolean;
   validateConfig(): boolean;
   getSigningKey(header: JwtHeader, callback: SigningKeyCallback): void;
   extractUserInfo(payload: JwtPayload): AuthUserInfo;
@@ -354,6 +378,7 @@ Singleton registry/factory. All instance methods are on `AuthProviderFactory.Ins
 | `getByIssuer(iss)`                         | Returns the first provider whose issuer matches (cached)             |
 | `getAllByIssuer(iss)`                      | Returns **all** providers for an issuer (multi-app / multi-audience) |
 | `getByName(name)`                          | Lookup by configured `name`                                          |
+| `RequiresEmailVerified(iss)`               | Whether any provider for the issuer sets `requireEmailVerified`      |
 | `getAllProviders()`                        | All registered providers                                             |
 | `hasProviders()`                           | Quick boolean check                                                  |
 | `clear()`                                  | Drop all providers and caches (used in tests)                        |

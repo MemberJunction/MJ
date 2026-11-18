@@ -6,6 +6,18 @@ import https from 'https';
 import http from 'http';
 
 /**
+ * Reads the `requireEmailVerified` config value. Config can arrive from a JS config file, an
+ * environment-derived default or a JSON column, so the strings `"true"` / `"1"` count as true.
+ */
+function ParseRequireEmailVerified(value: boolean | string | undefined): boolean {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return value === true;
+}
+
+/**
  * Base implementation of IAuthProvider with common functionality
  * Concrete providers should extend this class and use @RegisterClass decorator
  * with BaseAuthProvider as the base class
@@ -19,6 +31,8 @@ export abstract class BaseAuthProvider implements IAuthProvider {
   clientId?: string;
   /** Provider domain hosting the OAuth endpoints when they aren't on the issuer (used by OAuth proxy) */
   domain?: string;
+  /** Whether tokens from this provider must carry `email_verified: true` (config `requireEmailVerified`). */
+  RequireEmailVerified: boolean;
   protected config: AuthProviderConfig;
   protected jwksClient: jwksClient.JwksClient;
   /**
@@ -36,6 +50,7 @@ export abstract class BaseAuthProvider implements IAuthProvider {
     this.jwksUri = config.jwksUri;
     this.clientId = config.clientId;
     this.domain = config.domain;
+    this.RequireEmailVerified = ParseRequireEmailVerified(config.requireEmailVerified);
 
     // Create HTTP agent with keep-alive to prevent socket hangups
     this.requestAgent = this.jwksUri.startsWith('https')

@@ -39,6 +39,13 @@ export interface IAuthProvider {
   domain?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
+   * When true, a token from this provider is refused unless it carries `email_verified: true`.
+   * When false or unset, only a token that states `email_verified: false` is refused. Set from
+   * `requireEmailVerified` in the provider config.
+   */
+  RequireEmailVerified?: boolean;
+
+  /**
    * Validates that the provider configuration is complete and valid
    */
   validateConfig(): boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

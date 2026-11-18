@@ -167,6 +167,15 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     return matches;
   }
 
+  /**
+   * Whether tokens from this issuer must carry `email_verified: true`. True when any provider
+   * registered for the issuer sets `requireEmailVerified`, so the stricter setting wins where
+   * several providers share an issuer.
+   */
+  RequiresEmailVerified(issuer: string): boolean {
+    return this.GetAllByIssuer(issuer).some((provider) => provider.RequireEmailVerified === true);
+  }
+
   /** @deprecated Use {@link GetAllByIssuer}. */
   getAllByIssuer(issuer: string): IAuthProvider[] {
     return this.GetAllByIssuer(issuer);

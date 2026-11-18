@@ -164,6 +164,12 @@ const authProviderSchema = z.object({
   clientSecret: z.string().optional(),
   tenantId: z.string().optional(),
   domain: z.string().optional(),
+  /**
+   * When true, a token from this provider is refused unless it carries `email_verified: true`.
+   * Default false: only a token that states `email_verified: false` is refused, because several
+   * providers never send the claim.
+   */
+  requireEmailVerified: zodBooleanWithTransforms().optional().default(false),
 }).passthrough(); // Allow additional provider-specific fields
 
 const componentRegistrySchema = z.object({
