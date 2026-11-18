@@ -83,6 +83,9 @@ export const TRIGGER_GLOBS = [
     'turbo.json',
     '.github/workflows/integration.yml',
     'scripts/codegen-idempotency-check.mjs',
+    '.github/scripts/wait-for-mjapi.sh',
+    '.github/scripts/check-fls-wire-bundles-ran.mjs',
+    '.github/scripts/select-integration-tier.mjs',
 ];
 
 /** How many reasons the summary lists before it truncates. */

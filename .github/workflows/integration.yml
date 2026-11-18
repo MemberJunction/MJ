@@ -72,6 +72,12 @@ on:
       # matches it, but that job only runs if the workflow starts at all — so without this entry
       # a script-only PR never reaches the filter and the gate cannot catch its own regressions.
       - 'scripts/codegen-idempotency-check.mjs'
+      # Scripts the deterministic lane runs (and the one that decides whether it runs). A PR that
+      # changes one must run the lane; the tier selection treats any path outside packages/ that
+      # matched this filter as "run".
+      - '.github/scripts/wait-for-mjapi.sh'
+      - '.github/scripts/check-fls-wire-bundles-ran.mjs'
+      - '.github/scripts/select-integration-tier.mjs'
   # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).

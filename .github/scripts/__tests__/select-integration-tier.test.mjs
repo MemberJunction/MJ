@@ -79,6 +79,8 @@ describe('decide — fixture PRs', () => {
         'tsconfig.json',
         'mj.config.cjs',
         '.github/workflows/integration.yml',
+        '.github/scripts/wait-for-mjapi.sh',
+        '.github/scripts/select-integration-tier.mjs',
     ])('runs when a UI-only PR also changes %s', (path) => {
         const d = decide(['packages/Angular/Generic/artifacts/src/a.ts', path], BUILT, hasPackageJson);
         expect(d.run).toBe(true);
