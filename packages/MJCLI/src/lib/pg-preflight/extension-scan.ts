@@ -40,3 +40,24 @@ function extensionsInScript(script: string): string[] {
   }
   return names;
 }
+
+/**
+ * Returns which of the candidate group roles the scripts reference (in a GRANT, an
+ * `ALTER DEFAULT PRIVILEGES … TO`, a policy, …), in candidate order. Only those must exist
+ * before the migrations run: requiring the installer's full list would fail databases that
+ * a set of migrations never grants to (no shipped migration references `cdp_BI` or
+ * `cdp_CodeGen`, for example).
+ *
+ * @param scripts - Migration SQL texts.
+ * @param candidates - The role names to look for (the installer's `POSTGRES_MJ_GROUP_ROLES`).
+ */
+export function ExtractReferencedRoles(scripts: Iterable<string>, candidates: readonly string[]): string[] {
+  const code = [...scripts].map((s) => s.replace(BLOCK_COMMENT_PATTERN, ' ').replace(LINE_COMMENT_PATTERN, ' ')).join('\n');
+  return candidates.filter((role) => roleReferencePattern(role).test(code));
+}
+
+/** Matches a role name quoted (`"cdp_UI"`) or bare, as a whole identifier. */
+function roleReferencePattern(role: string): RegExp {
+  const escaped = role.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`"${escaped}"|(?<![A-Za-z0-9_$"])${escaped}(?![A-Za-z0-9_$"])`, 'i');
+}

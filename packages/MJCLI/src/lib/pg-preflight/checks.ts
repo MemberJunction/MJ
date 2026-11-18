@@ -49,6 +49,9 @@ export function CheckServerVersion(session: PgSessionContext, minimum = MIN_PG_S
 
 /** Every group role the migrations grant to must exist. */
 export async function CheckGroupRoles(runner: PgPreflightQueryRunner, session: PgSessionContext, roles: readonly string[]): Promise<PgPreflightCheck> {
+  if (roles.length === 0) {
+    return MakeCheck('group-roles', 'pass', 'The pending migrations grant to no MJ group role');
+  }
   const rows = await runner.Query<{ rolname: string }>('SELECT rolname FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])', [[...roles]]);
   const present = new Set(rows.map((r) => r.rolname));
   const missing = roles.filter((role) => !present.has(role));

@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { BuildPostgresSetupSteps, POSTGRES_MJ_EXTENSIONS, POSTGRES_MJ_GROUP_ROLES } from '@memberjunction/installer';
 import { RunPgManagedPreflight } from '../lib/pg-preflight/preflight';
-import { ExtractCreatedExtensions } from '../lib/pg-preflight/extension-scan';
+import { ExtractCreatedExtensions, ExtractReferencedRoles } from '../lib/pg-preflight/extension-scan';
 import { RenderRemediationScript } from '../lib/pg-preflight/remediation';
 import { ClassifyExtension, ParseAllowlist } from '../lib/pg-preflight/extension-check';
 import { IsLoopbackHost } from '../lib/pg-preflight/checks';
@@ -337,5 +337,22 @@ describe('helpers', () => {
     });
     expect(await runner.Query('SELECT $1', [5])).toEqual([{ ok: 1 }]);
     expect(seen).toEqual([{ sql: 'SELECT $1', params: [5] }]);
+  });
+});
+
+describe('ExtractReferencedRoles', () => {
+  const candidates = ['cdp_BI', 'cdp_CodeGen', 'cdp_Developer', 'cdp_Integration', 'cdp_UI'];
+
+  it('returns only the roles the scripts grant to, in candidate order', () => {
+    const scripts = [
+      'GRANT SELECT ON __mj."vwUsers" TO "cdp_UI", "cdp_Developer";',
+      'ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON ROUTINES TO cdp_Integration;',
+    ];
+    expect(ExtractReferencedRoles(scripts, candidates)).toEqual(['cdp_Developer', 'cdp_Integration', 'cdp_UI']);
+  });
+
+  it('ignores commented-out grants and longer identifiers that contain a role name', () => {
+    const scripts = ['-- GRANT ALL TO "cdp_BI";\n/* cdp_CodeGen */ SELECT 1 AS cdp_UIx;'];
+    expect(ExtractReferencedRoles(scripts, candidates)).toEqual([]);
   });
 });

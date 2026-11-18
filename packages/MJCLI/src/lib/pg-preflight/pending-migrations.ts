@@ -7,7 +7,8 @@
  */
 
 import { ResolveMigrations, ScanAndResolveMigrations, type SkywayConfig } from '@memberjunction/skyway-core';
-import { ExtractCreatedExtensions } from './extension-scan';
+import { POSTGRES_MJ_GROUP_ROLES } from '@memberjunction/installer';
+import { ExtractCreatedExtensions, ExtractReferencedRoles } from './extension-scan';
 
 /** Skyway's defaults for the values `mj migrate` leaves unset (`ResolveConfig` in skyway-core). */
 const DEFAULT_HISTORY_TABLE = 'flyway_schema_history';
@@ -40,4 +41,18 @@ export async function ReadPendingMigrationSql(skywayConfig: SkywayConfig): Promi
 /** The extensions the pending migrations create. */
 export async function ReadPendingExtensions(skywayConfig: SkywayConfig): Promise<string[]> {
   return ExtractCreatedExtensions(await ReadPendingMigrationSql(skywayConfig));
+}
+
+/** What the pending migrations need from the database before they run. */
+export interface PendingMigrationRequirements {
+  /** Extensions the pending migrations `CREATE`. */
+  Extensions: string[];
+  /** The installer's group roles that the pending migrations reference. */
+  Roles: string[];
+}
+
+/** Reads the pending migrations once and returns both the extensions and the group roles they need. */
+export async function ReadPendingRequirements(skywayConfig: SkywayConfig): Promise<PendingMigrationRequirements> {
+  const scripts = await ReadPendingMigrationSql(skywayConfig);
+  return { Extensions: ExtractCreatedExtensions(scripts), Roles: ExtractReferencedRoles(scripts, POSTGRES_MJ_GROUP_ROLES) };
 }

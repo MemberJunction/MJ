@@ -8,7 +8,7 @@
 import type { SkywayConfig } from '@memberjunction/skyway-core';
 import { OpenConnection, type QueryRunner } from '../../baseline/connection';
 import type { MJConfig } from '../../config';
-import { ReadPendingExtensions } from './pending-migrations';
+import { ReadPendingRequirements } from './pending-migrations';
 import { RunPgManagedPreflight } from './preflight';
 import type { PgPreflightQueryRunner, PgPreflightReport } from './types';
 
@@ -23,7 +23,7 @@ export type PgPreflightConnectionConfig = Pick<MJConfig, 'dbHost' | 'dbPort' | '
  *   to read pending migrations; its provider is connected and disconnected here.
  */
 export async function RunPgPreflightForConfig(config: PgPreflightConnectionConfig, skywayProbe: SkywayConfig): Promise<PgPreflightReport> {
-  const requiredExtensions = await ReadPendingExtensions(skywayProbe);
+  const pending = await ReadPendingRequirements(skywayProbe);
   const connection = await OpenConnection({
     Dialect: 'postgres',
     Host: config.dbHost,
@@ -35,7 +35,8 @@ export async function RunPgPreflightForConfig(config: PgPreflightConnectionConfi
   try {
     return await RunPgManagedPreflight(AdaptQueryRunner(connection), {
       TargetSchema: skywayProbe.Migrations.DefaultSchema ?? '__mj',
-      RequiredExtensions: requiredExtensions,
+      RequiredExtensions: pending.Extensions,
+      RequiredRoles: pending.Roles,
       Host: config.dbHost,
     });
   } finally {
