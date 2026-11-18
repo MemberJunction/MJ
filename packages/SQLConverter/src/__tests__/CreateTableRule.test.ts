@@ -378,3 +378,21 @@ describe('CreateTableRule', () => {
     });
   });
 });
+
+// Regression: V202611161958 — `UNIQUE NONCLUSTERED ([Col] ASC)` kept its ASC (only PRIMARY KEY lists
+// were stripped, and only their last modifier), and PG rejected it: `syntax error at or near "ASC"`.
+describe('CreateTableRule — sort order in constraint column lists', () => {
+  it('strips ASC/DESC from UNIQUE and composite PRIMARY KEY lists', () => {
+    const sql = `CREATE TABLE [__mj].[ShareLink] (
+    [ID] UNIQUEIDENTIFIER NOT NULL,
+    [OrgID] UNIQUEIDENTIFIER NOT NULL,
+    [InviteID] UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT [PK_ShareLink] PRIMARY KEY CLUSTERED ([ID] ASC, [OrgID] DESC),
+    CONSTRAINT [UQ_ShareLink_InviteID] UNIQUE NONCLUSTERED ([InviteID] ASC)
+)`;
+    const result = convert(sql);
+    expect(result).toContain('PRIMARY KEY ("ID", "OrgID")');
+    expect(result).toContain('UNIQUE ("InviteID")');
+    expect(result).not.toMatch(/\b(ASC|DESC)\b/);
+  });
+});

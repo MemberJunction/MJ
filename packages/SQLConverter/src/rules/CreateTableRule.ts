@@ -68,8 +68,14 @@ export class CreateTableRule implements IConversionRule {
     // Remove ON [PRIMARY] / ON "PRIMARY" filegroup clause
     result = result.replace(/\)\s*ON\s+\[?PRIMARY\]?\s*;?/gi, ');');
     result = result.replace(/\bON\s+"PRIMARY"/g, '');
-    // Remove ASC/DESC in PRIMARY KEY definitions
-    result = result.replace(/(PRIMARY\s+KEY\s*\([^)]*)\b(ASC|DESC)\b/gi, '$1');
+    // Remove ASC/DESC from PRIMARY KEY and UNIQUE column lists — PG constraint lists take no sort
+    // order. Every modifier in the list goes: the previous form matched once per list, so it kept
+    // all but the last in a composite key, and it never touched UNIQUE (V202611161958's
+    // `UNIQUE NONCLUSTERED ([MagicLinkInviteID] ASC)` failed with `syntax error at or near "ASC"`).
+    result = result.replace(
+      /((?:PRIMARY\s+KEY|UNIQUE)\s*\()([^)]*)(\))/gi,
+      (_match, open: string, cols: string, close: string) => `${open}${cols.replace(/\s+(?:ASC|DESC)\b/gi, '')}${close}`,
+    );
     // Remove TEXTIMAGE_ON filegroup
     result = result.replace(/\bTEXTIMAGE_ON\s+\[?\w+\]?/gi, '');
     // Remove WITH (PAD_INDEX = ...) etc.
