@@ -1,15 +1,22 @@
 # Agent Memory, SLEEP, Canon & Harness² — Architecture-Layer Consolidation, REM Dreaming, Precedence & Recursive Improvement
 
-**Version**: 1.1 — Unified v6.3 Design Spec (consolidates PR #5869 *Harness²* into this plan and aligns with merged PR #6279)  
-**Date**: November 2, 2026 (originally October 30, 2026)  
+**Version**: 1.2 — Unified v6.3 Design Spec (consolidates PR #5869 *Harness²* into this plan, aligns with merged PR #6279, and adds Self-Improvement Memory + relational run context items)  
+**Date**: November 18, 2026 (v1.1 November 2, 2026; originally October 30, 2026)  
 **Status**: Proposed — single authoritative v6.3 spec for **Arie Glazier (@arie-glazier-bcc)** after Predictive Studio wraps  
 **Owner / Assignee**: Arie Glazier (@arie-glazier-bcc) — extends his earlier work on Memory Consolidation ([`specs/001-memory-consolidation`](../specs/001-memory-consolidation/spec.md)), In-Flight Memory Writes ([`plans/agent-inflight-memory-writes.md`](agent-inflight-memory-writes.md)), and consolidates Recursive Improvement & Canon (formerly PR #5869) into a single roadmap  
 **FYI / Reviewers**: Robert Kihm (@rkihm-BC), Thomas Altman, Dray (@dray-mc), Topher Hunnewell (@topherHunnewell), Madhav Subramaniyam (@MS-BC), Jordan Fanapour (@jordanfanapour — Canon Semantic Graph alignment + legacy `Skip-Brain` FK cleanup in §3.2)  
 **Source Research**:
 - Behrouz, Hashemi, Javanmard, Mirrokni (Google Research, Oct 27, 2026), *The SLEEP Framework: Continual Learning via Wake–NREM–REM Consolidation* ([blog](https://research.google/blog/the-sleep-framework-a-new-way-for-llms-to-retain-knowledge-in-continual-learning/) · [arXiv:2606.03979](https://arxiv.org/abs/2606.03979)), building on *Hope / Nested Learning* ([arXiv:2512.24695](https://arxiv.org/abs/2512.24695)) and [Titans + MIRAS](https://research.google/blog/titans-miras-helping-ai-have-long-term-memory/)
 - Xu et al. (Google Cloud AI Research / Northwestern, Oct 9, 2026), *Harness²: Recursive Agent Harnessing for an Open World* ([arXiv:2610.14224](https://arxiv.org/abs/2610.14224)) — **consolidated into this document from PR #5869**
+- Xin Yu et al. (Google Cloud AI / Google DeepMind / Penn State, Nov 13, 2026), *Self-Improvement Memory Enables Continual Recursive Self-Improvement* ([arXiv:2611.18856](https://arxiv.org/abs/2611.18856)) — **added in v1.2**; shapes §3.3, §3.6, §5.5 and §9. v1.2 was written from the abstract and secondary summaries; re-check §9's numbers against the paper's tables before quoting them.
 
-**Code references** are pinned against `origin/next` @ `4da222e6aa` (2026-11-02, post-merge of PR #6279).
+**Code references** are pinned against `origin/next` @ `4da222e6aa` (2026-11-02, post-merge of PR #6279). §2.4 and §3.6 were re-verified against `origin/next` @ `883e71eb0` (2026-11-17); where §2.2 and §2.4 disagree, §2.4 is current.
+
+> **What changed in v1.2 (Nov 18, 2026)**
+> 1. **§2.4 — re-verified audit.** Two of §2.2's five bugs have moved: #2 is half fixed, and #2's cache half now costs a full reload on every note save. Five defects not listed in v1.1 join Phase 0, the worst being that **the daily maintenance pass almost never runs** (§2.4 item 1).
+> 2. **§3.6 — `MJ: AI Agent Run Context Items`.** Exposure and usage telemetry (Evidence Ladder Rungs 0–1) is recorded as real FK rows linking runs and run steps to the notes, examples and other items they were given, with a JSONType `Details` column for signals that will grow. It replaces the JSON `memoryAttribution` copy written into every prompt step's `OutputData` today.
+> 3. **§3.3 + §5.5 + §9 — Self-Improvement Memory.** The Learning Cycle Proposal table becomes the harness optimizer's memory: edits grouped by the problem they target, with rationale, predicted vs observed outcome, and evaluation context (model, prompt version, cohort). Both the proposer and the selector read it, and a model change triggers re-verification instead of silently keeping tuned edits.
+> 4. **§7 — thinner first slice.** Phase 0 now ships the run-context-items table. Phase 2 splits so the Harness Refiner with Self-Improvement Memory lands before REM dreaming, which waits until Phase 0 data shows which items help.
 
 ---
 
@@ -122,6 +129,8 @@ This unified specification **absorbs PR #5869** (`plans/agent-recursive-improvem
 
 ### 2.2 Five Live Bugs & Telemetry Gaps Confirmed on `next` (Phase 0 Scope)
 
+> **v1.2 status (`origin/next` @ `883e71eb0`)**: #1 still present · #2 first half fixed, second half changed shape (see §2.4) · #3 still present · #4 memory-manager read side unchanged (query still reads `vwConversationDetailRatings`); UI write side not re-checked · #5 still present (the `_agentNotes` config in `BaseAIEngine.ts` has no status filter).
+
 Before any replay harness or REM experiment can trust retrieval behavior, Phase 0 fixes five concrete defects verified in code on `origin/next`:
 
 1. **Cross-tenant / cross-user scope leak in vector search (`packages/AI/Engine/src/AIEngine.ts` L1400–1450)**:
@@ -158,11 +167,43 @@ Consolidating PR #5869 brings five additional code-verified defects on executabl
 5. **High-value agent runs are loaded and counted but never mined (`packages/AI/Agents/src/memory-manager-agent.ts` ≈ L825, L4079)**:
    `loadHighValueAgentRuns` queries high-value successful runs and logs their count, but nothing extracts procedural skills or notes from them. Phase 2 wires `loadHighValueAgentRuns` directly into the `SuccessfulTrajectory` sampler (§5.1 Step 1 #4).
 
+### 2.4 v1.2 Re-Verification Against `origin/next` @ `883e71eb0` (Phase 0 Scope Additions)
+
+Re-reading the memory stack on Nov 17–18, 2026 changed two §2.2 items and found five defects v1.1 did not list. Line numbers are at `883e71eb0`.
+
+**Changes to §2.2:**
+
+- **§2.2 #2, first half — fixed.** `AgentContextInjector` now filters with `IsInjectableNoteStatus` (`agent-context-injector.ts` L409), so `'Recent'` and `'All'` include Provisional notes. Drop it from Phase 0.
+- **§2.2 #2, second half — changed shape, still a cost.** New notes no longer wait for `Config(true)`. `BaseAIEngine` (`BaseAIEngine.ts` L632–647) allows in-place cache updates only for `_vectorIndexes`, so every note save triggers a **full reload of `_agentNotes`** after a 1.5 s debounce. Together with §2.2 #5 (no status filter, binary vectors loaded server-side), each in-flight `memoryWrites` save re-reads every note row of every tenant in every server process. Fix both together: preload only injectable statuses, and add `_agentNotes` to `IMMEDIATE_MUTATION_PROPERTIES` if `AdditionalLoading` does not derive from it.
+
+**New defects:**
+
+1. **The daily maintenance pass almost never runs (`memory-manager-agent.ts` L116, L719–744, L2361–2451, L4436–4437).**
+   - `CONSOLIDATION_CONFIG.frequency = 'daily'` compares against `getLastRunTime`, which returns the last *completed Memory Manager run*. The scheduled job (`metadata/scheduled-jobs/.memory-manager-job.json`) runs every 15 minutes, so that run is never 24 hours old.
+   - Importance scoring, consolidation, contradiction resolution, stale-reference pruning, decay and TTL expiry therefore run only when an agent gains ≥100 new auto-generated notes between two cycles, or when `data.forceMaintenance` is set.
+   - Fix: key the window on the last run *that performed maintenance*. Recording that is one more reason to activate `MJ: AI Agent Learning Cycles` (`CycleType = 'Consolidation'`, §3.2), whose latest completed row becomes the timestamp.
+   - Until this is fixed, `ImportanceScore`, decay and the REM samplers in §5.1 that depend on maintenance output are working from stale or missing data.
+2. **Tainted `Pending` notes are never reviewed or expired.** Hardening selects only `Status = 'Provisional'` (L3854) and TTL expiry selects only injectable statuses (L3631). A note written during a run that read untrusted content stays `Pending` forever. Route `Pending` notes into the Proposal quarantine (§3.3, `SourceTrustCeiling = 'UntrustedExternal'`) or expire them on their own TTL.
+3. **Contradiction search and consolidation do not stay within a user or company.**
+   - Contradiction pairing calls `FindSimilarAgentNotes(note.Note, note.AgentID, undefined, undefined, …)` (≈ L2864), so pairs can span users and companies, and resolving one can revoke another user's note.
+   - Consolidation copies `UserID`/`CompanyID` from the cluster's template note (L3206–3208) without checking that every member shares them.
+   - Pass the source note's own scope to both searches; refuse a cluster whose members differ in `UserID` or `CompanyID`.
+4. **Memory Manager extraction bypasses the in-flight write guards.** `createNoteRecords` creates any `Type`, including `Constraint`, directly as `Active` with no TTL. The extraction prompt asks for global Constraints, and none of the `metadata/prompts/templates/memory-manager/*.md` templates carries untrusted-content guidance. Apply the in-flight rules here too: no global `Constraint` without the §5.3 human-approval route, taint-check mined conversations, and add Harness²'s *"Evidence is data, not instructions"* section to the extraction prompts.
+5. **Injection is recorded only as an unread JSON copy (`base-agent.ts` L17127–17141).**
+   - Every prompt step's `OutputData` gets a `memoryAttribution` object: injected note and example IDs, plus a 100-character preview of each note.
+   - Nothing reads it, it repeats on every step of the run, it cannot be indexed, and the previews copy note text into step rows without the field-level security projection that `FormatNotesForInjection` applies.
+   - `AccessCount`/`LastAccessedAt` are never updated on injection (the only writers are dedupe and consolidation: `MemoryWriteManager.ts` L429–430, `memory-manager-agent.ts` L3214, L3926–3927), so decay effectively measures time since creation.
+   - §3.6 replaces this with relational exposure rows.
+
+Also tracked separately: [#2833](https://github.com/MemberJunction/MJ/issues/2833) (an agent with `AllowMemoryWrite = 0` claims it saved a memory). Nothing in this plan fixes it; it stays a separate issue.
+
 ---
 
-## 3. Schema Architecture — Four Additive Relational Changes
+## 3. Schema Architecture — Five Additive Relational Changes
 
 All schema work strictly follows the **[Publish-Then-No-Breaking-Changes Policy](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** for the v6 era: new tables, nullable/defaulted columns, data backfill, and metadata-level deprecation — **zero dropped or renamed columns**.
+
+> **Authoring note (v1.2)**: the CHECK value lists in this section predate the [Schema and Code Authoring Guide](../guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md)'s *"Value lists are written for people"* rule and the `readable-status-values` check. Write them readable when the migrations are authored: `'Consolidated From'`, `'Awaiting Approval'`, `'Verification Failed'`, `'Harness Refinement'`, not `'ConsolidatedFrom'`. Code compares against the CodeGen union, so nothing depends on the run-together spelling. §3.6 already uses readable values.
 
 ```mermaid
 erDiagram
@@ -178,6 +219,12 @@ erDiagram
     ConversationDetail ||--o{ AIAgentLearningCycleProposalSource : "SourceConversationDetailID"
     AIAgentNote ||--o{ AIAgentLearningCycleProposal : "AppliedNoteID"
     AISkill ||--o{ AIAgentLearningCycleProposal : "AppliedSkillID"
+    AIAgentRun ||--o{ AIAgentRunContextItem : "AgentRunID"
+    AIAgentRunStep ||--o{ AIAgentRunContextItem : "AgentRunStepID (optional)"
+    AIAgentNote ||--o{ AIAgentRunContextItem : "AgentNoteID"
+    AIAgentExample ||--o{ AIAgentRunContextItem : "AgentExampleID"
+    AISkill ||--o{ AIAgentRunContextItem : "SkillID"
+    GraphConcept ||--o{ AIAgentRunContextItem : "GraphConceptID"
 ```
 
 ### 3.1 Fixing Note Provenance: `MJ: AI Agent Note Sources` (`__mj.AIAgentNoteSource`)
@@ -246,9 +293,12 @@ Unverified hypotheses **never** live in `MJ: AI Agent Notes`. Every candidate in
 | **Trust & Privacy** | `SourceTrustCeiling` (`'UntrustedExternal' \| 'ProvisionalUser' \| 'VerifiedActive' \| 'Canonical'`), `DistinctUserCount` (`INT NULL`) | Monotonic minimum trust across all sources (poisoning ceiling); enforces $k \ge 3$ on `CrossUserPattern`. |
 | **REM Generation Signals** | `GeneratorMetadata` (`NVARCHAR(MAX)`, `@jsonType`), `CrossModelAgreementCount` (`INT NOT NULL DEFAULT 1`), `IsSingleModelOutlier` (`BIT NOT NULL DEFAULT 0`), `GateProbability` (`DECIMAL(5,4) NULL`), `FalsifierVerdict` (`'Passed' \| 'Rejected' \| 'NeedsScopeNarrowing' \| NULL`), `FalsifierCritique` (`NVARCHAR(MAX) NULL`) | Measures whether cross-model consensus vs. high-temp single-model outliers achieve higher replay win rates. |
 | **RL Verification Scorecard** | `VerificationMethod` (`'CounterfactualReplay' \| 'QueryCheck' \| 'Hybrid' \| 'ManualOnly' \| 'None'`), `ReplayTrialsCount` (`INT DEFAULT 0`), `ReplayWinsCount` (`INT DEFAULT 0`), `ReplayLossesCount` (`INT DEFAULT 0`), `ReplayWinDelta` (`DECIMAL(6,4) NULL`), `QueryCheckPassed` (`BIT NULL`), `VerificationEvidence` (`NVARCHAR(MAX) NULL`, `@jsonType`) | Full audit trail of historical `AIPromptRun` A/B judge comparisons and SQL checks. |
+| **Self-Improvement Memory (v1.2, §9)** | `ProblemKey` (`NVARCHAR(200) NOT NULL`), `ProblemSummary` (`NVARCHAR(MAX) NULL`), `Rationale` (`NVARCHAR(MAX) NOT NULL`), `PredictedEffect` (`DECIMAL(6,4) NULL`), `ObservedEffect` (`DECIMAL(6,4) NULL`), `EffectMetric` (`NVARCHAR(100) NULL`), `EvaluationContext` (`NVARCHAR(MAX) NULL`, `@jsonType IProposalEvaluationContext`), `SupersedesProposalID` (nullable self-FK) | Turns the proposal table into the harness optimizer's memory. `ProblemKey` groups every attempt at the same recurring failure (a normalized failure signature, e.g. agent + error class + tool, or a rubric criterion), so the proposer sees what was already tried for *this* problem. `PredictedEffect` is the proposer's own forecast; `ObservedEffect` is what verification measured, normally `ReplayWinDelta` (the gap between them is the calibration signal). `EvaluationContext` records the model ID, vendor, prompt version, agent configuration, cohort and cohort size the result was measured under, so a result is never trusted outside the context it came from. `SupersedesProposalID` links a revised edit to the attempt it replaces. |
 | **Lifecycle & Materialization** | `Status` (`'Draft' \| 'FilteredOut' \| 'Verifying' \| 'VerificationFailed' \| 'AwaitingApproval' \| 'Approved' \| 'Applied' \| 'Rejected' \| 'RolledBack'`), `ApprovalRequestID` (nullable FK → `AIAgentRequest`), `AppliedNoteID` (nullable FK → `AIAgentNote`), `AppliedSkillID` (nullable FK → `AISkill`), `AppliedEntityID` + `AppliedRecordID` (polymorphic fallback, `EntityIDFieldName = 'AppliedEntityID'`), `AppliedAt` (`DATETIMEOFFSET NULL`) | State machine + exclusive-arc links to the live artifact minted upon application. |
 
 **Negative Memory (Anti-Redreaming Cache)**: Retaining `VerificationFailed` and `Rejected` rows in `AIAgentLearningCycleProposal` (outside `BaseAIEngine` RAM) gives future REM cycles an indexed negative cache (`ClaimHash` + semantic check on recent failed/rejected claims in the same scope) so `MemoryManagerAgent` never burns tokens re-testing a falsified hypothesis or re-pestering humans with an already-rejected Canon suggestion.
+
+**Positive *and* negative history, read by two steps (v1.2)**: the anti-redreaming cache only uses the table to *skip* known failures. Self-Improvement Memory ([arXiv:2611.18856](https://arxiv.org/abs/2611.18856)) gets its gain from feeding the whole grouped history, wins and losses with their rationale and predicted vs observed effect, to **both** the step that proposes edits and the step that picks winners. §5.5 wires that in. The history is indexed on (`TargetAgentID`, `ProblemKey`, `__mj_CreatedAt`) and stays outside `BaseAIEngine` RAM, so it is read per cycle with a `RunView`, never cached process-wide.
 
 ### 3.4 Real-FK Provenance Junction: `MJ: AI Agent Learning Cycle Proposal Sources` (`__mj.AIAgentLearningCycleProposalSource`)
 
@@ -296,6 +346,115 @@ To distinguish **ratified organizational Canon** from ordinary `Active` notes or
   - `OriginProposalID UNIQUEIDENTIFIER NULL` (FK → `__mj.AIAgentLearningCycleProposal(ID)`)
 
 When a note is promoted to Canon (`IsCanonical = 1`), its `ProtectionTier` is automatically locked to `'Immutable'` (or `'Protected'`) so NREM consolidation and Ebbinghaus decay never silently merge or archive ratified policy.
+
+### 3.6 Run Context Items: `MJ: AI Agent Run Context Items` (`__mj.AIAgentRunContextItem`) — v1.2
+
+Every later phase depends on knowing **which items a run was given and which it used**: the Evidence Ladder (§8.1 Rungs 0, 1, 2 and 4), the REM samplers, counterfactual replay corpus selection, the EMA graph-edge weights (§6.1 #5), decay and `ImportanceScore`, Self-Improvement Memory's observed effects (§9), and poisoning blast-radius queries. Today that record is the unread `memoryAttribution` JSON copied into each prompt step's `OutputData` (§2.4 #5). This table replaces it.
+
+#### Design it twice: JSON bag vs. child table
+
+| | A. JSONType bag on `AIAgentRun` / `AIAgentRunStep` | B. Child table with real FKs **(chosen)** |
+| --- | --- | --- |
+| Precedent | `AIAgentRunStep.Skills` (`AgentSkillInvocation[]`), today's `memoryAttribution` | `AIAgentNoteSource` (§3.1), `AIAgentLearningCycleProposalSource` (§3.4) |
+| "Which runs saw note X?" (decay, credit, blast radius, holdout) | `OPENJSON` scan over every run row; no index; harder PG conversion | Indexed lookup on `AgentNoteID` (CodeGen adds the FK index) |
+| Referential integrity | None: a deleted or mistyped ID goes unnoticed | DB-enforced; bad IDs fail at insert |
+| Explorer | Opaque JSON on the run | Related tabs both ways: a note shows the runs that used it, a run shows what it was given |
+| Agents, evals, `RunView` | Parse JSON per row | Filter and join like any entity |
+| Extending with new signals | Edit the interface | Same: evolving signals live in the `Details` JSONType column (below) |
+| Write cost | One column update per run | 5–16 small inserts per run, batched |
+
+**Decision: B, with a JSONType column for what will change.** The identity of the link (which run, which step, which item, what happened) and the few columns analytics filter on are real columns with real FKs. Signals that will keep growing (reranker score, retrieval lane, status snapshot, holdout bucket) go in `Details`, so adding one is an interface change plus `mj sync push`, not a migration. This is the same reasoning §3.1 uses to retire `DerivedFromNoteIDs`.
+
+**Not both.** Writing a bag on the run *and* rows here gives two records that drift. The table is the only record; once it ships, remove `memoryAttribution` from step `OutputData` (or reduce it to counts). `AIAgentRunStep.Skills` stays as it is for skill activation provenance; skills get rows here only if the Evidence Ladder needs skill *exposure*, decided in Phase 2, and never as a second copy of the same fact.
+
+#### DDL (readable values per the §3 authoring note)
+
+```sql
+CREATE TABLE [${flyway:defaultSchema}].[AIAgentRunContextItem] (
+    [ID]                 UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_AIAgentRunContextItem_ID] DEFAULT (newsequentialid()),
+    [AgentRunID]         UNIQUEIDENTIFIER NOT NULL, -- FK -> AIAgentRun(ID)
+    [AgentRunStepID]     UNIQUEIDENTIFIER NULL,     -- FK -> AIAgentRunStep(ID); NULL for run-start injection
+    [EventType]          NVARCHAR(20)     NOT NULL,
+    [ItemType]           NVARCHAR(30)     NOT NULL,
+
+    -- Exactly one target: real FKs for the item types we know, polymorphic pair for the rest
+    [AgentNoteID]        UNIQUEIDENTIFIER NULL,     -- FK -> AIAgentNote(ID)
+    [AgentExampleID]     UNIQUEIDENTIFIER NULL,     -- FK -> AIAgentExample(ID)
+    [SkillID]            UNIQUEIDENTIFIER NULL,     -- FK -> AISkill(ID)
+    [GraphConceptID]     UNIQUEIDENTIFIER NULL,     -- FK -> GraphConcept(ID)
+    [ScopedPromptPartID] UNIQUEIDENTIFIER NULL,     -- FK -> ScopedPromptPart(ID)
+    [ItemEntityID]       UNIQUEIDENTIFIER NULL,     -- FK -> Entity(ID); EntityIDFieldName for ItemRecordID
+    [ItemRecordID]       NVARCHAR(450)    NULL,
+
+    [ShortID]            NVARCHAR(10)     NULL,     -- the tag rendered in the prompt ('N1', 'E2') so Cited rows resolve memoryUsed
+    [Rank]               INT              NULL,     -- position in the injected block
+    [Similarity]         DECIMAL(5,4)     NULL,     -- retrieval cosine score, when there was one
+    [Details]            NVARCHAR(MAX)    NULL,     -- JSONType IAgentRunContextItemDetails
+
+    CONSTRAINT [PK_AIAgentRunContextItem] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AIAgentRunContextItem_AgentRun] FOREIGN KEY ([AgentRunID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRun]([ID]),
+    CONSTRAINT [FK_AIAgentRunContextItem_AgentRunStep] FOREIGN KEY ([AgentRunStepID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRunStep]([ID]),
+    -- ...one FK constraint per target column...
+    CONSTRAINT [CK_AIAgentRunContextItem_EventType] CHECK ([EventType] IN (N'Retrieved', N'Injected', N'Withheld', N'Cited', N'Other')),
+    CONSTRAINT [CK_AIAgentRunContextItem_ItemType] CHECK ([ItemType] IN (N'Note', N'Example', N'Skill', N'Graph Concept', N'Scoped Prompt Part', N'Other')),
+    CONSTRAINT [CK_AIAgentRunContextItem_ExactlyOneTarget] CHECK (
+        (CASE WHEN [AgentNoteID]        IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [AgentExampleID]     IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [SkillID]            IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [GraphConceptID]     IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [ScopedPromptPartID] IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [ItemEntityID] IS NOT NULL AND [ItemRecordID] IS NOT NULL THEN 1 ELSE 0 END) = 1
+    )
+);
+```
+
+Every column gets an `MS_Description`; CodeGen adds the timestamp columns and FK indexes. `ItemRecordID` is decorated in `metadata/entities/.polymorphic-fk-entity-fields.json`, and the entity is `NotCloneable` in `.clone-configurations.json`.
+
+**Event types:**
+- `Injected` — the item was in the prompt (Rung 0).
+- `Withheld` — eligible, deliberately left out for the holdout arm (Rung 4). Never for `IsCanonical = 1` Constraints or `Immutable`/`Protected` notes.
+- `Cited` — the model said it acted on the item (`memoryUsed`, Rung 1), with `AgentRunStepID` set to the step whose response cited it.
+- `Retrieved` — scored but cut by top-K or the reranker. Off by default (`memoryConfig.recordRetrievedCandidates`); useful for retrieval-quality analysis and for explaining the §4.2 starvation cases.
+
+**Why `AgentRunStepID` is nullable:** injection happens once in `Execute` phase 2 (`base-agent.ts` ≈ L3122–3134, stored at L5184), before any step exists, so run-start rows carry only `AgentRunID`. `Cited` rows and in-flight retrieval (§6.3 `memoryToolCalls`) do have a step and record it.
+
+#### JSONType `Details` (`metadata/entities/JSONType-interfaces/IAgentRunContextItemDetails.ts`)
+
+Follow the `AgentSkillInvocation` precedent: an interface file plus a `.entity-field-jsontype-agent-run-context-item-details.json` record binding it to the field, pushed before CodeGen. Starting shape:
+
+```typescript
+export interface IAgentRunContextItemDetails {
+    /** Bump when the shape changes incompatibly; readers branch on it. */
+    Version: 1;
+    /** How the item was selected. */
+    Strategy?: 'Relevant' | 'Recent' | 'All' | 'Semantic' | 'Rated' | 'Canon Lane' | 'Graph Expansion' | 'In-Flight Search' | 'Other';
+    /** §4.2 retrieval lane. */
+    Lane?: 'Canon' | 'Dynamic';
+    RerankScore?: number;
+    /** §4.2 authority-boosted score. */
+    EffectiveScore?: number;
+    /** Snapshot of the item as the model saw it; the item itself changes later. */
+    StatusAtInjection?: string;
+    ProtectionTierAtInjection?: string;
+    IsCanonicalAtInjection?: boolean;
+    ScopeLevel?: string;
+    /** SampleBucket value, so holdout arms can be re-derived. */
+    HoldoutBucket?: number;
+}
+```
+
+Item **text** is not copied: readers join to the item under their own permissions (field-level security applies), and Record Changes on `MJ: AI Agent Notes` recovers the text as of the run's time if it was edited later.
+
+#### Write path, volume, settings
+
+- **Volume:** at most `MaxNotesToInject` (5) + `MaxExamplesToInject` (3) `Injected` rows plus up to as many `Cited` rows: typically 5–16 per run, more only with `Retrieved` on.
+- **Writes:** one batch after `InjectContextMemory` returns, not awaited by the turn; `Cited` rows when the step's response is processed. A failed write logs (`LogError` with run ID) and never fails the run.
+- **Entity settings (metadata, not migration):** `TrackRecordChanges = 0` (append-only telemetry; record changes would double the write volume) and `AllowCaching = 0`.
+- **Scope and security:** the row carries no scope columns; user, company and primary scope come from the run, so row-level security on runs governs who can read these rows.
+- **`AccessCount` / `LastAccessedAt`:** updated from `Injected` rows (one debounced update per note per run), so decay and `ImportanceScore`'s `accessFrequency` finally get a real signal. The table is the truth; the two columns are a cache of it.
+- **Deletes:** a hard-deleted note or run should take its context-item rows with it (privacy erasure). Check what `CascadeDeletes` already does for `MJ: AI Agent Runs` and `MJ: AI Agent Notes` before relying on it.
+
+**Open question:** the realtime path builds memory context through `AgentMemoryContextBuilder` / `AgentContextAssembler`. Confirm it always has an `AIAgentRun`; if a realtime turn can inject memory with no run, `AgentRunID` needs a nullable `AgentSessionID` alternative and the exactly-one rule extends to cover it.
 
 ---
 
@@ -395,7 +554,12 @@ While SLEEP REM Dreaming (§5.1) synthesizes declarative notes, disambiguations,
    - Apply each candidate edit as a scoped override (or deep-cloned sandbox agent via `RecordCloning`) and re-run the failure cohort via `AgentEvalDriver` (or single-decision replay for prompt/cue edits) with `TestRunID` tracking.
 3. **Compose & Reflect (Paper Prompts 3–6 → `AIAgentLearningCycle` & `AIAgentLearningCycleProposal`)**:
    - The Composer prompt compares base vs. candidate trajectories and logs `kept | revised | dropped → edit → trajectory moment` into `AIAgentLearningCycle` (`CycleType = 'HarnessRefinement'`), writing winning edits into `AIAgentLearningCycleProposal` (`ProposalType = 'PromptRevision' | 'DraftSkill'`, `SamplerStrategy = 'HarnessRefinerProbe'`) and tracking iterations/cost on `MJ: Experiments`.
-4. **Persisting PR #6279 Loop 2 Workflow Promotion & Graph Contradiction Verdicts**:
+4. **Self-Improvement Memory: the refiner reads its own history (v1.2, [arXiv:2611.18856](https://arxiv.org/abs/2611.18856))**:
+   - **Before Propose:** load prior proposals for the same `TargetAgentID` and `ProblemKey` (§3.3), wins and losses alike, each with its `Rationale`, `PredictedEffect`, `ObservedEffect` and `EvaluationContext`, and render them into both editor prompts as *"what has been tried for this problem"*. The editor must state for each new edit what it does differently from the closest past attempt, and write that into `Rationale` along with its own `PredictedEffect`.
+   - **Before Select:** the Composer and the Prompt 5 selector see the same history, so they can prefer an edit whose kind has worked for this problem and discount one that repeats a known loss. Prompt 5 stays blind to *which editor* produced each candidate; it gets the problem's history, not candidate authorship.
+   - **After Probe:** write `ObservedEffect` and the full `EvaluationContext` back to the proposal. The gap between predicted and observed effect, per editor and per model, is the refiner's calibration record (§9 success metric 5).
+   - **Continuation when the model changes:** the paper's headline failure is that a harness tuned on one model can score below the untuned seed on another. When an agent's effective model changes (prompt-model priority, `OverrideModelID`, vendor failover becoming the norm), applied `PromptRevision` and `DraftSkill` proposals whose `EvaluationContext` names a different model are marked for re-verification against the new model, using the same probe cohort. Results are written as new proposals with `SupersedesProposalID` set, so history accumulates rather than being overwritten. Notes are plain text and model-neutral; this applies to harness edits only.
+5. **Persisting PR #6279 Loop 2 Workflow Promotion & Graph Contradiction Verdicts**:
    - During the same scheduled cycle, `MemoryManagerAgent` invokes `@memberjunction/ai-core-plus`'s `DiscoverWorkflowPromotionCandidates` and `EvaluateWorkflowCanonHealth` (shipped in PR #6279) and writes high-confidence `PromoteWorkflow` / `EvolveWorkflow` proposals — plus unresolved `Contradicts` edges from `@memberjunction/content-pipeline`'s `GraphStage` (`ResolveGraphContradiction`) — directly into `AIAgentLearningCycleProposal` so human stewards review all Canon promotions and drift alerts in one unified `MJ: AI Agent Requests` inbox.
 
 ---
@@ -416,7 +580,7 @@ We build directly on the generalized Semantic Graph architecture (**schema, `Gra
    with $\tau(\text{Approved}) = 1.0$, $\tau(\text{Proposed}) = 0.4$.
 5. **Hybrid Symbolic-Prior + EMA Outcome-Learned Edge Weights**:
    - Initialize `Weight` from `GraphEdgeType.DefaultWeight` $\times$ origin prior (`Declared = 0.90`, `Inferred/Approved = 0.75`, `Inferred/Proposed = 0.45`) to avoid cold-start sparsity.
-   - Using Phase 0's per-run injected-item exposure log, update `Weight` via bounded exponential moving average ($w \leftarrow \text{clamp}(w + \eta \cdot r,\; 0.10,\; 1.00)$, $\eta = 0.05$) on counterfactual replay wins ($+1.0$), rated successes ($+0.5$), and user corrections / thumbs-down ($-1.0$).
+   - Using Phase 0's `MJ: AI Agent Run Context Items` rows (§3.6), update `Weight` via bounded exponential moving average ($w \leftarrow \text{clamp}(w + \eta \cdot r,\; 0.10,\; 1.00)$, $\eta = 0.05$) on counterfactual replay wins ($+1.0$), rated successes ($+0.5$), and user corrections / thumbs-down ($-1.0$).
 
 ### 6.2 Procedural Memory: Auto-Drafted `MJ: AI Skills` (`Active` vs. `Canonical`)
 
@@ -450,9 +614,10 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 
 | PR / Phase | Deliverables | Key Files & Packages |
 | --- | --- | --- |
-| **PR 1 (Phase 0): Memory & Action Approval Bug Fixes, `[N1]` Citation Telemetry & Counterfactual Replay Harness** | Fix `AIEngine.composeNoteFilters` & `fallbackGetNotesFromCache` null-scope leak; fix `'Recent'`/`'All'` `Provisional` & post-startup visibility; filter `BaseAIEngine._agentNotes` preload to injectable statuses; reconcile `ConversationDetail.UserRating`; add `[N1]`/`[E1]` short-ID tagging + `memoryUsed?: string[]` on `LoopAgentResponse` + debounced `AccessCount`/`LastAccessedAt`; fix `MJActionEntityServer` (`CodeApprovedByUserID`, `Runtime` edit approval reset), `Find Candidate Actions` approval filter, and `RuntimeActionExecutor` memory cap; ship single-turn counterfactual replay evaluator (`AIPromptRun.Messages` + position-randomized `temp=0` judge). | `packages/AI/Engine/src/AIEngine.ts`, `packages/AI/BaseAIEngine/src/BaseAIEngine.ts`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/MJCoreEntitiesServer/src/custom/MJActionEntityServer.server.ts`, `packages/Actions/CoreActions/`, `packages/Actions/CodeExecution/` |
+| **PR 1 (Phase 0): Memory & Action Approval Bug Fixes, Run Context Items, `[N1]` Citation Telemetry & Counterfactual Replay Harness** | Fix `AIEngine.composeNoteFilters` & `fallbackGetNotesFromCache` null-scope leak; filter `BaseAIEngine._agentNotes` preload to injectable statuses and stop the full reload on every note save (§2.4); fix the maintenance-pass time window (§2.4 #1); route or expire `Pending` notes (§2.4 #2); keep contradiction and consolidation within one user and company (§2.4 #3); apply the in-flight guards to Memory Manager extraction (§2.4 #4); reconcile `ConversationDetail.UserRating`; create `MJ: AI Agent Run Context Items` + `IAgentRunContextItemDetails` (§3.6) and retire step `memoryAttribution`; add `[N1]`/`[E1]` short-ID tagging + `memoryUsed?: string[]` on `LoopAgentResponse` written as `Cited` rows + debounced `AccessCount`/`LastAccessedAt` from `Injected` rows; fix `MJActionEntityServer` (`CodeApprovedByUserID`, `Runtime` edit approval reset), `Find Candidate Actions` approval filter, and `RuntimeActionExecutor` memory cap; ship single-turn counterfactual replay evaluator (`AIPromptRun.Messages` + position-randomized `temp=0` judge). | `migrations/v6/...`, `metadata/entities/`, `packages/AI/Engine/src/AIEngine.ts`, `packages/AI/BaseAIEngine/src/BaseAIEngine.ts`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/AI/Agents/src/base-agent.ts`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/MJCoreEntitiesServer/src/custom/MJActionEntityServer.server.ts`, `packages/Actions/CoreActions/`, `packages/Actions/CodeExecution/` |
 | **PR 2 (Phase 1): `AIAgentNoteSource` Sub-Table + 5-Tier Canon Precedence** | Migration creating `__mj.AIAgentNoteSource` + `OPENJSON` backfill from `DerivedFromNoteIDs` + deprecating `DerivedFromNoteIDs` in metadata; add `IsCanonical` columns to `AIAgentNote` & `AISkill`; refactor `MemoryManagerAgent` lineage to `AIAgentNoteSource`; implement Two-Lane Canon selection + 5-tier `<memory_policy>`. | `migrations/v6/...`, `metadata/entities/`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/AI/Agents/src/memory-manager-agent.ts` |
-| **PR 3 (Phase 2): Learning Cycle Schema, REM Dreaming MVP, Harness Refiner & Loop 2 Persistence** | Additive columns on `AIAgentLearningCycle`; create `AIAgentLearningCycleProposal` & `AIAgentLearningCycleProposalSource` (including `SourceGraphConceptID`/`SourceGraphEdgeID` FKs + `.polymorphic-fk-entity-fields.json` + `.clone-configurations.json`); build daily REM dreaming phase (`ParallelExecutionCoordinator` multi-model lenses + Cold Falsifier + `Jev` gate + anti-redreaming negative cache + `MaxDreamCycleCostUSD` circuit breaker); port *Harness²* Offline Harness Refiner (`Propose → Probe → Compose` *invariant*/*domain* prompts over `AgentEvalDriver` + `MJ: Experiments`); persist PR #6279 `DiscoverWorkflowPromotionCandidates`, `EvaluateWorkflowCanonHealth`, and `GraphStage` `Contradicts` proposals. | `migrations/v6/...`, `packages/AI/Agents/src/memory-manager-agent.ts`, `metadata/prompts/templates/memory-manager/` |
+| **PR 3a (Phase 2a): Learning Cycle Schema + Harness Refiner with Self-Improvement Memory** | Additive columns on `AIAgentLearningCycle`; create `AIAgentLearningCycleProposal` (including the §3.3 Self-Improvement Memory columns + `IProposalEvaluationContext`) & `AIAgentLearningCycleProposalSource` (including `SourceGraphConceptID`/`SourceGraphEdgeID` FKs + `.polymorphic-fk-entity-fields.json` + `.clone-configurations.json`); record maintenance cycles as `CycleType = 'Consolidation'` rows (§2.4 #1); port *Harness²* Offline Harness Refiner (`Propose → Probe → Compose` *invariant*/*domain* prompts over `AgentEvalDriver` + `MJ: Experiments`) with history fed to proposer and selector and model-change re-verification (§5.5 #4); persist PR #6279 `DiscoverWorkflowPromotionCandidates`, `EvaluateWorkflowCanonHealth`, and `GraphStage` `Contradicts` proposals. | `migrations/v6/...`, `metadata/entities/JSONType-interfaces/`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/TestingFramework/Engine/src/drivers/AgentEvalDriver.ts` |
+| **PR 3b (Phase 2b): REM Dreaming MVP** — starts once PR 1's run context items have collected enough exposure data to tell whether injected items help | Daily REM dreaming phase (`ParallelExecutionCoordinator` multi-model lenses + Cold Falsifier + `Jev` gate + anti-redreaming negative cache + `MaxDreamCycleCostUSD` circuit breaker), writing into the PR 3a tables. | `packages/AI/Agents/src/memory-manager-agent.ts`, `metadata/prompts/templates/memory-manager/` |
 | **PR 4 (Phase 3): RL Verification Router, Procedural Skills & Safe `AIAgentRequest` Inbox** | Wire counterfactual replay + read-only `RunQuery` falsification into `Verifying` proposals; implement `LearningCycleProposalMaterializer` (`Provisional` auto-apply vs. `AIAgentRequest` human approval with non-resuming settlement handler in `MJAIAgentRequestEntityServer`); add `DraftSkill` (`RequestedOnly` → `Auto` + `IsCanonical`) and monotonic `SourceTrustCeiling` poisoning enforcement + rollback on post-apply regression. | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/Angular/Explorer/core-entity-forms/` |
 | **PR 5 (Phase 4, Native Search & Middleware Hooks): Canon Semantic Graph Wiring, `memoryToolCalls` & Agent Hooks** | Persist `MemoryManagerAgent` EAV `entityTriples` into `MJ: Graph Edges` (`Proposed`); register `NoteLineageEdgeProvider` & `ProposalLineageEdgeProvider`; add 1–2 hop Canon-preferring graph expansion + bounded EMA edge weight updates; add opt-in native `memoryToolCalls` (`MemoryToolManager`); wire `BaseActionFilter` and `BeforeAction`/`AfterAction`/`AfterTurn`/`BeforeFinish` middleware hooks in `BaseAgent`. | `packages/AI/Agents/src/`, `@memberjunction/core-entities` (`GraphEngine`) |
 
@@ -461,6 +626,8 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 2. **Counterfactual Replay Win Rate**: Net positive `ReplayWinDelta` on held-out failed/corrected turns with `< 2%` regression rate on passing control turns.
 3. **Signal-to-Noise Funnel**: Share of raw REM drafts surviving Cold Falsifier + `Jev` (~15–25%), share passing replay/SQL verification, and **human approval rate $\ge 70\%$** on Canon/Skill requests routed to `MJ: AI Agent Requests` (keeping reviewer volume low and high-trust).
 4. **Contradiction Resolution Rate**: Reduction in unresolved `[Contradiction flagged...]` high-importance note pairs via verified conditional disambiguation proposals.
+5. **Refiner Calibration (v1.2)**: per editor and per model, the gap between `PredictedEffect` and `ObservedEffect` narrows over successive cycles, and the share of applied harness edits that survive re-verification after a model change is reported rather than assumed.
+6. **Exposure Coverage (v1.2)**: every run that injects memory has matching `Injected` rows, checked by an integration test that runs an agent with notes and asserts the rows (and the `Cited` rows when the response sets `memoryUsed`). Maintenance passes actually run daily: one completed `CycleType = 'Consolidation'` row per day.
 
 ---
 
@@ -472,8 +639,8 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 
 | Rung | Question | Mechanism | Cost | Strength |
 | --- | --- | --- | --- | --- |
-| **0. Exposure** | Was it present? | Per-run exposure record across notes, examples, skills, scoped prompt parts, and `GraphConcept`s: rank, score, and **arm** (`injected` vs. `withheld`) | Low | Prerequisite for all downstream attribution |
-| **1. Usage** | Did the model act on it? | Render notes/examples with compact short IDs (`[N1]`, `[E1]`); add `memoryUsed?: string[]` to `LoopAgentResponse` (§2.2 #3) | Low | Separates "ignored" from "acted on" across co-injected notes |
+| **0. Exposure** | Was it present? | `Injected` / `Withheld` rows in `MJ: AI Agent Run Context Items` (§3.6) across notes, examples, skills, scoped prompt parts, and `GraphConcept`s: rank, score, and **arm** | Low | Prerequisite for all downstream attribution |
+| **1. Usage** | Did the model act on it? | Render notes/examples with compact short IDs (`[N1]`, `[E1]`); add `memoryUsed?: string[]` to `LoopAgentResponse` (§2.2 #3), recorded as `Cited` rows keyed on the citing step (§3.6) | Low | Separates "ignored" from "acted on" across co-injected notes |
 | **2. Correlation** | Do runs with it do better? | Join exposure to rubric `ProductionSampling` scores, regenerate (`ConversationDetail.ReplacedAt`), edit-and-resend (`OriginalMessageChanged`), validation retries, tool-error steps, run success, and user ratings | Low | Screens candidates for Rung 3 replay |
 | **3. Counterfactual Replay** | Does adding/removing it change the decision, and is the result better? | Clone `AIPromptRun.Messages`, splice or withhold the candidate note/skill/prompt-part block, and **rerun that single decision** under the same model/config (`temp = 0` randomized A/B judge, §5.2) | Medium | Strong causal signal per turn with **zero side effects** |
 | **4. Randomized Holdout** | Does it help on average in production? | For eligible non-constraint notes, withhold with small probability ($\approx 10\%$) using deterministic run-ID bucketing (`SampleBucket` in `packages/Rubrics/Base/src/sampling.ts`). **Never withhold** `IsCanonical = 1` `Constraint` notes or `Immutable`/`Protected` tiers | Low per run | Gold-standard production causal metric |
@@ -503,6 +670,32 @@ Conversation-scoped `MJ: Artifacts` act as the staging area for procedural outpu
 | Plan / `TaskGraph` | Saved Workflow (`Flow` agent) | `Workflow.Validate` + dry run + deterministic Weisfeiler-Lehman DAG similarity clustering & telemetry (`@memberjunction/ai-core-plus`, shipped in PR #6279) |
 | Procedure Markdown | `MJ: AI Skill` | Counterfactual single-decision replay contrast with vs. without the skill (Rung 3) |
 | Domain / Policy Synthesis | `MJ: Graph Concept` / `MJ: Scoped Prompt Part` / `MJ: AI Agent Note` | Content Pipeline `GraphStage` authority-tier check (shipped in PR #6279) + Rung 3 replay or read-only `RunQuery` check |
+
+---
+
+## 9. Self-Improvement Memory (`arXiv:2611.18856`) — What We Take From It (v1.2)
+
+**The paper.** Xin Yu et al. formalize *continual recursive self-improvement*: continuing a harness-optimization run after the benchmark or the policy model changes. An evolved harness often does not transfer; their example is an Opus-evolved harness scoring *below the seed harness* on Gemini. **Self-Improvement Memory (SIM)** is a memory for the harness *optimizer*, not for the task-solving agent. It groups past harness edits by the problem they targeted and keeps each edit's rationale, predicted and observed outcomes, and evaluation context. Both the proposer and the selector read it, and each new attempt is appended. Reported: SIM improves 9 of 10 coding continuations, a mean +2.36 points over harness-only continuation (p = 0.003), with gains across four domains. A secondary write-up reports 84.75 vs 73.42 for the cross-model case from a 68.41 start; confirm against the paper before quoting.
+
+**How it maps onto this plan:**
+
+| SIM element | Where it lives here |
+| --- | --- |
+| Memory for the optimizer, separate from task memory | `AIAgentLearningCycleProposal` (§3.3), kept out of `MJ: AI Agent Notes` and out of `BaseAIEngine` RAM |
+| Edits grouped by the problem they targeted | `ProblemKey` + `ProblemSummary` (§3.3) |
+| Rationale | `Rationale` (§3.3), written by the editor with the difference from the nearest past attempt (§5.5 #4) |
+| Predicted vs observed outcome | `PredictedEffect` / `ObservedEffect` / `EffectMetric`; `ObservedEffect` usually equals `ReplayWinDelta` |
+| Evaluation context | `EvaluationContext` JSONType: model, vendor, prompt version, configuration, cohort |
+| Proposer **and** selector read it | §5.5 #4 |
+| Continuation after a model or benchmark change | Model-change re-verification with `SupersedesProposalID` lineage (§5.5 #4) |
+| Observed outcomes need measurement | Run context items (§3.6) and the Evidence Ladder (§8.1) |
+
+**Three lessons that changed this plan:**
+1. **The optimizer needs outcomes, and we record none today.** Nothing ties a note, example or harness edit to whether a run went better (§2.4 #5). That is why §3.6 moves into Phase 0 and REM dreaming (PR 3b) waits for its data.
+2. **Store attempts, not just conclusions.** Notes store conclusions. SIM's gain comes from remembering failed and successful *attempts* with their reasons, so the optimizer stops repeating itself. The anti-redreaming cache (§3.3) already keeps failures; v1.2 keeps both and shows them to the generating step, not only to the dedupe check.
+3. **A result is only valid in the context it was measured in.** We change models per prompt, per agent and on failover. Harness edits (prompt revisions, skills, cues) are model-sensitive, so `EvaluationContext` is required and a model change re-opens them. Plain-text notes are not re-opened.
+
+**What we do not take:** SIM optimizes against a benchmark score. Our probes run against replayed production turns and rubric judges (§5.2), so the "benchmark" is the probe cohort recorded in `EvaluationContext`, and Harness²'s *"What you do not have"* guardrail (no rubric, no answer key, never write for the grader) still applies to every editor prompt.
 
 ---
 
