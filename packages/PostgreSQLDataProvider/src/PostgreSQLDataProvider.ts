@@ -373,6 +373,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         );
         cfg.ConcurrencyCheck = this.ConcurrencyCheck;
         cfg.DeltaUpdates = this.DeltaUpdates;
+        cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }

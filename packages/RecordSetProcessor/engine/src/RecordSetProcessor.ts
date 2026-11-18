@@ -170,6 +170,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
+            if (options.Signal?.aborted) {
+                return this.stopped(ctx);
+            }
             const batch = await source.NextBatch(ctx.getCursor(), batchSize, contextUser, ctx.provider);
             if (batch.TotalRowCount != null && ctx.getTotal() == null) {
                 ctx.setTotal(batch.TotalRowCount);
@@ -197,6 +200,12 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             await this.processBatch(records, ctx);
 
             options.OnProgress?.({ ...counts, Total: ctx.getTotal() });
+
+            // Stopped mid-page: end before the cursor moves, so a resumed run reads this page again and
+            // picks up the records the stop left unreached.
+            if (options.Signal?.aborted) {
+                return this.stopped(ctx);
+            }
 
             // Checkpoint + pause/cancel handshake.
             ctx.setCursor(batch.NextCursor);
@@ -245,6 +254,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             OverwriteHumanValues: options.OverwriteHumanValues,
             DryRun: options.DryRun === true,
             TriggeredBy: ctx.triggeredBy,
+            Signal: options.Signal,
         };
 
         // P1-7b Watermark check: batch-evaluate unchanged records when SkipUnchanged is active (a real run without it
@@ -293,7 +303,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             await ctx.tracker.RecordResult(ctx.handle, record, skipResult, options.ContextUser, ctx.provider);
         }
 
-        if (eligibleRecords.length === 0) {
+        if (eligibleRecords.length === 0 || options.Signal?.aborted) {
             return;
         }
 
@@ -326,6 +336,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             const perRecordDuration = Math.round(totalDuration / Math.max(1, eligibleRecords.length));
 
             for (const record of eligibleRecords) {
+                if (!batchResults.has(record.RecordID) && options.Signal?.aborted) {
+                    continue; // the stop came before the processor reached it; it is still ready for the next run
+                }
                 let result = batchResults.get(record.RecordID) ?? { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' };
                 if (result.DurationMs == null) {
                     result = { ...result, DurationMs: perRecordDuration };
@@ -363,6 +376,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         }
 
         const worker = async (record: RecordRef): Promise<void> => {
+            if (options.Signal?.aborted) {
+                return; // not started, not counted: the record is still ready for the next run
+            }
             const decision = watermarkDecisions?.get(record.RecordID);
             const started = Date.now();
             let result: RecordResult;
@@ -370,6 +386,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 result = await options.Processor.ProcessRecord(record, recordContext);
             } catch (e) {
                 result = { Status: 'Failed', ErrorMessage: e instanceof Error ? e.message : String(e) };
+            }
+            if (options.Signal?.aborted && result.Status !== 'Succeeded' && result.Status !== 'Skipped') {
+                return; // stopped before settling: not committed, still ready for the next run
             }
             if (result.DurationMs == null) {
                 result.DurationMs = Date.now() - started;
@@ -460,6 +479,14 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
         };
         await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runNext()));
+    }
+
+    /** Ends a run its caller stopped: `Paused`, saying why. */
+    private stopped(ctx: BatchLoopContext): ProcessRunStatusValue {
+        const reason = ctx.options.Signal?.reason;
+        const detail = reason instanceof Error ? reason.message : reason != null ? String(reason) : 'stop signal';
+        ctx.setErrorMessage(`Stopped: ${detail}`);
+        return 'Paused';
     }
 
     /** Invokes the budget-gate hook, treating a thrown hook as non-fatal (continue). */

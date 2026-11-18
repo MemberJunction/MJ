@@ -3,8 +3,27 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
+import {
+    AgentRunner,
+    ArtifactToolManager,
+    CanAgentOwnSubAgentConsults,
+    DecisionDiscoveryCatalog,
+    DecisionDiscoveryRunnableAgents,
+    HostAllowedAgentIDs,
+    KeepHostAllowedAgents,
+    LoadOpenSubAgentConsults,
+} from '@memberjunction/ai-agents';
+import {
+    AttachmentData,
+    ContinuationAnnouncementText,
+    ConversationUtility,
+    EDGE_PRE_DISCOVERY_DATA_KEY,
+    ExecuteAgentResult,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    SanitizeEdgePreDiscoveryHint,
+    BuildTaskGraphStartDebug,
+} from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -288,6 +307,34 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * Strips or sanitizes untrusted `EdgePreDiscoveryHint` entries from incoming GraphQL `data`
+     * against the user's server-verified runnable & directly-discoverable agents (and optional
+     * host allow-list) so forged or unauthorized agent IDs never propagate past the resolver.
+     */
+    private async sanitizeEdgePreDiscoveryInData(
+        parsedData: Record<string, unknown> | undefined,
+        runningAgentId: string,
+        currentUser: UserInfo
+    ): Promise<Record<string, unknown> | undefined> {
+        if (!parsedData || !(EDGE_PRE_DISCOVERY_DATA_KEY in parsedData)) {
+            return parsedData;
+        }
+        const runnable = await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, currentUser);
+        const catalog = KeepHostAllowedAgents(
+            DecisionDiscoveryCatalog(runnable, runningAgentId),
+            HostAllowedAgentIDs(parsedData)
+        );
+        const sanitized = SanitizeEdgePreDiscoveryHint(parsedData[EDGE_PRE_DISCOVERY_DATA_KEY], catalog);
+        const nextData: Record<string, unknown> = { ...parsedData };
+        if (sanitized) {
+            nextData[EDGE_PRE_DISCOVERY_DATA_KEY] = sanitized;
+        } else {
+            delete nextData[EDGE_PRE_DISCOVERY_DATA_KEY];
+        }
+        return nextData;
+    }
+
+    /**
      * Internal method that handles the core AI agent execution logic.
      * This method is called by both the regular and system user resolvers.
      * @private
@@ -360,7 +407,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const userMessage = this.extractUserMessage(parsedMessages);
 
             // Parse data contexts
-            const parsedData = this.parseJsonInput(data, 'data');
+            const rawParsedData = this.parseJsonInput(data, 'data');
             const parsedTemplateData = this.parseJsonInput(templateData, 'templateData');
 
             // Get and validate current user
@@ -371,6 +418,10 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
+
+            // Server remains guard of truth: strip/sanitize any untrusted client EdgePreDiscoveryHint
+            // at the GraphQL ingress boundary before passing data into AgentRunner / BaseAgent.
+            const parsedData = await this.sanitizeEdgePreDiscoveryInData(rawParsedData, agentEntity.ID, currentUser);
 
             // Create AI agent runner with the per-request isolated provider so all agent DB operations
             // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global

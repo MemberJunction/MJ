@@ -46,6 +46,11 @@ import { InteractionType } from '@azure/msal-browser';
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
 import { environment } from '../environments/environment';
+import { RegisterSharedTabKernelWorker } from './shared-tab-kernel-bootstrap';
+
+// Register browser SharedWorker factory before AuthServicesModule / WorkspaceInitializer
+// instantiate GraphQLDataProvider so Tab 1..N multiplex a single WebSocket, L1 cache, and IDB owner.
+RegisterSharedTabKernelWorker();
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any

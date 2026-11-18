@@ -183,6 +183,16 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     }
 
     /**
+     * When `true`, {@link ExecuteRemoteOperationResolver} refuses scoped/anonymous Magic Link
+     * sessions (`IsMagicLinkAnonymous || MagicLinkScope`) before invoking this operation.
+     * Defaults to `false` so Open Apps visitor operations can execute over scoped Magic Links;
+     * artifact and other high-privilege operations override this to `true`.
+     */
+    public get DisallowMagicLinkScope(): boolean {
+        return false;
+    }
+
+    /**
      * Optional allow-list of entity names (or `['*']`) that this Remote Operation is authorized
      * to mutate when `GrantsServerWriteAuthority` is `true`. Forwarded into the active
      * `ServerOperationScopeFrame.allowedEntities` by `DispatchRemoteOperationInProcess`.
@@ -207,6 +217,19 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
 
     /** Optional JSON-Schema object describing `TInput` when exposed as an Agent or MCP tool. */
     public readonly ToolInputSchema?: Record<string, RemoteOpToolSchemaValue>;
+
+    /**
+     * Returns the resource identifiers checked against API-key scope authorization when
+     * {@link RequiredScope} is set (default: `[this.OperationKey]`). Operations that target
+     * specific resources (artifacts, collections, etc.) override this to declare all authoritative
+     * scope resource IDs from the validated input rather than relying on heuristic field guessing.
+     */
+    public GetScopeResourceIds(
+        _input: TInput,
+        _context?: { provider?: IMetadataProvider; user?: UserInfo },
+    ): string[] | Promise<string[]> {
+        return [this.OperationKey];
+    }
 
     /**
      * Discovers all ClassFactory-registered {@link BaseRemotableOperation} subclasses that opt into

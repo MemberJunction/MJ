@@ -5,14 +5,28 @@
  * sheets, reading rows, searching cells, aggregating columns, and listing formulas.
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+  BaseArtifactToolLibrary,
+  type ArtifactJsonValue,
+  type ArtifactToolArgs,
+  type ArtifactToolDefinition,
+  type ArtifactToolResult,
+} from '@memberjunction/ai-core-plus';
+import { CompileSafeToolRegex, ComputeNumericExtremum, DecodeBinaryArtifactContent } from './artifact-tool-helpers';
+import { ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 // ---------------------------------------------------------------------------
-// Local interfaces for exceljs types (no `any`)
+// Local interfaces for exceljs types (no `any` / `unknown`)
 // ---------------------------------------------------------------------------
+
+type ExcelCellValue = ArtifactJsonValue | Date | object | undefined;
+
+interface ExcelJsXlsx {
+  load(buffer: ArrayBuffer | Uint8Array | Buffer): Promise<ExcelWorkbook | object>;
+}
 
 interface ExcelWorkbook {
-  xlsx: { load(buffer: Buffer): Promise<void> };
+  xlsx: ExcelJsXlsx;
   worksheets: ExcelWorksheet[];
   getWorksheet(name: string): ExcelWorksheet | undefined;
 }
@@ -26,15 +40,31 @@ interface ExcelWorksheet {
 }
 
 interface ExcelRow {
-  values: unknown[];
+  values: ExcelCellValue[] | Record<string, ExcelCellValue>;
   eachCell(opts: { includeEmpty: boolean }, cb: (cell: ExcelCell, colNumber: number) => void): void;
 }
 
 interface ExcelCell {
-  value: unknown;
+  value: ExcelCellValue;
   text: string;
   formula?: string;
   address: string;
+}
+
+type ExcelJsModule = typeof import('exceljs') & {
+  default?: {
+    Workbook?: typeof import('exceljs').Workbook;
+  };
+};
+
+let excelJsModulePromise: Promise<ExcelJsModule> | null = null;
+
+function getExcelJsModule(): Promise<ExcelJsModule> {
+  if (!excelJsModulePromise) {
+    // Genuine bundle-size deferral + optional peer dependency: exceljs is heavy and only loaded for .xlsx artifacts.
+    excelJsModulePromise = import('exceljs') as Promise<ExcelJsModule>;
+  }
+  return excelJsModulePromise;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,12 +124,14 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
       },
       {
         name: 'search_cells',
-        description: 'Regex search across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
+        description:
+          'Searches across all cells using case-insensitive literal substring match by default (set isRegex=true for safe regex search). Optionally scope to a single sheet. Returns up to 100 matches.',
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: 'Regex pattern to search for' },
+            query: { type: 'string', description: 'Literal text or regex pattern to search for' },
             sheet: { type: 'string', description: 'Optional sheet name to limit search scope' },
+            isRegex: { type: 'boolean', description: 'When true, treat query as a regular expression (default: false)' },
           },
           required: ['query'],
         },
@@ -135,14 +167,16 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
   // invokeSubclassTool — dispatcher
   // -----------------------------------------------------------------------
 
-  protected async invokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
-    const buffer = this.toBuffer(artifactContent);
+  protected async invokeSubclassTool(toolName: string, input: ArtifactToolArgs, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+    const buffer = DecodeBinaryArtifactContent(artifactContent);
 
     let workbook: ExcelWorkbook;
     try {
-      const ExcelJS = await import('exceljs');
-      workbook = new ExcelJS.default.Workbook() as unknown as ExcelWorkbook;
-      await workbook.xlsx.load(buffer);
+      const ExcelJS = await getExcelJsModule();
+      const WorkbookCtor = ExcelJS.default?.Workbook ?? ExcelJS.Workbook;
+      const wb = new WorkbookCtor();
+      await wb.xlsx.load(new Uint8Array(buffer).buffer);
+      workbook = wb as ExcelWorkbook;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return this.errorResult(`Failed to parse Excel content: ${message}`);
@@ -177,32 +211,32 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
     return this.successResult({ sheets });
   }
 
-  private handleGetSheetData(workbook: ExcelWorkbook, input: Record<string, unknown>): ArtifactToolResult {
-    const sheetName = input.sheet as string;
+  private handleGetSheetData(workbook: ExcelWorkbook, input: ArtifactToolArgs): ArtifactToolResult {
+    const sheetName = String(input.sheet ?? '');
     const ws = workbook.getWorksheet(sheetName);
     if (!ws) {
       return this.errorResult(`Sheet "${sheetName}" not found.`);
     }
 
-    const startRow = (input.startRow as number) ?? 1;
-    const rowCount = (input.rowCount as number) ?? 50;
+    const startRow = typeof input.startRow === 'number' && Number.isFinite(input.startRow) ? input.startRow : 1;
+    const rowCount = typeof input.rowCount === 'number' && Number.isFinite(input.rowCount) ? input.rowCount : 50;
 
     const headerMap = this.buildHeaderMap(ws);
     if (headerMap.size === 0) {
       return this.successResult({ rows: [] });
     }
 
-    const rows: Array<Record<string, unknown>> = [];
+    const rows: Array<Record<string, ExcelCellValue>> = [];
     // Row 1 is header, data starts at row 2. startRow is 1-based offset after header.
     const firstDataRow = 1 + startRow;
     const lastDataRow = Math.min(1 + startRow + rowCount - 1, ws.rowCount);
 
     for (let r = firstDataRow; r <= lastDataRow; r++) {
       const row = ws.getRow(r);
-      if (!row || !row.values || (row.values as unknown[]).length === 0) continue;
+      const values = Array.isArray(row?.values) ? row.values : [];
+      if (!row || values.length === 0) continue;
 
-      const record: Record<string, unknown> = {};
-      const values = row.values as unknown[];
+      const record: Record<string, ExcelCellValue> = {};
       for (const [colIndex, colName] of headerMap.entries()) {
         record[colName] = values[colIndex] ?? null;
       }
@@ -212,49 +246,89 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
     return this.successResult({ rows });
   }
 
-  private handleSearchCells(workbook: ExcelWorkbook, input: Record<string, unknown>): ArtifactToolResult {
-    const query = input.query as string;
-    let regex: RegExp;
-    try {
-      regex = new RegExp(query, 'i');
-    } catch {
-      return this.errorResult(`Invalid regex pattern: "${query}".`);
+  private handleSearchCells(workbook: ExcelWorkbook, input: ArtifactToolArgs): ArtifactToolResult {
+    const query = typeof input.query === 'string' ? input.query : String(input.query ?? '');
+    const isRegex = input.isRegex === true;
+    const sheetName = typeof input.sheet === 'string' ? input.sheet : undefined;
+
+    if (sheetName) {
+      const ws = workbook.getWorksheet(sheetName);
+      if (!ws) {
+        return this.errorResult(`Sheet "${sheetName}" not found.`);
+      }
     }
 
-    const targetSheets = input.sheet ? [workbook.getWorksheet(input.sheet as string)] : workbook.worksheets;
+    let safeRegex: RegExp | null = null;
+    if (isRegex) {
+      const compiled = CompileSafeToolRegex(query, 'i');
+      if (!compiled.Regex) {
+        return this.errorResult(compiled.ErrorMessage ?? `Invalid or unsafe regex pattern: "${query}".`);
+      }
+      safeRegex = compiled.Regex;
+    }
 
-    const matches: CellMatch[] = [];
+    const targetSheets = sheetName ? [workbook.getWorksheet(sheetName)] : workbook.worksheets;
     const MATCH_LIMIT = 100;
 
+    if (!safeRegex) {
+      const lowerQuery = query.toLowerCase();
+      const matches: CellMatch[] = [];
+      for (const ws of targetSheets) {
+        if (!ws) continue;
+        ws.eachRow({ includeEmpty: false }, (row) => {
+          if (matches.length >= MATCH_LIMIT) return;
+          row.eachCell({ includeEmpty: false }, (cell) => {
+            if (matches.length >= MATCH_LIMIT) return;
+            const text = cell.text ?? String(cell.value ?? '');
+            if (text.toLowerCase().includes(lowerQuery)) {
+              matches.push({
+                sheet: ws.name,
+                cell: cell.address,
+                value: text,
+              });
+            }
+          });
+        });
+      }
+      return this.successResult({ matches });
+    }
+
+    const candidates: CellMatch[] = [];
     for (const ws of targetSheets) {
       if (!ws) continue;
       ws.eachRow({ includeEmpty: false }, (row) => {
-        if (matches.length >= MATCH_LIMIT) return;
         row.eachCell({ includeEmpty: false }, (cell) => {
-          if (matches.length >= MATCH_LIMIT) return;
           const text = cell.text ?? String(cell.value ?? '');
-          if (regex.test(text)) {
-            matches.push({
-              sheet: ws.name,
-              cell: cell.address,
-              value: text,
-            });
-          }
+          candidates.push({
+            sheet: ws.name,
+            cell: cell.address,
+            value: text,
+          });
         });
       });
     }
 
-    if (input.sheet && !targetSheets[0]) {
-      return this.errorResult(`Sheet "${input.sheet as string}" not found.`);
+    const texts = candidates.map((c) => c.value);
+    const batchResult = ExecuteSafeRegexBatchWithRecovery(safeRegex, texts, performance.now() + 1500);
+    const matches: CellMatch[] = [];
+    for (let i = 0; i < candidates.length && matches.length < MATCH_LIMIT; i++) {
+      if (batchResult.Matches[i]) {
+        matches.push(candidates[i]);
+      }
     }
 
-    return this.successResult({ matches });
+    return this.successResult({
+      matches,
+      ...(batchResult.BudgetExpired || batchResult.TimedOut.some(Boolean)
+        ? { partial: true, budgetExpired: batchResult.BudgetExpired }
+        : {}),
+    });
   }
 
-  private handleAggregateColumn(workbook: ExcelWorkbook, input: Record<string, unknown>): ArtifactToolResult {
-    const sheetName = input.sheet as string;
-    const columnName = input.column as string;
-    const operation = input.operation as string;
+  private handleAggregateColumn(workbook: ExcelWorkbook, input: ArtifactToolArgs): ArtifactToolResult {
+    const sheetName = String(input.sheet ?? '');
+    const columnName = String(input.column ?? '');
+    const operation = String(input.operation ?? '');
 
     const ws = workbook.getWorksheet(sheetName);
     if (!ws) {
@@ -280,7 +354,7 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
     const numericValues: number[] = [];
     for (let r = 2; r <= ws.rowCount; r++) {
       const row = ws.getRow(r);
-      const values = row.values as unknown[];
+      const values = Array.isArray(row?.values) ? row.values : [];
       const raw = values[targetCol];
       if (raw == null) continue;
       const num = Number(raw);
@@ -301,8 +375,8 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
     return this.successResult({ operation, column: columnName, value: result });
   }
 
-  private handleGetFormulas(workbook: ExcelWorkbook, input: Record<string, unknown>): ArtifactToolResult {
-    const sheetName = input.sheet as string;
+  private handleGetFormulas(workbook: ExcelWorkbook, input: ArtifactToolArgs): ArtifactToolResult {
+    const sheetName = String(input.sheet ?? '');
     const ws = workbook.getWorksheet(sheetName);
     if (!ws) {
       return this.errorResult(`Sheet "${sheetName}" not found.`);
@@ -329,18 +403,23 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
 
   private computeAggregate(values: number[], operation: AggregateOperation): number {
     switch (operation) {
-      case 'sum':
-        return values.reduce((acc, v) => acc + v, 0);
+      case 'sum': {
+        let sum = 0;
+        for (const v of values) sum += v;
+        return sum;
+      }
       case 'avg': {
-        const sum = values.reduce((acc, v) => acc + v, 0);
-        return values.length > 0 ? sum / values.length : 0;
+        if (values.length === 0) return 0;
+        let sum = 0;
+        for (const v of values) sum += v;
+        return sum / values.length;
       }
       case 'count':
         return values.length;
       case 'min':
-        return Math.min(...values);
+        return ComputeNumericExtremum(values, 'min');
       case 'max':
-        return Math.max(...values);
+        return ComputeNumericExtremum(values, 'max');
     }
   }
 
@@ -353,7 +432,7 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
     const headerMap = new Map<number, string>();
     if (!headerRow || !headerRow.values) return headerMap;
 
-    const values = headerRow.values as unknown[];
+    const values = Array.isArray(headerRow.values) ? headerRow.values : [];
     for (let i = 1; i < values.length; i++) {
       const val = values[i];
       if (val != null && String(val).trim() !== '') {
@@ -361,10 +440,6 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
       }
     }
     return headerMap;
-  }
-
-  private toBuffer(content: string | Buffer): Buffer {
-    return typeof content === 'string' ? Buffer.from(content, 'base64') : content;
   }
 
   private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {

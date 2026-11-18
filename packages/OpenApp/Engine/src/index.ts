@@ -77,6 +77,15 @@ export type {
     MigrationDownloadResult
 } from './github/github-client.js';
 
+// App sources: where an app's manifest, versions and SQL files come from
+export { ResolveAppSource, SubpathFromLocator } from './source/open-app-source.js';
+export type { OpenAppSource, SourceContext, VersionValidationResult } from './source/open-app-source.js';
+export { GitHubAppSource } from './source/github-app-source.js';
+export { LocalAppSource, NormalizeAppSource, IsLocalAppLocator, LOCAL_LOCATOR_PREFIX } from './source/local-app-source.js';
+export type { NormalizedAppSource } from './source/local-app-source.js';
+export { CheckWorkspacePackages } from './install/workspace-packages.js';
+export type { WorkspacePackageCheck } from './install/workspace-packages.js';
+
 // Install handlers
 export { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
 export type { SchemaOperationResult, SchemaNameValidation, SchemaNameRule, CreateAppSchemaOptions } from './install/schema-manager.js';

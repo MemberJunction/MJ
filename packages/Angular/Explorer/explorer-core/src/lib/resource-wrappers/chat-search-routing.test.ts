@@ -66,10 +66,10 @@ describe('ResolveChatSearchRoute', () => {
     });
   });
 
-  it('opens a collection result on the Collections nav item', () => {
+  it('opens a collection result on the Library nav item', () => {
     expect(ResolveChatSearchRoute(result({ id: 'COL1', type: 'collection' }))).toEqual({
       Kind: 'nav-item',
-      NavItemName: 'Collections',
+      NavItemName: 'Library',
       Configuration: { collectionId: 'COL1' },
     });
   });

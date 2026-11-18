@@ -427,12 +427,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() AllowForking = true;
 
+  private _allowRemoteBrowser = false;
   /**
    * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
    * that wants an agent-driven browser beside the chat sets true.
    */
-  private _allowRemoteBrowser = false;
   @Input()
   set AllowRemoteBrowser(value: boolean) {
     this._allowRemoteBrowser = value;
@@ -850,7 +850,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() ExportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fa-solid fa-download';
 
   /** @deprecated Use {@link ExportButtonIcon}. */
   @Input() set exportButtonIcon(value: string) {
@@ -990,17 +990,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Whether an untagged message asks one fast typed decision which agent in the conversation
    * should answer it, instead of always going back to the last agent that answered. It replaces
    * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
-   * (250 ms). False (the default)
-   * changes nothing: no decision call, and today's routing. See
+   * (350 ms). On by default; false makes no decision call and keeps today's routing. See
    * `MessageInputComponent.EnableDecisionRouting`.
    *
-   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * While it is on, each qualifying message sends conversation text to the model behind the `Default Decision` prompt, which
    * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
    * the last 6 turns (150 characters each), each participant's name, description and last reply,
    * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
    * when the answer comes too late to be used.
    */
-  @Input() EnableDecisionRouting: boolean = false;
+  @Input() EnableDecisionRouting: boolean = true;
+
+  /**
+   * Opt-in Stage 6C.1 client-side Edge AI Pre-Discovery (`bge-small-en-v1.5` Top-5 ->
+   * `ms-marco-MiniLM-L-6-v2` in a lazy WASM Web Worker). Forwarded to
+   * `MessageInputComponent.EnableEdgePreDiscovery`.
+   */
+  @Input() EnableEdgePreDiscovery: boolean = false;
 
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
@@ -8166,7 +8172,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   public ToggleRemoteBrowserPanel(): void {
     if (this.ShowRemoteBrowserPanel) {
-      this.CloseRemoteBrowserPanel();
+      this.HideRemoteBrowserPanel();
     } else {
       this.OpenRemoteBrowserPanel();
     }
@@ -8185,7 +8191,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  /** Hides the browser drawer while keeping the current browser session and page alive. */
+  public HideRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser and returns the conversation to standby (hiding it does not). */
   public CloseRemoteBrowserPanel(): void {
     if (!this.ShowRemoteBrowserPanel) {
       return;
@@ -8193,6 +8209,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
     void this.remoteBrowser?.Close();
+    this.standbyPreparedConversationId = null;
+    this.prepareStandbyRemoteBrowser(this.ConversationId);
     this.cdr.detectChanges();
   }
 
@@ -9057,13 +9075,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const agentName = this.RealtimeReview?.AgentName ?? null;
+    const preferredModelId = this.RealtimeReview?.ModelID ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
-        null, // preferredModelId
+        preferredModelId,
         null, // clientTools
         null, // coAgentId
         null, // configOverridesJson

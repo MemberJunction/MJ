@@ -1,163 +1,262 @@
-import { Component, Input } from '@angular/core';
-import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { Subject } from 'rxjs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactsModule } from '@memberjunction/ng-artifacts';
-import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import { ArtifactWorkspaceEngine } from './artifact-workspace-engine';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Subject } from 'rxjs';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { ArtifactVersionSavedEvent } from '@memberjunction/ng-artifacts';
+import type { RealtimeChannelEvent } from '@memberjunction/realtime-runtime';
+import { renderComponentFixture, query, queryAll, text, click } from '@memberjunction/ng-test-utils';
 import { RealtimeArtifactWorkspaceSurfaceComponent } from './realtime-artifact-workspace-surface.component';
+import { ArtifactWorkspaceChannel } from './artifact-workspace-channel';
+import { ArtifactWorkspaceEngine } from './artifact-workspace-engine';
+import type {
+  ArtifactSelectionAnchor,
+  ArtifactViewerNavigationAnchor,
+  ArtifactWorkspaceViewMode,
+} from './artifact-workspace-types';
+import { MakeContext, type ChannelLog } from '../../../../__tests__/helpers/interactive-component-fixtures';
 
-/** Stands in for the real viewer panel, recording the inputs the surface passes it. */
-@Component({ selector: 'mj-artifact-viewer-panel', standalone: true, template: '' })
-class ArtifactViewerPanelStub {
+@Component({
+  selector: 'mj-artifact-viewer-panel',
+  standalone: true,
+  template: `
+    <div
+      class="stub-viewer-panel"
+      [attr.data-artifact-id]="artifactId"
+      [attr.data-version-number]="versionNumber ?? ''"
+      [attr.data-view-mode]="viewMode"
+      [attr.data-nav-sheet]="navigationAnchor?.Sheet ?? ''"
+      [attr.data-nav-range]="navigationAnchor?.Range ?? ''"
+      [attr.data-nav-slide]="navigationAnchor?.SlideNumber ?? ''"
+      [attr.data-nav-heading]="navigationAnchor?.Heading ?? ''"
+    >
+      <input class="stub-unsaved-draft" />
+    </div>
+  `,
+})
+class StubArtifactViewerPanelComponent {
   @Input() public artifactId = '';
-  @Input() public versionNumber: number | undefined;
+  @Input() public versionNumber: number | undefined = undefined;
   @Input() public currentUser: UserInfo | null = null;
   @Input() public Provider: IMetadataProvider | null = null;
   @Input() public environmentId = '';
-  @Input() public refreshTrigger: Subject<{ artifactId: string; versionNumber: number }> | undefined;
+  @Input() public refreshTrigger: Subject<void> | undefined = undefined;
   @Input() public canEdit = false;
+  @Input() public viewMode: ArtifactWorkspaceViewMode = 'edit';
+  @Input() public navigationAnchor: ArtifactViewerNavigationAnchor | null = null;
   @Input() public showHeader = true;
   @Input() public showTabs = true;
   @Input() public showSaveToCollection = true;
   @Input() public showCloseButton = true;
   @Input() public showMaximizeButton = true;
+  @Output() public VersionSaved = new EventEmitter<ArtifactVersionSavedEvent>();
+  @Output() public selectionChanged = new EventEmitter<ArtifactSelectionAnchor>();
 }
 
-function setup(engine: ArtifactWorkspaceEngine | null, user: UserInfo | null = null): ComponentFixture<RealtimeArtifactWorkspaceSurfaceComponent> {
-  TestBed.configureTestingModule({ imports: [RealtimeArtifactWorkspaceSurfaceComponent] });
-  TestBed.overrideComponent(RealtimeArtifactWorkspaceSurfaceComponent, {
-    remove: { imports: [ArtifactsModule] },
-    add: { imports: [ArtifactViewerPanelStub] },
-  });
-  const fixture = TestBed.createComponent(RealtimeArtifactWorkspaceSurfaceComponent);
-  fixture.componentInstance.AgentName = 'Sage';
-  fixture.componentInstance.CurrentUser = user;
-  fixture.componentInstance.EnvironmentID = 'env-1';
-  fixture.componentRef.setInput('Engine', engine);
-  fixture.detectChanges();
-  return fixture;
-}
+const TEST_USER = { ID: 'u-1', Name: 'Tester', Email: 't@example.org' } as UserInfo;
 
-function tabs(fixture: ComponentFixture<RealtimeArtifactWorkspaceSurfaceComponent>): HTMLButtonElement[] {
-  return Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]'));
-}
+describe('RealtimeArtifactWorkspaceSurfaceComponent (DOM)', () => {
+  let engine: ArtifactWorkspaceEngine;
 
-describe('RealtimeArtifactWorkspaceSurfaceComponent', () => {
-  afterEach(() => {
-    TestBed.resetTestingModule();
+  beforeEach(() => {
+    engine = new ArtifactWorkspaceEngine();
+    TestBed.overrideComponent(RealtimeArtifactWorkspaceSurfaceComponent, {
+      set: { imports: [StubArtifactViewerPanelComponent] },
+    });
   });
 
-  it('shows the empty state, naming the agent, when no artifact is open', () => {
-    const fixture = setup(new ArtifactWorkspaceEngine());
-    const root: HTMLElement = fixture.nativeElement;
+  const renderSurface = () =>
+    renderComponentFixture(RealtimeArtifactWorkspaceSurfaceComponent, {
+      providers: [],
+      setup: (instance) => {
+        instance.AgentName = 'Aria';
+        instance.CurrentUser = TEST_USER;
+        instance.EnvironmentID = 'env-1';
+        instance.Engine = engine;
+      },
+    });
 
-    expect(root.querySelector('.aw-empty__title')?.textContent).toContain('No workspace document open');
-    expect(root.querySelector('.aw-empty__hint')?.textContent).toContain('Sage can open or build');
-    expect(tabs(fixture)).toHaveLength(0);
+  it('shows empty state naming agent when no workspace document is open', () => {
+    const f = renderSurface();
+    expect(text(f, '.aw-empty__title')).toBe('No workspace document open');
+    expect(text(f, '.aw-empty__hint')).toContain('Aria');
+    expect(query(f, '.aw-tabs')).toBeNull();
   });
 
-  it('renders a tab per open artifact, with an icon per type and the active one selected', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    engine.AddOrFocus({ ArtifactID: 'a-1', Name: 'Q3 plan', ArtifactTypeName: 'Document' });
-    engine.AddOrFocus({ ArtifactID: 'a-2', Name: 'Budget', ArtifactTypeName: 'Spreadsheet', VersionNumber: 3 });
-    const fixture = setup(engine);
+  it('keeps open workspace tabs mounted via [hidden] so switching tabs preserves DOM and viewer state', () => {
+    const doc = engine.AddOrFocus({
+      ArtifactID: 'art-doc',
+      ArtifactVersionID: 'ver-doc-1',
+      VersionNumber: 1,
+      Name: 'Q4 Memo',
+      ArtifactTypeName: 'Markdown Document',
+      CanEdit: true,
+    });
+    const sheet = engine.AddOrFocus({
+      ArtifactID: 'art-sheet',
+      ArtifactVersionID: 'ver-sheet-1',
+      VersionNumber: 2,
+      Name: 'Forecast',
+      ArtifactTypeName: 'Excel Spreadsheet',
+      CanEdit: true,
+    });
+    engine.SetActive(doc.InstanceID);
 
-    const [doc, sheet] = tabs(fixture);
-    expect(doc.textContent).toContain('Q3 plan');
-    expect(doc.querySelector('i')?.className).toContain('fa-file-lines');
-    expect(sheet.textContent).toContain('Budget');
-    expect(sheet.textContent).toContain('v3');
-    expect(sheet.querySelector('i')?.className).toContain('fa-table');
+    const f = renderSurface();
+    const panes = queryAll(f, '[role="tabpanel"]');
+    expect(panes).toHaveLength(2);
+    expect(panes.map((p) => p.hasAttribute('hidden'))).toEqual([false, true]);
+    expect(queryAll(f, 'mj-artifact-viewer-panel')).toHaveLength(2);
 
-    // The last one added is active: selected, focusable, and labels the visible pane.
-    expect(sheet.getAttribute('aria-selected')).toBe('true');
-    expect(sheet.getAttribute('tabindex')).toBe('0');
-    expect(doc.getAttribute('aria-selected')).toBe('false');
-    expect(doc.getAttribute('tabindex')).toBe('-1');
-    const pane = fixture.nativeElement.querySelector('[role="tabpanel"]') as HTMLElement;
-    expect(pane.getAttribute('aria-labelledby')).toBe(sheet.id);
-    expect(fixture.componentInstance.GetActiveElement()).toBe(pane);
+    // Mutate DOM inside the first viewer panel to simulate unsaved editor state
+    const firstInput = panes[0].querySelector<HTMLInputElement>('.stub-unsaved-draft');
+    expect(firstInput).not.toBeNull();
+    firstInput!.value = 'unsaved-draft-state';
+
+    // Switch to second tab and back: element identity and unsaved DOM state stay intact
+    click(f, `[role="tab"][data-instance="${sheet.InstanceID}"]`);
+    f.detectChanges();
+    expect(engine.ActiveID).toBe(sheet.InstanceID);
+    const panesAfterSwitch = queryAll(f, '[role="tabpanel"]');
+    expect(panesAfterSwitch[0]).toBe(panes[0]);
+    expect(panesAfterSwitch.map((p) => p.hasAttribute('hidden'))).toEqual([true, false]);
+
+    click(f, `[role="tab"][data-instance="${doc.InstanceID}"]`);
+    f.detectChanges();
+    expect(engine.ActiveID).toBe(doc.InstanceID);
+    expect(
+      query(f, `[role="tabpanel"][data-instance="${doc.InstanceID}"] .stub-unsaved-draft`)?.getAttribute('value') ??
+        (query(f, `[role="tabpanel"][data-instance="${doc.InstanceID}"] .stub-unsaved-draft`) as HTMLInputElement | null)?.value,
+    ).toBe('unsaved-draft-state');
   });
 
-  it('selecting a tab activates it in the engine and reports the user choice', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    const first = engine.AddOrFocus({ ArtifactID: 'a-1', Name: 'Q3 plan' });
-    engine.AddOrFocus({ ArtifactID: 'a-2', Name: 'Budget' });
-    const fixture = setup(engine);
-    const onSelected = vi.fn();
-    fixture.componentInstance.OnUserSelected = onSelected;
+  it('updates tab VersionNumber badge when child viewer emits VersionSaved (P0-22)', () => {
+    const doc = engine.AddOrFocus({
+      ArtifactID: 'art-doc',
+      ArtifactVersionID: 'ver-doc-1',
+      VersionNumber: 1,
+      Name: 'Spec Doc',
+      ArtifactTypeName: 'Markdown Document',
+      CanEdit: true,
+    });
 
-    tabs(fixture)[0].click();
-    fixture.detectChanges();
+    const f = renderSurface();
+    expect(text(f, `[role="tab"][data-instance="${doc.InstanceID}"] .aw-tab__version`)).toBe('v1');
 
-    expect(engine.ActiveID).toBe(first.InstanceID);
-    expect(onSelected).toHaveBeenCalledWith(first.InstanceID);
-    expect(tabs(fixture)[0].getAttribute('aria-selected')).toBe('true');
+    const viewerDebug = f.debugElement.query((d) => d.componentInstance instanceof StubArtifactViewerPanelComponent);
+    expect(viewerDebug).not.toBeNull();
+    const viewer = viewerDebug.componentInstance as StubArtifactViewerPanelComponent;
+
+    const savedHandler = vi.fn();
+    f.componentInstance.OnUserVersionSaved = savedHandler;
+
+    viewer.VersionSaved.emit({
+      ArtifactID: 'art-doc',
+      VersionID: 'ver-doc-2',
+      VersionNumber: 2,
+      UpdatedAt: new Date(),
+    });
+    f.detectChanges();
+
+    expect(text(f, `[role="tab"][data-instance="${doc.InstanceID}"] .aw-tab__version`)).toBe('v2');
+    expect(engine.Instances[0].ArtifactVersionID).toBe('ver-doc-2');
+    expect(savedHandler).toHaveBeenCalledWith(
+      doc.InstanceID,
+      expect.objectContaining({ VersionID: 'ver-doc-2', VersionNumber: 2 }),
+    );
   });
 
-  it('the close button removes the active artifact and reports it', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    engine.AddOrFocus({ ArtifactID: 'a-1', Name: 'Q3 plan' });
-    const active = engine.AddOrFocus({ ArtifactID: 'a-2', Name: 'Budget' });
-    const fixture = setup(engine);
-    const onClosed = vi.fn();
-    fixture.componentInstance.OnUserClosed = onClosed;
+  it('wires ArtifactWorkspaceChannel <-> <mj-artifact-viewer-panel> bidirectionally for viewMode, navigationAnchor, and selectionChanged (NW-6)', async () => {
+    const channel = new ArtifactWorkspaceChannel();
+    const log: ChannelLog = { Notes: [] };
+    await channel.Initialize(MakeContext(log));
 
-    const close = fixture.nativeElement.querySelector('.aw-close') as HTMLButtonElement;
-    expect(close.getAttribute('aria-label')).toBe('Close Budget');
-    close.click();
-    fixture.detectChanges();
+    const sheet = channel.Engine.AddOrFocus({
+      ArtifactID: '11111111-1111-4111-8111-111111111111',
+      ArtifactVersionID: '22222222-2222-4222-8222-222222222222',
+      VersionNumber: 1,
+      Name: 'Board Forecast',
+      ArtifactTypeName: 'Excel Spreadsheet',
+      CanEdit: true,
+    });
 
-    expect(onClosed).toHaveBeenCalledWith(active.InstanceID);
-    expect(engine.Get(active.InstanceID)).toBeUndefined();
-    expect(tabs(fixture).map((t) => t.textContent?.trim())).toEqual(['Q3 plan']);
-  });
+    const f = renderComponentFixture(RealtimeArtifactWorkspaceSurfaceComponent, {
+      providers: [],
+      setup: (instance) => {
+        channel.BindSurface(instance);
+        instance.CurrentUser = TEST_USER;
+      },
+    });
 
-  it('follows engine changes made after it renders', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    const fixture = setup(engine);
-    expect(tabs(fixture)).toHaveLength(0);
+    const pane = query(f, `[role="tabpanel"][data-instance="${sheet.InstanceID}"]`);
+    expect(pane).not.toBeNull();
+    // Passive DOM-attribute facade must not exist on .aw-pane
+    expect(pane?.hasAttribute('data-view-mode')).toBe(false);
+    expect(pane?.hasAttribute('data-anchor-sheet')).toBe(false);
+    expect(pane?.hasAttribute('data-anchor-range')).toBe(false);
 
-    engine.AddOrFocus({ ArtifactID: 'a-1', Name: 'Live doc' });
-    fixture.detectChanges();
+    const viewerDebug = f.debugElement.query((d) => d.componentInstance instanceof StubArtifactViewerPanelComponent);
+    expect(viewerDebug).not.toBeNull();
+    const viewer = viewerDebug.componentInstance as StubArtifactViewerPanelComponent;
 
-    expect(tabs(fixture)).toHaveLength(1);
-    expect(tabs(fixture)[0].textContent).toContain('Live doc');
-  });
+    // 1. Agent verb set_view_mode drives <mj-artifact-viewer-panel> [viewMode]
+    const modeRes = await channel.ApplyVerb('set_view_mode', { mode: 'suggest' }, 'agent', sheet.InstanceID);
+    expect(modeRes.Success).toBe(true);
+    f.detectChanges();
+    expect(viewer.viewMode).toBe('suggest');
+    expect(query(f, '.stub-viewer-panel')?.getAttribute('data-view-mode')).toBe('suggest');
 
-  it('mounts the viewer panel only with a current user, passing the active artifact', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    engine.AddOrFocus({ ArtifactID: 'a-9', Name: 'Deck', VersionNumber: 2, CanEdit: true });
+    // 2. Agent verb navigate_to_anchor drives <mj-artifact-viewer-panel> [navigationAnchor]
+    const navRes = await channel.ApplyVerb(
+      'navigate_to_anchor',
+      { sheet: 'Revenue', range: 'B2:D12', highlightMs: 5000 },
+      'agent',
+      sheet.InstanceID,
+    );
+    expect(navRes.Success).toBe(true);
+    f.detectChanges();
+    expect(viewer.navigationAnchor).toEqual({
+      Sheet: 'Revenue',
+      Range: 'B2:D12',
+      HighlightMs: 5000,
+    });
+    expect(query(f, '.stub-viewer-panel')?.getAttribute('data-nav-sheet')).toBe('Revenue');
+    expect(query(f, '.stub-viewer-panel')?.getAttribute('data-nav-range')).toBe('B2:D12');
 
-    const withoutUser = setup(engine);
-    expect(withoutUser.nativeElement.querySelector('mj-artifact-viewer-panel')).toBeNull();
-    TestBed.resetTestingModule();
+    // 3. Viewer (selectionChanged) flows through surface ReportSelectionAnchor -> OnUserSelectionChanged -> channel selection_changed event
+    const events: Array<{ Name: string; Payload: RealtimeChannelEvent['Payload'] }> = [];
+    const sub = channel.Events$.subscribe((ev) => {
+      events.push({ Name: ev.Name, Payload: ev.Payload });
+    });
+    try {
+      viewer.selectionChanged.emit({
+        domain: 'spreadsheet',
+        sheet: 'Q4',
+        range: 'E10:F15',
+      });
+      f.detectChanges();
 
-    const user = new UserInfo(undefined, { ID: 'u-1', Name: 'Pat' });
-    expect(user.Name).toBe('Pat');
-    const fixture = setup(engine, user);
-    const panelEl = fixture.debugElement.query((d) => d.componentInstance instanceof ArtifactViewerPanelStub);
-    const panel = panelEl.componentInstance as ArtifactViewerPanelStub;
-    expect(panel.artifactId).toBe('a-9');
-    expect(panel.versionNumber).toBe(2);
-    expect(panel.currentUser).toBe(user);
-    expect(panel.environmentId).toBe('env-1');
-    expect(panel.canEdit).toBe(true);
-    expect(panel.showHeader).toBe(false);
-    expect(panel.showTabs).toBe(false);
-  });
-
-  it('clears its tabs when the engine is removed', () => {
-    const engine = new ArtifactWorkspaceEngine();
-    engine.AddOrFocus({ ArtifactID: 'a-1', Name: 'Q3 plan' });
-    const fixture = setup(engine);
-    expect(tabs(fixture)).toHaveLength(1);
-
-    fixture.componentRef.setInput('Engine', null);
-    fixture.detectChanges();
-
-    expect(tabs(fixture)).toHaveLength(0);
-    expect(fixture.nativeElement.querySelector('.aw-empty')).not.toBeNull();
+      expect(channel.Engine.Get(sheet.InstanceID)?.Selection).toEqual({
+        domain: 'spreadsheet',
+        sheet: 'Q4',
+        range: 'E10:F15',
+      });
+      const selEv = events.find((e) => e.Name === 'selection_changed');
+      expect(selEv).toBeDefined();
+      expect(selEv?.Payload).toMatchObject({
+        instanceId: sheet.InstanceID,
+        artifactId: sheet.ArtifactID,
+        artifactTypeName: 'Excel Spreadsheet',
+        anchor: { domain: 'spreadsheet', sheet: 'Q4', range: 'E10:F15' },
+      });
+      expect(channel.GetState()['activeSelection']).toMatchObject({
+        instanceId: sheet.InstanceID,
+        artifactId: sheet.ArtifactID,
+        anchor: { domain: 'spreadsheet', sheet: 'Q4', range: 'E10:F15' },
+      });
+    } finally {
+      sub.unsubscribe();
+      channel.Dispose();
+    }
   });
 });

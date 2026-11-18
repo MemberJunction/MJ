@@ -6,6 +6,8 @@ import {
     ArtifactToolDefinition,
     ArtifactToolResult,
 } from '@memberjunction/ai-core-plus';
+import { CompileSafeToolRegex } from './artifact-tool-helpers';
+import { ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 interface SearchMatch {
     path: string;
@@ -125,11 +127,31 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleJsonSearch(parsed: ArtifactJsonValue, input: ArtifactToolArgs): ArtifactToolResult {
-        const key = String(input.key);
-        const pattern = new RegExp(String(input.pattern));
-        const matches: SearchMatch[] = [];
+        const key = String(input.key ?? '');
+        const rawPattern = String(input.pattern ?? '');
+        const compiled = CompileSafeToolRegex(rawPattern);
+        if (!compiled.Regex) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: compiled.ErrorMessage ?? `Invalid or unsafe regex pattern: "${rawPattern}".`,
+            };
+        }
 
-        this.searchRecursive(parsed, key, pattern, '', matches);
+        const candidates: SearchMatch[] = [];
+        this.collectKeyCandidates(parsed, key, '', candidates);
+        if (candidates.length === 0) {
+            return { success: true, data: [] };
+        }
+
+        const candidateTexts = candidates.map((c) => String(c.value ?? ''));
+        const batchResult = ExecuteSafeRegexBatchWithRecovery(compiled.Regex, candidateTexts, performance.now() + 1500);
+        const matches: SearchMatch[] = [];
+        for (let i = 0; i < candidates.length; i++) {
+            if (batchResult.Matches[i]) {
+                matches.push(candidates[i]);
+            }
+        }
         return { success: true, data: matches };
     }
 
@@ -169,7 +191,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
                 current = current[idx];
             } else {
                 const record = current;
-                if (!(segment in record)) {
+                if (!Object.prototype.hasOwnProperty.call(record, segment)) {
                     return { found: false, value: undefined };
                 }
                 current = record[segment];
@@ -179,13 +201,12 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         return { found: true, value: current };
     }
 
-    /** Recursively search for keys matching `targetKey` with string values matching `pattern`. */
-    private searchRecursive(
+    /** Recursively collect `{ path, value }` pairs for keys matching `targetKey` with string values. */
+    private collectKeyCandidates(
         obj: ArtifactJsonValue | undefined,
         targetKey: string,
-        pattern: RegExp,
         currentPath: string,
-        matches: SearchMatch[]
+        candidates: SearchMatch[]
     ): void {
         if (obj == null || typeof obj !== 'object') {
             return;
@@ -194,7 +215,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         if (Array.isArray(obj)) {
             for (let i = 0; i < obj.length; i++) {
                 const childPath = currentPath ? `${currentPath}.${i}` : String(i);
-                this.searchRecursive(obj[i], targetKey, pattern, childPath, matches);
+                this.collectKeyCandidates(obj[i], targetKey, childPath, candidates);
             }
         } else {
             const record = obj;
@@ -202,11 +223,11 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
                 const childPath = currentPath ? `${currentPath}.${key}` : key;
                 const value = record[key];
 
-                if (key === targetKey && typeof value === 'string' && pattern.test(value)) {
-                    matches.push({ path: childPath, value });
+                if (key === targetKey && typeof value === 'string') {
+                    candidates.push({ path: childPath, value });
                 }
 
-                this.searchRecursive(value, targetKey, pattern, childPath, matches);
+                this.collectKeyCandidates(value, targetKey, childPath, candidates);
             }
         }
     }

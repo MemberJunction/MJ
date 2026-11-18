@@ -16,6 +16,7 @@ import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgre
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, ProviderInfo, UserPayload } from './types.js';
+import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { RunWithRequestSessionId, StampProviderOriginSessionId } from './requestSessionContext.js';
@@ -622,7 +623,21 @@ export const GetUserPayload = async (
       }
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
+    const tokenExpiresAtMs =
+      typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : undefined;
+    const magicLinkScopes =
+      payload['mj_magic_link'] === true && Array.isArray(payload['mj_scopes'])
+        ? (payload['mj_scopes'] as MagicLinkScopeEntry[])
+        : undefined;
+
+    return {
+      userRecord: sessionUser,
+      email: sessionUser.Email,
+      sessionId,
+      emailVerified,
+      ...(tokenExpiresAtMs !== undefined ? { tokenExpiresAtMs } : {}),
+      ...(magicLinkScopes ? { magicLinkScopes } : {}),
+    };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
@@ -929,6 +944,7 @@ export function TryBuildLazyPostgresProviders(
     );
     pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const pgProvider = new PostgreSQLDataProvider();
     if (!pgProvider.ConfigureFromGlobalSync(pgConfig, primaryPool!)) {
       throw new Error('PostgreSQLDataProvider.ConfigureFromGlobalSync failed after readiness check');
@@ -1009,6 +1025,7 @@ function tryBuildLazySqlServerProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     if (!sqlProvider.ConfigureFromGlobalSync(config)) {
       return null;
@@ -1112,6 +1129,7 @@ async function createPerRequestProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
@@ -1163,6 +1181,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   );
   pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
   pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+  pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)

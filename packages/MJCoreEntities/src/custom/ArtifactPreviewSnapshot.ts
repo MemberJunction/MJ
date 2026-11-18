@@ -1,11 +1,19 @@
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
   MJArtifactTypeEntity,
   MJArtifactTypeEntity_ArtifactTypeThumbnailMode,
   MJArtifactTypeEntity_IArtifactTypeConfiguration,
   MJArtifactTypeEntity_IArtifactTypeThumbnailConfiguration,
 } from '../generated/entities/__mj';
+import { DocumentLiveBlockEngine } from './DocumentLiveBlockEngine';
 import { SlideDeckEngine } from './SlideDeckEngine';
 import { SpreadsheetEngine } from './SpreadsheetEngine';
+
+/**
+ * Strongly-typed JSON configuration/snapshot value used across preview helpers.
+ */
+export type PreviewJsonValue = string | number | boolean | object | null | undefined;
+type PreviewRecord = Record<string, PreviewJsonValue>;
 
 /**
  * Thumbnail capture / display mode derived directly from generated `MJArtifactTypeEntity` JSONType metadata.
@@ -60,13 +68,14 @@ const DEFAULT_STRUCTURAL_DRIVERS = new Set<string>(['SpreadsheetArtifactViewerPl
 
 const MAX_THUMBNAIL_DATA_URL_LENGTH = 250_000;
 const VALID_THUMBNAIL_DATA_URL_RE =
-  /^data:image\/(?:webp|jpeg|png|svg\+xml);base64,[A-Za-z0-9+/=]+$/i;
+  /^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/i;
 
 /**
- * Validates that a client-supplied or stored thumbnail string is a safe, bounded base64 `data:image/...` URI.
+ * Validates that a client-supplied thumbnail string is a safe, bounded base64 raster
+ * `data:image/(png|jpeg|webp);base64,...` URI (explicitly rejecting `image/svg+xml`).
  */
 export function IsValidThumbnailDataUrl(
-  value: unknown,
+  value: PreviewJsonValue,
   maxLength = MAX_THUMBNAIL_DATA_URL_LENGTH,
 ): value is string {
   return (
@@ -76,6 +85,9 @@ export function IsValidThumbnailDataUrl(
     VALID_THUMBNAIL_DATA_URL_RE.test(value)
   );
 }
+
+/** Alias for {@link IsValidThumbnailDataUrl} emphasizing raster-only enforcement (`png`/`jpeg`/`webp`). */
+export const ValidateRasterThumbnailDataUrl = IsValidThumbnailDataUrl;
 
 function parseArtifactTypeThumbnailConfig(
   typeObj: ArtifactTypePolicyInput,
@@ -90,7 +102,7 @@ function parseArtifactTypeThumbnailConfig(
   const raw = typeObj.Configuration;
   if (typeof raw === 'string' && raw.trim().startsWith('{')) {
     try {
-      const parsed: unknown = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as PreviewJsonValue;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const cfg = parsed as MJArtifactTypeEntity_IArtifactTypeConfiguration;
         if (cfg.Thumbnail && typeof cfg.Thumbnail === 'object') {
@@ -308,7 +320,7 @@ export interface ArtifactVersionConfiguration {
   thumbnailDataUrl?: string;
   connectedDriveLink?: ConnectedDriveLinkMetadata;
   guestShareLinks?: GuestShareLinkRecord[];
-  [key: string]: unknown;
+  [key: string]: PreviewJsonValue;
 }
 
 /**
@@ -325,7 +337,7 @@ export function ParseArtifactVersionConfiguration(
     return null;
   }
   try {
-    const parsed: unknown = JSON.parse(trimmed);
+    const parsed = JSON.parse(trimmed) as PreviewJsonValue;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as ArtifactVersionConfiguration;
     }
@@ -394,7 +406,7 @@ export function UpsertGuestShareLinkInConfig(
 ): string {
   const base: ArtifactVersionConfiguration = ParseArtifactVersionConfiguration(rawConfig) ?? {};
   const existing = GetGuestShareLinksFromConfig(rawConfig);
-  const filtered = existing.filter((r) => r.LinkID !== record.LinkID);
+  const filtered = existing.filter((r) => !UUIDsEqual(r.LinkID, record.LinkID));
   const next: ArtifactVersionConfiguration = {
     ...base,
     guestShareLinks: [...filtered, { ...record }],
@@ -415,7 +427,7 @@ export function MarkGuestShareLinkRevokedInConfig(
   const existing = GetGuestShareLinksFromConfig(rawConfig);
   let found = false;
   const updated = existing.map((entry) => {
-    if (entry.LinkID !== linkId) {
+    if (!UUIDsEqual(entry.LinkID, linkId)) {
       return entry;
     }
     found = true;
@@ -436,6 +448,11 @@ export function MarkGuestShareLinkRevokedInConfig(
   };
 }
 
+export interface BuildArtifactPreviewSnapshotOptions {
+  /** When true (default), masks live `:::mj-block` / `=MJ.*` cells and slides in extracted previews. */
+  MaskLiveDataBlocks?: boolean;
+}
+
 /**
  * Builds a compact structured preview snapshot from raw artifact `Content` + optional `DriverClass`.
  * When `driverClass` is omitted (e.g. server-side room compaction), JSON payloads for Sheets,
@@ -445,10 +462,12 @@ export function BuildArtifactPreviewSnapshot(
   content: string | null | undefined,
   driverClass?: string | null,
   fallbackTitle?: string,
+  options?: BuildArtifactPreviewSnapshotOptions,
 ): ArtifactPreviewSnapshot | null {
   if (!content || typeof content !== 'string' || !content.trim()) {
     return null;
   }
+  const maskLiveData = options?.MaskLiveDataBlocks !== false;
   const driver = (driverClass ?? '').trim();
   const trimmed = content.trim();
 
@@ -457,11 +476,11 @@ export function BuildArtifactPreviewSnapshot(
   }
 
   if (driver === 'SpreadsheetArtifactViewerPlugin') {
-    return extractSheetSnapshot(content);
+    return extractSheetSnapshot(content, maskLiveData);
   }
 
   if (driver === 'SlideDeckArtifactViewerPlugin') {
-    return extractSlideSnapshot(content, fallbackTitle);
+    return extractSlideSnapshot(content, fallbackTitle, maskLiveData);
   }
 
   if (driver === 'WhiteboardArtifactViewerPlugin') {
@@ -473,14 +492,14 @@ export function BuildArtifactPreviewSnapshot(
       return extractDocSnapshot(content, fallbackTitle);
     }
     try {
-      const parsed: unknown = JSON.parse(trimmed);
+      const parsed = JSON.parse(trimmed) as PreviewJsonValue;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const obj = parsed as Record<string, unknown>;
+        const obj = parsed as PreviewRecord;
         if (Array.isArray(obj['Worksheets'])) {
-          return extractSheetSnapshot(content);
+          return extractSheetSnapshot(content, maskLiveData);
         }
         if (Array.isArray(obj['Slides']) || Array.isArray(obj['slides'])) {
-          return extractSlideSnapshot(content, fallbackTitle);
+          return extractSlideSnapshot(content, fallbackTitle, maskLiveData);
         }
         if (Array.isArray(obj['pages']) || Array.isArray(obj['items']) || Array.isArray(obj['elements'])) {
           return extractWhiteboardSnapshot(content);
@@ -494,28 +513,116 @@ export function BuildArtifactPreviewSnapshot(
   return null;
 }
 
+function containsLiveMarkdownBlocks(markdown: string): boolean {
+  try {
+    return DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown).some(
+      (seg) => seg.Type === 'mj-block' && seg.BlockSpec?.Mode !== 'Frozen',
+    );
+  } catch {
+    return /:::\s*mj-block\b/i.test(markdown);
+  }
+}
+
+function hasLiveDataContent(content: string | null | undefined, driverClass?: string | null): boolean {
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return false;
+  }
+  const driver = (driverClass ?? '').trim();
+  const trimmed = content.trim();
+
+  if (driver === 'MarkdownArtifactViewerPlugin' || (!driver && !trimmed.startsWith('{'))) {
+    return containsLiveMarkdownBlocks(content);
+  }
+
+  if (driver === 'SpreadsheetArtifactViewerPlugin') {
+    return sheetContainsLiveData(content);
+  }
+
+  if (driver === 'SlideDeckArtifactViewerPlugin') {
+    return slidesContainLiveData(content);
+  }
+
+  if (!driver && trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as PreviewJsonValue;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const obj = parsed as PreviewRecord;
+        if (Array.isArray(obj['Worksheets'])) {
+          return sheetContainsLiveData(content);
+        }
+        if (Array.isArray(obj['Slides']) || Array.isArray(obj['slides'])) {
+          return slidesContainLiveData(content);
+        }
+      }
+    } catch {
+      return containsLiveMarkdownBlocks(content);
+    }
+  }
+  return false;
+}
+
+function sheetContainsLiveData(rawContent: string): boolean {
+  try {
+    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, undefined, { SkipEvaluate: true });
+    return wb.Worksheets.some(
+      (ws) =>
+        (ws.LiveTables ?? []).some((t) => t.Mode !== 'Frozen') ||
+        Object.values(ws.Cells ?? {}).some(
+          (c) => typeof c?.Formula === 'string' && /^\s*=MJ\./i.test(c.Formula),
+        ),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function slidesContainLiveData(rawContent: string): boolean {
+  try {
+    const deck = SlideDeckEngine.Instance.ParseDeckSpec(rawContent);
+    return deck.Slides.some((s) =>
+      s.Regions.some(
+        (r) =>
+          (r.Kind === 'mj-block' && r.BlockSpec?.Mode !== 'Frozen') ||
+          (typeof r.MarkdownContent === 'string' && containsLiveMarkdownBlocks(r.MarkdownContent)),
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function extractDocSnapshot(markdown: string, fallbackTitle?: string): ArtifactPreviewSnapshot {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   let heading = '';
   const bodyLines: string[] = [];
   let callout = '';
-  let inFencedBlock = false;
+  let activeFence: { char: '`' | '~'; len: number } | null = null;
   let inDirectiveBlock = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (line.startsWith('```')) {
-      inFencedBlock = !inFencedBlock;
+    if (!activeFence) {
+      const openMatch = /^(`{3,}|~{3,})/.exec(line);
+      if (openMatch) {
+        activeFence = { char: openMatch[1][0] === '~' ? '~' : '`', len: openMatch[1].length };
+        continue;
+      }
+    } else {
+      const closeRe = new RegExp(`^${activeFence.char}{${activeFence.len},}\\s*$`);
+      if (closeRe.test(line)) {
+        activeFence = null;
+      }
       continue;
     }
-    if (inFencedBlock) {
-      continue;
-    }
-    if (line.startsWith(':::')) {
-      inDirectiveBlock = line !== ':::' ? true : !inDirectiveBlock;
+
+    if (!inDirectiveBlock && /^:::\s*mj-block\b/i.test(line)) {
+      inDirectiveBlock = true;
       continue;
     }
     if (inDirectiveBlock) {
+      if (line === ':::') {
+        inDirectiveBlock = false;
+      }
       continue;
     }
     if (!line) {
@@ -556,18 +663,76 @@ function extractDocSnapshot(markdown: string, fallbackTitle?: string): ArtifactP
   };
 }
 
-function extractSheetSnapshot(rawContent: string): ArtifactPreviewSnapshot | null {
+function isLiveSheetCellMasked(
+  sheet: ReturnType<typeof SpreadsheetEngine.Instance.ParseWorkbook>['Worksheets'][number],
+  cell: ReturnType<typeof SpreadsheetEngine.Instance.ParseWorkbook>['Worksheets'][number]['Cells'][string] | undefined,
+): boolean {
+  if (!cell) return false;
+  if (typeof cell.Formula === 'string' && /^\s*=MJ\./i.test(cell.Formula)) {
+    return true;
+  }
+  if (cell.LiveTableID) {
+    const lt = (sheet.LiveTables ?? []).find((t) => t.TableID === cell.LiveTableID);
+    if (!lt || lt.Mode !== 'Frozen') {
+      return true;
+    }
+  }
+  if (cell.SpilledFrom) {
+    const anchor = sheet.Cells[cell.SpilledFrom];
+    if (anchor && typeof anchor.Formula === 'string' && /^\s*=MJ\./i.test(anchor.Formula)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractSheetSnapshot(rawContent: string, maskLiveDataBlocks = true): ArtifactPreviewSnapshot | null {
   try {
-    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent);
+    const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, undefined, { SkipEvaluate: true });
     const sheet = wb.Worksheets.find((w) => w.SheetID === wb.ActiveSheetID) ?? wb.Worksheets[0];
     if (!sheet) return null;
+
+    let cleanSheet: typeof sheet | null = null;
+    if (maskLiveDataBlocks) {
+      try {
+        const strippedJson = SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+        const cleanWb = SpreadsheetEngine.Instance.ParseWorkbook(strippedJson, undefined, { SkipEvaluate: true });
+        cleanSheet =
+          cleanWb.Worksheets.find((w) => w.SheetID === sheet.SheetID) ??
+          cleanWb.Worksheets[0] ??
+          null;
+      } catch {
+        cleanSheet = null;
+      }
+    }
+
+    const resolvePreviewCellValue = (addr: string): string => {
+      const origCell = sheet.Cells[addr];
+      if (!maskLiveDataBlocks) {
+        return origCell?.DisplayValue ?? (origCell?.RawValue != null ? String(origCell.RawValue) : '');
+      }
+      const cleanCell = cleanSheet?.Cells[addr];
+      const directlyMasked = isLiveSheetCellMasked(sheet, origCell);
+      const strippedByEngine = Boolean(
+        origCell &&
+          (origCell.Formula || origCell.LiveTableID || origCell.SpilledFrom) &&
+          (!cleanSheet ||
+            !cleanCell ||
+            cleanCell.DisplayValue !== origCell.DisplayValue ||
+            cleanCell.ComputedValue !== origCell.ComputedValue)
+      );
+      if (directlyMasked || strippedByEngine) {
+        return '•••';
+      }
+      const safeCell = cleanCell ?? origCell;
+      return safeCell?.DisplayValue ?? (safeCell?.RawValue != null ? String(safeCell.RawValue) : '');
+    };
 
     const colLetters = ['A', 'B', 'C'];
     const headers: string[] = [];
     for (let c = 0; c < 3; c++) {
       const addr = `${colLetters[c]}1`;
-      const cell = sheet.Cells[addr];
-      const val = cell?.DisplayValue ?? (cell?.RawValue != null ? String(cell.RawValue) : '');
+      const val = resolvePreviewCellValue(addr);
       headers.push(val.trim() || `Col ${colLetters[c]}`);
     }
 
@@ -577,8 +742,7 @@ function extractSheetSnapshot(rawContent: string): ArtifactPreviewSnapshot | nul
       let hasData = false;
       for (let c = 0; c < 3; c++) {
         const addr = `${colLetters[c]}${r}`;
-        const cell = sheet.Cells[addr];
-        const val = cell?.DisplayValue ?? (cell?.RawValue != null ? String(cell.RawValue) : '');
+        const val = resolvePreviewCellValue(addr);
         if (val.trim()) hasData = true;
         rowVals.push(val.trim().slice(0, 18));
       }
@@ -601,7 +765,11 @@ function extractSheetSnapshot(rawContent: string): ArtifactPreviewSnapshot | nul
   }
 }
 
-function extractSlideSnapshot(rawContent: string, fallbackTitle?: string): ArtifactPreviewSnapshot | null {
+function extractSlideSnapshot(
+  rawContent: string,
+  fallbackTitle?: string,
+  maskLiveDataBlocks = true,
+): ArtifactPreviewSnapshot | null {
   try {
     const deck = SlideDeckEngine.Instance.ParseDeckSpec(rawContent);
     const firstSlide = deck.Slides[0];
@@ -609,13 +777,22 @@ function extractSlideSnapshot(rawContent: string, fallbackTitle?: string): Artif
 
     const textSnippets: string[] = [];
     for (const region of firstSlide.Regions) {
-      if (region.MarkdownContent?.trim()) {
-        const firstLine = region.MarkdownContent
-          .split('\n')
-          .map((l) => l.trim().replace(/^[#>*\-\s]+/, ''))
-          .find((l) => l.length > 0);
-        if (firstLine) {
-          textSnippets.push(firstLine.slice(0, 28));
+      if (maskLiveDataBlocks && region.Kind === 'mj-block' && region.BlockSpec?.Mode !== 'Frozen') {
+        textSnippets.push('••• Live Data •••');
+      } else if (region.MarkdownContent?.trim()) {
+        if (maskLiveDataBlocks && containsLiveMarkdownBlocks(region.MarkdownContent)) {
+          const docSnap = extractDocSnapshot(region.MarkdownContent);
+          const docExcerpt = docSnap.Kind === 'doc' ? docSnap.Excerpt : undefined;
+          const sanitized = docExcerpt && docExcerpt !== 'Markdown document' ? docExcerpt : '••• Live Data •••';
+          textSnippets.push(sanitized.slice(0, 28));
+        } else {
+          const firstLine = region.MarkdownContent
+            .split('\n')
+            .map((l) => l.trim().replace(/^[#>*\-\s]+/, ''))
+            .find((l) => l.length > 0);
+          if (firstLine) {
+            textSnippets.push(firstLine.slice(0, 28));
+          }
         }
       }
       if (textSnippets.length >= 2) break;
@@ -635,21 +812,21 @@ function extractSlideSnapshot(rawContent: string, fallbackTitle?: string): Artif
 
 function extractWhiteboardSnapshot(rawContent: string): ArtifactPreviewSnapshot | null {
   try {
-    const parsed: unknown = JSON.parse(rawContent);
+    const parsed = JSON.parse(rawContent) as PreviewJsonValue;
     if (!parsed || typeof parsed !== 'object') return null;
-    const obj = parsed as Record<string, unknown>;
-    const rawItems: unknown[] = [];
+    const obj = parsed as PreviewRecord;
+    const rawItems: PreviewJsonValue[] = [];
 
     if (Array.isArray(obj['items'])) {
-      rawItems.push(...obj['items']);
+      rawItems.push(...(obj['items'] as PreviewJsonValue[]));
     } else if (Array.isArray(obj['elements'])) {
-      rawItems.push(...obj['elements']);
+      rawItems.push(...(obj['elements'] as PreviewJsonValue[]));
     } else if (Array.isArray(obj['pages'])) {
-      for (const page of obj['pages']) {
+      for (const page of obj['pages'] as PreviewJsonValue[]) {
         if (page && typeof page === 'object') {
-          const pRec = page as Record<string, unknown>;
+          const pRec = page as PreviewRecord;
           if (Array.isArray(pRec['items'])) {
-            rawItems.push(...pRec['items']);
+            rawItems.push(...(pRec['items'] as PreviewJsonValue[]));
           }
         }
       }
@@ -658,7 +835,7 @@ function extractWhiteboardSnapshot(rawContent: string): ArtifactPreviewSnapshot 
     const nodes: string[] = [];
     for (const entry of rawItems) {
       if (entry && typeof entry === 'object') {
-        const rec = entry as Record<string, unknown>;
+        const rec = entry as PreviewRecord;
         const label =
           typeof rec['text'] === 'string'
             ? rec['text']
@@ -703,6 +880,20 @@ function encodeUtf8ToBase64(input: string): string {
   return btoa(binary);
 }
 
+function sanitizeSvgColor(raw: string | undefined, fallback = '#f59e0b'): string {
+  if (!raw || typeof raw !== 'string') {
+    return fallback;
+  }
+  const trimmed = raw.trim();
+  if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(trimmed)) {
+    return trimmed;
+  }
+  return fallback;
+}
+
 /**
  * Renders a compact, base64-encoded SVG thumbnail (`data:image/svg+xml;base64,...`)
  * from an {@link ArtifactPreviewSnapshot} so it can be stored directly inside
@@ -730,7 +921,7 @@ export function BuildSvgThumbnailDataUrl(snapshot: ArtifactPreviewSnapshot | nul
       ${rows.map((r, rIdx) => r.slice(0, 3).map((c, cIdx) => `<text x="${24 + cIdx * 82}" y="${58 + rIdx * 24}" fill="#cbd5e1" font-family="system-ui,sans-serif" font-size="9.5">${escapeXml(c.slice(0, 12))}</text>`).join('')).join('')}
     `;
   } else if (snapshot.Kind === 'slides') {
-    const accent = snapshot.ThemeAccent || '#f59e0b';
+    const accent = sanitizeSvgColor(snapshot.ThemeAccent, '#f59e0b');
     body = `
       <rect x="14" y="16" width="252" height="118" rx="8" fill="#171f33" stroke="#473c24"/>
       <text x="26" y="42" fill="#f1f5f9" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700">${escapeXml(snapshot.SlideTitle.slice(0, 32))}</text>
@@ -788,13 +979,32 @@ export function MergeArtifactVersionPreviewConfig(
     return Object.keys(cleaned).length > 0 ? JSON.stringify(cleaned) : null;
   }
 
-  if (!snapshot && !thumbnailDataUrl) {
-    return rawConfig ?? null;
+  const sanitizedIncomingThumb =
+    typeof thumbnailDataUrl === 'string' &&
+    (ValidateRasterThumbnailDataUrl(thumbnailDataUrl) ||
+      (snapshot !== null && thumbnailDataUrl === BuildSvgThumbnailDataUrl(snapshot)))
+      ? thumbnailDataUrl
+      : null;
+
+  const cleanedExisting: ArtifactVersionConfiguration = existing ? { ...existing } : {};
+  if (
+    cleanedExisting.thumbnailDataUrl !== undefined &&
+    !ValidateRasterThumbnailDataUrl(cleanedExisting.thumbnailDataUrl)
+  ) {
+    delete cleanedExisting.thumbnailDataUrl;
   }
+
+  if (!snapshot && !sanitizedIncomingThumb) {
+    if (!existing) {
+      return rawConfig ?? null;
+    }
+    return Object.keys(cleanedExisting).length > 0 ? JSON.stringify(cleanedExisting) : null;
+  }
+
   const merged: ArtifactVersionConfiguration = {
-    ...(existing ?? {}),
+    ...cleanedExisting,
     ...(snapshot ? { previewSnapshot: snapshot } : {}),
-    ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
+    ...(sanitizedIncomingThumb ? { thumbnailDataUrl: sanitizedIncomingThumb } : {}),
   };
   return JSON.stringify(merged);
 }
@@ -829,10 +1039,18 @@ export function BuildArtifactVersionConfigurationWithPreview(
       ? options.ArtifactType.DriverClass
       : null);
 
-  const snapshot = BuildArtifactPreviewSnapshot(content, effectiveDriver, fallbackTitle ?? undefined);
-  const capturedThumb = IsValidThumbnailDataUrl(options?.CapturedThumbnailDataUrl)
-    ? options.CapturedThumbnailDataUrl
-    : null;
+  const snapshot = BuildArtifactPreviewSnapshot(content, effectiveDriver, fallbackTitle ?? undefined, {
+    MaskLiveDataBlocks: policy.MaskLiveDataBlocks,
+  });
+  const suppressCapturedForLive = policy.MaskLiveDataBlocks && hasLiveDataContent(content, effectiveDriver);
+  const capturedThumb =
+    !suppressCapturedForLive && ValidateRasterThumbnailDataUrl(options?.CapturedThumbnailDataUrl)
+      ? options?.CapturedThumbnailDataUrl ?? null
+      : null;
   const thumbnailDataUrl = capturedThumb ?? BuildSvgThumbnailDataUrl(snapshot);
-  return MergeArtifactVersionPreviewConfig(rawConfig, snapshot, thumbnailDataUrl, false);
+  const effectiveRawConfig =
+    suppressCapturedForLive && !thumbnailDataUrl
+      ? MergeArtifactVersionPreviewConfig(rawConfig, null, null, true)
+      : rawConfig;
+  return MergeArtifactVersionPreviewConfig(effectiveRawConfig, snapshot, thumbnailDataUrl, false);
 }
