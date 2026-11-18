@@ -1498,6 +1498,10 @@
     },
     "primaryKey": {
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:24:04.270Z",
+      "checksum": "90831eecfe828269662130b3d9d48d68d67ec073f405ef4084bdafcc14481ac8"
     }
   },
   {
