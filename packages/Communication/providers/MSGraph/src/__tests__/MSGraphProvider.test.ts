@@ -98,6 +98,8 @@ vi.mock('@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials',
 // ---------------------------------------------------------------------------
 
 import { MSGraphProvider } from '../MSGraphProvider';
+import type { GetMessagesParams } from '@memberjunction/communication-types';
+import type { GetMessagesContextDataParams } from '../generic/models';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -129,7 +131,7 @@ describe('MSGraphProvider', () => {
 
     /**
      * Drives one Graph message resource through the public GetMessages() path.
-     * GetMessages chains .filter().top().get(), so the api mock must be chainable;
+     * GetMessages chains .filter().top()[.expand()].get(), so the api mock must be chainable;
      * mockReturnValueOnce keeps the default (non-chainable) api mock intact for other tests.
      */
     const getMessageFor = async (graphMessage: Record<string, unknown>): Promise<NormalizedMessage> => {
@@ -268,6 +270,57 @@ describe('MSGraphProvider', () => {
 
     it('declares both capabilities, because Graph really does filter server-side', async () => {
       expect(provider.MessageRetrieval).toEqual({ FilterByReceivedDate: true, FilterByUnread: true });
+    });
+
+    describe('ContextData.Expand is sent as $expand', () => {
+      const EXPAND = "singleValueExtendedProperties($filter=id eq 'String 0x1042' or id eq 'Integer 0x0036')";
+      const PROPS = [{ id: 'String 0x1042', value: '<a@x>' }];
+
+      /**
+       * Like Graph, this chain returns the extended properties ONLY when `$expand` asked for them, so
+       * the SourceData assertion below fails if the provider stops sending it.
+       */
+      const run = async (params: GetMessagesParams<GetMessagesContextDataParams>) => {
+        let expanded: string | undefined;
+        const chain = {
+          filter: vi.fn().mockReturnThis(),
+          top: vi.fn().mockReturnThis(),
+          expand: vi.fn((e: string) => {
+            expanded = e;
+            return chain;
+          }),
+          get: vi.fn(async () => ({ value: [{ id: 'm1', subject: 'Quote', ...(expanded ? { singleValueExtendedProperties: PROPS } : {}) }] })),
+        };
+        mockGraphApi.mockReturnValueOnce(chain);
+        const result = await provider.GetMessages(params);
+        return { chain, result };
+      };
+
+      it('sends it, and the extended properties come back in SourceData', async () => {
+        const { chain, result } = await run({ Identifier: 'rep@example.com', NumMessages: 10, ContextData: { Expand: EXPAND } });
+        expect(chain.expand).toHaveBeenCalledWith(EXPAND);
+        expect(result.SourceData?.[0]).toMatchObject({ singleValueExtendedProperties: PROPS });
+      });
+
+      it('sends no $expand when none is asked for, or a blank one', async () => {
+        const absent = await run({ Identifier: 'rep@example.com', NumMessages: 10 });
+        const blank = await run({ Identifier: 'rep@example.com', NumMessages: 10, ContextData: { Expand: '   ' } });
+        expect(absent.chain.expand).not.toHaveBeenCalled();
+        expect(blank.chain.expand).not.toHaveBeenCalled();
+        expect(absent.result.SourceData?.[0]).not.toHaveProperty('singleValueExtendedProperties');
+      });
+
+      it('keeps the composed filter and $top alongside it', async () => {
+        const { chain } = await run({
+          Identifier: 'rep@example.com',
+          NumMessages: 5,
+          ReceivedAfter: new Date('2026-11-01T00:00:00.000Z'),
+          ContextData: { Filter: "categories/any(c:c eq 'AIDP')", Expand: EXPAND },
+        });
+        expect(chain.filter).toHaveBeenCalledWith("(receivedDateTime ge 2026-11-01T00:00:00.000Z) and categories/any(c:c eq 'AIDP')");
+        expect(chain.top).toHaveBeenCalledWith(5);
+        expect(chain.expand).toHaveBeenCalledWith(EXPAND);
+      });
     });
   });
 
