@@ -837,5 +837,78 @@ describe('TwoTierAndHashCache (Wave 4.4)', () => {
 
             twoTier.Dispose();
         });
+
+        it('exempts providerInternalScaffolding RunView slots and MJ_Metadata DatasetCache entries from L1 freeze (#6598)', async () => {
+            const redis = new RedisLocalStorageProvider({ keyPrefix: 'test', useHashForRunViewSlots: true });
+            const twoTier = new TwoTierCacheStorageProvider(redis);
+
+            // 1. RunViewCache slot with providerInternalScaffolding: true stays unfrozen on write and L2->L1 hydration
+            const scaffoldingSlot: CachedRunViewData = {
+                results: [{ ID: 'e-2', Name: 'Zeta' }, { ID: 'e-1', Name: 'Alpha' }],
+                rowCount: 2,
+                totalRowCount: 2,
+                maxUpdatedAt: '2026-11-12T06:00:00.000Z',
+                cachedAt: Date.now(),
+                providerInternalScaffolding: true,
+            };
+            await twoTier.SetItem('Entities|scaffolding', scaffoldingSlot, 'RunViewCache');
+
+            const l1Hit = await twoTier.GetItem<CachedRunViewData>('Entities|scaffolding', 'RunViewCache');
+            expect(l1Hit).not.toBeNull();
+            expect(Object.isFrozen(l1Hit!.results)).toBe(false);
+            expect(Object.isFrozen(l1Hit!.results[0])).toBe(false);
+
+            // Flush L1 so GetItem hydrates from Redis L2 hash storage — must also remain unfrozen
+            twoTier.ClearL1();
+            const l2Hydrated = await twoTier.GetItem<CachedRunViewData>('Entities|scaffolding', 'RunViewCache');
+            expect(l2Hydrated).not.toBeNull();
+            expect(l2Hydrated!.providerInternalScaffolding).toBe(true);
+            expect(Object.isFrozen(l2Hydrated!.results)).toBe(false);
+            expect(Object.isFrozen(l2Hydrated!.results[0])).toBe(false);
+
+            // 2. MJ_Metadata in DatasetCache stays unfrozen, while non-metadata datasets ARE frozen (cache-immutability.F14)
+            const mjMetadataDataset = {
+                DatasetID: 'ds-meta',
+                DatasetName: 'MJ_Metadata',
+                Success: true,
+                Status: 'Success',
+                LatestUpdateDate: '2026-11-12T06:00:00.000Z',
+                Results: [{ Code: 'Entities', EntityName: 'MJ: Entities', EntityID: '1', Results: [{ ID: 'e-1', Name: 'Alpha' }] }],
+            };
+            const otherDataset = {
+                DatasetID: 'ds-other',
+                DatasetName: 'MJ_Catalog',
+                Success: true,
+                Status: 'Success',
+                LatestUpdateDate: '2026-11-12T06:00:00.000Z',
+                Results: [{ Code: 'Items', EntityName: 'MJ: Items', EntityID: '2', Results: [{ ID: 'i-1', Name: 'Item 1' }] }],
+            };
+
+            await twoTier.SetItem('__MJ_conn__DATASET__MJ_Metadata', mjMetadataDataset, 'DatasetCache');
+            await twoTier.SetItem('__MJ_conn__DATASET__MJ_Catalog', otherDataset, 'DatasetCache');
+
+            const metaHit = await twoTier.GetItem<typeof mjMetadataDataset>('__MJ_conn__DATASET__MJ_Metadata', 'DatasetCache');
+            const otherHit = await twoTier.GetItem<typeof otherDataset>('__MJ_conn__DATASET__MJ_Catalog', 'DatasetCache');
+
+            expect(Object.isFrozen(metaHit!.Results[0].Results)).toBe(false);
+            expect(Object.isFrozen(metaHit!.Results[0].Results[0])).toBe(false);
+            expect(Object.isFrozen(otherHit!.Results[0].Results)).toBe(true);
+            expect(Object.isFrozen(otherHit!.Results[0].Results[0])).toBe(true);
+
+            // 3. Without DatasetName the key decides: a filtered MJ_Metadata key is exempt, a longer name is not
+            const unnamed = () => ({ Results: [{ Code: 'Entities', Results: [{ ID: 'e-2', Name: 'Beta' }] }] });
+            const filteredKey = '__MJ_conn__DATASET__MJ_Metadata{"Queries":"1=0"}';
+            const longerKey = '__MJ_conn__DATASET__MJ_Metadata_Extended';
+            await twoTier.SetItem(filteredKey, unnamed(), 'DatasetCache');
+            await twoTier.SetItem(longerKey, unnamed(), 'DatasetCache');
+
+            const filteredHit = await twoTier.GetItem<ReturnType<typeof unnamed>>(filteredKey, 'DatasetCache');
+            const longerHit = await twoTier.GetItem<ReturnType<typeof unnamed>>(longerKey, 'DatasetCache');
+
+            expect(Object.isFrozen(filteredHit!.Results[0].Results)).toBe(false);
+            expect(Object.isFrozen(longerHit!.Results[0].Results)).toBe(true);
+
+            twoTier.Dispose();
+        });
     });
 });
