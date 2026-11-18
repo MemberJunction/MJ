@@ -1166,6 +1166,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
      * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
      * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     *
+     * Matching is case-insensitive (`ILIKE`), as it is on SQL Server under its default
+     * case-insensitive collation: a user searching for "acme" must find "Acme Corp" on both
+     * platforms. `Exact` uses `ILIKE` without wildcards for the same reason, with the term's
+     * LIKE metacharacters escaped so they match literally.
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
@@ -1177,14 +1182,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
         switch (pred) {
             case 'Exact':
-                return ` = '${rawSafeTerm}'`;
+                return ` ILIKE '${escapedTerm}'`;
             case 'BeginsWith':
-                return ` LIKE '${escapedTerm}%'`;
+                return ` ILIKE '${escapedTerm}%'`;
             case 'EndsWith':
-                return ` LIKE '%${escapedTerm}'`;
+                return ` ILIKE '%${escapedTerm}'`;
             case 'Contains':
             default:
-                return ` LIKE '%${escapedTerm}%'`;
+                return ` ILIKE '%${escapedTerm}%'`;
         }
     }
 
