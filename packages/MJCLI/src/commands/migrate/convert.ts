@@ -11,7 +11,9 @@ import {
   IncrementalBaker,
   BakeApplyError,
   SelectBakeableEntities,
+  DiffFieldDefaults,
   SplitMigration,
+  CollectTSQLBitColumns,
 } from '@memberjunction/sql-converter';
 import type {
   BatchConverterConfig,
@@ -20,6 +22,8 @@ import type {
   MigrationConversionResult,
   BakedMigrationResult,
   BakerWorkingDB,
+  EntityFieldDefault,
+  TableColumnRegistry,
 } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler, type BitColumnRef } from '@memberjunction/sqlglot-ts';
 // Type-only import: erased at runtime, so the heavy codegen-lib value graph is NOT loaded
@@ -38,7 +42,7 @@ const MJ_CORE_SCHEMA = '__mj';
  * `mode`). An INTERSECTION (not a bare `Pick`) because `MigrationConversionResult` has no `mode`
  * field — the baker's `mode`/`reconciliation` are optional here (issue #3252 Phase 4b).
  */
-type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural'> & {
+type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural' | 'warnings'> & {
   mode?: BakedMigrationResult['mode'];
   reconciliation?: MigrationConversionResult['reconciliation'];
 };
@@ -154,6 +158,42 @@ export function decideLegacyConvertExit(args: {
   allowGaps: boolean;
 }): { fail: true; message: string } | { fail: false; message: null } {
   return DecideLegacyConvertExit(args);
+}
+
+/** A T-SQL baseline migration file (`B<version>__….sql`), not a PG counterpart. */
+function isBaselineSource(file: string): boolean {
+  return /^B\d.*\.sql$/.test(file) && !file.endsWith('.pg.sql') && !file.endsWith('.pg-only.sql');
+}
+
+/** The newest T-SQL baseline among `files`, or undefined. */
+export function LatestBaseline(files: string[]): string | undefined {
+  return files.filter(isBaselineSource).sort().at(-1);
+}
+
+/** The version key of a migration file name: `V202602131500__…` → `202602131500`. */
+function migrationVersion(file: string): string {
+  return (file.match(/^[VB](\d+)/) ?? [])[1] ?? '';
+}
+
+/**
+ * Splits T-SQL migration files into those to consider for conversion and the `V…` files older than
+ * the oldest baseline (#3345 item 1). A baseline is a cumulative snapshot, so a migration below the
+ * oldest one is already inside it and has no counterpart to write; counting it as unconverted halted
+ * every bake chain. Baselines and every file at or after the oldest baseline are kept; with no
+ * baseline in the folder, every file is kept. Pure.
+ */
+export function FilterPreBaselineMigrations(files: string[]): { kept: string[]; skipped: string[] } {
+  const baselines = files.filter(isBaselineSource).map(migrationVersion).filter((v) => v).sort();
+  const floor = baselines[0];
+  if (!floor) return { kept: [...files], skipped: [] };
+  const kept: string[] = [];
+  const skipped: string[] = [];
+  for (const f of files) {
+    const version = migrationVersion(f);
+    if (/^V/.test(f) && version && version < floor) skipped.push(f);
+    else kept.push(f);
+  }
+  return { kept, skipped };
 }
 
 /** A CodeGen CRUD procedure definition, e.g. `CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateX]`. */
@@ -345,6 +385,10 @@ export default class MigrateConvert extends Command {
 
     this.log('');
 
+    // One boolean-column registry for the whole run (#5016): the latest baseline's tables, then each
+    // converted file's own, so a view over a table an earlier migration created converts `= 1`.
+    const tableColumns = this.buildLegacyColumnRegistry(sourceDir);
+
     // Convert each file
     let successCount = 0;
     let errorCount = 0;
@@ -365,6 +409,7 @@ export default class MigrateConvert extends Command {
         IncludeHeader: !flags['no-header'],
         EnablePostProcess: true,
         OnProgress: flags.verbose ? (msg: string) => this.log(`  ${msg}`) : undefined,
+        TableColumns: tableColumns,
       };
 
       const result: BatchConverterResult = convertFile(config);
@@ -405,17 +450,26 @@ export default class MigrateConvert extends Command {
     this.log(`  Indexes:     ${totalStats.IndexesCreated}`);
     this.log(`  Inserts:     ${totalStats.InsertsConverted}`);
     this.log(`  Grants:      ${totalStats.GrantsConverted}`);
+    this.printWarnings(totalStats.Warnings);
 
     // Post-conversion: deduplicate EntityField Sequence values across files
     // to prevent UQ_EntityField_EntityID_Sequence violations on PG
+    // Only the files written by THIS run may be edited: every other .pg.sql in the folder is
+    // committed history that may already be applied, so a fix lands on the side of a collision
+    // that this run produced (issue #3166).
     this.log('\nRunning EntityField Sequence deduplication...');
-    const dedupResult = deduplicateEntityFieldSequences(outputDir);
-    if (dedupResult.totalCollisions > 0) {
-      this.log(`  Fixed ${dedupResult.totalCollisions} sequence collision(s) across ${dedupResult.fixes.length} INSERT(s):`);
+    const writtenThisRun = new Set(unconverted.map((m) => path.basename(m.OutputFile)));
+    const dedupResult = deduplicateEntityFieldSequences(outputDir, false, writtenThisRun);
+    if (dedupResult.fixes.length > 0) {
+      this.log(`  Fixed ${dedupResult.fixes.length} sequence collision(s) in files written by this run:`);
       for (const fix of dedupResult.fixes) {
         this.log(`    ${fix.file} line ${fix.line}: ${fix.originalSequence} → ${fix.newSequence}`);
       }
-    } else {
+    }
+    if (dedupResult.committedCollisions.length > 0) {
+      this.log(`  Left ${dedupResult.committedCollisions.length} collision(s) between committed files unchanged.`);
+    }
+    if (dedupResult.totalCollisions === 0) {
       this.log(`  No collisions found (${dedupResult.totalInserts} EntityField INSERTs scanned).`);
     }
 
@@ -472,7 +526,8 @@ export default class MigrateConvert extends Command {
     // Select the per-migration conversion: inline-baking (live DB, CodeGen baked natively) or
     // the default transpile-only path (CodeGen regenerated by `mj codegen` at deploy).
     const bakeCodegen = flags['bake-codegen'];
-    const baker = bakeCodegen ? await this.buildBaker(transpiler, flags.schema, flags['core-schema']) : null;
+    const bakeDriver = bakeCodegen ? await this.buildBaker(transpiler, flags.schema, flags['core-schema']) : null;
+    const baker = bakeDriver?.baker ?? null;
     const convertOne = (sql: string, fileName: string): Promise<ConvertedShape> =>
       baker
         ? baker.bakeMigration(sql, fileName)
@@ -488,6 +543,7 @@ export default class MigrateConvert extends Command {
     const regenReseed: string[] = [];
     const needsHand: { file: string; routines: string[] }[] = [];
     const withUnhandled: { file: string; count: number }[] = [];
+    const warnings: string[] = [];
     const gapReport: {
       sourceFile: string;
       outputFile: string;
@@ -534,7 +590,10 @@ export default class MigrateConvert extends Command {
         break;
       }
 
+      warnings.push(...result.warnings);
       const decision = DecideConvertWrite(result, bakeCodegen);
+      // The working DB advanced past this file: pick up the boolean columns it added (#6348).
+      if (bakeDriver && !decision.haltBake) await bakeDriver.refreshBitColumns();
       // A needs-hand / gap-no-bake migration is NEVER written as a discoverable .pg.sql — that
       // would mark it converted forever and let Skyway apply an incomplete file. The .needs-hand
       // artifact carries the transpiled DDL + gap comments for a human (or LLM pass) to finish.
@@ -596,6 +655,7 @@ export default class MigrateConvert extends Command {
     }
 
     this.printSplitSummary(converted, regenReseed, needsHand, withUnhandled, flags['dry-run'], bakeCodegen);
+    this.printWarnings(warnings);
 
     // A halt (bake-mode gap or a conversion failure) ALWAYS ends the run non-zero, BEFORE the
     // unconditional `process.exit(0)` below — otherwise a bake run could exit 0 despite a gap
@@ -625,6 +685,17 @@ export default class MigrateConvert extends Command {
   }
 
   /**
+   * The legacy path's run-wide boolean-column registry, seeded from the latest baseline in
+   * `sourceDir` (a cumulative schema snapshot, so it declares every table that exists before the
+   * files being converted). Empty when the folder has no baseline.
+   */
+  private buildLegacyColumnRegistry(sourceDir: string): TableColumnRegistry {
+    const latest = LatestBaseline(fs.readdirSync(sourceDir));
+    if (!latest) return new Map();
+    return CollectTSQLBitColumns(fs.readFileSync(path.join(sourceDir, latest), 'utf8'));
+  }
+
+  /**
    * Construct the AST transpiler with the cross-file BIT/BOOLEAN column registry
    * collected from the baselines (they declare the core tables, e.g. User.IsActive),
    * so per-file transpiles can coerce 1/0 → TRUE/FALSE in seed INSERTs that target
@@ -648,11 +719,7 @@ export default class MigrateConvert extends Command {
     // once enough baselines accumulate, making every spawn fail with `spawn E2BIG`.
     // (Threshold first crossed at v5.46: 5 baselines = 4060 entries ≈ 134 KB. Latest
     // baseline alone ≈ 1023 entries ≈ 34 KB.)
-    const baselines = fs
-      .readdirSync(sourceDir)
-      .filter((f) => /^B\d.*\.sql$/.test(f) && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql'))
-      .sort();
-    const latestBaseline = baselines.at(-1);
+    const latestBaseline = LatestBaseline(fs.readdirSync(sourceDir));
     const bitColumns: BitColumnRef[] = [];
     if (latestBaseline) {
       try {
@@ -677,8 +744,12 @@ export default class MigrateConvert extends Command {
    * codegen-lib + core are declared MJCLI deps) to keep a plain `convert --split` light. The
    * matching `import type` at the top is erased at runtime, so it does not defeat the deferral.
    */
-  private async buildBaker(transpiler: MJPostgresTranspiler, schema: string, coreSchema: string): Promise<IncrementalBaker> {
-    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
+  private async buildBaker(
+    transpiler: MJPostgresTranspiler,
+    schema: string,
+    coreSchema: string,
+  ): Promise<{ baker: IncrementalBaker; refreshBitColumns: () => Promise<void> }> {
+    const { RunCodeGenBase, SQLCodeGenBase, PostgreSQLCodeGenProvider, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
@@ -714,31 +785,36 @@ export default class MigrateConvert extends Command {
     // not: the copies in the bizapps repos are generated against core 5.37 and already miss columns
     // that exist in 6.x. Failure to read the catalog degrades coercion rather than stopping the
     // run, so it warns loudly instead of aborting.
-    try {
-      // `CodeGenConnection.query` takes SQL only — no parameter array — so the two schema names are
-      // inlined as literals. They are configuration identifiers rather than user input, and are
-      // escaped by doubling any single quote so a schema name cannot terminate the literal.
-      const schemaList = [MJ_CORE_SCHEMA, schema].map((n) => `'${n.replaceAll("'", "''")}'`).join(', ');
-      const { recordset } = await ds.connection.query(
-        `SELECT table_name, column_name
-           FROM information_schema.columns
-          WHERE data_type = 'boolean' AND table_schema IN (${schemaList})`,
-      );
-      // The dialect's registry keys are LOWERCASED [table, column] pairs.
-      const catalogBitCols: BitColumnRef[] = recordset.map((r) => [
-        String(r.table_name).toLowerCase(),
-        String(r.column_name).toLowerCase(),
-      ]);
-      transpiler.addExtraBitColumns(catalogBitCols);
-      if (catalogBitCols.length === 0) {
-        this.warn('No boolean columns found in the working database — bit/boolean coercion will rely on the baseline registry alone.');
+    // The catalog is read again after every applied migration (#6348): a column a migration in this
+    // run adds is boolean in the working DB from then on, and a later file's view compares it.
+    const refreshBitColumns = async (initial: boolean): Promise<void> => {
+      try {
+        // `CodeGenConnection.query` takes SQL only — no parameter array — so the two schema names are
+        // inlined as literals. They are configuration identifiers rather than user input, and are
+        // escaped by doubling any single quote so a schema name cannot terminate the literal.
+        const schemaList = [MJ_CORE_SCHEMA, schema].map((n) => `'${n.replaceAll("'", "''")}'`).join(', ');
+        const { recordset } = await ds.connection.query(
+          `SELECT table_name, column_name
+             FROM information_schema.columns
+            WHERE data_type = 'boolean' AND table_schema IN (${schemaList})`,
+        );
+        // The dialect's registry keys are LOWERCASED [table, column] pairs.
+        const catalogBitCols: BitColumnRef[] = recordset.map((r) => [
+          String(r.table_name).toLowerCase(),
+          String(r.column_name).toLowerCase(),
+        ]);
+        transpiler.addExtraBitColumns(catalogBitCols);
+        if (initial && catalogBitCols.length === 0) {
+          this.warn('No boolean columns found in the working database — bit/boolean coercion will rely on the baseline registry alone.');
+        }
+      } catch (err) {
+        this.warn(
+          `Could not read boolean columns from the working database (${err instanceof Error ? err.message : String(err)}). ` +
+            'Seed INSERT/UPDATE values targeting core boolean columns may not be coerced.',
+        );
       }
-    } catch (err) {
-      this.warn(
-        `Could not read boolean columns from the working database (${err instanceof Error ? err.message : String(err)}). ` +
-          'Seed INSERT/UPDATE values targeting core boolean columns may not be coerced.',
-      );
-    }
+    };
+    await refreshBitColumns(true);
 
     const sqlGen = new SQLCodeGenBase();
     const db: BakerWorkingDB = {
@@ -776,8 +852,51 @@ export default class MigrateConvert extends Command {
       // Provider order is name-sorted (PostProcessEntityMetadata), matching a full run.
       listBakeableEntities: async (targetSchema: string) =>
         SelectBakeableEntities(ds.provider.Entities, targetSchema, configInfo.excludeSchemas ?? []),
+      // PostgreSQL's field sync for the migration's entities, between apply and capture (issue
+      // #5650): a default added to an existing column reaches the metadata the baked spCreate is
+      // generated from. CodeGen's support objects are ensured first, as `mj codegen` does, since
+      // the sync with an entity-ID scope is one of them.
+      syncFieldDefaults: async (entityNames: string[]) => {
+        const ids = entityNames
+          .map((n) => ds.provider.EntityByName(n)?.ID)
+          .filter((id): id is string => typeof id === 'string');
+        if (ids.length === 0) return [];
+        const lit = (v: string) => `'${v.replaceAll("'", "''")}'`;
+        const support = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL(coreSchema);
+        if (support) await ds.connection.query(support);
+        const snapshot = async (): Promise<EntityFieldDefault[]> => {
+          const { recordset } = await ds.connection.query(
+            `SELECT f."ID", e."Name" AS "EntityName", f."Name" AS "FieldName", f."DefaultValue"
+               FROM ${coreSchema}."EntityField" f JOIN ${coreSchema}."Entity" e ON e."ID" = f."EntityID"
+              WHERE f."EntityID" IN (${ids.map(lit).join(', ')})
+              ORDER BY e."Name", f."Sequence"`,
+          );
+          return recordset.map((r) => ({
+            ID: String(r.ID),
+            EntityName: String(r.EntityName),
+            FieldName: String(r.FieldName),
+            DefaultValue: r.DefaultValue === null || r.DefaultValue === undefined ? null : String(r.DefaultValue),
+          }));
+        };
+        const before = await snapshot();
+        const excluded = (configInfo.excludeSchemas ?? []).join(',');
+        await ds.connection.query(
+          `SELECT * FROM ${coreSchema}."spUpdateExistingEntityFieldsFromSchema"(${lit(excluded)}, ${lit(ids.join(','))})`,
+        );
+        return DiffFieldDefaults(before, await snapshot());
+      },
     };
-    return new IncrementalBaker({ transpiler, db, schema, coreSchema });
+    return { baker: new IncrementalBaker({ transpiler, db, schema, coreSchema }), refreshBitColumns: () => refreshBitColumns(false) };
+  }
+
+  /**
+   * Print the named, non-blocking warnings (issue #5649): work the converter cannot do that a
+   * person finishes by hand. They do not fail the run or stop a bake.
+   */
+  private printWarnings(warnings: string[]): void {
+    if (warnings.length === 0) return;
+    this.logToStderr(`\n  ⚠ ${warnings.length} warning(s) to finish by hand (the run is not failed):`);
+    for (const w of warnings) this.logToStderr(`    ${w}`);
   }
 
   /** Warn when the legacy path is about to transpile CodeGen CRUD procedures. */
@@ -848,13 +967,23 @@ export default class MigrateConvert extends Command {
     outputDir: string,
     specificFile: string | undefined,
   ): Array<{ SourceFile: string; OutputFile: string }> {
-    const sourceFiles = fs.readdirSync(sourceDir)
+    const allSourceFiles = fs.readdirSync(sourceDir)
       .filter((f: string) => f.endsWith('.sql') && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql'))
       .sort();
 
-    if (specificFile && !sourceFiles.includes(specificFile)) {
+    if (specificFile && !allSourceFiles.includes(specificFile)) {
       this.error(`--file ${specificFile} not found in ${sourceDir}`);
     }
+
+    // A named --file is converted as asked; otherwise migrations older than the oldest baseline
+    // are already inside it and are not candidates (#3345 item 1).
+    const { kept, skipped } = specificFile
+      ? { kept: allSourceFiles, skipped: [] as string[] }
+      : FilterPreBaselineMigrations(allSourceFiles);
+    if (skipped.length > 0) {
+      this.log(`Skipped ${skipped.length} migration(s) older than the oldest baseline (already inside it).`);
+    }
+    const sourceFiles = kept;
 
     const outputFiles = new Set(
       fs.readdirSync(outputDir)
@@ -908,5 +1037,6 @@ export default class MigrateConvert extends Command {
     target.ErrorBatches.push(...source.ErrorBatches);
     target.SkippedBatches.push(...source.SkippedBatches);
     target.GapBatches.push(...source.GapBatches);
+    target.Warnings.push(...source.Warnings);
   }
 }
