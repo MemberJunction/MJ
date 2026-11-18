@@ -6677,7 +6677,7 @@ names the columns
 number): { readonly Sampled: number; readonly MaxAbsDifference: number; readonly Passed: boolean }` (the `Parity` JSON
 of `MJ: ML Monitoring Results`, written by M6); `Recompute` calls `Predict` at each stored row's `EffectiveAsOf`
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   it('passes identical recomputations and fails a 1e-6 skew at tolerance 1e-9', () => {
     expect(ParityCheck.Compare(stored, Same(stored), 1e-9).Passed).toBe(true);
@@ -6688,11 +6688,11 @@ of `MJ: ML Monitoring Results`, written by M6); `Recompute` calls `Predict` at e
     expect(predict.Calls().map((c) => c.AsOf)).toEqual([DAY1, DAY2]);
   });
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/parity-check.test.ts` → fails to import.
-- [ ] Step 3: Implement the three statics (`Sample` reads the binding's `Champion` `Model` rows through `RunView`,
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/parity-check.test.ts` → fails to import.
+- [x] Step 3: Implement the three statics (`Sample` reads the binding's `Champion` `Model` rows through `RunView`,
   seeded selection; `Recompute` groups by `EffectiveAsOf` and calls `ScoringService.Predict` with `Path = 'parity'`).
-- [ ] Step 4: Step 2's command → passes; Engine `pnpm test` → 0 failed.
-- [ ] Step 5: `git grep -n "1e-9" -- packages/AI/PredictiveStudio/Engine/src/scoring/parity-check.ts` → one hit (the
+- [x] Step 4: Step 2's command → passes; Engine `pnpm test` → 0 failed.
+- [x] Step 5: `git grep -n "1e-9" -- packages/AI/PredictiveStudio/Engine/src/scoring/parity-check.ts` → one hit (the
   default tolerance constant `ParityCheck.DefaultTolerance`).
 
 #### Task M5.9: JSONType metadata for `MJ: ML Scoring Runs`
@@ -10203,6 +10203,14 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `ModelNeedsTrainingError` (a run row needs a real model), and a binding run over a never-trained model ends `failed`
   with "needs training" (no refusal names an absent file truthfully). A create on a `Withdrawn` binding's model and
   feature is refused.
+- **D4-157 · Parity measures the model that serves** (M5.8 report, concern 3). `ParityCheck.Sample` draws only
+  `Champion` `Model` rows written by the binding's serving model (`ScoringService`'s own rule: the Published model, or
+  the one kept serving while Unevaluated), and for a model with no Prediction Unit only rows dated on the scoring
+  clock's run date, because `Predict` refuses a superseded model (`model-not-published`) and a unit-less model's past
+  dates (`as-of-unsupported`). A binding with nothing serving gives an empty sample with the `no-published-model`
+  reason; `Compare` of an empty sample is `Sampled: 0, Passed: false`. `Recompute` groups by model and `EffectiveAsOf`
+  and keeps each refusal in `Results`. Each recomputation writes one `MJ: ML Scoring Runs` row on the `parity` path;
+  M6's job user must hold the binding's view authorization once M5b attaches the view gate.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
