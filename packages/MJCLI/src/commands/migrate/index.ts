@@ -3,7 +3,7 @@ import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
 import type { MigrateResult, MigrationExecutionResult, MigrationStatus, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { GetValidatedConfig, GetSkywayConfig, GetRawConfig, type MJConfig } from '../../config';
+import { GetValidatedConfig, GetSkywayConfig, GetRawConfig, ResolvePostgresMigrationSecurity, type MJConfig } from '../../config';
 import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
 import { VerifyDatabaseConnection } from '../../lib/db-preflight';
 import { ReadAppliedMigrationState, type AppliedMigrationState } from '../../lib/db-version';
@@ -426,6 +426,7 @@ export default class Migrate extends Command {
     const spinner = ora(`Refreshing metadata for ${targetSchema}...`);
     spinner.start();
     try {
+      const pgSecurity = config.dbPlatform === 'postgresql' ? await ResolvePostgresMigrationSecurity(config) : undefined;
       await executeOpenAppMetadataRefresh({
         platform: config.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver',
         coreSchema,
@@ -435,9 +436,10 @@ export default class Migrate extends Command {
           Port: config.dbPort,
           Database: config.dbDatabase,
           User: config.codeGenLogin,
-          Password: config.codeGenPassword,
+          Password: pgSecurity?.Password ?? config.codeGenPassword,
           Encrypt: config.dbEncrypt,
           TrustServerCertificate: config.dbTrustServerCertificate,
+          ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
         },
       });
       spinner.succeed(`Metadata refreshed for ${targetSchema}`);

@@ -124,6 +124,13 @@ export interface SkywayDatabaseConfig {
     TrustServerCertificate?: boolean;
     /** Request timeout in milliseconds */
     RequestTimeout?: number;
+    /**
+     * PostgreSQL only: the TLS options for every connection the install opens (the migration run
+     * and the metadata refresh after it), in node-postgres' `ssl` shape. Build it with
+     * `BuildPgSslConfig` from `@memberjunction/postgresql-dataprovider` so it follows the shared
+     * `PG_SSL_*` settings. Omit it for plain TCP. SQL Server uses `Encrypt` instead.
+     */
+    SSL?: Record<string, unknown>;
 }
 
 /**
@@ -366,6 +373,7 @@ export function BuildSkywayConfig(
                 Encrypt: encrypt,
                 TrustServerCertificate: trustCert,
                 ...(dbConfig.RequestTimeout ? { RequestTimeout: dbConfig.RequestTimeout } : {}),
+                ...(platform === 'postgresql' && dbConfig.SSL ? { SSL: dbConfig.SSL } : {}),
             },
         },
         Migrations: {

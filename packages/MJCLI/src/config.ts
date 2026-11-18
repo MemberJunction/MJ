@@ -362,7 +362,7 @@ export const GetSkywayConfig = async (
 
   const dialect: DatabaseDialect = mjConfig.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver';
 
-  const pgSecurity = dialect === 'postgresql' ? await resolvePostgresMigrationSecurity(mjConfig) : undefined;
+  const pgSecurity = dialect === 'postgresql' ? await ResolvePostgresMigrationSecurity(mjConfig) : undefined;
   const dbConfig = {
     Dialect: dialect,
     Server: mjConfig.dbHost,
@@ -436,7 +436,7 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
  * settings every MJ PostgreSQL client follows. A token login fetches one token up front: a migration
  * run opens one connection and finishes well within a token's lifetime.
  */
-async function resolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<{ SSL?: Record<string, unknown>; Password?: string }> {
+export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<{ SSL?: Record<string, unknown>; Password?: string }> {
   const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
   const authMode = ResolvePgAuthMode();
   if (authMode !== 'password' && !PgSslVerifiesServer(ssl)) {
