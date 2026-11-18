@@ -13,6 +13,7 @@ import {
     DescribeConnectionBudget,
     PostgreSQLPoolBudget,
     WarnIfPostgreSQLConnectionBudgetExceeded,
+    ResolvePostgreSQLReadOnlyEndpoints,
 } from '../postgresqlPoolSettings.js';
 import { GetReadOnlyProvider } from '../util.js';
 import type { ProviderInfo } from '../types.js';
@@ -257,5 +258,31 @@ describe('PostgreSQL connection budget', () => {
         const failing = { query: async (): Promise<{ rows: [] }> => { throw new Error('boom'); } };
         await WarnIfPostgreSQLConnectionBudgetExceeded(failing, defaults, false, false, m => messages.push(m));
         expect(messages).toEqual(['WARNING: could not check the PostgreSQL connection budget: boom']);
+    });
+});
+
+describe('ResolvePostgreSQLReadOnlyEndpoints', () => {
+    const ro = { ...endpoint, User: 'ro', Password: 'ropw' };
+
+    it('keeps both read-only pools on the primary without a replica', () => {
+        expect(ResolvePostgreSQLReadOnlyEndpoints(ro, defaults, {})).toEqual({ Application: ro, Adhoc: ro });
+    });
+
+    it('moves only the ad-hoc pool to the replica by default, keeping the read-only login', () => {
+        const eps = ResolvePostgreSQLReadOnlyEndpoints(ro, defaults, { PG_READ_REPLICA_HOST: 'reader.example.com' });
+        expect(eps.Application).toEqual(ro);
+        expect(eps.Adhoc).toEqual({ ...ro, Host: 'reader.example.com' });
+    });
+
+    it('moves the application pool too when asked, with a configured port', () => {
+        const settings: DatabaseSettingsInfo = { ...defaults, postgres: { readReplica: { host: 'reader', port: 6432, pools: 'all-read-only' } } };
+        const eps = ResolvePostgreSQLReadOnlyEndpoints(ro, settings, {});
+        expect(eps.Application).toEqual({ ...ro, Host: 'reader', Port: 6432 });
+        expect(eps.Adhoc).toEqual({ ...ro, Host: 'reader', Port: 6432 });
+    });
+
+    it('rejects an unknown pools value', () => {
+        expect(() => ResolvePostgreSQLReadOnlyEndpoints(ro, defaults, { PG_READ_REPLICA_HOST: 'r', PG_READ_REPLICA_POOLS: 'everything' }))
+            .toThrow(/expected adhoc or all-read-only/);
     });
 });

@@ -375,3 +375,44 @@ export async function WarnIfPostgreSQLConnectionBudgetExceeded(
         log(`WARNING: could not check the PostgreSQL connection budget: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
+
+/** Which read-only pools a configured replica serves. */
+export type PostgreSQLReplicaPools = 'adhoc' | 'all-read-only';
+
+/** Where each read-only pool connects: the primary, or a read replica when one is configured. */
+export interface PostgreSQLReadOnlyEndpoints {
+    Application: PostgreSQLEndpoint;
+    Adhoc: PostgreSQLEndpoint;
+}
+
+/**
+ * Resolves the read-only pools' endpoints. `PG_READ_REPLICA_HOST` / `databaseSettings.postgres.readReplica.host`
+ * moves the ad-hoc pool to a replica; `pools: 'all-read-only'` (`PG_READ_REPLICA_POOLS`) moves the
+ * application read-only pool too. Without a replica both stay on the primary, as before.
+ *
+ * @param readOnly - The primary endpoint with the read-only login's credentials.
+ */
+export function ResolvePostgreSQLReadOnlyEndpoints(
+    readOnly: PostgreSQLEndpoint,
+    settings: DatabaseSettingsInfo,
+    env: NodeJS.ProcessEnv = process.env,
+): PostgreSQLReadOnlyEndpoints {
+    const configured = settings.postgres?.readReplica;
+    const host = env.PG_READ_REPLICA_HOST?.trim() || configured?.host?.trim();
+    if (!host) {
+        return { Application: readOnly, Adhoc: readOnly };
+    }
+    const envPort = env.PG_READ_REPLICA_PORT ? parseInt(env.PG_READ_REPLICA_PORT, 10) : NaN;
+    const port = Number.isFinite(envPort) ? envPort : configured?.port ?? readOnly.Port;
+    const pools = parseReplicaPools(env.PG_READ_REPLICA_POOLS ?? configured?.pools);
+    const replica: PostgreSQLEndpoint = { ...readOnly, Host: host, Port: port };
+    return { Application: pools === 'all-read-only' ? replica : readOnly, Adhoc: replica };
+}
+
+function parseReplicaPools(value: string | undefined): PostgreSQLReplicaPools {
+    const v = (value ?? 'adhoc').trim().toLowerCase();
+    if (v !== 'adhoc' && v !== 'all-read-only') {
+        throw new Error(`PG_READ_REPLICA_POOLS is "${value}"; expected adhoc or all-read-only.`);
+    }
+    return v;
+}

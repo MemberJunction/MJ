@@ -40,7 +40,7 @@ import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
-import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig, WarnIfPostgreSQLConnectionBudgetExceeded } from './postgresqlPoolSettings.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig, WarnIfPostgreSQLConnectionBudgetExceeded, ResolvePostgreSQLReadOnlyEndpoints } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -650,10 +650,13 @@ const setupComplete$ = new ReplaySubject(1);
     //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
+      // Both pools use the read-only login; a configured read replica takes the ad-hoc pool (and,
+      // when asked, the application read-only pool).
+      const readOnlyEndpoints = ResolvePostgreSQLReadOnlyEndpoints({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings);
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
       // come back as numbers here as they do on the provider's own pool.
       const readOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Application, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
       readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
@@ -668,13 +671,13 @@ const setupComplete$ = new ReplaySubject(1);
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
 
       const adhocReadOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'adhoc-read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Adhoc, configInfo.databaseSettings, 'adhoc-read-only')),
         types: MJPostgresTypes,
       });
       adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
       PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
 
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pools (application & ad-hoc) have been initialized.');
+      startupLog.LogIf('verbose', `Read-only PostgreSQL pools initialized (application → ${readOnlyEndpoints.Application.Host}:${readOnlyEndpoints.Application.Port}, ad-hoc → ${readOnlyEndpoints.Adhoc.Host}:${readOnlyEndpoints.Adhoc.Port}).`);
     }
     await WarnIfPostgreSQLConnectionBudgetExceeded(
       pgPool, configInfo.databaseSettings, pgReadOnlyCredentials != null,

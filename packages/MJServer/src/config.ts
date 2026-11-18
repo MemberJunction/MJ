@@ -105,6 +105,20 @@ const databaseSettingsInfoSchema = z.object({
     }).optional(),
     /** `password` (default), or a token mode such as `azure-entra` or `aws-rds-iam`. Env: `PG_AUTH_MODE`. */
     authMode: z.string().optional(),
+    /**
+     * A read replica (Aurora reader endpoint, Azure read replica, HorizonDB replica) for the
+     * read-only pools, which still log in with the read-only login. Replicas lag the primary, so by
+     * default only the ad-hoc pool (caller-supplied SQL, reports, agents) moves there; application
+     * RunView reads stay on the primary so a save is visible to the next read.
+     */
+    readReplica: z.object({
+      /** Env: `PG_READ_REPLICA_HOST`. */
+      host: z.string().optional(),
+      /** Env: `PG_READ_REPLICA_PORT`. Defaults to the primary's port. */
+      port: z.number().int().positive().optional(),
+      /** `adhoc` (default): only the ad-hoc pool. `all-read-only`: the application read-only pool too. Env: `PG_READ_REPLICA_POOLS`. */
+      pools: z.enum(['adhoc', 'all-read-only']).optional(),
+    }).optional(),
   }).optional(),
 });
  
