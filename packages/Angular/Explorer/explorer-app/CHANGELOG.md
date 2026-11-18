@@ -1,5 +1,115 @@
 # @memberjunction/ng-explorer-app
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 44b885a: Harden governed artifacts, live collaboration, public guest sharing, and agent artifact tools (`NW-1` through `NW-6` plus adversarial security & correctness fixes):
+  - **Server & Database Read/Write Security**: Register `PostRunView`-protected artifact, collection, and anchored conversation entities at module load (`MJCoreEntitiesServer`, `MJServer`) and in `agent-data-policy-guard`; fail closed on non-system SQL `Aggregates` and smart-cache/differential/fast-path bypasses in `MJCore` (`ProviderBase`) & `GenericDatabaseProvider`; harden `MJCollectionEntityServer` reparenting (`CanDelete` + `oldParentId`/`newParentId` `CanEdit`), collection ancestry cascading, grantee self-delete ("Leave shared item"), owner-scoped `ListArtifactGuestShareLinks` query (with `artifact:read` API key scope enforcement), and `RealtimeClientSessionResolver` `AuthorizeSessionAccess` magic-link IDOR enforcement.
+  - **Public Guest Sharing & Viewer Sandboxing (`NW-1`)**: Add `MJArtifactGuestShareLink` migration (`V202611161958`) binding Frozen `ArtifactVersion` records to native anonymous `resource-share` `MagicLinkInvite` records (`MagicLinkService`, `POST /magic-link/redeem`, RS256 JWKS `#token=` + `ResolveGuestArtifactSnapshot`, with dormant `PublicLink` marked `@deprecated` via metadata), fail-closed HMAC frozen snapshot verification (`SnapshotVerified === true` required for `.pptx` export), `ComponentArtifactViewerPlugin` server + client fail-closed gates in `GuestSnapshotMode`, dual-field `EmbeddedArtifacts` inspection/scrubbing, nonce-scoped `PrintHtmlInSandboxedIframe` (`allow-modals allow-scripts` without `allow-same-origin`), raster image/whiteboard sandboxed print, URL scheme validation in `LibraryRemoteDrivePane`, and `[GuestSnapshotMode]` offline viewer isolation across Docs, Slides, and Sheets.
+  - **Agent Artifact Tools (`create_artifact` `InitialOperations` & `NW-3`–`NW-6`)**: Forward and atomically execute `initialOperations` / `InitialOperations` in `ArtifactToolManager.handleCreateArtifactTool` (both persisted and in-memory modes); enforce `ValidateEmbeddedArtifactAccess` when accepting document suggestions; wire production `RegisterServerArtifactFileBytesLoader` / `RegisterClientArtifactFileBytesLoader` and preserve `File`-mode `.xlsx` configuration metadata across suggestion/comment edits; enforce most-restrictive `ProtectedRanges` evaluation; and fix `NW-3` suggestion anchors/tabs and `NW-6` viewer initialization races (`ViewMode`, `NavigationAnchor`, Whiteboard selection/navigation).
+  - **CI, Standards, Documentation & Test Coverage**: Resolve all `check:guards`, `check:standards`, `check:dynamic-replace`, `check:codegen-tail`, `check:esm`, and `mj sync validate` checks; sync Docs/Slides/Sheets tool counts (`26 / 29 / 47`); and expand unit, HappyDOM, and live integration (`IT170`, `IT171`) coverage.
+
+### Patch Changes
+
+- e912249: Explorer boots on catalog-only authentication: when the server's provider catalog resolved a provider, the compiled `AUTH_TYPE` and provider-specific fields are no longer required, and MSAL no longer requires the unused `TENANT_ID`. `UserInfoEngine.CreateDefaultApplications` re-reads the user's applications after a failed save and keeps rows the server created in the same window instead of logging an error.
+- fff3a52: Waves 5.4, 5.5, and 5.6 performance & bundle-splitting improvements:
+  - **Wave 5.4**: Lazy `EntityInfo.Fields` / `EntityFieldInfo` instantiation on first field access, native structured-clone IndexedDB metadata caching in `ProviderBase` / `BrowserIndexedDBStorageProvider`, and `IT128 PB20` hydration benchmarks.
+  - **Wave 5.5**: Added `@memberjunction/ng-bootstrap/types` secondary entry point to decouple `ng-explorer-app` from eager dashboard registrations, switched `MarkdownArtifactViewerComponent` to `ChangeDetectionStrategy.OnPush`, and extended `check-browser-manifest-leakage.mjs` with bundle-splitting regression guards.
+  - **Wave 5.6**: Added `@memberjunction/ng-auth-services/preload` lightweight entry point for `MJExplorer/src/main.ts` and decoupled `@memberjunction/core-entities/schemas` Zod schemas from entity classes (with CodeGen support).
+- e781aec: Add Wave 6C client-side Edge AI agent pre-discovery and client-only semantic Cmd+K Omnibox:
+  - **Shared Lazy WASM Edge AI Worker (`@memberjunction/ng-conversations`, `@memberjunction/ng-explorer-app`)**: Pre-bundles quantized `Xenova/bge-small-en-v1.5` (`q8`) and `Xenova/ms-marco-MiniLM-L-6-v2` (`q8`) into `assets/edge-ai.worker.js` (`device: 'wasm'`, `dtype: 'q8'`) with zero initial bundle overhead, per-user/session `SimpleVectorService` `'float32'` catalog caching, strict query deadlines, and a circuit-breaker fallback — shipped directly in `@memberjunction/ng-conversations` / `@memberjunction/ng-explorer-app` assets with zero host-app boilerplate.
+  - **Stage 6C.1 Edge Agent Pre-Discovery (`@memberjunction/ai-core-plus`, `@memberjunction/conversations-runtime`, `@memberjunction/ai-agents`, `@memberjunction/server`)**: Computes an untrusted advisory `EdgePreDiscoveryHint` (top-5 candidates + `logit >= -2.0` confidence gate). Server remains guard of truth, verifying `AIAgentPermissionHelper.HasPermission`, `AllowedAgentIDs`, and `IsRunnable` / `IsDirectlyDiscoverable` at both GraphQL ingress (`RunAIAgentResolver`) and `BaseAgent.InjectDecisionDiscovery`, discarding unauthorized/unknown IDs silently and falling back cleanly to `SearchEntity` / server `Jev` / `Sage`.
+  - **Stage 6C.2 Client-Only Semantic Omnibox (`@memberjunction/ng-explorer-core`)**: Adds `OmnibarSemanticIndexService` backed by `'float32'` `SimpleVectorService` and the shared `bge-small-en-v1.5` worker over browser-resident metadata (Entities, Saved Views, Dashboards, Apps/Navigation, Agents) for sub-15ms offline semantic matching with zero `PreviewSearch` GraphQL calls when offline and graceful fallback when cold/unavailable.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [eaba2bc]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [92a4d65]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [dfa6a4a]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [7a6d72d]
+- Updated dependencies [27184ba]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [de2bf2e]
+- Updated dependencies [346a8d6]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [0bad3a4]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [4f15ace]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ng-auth-services@6.3.0-edge.1
+  - @memberjunction/ng-bootstrap@6.3.0-edge.1
+  - @memberjunction/ng-conversations@6.3.0-edge.1
+  - @memberjunction/ng-explorer-core@6.3.0-edge.1
+  - @memberjunction/ng-shared@6.3.0-edge.1
+  - @memberjunction/ng-base-application@6.3.0-edge.1
+  - @memberjunction/ng-explorer-service-worker@6.3.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.3.0-edge.1
+  - @memberjunction/ai-agent-client@6.3.0-edge.1
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.1
+  - @memberjunction/ng-base-types@6.3.0-edge.1
+  - @memberjunction/ng-feedback@6.3.0-edge.1
+  - @memberjunction/ng-notifications@6.3.0-edge.1
+  - @memberjunction/ng-agent-client@6.3.0-edge.1
+  - @memberjunction/theme-engine@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes
