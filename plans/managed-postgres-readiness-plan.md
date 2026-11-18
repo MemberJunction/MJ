@@ -1,6 +1,6 @@
 # Managed PostgreSQL Readiness — Plan
 
-- **Status:** Proposed. This PR adds the plan only; no code changes.
+- **Status:** W1, W2, W3, W4, W5 and W6 implemented and verified on PostgreSQL 16 (TLS-only server, streaming replica, unprivileged login). W7 partly done, W8 partly done; see §8.
 - **Date:** 2026-11-18
 - **Targets:** AWS RDS / Aurora (MJ Central's PG tiers today), Azure Database for PostgreSQL Flexible Server, Azure HorizonDB, and other managed PostgreSQL hosts.
 - **Related:** [`pg-parity-audit-findings.md`](pg-parity-audit-findings.md) · [`pg-migration-architecture/DEV_ON_PG_GUIDE.md`](pg-migration-architecture/DEV_ON_PG_GUIDE.md) · [`colocated-vector-search.md`](colocated-vector-search.md) · [`../migrations-pg/README.md`](../migrations-pg/README.md)
@@ -182,3 +182,34 @@ Suggested PR slicing, one reviewable PR each:
 3. **Replica reads:** is ad-hoc SQL plus analytics on the replica the right v1 boundary (W4)?
 4. **Minimum PostgreSQL version:** confirm 14 is still the floor. W5 relies on 13 or later.
 5. **HorizonDB-specific features** (`pg_diskann` in `PgVectorColocated`, `pg_textsearch` BM25 as a CodeGen full-text search option) are intentionally left out. They get their own plan after W8 produces numbers.
+
+## 8. As built (2026-11-18)
+
+Every item below was checked against a real PostgreSQL 16 in the development container: a TLS-only cluster with a private CA, a TLS streaming replica, and logins without superuser.
+
+| Workstream | What shipped | How it was verified |
+|---|---|---|
+| W1 TLS | `BuildPgSslConfig` in `@memberjunction/postgresql-dataprovider` (`pgSsl.ts`). It is used by MJAPI's pools, the provider, CodeGen, `mj migrate` and its connection check (`baseline/connection.ts`), MetadataSync and pgvector. Env: `PG_SSL_MODE`, `PG_SSL_CA_FILE`, `PG_SSL_SERVERNAME`. MJAPI config: `databaseSettings.postgres.ssl.{mode,caFile,serverName}`. | Against the TLS-only server: plain TCP refused, `verify-full` without the CA refused, `verify-full` with the CA applied 185 migrations, and MJAPI booted. |
+| W2 token logins | `BasePgCredentialProvider` / `CachingPgCredentialProvider`, selected by `PG_AUTH_MODE` or `databaseSettings.postgres.authMode`. `PGConnectionConfig.PasswordSource` is called for each new connection. It ships `azure-entra` (`DefaultAzureCredential`, scope `https://ossrdbms-aad.database.windows.net/.default`) and `aws-rds-iam` (`@aws-sdk/rds-signer`), both as optional peers in the provider package rather than the two packages §4 proposed. A token login refuses TLS that does not verify the server. | Unit tests, plus both SDKs loading for real: an RDS token was signed, and Entra failed cleanly with no identity. **Not run against a real Azure or AWS server.** |
+| W3 connections | MJAPI and MetadataSync configure the provider on the pool they already opened (`ConfigWithSharedPool`), so they no longer open a second one. The CodeGen pool is shared the same way. There is a startup budget warning, with `connectionPool.expectedInstances` for a fleet. **Dropped:** opening the CodeGen pools lazily, since `pg` pools open connections only on demand anyway. **Open:** the transaction-mode pooler investigation (W3.4). | MJAPI on a server with `max_connections` 60 warned: "up to 60 … (API 50, CodeGen 10), against 57 usable". |
+| W4 read replica | Env: `PG_READ_REPLICA_HOST`, `PG_READ_REPLICA_PORT`, `PG_READ_REPLICA_POOLS` (`adhoc` default, or `all-read-only`). MJAPI config: `databaseSettings.postgres.readReplica`. The replica-lag health signal is not built. | Against the streaming replica, the application pool went to the primary (`pg_is_in_recovery` false) and the ad-hoc pool to the replica (true), both over `verify-full` TLS. |
+| W5 extensions | Converted migrations emit `CREATE EXTENSION` only for an extension the body uses, on both the legacy and `--split` paths. The installer still creates both, because shipped files are immutable. | The 16 unreleased v6.3 migrations converted with no `CREATE EXTENSION`. |
+| W6 preflight | `mj doctor --db [--format json]`, run automatically by `mj migrate` on PostgreSQL. `--skip-preflight` turns it off. The remediation SQL comes from the installer's `BuildPostgresSetupSteps`. Group roles and extensions are scanned from the pending migrations, so a database is not asked for roles no migration uses. | An unprovisioned database was refused before anything ran. The printed SQL fixed it, and then 185 migrations applied over TLS as the unprivileged login. |
+| W7 parity | **Converter:** 8 defects fixed, each with a regression test: the index `DESC` quoting, `ORDER BY` alias quoting, the CodeGen 6.3 single-write `spUpdate`, bare `DROP TRIGGER`, comment-unaware `@var` renaming, sort order in `UNIQUE` and composite-PK lists, and `OUTER APPLY` inside functions. 14 of the 16 unreleased migrations now convert and apply. **G8:** user search uses `ILIKE`. **CI:** the existing nightly functional lane in `pg-migrations.yml` was already there (the parity audit predates it). A new `managed-host` job asserts the TLS, preflight and remediation sequence on every relevant PR. | The converter, MJInstaller, MJCLI and provider suites pass. The CI job was simulated locally, step for step. |
+| W8 matrix | Only the local matrix is done: TLS-only server, replica, and unprivileged login. | **Not done:** RDS, Aurora, Azure Flexible Server and HorizonDB. They need cloud accounts this environment does not have. |
+
+**Still open**
+
+- **Two of the unreleased v6.3 migrations still need release-time hand-porting:**
+  - `V202611131724` references a function whose CodeGen names differ between dialects.
+  - `V202611150900` is a hand-written `spCreateRecordChange_Internal` with `OUTPUT INTO` and a multi-line `COALESCE` subquery.
+- **Minor converter gaps:**
+  - `INCLUDE (...)` is dropped from indexes.
+  - `DESC` gets no `NULLS LAST`, so null ordering differs from SQL Server.
+  - The legacy path creates camelCase triggers alongside the native snake_case ones.
+- **F9:** `R__RefreshMetadata` is still not equivalent across platforms.
+- **F12** did not reproduce: `mj codegen`'s database phase on PostgreSQL completed.
+- **Two failing unit tests, neither caused by this branch:**
+  - `transaction-scope-affinity.test.ts` fails on untouched `next`.
+  - MJCLI's `dev-workspace.member-installs` "unreadable directory" test fails when run as root.
+- **Transaction-mode pooler support** (W3.4) is undecided.
