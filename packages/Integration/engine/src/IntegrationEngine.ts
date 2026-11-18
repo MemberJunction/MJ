@@ -4175,12 +4175,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         // Update push watermark. ChangedAt reaches us at JavaScript Date precision (milliseconds) while the column holds
         // up to seven fractional digits, so a record changed at .2666667 sits ABOVE a watermark of .266 and would be
-        // re-selected (and re-pushed) by the very next pass. Round the watermark UP to the next whole millisecond: every
-        // change already pushed is then strictly below it. (A change committed inside that same millisecond window after
-        // the push's read is the ordinary timestamp-watermark race, not a new one.)
+        // re-selected (and re-pushed) by the very next pass. Round the watermark UP to the next whole millisecond ONLY
+        // when that rounded value remains strictly below `firstErrorChangeAt`: if a success sits 1 ms before a
+        // millisecond-aligned failure (e.g. .2654 vs .2660 on PostgreSQL microsecond `now()`), rounding .265Z up to
+        // .266Z would match the failure and `ChangedAt > watermark` would never retry it.
         if (latestChangeAt) {
             const parsed = new Date(latestChangeAt);
-            const watermark = Number.isNaN(parsed.getTime()) ? latestChangeAt : new Date(parsed.getTime() + 1).toISOString();
+            let watermark = latestChangeAt;
+            if (!Number.isNaN(parsed.getTime())) {
+                const roundedUp = new Date(parsed.getTime() + 1).toISOString();
+                if (!firstErrorChangeAt || roundedUp < firstErrorChangeAt) watermark = roundedUp;
+            }
             await this.watermarkService.Update(entityMapID, watermark, contextUser, 'Push');
         }
 
@@ -4368,7 +4373,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const mapResult = await rv.RunView<{ ExternalSystemRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
+            ExtraFilter:
+                `EntityRecordID='${EscapeSQLString(change.RecordID)}' ` +
+                `AND CompanyIntegrationID='${EscapeSQLString(String(config.companyIntegration.ID))}' ` +
+                `AND EntityID='${EscapeSQLString(entityMap.EntityID)}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
             SkipTotalRowCount: true,
@@ -4376,7 +4384,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
 
-        const externalID = mapResult.Success && mapResult.Results.length > 0
+        if (!mapResult.Success) {
+            throw new Error(
+                `RECORD_MAP_UNREADABLE: could not read the record map for ${entityMap.Entity} ${change.RecordID}: ` +
+                `${mapResult.ErrorMessage ?? 'unknown error'}`
+            );
+        }
+
+        const externalID = mapResult.Results.length > 0
             ? mapResult.Results[0].ExternalSystemRecordID
             : null;
 

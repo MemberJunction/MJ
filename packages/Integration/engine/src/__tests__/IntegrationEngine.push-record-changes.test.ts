@@ -22,6 +22,7 @@ const providerState = vi.hoisted(() => ({
     rows: [] as Array<ChangeRow & { DbChangedAt7?: string }>,
     calls: [] as RunViewParams[],
     recordMaps: [] as Array<{ ID?: string; EntityRecordID?: string; ExternalSystemRecordID: string }>,
+    recordMapsFail: false,
     fieldMaps: [] as Array<{ SourceFieldName: string; DestinationFieldName: string; Direction: string }>,
 }));
 
@@ -36,6 +37,9 @@ vi.mock('@memberjunction/core', async () => {
                     return { Success: true, Results: providerState.fieldMaps };
                 }
                 if (params.EntityName === 'MJ: Company Integration Record Maps') {
+                    if (providerState.recordMapsFail) {
+                        return { Success: false, Results: [], ErrorMessage: 'Transient database timeout reading record maps' };
+                    }
                     const m = params.ExtraFilter?.match(/EntityRecordID='([^']+)'/);
                     if (m && providerState.recordMaps.some(rm => rm.EntityRecordID !== undefined)) {
                         return {
@@ -153,51 +157,78 @@ describe('IntegrationEngine.pushSingleRecord — a Delete that cannot be perform
         pushSingleRecord: (change: LoadedChange, config: unknown, entityMap: unknown, pushFieldMaps: unknown[], result: Record<string, number | unknown[]>, contextUser: UserInfo) => Promise<void>;
     };
     const makePushHost = () => {
-        const host = Object.create(IntegrationEngine.prototype) as unknown as PushHost & { rateLimit: () => Promise<void>; warnPushSkip: () => void };
+        const warnings: Array<{ op: string; why: string }> = [];
+        const host = Object.create(IntegrationEngine.prototype) as unknown as PushHost & {
+            rateLimit: () => Promise<void>;
+            warnPushSkip: (_logger: unknown, _em: unknown, op: string, why: string) => void;
+            warnings: Array<{ op: string; why: string }>;
+        };
         host.rateLimit = async () => {};
-        host.warnPushSkip = () => {};
+        host.warnPushSkip = (_logger: unknown, _em: unknown, op: string, why: string) => { warnings.push({ op, why }); };
+        host.warnings = warnings;
         return host;
     };
     const emptyResult = () => ({ Success: true, RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0, Errors: [] });
     const fieldMaps = [{ SourceFieldName: 'email', DestinationFieldName: 'Email', Direction: 'Both' }];
-    const change: LoadedChange = { RecordID: `ID|${RECORD_ID}`, Type: 'Delete', ChangedAt: '2026-11-17T06:25:06.893Z', Fields: {} };
-    const connectorThatMustNotBeCalled = (supportsDelete: boolean) => ({
-        SupportsDelete: supportsDelete, SupportsCreate: true, SupportsUpdate: true, SupportsGet: false,
+    const change: LoadedChange = { RecordID: RECORD_ID, Type: 'Delete', ChangedAt: '2026-11-17T06:25:06.893Z', Fields: {} };
+    const connectorThatMustNotBeCalled = (supportsDelete: boolean, supportsGet = false) => ({
+        SupportsDelete: supportsDelete, SupportsCreate: true, SupportsUpdate: true, SupportsGet: supportsGet,
+        GetRecord: async () => { throw new Error('GetRecord must not be called for a skipped Delete'); },
         CreateRecord: async () => { throw new Error('CreateRecord must not be called for a Delete'); },
         UpdateRecord: async () => { throw new Error('UpdateRecord must not be called for a Delete'); },
         DeleteRecord: async () => { throw new Error('DeleteRecord must not be called without delete support'); },
     });
 
-    it('skips a Delete for a record that was never pushed (no record map)', async () => {
+    beforeEach(() => {
+        providerState.calls = [];
+        providerState.recordMapsFail = false;
+    });
+
+    it('skips a Delete for a record that was never pushed (no record map) and scopes lookup by EntityID', async () => {
         providerState.recordMaps = [];
         const result = emptyResult();
-        await makePushHost().pushSingleRecord(change, { connector: connectorThatMustNotBeCalled(true), companyIntegration: { ID: 'ci-1' } }, entityMap, fieldMaps, result, contextUser);
+        const host = makePushHost();
+        await host.pushSingleRecord(change, { connector: connectorThatMustNotBeCalled(true), companyIntegration: { ID: 'ci-1' } }, entityMap, fieldMaps, result, contextUser);
         expect(result.RecordsSkipped).toBe(1);
         expect(result.RecordsErrored).toBe(0);
+        expect(host.warnings).toEqual([{ op: 'delete', why: expect.stringMatching(/no record map/) }]);
+        const mapCall = providerState.calls.find(c => c.EntityName === 'MJ: Company Integration Record Maps');
+        expect(mapCall?.ExtraFilter).toContain(`EntityID='${entityMap.EntityID}'`);
     });
 
-    it('skips a Delete when the connector does not support delete, even with a record map', async () => {
-        providerState.recordMaps = [{ ExternalSystemRecordID: '910002' }];
+    it('skips a Delete when the connector does not support delete, even with a record map, SupportsGet, and a snapshot', async () => {
+        providerState.recordMaps = [{ EntityRecordID: RECORD_ID, ExternalSystemRecordID: '910002' }];
         const result = emptyResult();
-        await makePushHost().pushSingleRecord(change, { connector: connectorThatMustNotBeCalled(false), companyIntegration: { ID: 'ci-1' } }, entityMap, fieldMaps, result, contextUser);
+        const host = makePushHost();
+        const deleteWithSnapshotAndFields: LoadedChange = {
+            RecordID: RECORD_ID,
+            Type: 'Delete',
+            ChangedAt: '2026-11-17T06:25:06.893Z',
+            Fields: {
+                Email: 'new@example.test',
+                __mj_integration_LastSyncedSnapshot: JSON.stringify({ Email: 'old@example.test' }),
+            },
+        };
+        await host.pushSingleRecord(
+            deleteWithSnapshotAndFields,
+            { connector: connectorThatMustNotBeCalled(false, true), companyIntegration: { ID: 'ci-1' } },
+            entityMap,
+            fieldMaps,
+            result,
+            contextUser,
+        );
         expect(result.RecordsSkipped).toBe(1);
         expect(result.RecordsDeleted).toBe(0);
+        expect(host.warnings).toEqual([{ op: 'delete', why: 'the connector does not support delete' }]);
     });
-});
 
-describe('IntegrationEngine push watermark — rounds up to the next millisecond', () => {
-    it('stores a watermark strictly above a sub-millisecond ChangedAt (regression: .2666667 re-selected by a .266 watermark)', async () => {
-        providerState.registeredName = 'MJ: Record Changes'; providerState.calls = [];
-        const updates: Array<{ value: string; direction: string }> = [];
-        const host = Object.create(IntegrationEngine.prototype) as Record<string, unknown>;
-        // exercise only the watermark derivation + update used by the push path
-        host['watermarkService'] = { Update: async (_id: string, value: string, _u: unknown, direction: string) => { updates.push({ value, direction }); } };
-        const latest = '2026-11-17T07:10:52.266Z';
-        const parsed = new Date(latest);
-        const watermark = new Date(parsed.getTime() + 1).toISOString();
-        await (host['watermarkService'] as { Update: (a: string, b: string, c: unknown, d: string) => Promise<void> }).Update('em-1', watermark, contextUser, 'Push');
-        expect(updates[0].value).toBe('2026-11-17T07:10:52.267Z');
-        expect(updates[0].value > '2026-11-17T07:10:52.2666667Z').toBe(true);
+    it('throws RECORD_MAP_UNREADABLE instead of skipping when the record-map lookup itself fails', async () => {
+        providerState.recordMapsFail = true;
+        const result = emptyResult();
+        await expect(
+            makePushHost().pushSingleRecord(change, { connector: connectorThatMustNotBeCalled(true), companyIntegration: { ID: 'ci-1' } }, entityMap, fieldMaps, result, contextUser),
+        ).rejects.toThrow(/RECORD_MAP_UNREADABLE/);
+        expect(result.RecordsSkipped).toBe(0);
     });
 });
 
@@ -238,6 +269,7 @@ describe('IntegrationEngine.processPushSync — multi-pass end-to-end incrementa
         providerState.calls = [];
         providerState.rows = [];
         providerState.recordMaps = [];
+        providerState.recordMapsFail = false;
         providerState.fieldMaps = [
             { SourceFieldName: 'email', DestinationFieldName: 'Email', Direction: 'Both' },
             { SourceFieldName: 'firstname', DestinationFieldName: 'FirstName', Direction: 'DestToSource' },
@@ -441,5 +473,116 @@ describe('IntegrationEngine.processPushSync — multi-pass end-to-end incrementa
 
         const pass3 = await h.runSync();
         expect(pass3.RecordsProcessed).toBe(0);
+    });
+
+    it('does not round the push watermark up onto an adjacent millisecond-aligned failure (.2654 success vs .2660 failure)', async () => {
+        const h = makeStatefulPushHarness({ supportsDelete: true });
+        h.mjRows.set(REC_A, { ID: REC_A, Email: 'ok@example.test', FirstName: 'Ok' });
+        h.mjRows.set(REC_B, { ID: REC_B, Email: 'fail@example.test', FirstName: 'Fail' });
+        h.setFailOnEmail(true);
+
+        providerState.rows.push(
+            {
+                RecordID: `ID|${REC_A}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T09:00:00.265Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T09:00:00.2654000Z',
+            },
+            {
+                RecordID: `ID|${REC_B}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T09:00:00.266Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T09:00:00.2660000Z',
+            },
+        );
+
+        const pass1 = await h.runSync();
+        expect(pass1.RecordsCreated).toBe(1);
+        expect(pass1.RecordsErrored).toBe(1);
+        // Rounding .265Z up to .266Z would match DbChangedAt7 (.2660000Z) and exclude REC_B forever.
+        expect(h.getWatermark()).toBe('2026-11-17T09:00:00.265Z');
+
+        // Vendor recovers -> next pass selects REC_B (and idempotently updates REC_A via its saved record map), advancing past both.
+        h.setFailOnEmail(false);
+        const pass2 = await h.runSync();
+        expect(pass2.RecordsCreated).toBe(1);
+        expect(pass2.RecordsErrored).toBe(0);
+        expect(h.getWatermark()).toBe('2026-11-17T09:00:00.267Z');
+    });
+
+    it('clamps watermark below an earlier failure even when a later record succeeds, and when success and failure share a ChangedAt', async () => {
+        const h = makeStatefulPushHarness({ supportsDelete: true });
+        const REC_C = '7f1c2a90-0000-4000-8000-000000000040';
+        h.mjRows.set(REC_B, { ID: REC_B, Email: 'fail@example.test', FirstName: 'EarlierFail' });
+        h.mjRows.set(REC_A, { ID: REC_A, Email: 'later-ok@example.test', FirstName: 'LaterOk' });
+        h.setFailOnEmail(true);
+
+        // Case 1: Failure at 10:00:01, followed by a LATER success at 10:00:05 -> watermark must NOT advance to 10:00:05.
+        providerState.rows.push(
+            {
+                RecordID: `ID|${REC_B}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T10:00:01.100Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T10:00:01.1000000Z',
+            },
+            {
+                RecordID: `ID|${REC_A}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T10:00:05.500Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T10:00:05.5000000Z',
+            },
+        );
+
+        const pass1 = await h.runSync();
+        expect(pass1.RecordsErrored).toBe(1);
+        expect(pass1.RecordsCreated).toBe(1);
+        expect(h.getWatermark()).toBeNull();
+
+        // Recover and clear both -> watermark advances to 10:00:05.501Z
+        h.setFailOnEmail(false);
+        const pass2 = await h.runSync();
+        expect(pass2.RecordsErrored).toBe(0);
+        expect(h.getWatermark()).toBe('2026-11-17T10:00:05.501Z');
+
+        // Case 2: An earlier success at 10:01:00.100Z, then a success and a failure sharing the EXACT same ChangedAt 10:01:02.000Z.
+        // Pins `at >= firstErrorChangeAt` (`>=`, not `>`): watermark must stay at 10:01:00.101Z, strictly below 10:01:02.000Z.
+        const REC_EARLY = '7f1c2a90-0000-4000-8000-000000000050';
+        const REC_FAIL2 = '7f1c2a90-0000-4000-8000-000000000060';
+        h.mjRows.set(REC_EARLY, { ID: REC_EARLY, Email: 'early@example.test', FirstName: 'Early' });
+        h.mjRows.set(REC_C, { ID: REC_C, Email: 'same-ts-ok@example.test', FirstName: 'SameTsOk' });
+        h.mjRows.set(REC_FAIL2, { ID: REC_FAIL2, Email: 'fail@example.test', FirstName: 'SameTsFail' });
+        h.setFailOnEmail(true);
+
+        providerState.rows.push(
+            {
+                RecordID: `ID|${REC_EARLY}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T10:01:00.100Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T10:01:00.1002000Z',
+            },
+            {
+                RecordID: `ID|${REC_C}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T10:01:02.000Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T10:01:02.0000000Z',
+            },
+            {
+                RecordID: `ID|${REC_FAIL2}`,
+                Type: 'Create',
+                ChangedAt: new Date('2026-11-17T10:01:02.000Z') as unknown as string,
+                DbChangedAt7: '2026-11-17T10:01:02.0000000Z',
+            },
+        );
+
+        const pass3 = await h.runSync();
+        expect(pass3.RecordsCreated).toBe(2);
+        expect(pass3.RecordsErrored).toBe(1);
+        expect(h.getWatermark()).toBe('2026-11-17T10:01:00.101Z');
+
+        h.setFailOnEmail(false);
+        const pass4 = await h.runSync();
+        expect(pass4.RecordsCreated).toBe(1);
+        expect(pass4.RecordsErrored).toBe(0);
+        expect(h.getWatermark()).toBe('2026-11-17T10:01:02.001Z');
     });
 });
