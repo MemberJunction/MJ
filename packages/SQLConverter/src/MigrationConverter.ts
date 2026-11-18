@@ -26,8 +26,10 @@
  */
 import { SplitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
 import { SplitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
-import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
+import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments } from './rules/ExpressionHelpers.js';
 import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
+import { SP_REFRESHVIEW_CALL, DescribeRefreshView } from './rules/StatementClassifier.js';
+import { GetPGCatalogViewDefinition } from './rules/CatalogViewRule.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -88,6 +90,12 @@ export interface KeptTSQL {
   split: MigrationSplitResult;
   /** Lines of Category-A CodeGen output dropped (regenerated natively instead). */
   droppedCodeGenLines: number;
+  /**
+   * Content classification itself dropped that nothing reproduces on PostgreSQL, reported as gaps
+   * (`METADATA-DML-DROPPED`). ConvertMigration adds these to `unhandled`, so a bake halts with a
+   * named reason instead of writing a file that silently lacks them.
+   */
+  classificationGaps: UnhandledStatement[];
 }
 
 /**
@@ -135,6 +143,12 @@ export interface MigrationConversionResult {
   notes: string[];
   /** Coarse source→output statement-count reconciliation (issue #3252 Phase 3). */
   reconciliation: ConversionReconciliation;
+  /**
+   * Named, non-blocking warnings: work the converter cannot do that a person must finish by hand,
+   * which does not stop the file converting or baking. Today: one per `sp_refreshview` (see
+   * {@link RefreshViewWarnings}).
+   */
+  warnings: string[];
 }
 
 export interface ConvertMigrationOptions {
@@ -159,6 +173,15 @@ export interface ConvertMigrationOptions {
    * pure regen/reseed files convert without it.
    */
   transpiler?: TSQLToPGTranspiler;
+}
+
+/**
+ * One warning per `EXEC sp_refreshview` in a migration, hand region or CodeGen block alike
+ * (issue #5649, decision pg.5; see {@link DescribeRefreshView}). The split path drops the CodeGen
+ * block before transpiling and the dialect only accounts the call, so the source is scanned here.
+ */
+export function RefreshViewWarnings(sql: string, fileName: string): string[] {
+  return [...StripComments(sql).matchAll(SP_REFRESHVIEW_CALL)].map((m) => `${fileName}: ${DescribeRefreshView(m[1])}`);
 }
 
 /** Statement kinds that survive statement-mode classification and flow to the transpiler. */
@@ -187,6 +210,7 @@ const SNAPSHOT_CODEGEN_OBJECT = /^(?:VIEW|PROCEDURE|PROC|FUNCTION)\b/i;
 export function ExtractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   const split = SplitMigration(sql, fileName);
   const droppedCodeGenLines = split.codeGenBlock ? split.codeGenBlock.split('\n').length : 0;
+  const handWrittenViews = ViewsAreHandWritten(split, sql);
 
   // Baselines and old-style migrations have NO banner but DO contain generated
   // objects (squashed snapshots). Banner-based splitting can't separate them — use
@@ -199,7 +223,7 @@ export function ExtractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // hand-authored file from flipping the whole file into statement-mode, where its other
   // batches would be dropped (issue #3252 RC2 defense-in-depth). Such a file stays banner-mode,
   // where a stray hand routine is flagged needs-hand-authoring instead of silently dropped.
-  const stmts = SplitByStatement(sql);
+  const stmts = SplitByStatement(sql, { HandWrittenViews: handWrittenViews });
   const isUnbanneredSnapshot =
     split.boundaryMethod === 'no-codegen-block' &&
     stmts.some((s) => s.kind === 'codegen-object' && SNAPSHOT_CODEGEN_OBJECT.test(s.evidence));
@@ -207,7 +231,23 @@ export function ExtractKeptTSQL(sql: string, fileName: string): KeptTSQL {
     return classifyStatementMode(split, stmts, droppedCodeGenLines);
   }
 
-  return classifyBannerMode(split, droppedCodeGenLines);
+  return classifyBannerMode(split, droppedCodeGenLines, handWrittenViews);
+}
+
+/**
+ * Whether the views in a migration are the author's own rather than CodeGen output: true for a
+ * non-baseline file with no CodeGen banner and no CodeGen-named routine. CodeGen writes its
+ * banner, so an unbannered `vw…` view there is hand-written (issue #5551, a layered wrapper
+ * view; also MJ's own hand-maintained views such as `vwEntityFieldsWithCheckConstraints`).
+ * Baselines (`B…`) are squashed snapshots whose generated views carry no banner, and an older
+ * file that pasted CodeGen's CRUD routines without the banner (spCreate…/trgUpdate…) holds its
+ * generated view too, so both keep the name-based rule.
+ */
+export function ViewsAreHandWritten(split: MigrationSplitResult, sql: string): boolean {
+  if (/^B\d/.test(split.fileName) || split.boundaryMethod !== 'no-codegen-block') return false;
+  return !SplitByStatement(sql).some(
+    (s) => s.kind === 'codegen-object' && /^(?:PROCEDURE|PROC|FUNCTION|TRIGGER)\b/i.test(s.evidence),
+  );
 }
 
 /** @deprecated Use {@link ExtractKeptTSQL}. */
@@ -216,7 +256,11 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
 }
 
 /** Banner-split path: feature migrations with (or without) a CodeGen block. */
-function classifyBannerMode(split: MigrationSplitResult, droppedCodeGenLines: number): KeptTSQL {
+function classifyBannerMode(
+  split: MigrationSplitResult,
+  droppedCodeGenLines: number,
+  handWrittenViews: boolean,
+): KeptTSQL {
   const has = (k: MigrationRegionKind) => split.handAuthoredRegions.some((r) => r.kind === k);
   const handProcedural =
     split.routing === 'needs-hand-authoring'
@@ -228,8 +272,11 @@ function classifyBannerMode(split: MigrationSplitResult, droppedCodeGenLines: nu
   // Transpile when there is real schema DDL, data DML that isn't an mj-sync seed, or
   // hand-procedural content (whose surrounding DDL must still be emitted — the dialect
   // routes the routine bodies themselves to `unhandled`).
+  // A hand-written view counts as schema DDL: before, a file holding only a wrapper view and its
+  // grants had nothing "translatable" and became a regen-only marker (issue #5551).
+  const handView = handWrittenViews && /\bCREATE\s+(?:OR\s+ALTER\s+)?VIEW\b/i.test(StripComments(split.handAuthored));
   const translatable =
-    handProcedural.length > 0 || has('schema-ddl') || (has('data-dml') && !has('metadata-sync'));
+    handProcedural.length > 0 || has('schema-ddl') || handView || (has('data-dml') && !has('metadata-sync'));
 
   // Recover entity-REGISTRATION INSERTs from the dropped CodeGen block. On SQL Server,
   // CodeGen's schema-introspection sprocs (spUpdateExistingEntitiesFromSchema, …) recreate
@@ -261,6 +308,7 @@ function classifyBannerMode(split: MigrationSplitResult, droppedCodeGenLines: nu
     notes,
     split,
     droppedCodeGenLines,
+    classificationGaps: [],
   };
 }
 
@@ -283,6 +331,14 @@ function classifyStatementMode(
   const unknown = stmts.filter((s) => s.kind === 'unknown');
   const droppedRegen = stmts.filter((s) => s.kind === 'codegen-object' || s.kind === 'grant');
   const droppedMeta = isBaseline ? [] : stmts.filter((s) => s.kind === 'metadata-dml');
+  // "Re-seeded by `mj sync push`" holds for MJ's own metadata logs, not for an Open App's
+  // migrations, which are installed from migrations alone (issues #5551, #5543). Outside an
+  // mj-sync log each dropped metadata batch is a named gap.
+  const isSyncLog =
+    /Metadata_Sync/i.test(split.fileName) || split.handAuthoredRegions.some((r) => r.kind === 'metadata-sync');
+  const classificationGaps: UnhandledStatement[] = isSyncLog
+    ? []
+    : droppedMeta.map((s) => ({ kind: 'METADATA-DML-DROPPED', snippet: s.sql.slice(0, 300) }));
 
   const notes = [
     `Statement-mode (unbannered snapshot): kept ${kept.length} batches ` +
@@ -306,6 +362,7 @@ function classifyStatementMode(
     notes,
     split,
     droppedCodeGenLines: droppedRegen.concat(droppedMeta).reduce((n, s) => n + s.sql.split('\n').length, 0),
+    classificationGaps,
   };
 }
 
@@ -324,7 +381,8 @@ export async function ConvertMigration(
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
   const kept = ExtractKeptTSQL(sql, fileName);
-  const stmts = SplitByStatement(sql);
+  const warnings = RefreshViewWarnings(sql, fileName);
+  const stmts = SplitByStatement(sql, { HandWrittenViews: ViewsAreHandWritten(kept.split, sql) });
   const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
@@ -345,7 +403,7 @@ export async function ConvertMigration(
     const droppedSchemaDdl = stmts.filter((s) => s.kind === 'schema-ddl').length;
     const suspiciousEmptyOutput = unreportedHand + droppedSchemaDdl > 0;
 
-    const unhandled: UnhandledStatement[] = [];
+    const unhandled: UnhandledStatement[] = [...kept.classificationGaps];
     const notes = [...kept.notes];
     if (suspiciousEmptyOutput) {
       unhandled.push({
@@ -364,8 +422,12 @@ export async function ConvertMigration(
       // A silent-drop marker must NOT masquerade as a clean reseed/regen file: promote it to
       // needs-hand-authoring so the CLI writes `.needs-hand` (never a discoverable `.pg.sql` that
       // Skyway could apply) and the bake batch halts on it.
-      status: suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
-      pgSQL: suspiciousEmptyOutput ? emptyDropGapMarker(kept, stmts) : regenOnlyMarker(kept),
+      status: suspiciousEmptyOutput || unhandled.length > 0 ? 'needs-hand-authoring' : kept.status,
+      pgSQL: suspiciousEmptyOutput
+        ? emptyDropGapMarker(kept, stmts)
+        : unhandled.length > 0
+          ? `${regenOnlyMarker(kept)}\n${gapCommentBlock(unhandled)}`
+          : regenOnlyMarker(kept),
       split: kept.split,
       droppedCodeGenLines: kept.droppedCodeGenLines,
       unhandled,
@@ -379,6 +441,7 @@ export async function ConvertMigration(
         accountingLeak: false,
         suspiciousEmptyOutput,
       },
+      warnings,
     };
   }
 
@@ -389,9 +452,19 @@ export async function ConvertMigration(
     );
   }
 
-  const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
   const coreSchema = options.coreSchema ?? '__mj';
+  // MJ's catalog wrapper views read `sys.*`; the AST dialect cannot translate them, so they take the
+  // legacy CatalogViewRule's hand-written PG text, and any other view over `sys.*` is a gap (#6538).
+  const catalog = ExtractCatalogViews(kept.tsql, coreSchema);
+  const astResult = catalog.tsql.trim()
+    ? await options.transpiler.transpile(catalog.tsql)
+    : { sql: [], unhandled: [], dropped: [] };
+  const transpiled: MJTranspileResult = {
+    ...astResult,
+    sql: [...astResult.sql, ...catalog.pgViews],
+    unhandled: [...catalog.unhandled, ...astResult.unhandled],
+  };
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
@@ -403,7 +476,7 @@ export async function ConvertMigration(
   const suspiciousEmptyOutput =
     emittedStatements === 0 && transpiled.unhandled.length === 0 && (transpiled.dropped?.length ?? 0) === 0;
 
-  const unhandled: UnhandledStatement[] = [...transpiled.unhandled];
+  const unhandled: UnhandledStatement[] = [...kept.classificationGaps, ...transpiled.unhandled];
   const notes = [...kept.notes];
   if (suspiciousEmptyOutput) {
     unhandled.push({
@@ -472,7 +545,50 @@ export async function ConvertMigration(
       accountingLeak,
       suspiciousEmptyOutput,
     },
+    warnings,
   };
+}
+
+/** The catalog views found in kept T-SQL, and what is left for the AST transpiler. */
+export interface CatalogViewExtraction {
+  /** The kept T-SQL without the catalog-view batches. */
+  tsql: string;
+  /** PostgreSQL definitions for the catalog views that were removed. */
+  pgViews: string[];
+  /** A `CREATE VIEW` over `sys.*` that is not one of MJ's catalog views. */
+  unhandled: UnhandledStatement[];
+}
+
+const CREATE_VIEW_NAME = /\bCREATE\s+(?:OR\s+ALTER\s+)?VIEW\s+(?:(?:\[[^\]]+\]|"[^"]+"|[\w${}:]+)\.)?(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i;
+
+/**
+ * Splits MJ's catalog wrapper views (`vwSQLColumnsAndEntityFields`, `vwTableUniqueKeys`, …) out of
+ * kept T-SQL batches: each becomes the legacy {@link GetPGCatalogViewDefinition} text. Any other
+ * `CREATE VIEW` that reads `sys.*` is removed and reported, since its transpile would reach
+ * PostgreSQL naming SQL Server's catalog.
+ */
+export function ExtractCatalogViews(tsql: string, coreSchema: string = '__mj'): CatalogViewExtraction {
+  const keptBatches: string[] = [];
+  const pgViews: string[] = [];
+  const unhandled: UnhandledStatement[] = [];
+  for (const batch of tsql.split(/^[ \t]*GO[ \t]*(?:;[ \t]*)?\r?$/im)) {
+    const code = StripComments(batch);
+    const m = code.match(CREATE_VIEW_NAME);
+    if (m) {
+      const name = m[1] ?? m[2] ?? m[3];
+      const pg = GetPGCatalogViewDefinition(name, coreSchema);
+      if (pg !== undefined) {
+        pgViews.push(pg.trim());
+        continue;
+      }
+      if (/\bsys\.\w+/i.test(code)) {
+        unhandled.push({ kind: 'CATALOG-VIEW-UNMAPPED', snippet: `CREATE VIEW ${name} reads sys.* and has no PostgreSQL definition` });
+        continue;
+      }
+    }
+    keptBatches.push(batch);
+  }
+  return { tsql: keptBatches.join('\nGO\n'), pgViews, unhandled };
 }
 
 /** @deprecated Use {@link ConvertMigration}. */
@@ -620,15 +736,21 @@ const ENTITY_REGISTRATION_TABLES = [
   // into the CodeGen block on SQL Server; PG codegen runs without AdvancedGeneration,
   // so these rows have no other source on PG (live hit: 12 eSignature settings).
   'EntitySetting',
+  // CodeGen's validator functions (CodeGen: Validators). PG CodeGen runs without the AI pass,
+  // so a baked baseline has no other source for them (issue #5550).
+  'GeneratedCode',
 ];
 
 /**
- * Pull every `INSERT INTO ${flyway:defaultSchema}.<RegistrationTable> …` statement out of a
- * dropped CodeGen block, in original order, and return them GO-separated for the transpiler.
+ * Pull every `INSERT INTO <core>.<RegistrationTable> …` statement out of a dropped CodeGen
+ * block, in original order, and return them GO-separated for the transpiler. The core schema is
+ * `${flyway:defaultSchema}` in MJ's own migrations and `${mjSchema}` in an Open App's, where
+ * the app's own schema is the default; matching only the first dropped every UPDATE, EntitySetting
+ * and GeneratedCode row of an Open App baseline (issue #5550).
  */
 function recoverEntityRegistrationInserts(codeGenBlock: string): string {
   const tableAlt = ENTITY_REGISTRATION_TABLES.join('|');
-  const qualifiedTable = String.raw`\[?\$\{flyway:defaultSchema\}\]?\s*\.\s*\[?(?:${tableAlt})\]?\b`;
+  const qualifiedTable = String.raw`\[?\$\{(?:flyway:defaultSchema|mjSchema)\}\]?\s*\.\s*\[?(?:${tableAlt})\]?\b`;
   // Three CodeGen shapes target a registration table:
   //   (a) a bare `INSERT INTO <schema>.<RegTable> …` (the Entity / ApplicationEntity rows),
   //   (b) an idempotent `IF NOT EXISTS (SELECT … FROM <schema>.<RegTable> …) BEGIN INSERT … END`
@@ -727,6 +849,15 @@ function regenReseedNotes(split: MigrationSplitResult, droppedCodeGenLines: numb
 }
 
 /** Marker `.pg.sql` body for files with nothing to translate. */
+/** Comment lines naming each gap, for a marker file that has no transpiled body to carry them. */
+function gapCommentBlock(gaps: UnhandledStatement[]): string {
+  return [
+    `-- CONVERSION GAPS (${gaps.length}):`,
+    ...gaps.map((g, i) => `--   [${i + 1}] (${g.kind}) ${g.snippet.replace(/\s+/g, ' ').trim().slice(0, 200)}`),
+    '',
+  ].join('\n');
+}
+
 function regenOnlyMarker(kept: KeptTSQL): string {
   const lines = [`-- ${kept.fileName} — no DDL to translate.`];
   if (kept.split.codeGenBlock) lines.push('-- CodeGen objects are regenerated natively via `mj codegen` on PG.');
