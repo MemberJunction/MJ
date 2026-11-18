@@ -392,7 +392,7 @@ describe('CreateTableRule — sort order in constraint column lists', () => {
 )`;
     const result = convert(sql);
     expect(result).toContain('PRIMARY KEY ("ID", "OrgID")');
-    expect(result).toContain('UNIQUE ("InviteID")');
+    expect(result).toContain('UNIQUE NULLS NOT DISTINCT ("InviteID")');
     expect(result).not.toMatch(/\b(ASC|DESC)\b/);
   });
 });

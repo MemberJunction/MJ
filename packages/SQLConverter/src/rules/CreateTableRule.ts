@@ -73,7 +73,8 @@ export class CreateTableRule implements IConversionRule {
     // all but the last in a composite key, and it never touched UNIQUE (V202611161958's
     // `UNIQUE NONCLUSTERED ([MagicLinkInviteID] ASC)` failed with `syntax error at or near "ASC"`).
     result = result.replace(
-      /((?:PRIMARY\s+KEY|UNIQUE)\s*\()([^)]*)(\))/gi,
+      // quoteColumnDefinitions has already added NULLS NOT DISTINCT to UNIQUE by this point.
+      /((?:PRIMARY\s+KEY|UNIQUE(?:\s+NULLS\s+(?:NOT\s+)?DISTINCT)?)\s*\()([^)]*)(\))/gi,
       (_match, open: string, cols: string, close: string) => `${open}${cols.replace(/\s+(?:ASC|DESC)\b/gi, '')}${close}`,
     );
     // Remove TEXTIMAGE_ON filegroup
