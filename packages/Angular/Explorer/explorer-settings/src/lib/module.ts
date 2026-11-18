@@ -28,14 +28,12 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Shared module
 import { SharedSettingsModule } from './shared/shared-settings.module';
+import { UserSettingsModule } from './user-settings.module';
 
 // Main settings container
 import { SettingsComponent } from './settings/settings.component';
 
 // User-facing components
-import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
-import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
-import { UserAppConfigContentComponent } from './user-app-config/user-app-config-content.component';
 import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 // New user settings components
@@ -62,9 +60,6 @@ import { ApplicationDialogComponent } from './application-management/application
     // Main settings container
     SettingsComponent,
     // User-facing components
-    UserProfileSettingsComponent,
-    UserAppConfigComponent,
-    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,
@@ -94,6 +89,7 @@ import { ApplicationDialogComponent } from './application-management/application
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
+    UserSettingsModule,
     SharedGenericModule,
     MJButtonDirective,
     MJPageHeaderInteriorComponent,
@@ -110,12 +106,11 @@ import { ApplicationDialogComponent } from './application-management/application
     MJAccordionModule
   ],
   exports: [
+    // Re-export user settings components
+    UserSettingsModule,
     // Main settings container
     SettingsComponent,
     // User-facing components
-    UserProfileSettingsComponent,
-    UserAppConfigComponent,
-    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,

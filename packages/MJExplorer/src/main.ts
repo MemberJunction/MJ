@@ -1,4 +1,4 @@
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+import { platformBrowser } from '@angular/platform-browser';
 import { TryStartPublicPage } from '@memberjunction/ng-public-host/bootstrap';
 import { environment } from './environments/environment';
 import { PUBLIC_PAGES } from './app/generated/public-pages.generated';
@@ -11,7 +11,7 @@ async function initAndBootstrap() {
 
   // Dynamic import, bundle-size category: the preload helpers import all of @memberjunction/core
   // (about 550 KB compressed), which a public page must not download.
-  const { AuthProviderCatalog, LoginScreenLoader } = await import('@memberjunction/ng-auth-services/preload');
+  const { AuthProviderCatalog, LoginScreenLoader, PreloadActiveAuthProvider } = await import('@memberjunction/ng-auth-services/preload');
 
   // Fetch the server's public authentication-provider catalog BEFORE the root module is
   // imported. `AuthServicesModule.forRoot()` runs while the @NgModule decorator's `imports`
@@ -27,13 +27,17 @@ async function initAndBootstrap() {
     LoginScreenLoader.Load(environment.GRAPHQL_URI),
   ]);
 
+  // Dynamically import only the active IdP driver before AppModule evaluates
+  // AuthServicesModule.forRoot(), keeping inactive IdP SDKs in lazy chunks.
+  await PreloadActiveAuthProvider(environment);
+
   // Dynamic import is REQUIRED here, not a convenience. A static import is hoisted, so AppModule
   // — and with it AuthServicesModule.forRoot — would evaluate before the await above ever ran,
   // making the preload pointless. This is the framework-ordering exception, the same reason
   // Angular's runtime-configuration guidance defers the root module import.
   const { AppModule } = await import('./app/app.module');
 
-  platformBrowserDynamic().bootstrapModule(AppModule)
+  platformBrowser().bootstrapModule(AppModule)
     .then(ref => {
       //LogStatus('Bootstrap success: ' + ref);
     })

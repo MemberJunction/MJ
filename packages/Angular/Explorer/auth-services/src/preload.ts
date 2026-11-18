@@ -7,5 +7,7 @@
  */
 
 export * from './lib/auth-provider-catalog';
+export * from './lib/auth-provider-loader';
 export * from './lib/catalog-environment';
 export * from './lib/login-screen-loader';
+export * from './lib/magic-link-session';
