@@ -142,6 +142,7 @@
     "@memberjunction/integration-actions": "6.3.0-edge.1",
     "@memberjunction/integration-engine": "6.3.0-edge.1",
     "@memberjunction/messaging-adapters": "6.3.0-edge.1",
+    "@memberjunction/postgresql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/predictive-studio": "6.3.0-edge.1",
     "@memberjunction/queue": "6.3.0-edge.1",
     "@memberjunction/react-linter": "6.3.0-edge.1",

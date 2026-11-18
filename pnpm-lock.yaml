@@ -16293,6 +16293,9 @@ importers:
       '@memberjunction/messaging-adapters':
         specifier: 6.3.0-edge.1
         version: link:../MessagingAdapters
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.3.0-edge.1
+        version: link:../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.3.0-edge.1
         version: link:../AI/PredictiveStudio/Engine

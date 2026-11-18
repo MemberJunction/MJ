@@ -5,6 +5,7 @@
 "@memberjunction/cli": patch
 "@memberjunction/metadata-sync": patch
 "@memberjunction/ai-vectors-pgvector": patch
+"@memberjunction/server-bootstrap": patch
 ---
 
 PostgreSQL on managed hosts: one TLS setting for every client, token logins, and one API pool instead of two.
