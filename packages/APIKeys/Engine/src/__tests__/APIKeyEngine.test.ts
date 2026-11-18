@@ -53,6 +53,7 @@ import {
     setMockBaseKeyScopes,
     setMockBaseLoaded,
     clearMockBaseState,
+    GetMockBaseRefreshInterval,
 } from '../__mocks__/api-keys-base';
 import {
     APIKeyEngine,
@@ -738,6 +739,45 @@ describe('row filters', () => {
             const engine = new APIKeyEngine();
             const result = await engine.Authorize(HASH, 'MJAPI', 'query:run', 'SomeQuery', systemUser as never, undefined, { skipLogging: true });
             expect(result.Allowed).toBe(true);
+        });
+    });
+
+    describe('scope-table refresh (out-of-process changes)', () => {
+        it('sets the base engine refresh interval to scopeCacheTTLMs (default 60 s)', () => {
+            new APIKeyEngine();
+            expect(GetMockBaseRefreshInterval()).toBe(60000);
+            new APIKeyEngine({ scopeCacheTTLMs: 5000 });
+            expect(GetMockBaseRefreshInterval()).toBe(5000);
+            new APIKeyEngine({ scopeCacheTTLMs: 0 });
+            expect(GetMockBaseRefreshInterval()).toBe(0);
+        });
+
+        it('SetScopeCacheTTL updates the TTL and the base engine refresh interval', () => {
+            const e = new APIKeyEngine();
+            e.SetScopeCacheTTL(2500);
+            expect(e.ScopeCacheTTLMs).toBe(2500);
+            expect(GetMockBaseRefreshInterval()).toBe(2500);
+        });
+
+        it('denies a scope once a refresh drops its key-scope row', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-qr');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-qr', APIKeyID: 'key-1', ScopeID: 'scope-qr',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            const before = await engine.Authorize(HASH, 'MJAPI', 'query:run', 'SomeQuery', systemUser as never, undefined, { skipLogging: true });
+            expect(before.Allowed).toBe(true);
+
+            // Simulates the timed re-read returning the table after another process deleted the row.
+            setMockBaseKeyScopes([]);
+
+            const after = await engine.Authorize(HASH, 'MJAPI', 'query:run', 'SomeQuery', systemUser as never, undefined, { skipLogging: true });
+            expect(after.Allowed).toBe(false);
         });
     });
 
