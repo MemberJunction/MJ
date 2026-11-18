@@ -917,7 +917,7 @@ describe('PayloadManager', () => {
             expect(merged.applied.additions).toBe(2);
         });
 
-        it('updates a non-empty array to [] when sub-agent clears it under both wildcard and exact allowed paths', () => {
+        it('clears a non-empty array to [] when element deletes are allowed (config.* and config.filters.*)', () => {
             const parent: PipelinePayload = {
                 config: {
                     filters: ['eq', 'limiter'],
@@ -937,15 +937,31 @@ describe('PayloadManager', () => {
             );
             expect(wildcardMerged.result.config.filters).toEqual([]);
             expect(wildcardMerged.applied.deletions).toBe(2);
+            expect(wildcardMerged.applied.updates).toBe(0);
 
-            const exactMerged = pm.MergeUpstreamPayload<PipelinePayload>(
+            const fieldWildcardMerged = pm.MergeUpstreamPayload<PipelinePayload>(
                 'AudioSubAgent',
                 parent,
                 subAgent,
-                ['config.filters']
+                ['config.filters.*']
             );
-            expect(exactMerged.result.config.filters).toEqual([]);
-            expect(exactMerged.applied.updates).toBe(1);
+            expect(fieldWildcardMerged.result.config.filters).toEqual([]);
+            expect(fieldWildcardMerged.applied.deletions).toBe(2);
+            expect(fieldWildcardMerged.applied.updates).toBe(0);
+        });
+
+        it('adds a brand-new [] under an exact allowed path when parent lacked the key', () => {
+            const parent: PipelinePayload = { config: {} };
+            const subAgent: PipelinePayload = { config: { tracks: [] } };
+
+            const exactAdded = pm.MergeUpstreamPayload<PipelinePayload>(
+                'AudioSubAgent',
+                parent,
+                subAgent,
+                ['config.tracks']
+            );
+            expect(exactAdded.result.config.tracks).toEqual([]);
+            expect(exactAdded.applied.additions).toBe(1);
         });
     });
 
@@ -1099,6 +1115,44 @@ describe('PayloadManager', () => {
 
             expect(merged.result.Beats[0].Layers[0].Filters).toEqual([]);
             expect(merged.result.Beats[0].Layers[0].Name).toBe('L1');
+        });
+
+        it.each([
+            ['items.*:add,update'],
+            ['items:add,update'],
+            ['items:update'],
+            ['items.*:update'],
+            ['items'],
+        ])('blocks emptying a non-empty array when element delete is not permitted (%s)', (upstreamRule) => {
+            const parent = { items: ['a', 'b'] };
+            const subAgent = { items: [] };
+
+            const merged = pm.MergeUpstreamPayload(
+                'RestrictedSubAgent',
+                parent,
+                subAgent,
+                [upstreamRule]
+            );
+
+            expect(merged.result.items).toEqual(['a', 'b']);
+            expect(merged.applied.updates).toBe(0);
+            expect(merged.applied.deletions).toBe(0);
+            expect(merged.blockedOperations).toHaveLength(2);
+            expect(merged.blockedOperations.every((op) => op.operation === 'delete')).toBe(true);
+        });
+
+        it('counts only deletions when emptying a non-empty array with full permissions (*)', () => {
+            const merged = pm.MergeUpstreamPayload(
+                'FullSubAgent',
+                { items: ['a', 'b'] },
+                { items: [] },
+                ['*']
+            );
+
+            expect(merged.result.items).toEqual([]);
+            expect(merged.applied.updates).toBe(0);
+            expect(merged.applied.deletions).toBe(2);
+            expect(merged.blockedOperations).toEqual([]);
         });
 
         it('ApplyAgentChangeRequest updates, adds, and removes dotted keys in nested objects under deep allowedPaths', () => {

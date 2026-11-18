@@ -562,15 +562,14 @@ export class PayloadManager {
             const subAgentValue = this.getAtSegments(subAgentPayload, segments);
             const originalValue = this.getAtSegments(result, segments);
 
-            // When a sub-agent empties a previously non-empty array and element-level delete rules
-            // apply, defer to the deletion loop below so per-element delete permissions, deletion
-            // counts, and pruneVacatedArrayElements all run as expected.
+            // When a sub-agent empties a previously non-empty array, defer to the deletion loop
+            // below so per-element delete permissions, blocked-operation records, deletion counts,
+            // and pruneVacatedArrayElements all run instead of overwriting via an array-level update.
             if (
                 Array.isArray(subAgentValue) &&
                 subAgentValue.length === 0 &&
                 Array.isArray(originalValue) &&
-                originalValue.length > 0 &&
-                this.isOperationAllowedForPath(`${actualPath}.[0]`, 'delete', upstreamPaths, parsedUpstreamRules)
+                originalValue.length > 0
             ) {
                 continue;
             }
@@ -712,6 +711,16 @@ export class PayloadManager {
         for (const entry of modifiedEntries) {
             const originalValue = this.getAtSegments(original, entry.segments);
             const modifiedValue = this.getAtSegments(modified, entry.segments);
+
+            // An emptied array is accounted for as per-element deletions in the loop below.
+            if (
+                Array.isArray(modifiedValue) &&
+                modifiedValue.length === 0 &&
+                Array.isArray(originalValue) &&
+                originalValue.length > 0
+            ) {
+                continue;
+            }
             
             if (originalValue === undefined) {
                 counts.additions++;
@@ -821,15 +830,6 @@ export class PayloadManager {
         }
 
         return entries;
-    }
-
-    /**
-     * Gets all leaf paths from an object.
-     * 
-     * @private
-     */
-    private getAllPaths(obj: unknown, currentPath: string[] = []): string[] {
-        return this.getAllPathEntries(obj, currentPath, currentPath).map(e => e.path);
     }
 
     /**
