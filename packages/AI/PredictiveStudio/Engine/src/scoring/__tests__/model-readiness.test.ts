@@ -214,13 +214,13 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const { deps, map, artifacts } = setup([new FakeModel('model-1', null)]);
     const trainer = new FakeAutoTrainer(map, artifacts);
     const proc = new MLModelInferenceProcessor(
-      { modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1', binding: { targetColumn: 'Score' } }, autoTrainer: trainer },
+      { modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1', binding: { featureName: 'Score', viewAuthorizationId: 'auth-1', targetColumn: 'Score', targetColumnSource: '$.AdverseProbability' } }, autoTrainer: trainer },
       new TestAssembler(),
     );
 
     await proc.Preflight(CTX);
     expect(trainer.Requests).toEqual([
-      { pipelineId: 'pipe-1', currentModelId: 'model-1', recordProcessId: 'rp-1', binding: { targetColumn: 'Score' } },
+      { pipelineId: 'pipe-1', currentModelId: 'model-1', recordProcessId: 'rp-1', binding: { featureName: 'Score', viewAuthorizationId: 'auth-1', targetColumn: 'Score', targetColumnSource: '$.AdverseProbability' } },
     ]);
 
     const result = await proc.ProcessRecord(record('r1', 3), CTX);

@@ -47,6 +47,8 @@ import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-int
 import type { PredictiveStudioFixture } from '@memberjunction/testing-integration';
 
 const PREFIX = 'mj-predictive-studio-test';
+/** The fixture binding's feature name on the target entity. */
+const BINDING_FEATURE = `${PREFIX}-feature`;
 
 // Anchor the side-effect registrations so the bundler/transpiler can't drop the decorated modules.
 LoadMLModelInferenceProcessor();
@@ -124,10 +126,13 @@ export const PredictiveStudioChecks: NamedCheck[] = [
             );
             const b = bRes.Results?.[0];
             Assert(!!b, `persisted scoring binding ${Binding.ID} not found`);
-            AssertEqual(b!.MLModelID, Model.ID, 'binding → model FK (lineage)');
+            AssertEqual(b!.MLTrainingPipelineID, Pipeline.ID, 'binding → pipeline FK (lineage)');
+            AssertEqual(Model.PipelineID, Pipeline.ID, 'model → pipeline FK (the binding scores with the pipeline\'s Published model)');
             AssertEqual(String(b!.Mode), 'OnDemand', 'binding Mode (typed union)');
-            AssertEqual(b!.TargetColumn, 'RenewalScore', 'binding TargetColumn');
-            console.log(`      → lineage binding ${b!.ID} → model ${b!.MLModelID} → pipeline ${p!.ID} verified`);
+            AssertEqual(String(b!.Status), 'Active', 'binding Status (typed union)');
+            AssertEqual(b!.FeatureName, BINDING_FEATURE, 'binding FeatureName');
+            AssertEqual(b!.TargetColumn, null, 'binding TargetColumn (no column copy)');
+            console.log(`      → lineage binding ${b!.ID} → pipeline ${p!.ID} ← model ${Model.ID} verified`);
         }
     },
     {
@@ -268,6 +273,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         Assert(!!targetEntityID, 'Could not resolve a seed entity for the ML pipeline target');
         const algorithmID = (await firstID('MJ: ML Algorithms', user));
         Assert(!!algorithmID, 'No MJ: ML Algorithms are seeded — run `mj sync push --include=ml-algorithms` first');
+        // A binding names the authorization its predictions are seen through; any authorization serves the fixture.
+        const viewAuthorizationID = md.Authorizations.length > 0 ? md.Authorizations[0].ID : null;
+        Assert(viewAuthorizationID !== null, 'No MJ: Authorizations are loaded for the scoring binding fixture');
 
         // Publish the handle up-front and populate each field as its record is created, so a
         // mid-Setup crash leaves Teardown a handle to sweep whatever part of the lineage exists.
@@ -301,9 +309,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
 
         const binding = await md.GetEntityObject<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', user);
         binding.NewRecord();
-        binding.MLModelID = model.ID;
+        binding.MLTrainingPipelineID = pipeline.ID;
+        binding.FeatureName = BINDING_FEATURE;
+        binding.ViewAuthorizationID = viewAuthorizationID!;
         binding.TargetEntityID = targetEntityID!;
-        binding.TargetColumn = 'RenewalScore';
         binding.Mode = 'OnDemand';
         Assert(await binding.Save(), `creating test scoring binding failed: ${binding.LatestResult?.CompleteMessage}`);
         fx.Binding = binding;
@@ -316,7 +325,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         // Cleanup: delete the fixtures child → parent (binding → model → pipeline) so FKs never block a
         // delete. Each is guarded + best-effort — a mid-Setup crash may have created only some (R4).
         if (f.Binding) {
-            await f.Binding.Delete().catch(() => undefined);
+            // A binding deletes only once withdrawn (it has no column copy to clear here).
+            f.Binding.Status = 'Withdrawn';
+            if (await f.Binding.Save().catch(() => false)) await f.Binding.Delete().catch(() => undefined);
         }
         if (f.Model) {
             await f.Model.Delete().catch(() => undefined);

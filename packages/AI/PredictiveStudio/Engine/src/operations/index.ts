@@ -1,7 +1,7 @@
 /**
  * @module operations
  *
- * Barrel for the **Predictive Studio Remote Operations** — the nine Manual-mode
+ * Barrel for the **Predictive Studio Remote Operations** — the ten Manual-mode
  * server bodies for the CodeGen-emitted `PredictiveStudio.*` operation bases
  * (`@memberjunction/core-entities` → `generated/remote_operations.ts`).
  *
@@ -22,8 +22,9 @@
  *   - `PredictiveStudio.CreateScoringProcess`    → {@link PredictiveStudioCreateScoringProcessServerOperation}
  *   - `PredictiveStudio.GetModelEvidence`        → {@link PredictiveStudioGetModelEvidenceServerOperation}
  *   - `PredictiveStudio.SignOffModel`            → {@link PredictiveStudioSignOffModelServerOperation}
+ *   - `PredictiveStudio.WithdrawScoringBinding`  → {@link PredictiveStudioWithdrawScoringBindingServerOperation}
  *
- * The last two have no Action peer: an agent may not sign off (D4-04).
+ * The evidence and sign-off operations have no Action peer: an agent may not sign off (D4-04).
  */
 
 export * from './delegation';
@@ -37,6 +38,7 @@ export * from './promote-model.operation';
 export * from './create-scoring-process.operation';
 export * from './get-model-evidence.operation';
 export * from './sign-off-model.operation';
+export * from './withdraw-scoring-binding.operation';
 
 import { PredictiveStudioTrainModelServerOperation } from './train-model.operation';
 import { PredictiveStudioScoreRecordSetServerOperation } from './score-record-set.operation';
@@ -47,9 +49,10 @@ import { PredictiveStudioPromoteModelServerOperation } from './promote-model.ope
 import { PredictiveStudioCreateScoringProcessServerOperation } from './create-scoring-process.operation';
 import { PredictiveStudioGetModelEvidenceServerOperation } from './get-model-evidence.operation';
 import { PredictiveStudioSignOffModelServerOperation } from './sign-off-model.operation';
+import { PredictiveStudioWithdrawScoringBindingServerOperation } from './withdraw-scoring-binding.operation';
 
 /**
- * Tree-shaking anchor — call from a server bootstrap to guarantee the nine
+ * Tree-shaking anchor — call from a server bootstrap to guarantee the ten
  * `@RegisterClass(BaseRemotableOperation, 'PredictiveStudio.*')` registrations are
  * not eliminated by the bundler. Referencing the classes through this function
  * creates a static code path the bundler keeps (mirrors `LoadPredictiveStudioActions`
@@ -65,4 +68,5 @@ export function LoadPredictiveStudioOperations(): void {
   void PredictiveStudioCreateScoringProcessServerOperation;
   void PredictiveStudioGetModelEvidenceServerOperation;
   void PredictiveStudioSignOffModelServerOperation;
+  void PredictiveStudioWithdrawScoringBindingServerOperation;
 }

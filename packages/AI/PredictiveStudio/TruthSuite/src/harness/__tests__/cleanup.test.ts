@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
 import { TRAINING_RUN_RESULTS_SCHEMA, type MetricWithInterval, type StoredTrainerResult, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import {
-  HarnessCleanup, RecordIDSet, RunRecords, type CleanupActionParamRow, type CleanupAgentRunRow, type CleanupAgentRunStepRow, type CleanupConversationDetailRow, type CleanupPromptRunRow, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow,
+  HarnessCleanup, RecordIDSet, RunRecords, type CleanupActionParamRow, type CleanupAgentRunRow, type CleanupBindingRow, type CleanupAgentRunStepRow, type CleanupConversationDetailRow, type CleanupPromptRunRow, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow,
   type CleanupPublishRecordRow, type CleanupRecordProcessRow, type CleanupRow, type CleanupScheduledJobRow, type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
 } from '../cleanup';
 
@@ -55,6 +55,8 @@ function trainerResultsEnvelope(): TrainingRunResults {
 
 /** What the fake store holds besides the fixed rows: RUN-1's snapshot, the snapshots it answers, failing object deletes. */
 interface FakeStoreOptions {
+  /** The binding withdrawal fails (the caller may not withdraw it). */
+  readonly FailWithdraw?: boolean;
   readonly RunSnapshotID?: string | null;
   readonly RunValidationResults?: string | null;
   /** The model RUN-1 produced (its `ResultingModelID`). */
@@ -196,6 +198,23 @@ class FakeStore implements CleanupStore {
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
     return ids.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
   }
+  /** The bindings withdrawn so far: a read after the withdrawal says `Withdrawn`, a copy read before still says `Active`. */
+  private readonly withdrawn = new Set<string>();
+  public async ScoringBindings(filter: string): Promise<CleanupBindingRow[]> {
+    this.Filters.push(`MJ: ML Model Scoring Bindings | ${filter}`);
+    return [{ id: 'BINDING-1', status: 'Active' as const }, { id: 'BINDING-WITHDRAWN', status: 'Withdrawn' as const }].map(({ id, status }) => {
+      const row = this.row('MJ: ML Model Scoring Bindings', id);
+      const statusNow: CleanupBindingRow['Status'] = this.withdrawn.has(id) ? 'Withdrawn' : status;
+      // As the server entity does, Delete() refuses a binding whose (in-memory) Status is not Withdrawn.
+      return { ...row, Status: statusNow, Delete: async () => (statusNow === 'Withdrawn' ? row.Delete() : false) };
+    });
+  }
+  public async WithdrawBinding(bindingId: string): Promise<string | null> {
+    if (this.options.FailWithdraw) return 'binding-not-authorized';
+    this.withdrawn.add(bindingId);
+    this.Deleted.push(`withdraw:${bindingId}`);
+    return null;
+  }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
     const process = (id: string, modelId: string): CleanupRecordProcessRow => ({ ...this.row('MJ: Record Processes', id), Configuration: JSON.stringify({ modelId: modelId.toUpperCase() }) });
@@ -269,7 +288,9 @@ class FakeStore implements CleanupStore {
     if (entityName === 'MJ: AI Agent Examples') return this.options.AgentRun ? [this.row(entityName, 'EX-1')] : [];
     if (entityName === 'MJ: AI Agent Notes' || entityName === 'MJ: AI Agent Run Medias') return [];
     if (entityName === 'MJ: Conversations') return this.options.AgentRun ? [this.row(entityName, 'CV-1')] : [];
-    return [this.row(entityName, 'BINDING-1')];
+    if (entityName === 'MJ: Feature Values') return [this.row(entityName, 'FV-MODEL-1')];
+    if (entityName === 'MJ: ML Scoring Runs') return [this.row(entityName, 'SCORING-RUN-1')];
+    throw new Error(`FakeStore: unexpected read of ${entityName}`);
   }
 }
 
@@ -304,7 +325,9 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: ML Models | ID IN ('${M1}') OR PipelineID IN ('${P1}')`,
       `MJ: Record Processes | WorkType = 'ML Model'`,
       `MJ: Process Runs | RecordProcessID IN ('${RP1}')`,
-      `MJ: ML Model Scoring Bindings | MLModelID IN ('${M1}','${M2}')`,
+      `MJ: ML Model Scoring Bindings | MLTrainingPipelineID IN ('${P1}','${AGENT_P}')`,
+      `MJ: Feature Values | MLModelScoringBindingID IN ('BINDING-1','BINDING-WITHDRAWN')`,
+      `MJ: ML Scoring Runs | MLModelScoringBindingID IN ('BINDING-1','BINDING-WITHDRAWN') OR ModelID IN ('${M1}','${M2}')`,
       `MJ: Process Run Details | ProcessRunID IN ('${PR1}')`,
       `MJ: Record Process Watermarks | RecordProcessID IN ('${RP1}')`,
       `MJ: ML Training Runs | PipelineID IN ('${P1}','${AGENT_P}') OR ResultingModelID IN ('${M1}','${M2}')`,
@@ -315,15 +338,30 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: Action Params | Name = 'ModelID' AND Type = 'Input' AND (DefaultValue IN ('${M1}','${M2}'))`,
       `MJ: ML Model Publish Records | ModelID IN ('${M1}','${M2}') OR ReplacesModelID IN ('${M1}','${M2}') OR TrainingRunID IN ('RUN-1')`,
       `MJ: ML Output Bindings | ModelID IN ('${M1}','${M2}')`,
+      // read again after the withdrawal: a row read before it still says Active and its Delete() is refused
+      `MJ: ML Model Scoring Bindings | ID IN ('BINDING-1','BINDING-WITHDRAWN')`,
     ]);
     expect(store.Filters.join(' ')).not.toMatch(/LIKE/i);
     expect(store.Deleted).toEqual([
-      'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
+      'withdraw:BINDING-1', 'MJ: Feature Values:FV-MODEL-1', 'MJ: ML Scoring Runs:SCORING-RUN-1',
+      'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: ML Model Scoring Bindings:BINDING-WITHDRAWN', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
       `MJ: Record Processes:${RP1}`,
       `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, 'MJ: ML Training Runs:RUN-1', `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
     ]);
     expect(store.Deleted.join(' ')).not.toContain(RP_OTHER);
     expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
+  });
+
+  it('withdraws an active binding before deleting it, and reports a binding it could not withdraw', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set(['BINDING-1']), { FailWithdraw: true });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toEqual(expect.arrayContaining([
+      'MJ: ML Model Scoring Bindings BINDING-1: could not be withdrawn before it is deleted: binding-not-authorized',
+    ]));
+    expect(store.Deleted).toContain('MJ: ML Model Scoring Bindings:BINDING-WITHDRAWN');
+    expect(store.Deleted).not.toContain('withdraw:BINDING-WITHDRAWN');
   });
 
   it('deletes what the lifecycle gate wrote for a model before the model: its publish records, its monitoring job, its generated scoring Action (params first) and its output bindings', async () => {

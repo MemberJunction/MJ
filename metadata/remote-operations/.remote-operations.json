@@ -424,6 +424,29 @@
   },
   {
     "fields": {
+      "Name": "Withdraw ML Model Scoring Binding",
+      "OperationKey": "PredictiveStudio.WithdrawScoringBinding",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Withdraw an MJ: ML Model Scoring Bindings row: its Status becomes Withdrawn, so it scores no more, and in the same transaction every record whose TargetColumn still holds the value the binding last copied (its newest Champion Model Feature Value, resolved through TargetColumnSource) is saved with the column cleared, so Record Changes keeps the history. A value a person entered since, or a record holding a Human Feature Value of the binding's feature, is kept. The binding's Feature Values stay and follow its retention. Returns the counts of cleared and kept values. Delegates to ScoringBindings.Withdraw in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioWithdrawScoringBindingInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-withdraw-scoring-binding.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioWithdrawScoringBindingOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-withdraw-scoring-binding.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "657E7834-B63C-46C0-B8B8-503A8B16C17C"
+    }
+  },
+  {
+    "fields": {
       "Name": "Export AI Skill Markdown",
       "OperationKey": "AISkill.ExportMarkdown",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=AI Skills",

@@ -6214,7 +6214,7 @@ by `(EntityID, RecordID, FeatureName, Source, MLModelScoringBindingID)`
   `cache.test.ts`), is next's public API and stays (D4-152).
 - [x] Step 4: Step 2's command → passes; `cd packages/AI/Knowledge/FeaturePipelines && pnpm test` → 285 (measured on
   `599c288dee`'s tree, 14 files) + the new cases, 0 failed; `pnpm run build` → exit 0.
-- [ ] Step 5: PR 1's gates unchanged: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`
+- [x] Step 5: PR 1's gates unchanged: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`
   → 0 failed (§4.2 keep row; count measured at M5).
 
 #### Task M5.4: The binding reshape — helpers, readers, the server entity and withdrawal
@@ -6230,7 +6230,10 @@ deleted), `Engine/src/scoring/scoring-process-shared.ts`, `Engine/src/scoring/sc
 Published model; the module is deleted at M6) and `Engine/src/maintenance/types.ts` (`:214` `MaintenanceBindingMode`
 becomes `ScoringBindingMode`), `Engine/src/actions/schedule-model-scoring.action.ts`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ml-model-form.component.{ts,html}` (the bindings
-section reads by pipeline, D4-148), `packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-production.component.ts` (bindings by
+section reads by pipeline, D4-148), `packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts` (the ceiling 65 → 66 for the binding's
+view-authorization columns), `packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts` (generic mode
+returns a binding), `metadata/authorizations/.model-predictions.json`, `metadata/authorization-roles/.model-predictions-roles.json`
+(D4-153), `packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-production.component.ts` (bindings by
 pipeline; `ModeBadge`, `:906-908`, loses its `'Materialized'` branch), `…/PredictiveStudio/engine/predictive-studio.engine.ts`,
 `…/PredictiveStudio/production-distribution.ts` (`ModeBadgeClass`, `:290`, takes `MJMLModelScoringBindingEntity['Mode'] |
 null | undefined` and loses its `'Materialized'` case, `:294`; D-042, D4-69),
@@ -6260,7 +6263,7 @@ binding's `Model` rows, then delete it, D4-62); `ModeBadgeClass(mode: MJMLModelS
 undefined): StatusVariant` maps `Scheduled` → `blue` and everything else → `gray`, so a `'Materialized'` argument is a
 compile error once CodeGen narrows the entity's `Mode` to `'OnDemand' | 'Scheduled'` (M5.1's CHECK)
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   // ml-model-scoring-binding.test.ts
   it('requires the pipeline, feature name, target entity and view authorization', async () => {
@@ -6292,10 +6295,10 @@ compile error once CodeGen narrows the entity's `Mode` to `'OnDemand' | 'Schedul
   ```
   (`NewBinding`, `pipelineOutputName` and the C1 classification model are the file's fixtures; `target` is the
   binding test file's fake target entity.)
-- [ ] Step 2: `cd packages/MJCoreEntitiesServer && pnpm vitest run src/__tests__/ml-model-scoring-binding.test.ts` → fails
+- [x] Step 2: `cd packages/MJCoreEntitiesServer && pnpm vitest run src/__tests__/ml-model-scoring-binding.test.ts` → fails
   to import; `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/scoring-binding.test.ts`
   → fails (`ScoringBindings` not exported).
-- [ ] Step 3: Implement `export class ScoringBindings { public static Upsert(…); public static Withdraw(…) }`
+- [x] Step 3: Implement `export class ScoringBindings { public static Upsert(…); public static Withdraw(…) }`
   (`Engine/src/scoring/scoring-binding.ts`; withdrawal: one provider transaction — `Status = 'Withdrawn'`, then for each
   record whose `TargetColumn` holds the value its newest `Champion` `Model` row resolves to through `TargetColumnSource`,
   an entity save setting the column null, a value `BindingHumanValueGuard` reports human-owned kept), `export class
@@ -6313,11 +6316,11 @@ compile error once CodeGen narrows the entity's `Mode` to `'OnDemand' | 'Schedul
   `Engine/src/maintenance/types.ts:214`,
   `Engine/src/scoring/scoring-binding.ts:25`, and the three Engine test fakes `scheduled-model-scoring.test.ts:89`,
   `scoring-binding.test.ts:26`, `scoring-process.test.ts:90`, all moved to `ScoringBindingMode` here).
-- [ ] Step 4: Step 2's commands → pass; `cd packages/MJCoreEntitiesServer && pnpm test` and
+- [x] Step 4: Step 2's commands → pass; `cd packages/MJCoreEntitiesServer && pnpm test` and
   `cd packages/Angular/Explorer/dashboards && pnpm test` and `cd packages/Angular/Explorer/core-entity-forms && pnpm test`
   → 0 failed (totals measured at M5: `git -C $MJ diff --stat HEAD origin/next -- <pkg>` is not empty for these three),
   `production-distribution.test.ts`'s `modeBadgeClass` case passing without its `'Materialized'` line; `npm run check:ui` → exit 0.
-- [ ] Step 5: Runtime on MJAPI :4041: `PredictiveStudio.WithdrawScoringBinding` on a binding with three copied values,
+- [x] Step 5: Runtime on MJAPI :4041: `PredictiveStudio.WithdrawScoringBinding` on a binding with three copied values,
   one since overwritten by a person → `SELECT Status FROM __mj.MLModelScoringBinding WHERE ID = @b` → `Withdrawn`, the
   column null on two records and kept on the third, Record Changes rows for the two clears.
 
@@ -10149,6 +10152,21 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   then, so Record-Process-scoped hashes are byte-identical to before), so `UQ_FeatureValue_ValueKey (RecordProcessID,
   ValueKeyHash)`, whose NULLs compare equal, cannot collide across bindings (review M1). The package's test tree
   type-checks (21 errors in four of next's test files fixed to the current types, D-082 caller maintenance).
+- **D4-153 · The seeded view authorization ships with M5.4** (M5.4 report, concern 1). M5.4 makes `ViewAuthorizationID`
+  required on every binding save, and generic mode now creates a binding, so the "View Model Predictions" authorization
+  and its `Allow` grants to Developer and Integration (`metadata/authorizations/.model-predictions.json`,
+  `metadata/authorization-roles/.model-predictions-roles.json`) move from Task M5b.1 to Task M5.4. M5b.1 keeps the
+  row-level security filter and its attachment. Every binding creator given no `viewAuthorizationId` defaults to the
+  seeded authorization through one Engine resolver (§5.8.4: "the binding editor's default"), which raises a structured
+  error naming the authorization when it is not loaded. `CreateScoringProcess` takes optional `featureName` and
+  `viewAuthorizationId`. Migrated bindings keep a null authorization, and refuse a save, until M5b's backfill (§5.8.7).
+  M5.4's `Withdraw` takes `RegistryContext` and applies `BindingHumanValueGuard`'s rule inline; Task M5.5 wires
+  `CheckCallerHoldsBinding` into it. M5.5's column copy rounds to the column's scale, because withdrawal treats a value
+  as a copy only within 1e-9. M5.6 replaces the write-back `OutputMapping`.
+  As built: the resolver is `ScoringBindings.ResolveViewAuthorizationID` (`ViewAuthorizationNotLoadedError`); with no
+  `featureName`, `CreateScoringProcess` names the feature after the pipeline (§5.8.6's rule); the op's contract
+  fingerprint changed, so external clients rebuild. M5.3 Step 5 ran as the plan's rule for that suite says: Feature
+  Pipelines → 0 / 5 / 0, environment-blocked (D3-78: bizapps-common not installed), at M5.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -12039,6 +12057,23 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   lane is `1 failed | 84 passed`, from runtime filters naming the dropped columns (`cleanup.ts:536`,
   `auto-train.ts:416`), which also left test rows on the agent database. Review: Spec ✅ / Quality Approved after fix
   round 1 (`task-M5.1-2-review.md`).
+
+### 2026-11-18 — Tasks M5.3 + M5.4 (model-row writer; binding reshape, readers, server entity, withdrawal) — Claude (Opus 5.5)
+
+- M5.3 committed `0c4085cb1f` (D4-152): `RecordModelValues`, binding-scoped Human rows hashed with their binding ID;
+  FeaturePipelines `pnpm test` 315, src+tests type-check 0 errors. Step 5: Feature Pipelines → 0 / 5 / 0,
+  environment-blocked (D3-78: bizapps-common not installed; run `14349607-…`).
+- M5.4: every binding reader goes through `MLTrainingPipelineID`; `ScoringBindings.Upsert`/`.Withdraw`,
+  `MJMLModelScoringBindingEntityServer` (pipeline and view authorization required; delete refused before withdrawal),
+  `PredictiveStudio.WithdrawScoringBinding`; the seeded "View Model Predictions" authorization and grants pulled forward
+  (D4-153), pushed to both databases. Root build 351/351; Engine 1716, MJCoreEntitiesServer 1610, TruthSuite 153,
+  core-entity-forms 683, dashboards 3140, integration-test-suite 1079; TruthSuite DB lane 85/85; `check:guards` pass;
+  Deterministic (PR-lane form) 129 passed / 1 failed / 26 skipped, the failure next's PB7/PB18 (OF4-36). Step 5 on
+  MJAPI :4041: `cleared 2, keptHuman 1`, binding `Withdrawn`, Record Changes for both clears; the reviewer's run on
+  :4049 `cleared 1, keptHuman 1`; the delete-refusal mutation fails 2 of 6 server-entity tests. Census 0.
+- Review: Spec ✅ / Quality Approved (`task-M5.4-review.md`). Minor M1–M4 go to the M5 exit batch (M1: a create on a
+  `Withdrawn` binding's model and feature reuses it; M5.5's `ScoringService` refuses it, so the op must refuse or
+  reactivate explicitly).
 
 ## 12. Refresh log (append-only)
 

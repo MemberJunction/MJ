@@ -474,10 +474,10 @@ export interface PredictiveStudioCreateScoringProcessInput {
     /**
      * Optional. The target-entity column to write the prediction into (e.g.
      * `RenewalScore`). **When supplied → write-back mode**: each run writes the
-     * prediction into that column AND a `MJ: ML Model Scoring Bindings` lineage row
-     * (`Mode='OnDemand'`) is created. **When omitted → generic output, no binding**:
-     * predictions are recorded in the process run history (`MJ: Process Run Details`)
-     * only, with no write-back column and no scoring binding.
+     * prediction into that column. **When omitted → generic output**: predictions are
+     * recorded in the process run history (`MJ: Process Run Details`) with no write-back
+     * column. Either way a `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`) is
+     * created for the model's training pipeline; it names the column only in write-back mode.
      */
     outputField?: string;
     /**
@@ -490,6 +490,10 @@ export interface PredictiveStudioCreateScoringProcessInput {
     primaryKeyField?: string;
     /** Optional Record Process name; a descriptive default is generated when omitted. */
     name?: string;
+    /** Optional. The binding's feature name on the target entity; defaults to the model's training pipeline name. */
+    featureName?: string;
+    /** Optional. The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
 }
 
 /** Output of `PredictiveStudio.CreateScoringProcess` — the created on-demand scoring Record Process + write-back lineage. */
@@ -930,6 +934,24 @@ export interface PredictiveStudioTrainModelOutput {
     gateReason?: string;
     /** The member the gate ships (the model, a simple baseline or the existing rule); absent under no-signal. */
     shipped?: string;
+}
+
+/** Input for `PredictiveStudio.WithdrawScoringBinding`. */
+export interface PredictiveStudioWithdrawScoringBindingInput {
+    /** Id of the `MJ: ML Model Scoring Bindings` row to withdraw. */
+    bindingId: string;
+}
+
+/**
+ * Output of `PredictiveStudio.WithdrawScoringBinding`: what withdrawal did to the binding's column copies. The binding is
+ * `Withdrawn` whenever the operation succeeds; a failure arrives as `Success: false` with the reason in `ErrorMessage`
+ * and changes nothing.
+ */
+export interface PredictiveStudioWithdrawScoringBindingOutput {
+    /** Records whose target column held the value the binding copied, now cleared. */
+    cleared: number;
+    /** Records whose target column holds a value a person entered since, kept. */
+    keptHuman: number;
 }
 
 /** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
@@ -2424,7 +2446,7 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_0a4217c595837dc0";
+    public readonly ContractFingerprint = "ro_fp_fac424ba69f01257";
 }
 
 // ============================================================
@@ -2544,6 +2566,23 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_2b7f9d9a95e772b6";
+}
+
+// ============================================================
+// PredictiveStudio.WithdrawScoringBinding — Withdraw ML Model Scoring Binding
+// ============================================================
+/**
+ * Withdraw ML Model Scoring Binding
+ * Withdraw an MJ: ML Model Scoring Bindings row: its Status becomes Withdrawn, so it scores no more, and in the same transaction every record whose TargetColumn still holds the value the binding last copied (its newest Champion Model Feature Value, resolved through TargetColumnSource) is saved with the column cleared, so Record Changes keeps the history. A value a person entered since, or a record holding a Human Feature Value of the binding's feature, is kept. The binding's Feature Values stay and follow its retention. Returns the counts of cleared and kept values. Delegates to ScoringBindings.Withdraw in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.WithdrawScoringBinding'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioWithdrawScoringBindingOperation extends BaseRemotableOperation<PredictiveStudioWithdrawScoringBindingInput, PredictiveStudioWithdrawScoringBindingOutput> {
+    public readonly OperationKey = "PredictiveStudio.WithdrawScoringBinding";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_134951a81a51789b";
 }
 
 // ============================================================

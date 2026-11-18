@@ -68,6 +68,13 @@ async function unsavedRow<T extends BaseEntity>(entityName: string, fill: (row: 
   return row;
 }
 
+/** An authorization a fixture binding is seen through (the binding entity requires one; which one is immaterial here). */
+function AnyAuthorizationID(): string {
+  const authorization = server.Provider.Authorizations[0];
+  if (!authorization) throw new Error('no MJ: Authorizations are loaded for the scoring binding fixture');
+  return authorization.ID;
+}
+
 /** Save a new row of `entityName` with `fill` applied; throws with the provider's message when the save fails. */
 async function createRow<T extends BaseEntity>(entityName: string, fill: (row: T) => void): Promise<T> {
   const row = await unsavedRow<T>(entityName, fill);
@@ -197,6 +204,7 @@ async function createFixtures(): Promise<ScoringFixtures> {
   const binding = await createRow<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', (b) => {
     b.MLTrainingPipelineID = pipeline.ID;
     b.FeatureName = TAG;
+    b.ViewAuthorizationID = AnyAuthorizationID();
     b.TargetEntityID = targetEntityId;
     b.Mode = 'OnDemand';
   });

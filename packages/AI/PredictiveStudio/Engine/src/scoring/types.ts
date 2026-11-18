@@ -51,6 +51,7 @@ import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
 import type { ShadowScoringCoordinator } from './shadow-scoring';
+import type { ScoringBindingMode } from './scoring-binding';
 
 /**
  * Read seam for loading the immutable `MJ: ML Models` row to score against.
@@ -255,16 +256,21 @@ export interface MLAutoTrainConfig {
   /** The `MJ: ML Training Pipelines` id to train when the configured model needs training. */
   pipelineId: string;
   /**
-   * Optional scoring binding to ensure for the trained model when the process has none
-   * yet (bindings that already point at this process are always repointed). Lets an
-   * app declare where scores land without shipping a binding row that would have to
-   * reference a model id that doesn't exist on a fresh install.
+   * Optional scoring binding of the pipeline to ensure on the process's entity: created when the pipeline does not bind
+   * `featureName` there yet, else updated. A binding names the pipeline, not a model, so an app declares its prediction
+   * feature without shipping a binding row that would reference a model id that does not exist on a fresh install.
    */
   binding?: {
-    /** The target-entity column the process writes the score to (shown by the prediction panel). */
+    /** The prediction's feature name on the process's entity. */
+    featureName: string;
+    /** The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
+    /** Optional target-entity column the newest value is copied into (shown by the prediction panel). */
     targetColumn?: string;
+    /** The scored value the column receives (`$.AdverseProbability`, `$.Value`, …); required with `targetColumn`. */
+    targetColumnSource?: string;
     /** Binding mode; defaults to `Scheduled` when the process is scheduled, else `OnDemand`. */
-    mode?: 'OnDemand' | 'Scheduled';
+    mode?: ScoringBindingMode;
   };
   /**
    * Hours auto-train waits after a non-transient refusal of the pipeline's last attempt (a withheld publish, or a run

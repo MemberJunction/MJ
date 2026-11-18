@@ -258,8 +258,8 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','MLModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','MLModelID')"
+                [Params]="PipelineBindingsParams"
+                [NewRecordValues]="PipelineBindingNewValues"
                 [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"

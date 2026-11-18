@@ -28,6 +28,7 @@ const makeEngine = (publishedModels: unknown[]) => {
     ObserveProperty: () => subject.asObservable(),
     PublishedModels: publishedModels,
     ScoringBindings: [],
+    ScoringBindingsForPipeline: () => [],
     RecordProcessesForModel: () => [],
     RecordProcessByID: () => undefined,
     ModelDisplayName: () => 'Renewal Model',

@@ -23,10 +23,10 @@ export interface PredictiveStudioCreateScoringProcessInput {
     /**
      * Optional. The target-entity column to write the prediction into (e.g.
      * `RenewalScore`). **When supplied → write-back mode**: each run writes the
-     * prediction into that column AND a `MJ: ML Model Scoring Bindings` lineage row
-     * (`Mode='OnDemand'`) is created. **When omitted → generic output, no binding**:
-     * predictions are recorded in the process run history (`MJ: Process Run Details`)
-     * only, with no write-back column and no scoring binding.
+     * prediction into that column. **When omitted → generic output**: predictions are
+     * recorded in the process run history (`MJ: Process Run Details`) with no write-back
+     * column. Either way a `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`) is
+     * created for the model's training pipeline; it names the column only in write-back mode.
      */
     outputField?: string;
     /**
@@ -39,4 +39,8 @@ export interface PredictiveStudioCreateScoringProcessInput {
     primaryKeyField?: string;
     /** Optional Record Process name; a descriptive default is generated when omitted. */
     name?: string;
+    /** Optional. The binding's feature name on the target entity; defaults to the model's training pipeline name. */
+    featureName?: string;
+    /** Optional. The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
 }

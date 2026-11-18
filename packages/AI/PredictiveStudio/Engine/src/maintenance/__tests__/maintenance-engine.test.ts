@@ -53,7 +53,8 @@ const NOW = new Date('2026-06-27T00:00:00.000Z');
 
 class FakeBinding {
   public ID: string;
-  public MLModelID: string;
+  /** The binding's pipeline: the one whose Published model is `publishedModelId` in these tests. */
+  public MLTrainingPipelineID: string;
   public RecordProcessID: string | null = 'rp-1';
   public TargetEntityID: string | null = null;
   public TargetColumn: string | null = null;
@@ -64,9 +65,9 @@ class FakeBinding {
   public SaveCallCount = 0;
   private saveOk: boolean;
 
-  constructor(id: string, modelId: string, saveOk = true) {
+  constructor(id: string, publishedModelId: string, saveOk = true) {
     this.ID = id;
-    this.MLModelID = modelId;
+    this.MLTrainingPipelineID = PipelineOf(publishedModelId);
     this.saveOk = saveOk;
   }
 
@@ -85,9 +86,14 @@ class FakeBinding {
   }
 }
 
+/** The pipeline a test model belongs to (one pipeline per model, so a binding's pipeline names its Published model). */
+function PipelineOf(modelId: string): string {
+  return `pipeline-of-${modelId}`;
+}
+
 class FakeModel {
   public ID: string;
-  public PipelineID = 'pipeline-1';
+  public PipelineID: string;
   public ProblemType: 'classification' | 'regression' = 'classification';
   public TrainedAt: Date | null = NOW;
   public TrainingRowCount: number | null = 1000;
@@ -97,6 +103,7 @@ class FakeModel {
 
   constructor(id: string) {
     this.ID = id;
+    this.PipelineID = PipelineOf(id);
   }
 }
 
@@ -122,6 +129,10 @@ class FakeLoader implements IMaintenanceLoader {
   }
   async loadModel(id: string): Promise<MJMLModelEntity | null> {
     const m = this.models.get(id);
+    return m ? asModel(m) : null;
+  }
+  async LoadPublishedModel(pipelineId: string): Promise<MJMLModelEntity | null> {
+    const m = [...this.models.values()].find((x) => x.PipelineID === pipelineId);
     return m ? asModel(m) : null;
   }
 }
@@ -636,7 +647,7 @@ describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
 
     expect(result.entries).toHaveLength(2);
     const orphanEntry = result.entries.find((e) => e.bindingId === 'b-orphan');
-    expect(orphanEntry?.error).toMatch(/not found/);
+    expect(orphanEntry?.error).toMatch(/has no Published model/);
     const goodEntry = result.entries.find((e) => e.bindingId === 'b-good');
     expect(goodEntry?.error).toBeUndefined();
   });

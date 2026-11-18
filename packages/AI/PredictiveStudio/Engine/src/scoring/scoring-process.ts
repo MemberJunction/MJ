@@ -15,8 +15,8 @@
  *      single `MJ: Record Processes` row (`WorkType='ML Model'`, `Status='Active'`,
  *      `OnDemandEnabled=true`, `ScheduleEnabled=false`, NO cron) with the model
  *      `Configuration`, the scope, and — when a write-back column is supplied — an
- *      `OutputMapping` plus a `MJ: ML Model Scoring Bindings` lineage row
- *      (`Mode='OnDemand'`).
+ *      `OutputMapping`, plus — in both modes — a `MJ: ML Model Scoring Bindings`
+ *      row (`Mode='OnDemand'`) naming the model's training pipeline.
  *   2. **Run / schedule** it later via the GENERIC surfaces — the existing
  *      "Run Record Process" Remote Op for run-now, and the generic
  *      `@memberjunction/ng-scheduling` dialog for scheduling (which creates its own
@@ -51,17 +51,19 @@ import {
 } from './scoring-process-shared';
 
 /**
- * Inputs for {@link createScoringProcess}. The required pair — `modelId` and
+ * Inputs for {@link CreateScoringProcess}. The required pair — `modelId` and
  * `targetEntityName` — plus exactly one `scope` selector is the minimum to create an
  * on-demand scoring Record Process; everything else has a sensible default (`ID`
  * primary key, numeric score, generated name).
  *
  * Two output modes, driven by whether `outputField` is supplied:
  * - **Write-back** (`outputField` present): a run writes the prediction into that
- *   target column AND a `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`)
- *   is created.
- * - **Generic** (`outputField` omitted): a run records its predictions in the process
- *   run history (`MJ: Process Run Details`) only — no write-back column and no binding.
+ *   target column, and the binding created for the process names that column.
+ * - **Generic** (`outputField` omitted): no write-back column; the binding has no
+ *   `TargetColumn`.
+ *
+ * Either way a `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`) defines the
+ * prediction feature.
  */
 export interface CreateScoringProcessOptions {
   /** The `MJ: ML Models` id to score with. */
@@ -73,14 +75,18 @@ export interface CreateScoringProcessOptions {
   /**
    * Optional. The target-entity column to write the prediction into (e.g.
    * `'RenewalScore'`). **Omit for generic output** — a run's predictions are recorded
-   * in the process run history (`MJ: Process Run Details`) only; no write-back column
-   * and no scoring binding are created.
+   * in the process run history (`MJ: Process Run Details`); no write-back column is
+   * set and the scoring binding names no column.
    */
   outputField?: string;
   /** Which prediction value to write — numeric `'score'` (default) or `'class'` label. */
   valueKind?: ScoringValueKind;
   /** Primary-key field on the target entity (defaults to `'ID'`). */
   primaryKeyField?: string;
+  /** The prediction's feature name on the target entity; defaults to the model's pipeline name. */
+  featureName?: string;
+  /** Who may see the predictions; defaults to the seeded "View Model Predictions" authorization. */
+  viewAuthorizationId?: string;
   /** Optional Record Process name; a descriptive default is generated when omitted. */
   name?: string;
   /** Server-side context user (required for data isolation + audit on the saved row). */
@@ -90,24 +96,17 @@ export interface CreateScoringProcessOptions {
 }
 
 /**
- * The result of {@link createScoringProcess}: the saved on-demand Record Process AND —
- * in write-back mode — its lineage binding. The Record Process is the row that the
+ * The result of {@link CreateScoringProcess}: the saved on-demand Record Process AND —
+ * its scoring binding. The Record Process is the row that the
  * generic "Run Record Process" run-now / scheduler dialog then targets; the
- * `MJ: ML Model Scoring Bindings` row *records* the operationalized model so the
+ * `MJ: ML Model Scoring Bindings` row defines the prediction feature, so the
  * model-prediction form panel and "Models in Production" dashboard surface it.
- *
- * `binding` is `null` in **generic** mode (no `outputField`): there is no write-back
- * column to bind, so no lineage row is created — predictions live in the process run
- * history (`MJ: Process Run Details`) only.
  */
 export interface CreateScoringProcessResult {
   /** The saved on-demand `MJ: Record Processes` entity (`OnDemandEnabled=true`, no schedule). */
   recordProcess: MJRecordProcessEntity;
-  /**
-   * The saved `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`) in
-   * write-back mode, or `null` in generic mode (no `outputField`, no binding).
-   */
-  binding: MJMLModelScoringBindingEntity | null;
+  /** The saved `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`); its `TargetColumn` is null in generic mode. */
+  binding: MJMLModelScoringBindingEntity;
 }
 
 /** The helper name used to prefix this module's errors + binding-failure logs. */
@@ -120,13 +119,13 @@ const HELPER_NAME = 'createScoringProcess';
  * two modes, driven by whether `opts.outputField` is supplied:
  *
  * - **Write-back** (`outputField` present): a run writes the prediction into that
- *   target column (via the Record Process `OutputMapping`), AND this helper records a
- *   `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`) tying the model →
- *   Record Process → target entity/column so the operationalized model is discoverable
- *   by the UX surfaces that read those bindings. `result.binding` is the saved row.
- * - **Generic** (`outputField` omitted): no `OutputMapping` is set and no binding is
- *   created — a run's predictions are recorded in the process run history
- *   (`MJ: Process Run Details`) only. `result.binding` is `null`.
+ *   target column (via the Record Process `OutputMapping`).
+ * - **Generic** (`outputField` omitted): no `OutputMapping` is set; a run's predictions
+ *   are recorded in the process run history (`MJ: Process Run Details`).
+ *
+ * In both modes this helper records a `MJ: ML Model Scoring Bindings` row
+ * (`Mode='OnDemand'`) naming the model's training pipeline, the Record Process, the
+ * target entity and (in write-back mode) the column; `result.binding` is the saved row.
  *
  * Unlike the scheduled sibling, this row carries `ScheduleEnabled=false` and NO cron,
  * so saving it does NOT create an owned `MJ: Scheduled Jobs` row — it stays purely
@@ -134,11 +133,10 @@ const HELPER_NAME = 'createScoringProcess';
  *
  * @param opts the model + target + scope (+ optional write-back column); see
  *   {@link CreateScoringProcessOptions}
- * @returns the saved Record Process AND — in write-back mode — its scoring binding
- *   (`null` in generic mode); see {@link CreateScoringProcessResult}
+ * @returns the saved Record Process and its scoring binding; see {@link CreateScoringProcessResult}
  * @throws if a required input is missing, the scope is not exactly one selector, the
- *   target entity is unknown, the Record Process fails to save, or — in write-back mode,
- *   after the Record Process was saved — the binding fails to save (the message carries
+ *   target entity is unknown, the Record Process fails to save, or — after the Record
+ *   Process was saved — the binding fails to save (the message carries
  *   the cause). The binding save is intentionally fail-loud (not swallowed): a saved RP
  *   without a binding would run invisibly to the lineage UX, so we surface the inconsistency.
  */
@@ -161,27 +159,20 @@ export async function CreateScoringProcess(
     );
   }
 
-  // Lineage binding only in write-back mode — generic output has no column to bind.
-  const binding = IsNonEmpty(opts.outputField)
-    ? await CreateScoringBinding(
-        opts.modelId,
-        opts.outputField,
-        rp.ID,
-        entityID,
-        'OnDemand',
-        provider,
-        opts.contextUser,
-        HELPER_NAME,
-      )
-    : null;
+  const binding = await CreateScoringBinding({
+    ModelID: opts.modelId,
+    RecordProcessID: rp.ID,
+    TargetEntityID: entityID,
+    TargetColumn: IsNonEmpty(opts.outputField) ? opts.outputField : null,
+    ValueKind: opts.valueKind,
+    FeatureName: opts.featureName,
+    ViewAuthorizationID: opts.viewAuthorizationId,
+    Mode: 'OnDemand',
+    Provider: provider,
+    ContextUser: opts.contextUser,
+    ContextLabel: HELPER_NAME,
+  });
   return { recordProcess: rp, binding };
-}
-
-/** @deprecated Use {@link CreateScoringProcess}. */
-export async function createScoringProcess(
-  opts: CreateScoringProcessOptions,
-): Promise<CreateScoringProcessResult> {
-  return CreateScoringProcess(opts);
 }
 
 // ----- field population --------------------------------------------------------
@@ -242,7 +233,7 @@ function defaultName(opts: CreateScoringProcessOptions): string {
 /**
  * Validate the required inputs + exactly-one-scope rule, throwing a clear error on the
  * first problem. `outputField` is NOT required — omitting it selects generic output
- * (predictions recorded in run history only; see {@link createScoringProcess}).
+ * (predictions recorded in run history only; see {@link CreateScoringProcess}).
  */
 function validateOptions(opts: CreateScoringProcessOptions): void {
   if (!IsNonEmpty(opts.modelId)) {

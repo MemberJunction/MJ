@@ -449,15 +449,17 @@ export class MaintenanceEngine {
     deps: MaintenanceDeps,
     options: Required<Pick<MaintenancePassOptions, 'rescoreScheduled' | 'retrainStale'>> & Pick<MaintenancePassOptions, 'trainModelInput'>,
   ): Promise<MaintenancePassEntry> {
+    let modelId = '';
     try {
-      const model = await deps.loader.loadModel(binding.MLModelID, deps.contextUser, deps.provider);
+      const model = await deps.loader.LoadPublishedModel(binding.MLTrainingPipelineID, deps.contextUser, deps.provider);
       if (!model) {
         return {
           bindingId: binding.ID,
-          staleness: { bindingId: binding.ID, modelId: binding.MLModelID, stale: false, reasons: [] },
-          error: `Model '${binding.MLModelID}' not found for binding '${binding.ID}'.`,
+          staleness: { bindingId: binding.ID, modelId: '', stale: false, reasons: [] },
+          error: `Pipeline '${binding.MLTrainingPipelineID}' of binding '${binding.ID}' has no Published model.`,
         };
       }
+      modelId = model.ID;
 
       const rescore = options.rescoreScheduled
         ? (await this.RescoreScheduledBinding(binding, model, deps)) ?? undefined
@@ -476,7 +478,7 @@ export class MaintenanceEngine {
       LogError(`MaintenanceEngine: maintenance failed for binding '${binding.ID}': ${message}`);
       return {
         bindingId: binding.ID,
-        staleness: { bindingId: binding.ID, modelId: binding.MLModelID, stale: false, reasons: [] },
+        staleness: { bindingId: binding.ID, modelId, stale: false, reasons: [] },
         error: message,
       };
     }

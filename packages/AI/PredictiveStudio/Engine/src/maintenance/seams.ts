@@ -11,6 +11,7 @@
  */
 
 import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type {
   MJMLModelEntity,
   MJMLModelScoringBindingEntity,
@@ -104,6 +105,26 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
       return null;
     }
     return result.Results[0];
+  }
+
+  /** @inheritdoc */
+  public async LoadPublishedModel(
+    pipelineId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<MJMLModelEntity | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<MJMLModelEntity>(
+      {
+        EntityName: 'MJ: ML Models',
+        ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}' AND Status='Published'`,
+        OrderBy: 'Version DESC',
+        ResultType: 'entity_object',
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+      },
+      contextUser,
+    );
+    return result.Success && result.Results.length > 0 ? result.Results[0] : null;
   }
 }
 

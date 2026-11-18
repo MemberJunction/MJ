@@ -6,8 +6,8 @@
  * cron-driven write-back) and the **on-demand** helper
  * ({@link module:scoring/scoring-process}, a single `WorkType='ML Model'` Record
  * Process the UI run-now / generic scheduler dialog then targets). Both assemble the
- * SAME kind of Record Process row + (optional) `MJ: ML Model Scoring Bindings` lineage
- * row, differing only in trigger (schedule vs on-demand) and binding `Mode`
+ * SAME kind of Record Process row + its `MJ: ML Model Scoring Bindings` row (in
+ * generic mode too), differing only in trigger (schedule vs on-demand) and binding `Mode`
  * (`'Scheduled'` vs `'OnDemand'`).
  *
  * Rather than copy-paste that contract twice, the shared shape + the field-population
@@ -18,9 +18,10 @@
  * these primitives and own only their trigger-specific bits.
  */
 
-import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
-import { UpsertScoringBinding, type ScoringBindingMode } from './scoring-binding';
+import { LogError, RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import type { MJMLModelEntity, MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { ScoringBindings, type ScoringBindingMode } from './scoring-binding';
 import { MetadataEntityFactory } from '../training/seams';
 
 /**
@@ -75,20 +76,12 @@ export function ApplyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void
   }
 }
 
-/** @deprecated Use {@link ApplyScope}. */
-export function applyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void {
-  return ApplyScope(rp, scope);
-}
 
 /** The prediction result-ref the write-back maps into the column: `$.class` for a label, else `$.score`. */
 export function OutputRef(valueKind: ScoringValueKind | undefined): string {
   return valueKind === 'class' ? '$.class' : '$.score';
 }
 
-/** @deprecated Use {@link OutputRef}. */
-export function outputRef(valueKind: ScoringValueKind | undefined): string {
-  return OutputRef(valueKind);
-}
 
 /**
  * Serialize the model `Configuration` JSON every scoring Record Process carries: the
@@ -99,10 +92,6 @@ export function ModelConfiguration(modelId: string, primaryKeyField: string | un
   return JSON.stringify({ modelId, primaryKeyField: primaryKeyField ?? 'ID' });
 }
 
-/** @deprecated Use {@link ModelConfiguration}. */
-export function modelConfiguration(modelId: string, primaryKeyField: string | undefined): string {
-  return ModelConfiguration(modelId, primaryKeyField);
-}
 
 /**
  * Serialize the write-back `OutputMapping` JSON mapping the (non-empty) `outputField`
@@ -112,80 +101,115 @@ export function WriteBackOutputMapping(outputField: string, valueKind: ScoringVa
   return JSON.stringify({ fields: { [outputField]: OutputRef(valueKind) } });
 }
 
-/** @deprecated Use {@link WriteBackOutputMapping}. */
-export function writeBackOutputMapping(outputField: string, valueKind: ScoringValueKind | undefined): string {
-  return WriteBackOutputMapping(outputField, valueKind);
+
+/** What {@link CreateScoringBinding} needs to bind a just-saved scoring Record Process. */
+export interface ScoringBindingRequest {
+  /** The `MJ: ML Models` id the process scores with; the binding names its training pipeline. */
+  readonly ModelID: string;
+  /** The id of the just-saved scoring Record Process. */
+  readonly RecordProcessID: string;
+  /** The already-resolved target-entity id. */
+  readonly TargetEntityID: string;
+  /** The column the newest value is copied into, or null for generic output (no column). */
+  readonly TargetColumn: string | null;
+  /** Which prediction value the column receives (the copy source); ignored without a column. */
+  readonly ValueKind: ScoringValueKind | undefined;
+  /** The prediction's feature name; defaults to the model's pipeline name (the plan's default for a binding, §5.8.6). */
+  readonly FeatureName: string | undefined;
+  /** Who may see the predictions; defaults through {@link ScoringBindings.ResolveViewAuthorizationID}. */
+  readonly ViewAuthorizationID: string | undefined;
+  /** The binding mode — `'Scheduled'` or `'OnDemand'`. */
+  readonly Mode: ScoringBindingMode;
+  /** The provider every read and the binding save go through. */
+  readonly Provider: IMetadataProvider;
+  /** The request user; the provider's current user when omitted (a client provider). */
+  readonly ContextUser: UserInfo | undefined;
+  /** A short helper name used to prefix errors and the contextual log on failure. */
+  readonly ContextLabel: string;
 }
 
+/** The model columns a binding is created from. */
+type BindingModelRow = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Pipeline' | 'ProblemType'>;
+/** The existing binding a creation of the same feature updates. */
+type ExistingBindingRow = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID'>;
+
 /**
- * Create the `MJ: ML Model Scoring Bindings` lineage row for a just-saved scoring
- * Record Process. Reuses the already-resolved `entityID` (no second metadata lookup)
- * and the production `MetadataEntityFactory` over the same provider so the binding
- * lands on the right server in multi-provider setups. `mode` distinguishes the
- * scheduled (`'Scheduled'`) from the on-demand (`'OnDemand'`) caller.
+ * Create (or, for the same pipeline and feature on the same entity, update) the `MJ: ML Model Scoring Bindings` row of a
+ * just-saved scoring Record Process — in generic mode too, with no column. The binding names the model's training
+ * pipeline, so a newly published version of the pipeline scores it with no binding change.
  *
- * Fail-loud on save failure: {@link upsertScoringBinding} throws (after `LogError`)
- * when the binding `Save()` fails, which propagates out of this helper. We do NOT
- * swallow it — a scoring Record Process whose lineage binding is missing would score
- * records but stay invisible to the model-prediction panel / production dashboard, the
- * exact bug this wiring exists to prevent. The Record Process is already persisted at
- * this point, so the failure is surfaced for operator follow-up rather than rolled back
- * (there is no cross-row transaction across the two saves).
+ * Fail-loud: a failure throws (after `LogError`) — a scoring Record Process whose binding is missing would score records
+ * that no prediction feature names. The Record Process is already persisted at this point, so the failure is surfaced
+ * for operator follow-up rather than rolled back (there is no cross-row transaction across the two saves).
  *
- * @param modelId the `MJ: ML Models` id the binding scores with
- * @param outputField the (non-empty) target column the prediction lands in
- * @param recordProcessId the id of the just-saved scoring Record Process
- * @param entityID the already-resolved target-entity id
- * @param mode the binding mode — `'Scheduled'` or `'OnDemand'`
- * @param provider the metadata provider the binding is created against
- * @param contextUser request user — required server-side for isolation/audit
- * @param contextLabel a short helper name used to prefix the contextual log on failure
+ * @throws when the model cannot be read, no view authorization is given or seeded, or the binding save fails
  */
-export async function CreateScoringBinding(
-  modelId: string,
-  outputField: string,
-  recordProcessId: string,
-  entityID: string,
-  mode: ScoringBindingMode,
-  provider: IMetadataProvider,
-  contextUser: UserInfo | undefined,
-  contextLabel: string,
-): Promise<MJMLModelScoringBindingEntity> {
+export async function CreateScoringBinding(request: ScoringBindingRequest): Promise<MJMLModelScoringBindingEntity> {
+  const label = request.ContextLabel;
   try {
-    return await UpsertScoringBinding(
+    const user = request.ContextUser || request.Provider.CurrentUser;
+    if (!user) throw new Error(`${label}: no user to create the scoring binding as`);
+    const model = await readBindingModel(request, user);
+    const featureName = IsNonEmpty(request.FeatureName) ? request.FeatureName.trim() : model.Pipeline || model.PipelineID;
+    const existing = await readExistingBinding(request, featureName, user);
+    return await ScoringBindings.Upsert(
       {
-        mlModelId: modelId,
-        recordProcessId,
-        targetEntityId: entityID,
-        targetColumn: outputField,
-        mode,
+        bindingId: existing !== null && UUIDsEqual(existing.MLTrainingPipelineID, model.PipelineID) ? existing.ID : undefined,
+        mlTrainingPipelineId: model.PipelineID,
+        featureName,
+        viewAuthorizationId: ScoringBindings.ResolveViewAuthorizationID(request.ViewAuthorizationID, request.Provider),
+        targetEntityId: request.TargetEntityID,
+        recordProcessId: request.RecordProcessID,
+        targetColumn: request.TargetColumn,
+        targetColumnSource: request.TargetColumn === null ? null : DefaultCopySource(model.ProblemType, request.ValueKind),
+        mode: request.Mode,
       },
-      new MetadataEntityFactory(provider),
-      contextUser,
+      new MetadataEntityFactory(request.Provider),
+      user,
     );
   } catch (e) {
-    // upsertScoringBinding already LogError'd the underlying Save() failure; add the
-    // caller's context (the saved RP id) so the inconsistency is traceable.
     LogError(
-      `${contextLabel}: Record Process '${recordProcessId}' saved but its scoring binding ` +
-        `failed for model '${modelId}': ${e instanceof Error ? e.message : String(e)}`,
+      `${label}: Record Process '${request.RecordProcessID}' saved but its scoring binding ` +
+        `failed for model '${request.ModelID}': ${e instanceof Error ? e.message : String(e)}`,
     );
     throw e;
   }
 }
 
-/** @deprecated Use {@link CreateScoringBinding}. */
-export async function createScoringBinding(
-  modelId: string,
-  outputField: string,
-  recordProcessId: string,
-  entityID: string,
-  mode: ScoringBindingMode,
-  provider: IMetadataProvider,
-  contextUser: UserInfo | undefined,
-  contextLabel: string,
-): Promise<MJMLModelScoringBindingEntity> {
-  return CreateScoringBinding(modelId, outputField, recordProcessId, entityID, mode, provider, contextUser, contextLabel);
+/**
+ * The scored value a column copy receives by default: `$.Class` for a class label, else the adverse-class probability
+ * of a classification and the point prediction of a regression. Pure.
+ */
+export function DefaultCopySource(problemType: MJMLModelEntity['ProblemType'], valueKind: ScoringValueKind | undefined): string {
+  if (valueKind === 'class') return '$.Class';
+  return problemType === 'classification' ? '$.AdverseProbability' : '$.Value';
+}
+
+/** The model the binding is created from (its pipeline and problem type); throws when it cannot be read. */
+async function readBindingModel(request: ScoringBindingRequest, user: UserInfo): Promise<BindingModelRow> {
+  const read = await RunView.FromMetadataProvider(request.Provider).RunView<BindingModelRow>({
+    EntityName: 'MJ: ML Models',
+    ExtraFilter: `ID='${EscapeSQLString(request.ModelID)}'`, // pk-filter-ok: MJ: ML Models is an MJ core entity keyed by ID
+    Fields: ['ID', 'PipelineID', 'Pipeline', 'ProblemType'],
+    ResultType: 'simple',
+  }, user);
+  if (!read.Success) throw new Error(`${request.ContextLabel}: reading ML Model '${request.ModelID}' failed: ${read.ErrorMessage}`);
+  const model = read.Results[0];
+  if (!model) throw new Error(`${request.ContextLabel}: ML Model '${request.ModelID}' was not found`);
+  return model;
+}
+
+/** The binding of `featureName` on the target entity, or null when there is none. */
+async function readExistingBinding(request: ScoringBindingRequest, featureName: string, user: UserInfo): Promise<ExistingBindingRow | null> {
+  const read = await RunView.FromMetadataProvider(request.Provider).RunView<ExistingBindingRow>({
+    EntityName: 'MJ: ML Model Scoring Bindings',
+    ExtraFilter: `TargetEntityID='${EscapeSQLString(request.TargetEntityID)}' AND FeatureName='${EscapeSQLString(featureName)}'`,
+    Fields: ['ID', 'MLTrainingPipelineID'],
+    ResultType: 'simple',
+    BypassCache: true,
+  }, user);
+  if (!read.Success) throw new Error(`${request.ContextLabel}: reading the scoring bindings of "${featureName}" failed: ${read.ErrorMessage}`);
+  return read.Results[0] || null;
 }
 
 /**
@@ -204,10 +228,6 @@ export function CountScopeSelectors(scope: ScoringScope | undefined): number {
   return count;
 }
 
-/** @deprecated Use {@link CountScopeSelectors}. */
-export function countScopeSelectors(scope: ScoringScope | undefined): number {
-  return CountScopeSelectors(scope);
-}
 
 /**
  * Resolve the target entity's id from its name, throwing when the entity is unknown.
@@ -225,21 +245,9 @@ export function ResolveTargetEntityID(
   return entity.ID;
 }
 
-/** @deprecated Use {@link ResolveTargetEntityID}. */
-export function resolveTargetEntityID(
-  targetEntityName: string,
-  provider: IMetadataProvider,
-  contextLabel: string,
-): string {
-  return ResolveTargetEntityID(targetEntityName, provider, contextLabel);
-}
 
 /** Whether a value is a non-empty (trimmed) string. */
 export function IsNonEmpty(value: string | undefined | null): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-/** @deprecated Use {@link IsNonEmpty}. */
-export function isNonEmpty(value: string | undefined | null): value is string {
-  return IsNonEmpty(value);
-}

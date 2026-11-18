@@ -23,8 +23,8 @@
  * | 4. train ({@link PipelineAutoTrainer.TrainAndPublish}) | the single-flight claim (D4-12), then the training engine | the run evaluated and published through {@link AutomatedPublisher.EvaluateAndPublish} |
  *
  * A publish that does not happen fails the Process Run with the recorded refusal (§5.7 R4) unless a Published model of
- * the pipeline is left to score with, which then scores and the withheld outcome is logged. The process and its scoring
- * bindings are then repointed at the served model. The publish archives a superseded model of the same pipeline in its
+ * the pipeline is left to score with, which then scores and the withheld outcome is logged. The process is then
+ * repointed at the served model; its scoring bindings name the pipeline, so they follow it unchanged. The publish archives a superseded model of the same pipeline in its
  * own transaction; a superseded model of another pipeline is never archived (it may still serve another process,
  * D4-12) and is named in the log instead. The gate decides every publish: a kept baseline, a flagged run or a caller
  * without the publish grants is withheld and recorded by the gate, never pre-judged here (D4-99).
@@ -52,7 +52,7 @@ import { TrainingInFlightError } from '../training/training-claims';
 import { ArtifactRegistry, type IArtifactRegistry } from '../registry/artifact-registry';
 import type { RegistryContext } from '../registry/registry-context';
 import { StorageProviderArtifactLoader } from './storage-provider-artifact-loader';
-import { UpsertScoringBinding } from './scoring-binding';
+import { ScoringBindings } from './scoring-binding';
 import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
 import type { AutoTrainRequest, IModelAutoTrainer } from './types';
 
@@ -344,58 +344,27 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   // ----- repoint ------------------------------------------------------------
 
   /**
-   * Point the Record Process (its `Configuration.modelId`) and its scoring bindings at
-   * the trained model. Bindings on the process — and bindings still on the superseded
-   * model — are repointed; when none exist and a binding was declared, one is created.
+   * Point the Record Process (its `Configuration.modelId`) at the trained model. Scoring bindings name the pipeline,
+   * not a model version, so they need no repoint; when the process declares a binding (`autoTrain.binding`), it is
+   * created on the process's entity, or updated when the pipeline already binds that feature there.
    * The process row is read past the RunView cache. A Record Process the request names that no longer exists (deleted
-   * between training and repoint, M4b.6 cell (d)) is not written to: the bindings of the superseded model are still
-   * repointed, then the run fails naming the process ({@link RecordProcessGoneMessage}); the publish that committed
-   * before stands, and the next process on the pipeline serves that model without training.
+   * between training and repoint, M4b.6 cell (d)) is not written to, and the run fails naming the process
+   * ({@link RecordProcessGoneMessage}); the publish that committed before stands, and the next process on the pipeline
+   * serves that model without training.
    *
-   * @throws Error when the named Record Process no longer exists, cannot be read, or its save fails
+   * @throws Error when the named Record Process no longer exists, cannot be read, or its save or its binding's fails
    */
   protected async repoint(request: AutoTrainRequest, modelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
-    const factory = new MetadataEntityFactory(provider);
-    let rp: MJRecordProcessEntity | null = null;
-    let gone: string | null = null;
+    const ctx: RegistryContext = { ContextUser: contextUser, Provider: provider };
     const recordProcessId = request.recordProcessId;
-    if (recordProcessId !== null && IsValidUUID(recordProcessId)) {
-      rp = await this.readRecordProcess(recordProcessId, { ContextUser: contextUser, Provider: provider });
-      if (rp === null) {
-        gone = recordProcessId;
-      } else {
-        rp.Configuration = JSON.stringify({ ...this.parseConfig(rp.Configuration), modelId });
-        if (!(await rp.Save())) {
-          throw new Error(`Auto-train: failed to repoint Record Process '${rp.ID}': ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
-        }
-      }
+    if (recordProcessId === null || !IsValidUUID(recordProcessId)) return;
+    const rp = await this.readRecordProcess(recordProcessId, ctx);
+    if (rp === null) throw new Error(PipelineAutoTrainer.RecordProcessGoneMessage(recordProcessId, modelId, request.pipelineId));
+    rp.Configuration = JSON.stringify({ ...this.parseConfig(rp.Configuration), modelId });
+    if (!(await rp.Save())) {
+      throw new Error(`Auto-train: failed to repoint Record Process '${rp.ID}': ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
     }
-
-    const bindings = await this.loadBindings(request, rp ? rp.ID : null, contextUser, provider);
-    for (const binding of bindings) {
-      if (UUIDsEqual(binding.MLModelID, modelId)) {
-        continue;
-      }
-      binding.MLModelID = modelId;
-      if (!(await binding.Save())) {
-        LogError(`Auto-train: failed to repoint scoring binding '${binding.ID}': ${binding.LatestResult?.CompleteMessage || 'unknown error'}`);
-      }
-    }
-
-    if (bindings.length === 0 && rp && request.binding) {
-      await UpsertScoringBinding(
-        {
-          mlModelId: modelId,
-          recordProcessId: rp.ID,
-          targetEntityId: rp.EntityID,
-          targetColumn: request.binding.targetColumn,
-          mode: request.binding.mode || (rp.ScheduleEnabled ? 'Scheduled' : 'OnDemand'),
-        },
-        factory,
-        contextUser,
-      );
-    }
-    if (gone !== null) throw new Error(PipelineAutoTrainer.RecordProcessGoneMessage(gone, modelId, request.pipelineId));
+    if (request.binding) await this.ensureDeclaredBinding(request, request.binding, rp, ctx);
   }
 
   /** The error of a repoint whose Record Process no longer exists (the run fails loudly; nothing is written to it). Pure. */
@@ -404,24 +373,27 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
       `a process that runs next on pipeline '${pipelineId}' serves that model without training.`;
   }
 
-  /** Bindings on the Record Process and/or on the superseded model. */
-  protected async loadBindings(
-    request: AutoTrainRequest,
-    recordProcessId: string | null,
-    contextUser: UserInfo,
-    provider: IMetadataProvider,
-  ): Promise<MJMLModelScoringBindingEntity[]> {
-    const clauses: string[] = [];
-    if (recordProcessId !== null && IsValidUUID(recordProcessId)) clauses.push(`RecordProcessID='${EscapeSQLString(recordProcessId)}'`);
-    if (request.currentModelId !== null && IsValidUUID(request.currentModelId)) clauses.push(`MLModelID='${EscapeSQLString(request.currentModelId)}'`);
-    if (clauses.length === 0) {
-      return [];
-    }
-    const result = await RunView.FromMetadataProvider(provider).RunView<MJMLModelScoringBindingEntity>(
-      { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: clauses.join(' OR '), ResultType: 'entity_object' },
-      contextUser,
-    );
-    return result.Success ? result.Results : [];
+  /** Creates the process's declared binding of the pipeline, or updates the pipeline's binding of that feature. */
+  protected async ensureDeclaredBinding(request: AutoTrainRequest, declared: NonNullable<AutoTrainRequest['binding']>, rp: MJRecordProcessEntity, ctx: RegistryContext): Promise<void> {
+    const existing = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID'>>({
+      EntityName: 'MJ: ML Model Scoring Bindings',
+      ExtraFilter: `TargetEntityID='${EscapeSQLString(rp.EntityID)}' AND FeatureName='${EscapeSQLString(declared.featureName)}'`,
+      Fields: ['ID', 'MLTrainingPipelineID'],
+      ResultType: 'simple',
+    }, ctx);
+    if (!existing.Success) throw new Error(`Auto-train: reading the scoring binding "${declared.featureName}" failed: ${existing.ErrorMessage}`);
+    const same = existing.Results.find((b) => UUIDsEqual(b.MLTrainingPipelineID, request.pipelineId));
+    await ScoringBindings.Upsert({
+      bindingId: same ? same.ID : undefined,
+      mlTrainingPipelineId: request.pipelineId,
+      featureName: declared.featureName,
+      viewAuthorizationId: ScoringBindings.ResolveViewAuthorizationID(declared.viewAuthorizationId, ctx.Provider),
+      targetEntityId: rp.EntityID,
+      recordProcessId: rp.ID,
+      targetColumn: declared.targetColumn || null,
+      targetColumnSource: declared.targetColumn ? declared.targetColumnSource || null : null,
+      mode: declared.mode || (rp.ScheduleEnabled ? 'Scheduled' : 'OnDemand'),
+    }, new MetadataEntityFactory(ctx.Provider), ctx.ContextUser);
   }
 
   // ----- private helpers ----------------------------------------------------

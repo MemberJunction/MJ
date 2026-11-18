@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { RegisterClassEx } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClassEx, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
@@ -114,14 +114,6 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     /** Resolved models by ID for lineage and history decoration. */
     public ModelsById: Map<string, MJMLModelEntity> = new Map();
 
-    /** @deprecated Use {@link ModelsById}. */
-    public get modelsById(): Map<string, MJMLModelEntity> {
-        return this.ModelsById;
-    }
-    /** @deprecated Use {@link ModelsById}. */
-    public set modelsById(value: Map<string, MJMLModelEntity>) {
-        this.ModelsById = value;
-    }
     /** Historical prediction runs for this record across models. */
     public HistoryItems: PredictionHistoryItem[] = [];
     /** Loading flag for historical predictions lookup. */
@@ -325,21 +317,25 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         return result.Results ?? [];
     }
 
-    /** Load the distinct models referenced by the bindings, keyed by model ID. */
+    /**
+     * Load the Published models of the bindings' training pipelines (a binding scores with its pipeline's Published
+     * model), keyed by model ID, newest version first.
+     */
     private async loadModelsForBindings(
         bindings: MJMLModelScoringBindingEntity[],
     ): Promise<Map<string, MJMLModelEntity>> {
-        const modelIds = [...new Set(bindings.map(b => b.MLModelID).filter((id): id is string => !!id))];
+        const pipelineIds = new UUIDSet(bindings.map(b => b.MLTrainingPipelineID));
         const byId = new Map<string, MJMLModelEntity>();
-        if (modelIds.length === 0) {
+        if (pipelineIds.Size === 0) {
             return byId;
         }
-        const inList = modelIds.map(id => `'${id}'`).join(',');
+        const inList = [...pipelineIds].map(id => `'${EscapeSQLString(id)}'`).join(',');
         const rv = this.runView();
         const result = await rv.RunView<MJMLModelEntity>(
             {
                 EntityName: 'MJ: ML Models',
-                ExtraFilter: `ID IN (${inList})`,
+                ExtraFilter: `PipelineID IN (${inList}) AND Status='Published'`,
+                OrderBy: 'Version DESC',
                 ResultType: 'entity_object',
             },
             this.contextUser(),
@@ -393,14 +389,21 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         }
     }
 
-    /** Map each binding (+ its model) to a display card. Skips bindings whose model is missing. */
+    /**
+     * Map each binding (+ its pipeline's newest Published model) to a display card. Skips bindings whose pipeline has
+     * no Published model.
+     */
     private buildCards(
         bindings: MJMLModelScoringBindingEntity[],
         models: Map<string, MJMLModelEntity>,
     ): PredictionCard[] {
+        const byPipeline = new UUIDMap<MJMLModelEntity>();
+        for (const m of models.values()) {
+            if (!byPipeline.Has(m.PipelineID)) byPipeline.Set(m.PipelineID, m);
+        }
         const cards: PredictionCard[] = [];
         for (const binding of bindings) {
-            const model = binding.MLModelID ? models.get(binding.MLModelID) : undefined;
+            const model = byPipeline.Get(binding.MLTrainingPipelineID);
             if (!model) {
                 continue;
             }

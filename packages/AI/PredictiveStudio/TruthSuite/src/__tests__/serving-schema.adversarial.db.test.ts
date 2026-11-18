@@ -123,6 +123,13 @@ async function expectRefused(row: BaseEntity, constraint: string): Promise<void>
   expect(Logged).toContain(constraint);
 }
 
+/** An authorization a fixture binding is seen through (the binding entity requires one; which one is immaterial here). */
+function AnyAuthorizationID(): string {
+  const authorization = server.Provider.Authorizations[0];
+  if (!authorization) throw new Error('no MJ: Authorizations are loaded for the scoring binding fixture');
+  return authorization.ID;
+}
+
 /** Save a new row of `entityName` with `fill` applied; throws with the provider's message when the save fails. */
 async function createRow<T extends BaseEntity>(
   entityName: string,
@@ -512,6 +519,17 @@ describe('ML model publish records refuse inconsistent rows', () => {
 
 // ── spDeleteEntityWithCoreDependencies ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * What the teardown of one doomed world deletes by: the scratch entity's ID (known before anything is written) and the
+ * pipeline, unit and file IDs once their rows exist (null or empty until then).
+ */
+interface DoomedTeardownKeys {
+  readonly EntityID: string;
+  PipelineID: string | null;
+  PredictionUnitID: string | null;
+  FileIDs: readonly string[];
+}
+
 /** The entity the delete case removes, its pipeline, and the rows of every serving table that name that pipeline. */
 interface DoomedEntityWorld {
   readonly EntityID: string;
@@ -679,8 +697,8 @@ async function SavePublishRecord(overrides: PublishRecordOverrides): Promise<MJM
 }
 
 /** The scratch entity, its pipeline, a trained run and a no-signal run, a snapshot, and the model the run produced. */
-async function createDoomedPipeline(algorithmId: string): Promise<DoomedPipeline> {
-  const entityId = randomUUID();
+async function createDoomedPipeline(algorithmId: string, keys: DoomedTeardownKeys): Promise<DoomedPipeline> {
+  const entityId = keys.EntityID;
   await RawScratchEntity(pool, entityId);
   const pipeline = await createRow<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', (p) => {
     p.Name = `${TAG}-doomed-${entityId}`;
@@ -689,9 +707,12 @@ async function createDoomedPipeline(algorithmId: string): Promise<DoomedPipeline
     p.ProblemType = 'classification';
     p.AlgorithmID = algorithmId;
   });
+  keys.PipelineID = pipeline.ID;
   const run = await NewTrainingRun(pipeline.ID, algorithmId);
   const noSignalRun = await NewTrainingRun(pipeline.ID, algorithmId);
   const snapshot = await RawTrainingSnapshot(pool, pipeline.ID);
+  keys.PredictionUnitID = snapshot.PredictionUnitID;
+  keys.FileIDs = snapshot.FileIDs;
   const model = await createRow<MJMLModelEntity>('MJ: ML Models', (m) => {
     m.PipelineID = pipeline.ID;
     m.AlgorithmID = algorithmId;
@@ -716,6 +737,7 @@ async function createDoomedServingRows(d: DoomedPipeline, survivingModelId: stri
   const binding = await createRow<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', (b) => {
     b.MLTrainingPipelineID = d.PipelineID;
     b.FeatureName = `${TAG}-doomed`;
+    b.ViewAuthorizationID = AnyAuthorizationID();
     b.TargetEntityID = d.EntityID;
     b.Mode = 'OnDemand';
   });
@@ -819,16 +841,16 @@ async function SurvivingReferencesOf(p: sql.ConnectionPool, s: SurvivingRows): P
  * and, when the procedure failed, the doomed world too, children first. The surviving pipeline's own fixtures are
  * deleted once, after every world, by `deleteFixtures`.
  */
-async function deleteDoomedWorld(w: DoomedEntityWorld, s: ServingFixtures): Promise<void> {
+async function deleteDoomedWorld(w: DoomedTeardownKeys, s: ServingFixtures): Promise<void> {
   const t = (entityName: string): string => tableOf(server.Provider, entityName);
   await pool.request()
     .input('EntityID', sql.UniqueIdentifier, w.EntityID)
     .input('Doomed', sql.UniqueIdentifier, w.PipelineID)
     .input('Surviving', sql.UniqueIdentifier, s.Pipeline.ID)
     .input('UnitID', sql.UniqueIdentifier, w.PredictionUnitID)
-    .input('F1', sql.UniqueIdentifier, w.FileIDs[0])
-    .input('F2', sql.UniqueIdentifier, w.FileIDs[1])
-    .input('F3', sql.UniqueIdentifier, w.FileIDs[2])
+    .input('F1', sql.UniqueIdentifier, w.FileIDs[0] || null)
+    .input('F2', sql.UniqueIdentifier, w.FileIDs[1] || null)
+    .input('F3', sql.UniqueIdentifier, w.FileIDs[2] || null)
     .query(`
       DECLARE @Models TABLE (ID uniqueidentifier PRIMARY KEY);
       INSERT INTO @Models (ID) SELECT ID FROM ${t('MJ: ML Models')} WHERE PipelineID IN (@Doomed, @Surviving);
@@ -852,18 +874,22 @@ async function deleteDoomedWorld(w: DoomedEntityWorld, s: ServingFixtures): Prom
       DELETE FROM ${t('MJ: Entities')} WHERE ID = @EntityID;`);
 }
 
-/** A new scratch entity with a pipeline holding a row of every serving table, recorded in `worlds` for the teardown. */
-async function BuildDoomedWorld(s: ServingFixtures, worlds: DoomedEntityWorld[]): Promise<DoomedEntityWorld> {
-  const doomed = await createDoomedPipeline(s.AlgorithmID);
-  const world = await createDoomedServingRows(doomed, s.Model.ID);
-  worlds.push(world);
-  return world;
+/**
+ * A new scratch entity with a pipeline holding a row of every serving table. Its teardown keys are recorded in `worlds`
+ * before the first row is written and filled in as each keyed row is saved, so a setup that throws part-way still
+ * leaves the teardown everything it wrote, the raw scratch Entity row included.
+ */
+async function BuildDoomedWorld(s: ServingFixtures, worlds: DoomedTeardownKeys[]): Promise<DoomedEntityWorld> {
+  const keys: DoomedTeardownKeys = { EntityID: randomUUID(), PipelineID: null, PredictionUnitID: null, FileIDs: [] };
+  worlds.push(keys);
+  const doomed = await createDoomedPipeline(s.AlgorithmID, keys);
+  return createDoomedServingRows(doomed, s.Model.ID);
 }
 
 describe('spDeleteEntityWithCoreDependencies removes an entity with its serving rows', () => {
   // Each case builds its own doomed entity and runs the procedure itself, so neither depends on the other.
   let surviving: ServingFixtures;
-  const worlds: DoomedEntityWorld[] = [];
+  const worlds: DoomedTeardownKeys[] = [];
 
   beforeAll(async () => {
     surviving = await createFixtures();

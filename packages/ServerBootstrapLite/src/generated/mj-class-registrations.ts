@@ -1163,7 +1163,7 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/predictive-studio (20 classes)
+// @memberjunction/predictive-studio (21 classes)
 import {
     EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
@@ -1185,6 +1185,7 @@ import {
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioWithdrawScoringBindingServerOperation,
 } from '@memberjunction/predictive-studio';
 
 // @memberjunction/task-graph (16 classes)
@@ -1222,7 +1223,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (93 classes)
+// @memberjunction/core-entities-server (94 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1281,6 +1282,7 @@ import {
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
     MJMLModelPublishRecordEntityServer,
+    MJMLModelScoringBindingEntityServer,
     MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2484,6 +2486,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioWithdrawScoringBindingServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -2568,6 +2571,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
     MJMLModelPublishRecordEntityServer,
+    MJMLModelScoringBindingEntityServer,
     MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2602,12 +2606,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
-    QueryRefreshExtractionServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
@@ -2806,12 +2810,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
     RubricCalibrationTestDriver,
     DecisionFeaturePipelineDriver,
@@ -2861,7 +2865,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1232;
+export const CLASS_REGISTRATIONS_COUNT = 1234;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

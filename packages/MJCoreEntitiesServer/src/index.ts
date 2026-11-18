@@ -114,6 +114,7 @@ export * from './custom/MJMLEvaluationProtocolEntityServer.server';
 export * from './custom/MJMLTrainingSnapshotEntityServer.server';
 export * from './custom/MJMLModelPublishRecordEntityServer.server';
 export * from './custom/MJMLOutputBindingEntityServer.server';
+export * from './custom/MJMLModelScoringBindingEntityServer.server';
 export * from './custom/MJBrandKitEntityServer.server';
 export * from './custom/MJGraphEdgeEntityServer.server';
 export * from './custom/MJGraphEdgeTypeEntityServer.server';

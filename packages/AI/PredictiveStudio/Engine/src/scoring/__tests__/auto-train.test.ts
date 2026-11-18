@@ -230,6 +230,18 @@ describe('PipelineAutoTrainer.EnsureTrainedModel through the automated publisher
     expect([a.status, b.status].sort()).toEqual(['fulfilled', 'rejected']);
     expect(String((a.status === 'rejected' ? a : b as PromiseRejectedResult).reason)).toContain(store.TrainingRuns(p.ID)[0].ID);
   });
+  it('a declared binding is created once for the pipeline, then updated in place on the next repoint (bindings are not repointed)', async () => {
+    const declared = { featureName: 'Renewal risk', viewAuthorizationId: 'auth-1', targetColumn: 'RenewalScore', targetColumnSource: '$.AdverseProbability' };
+    await trainer.EnsureTrainedModel({ ...request, binding: declared }, user, provider);
+    await trainer.EnsureTrainedModel({ ...request, binding: declared }, user, provider);
+    const bindings = store.Tables['MJ: ML Model Scoring Bindings'] || [];
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0]).toMatchObject({
+      MLTrainingPipelineID: p.ID, FeatureName: 'Renewal risk', ViewAuthorizationID: 'auth-1', RecordProcessID: rp.ID,
+      TargetColumn: 'RenewalScore', TargetColumnSource: '$.AdverseProbability', Status: 'Active',
+    });
+    expect(bindings[0]['MLModelID']).toBeUndefined();
+  });
   it('a demoted configured model is repointed to the pipeline\'s current published model without training', async () => {
     const current = store.AddModel(p.ID, { Status: 'Published', ArtifactStatus: 'verified' });
     const id = await trainer.EnsureTrainedModel({ ...request, currentModelId: demoted.ID }, user, provider);

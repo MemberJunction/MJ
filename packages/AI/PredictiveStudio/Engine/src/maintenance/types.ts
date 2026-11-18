@@ -19,6 +19,7 @@ import type {
 } from '@memberjunction/core-entities';
 
 import type { TrainingEngine } from '../training';
+import type { ScoringBindingMode } from '../scoring/scoring-binding';
 import type { TrainModelInput, TrainModelResult, TrainingDeps, IEntityFactory } from '../training';
 
 /**
@@ -217,10 +218,21 @@ export interface IMaintenanceLoader {
     contextUser: UserInfo | undefined,
     provider: IMetadataProvider,
   ): Promise<MJMLModelEntity | null>;
+
+  /**
+   * Load the model a binding scores with: the newest Published model of its training pipeline (mutation-free read).
+   *
+   * @returns the model, or `null` when the pipeline has no Published model
+   */
+  LoadPublishedModel(
+    pipelineId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<MJMLModelEntity | null>;
 }
 
-/** The binding modes maintenance distinguishes (mirrors `MJMLModelScoringBindingEntity.Mode`). */
-export type MaintenanceBindingMode = 'OnDemand' | 'Scheduled' | 'Materialized';
+/** The binding modes maintenance distinguishes: the binding entity's `Mode`. */
+export type MaintenanceBindingMode = ScoringBindingMode;
 
 /**
  * Re-scoring seam — re-runs scoring for a binding and reports how many rows were

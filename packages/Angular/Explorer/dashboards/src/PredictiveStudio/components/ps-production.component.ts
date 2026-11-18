@@ -10,7 +10,7 @@ import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntit
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProcessRunRow, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
-import { humanizeCron, StatusVariant } from '../production-distribution';
+import { HumanizeCron, ModeBadgeClass, StatusVariant } from '../production-distribution';
 import { JsonParse } from '@memberjunction/predictive-studio-core';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
@@ -27,7 +27,7 @@ interface BindingVM {
   id: string;
   targetEntity: string;
   targetColumn: string;
-  mode: string;
+  mode: MJMLModelScoringBindingEntity['Mode'];
   schedulePhrase: string | null;
 }
 
@@ -507,7 +507,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   }
 
   private toVM(m: MJMLModelEntity): ProductionModelVM {
-    const bindings = this.Engine.ScoringBindings.filter((b) => UUIDsEqual(b.MLModelID, m.ID));
+    const bindings = this.Engine.ScoringBindingsForPipeline(m.PipelineID);
     const processes = this.Engine.RecordProcessesForModel(m.ID);
     const scheduledCount = processes.filter((p) => !!p.ScheduleEnabled).length
       + bindings.filter((b) => b.Mode === 'Scheduled').length;
@@ -536,10 +536,10 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     };
   }
 
+  /** The bindings of the model's pipeline (a binding scores with whichever version of it is Published). */
   private bindingsForModel(modelId: string): BindingVM[] {
-    return this.Engine.ScoringBindings
-      .filter((b) => UUIDsEqual(b.MLModelID, modelId))
-      .map((b) => this.toBindingVM(b));
+    const model = this.Engine.PublishedModels.find((m) => UUIDsEqual(m.ID, modelId));
+    return model ? this.Engine.ScoringBindingsForPipeline(model.PipelineID).map((b) => this.toBindingVM(b)) : [];
   }
 
   private toBindingVM(b: MJMLModelScoringBindingEntity): BindingVM {
@@ -549,7 +549,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       targetEntity: this.resolveEntityName(b),
       targetColumn: b.TargetColumn === null || b.TargetColumn === undefined ? '(generic output)' : b.TargetColumn,
       mode: b.Mode,
-      schedulePhrase: b.Mode === 'Scheduled' ? humanizeCron(process?.CronExpression === null || process?.CronExpression === undefined ? null : process.CronExpression) : null,
+      schedulePhrase: b.Mode === 'Scheduled' ? HumanizeCron(process?.CronExpression === null || process?.CronExpression === undefined ? null : process.CronExpression) : null,
     };
   }
 
@@ -725,8 +725,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   }
 
   /** The badge variant of a binding mode. */
-  public ModeBadge(mode: string): StatusVariant {
-    return mode === 'Scheduled' ? 'blue' : mode === 'Materialized' ? 'green' : 'gray';
+  public ModeBadge(mode: BindingVM['mode']): StatusVariant {
+    return ModeBadgeClass(mode);
   }
 
   /** The badge variant of a run status. */

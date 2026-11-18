@@ -1,8 +1,9 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
   MJActionParamEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJConversationDetailEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity, MJMLPredictionUnitEntity, MJRecordProcessEntity, MJMLTrainingSnapshotEntity, MJScheduledJobEntity,
+  MJMLTrainingRunEntity, MJMLPredictionUnitEntity, MJRecordProcessEntity, MJMLTrainingSnapshotEntity, MJScheduledJobEntity, MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
+import { PredictiveStudioWithdrawScoringBindingOperation } from '@memberjunction/core-entities';
 import { MonitoringJobs } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
@@ -179,6 +180,9 @@ export type CleanupTrainingRunRow = CleanupRow & Pick<BaseEntity, 'Save'> & Pick
 /** A Training Snapshot row: a cleanup row with its three stored files. */
 export type CleanupSnapshotRow = CleanupRow & Pick<MJMLTrainingSnapshotEntity, 'MatrixFileID' | 'RowManifestFileID' | 'ProvenanceFileID'>;
 
+/** A scoring binding row: a cleanup row with its status (an active binding is withdrawn before it is deleted). */
+export type CleanupBindingRow = CleanupRow & Pick<MJMLModelScoringBindingEntity, 'Status'>;
+
 /** A scheduled job row: a cleanup row with the configuration that names the model a monitoring job watches. */
 export type CleanupScheduledJobRow = CleanupRow & Pick<MJScheduledJobEntity, 'Configuration'>;
 
@@ -210,6 +214,10 @@ export interface CleanupStore {
   /** The `MJ: ML Evaluation Protocols` rows matching the filter. */
   EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]>;
   RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
+  /** The `MJ: ML Model Scoring Bindings` rows matching the filter, with their status. */
+  ScoringBindings(filter: string): Promise<CleanupBindingRow[]>;
+  /** Withdraw a scoring binding (`PredictiveStudio.WithdrawScoringBinding`); null when withdrawn, else why not. */
+  WithdrawBinding(bindingId: string): Promise<string | null>;
   TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]>;
   TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]>;
   Files(filter: string): Promise<CleanupFileRow[]>;
@@ -249,11 +257,16 @@ interface AgentRows {
   readonly Conversations: CleanupRow[];
 }
 
-/** The scoring rows hanging off the recorded models. */
+/** The scoring rows hanging off the recorded pipelines and models. */
 interface ScoringRows {
   readonly Processes: CleanupRecordProcessRow[];
   readonly ProcessRuns: CleanupRow[];
-  readonly Bindings: CleanupRow[];
+  /** The pipelines' scoring bindings. */
+  readonly Bindings: CleanupBindingRow[];
+  /** Every Feature Value a binding names (its `Model` rows, and `Human` rows entered against it). */
+  readonly BindingFeatureValues: CleanupRow[];
+  /** The `MJ: ML Scoring Runs` of the bindings and the models. */
+  readonly ScoringRuns: CleanupRow[];
   readonly Details: CleanupRow[];
   readonly Watermarks: CleanupRow[];
 }
@@ -312,6 +325,11 @@ export class HarnessCleanup {
       PredictionUnits: (filter) => HarnessCleanup.load<MJMLPredictionUnitEntity>(provider, user, 'MJ: ML Prediction Units', filter),
       EvaluationProtocols: (filter) => HarnessCleanup.load<MJMLEvaluationProtocolEntity>(provider, user, 'MJ: ML Evaluation Protocols', filter),
       RecordProcesses: (filter) => HarnessCleanup.load<MJRecordProcessEntity>(provider, user, 'MJ: Record Processes', filter),
+      ScoringBindings: (filter) => HarnessCleanup.load<MJMLModelScoringBindingEntity>(provider, user, 'MJ: ML Model Scoring Bindings', filter),
+      WithdrawBinding: async (bindingId) => {
+        const r = await new PredictiveStudioWithdrawScoringBindingOperation().Execute({ bindingId }, { provider, user });
+        return r.Success ? null : r.ErrorMessage || r.ResultCode || 'the withdrawal returned no result';
+      },
       TrainingRuns: (filter) => HarnessCleanup.load<MJMLTrainingRunEntity>(provider, user, 'MJ: ML Training Runs', filter),
       TrainingSnapshots: (filter) => HarnessCleanup.load<MJMLTrainingSnapshotEntity>(provider, user, 'MJ: ML Training Snapshots', filter),
       Files: (filter) => HarnessCleanup.load<MJFileEntity>(provider, user, 'MJ: Files', filter),
@@ -334,7 +352,8 @@ export class HarnessCleanup {
 
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
-   * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
+   * pipelines of recorded models), children first: the pipelines' scoring bindings (an active one withdrawn first, then
+   * the Feature Values and scoring runs that name a binding, then the bindings); the models' scoring Record Processes with their
    * runs, run details and watermarks; what the lifecycle gate wrote for the models and runs (publish records — those
    * naming a sign-off before the rest, run-level refusals included —, the monitoring jobs' runs, the jobs, the generated
    * scoring Actions and their params, the models' output bindings); then the run/model cycle (a run names the model it produced in `ResultingModelID`,
@@ -352,7 +371,7 @@ export class HarnessCleanup {
     const r = await HarnessCleanup.readRecorded(store, records);
     return [
       ...r.TrainerFiles.flatMap((t) => (t.Failure === null ? [] : [t.Failure])),
-      ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', r.Bindings)),
+      ...(await HarnessCleanup.deleteBindings(store, r)),
       ...(await HarnessCleanup.deleteAll('MJ: Process Run Details', r.Details)),
       ...(await HarnessCleanup.deleteAll('MJ: Process Runs', r.ProcessRuns)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Process Watermarks', r.Watermarks)),
@@ -455,6 +474,36 @@ export class HarnessCleanup {
 
 
   /**
+   * Deletes the pipelines' scoring bindings, D4-62's order: the active ones withdrawn, the Feature Values and scoring runs
+   * that name a binding deleted, then the bindings — read again first, because a binding row read before its withdrawal
+   * still says `Active` and its `Delete()` is refused on that copy. Returns one line per failure.
+   */
+  private static async deleteBindings(store: CleanupStore, r: RecordedRows): Promise<string[]> {
+    const failures = [
+      ...(await HarnessCleanup.withdrawActive(store, r.Bindings)),
+      ...(await HarnessCleanup.deleteAll('MJ: Feature Values', r.BindingFeatureValues)),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Scoring Runs', r.ScoringRuns)),
+    ];
+    const idFilter = HarnessCleanup.anyIn([['ID', new RecordIDSet(r.Bindings.map((b) => b.ID))]]);
+    const fresh = idFilter ? await store.ScoringBindings(idFilter) : [];
+    return [...failures, ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', fresh))];
+  }
+
+  /**
+   * Withdraws every active binding through `PredictiveStudio.WithdrawScoringBinding` (a binding deletes only once
+   * withdrawn, D4-62), so its column copies are cleared through the entity layer. Returns one line per failure; that
+   * binding's delete then fails too and is reported on its own line.
+   */
+  private static async withdrawActive(store: CleanupStore, bindings: readonly CleanupBindingRow[]): Promise<string[]> {
+    const active = bindings.filter((b) => b.Status === 'Active');
+    const failures = await HarnessCleanup.mapBounded(active, HarnessCleanup.SERIAL_DELETES, async (b) => {
+      const failure = await store.WithdrawBinding(b.ID);
+      return failure === null ? null : `MJ: ML Model Scoring Bindings ${b.ID}: could not be withdrawn before it is deleted: ${failure}`;
+    });
+    return failures.filter((f): f is string => f !== null);
+  }
+
+  /**
    * Clears and saves `ResultingModelID` on every run that names one of `modelIds`, so the models can be deleted before
    * the runs they reference (`MJ: ML Models.TrainingRunID`). Returns one line per run whose save failed; its model's
    * delete then fails too and is reported on its own line.
@@ -475,7 +524,7 @@ export class HarnessCleanup {
     const models = modelFilter ? await store.Models(modelFilter) : [];
     const modelIds = new RecordIDSet(models.map((m) => m.ID));
     const pipelineIds = new RecordIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
-    const scoring = await HarnessCleanup.readScoring(store, modelIds);
+    const scoring = await HarnessCleanup.readScoring(store, modelIds, pipelineIds);
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);
     const pipelineFilter = HarnessCleanup.anyIn([['ID', pipelineIds]]);
     const runs = runFilter ? await store.TrainingRuns(runFilter) : [];
@@ -528,16 +577,25 @@ export class HarnessCleanup {
     return modelId !== null && modelIds.Has(modelId);
   }
 
-  /** The models' scoring rows: their bindings and Record Processes, with the processes' runs, run details and watermarks. */
-  private static async readScoring(store: CleanupStore, modelIds: RecordIDSet): Promise<ScoringRows> {
+  /**
+   * The scoring rows: the pipelines' bindings with every Feature Value naming one and the bindings' and models' scoring
+   * runs; the models' Record Processes, with the processes' runs, run details and watermarks.
+   */
+  private static async readScoring(store: CleanupStore, modelIds: RecordIDSet, pipelineIds: RecordIDSet): Promise<ScoringRows> {
     const processes = modelIds.Size > 0 ? await HarnessCleanup.scoringProcesses(store, modelIds) : [];
     const processFilter = HarnessCleanup.anyIn([['RecordProcessID', new RecordIDSet(processes.map((p) => p.ID))]]);
     const processRuns = processFilter ? await store.Rows('MJ: Process Runs', processFilter) : [];
-    const bindingFilter = HarnessCleanup.anyIn([['MLModelID', modelIds]]);
+    const bindingFilter = HarnessCleanup.anyIn([['MLTrainingPipelineID', pipelineIds]]);
+    const bindings = bindingFilter ? await store.ScoringBindings(bindingFilter) : [];
+    const bindingIds = new RecordIDSet(bindings.map((b) => b.ID));
+    const valueFilter = HarnessCleanup.anyIn([['MLModelScoringBindingID', bindingIds]]);
+    const scoringRunFilter = HarnessCleanup.anyIn([['MLModelScoringBindingID', bindingIds], ['ModelID', modelIds]]);
     const detailFilter = HarnessCleanup.anyIn([['ProcessRunID', new RecordIDSet(processRuns.map((r) => r.ID))]]);
     return {
       Processes: processes, ProcessRuns: processRuns,
-      Bindings: bindingFilter ? await store.Rows('MJ: ML Model Scoring Bindings', bindingFilter) : [],
+      Bindings: bindings,
+      BindingFeatureValues: valueFilter ? await store.Rows('MJ: Feature Values', valueFilter) : [],
+      ScoringRuns: scoringRunFilter ? await store.Rows('MJ: ML Scoring Runs', scoringRunFilter) : [],
       Details: detailFilter ? await store.Rows('MJ: Process Run Details', detailFilter) : [],
       Watermarks: processFilter ? await store.Rows('MJ: Record Process Watermarks', processFilter) : [],
     };
