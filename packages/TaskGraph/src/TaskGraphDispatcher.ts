@@ -1385,6 +1385,14 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Recording first costs a poll: the skips now land after the completion, so a rollup
             // that lands in between sees work still Pending and settles one pass later. That is a
             // delay; the other order was a wrong graph.
+            //
+            // A retryable failure is not an outcome yet. It goes back to Pending with its next
+            // attempt on the row, so the retry survives this process and runs on whichever instance
+            // is free once its moment comes — and nothing downstream reacts to a failure that may
+            // still succeed.
+            if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
+                return;
+            }
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -2882,6 +2890,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
                 if (sagaHolds && !IsCompensationTask(entity)) continue;
+                // A scheduled retry waits for its moment. The claim procedure enforces this on the
+                // database clock; skipping here only saves a claim attempt that would be refused.
+                if (entity.NextAttemptAt && new Date(entity.NextAttemptAt).getTime() > Date.now()) continue;
 
                 // Human tasks are never dispatched — a person completes them. But "eligible" is the
                 // moment that person can finally act, and nothing else in the system knows it has
@@ -4312,7 +4323,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const raw = task.ActionID
             ? {
-                ...await this.invokeActionWithRetry(
+                ...await this.invokeAction(
                     task,
                     provider,
                     effectiveInput,
@@ -4338,14 +4349,12 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Runs an action task, retrying a failure up to the step's `retryCount` — but only when running the
-     * action again is safe: only when the action's `IsIdempotent` column says so. A forward step's node may
-     * turn that off (`compensation.isIdempotent: false`) but never on, because the node is written by a
-     * model and the column by whoever owns the action; a compensation task retries when its compensation
-     * action is idempotent. A non-idempotent action is never re-run: a payment that failed after charging
-     * must not charge again. Retries back off exponentially (`RetryBackoffBaseMs`, doubling, capped at 30×).
+     * Runs an action task once.
+     *
+     * Retrying is not done here any more: sleeping inside the claim lost the retry to any restart.
+     * A retryable failure is scheduled durably on the row instead (see {@link scheduleRetryIfAllowed}).
      */
-    private async invokeActionWithRetry(
+    private async invokeAction(
         task: MJTaskEntity,
         provider: IMetadataProvider,
         effectiveInput: Record<string, unknown>,
@@ -4354,7 +4363,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
         effectiveEnvelope?: TaskSecurityEnvelope,
     ): Promise<TaskActionRunResult> {
-        const run = () => this.actionRunner!.RunActionForTask({
+        return this.actionRunner!.RunActionForTask({
             TaskID: task.ID,
             ActionID: task.ActionID!,
             InputPayload: effectiveInput,
@@ -4364,18 +4373,52 @@ export class TaskGraphDispatcher implements IShutdownable {
             OnProgress: onProgress,
             ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
         });
-        let result = await run();
-        if (result.Success || result.ResultCode === TAINTED_EGRESS_BLOCKED) {
-            return result;
+    }
+
+    /**
+     * Schedules a failed run for another attempt when its step allows one.
+     *
+     * Retryable means: the step's policy asks for retries, attempts remain, the failure is not a
+     * security refusal, and running the step again is safe — an Action step only when its action is
+     * idempotent (see {@link allowedRetries}), a Prompt or Decision step always (a model call has no
+     * side effects), an Agent step never (its run may have called actions that must not run twice,
+     * and an agent carries no idempotency flag to say otherwise).
+     *
+     * @returns true when the retry was scheduled and the caller must NOT record a final outcome
+     */
+    private async scheduleRetryIfAllowed(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        result: { Success: boolean; ErrorMessage?: string; ResultCode?: string },
+        ownerUserID: string | null | undefined,
+    ): Promise<boolean> {
+        if (result.ResultCode === TAINTED_EGRESS_BLOCKED) return false;
+        const maxAttempts = await this.allowedRetries(provider, task);
+        const attemptsSoFar = task.AttemptCount ?? 0;
+        if (attemptsSoFar >= maxAttempts) return false;
+
+        const nextAttempt = attemptsSoFar + 1;
+        const delay = RetryBackoffMs(nextAttempt, this.config.RetryBackoffBaseMs);
+        const scheduled = await this.claims.TryScheduleRetry(
+            provider, task.ID, maxAttempts, delay, result.ErrorMessage ?? null, this.contextUser,
+        );
+        if (!scheduled) {
+            // Refused: the step moved under us, or the count on the row is already at the cap. Either
+            // way the caller records the outcome as it would have without a retry policy.
+            return false;
         }
-        const retries = await this.allowedRetries(provider, task);
-        for (let attempt = 1; !result.Success && attempt <= retries; attempt++) {
-            const delay = RetryBackoffMs(attempt, this.config.RetryBackoffBaseMs);
-            LogStatus(`[TaskGraphDispatcher] Retrying idempotent action task '${task.Name}' (${task.ID}) in ${delay}ms, attempt ${attempt}/${retries}.`);
-            await new Promise<void>((resolve) => setTimeout(resolve, delay));
-            result = await run();
-        }
-        return result;
+        LogStatus(
+            `[TaskGraphDispatcher] '${task.Name}' (${task.ID}) failed; retry ${nextAttempt}/${maxAttempts} ` +
+            `scheduled in ${delay}ms: ${result.ErrorMessage ?? 'no message'}`,
+        );
+        this.emit({
+            Kind: 'ClaimChanged', ParentTaskID: task.ParentID ?? '', OwnerUserID: ownerUserID,
+            TaskID: task.ID, TaskName: task.Name, Status: 'Pending',
+            ClaimEvent: 'retry-scheduled', Attempt: nextAttempt,
+            NextAttemptAt: new Date(Date.now() + delay).toISOString(),
+            ErrorMessage: result.ErrorMessage,
+        });
+        return true;
     }
 
     /**
@@ -4386,8 +4429,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         const config = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const compensation = ReadTaskCompensationMetadata(task.Configuration);
         const requested = Math.max(0, Math.floor(config?.policy?.retryCount ?? compensation?.retryCount ?? 0));
-        if (requested === 0 || !task.ActionID) {
+        if (requested === 0 || task.AgentID) {
+            // An agent's run may have called actions that must not run twice, and an agent carries
+            // no idempotency flag that could say otherwise. A loop whose body is an agent included.
             return 0;
+        }
+        if (!task.ActionID) {
+            // A model call — a Prompt or Decision step, or a loop over a prompt — changes nothing it
+            // would repeat. Anything else has no runner to retry.
+            return task.PromptID ? requested : 0;
         }
         // The action's own column decides. A forward step's node can only narrow it: a model-written
         // `isIdempotent: true` must not make a payment retryable that its action says is not.

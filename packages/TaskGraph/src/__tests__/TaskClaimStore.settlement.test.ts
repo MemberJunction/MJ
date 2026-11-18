@@ -38,27 +38,35 @@ function findMigration(): string {
 }
 
 /**
- * The hand-written half of the waiting-steps migration, which adds the procedures the waiting
- * lifecycle calls. Cut at the CodeGen banner: the generated section below it is CodeGen's own
- * plumbing (views, CRUD procedures), held to CodeGen's rules rather than to this contract.
+ * The hand-written half of a later task-graph migration that adds or replaces procedures. Cut at the
+ * CodeGen banner: the generated section below it is CodeGen's own plumbing (views, CRUD procedures),
+ * held to CodeGen's rules rather than to this contract.
  */
-function findWaitingStepsMigration(): string {
+function handWrittenMigration(suffix: string): string {
     const dir = join(__dirname, '../../../../migrations/v6');
-    const name = readdirSync(dir).find((f) => f.endsWith('__TaskGraph_Waiting_Steps.sql'));
-    if (!name) throw new Error(`No TaskGraph waiting-steps migration found in ${dir}`);
+    const name = readdirSync(dir).find((f) => f.endsWith(suffix));
+    if (!name) throw new Error(`No migration ending ${suffix} found in ${dir}`);
     const text = readFileSync(join(dir, name), 'utf8');
     const banner = text.indexOf('EVERYTHING BELOW THIS BLOCK WAS GENERATED');
     return banner > -1 ? text.slice(0, text.lastIndexOf('/*', banner)) : text;
 }
 
-/** Every migration that creates spTaskGraph* procedures, hand-written parts only. */
-const MIGRATION = `${readFileSync(findMigration(), 'utf8')}\n${findWaitingStepsMigration()}`;
+/**
+ * Every migration that creates or replaces spTaskGraph* procedures, hand-written parts only, in the
+ * order they run — so the LAST definition of a procedure is the one a database ends up with.
+ */
+const MIGRATION = [
+    readFileSync(findMigration(), 'utf8'),
+    handWrittenMigration('__TaskGraph_Waiting_Steps.sql'),
+    handWrittenMigration('__TaskGraph_Durable_Retry.sql'),
+].join('\n');
 
-/** One procedure's body, from CREATE (or CREATE OR ALTER) to its terminating END. */
+/** One procedure's body as a database ends up with it, from CREATE (or CREATE OR ALTER) to its terminating END. */
 function proc(name: string): string {
     const plain = `CREATE PROCEDURE [\${flyway:defaultSchema}].[${name}]`;
     const orAlter = `CREATE OR ALTER PROCEDURE [\${flyway:defaultSchema}].[${name}]`;
-    const start = MIGRATION.indexOf(plain) > -1 ? MIGRATION.indexOf(plain) : MIGRATION.indexOf(orAlter);
+    // The LAST definition: a later migration that replaces a procedure is what a database runs.
+    const start = Math.max(MIGRATION.lastIndexOf(plain), MIGRATION.lastIndexOf(orAlter));
     expect(start, `procedure ${name} is missing from the migration`).toBeGreaterThan(-1);
     const end = MIGRATION.indexOf('\nEND;', start);
     expect(end, `procedure ${name} has no END`).toBeGreaterThan(start);

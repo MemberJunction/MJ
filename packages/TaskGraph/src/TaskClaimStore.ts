@@ -302,6 +302,33 @@ export class TaskClaimStore {
     }
 
     /**
+     * Records this instance's failed run of a task as a scheduled retry: back to `Pending`, the
+     * attempt counted, and not claimable until `delayMilliseconds` from now on the database clock.
+     *
+     * Guarded like {@link CompleteClaimed} (still `In Progress` and claimed by this instance), and on
+     * the attempt cap too, so a stale count can never schedule one retry more than the policy allows.
+     * A refusal means the caller must record the failure as final instead.
+     *
+     * @returns true when the retry was scheduled
+     */
+    public async TryScheduleRetry(
+        provider: IMetadataProvider,
+        taskID: string,
+        maxAttempts: number,
+        delayMilliseconds: number,
+        errorMessage: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphScheduleRetry', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'MaxAttempts', Value: maxAttempts },
+            { Name: 'DelayMilliseconds', Value: Math.max(0, Math.min(Math.round(delayMilliseconds), 2_147_483_647)) },
+            { Name: 'ErrorMessage', Value: errorMessage },
+        ], contextUser);
+    }
+
+    /**
      * Reclaims tasks whose claims have lapsed, returning them to `Pending` so any instance can pick
      * them up.
      *

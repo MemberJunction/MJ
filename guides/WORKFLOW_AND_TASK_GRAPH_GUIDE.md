@@ -445,6 +445,29 @@ Two levels, and they answer different questions.
 **Per-node `onError` policy** — `fail` (default), `continue`, or `retry` with `retryCount`.
 `continue` is what lets a workflow draw a recovery path instead of stopping dead.
 
+### Retries are durable
+
+A step with `policy.retryCount` that fails is **not** retried inside the run that failed. It goes
+back to `Pending` with the attempt counted (`Task.AttemptCount`), the error kept, and the earliest
+moment it may run again (`Task.NextAttemptAt`, on the database clock). Claiming waits for that
+moment, so the retry survives a restart or a deploy and runs on whichever instance is free. Nothing
+downstream reacts to a failure that is still going to be retried; viewers get a `ClaimChanged` frame
+with `ClaimEvent: 'retry-scheduled'`. Backoff doubles from `RetryBackoffBaseMs` (default 1s), capped
+at 30×. When the retries are spent, the failure is final.
+
+Which steps may be retried — the step's policy asks, **and** running it again is safe:
+
+| Step | Retried? | Why |
+|---|---|---|
+| Action | only when the action's `IsIdempotent` is true | a payment that failed after charging must not charge again; a node may switch retries off (`compensation.isIdempotent: false`) but never on |
+| Prompt, Decision | yes | a model call changes nothing it would repeat |
+| Agent (and a loop over an agent) | **never** | the agent may have called actions that must not run twice, and an agent has no idempotency flag to say otherwise — model its retry as an explicit failure path |
+
+A person retrying a step (`TaskGraph.RetryTask`) resets its attempt count.
+
+This is what makes an app-side outbox — status, attempt count, next-attempt time, lease,
+dead-letter — unnecessary for multi-step work: put the steps in the graph and give them a policy.
+
 **Per-graph `failureSemantics`:**
 
 | Value | Meaning | Used by |

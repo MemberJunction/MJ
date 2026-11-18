@@ -757,6 +757,7 @@ function isNameValueJson(json: string): boolean {
 export type RetryableTask = Pick<
     MJTaskEntity,
     'Status' | 'StepType' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt' | 'OutputPayload'
+    | 'AttemptCount' | 'NextAttemptAt'
 >;
 
 /**
@@ -779,6 +780,10 @@ export function PrepareTaskForRetry(task: RetryableTask): void {
     // Clear any stale claim so the task is immediately claimable.
     task.ClaimedBy = null;
     task.ClaimExpiresAt = null;
+    // A person retrying a step starts its retry budget over, and does not wait out a backoff the
+    // dispatcher scheduled before they stepped in.
+    task.AttemptCount = 0;
+    task.NextAttemptAt = null;
 }
 
 export class TaskGraphService {

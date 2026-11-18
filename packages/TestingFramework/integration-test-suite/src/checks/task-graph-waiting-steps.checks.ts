@@ -12,32 +12,24 @@
  *
  * @module @memberjunction/integration-test-suite
  */
-import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskTypeEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION, type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
+import { RunView } from '@memberjunction/core';
+import { type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     BaseHumanTaskProvider,
-    TaskGraphDispatcher,
-    TaskGraphService,
     TaskGraphWaitingSteps,
     WAITING_STEP_MARKER,
     type HumanTaskRaiseContext,
     type HumanTaskRaiseResult,
-    type ProviderFactory,
     type TaskAgentRunner,
     type TaskAgentRunParams,
     type TaskAgentRunResult,
 } from '@memberjunction/task-graph';
-import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { TaskGraphLiveFixture } from './task-graph-live-fixture';
 
-/** Parent tasks this bundle submitted, unwound children-first in teardown. */
-const CREATED_PARENT_IDS: string[] = [];
-/** TaskTypes created only when the install had none. */
-const CREATED_TASK_TYPE_IDS: string[] = [];
 
 const POLL_SECONDS = 0.25;
 const SETTLE_TIMEOUT_MS = 30_000;
@@ -85,119 +77,18 @@ export class IntegrationTestHumanTaskProvider extends BaseHumanTaskProvider {
     }
 }
 
-function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
-    const pool = ctx.Pool;
-    if (!pool) return { CreateProvider: async () => ctx.Provider };
-    return {
-        CreateProvider: async () => {
-            const config = new SQLServerProviderConfigData(pool, ctx.Schema ?? '__mj', 0, undefined, undefined, false);
-            const provider = new SQLServerDataProvider();
-            await provider.Config(config);
-            return provider as unknown as IMetadataProvider;
-        },
-    };
-}
+const FIXTURE = new TaskGraphLiveFixture('waiting-steps', POLL_SECONDS, SETTLE_TIMEOUT_MS);
+const RUNNERS = { Agent: RUNNER };
 
-function buildDispatcher(ctx: IntegrationCheckContext, instanceID: string): TaskGraphDispatcher {
-    return new TaskGraphDispatcher(providerFactory(ctx), RUNNER, ctx.User as UserInfo, {
-        InstanceID: instanceID,
-        PollIntervalSeconds: POLL_SECONDS,
-        ClaimTTLSeconds: 300,
-        ReconciliationIntervalSeconds: 3600,
-        MaxConcurrentTasks: 5,
-    });
-}
-
-async function firstID(ctx: IntegrationCheckContext, entity: string): Promise<string | undefined> {
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
-        { EntityName: entity, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
-    );
-    return res.Results?.[0]?.ID;
-}
-
-async function ensureTaskType(ctx: IntegrationCheckContext): Promise<void> {
-    if (await firstID(ctx, 'MJ: Task Types')) return;
-    const tt = await ctx.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', ctx.User);
-    tt.NewRecord();
-    tt.Name = 'mj-integration-test-waiting-task-type (safe to delete)';
-    tt.Description = 'Created by the task-graph-waiting-steps integration bundle.';
-    Assert(await tt.Save(), `could not create a TaskType fixture: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-    CREATED_TASK_TYPE_IDS.push(tt.ID);
-}
-
-async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
-        { EntityName: 'MJ: AI Agents', Fields: ['Name'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
-    );
-    const name = res.Results?.[0]?.Name;
-    Assert(!!name, 'could not resolve an AI Agent');
-    return name!;
-}
-
-async function trySubmit(ctx: IntegrationCheckContext, spec: TaskGraphSpec): Promise<{ ParentTaskID?: string; ErrorMessage?: string }> {
-    await ensureTaskType(ctx);
-    const environmentID = await firstID(ctx, 'MJ: Environments');
-    Assert(!!environmentID, 'could not resolve an Environment');
-    const result = await new TaskGraphService().Submit(spec, {
-        EnvironmentID: environmentID!,
-        ConversationDetailID: null,
-        ContextUser: ctx.User,
-        Provider: ctx.Provider,
-    });
-    if (result.ParentTaskID) CREATED_PARENT_IDS.push(result.ParentTaskID);
-    return { ParentTaskID: result.ParentTaskID, ErrorMessage: result.Success ? undefined : result.ErrorMessage };
-}
-
-async function submit(ctx: IntegrationCheckContext, spec: TaskGraphSpec): Promise<string> {
-    const r = await trySubmit(ctx, spec);
-    Assert(!!r.ParentTaskID && !r.ErrorMessage, `submission failed: ${r.ErrorMessage}`);
-    return r.ParentTaskID!;
-}
-
-async function loadTask(ctx: IntegrationCheckContext, id: string): Promise<MJTaskEntity> {
-    const t = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
-    Assert(await t.Load(id), `task ${id} could not be loaded`);
-    return t;
-}
-
-async function childNamed(ctx: IntegrationCheckContext, parentID: string, name: string): Promise<MJTaskEntity> {
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
-        { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
-    );
-    const child = (res.Results ?? []).find((t) => t.Name === name);
-    Assert(!!child, `step "${name}" not found`);
-    return child!;
-}
-
-/** Polls until `done`, or fails the check naming what it waited for. */
-async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, what: string): Promise<T> {
-    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
-    let latest = await read();
-    while (Date.now() < deadline && !done(latest)) {
-        await settle(200);
-        latest = await read();
-    }
-    Assert(done(latest), `${what} (last saw ${JSON.stringify(latest)})`);
-    return latest;
-}
-
-const TERMINAL = new Set(['Complete', 'Failed', 'Cancelled', 'Blocked']);
-
-async function waitForParent(ctx: IntegrationCheckContext, parentID: string): Promise<MJTaskEntity> {
-    await waitFor(async () => (await loadTask(ctx, parentID)).Status, (s) => TERMINAL.has(s), `graph ${parentID} did not settle`);
-    return loadTask(ctx, parentID);
-}
-
-/** Starts a dispatcher, runs `body`, and always stops it. */
-async function withDispatcher<T>(ctx: IntegrationCheckContext, instanceID: string, body: () => Promise<T>): Promise<T> {
-    const dispatcher = buildDispatcher(ctx, instanceID);
-    await dispatcher.Start();
-    try {
-        return await body();
-    } finally {
-        await dispatcher.Stop();
-    }
-}
+const resolveAgentName = (ctx: IntegrationCheckContext) => FIXTURE.AnyName(ctx, 'MJ: AI Agents');
+const trySubmit = (ctx: IntegrationCheckContext, spec: TaskGraphSpec) => FIXTURE.TrySubmit(ctx, spec);
+const submit = (ctx: IntegrationCheckContext, spec: TaskGraphSpec) => FIXTURE.Submit(ctx, spec);
+const loadTask = (ctx: IntegrationCheckContext, id: string) => FIXTURE.LoadTask(ctx, id);
+const childNamed = (ctx: IntegrationCheckContext, parentID: string, name: string) => FIXTURE.ChildNamed(ctx, parentID, name);
+const waitFor = <T>(read: () => Promise<T>, done: (value: T) => boolean, what: string) => FIXTURE.WaitFor(read, done, what);
+const waitForParent = (ctx: IntegrationCheckContext, parentID: string) => FIXTURE.WaitForParent(ctx, parentID);
+const withDispatcher = <T>(ctx: IntegrationCheckContext, instanceID: string, body: () => Promise<T>) =>
+    FIXTURE.WithDispatcher(ctx, instanceID, RUNNERS, body);
 
 function parse(json: string | null | undefined): Record<string, unknown> {
     try {
@@ -440,38 +331,5 @@ for (const check of TaskGraphWaitingStepChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-waiting-steps', {
     Setup: async () => { /* each check builds its own graph */ },
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        for (const parentID of CREATED_PARENT_IDS) {
-            const childRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
-            );
-            const children = childRes.Results ?? [];
-            if (children.length > 0) {
-                const ids = children.map((c) => `'${c.ID}'`).join(',');
-                const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
-                    { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
-                );
-                for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await ServerOperationScopeManager.Instance.RunWithAuthority(
-                        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
-                        () => dep.Delete(),
-                    );
-                }
-                const requestRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>(
-                    { EntityName: 'MJ: AI Agent Requests', ExtraFilter: `OriginatingTaskID IN (${ids})`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
-                );
-                for (const request of requestRes.Results ?? []) await request.Delete();
-            }
-            for (const c of children) await c.Delete();
-            const parent = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
-            if (await parent.Load(parentID)) await parent.Delete();
-        }
-        CREATED_PARENT_IDS.length = 0;
-
-        for (const id of CREATED_TASK_TYPE_IDS) {
-            const row = await ctx.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', ctx.User);
-            if (await row.Load(id)) await row.Delete();
-        }
-        CREATED_TASK_TYPE_IDS.length = 0;
-    },
+    Teardown: (ctx: IntegrationCheckContext) => FIXTURE.Teardown(ctx),
 });
