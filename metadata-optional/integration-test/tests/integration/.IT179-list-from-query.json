@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT176 - List From Query",
+    "Name": "IT179 - List From Query",
     "Description": "Live proof of making a list from SQL written in a conversation, deterministic (no model calls). LQ1: the SQL is saved as a Pending query in the user's own subcategory of User Lists. LQ2: saving again under the same name picks an unused name in the same category. LQ3: a list made from the saved query is linked to it, filled, and takes its fingerprint. LQ4: the list refreshes from the query while it is still Pending. LQ5: editing the query's SQL stops the refresh with SOURCE_CHANGED and applies nothing. The bundle creates and tears down its own queries and list, and the user's User Lists category when it created it.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

@@ -20,4 +20,4 @@ Lists made in a conversation now keep themselves current.
 - The Data artifact has a **Save as List** button, offered when the result's rows are records.
 - The list form's source badge reads "Definition unchanged" (it said "Matches approved version", which read as the query's own approval when the query is Pending).
 - New "User Lists" query category in core metadata.
-- Integration bundle IT176 (`list-from-query`).
+- Integration bundle IT179 (`list-from-query`).

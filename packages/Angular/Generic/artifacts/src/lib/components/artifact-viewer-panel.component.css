@@ -1275,3 +1275,93 @@
 }
 .guest-share-row__meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--mj-text-secondary); }
 .guest-share-row__meta strong { font-size: 13px; color: var(--mj-text-primary); }
+
+.living-report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.living-report-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+.living-report-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.living-report-btn--active {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+.living-report-badge {
+  font-size: 11px;
+  font-weight: 600;
+}
+.living-report-modal {
+  width: min(560px, 94vw);
+}
+.living-report-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.living-report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.living-report-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+.living-report-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.living-report-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+.living-report-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--mj-bg-surface-sunken);
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+}
+.living-report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+.living-report-actions__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.living-report-remove-btn {
+  color: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+}

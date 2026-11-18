@@ -45,5 +45,13 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.48.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
   }
 }

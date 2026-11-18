@@ -43,9 +43,12 @@ import {
     InMemoryLocalStorageProvider,
     LocalCacheManager,
     SQLMaxLength,
+    QueryResultEnricherBase,
 } from '@memberjunction/core';
-import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
-import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
+import type { PostCommitToken, QueryExecutionSpec, RunQueryParams, RunViewParams } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import type { MJEntityAIActionEntity, MJQueryCategoryEntity, MJQueryEntityExtended } from '@memberjunction/core-entities';
+import { QueryEngine } from '@memberjunction/core-entities';
 import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TransactionFrameTracker } from '../TransactionFrameTracker';
@@ -145,6 +148,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
 
     public testResolveCategoryPath(categoryPath: string): string | null {
         return this.resolveCategoryPath(categoryPath);
+    }
+
+    public testEnrichQueryResults(rows: Record<string, unknown>[], params: RunQueryParams, query: MJQueryEntityExtended): Promise<Record<string, unknown>[]> {
+        return this.enrichQueryResults(rows, params, query);
     }
 
     public testGetColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
@@ -536,11 +543,18 @@ describe('GenericDatabaseProvider', () => {
 
     describe('resolveCategoryPath', () => {
         beforeEach(() => {
-            provider.setQueryCategories([
-                { ID: 'cat-1', Name: 'MJ', ParentID: null } as QueryCategoryInfo,
-                { ID: 'cat-2', Name: 'AI', ParentID: 'cat-1' } as QueryCategoryInfo,
-                { ID: 'cat-3', Name: 'Agents', ParentID: 'cat-2' } as QueryCategoryInfo,
+            // The categories are in QueryEngine; the provider's deprecated getter is empty, as it is
+            // unless the provider loads query metadata.
+            provider.setQueryCategories([]);
+            vi.spyOn(QueryEngine.Instance, 'QueryCategories', 'get').mockReturnValue([
+                { ID: 'cat-1', Name: 'MJ', ParentID: null } as MJQueryCategoryEntity,
+                { ID: 'cat-2', Name: 'AI', ParentID: 'cat-1' } as MJQueryCategoryEntity,
+                { ID: 'cat-3', Name: 'Agents', ParentID: 'cat-2' } as MJQueryCategoryEntity,
             ]);
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
         });
 
         it('resolves a valid hierarchical path', () => {
@@ -565,6 +579,35 @@ describe('GenericDatabaseProvider', () => {
 
         it('resolves case-insensitively', () => {
             expect(provider.testResolveCategoryPath('/mj/ai/agents/')).toBe('cat-3');
+        });
+    });
+
+    describe('enrichQueryResults', () => {
+        type EnrichOptions = Parameters<QueryResultEnricherBase['EnrichResults']>[0];
+        const seen: EnrichOptions[] = [];
+
+        class CapturingEnricher extends QueryResultEnricherBase {
+            public async EnrichResults(opts: EnrichOptions): Promise<Record<string, unknown>[]> {
+                seen.push(opts);
+                return opts.rows;
+            }
+        }
+
+        beforeEach(() => {
+            seen.length = 0;
+            MJGlobal.Instance.ClassFactory.Register(QueryResultEnricherBase, CapturingEnricher, 'GDPTestCapturingEnricher');
+        });
+
+        it('hands the enricher the query ID, and no QueryInfo when the provider does not load query metadata', async () => {
+            const rows = [{ Total: 1 }];
+            const params = { QueryID: 'q-1', Enrichment: { EnricherKey: 'GDPTestCapturingEnricher' } } as RunQueryParams;
+
+            const result = await provider.testEnrichQueryResults(rows, params, { ID: 'q-1' } as MJQueryEntityExtended);
+
+            expect(result).toBe(rows);
+            expect(seen).toHaveLength(1);
+            expect(seen[0].queryID).toBe('q-1');
+            expect(seen[0].query).toBeUndefined();
         });
     });
 

@@ -26,6 +26,7 @@ import type {
 } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
+import type { DbConfig } from './config';
 
 /**
  * The self-contained Query/Category fixtures the `runquery-cache` bundle needs:
@@ -427,6 +428,28 @@ export interface OpenAppTeardownFixture {
 }
 
 /**
+ * Shared fixture for the `open-app-local-source` bundle: a throwaway consumer repository (a pnpm
+ * workspace in the OS temp directory) whose app folders the checks install from, plus the apps and
+ * schemas the checks created, which teardown removes.
+ */
+export interface OpenAppLocalSourceFixture {
+    /** Unique per run; part of every app, schema, package and folder name. */
+    Tag: string;
+    /** Absolute path of the throwaway consumer repository. */
+    RepoRoot: string;
+    /** Absolute path of an app folder next to the repository, which a local install must refuse. */
+    OutsideFolder: string;
+    /** Connection settings the engine gives to the migration runner. */
+    Db: DbConfig;
+    /** True when the test login can create and drop schemas. */
+    CanChangeSchemas: boolean;
+    /** Apps the checks installed, in install order. */
+    AppNames: string[];
+    /** Schemas the checks' apps own. */
+    SchemaNames: string[];
+}
+
+/**
  * Shared fixture for the `user-routines` bundle: the resolved (never-mutated) 'Calculate Expression'
  * Action target, the mutable FK-safe teardown accumulators, and the cross-check routine references the
  * ordered UR1–UR16 checks read/append (e.g. RoutineDue set by UR9, run by UR10/11, deleted by UR14).
@@ -739,6 +762,8 @@ export interface IntegrationCheckContext {
     ListFromQueryFixture?: ListFromQueryFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
+    /** Shared fixture for the `open-app-local-source` bundle. */
+    OpenAppLocalSourceFixture?: OpenAppLocalSourceFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */

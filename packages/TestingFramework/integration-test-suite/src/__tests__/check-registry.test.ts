@@ -39,6 +39,7 @@ import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellati
 import { ListsChecks } from '../checks/lists.checks';
 import { ListRefreshChecks } from '../checks/list-refresh.checks';
 import { ListFromQueryChecks } from '../checks/list-from-query.checks';
+import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
 import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
@@ -105,6 +106,8 @@ import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.check
 import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
 import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
 import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { QueryMetadataClientChecks } from '../checks/query-metadata-client.checks';
+import { MetadataPayloadClientChecks } from '../checks/metadata-payload-client.checks';
 import { TransactionGroupConcurrencyClientChecks } from '../checks/transaction-group-concurrency-client.checks';
 import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
 import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
@@ -204,7 +207,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
-        ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT176)
+        ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
+        ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -302,9 +306,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
+        ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
+        ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
-        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT172)
+        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -401,7 +407,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
-        'content-pipeline': 15,
+        'content-pipeline': 21,
         'content-vectorization': 10,
         'conversation-authorship-client': 13,
         'conversation-delete-client': 3,
@@ -446,6 +452,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 8,
+        'metadata-payload-client': 3,
         'metadata-sync': 9,
         'metadata-sync-push': 12,
         'metadata-sync-queries': 10,
@@ -453,6 +460,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'native-tool-loop': 14,
         'native-tool-loop-live': 3,
         'nested-transactions': 11,
+        'open-app-local-source': 10,
         'open-app-teardown': 2,
         'performance-benchmark': 23,
         'permission-engine': 15,
@@ -530,6 +538,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'query-api-lifecycle': 12,
         'query-approvals': 5,
         'query-extraction': 15,
+        'query-metadata-client': 3,
         'query-refresh': 16,
         'query-security': 10,
         'queue': 7,
@@ -621,7 +630,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(246);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(249);
     });
 });
 
@@ -702,7 +711,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-pipeline.CP13',
         'content-pipeline.CP14',
         'content-pipeline.CP15',
+        'content-pipeline.CP16',
+        'content-pipeline.CP17',
+        'content-pipeline.CP19',
         'content-pipeline.CP2',
+        'content-pipeline.CP20',
+        'content-pipeline.CP21',
+        'content-pipeline.CP22',
         'content-pipeline.CP3',
         'content-pipeline.CP4',
         'content-pipeline.CP5',
@@ -1010,6 +1025,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-truth-datasets.W9-multiclass-s43',
         'ps-truth-datasets.W9-multiclass-s44',
         'ps-truth-datasets.W9-multiclass-s9042',
+        'query-metadata-client.QM3',
         'realtime-session-guard.RSG1',
         'realtime-session-guard.RSG2',
         'realtime-session-verification.RSV1',
@@ -1239,6 +1255,7 @@ describe('skip allowlist', () => {
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'query-metadata-client.QM3',
         'realtime-session-guard.RSG1',
         'realtime-session-guard.RSG2',
         'server-cache.S29',

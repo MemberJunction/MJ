@@ -10,6 +10,7 @@ import {
     BuildBoundDataLiterals,
     CreateMJChartKit,
     DescribeGeneratedAssets,
+    DescribeSynthesizedAudio,
     type AudioCue,
     type NarrationLine,
     type VideoBeat,
@@ -160,11 +161,17 @@ export function BuildTimelineTable(spec: Partial<VideoGenerationSpec>): string {
         const rows = cues.map((cue) => {
             const time =
                 typeof cue.TimestampSeconds === 'number' ? cue.TimestampSeconds.toFixed(2) : '0.00';
-            return `| ${escapeCell(cue.Key)} | ${time} | ${escapeCell(cue.Kind)} | ${escapeCell(cue.BeatKey ?? '—')} | ${escapeCell(cue.AssetKey ?? '—')} | ${escapeCell(cue.Notes ?? '—')} |`;
+            const source = cue.AssetKey ?? (cue.Synth ? `synthesized ${cue.Synth}` : '—');
+            return `| ${escapeCell(cue.Key)} | ${time} | ${escapeCell(cue.Kind)} | ${escapeCell(cue.BeatKey ?? '—')} | ${escapeCell(source)} | ${escapeCell(cue.Notes ?? '—')} |`;
         });
         sections.push(['### Audio Cues', header, divider, ...rows].join('\n'));
     } else {
         sections.push('### Audio Cues\n(no audio cues)');
+    }
+
+    const synthesized = DescribeSynthesizedAudio(spec);
+    if (synthesized.length > 0) {
+        sections.push(['### Synthesized audio (disclose; never present as a licensed track)', ...synthesized.map((l) => `- ${escapeCell(l)}`)].join('\n'));
     }
 
     return sections.join('\n\n');

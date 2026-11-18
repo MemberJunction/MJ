@@ -1,6 +1,6 @@
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { MJAISkillEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJAISkillEntity, MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntersectAcceptedSkills } from './SkillNarrowing';
@@ -37,7 +37,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
   private entitiesCache: EntityInfo[] = [];
-  private queriesCache: QueryInfo[] = [];
+  private queriesCache: MJQueryEntityExtended[] = [];
   /** Active skills the current user can Run — surfaced under the '/' trigger. */
   private skillsCache: MJAISkillEntity[] = [];
   /** The provider this instance was initialised against (multi-provider hosts); undefined = global. */
@@ -105,7 +105,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
       this.entitiesCache = this.loadReadableEntities(currentUser, provider);
 
       // Load queries the current user can run (also surfaced under the '#' trigger)
-      this.queriesCache = this.loadRunnableQueries(currentUser, provider);
+      this.queriesCache = await this.loadRunnableQueries(currentUser, provider);
       this.queriesEntityIcon = this.resolveQueriesEntityIcon(provider);
 
       // Load Active skills the current user can Run (surfaced under the '/' trigger). Mirrors the
@@ -183,23 +183,33 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   }
 
   /**
-   * Load queries the current user has run permission for.
+   * Load queries the current user can run, from the provider's QueryEngine (loaded here if it
+   * has not loaded yet). A query is runnable when the user holds its run permission and, for a
+   * query without explicit permission rows, can read every entity it references.
    * These are the candidates surfaced for #query mentions.
    */
-  private loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): QueryInfo[] {
+  private async loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): Promise<MJQueryEntityExtended[]> {
     try {
-      const md = provider ?? Metadata.Provider;
-      return (md.Queries || []).filter(query => {
-        try {
-          return query.UserCanRun(user);
-        } catch {
-          // Fail closed — exclude query on permission-check error
-          return false;
-        }
-      });
+      const engine = this.queryEngineFor(provider);
+      await engine.Config(false, user, provider);
+      return engine.Queries.filter(query => this.userCanRunQuery(query, user));
     } catch (error) {
       console.error('Failed to load queries for mention autocomplete:', error);
       return [];
+    }
+  }
+
+  /** The QueryEngine for the given provider, or the global one when no provider is given. */
+  private queryEngineFor(provider?: IMetadataProvider): QueryEngine {
+    return provider ? (QueryEngine.GetProviderInstance<QueryEngine>(provider, QueryEngine) as QueryEngine) : QueryEngine.Instance;
+  }
+
+  /** Whether the user can run the query; a permission-check error excludes it (fail closed). */
+  private userCanRunQuery(query: MJQueryEntityExtended, user: UserInfo): boolean {
+    try {
+      return query.UserCanRun(user).canRun;
+    } catch {
+      return false;
     }
   }
 
@@ -529,12 +539,12 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   /**
    * Get available queries for parsing
    */
-  GetAvailableQueries(): QueryInfo[] {
+  GetAvailableQueries(): MJQueryEntityExtended[] {
     return this.queriesCache;
   }
 
   /** @deprecated Use {@link GetAvailableQueries}. */
-  getAvailableQueries(): QueryInfo[] {
+  getAvailableQueries(): MJQueryEntityExtended[] {
     return this.GetAvailableQueries();
   }
 
