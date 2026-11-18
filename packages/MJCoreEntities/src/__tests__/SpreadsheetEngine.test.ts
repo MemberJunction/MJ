@@ -4858,4 +4858,25 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             SetSpreadsheetWorkerIsolationRequired(false);
         }
     });
+
+    it('evaluates SPARKLINE formulas into typed sparkline payloads for line, bar, winloss, and empty ranges', () => {
+        const wb = engine.CreateEmptyWorkbook('SparklineWB', ['Sheet1'], 5, 6);
+        const sheet = wb.Worksheets[0];
+        engine.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'B1', { Value: 25 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'C1', { Value: 18 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'D1', { Value: 42 }, false);
+
+        const lineRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A1:D1)');
+        expect(typeof lineRes).toBe('string');
+        expect(String(lineRes)).toContain('__MJ_SPARKLINE__:line:10,25,18,42');
+
+        const barRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A1:D1, "bar")');
+        expect(String(barRes)).toContain('__MJ_SPARKLINE__:bar:10,25,18,42');
+
+        const emptyRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A5:D5)');
+        expect(emptyRes).toBe('#N/A');
+
+        expect(engine.FormatCellValue(lineRes)).toBe('Sparkline (4 pts)');
+    });
 });
