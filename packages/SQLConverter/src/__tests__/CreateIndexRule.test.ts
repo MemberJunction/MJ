@@ -37,6 +37,25 @@ describe('CreateIndexRule', () => {
       expect(result).toContain('"ColA"');
       expect(result).toContain('"ColB"');
     });
+
+    // Regression: V202611110216 — an unbracketed column carrying a sort direction was left unquoted
+    // (`StartedAt DESC`), PG folded it to `startedat`, and the CREATE INDEX failed at apply time.
+    it('quotes an unbracketed column that carries a sort direction', () => {
+      const sql = 'CREATE NONCLUSTERED INDEX IX_Run_CI_StartedAt\n    ON __mj.CompanyIntegrationRun (CompanyIntegrationID, StartedAt DESC)\n    INCLUDE (EndedAt)';
+      const result = convert(sql);
+      expect(result).toContain('("CompanyIntegrationID", "StartedAt" DESC)');
+      expect(result).not.toMatch(/[(,]\s*StartedAt\b/);
+    });
+
+    it('quotes columns with ASC and NULLS FIRST/LAST modifiers', () => {
+      const result = convert('CREATE INDEX IX_T ON __mj.T (ColA ASC, ColB DESC NULLS LAST, ColC NULLS FIRST)');
+      expect(result).toContain('("ColA" ASC, "ColB" DESC NULLS LAST, "ColC" NULLS FIRST)');
+    });
+
+    it('leaves already-quoted and lowercase columns alone', () => {
+      const result = convert('CREATE INDEX IX_T ON __mj.T ("ColA" DESC, lower_col)');
+      expect(result).toContain('("ColA" DESC, lower_col)');
+    });
   });
 
   describe('UNIQUE index', () => {
