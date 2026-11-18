@@ -4,7 +4,8 @@
  * `metadata/remote-operations/types/predictive-studio-promote-model.output.ts`, the `PredictiveStudio.GetModelEvidence`
  * output's evidence (`MirrorGetModelEvidence`, `predictive-studio-get-model-evidence.output.ts`), and the
  * `PredictiveStudio.SignOffModel` input's leakage flag kind, purpose and decision (`MirrorLeakageFlagKind`,
- * `MirrorSignOffPurpose`, `MirrorSignOffDecision`, `predictive-studio-sign-off-model.input.ts`) equal their Core types:
+ * `MirrorSignOffPurpose`, `MirrorSignOffDecision`, `predictive-studio-sign-off-model.input.ts`), and the `MJ: ML Scoring Runs`
+ * mirror `IMLScoringRunJsonTypes.ts` (Task M5.9) equal their Core types:
  * `fixtures/jsontype-mirrors.ts`, compiled with the TypeScript compiler API under this package's options, has no
  * diagnostics. A drifted mirror (one member changed in
  * memory) fails on exactly the assertion for that type, so the check cannot pass vacuously.
@@ -21,6 +22,7 @@ const TSCONFIG = resolve(here, '../../tsconfig.json');
 const MODELS_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLModelJsonTypes.ts');
 const PUBLISH_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts');
 const PROMOTE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-promote-model.output.ts');
+const SCORING_RUN_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts');
 const EVIDENCE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-get-model-evidence.output.ts');
 
 /** The package's compiler options with emit off; `rootDir` is dropped because the mirrors live outside `src`. */
@@ -60,7 +62,7 @@ function failingMirrors(output: string): string[] {
 }
 
 describe('JSONType mirrors equal their Core types', () => {
-  it('compiles with no diagnostics (all twelve mirrors equal Core)', () => {
+  it('compiles with no diagnostics (all eighteen mirrors equal Core)', () => {
     expect(compile()).toBe('');
   }, 120_000);
 
@@ -91,5 +93,19 @@ describe('JSONType mirrors equal their Core types', () => {
     const drifted = text.replace("    | { readonly kind: 'reason-required' }\n", '');
     expect(drifted).not.toBe(text);
     expect(failingMirrors(compile(new Map([[PROMOTE_OUTPUT_MIRROR, drifted]])))).toEqual(['MirrorPromoteModelRefusal']);
+  }, 120_000);
+
+  it('fails on exactly the drifted mirror (Scoring Runs: a ScoringRefusal kind dropped)', () => {
+    const text = readFileSync(SCORING_RUN_MIRROR, 'utf8');
+    const drifted = text.replace("  | { readonly kind: 'artifact-unverified'; readonly modelId: string };", "  ;");
+    expect(drifted).not.toBe(text);
+    expect(failingMirrors(compile(new Map([[SCORING_RUN_MIRROR, drifted]])))).toEqual(['MirrorScoringRefusal']);
+  }, 120_000);
+
+  it('fails on exactly the drifted mirror (Scoring Runs: a ScoringScope key renamed)', () => {
+    const text = readFileSync(SCORING_RUN_MIRROR, 'utf8');
+    const drifted = text.replace("readonly kind: 'view'; readonly entity: string; readonly userViewId: string", "readonly kind: 'view'; readonly entity: string; readonly viewId: string");
+    expect(drifted).not.toBe(text);
+    expect(failingMirrors(compile(new Map([[SCORING_RUN_MIRROR, drifted]])))).toEqual(['MirrorScoringScope']);
   }, 120_000);
 });

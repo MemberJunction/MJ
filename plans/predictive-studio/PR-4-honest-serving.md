@@ -6703,18 +6703,19 @@ of `MJ: ML Monitoring Results`, written by M6); `Recompute` calls `Predict` at e
 
 **Files:** Create `metadata/entities/.entity-field-jsontype-ml-scoring-runs.json` (`Scope` → `ScoringScope`,
 `ReadPolicy` → `ReadPolicy`, `RequestedBy` → `Actor`, `EntityMapping` → `EntityRef`, `Refusal` → `ScoringRefusal`,
-`FirstErrors` → `ScoringRunErrors`), the six interface files under `metadata/entities/JSONType-interfaces/`, in M1.5's
-form
+`FirstErrors` → `ScoringRowError[]`, D4-161), one combined interface file
+`metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts`, in M1.5's as-built form (D4-161)
 
 **Interfaces:** CodeGen's typed `…Object` accessors on `MJMLScoringRunEntity`; each interface file mirrors its `Core`
 type field for field and is edited in the same commit as it
 
-- [ ] Step 1: The failing check: `git grep -c "JSON Type: MJMLScoringRunEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`.
-- [ ] Step 2: Run it → `0`.
-- [ ] Step 3: Add the files; `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` →
-  `"$PLANS/tools/ps-env.sh" pnpm mj codegen` (push before CodeGen).
-- [ ] Step 4: Step 1's command → at least `6`; `pnpm run build` → exit 0.
-- [ ] Step 5: `SELECT f.Name, f.JSONType FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID = f.EntityID WHERE e.Name = 'MJ: ML Scoring Runs' AND f.JSONType IS NOT NULL`
+- [x] Step 1: The failing check: `git grep -c "JSON Type: MJMLScoringRunEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`.
+- [x] Step 2: Run it → `0`.
+- [x] Step 3: Add the files; `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj codegen`, then `… pnpm mj codegen --skipdb` (push before CodeGen; a full run emits
+  only dirty schemas and a metadata-only JSONType change marks none, D4-161).
+- [x] Step 4: Step 1's command → at least `5`, plus 1 `JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>` (D4-161); `pnpm run build` → exit 0.
+- [x] Step 5: `SELECT f.Name, f.JSONType FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID = f.EntityID WHERE e.Name = 'MJ: ML Scoring Runs' AND f.JSONType IS NOT NULL`
   → 6 rows.
 
 #### Task M5.10: Gates G5.1 `R1 -> S7.3`, G5.2 `W1 -> S7.3 #2`, G5.3 `R1 -> S7.4`, G5.4 `C1 -> S7.4`, G5.5 `W1 -> S7.5 #3`, G3.9 `W9 -> S9.5`
@@ -10274,6 +10275,17 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Pipeline rows. IT166's PSD1 runs again (D4-94's skip removed). The draw's as-of date is read once per run, so a run
   that crosses midnight keeps one sample and a backfill `asOf` reproduces its sample; the sample rotates daily (a fresh
   cohort per day), which M6 monitoring reads as such (M5.6+M5.11 review, Nit).
+- **D4-161 · M5.9 as built** (controller, 2026-11-18). The six JSON columns of `MJ: ML Scoring Runs` bind one combined
+  file, `metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts`, in M1.5's as-built form (not six files):
+  CodeGen emits a definition once per entity, and six files would each carry `Actor`, `PersistedModelStatus`,
+  `LeakageFlag` and `AssemblyRefusal` and collide. `FirstErrors` binds `ScoringRowError` with `JSONTypeIsArray` — Core
+  has no `ScoringRunErrors`; the stored value is `ScoringRowError[]` (`ScoringRunRecorder.Close`). Core's
+  `jsontype-mirrors.compile.test.ts` holds six more mirror assertions and two drift cases (a refusal kind dropped, a
+  scope key renamed). A full `mj codegen` after a metadata-only push does not rewrite `entities/__mj.ts`: it emits only
+  dirty schemas (`buildSchemaEmitOptions`, a schema with new or modified entities), and a JSONType change marks none, so
+  Step 3 runs `mj codegen --skipdb` after the push to emit the accessors. Step 4's grep counts 5, because the array
+  field emits `JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>`; with the array form the six typed accessors are
+  all present. Step 5: 6 rows.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not

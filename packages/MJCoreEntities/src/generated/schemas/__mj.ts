@@ -29624,25 +29624,28 @@ export const MJMLScoringRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: The entity whose records the scope names.`),
-    Scope: z.string().describe(`
+    Scope: z.any().describe(`
         * * Field Name: Scope
         * * Display Name: Scope
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLScoringRunEntity_ScoringScope
         * * Description: JSON ScoringScope: the records the call asked to score.`),
-    EntityMapping: z.string().nullable().describe(`
+    EntityMapping: z.any().nullable().describe(`
         * * Field Name: EntityMapping
         * * Display Name: Entity Mapping
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLScoringRunEntity_EntityRef
         * * Description: JSON EntityRef mapping the scope entity onto the model's grain, when they differ.`),
     AsOfDate: z.date().describe(`
         * * Field Name: AsOfDate
         * * Display Name: As Of Date
         * * SQL Data Type: datetimeoffset
         * * Description: The as-of instant the features were read at.`),
-    ReadPolicy: z.string().describe(`
+    ReadPolicy: z.any().describe(`
         * * Field Name: ReadPolicy
         * * Display Name: Read Policy
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLScoringRunEntity_ReadPolicy
         * * Description: JSON ReadPolicy the features were read under.`),
     DryRun: z.boolean().describe(`
         * * Field Name: DryRun
@@ -29650,10 +29653,11 @@ export const MJMLScoringRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: True when the call scored without writing anything.`),
-    RequestedBy: z.string().describe(`
+    RequestedBy: z.any().describe(`
         * * Field Name: RequestedBy
         * * Display Name: Requested By
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLScoringRunEntity_Actor
         * * Description: JSON Actor: who asked for the run.`),
     RequestedByUserID: z.string().nullable().describe(`
         * * Field Name: RequestedByUserID
@@ -29685,10 +29689,11 @@ export const MJMLScoringRunSchema = z.object({
     *   * refused
     *   * running
         * * Description: running, refused, failed or completed. A failed run keeps the batches it wrote before the failing one.`),
-    Refusal: z.string().nullable().describe(`
+    Refusal: z.any().nullable().describe(`
         * * Field Name: Refusal
         * * Display Name: Refusal
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLScoringRunEntity_ScoringRefusal
         * * Description: JSON ScoringRefusal when the run was refused.`),
     Total: z.number().describe(`
         * * Field Name: Total
@@ -29714,10 +29719,11 @@ export const MJMLScoringRunSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Records skipped (for example, a person's value the run must not overwrite).`),
-    FirstErrors: z.string().nullable().describe(`
+    FirstErrors: z.any().nullable().describe(`
         * * Field Name: FirstErrors
         * * Display Name: First Errors
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>
         * * Description: JSON array of the first errors, at most 20, each {recordId, message}.`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt

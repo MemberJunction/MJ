@@ -84700,6 +84700,130 @@ export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntit
 
 
 /**
+ * JSON shapes for the `MJ: ML Scoring Runs` columns that store Predictive Studio contract values: `Scope`
+ * (`MJMLScoringRunEntity_ScoringScope`), `MJMLScoringRunEntity_ReadPolicy` (`MJMLScoringRunEntity_ReadPolicy`), `RequestedBy` (`MJMLScoringRunEntity_Actor`), `EntityMapping` (`MJMLScoringRunEntity_EntityRef`), `Refusal`
+ * (`MJMLScoringRunEntity_ScoringRefusal`) and `FirstErrors` (an array of `MJMLScoringRunEntity_ScoringRowError`, at most 20).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `ScopeObject`, `ReadPolicyObject`, `RequestedByObject`, `EntityMappingObject`, `RefusalObject` and
+ * `FirstErrorsObject` accessors on `MJMLScoringRunEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLScoringRunEntity_ScoringScope`, `MJMLScoringRunEntity_EntityRef`,
+ * `MJMLScoringRunEntity_ScoringRefusal` and `MJMLScoringRunEntity_ScoringRowError` in `scoring-contracts.ts`; `MJMLScoringRunEntity_ReadPolicy` and `MJMLScoringRunEntity_AssemblyRefusal` in
+ * `assembly-contract.ts`; `MJMLScoringRunEntity_Actor` in `prediction-unit.ts`; `MJMLScoringRunEntity_PersistedModelStatus` in `registry-contracts.ts`;
+ * `MJMLScoringRunEntity_LeakageFlag` in `trainer-contract.ts`. Runtime code reads the columns through those Core types, so a member added
+ * there must be added here. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts`
+ * fails when they drift. The keys are camelCase because they are stored JSON.
+ */
+
+/** Which records one scoring call scores. */
+export type MJMLScoringRunEntity_ScoringScope =
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'record-ids'; readonly entity: string; readonly ids: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'view'; readonly entity: string; readonly userViewId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'filter'; readonly entity: string; readonly extraFilter: string };
+
+/** How the scope's rows were read: all of them, or in pages of `pageSize`. */
+export type MJMLScoringRunEntity_ReadPolicy = { readonly mode: 'complete' } | { readonly mode: 'paged'; readonly pageSize: number };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+
+/**
+ * Who asked for the run — data, never a permission by itself. `human` is a user; `agent`, `scheduled-job` and `system`
+ * are the automated authors. A `system` actor started by a Record Process run names that run in `processRunId`.
+ */
+export type MJMLScoringRunEntity_Actor =
+  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field names
+  | { readonly kind: 'system'; readonly component: string; readonly processRunId?: string };
+
+/** A reference to a stored row: its entity name and its ID. */
+export interface MJMLScoringRunEntity_EntityRef {
+  readonly entity: string;  // case-violation-ok-legacy-back-compat: stored scoring-run EntityMapping JSON key
+  readonly id: string;  // case-violation-ok-legacy-back-compat: stored scoring-run EntityMapping JSON key
+}
+
+/** A model status as stored on `MJ: ML Models.Status`. */
+export type MJMLScoringRunEntity_PersistedModelStatus = 'Draft' | 'Validated' | 'Published' | 'Archived' | 'KeepBaseline' | 'Unevaluated';
+
+/** A leakage flag the trainer raised; a refusal names only its `kind`. */
+export type MJMLScoringRunEntity_LeakageFlag =
+  | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number };  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+
+/** Why feature assembly refused, carried by an `assembly-refused` scoring refusal. */
+export type MJMLScoringRunEntity_AssemblyRefusal =
+  | { readonly kind: 'select-changes-after-decision-date'; readonly entity: string; readonly field: string; readonly changesAfter: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'decision-date-before-change-history'; readonly entity: string; readonly field: string; readonly historyStart: string | null; readonly rowsAffected: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'truncated-read'; readonly entity: string; readonly rowsExpected: number; readonly rowsRead: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'non-numeric-in-numeric-column'; readonly column: string; readonly sampleValue: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'future-period-lag'; readonly column: string; readonly lag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'incumbent-score-missing'; readonly entity: string; readonly rows: number; readonly firstRowIds: readonly string[] }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'invalid-date-in-history'; readonly entity: string; readonly field: string; readonly value: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+
+/** Why a scoring call wrote nothing, decided before any assembly. */
+export type MJMLScoringRunEntity_ScoringRefusal =
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'model-not-published'; readonly status: MJMLScoringRunEntity_PersistedModelStatus }
+  /** The model carries leakage flags, or the dominance re-run over its stored feature importance flagged one feature. */
+  | {
+      readonly kind: 'model-flagged';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly flags: readonly MJMLScoringRunEntity_LeakageFlag['kind'][];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly dominance?: {  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topFeature: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topShare: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly threshold: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      };
+    }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-missing'; readonly fileId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-hash-mismatch'; readonly expected: string; readonly actual: string }
+  | {
+      readonly kind: 'feature-schema-mismatch';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly expectedHash: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly actualHash: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly missingColumns: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly extraColumns: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly typeMismatches: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+    }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'assembly-refused'; readonly refusal: MJMLScoringRunEntity_AssemblyRefusal }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'nan-or-empty-feature-column'; readonly columns: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'no-published-model'; readonly pipelineId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'binding-withdrawn'; readonly bindingId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'binding-not-authorized'; readonly bindingId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'as-of-unsupported'; readonly modelId: string; readonly asOf: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'leakage-unknown'; readonly modelId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-unverified'; readonly modelId: string };
+
+/** One record that failed to score; `FirstErrors` stores an array of these (at most 20). */
+export interface MJMLScoringRunEntity_ScoringRowError {
+  readonly recordId: string;  // case-violation-ok-legacy-back-compat: stored scoring-run FirstErrors JSON key
+  readonly message: string;  // case-violation-ok-legacy-back-compat: stored scoring-run FirstErrors JSON key
+}
+
+/**
  * MJ: ML Scoring Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MLScoringRun
@@ -84865,6 +84989,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     * * Field Name: Scope
     * * Display Name: Scope
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ScoringScope
     * * Description: JSON ScoringScope: the records the call asked to score.
     */
     get Scope(): string {
@@ -84875,9 +85000,25 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
 
     /**
+    * Typed accessor for Scope — a live view of the parsed JSON as MJMLScoringRunEntity_ScoringScope.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Scope field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ScopeObject(): MJMLScoringRunEntity_ScoringScope {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ScoringScope>('Scope')!;
+    }
+    set ScopeObject(value: MJMLScoringRunEntity_ScoringScope) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ScoringScope>('Scope', value);
+    }
+
+    /**
     * * Field Name: EntityMapping
     * * Display Name: Entity Mapping
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_EntityRef
     * * Description: JSON EntityRef mapping the scope entity onto the model's grain, when they differ.
     */
     get EntityMapping(): string | null {
@@ -84885,6 +85026,21 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
     set EntityMapping(value: string | null) {
         this.Set('EntityMapping', value);
+    }
+
+    /**
+    * Typed accessor for EntityMapping — a live view of the parsed JSON as MJMLScoringRunEntity_EntityRef.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EntityMapping field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EntityMappingObject(): MJMLScoringRunEntity_EntityRef | null {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_EntityRef>('EntityMapping');
+    }
+    set EntityMappingObject(value: MJMLScoringRunEntity_EntityRef | null) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_EntityRef>('EntityMapping', value);
     }
 
     /**
@@ -84904,6 +85060,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     * * Field Name: ReadPolicy
     * * Display Name: Read Policy
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ReadPolicy
     * * Description: JSON ReadPolicy the features were read under.
     */
     get ReadPolicy(): string {
@@ -84911,6 +85068,21 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
     set ReadPolicy(value: string) {
         this.Set('ReadPolicy', value);
+    }
+
+    /**
+    * Typed accessor for ReadPolicy — a live view of the parsed JSON as MJMLScoringRunEntity_ReadPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ReadPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ReadPolicyObject(): MJMLScoringRunEntity_ReadPolicy {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ReadPolicy>('ReadPolicy')!;
+    }
+    set ReadPolicyObject(value: MJMLScoringRunEntity_ReadPolicy) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ReadPolicy>('ReadPolicy', value);
     }
 
     /**
@@ -84931,6 +85103,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     * * Field Name: RequestedBy
     * * Display Name: Requested By
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_Actor
     * * Description: JSON Actor: who asked for the run.
     */
     get RequestedBy(): string {
@@ -84938,6 +85111,21 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
     set RequestedBy(value: string) {
         this.Set('RequestedBy', value);
+    }
+
+    /**
+    * Typed accessor for RequestedBy — a live view of the parsed JSON as MJMLScoringRunEntity_Actor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RequestedBy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RequestedByObject(): MJMLScoringRunEntity_Actor {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_Actor>('RequestedBy')!;
+    }
+    set RequestedByObject(value: MJMLScoringRunEntity_Actor) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_Actor>('RequestedBy', value);
     }
 
     /**
@@ -85006,6 +85194,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     * * Field Name: Refusal
     * * Display Name: Refusal
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ScoringRefusal
     * * Description: JSON ScoringRefusal when the run was refused.
     */
     get Refusal(): string | null {
@@ -85013,6 +85202,21 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
     set Refusal(value: string | null) {
         this.Set('Refusal', value);
+    }
+
+    /**
+    * Typed accessor for Refusal — a live view of the parsed JSON as MJMLScoringRunEntity_ScoringRefusal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Refusal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RefusalObject(): MJMLScoringRunEntity_ScoringRefusal | null {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ScoringRefusal>('Refusal');
+    }
+    set RefusalObject(value: MJMLScoringRunEntity_ScoringRefusal | null) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ScoringRefusal>('Refusal', value);
     }
 
     /**
@@ -85075,6 +85279,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     * * Field Name: FirstErrors
     * * Display Name: First Errors
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>
     * * Description: JSON array of the first errors, at most 20, each {recordId, message}.
     */
     get FirstErrors(): string | null {
@@ -85082,6 +85287,21 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
     set FirstErrors(value: string | null) {
         this.Set('FirstErrors', value);
+    }
+
+    /**
+    * Typed accessor for FirstErrors — a live view of the parsed JSON as Array<MJMLScoringRunEntity_ScoringRowError>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying FirstErrors field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get FirstErrorsObject(): Array<MJMLScoringRunEntity_ScoringRowError> | null {
+        return this.GetJSONFieldObject<Array<MJMLScoringRunEntity_ScoringRowError>>('FirstErrors');
+    }
+    set FirstErrorsObject(value: Array<MJMLScoringRunEntity_ScoringRowError> | null) {
+        this.SetJSONFieldObject<Array<MJMLScoringRunEntity_ScoringRowError>>('FirstErrors', value);
     }
 
     /**
