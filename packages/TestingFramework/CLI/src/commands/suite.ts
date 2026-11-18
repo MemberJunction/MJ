@@ -5,6 +5,7 @@
 
 import { TestEngine, ParseShardSpec } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { CriterionSpreads } from './criterion-spread';
@@ -18,6 +19,7 @@ import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
 import { EvaluateSuiteSkipGate } from './suite-skip-gate';
 import { FlushAndExit } from '../utils/flush-and-exit';
+import { SelectSuiteTestsByName } from '../utils/select-suite-tests';
 
 /**
  * Suite command - Execute a test suite
@@ -148,6 +150,7 @@ export class SuiteCommand {
             // Parse variables from --var flags
             // Note: Suite variables apply to all tests - type conversion happens per-test
             const variables = ParseVariableFlags(flags.var);
+            const selectedTestIds = this.selectTests(engine, suite.ID, flags.test);
 
             // Execute suite
             const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
@@ -173,6 +176,7 @@ export class SuiteCommand {
                 rubricVersionId: rubric?.versionId,
                 transport: flags.transport,
                 shard: parsedShard,
+                selectedTestIds,
             }, contextUser);
 
             this.spinner.stop();
@@ -223,6 +227,27 @@ export class SuiteCommand {
 
             process.exit(1);
         }
+    }
+
+    /**
+     * The IDs of the suite tests named by `--test`, or `undefined` to run the whole suite.
+     * Throws when a name is not a test in this suite.
+     */
+    private selectTests(engine: TestEngine, suiteId: string, names?: string[]): string[] | undefined {
+        if (!names || names.length === 0) {
+            return undefined;
+        }
+        const memberIds = new UUIDSet(engine.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId)).map(st => st.TestID));
+        const members = (engine.Tests ?? []).filter(t => memberIds.Has(t.ID));
+        const selection = SelectSuiteTestsByName(members, names);
+        if (selection.Missing.length > 0) {
+            throw new Error(`Not a test in this suite: ${selection.Missing.join(', ')}`);
+        }
+        if (selection.Ids.length === 0) {
+            throw new Error('--test was given, but every name was empty');
+        }
+        console.log(`Running ${selection.Ids.length} selected test(s)`);
+        return selection.Ids;
     }
 
     /** @deprecated Use {@link Execute}. */

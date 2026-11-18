@@ -16,12 +16,13 @@ import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } f
 import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, type ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import type { PubSubEngine } from 'type-graphql';
-import type { ProviderFactory, TaskContinuationDeliverer, TaskContinuationParams } from '@memberjunction/task-graph';
+import { CloneUserWithTenantContext, type ProviderFactory, type TaskContinuationDeliverer, type TaskContinuationParams } from '@memberjunction/task-graph';
 import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { TaskGraphEnvelopeRunParams } from './TaskGraphAgentRunner.js';
 
 /** How many per-task lines a posted summary shows before collapsing the rest into a count. */
 const MAX_LISTED_TASKS = 20;
@@ -39,6 +40,12 @@ const MAX_LISTED_TASKS = 20;
  * run submits, and the cap finally compares against something real.
  */
 export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer {
+    /**
+     * `Reinvoke` starts the turn under `params.SecurityEnvelope` exactly as `TaskGraphAgentRunner` starts a
+     * graph's agent node, and posts instead when it cannot ({@link envelopeTurn}).
+     */
+    public readonly EnforcesSecurityEnvelope = true;
+
     /**
      * @param providerFactory mints a fresh provider per delivery, for the same reason the dispatcher
      *        does: deliveries run outside any request and concurrently with task execution, so
@@ -194,14 +201,23 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
+            // The graph's constraints, carried into the turn (B1). Checked before anything is written: a
+            // turn that cannot run under them is not started, and the outcome is posted instead.
+            const envelopeTurn = await this.envelopeTurn(params, provider);
+            if ('Refusal' in envelopeTurn) {
+                LogError(`[TaskGraphContinuationDeliverer] Not reinvoking for "${params.WorkflowName}": ${envelopeTurn.Refusal} Posting instead.`);
+                await this.PostMessage(params);
+                return;
+            }
+
             // Run on the fork of the message that started the graph, as PostMessage posts into it:
             // RunAgent derives the conversation from the detail, but not the fork.
-            const runUserId = targetRun.UserID || priorRun.UserID || params.SubmittedByUserID;
+            const runUserId = envelopeTurn.User?.ID || targetRun.UserID || priorRun.UserID || params.SubmittedByUserID;
             const origin = params.ConversationDetailID
                 ? await this.resolveOrigin(params.ConversationDetailID, provider, runUserId)
                 : null;
             const ownerUserId = runUserId || origin?.OwnerUserID || this.contextUser.ID;
-            const actingUser = this.resolveActingUser(ownerUserId);
+            const actingUser = envelopeTurn.User ?? this.resolveActingUser(ownerUserId);
 
             // Adaptive delivery:
             // - When the originating workflow message is still the latest message in the conversation
@@ -263,6 +279,9 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 // The load-bearing value: without it the next graph this run submits restarts the
                 // chain at zero and the cap never fires.
                 continuationDepth: params.ReinvokeDepth + 1,
+                // Scope, audience readers, bound parameters, the envelope (seeding taint) and the removals
+                // for a tainted turn — what an agent node of the same graph runs under.
+                ...envelopeTurn.RunParams,
             });
 
             if (replyDetail && replySaved) {
@@ -344,6 +363,35 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 LogError(`[TaskGraphContinuationDeliverer] The fallback post for "${params.WorkflowName}" also failed`, undefined, fallbackError);
             }
         }
+    }
+
+    /**
+     * Who a `reinvoke` turn runs as and the `RunAgent` parameters that carry the graph's envelope (B1), or why the
+     * turn must not start. A graph with no envelope adds nothing. One with an envelope runs as the person who
+     * submitted it — never the deliverer's own user, which carries no tenant and no reader limits — on a per-run
+     * clone stamped with the caller's tenant when the envelope names one, so the shared cached user is never
+     * stamped.
+     */
+    private async envelopeTurn(
+        params: TaskContinuationParams,
+        provider: IMetadataProvider,
+    ): Promise<{ User?: UserInfo; RunParams: Partial<ExecuteAgentParams> } | { Refusal: string }> {
+        const env = params.SecurityEnvelope;
+        if (!env) {
+            return { RunParams: {} };
+        }
+        const submitter = params.SubmittedByUserID ? this.findCachedUser(params.SubmittedByUserID) : undefined;
+        if (!submitter) {
+            return { Refusal: 'the graph carries security constraints and the user who submitted it could not be resolved.' };
+        }
+        const user = env.CallerTenantContext ? CloneUserWithTenantContext(submitter, env.CallerTenantContext, provider) : submitter;
+        return { User: user, RunParams: await TaskGraphEnvelopeRunParams(env, user) };
+    }
+
+    /** The cached `UserInfo` with this ID, or undefined. */
+    private findCachedUser(userID: string): UserInfo | undefined {
+        const users = UserCache.Instance?.Users ?? UserCache.Users ?? [];
+        return users.find((u) => UUIDsEqual(u.ID, userID));
     }
 
     /**

@@ -1,5 +1,166 @@
 # @memberjunction/testing-cli
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [1be3915]
+- Updated dependencies [ae69eec]
+- Updated dependencies [2b07be4]
+- Updated dependencies [019fd49]
+- Updated dependencies [8e41e43]
+- Updated dependencies [1618217]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [367a259]
+- Updated dependencies [49731ee]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [51972e3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [5882617]
+- Updated dependencies [74950be]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [442014c]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-agents@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/testing-integration@6.3.0-edge.1
+  - @memberjunction/rubrics@6.3.0-edge.1
+  - @memberjunction/testing-engine@6.3.0-edge.1
+  - @memberjunction/rubrics-base@6.3.0-edge.1
+  - @memberjunction/testing-engine-base@6.3.0-edge.1
+  - @memberjunction/dynamic-packages@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 0d484c2: CodeGen base views: display-label joins (related-entity name fields) and the embedded-record geo join are always `LEFT OUTER JOIN`, regardless of the foreign key's nullability, so an unmatched related row yields a NULL label instead of removing the row from the view (#4533). IS-A parent joins stay `INNER`. Ships a migration that regenerates the affected core base views. The display-name fields those joins feed are now typed `string | null` in the generated entity classes, and the call sites that read them handle the null.
+- 16ac431: Fix dynamic imports that break under pnpm (#3741). SearchEngine declares `@elastic/elasticsearch` and `@huggingface/transformers` as optional dependencies and its load errors no longer tell users to add them to their own project. MJServer now logs which resolver module failed to load. Plugin, check-module, AI driver and realtime-bridge native addon names that come from configuration load through `ImportFromHost`, so a package installed by the host application resolves; AIEngine skips the import when the driver class is already registered. A new `check:dynamic-imports` guard fails on a dynamic import of a package the importing package does not declare.
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [d073171]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [83b1293]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/testing-engine@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/testing-integration@6.3.0-edge.0
+  - @memberjunction/rubrics@6.3.0-edge.0
+  - @memberjunction/rubrics-base@6.3.0-edge.0
+  - @memberjunction/testing-engine-base@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

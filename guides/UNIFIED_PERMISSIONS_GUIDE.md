@@ -210,6 +210,8 @@ Granting a parent implicitly grants descendants. Use this to gate **whether a us
 
 `MJ: Entity Permissions` drives **`getRowLevelSecurityWhereClause(provider, entityName, userPayload, EntityPermissionType.Read|Create|Update|Delete, prefix)`** (`packages/MJServer/src/generic/ResolverBase.ts`), which injects a SQL `WHERE` clause into generated entity queries so users only see rows they're allowed to. This is **query-time, set-level** gating — orthogonal to "can I use this one record." (It's *also* surfaced through the unified model via `MJEntityPermissionProvider`, so entity-level grants show up in the Sharing Center too.)
 
+Each verb's filter belongs to its `Can<Op>` flag: saving a row with a flag cleared also clears that verb's filter (`ReadRLSFilterID` with `CanRead`, and so on). Ticking the flag again later grants that verb **unfiltered** until a filter is set again, so re-add the filter in the same save if the role should stay limited.
+
 ---
 
 ## 6. Where to look

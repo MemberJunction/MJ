@@ -1,5 +1,312 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- a9e640a: Lists: refresh from a saved view or query, safely and on a schedule.
+  - Queries and User Views store a `DefinitionFingerprint` on every save. A list stores the fingerprint of the source it was linked against (`SourceFingerprint`); a refresh whose source changed since then applies nothing, returns `SOURCE_CHANGED` and pauses the list's routine until the owner approves the change (`ApproveListSource`). Approving, and linking a source, fill the list straight away.
+  - A list can refresh from a saved query (`SourceQueryID`, `SourceQueryParameters`, `SourceQueryKeyField`).
+  - "Refresh automatically" (`List.AutoRefresh`) creates a User Routine that runs "Refresh List From Source" on the Lists app's default schedule (application settings `Lists.Refresh.DefaultCron` and `Lists.Refresh.DefaultTimezone`). Only the list's owner can link a source or turn it on.
+  - `RefreshFromSource` (and so linking, approving and scheduled refreshes) no longer signs a delta token, so it works on a server without `MJ_LIST_DELTA_SECRET`; previews and `ApplyDelta` still need the secret.
+  - New list operations `PreviewRefreshFromSource` / `ApplyRefreshPreview` (GraphQL `PreviewListRefresh` / `ApplyListRefresh`) preview a refresh from any source before applying it. Each refresh that changes a list writes a "List Refreshed" audit row; source changes and approvals write their own.
+  - The List form gains a Source & refresh card, a source-change review with a SQL or filter diff from Record Changes, a link-source dialog and a Refresh history section. The Lists app gains refresh status on the browse page and a Refreshes page.
+  - New deterministic integration test IT175 (`list-refresh` bundle, LR1–LR7) covers the fingerprint stamp, fill on link, the routine's lifecycle, a stopped refresh on a changed source, and approval.
+
+### Patch Changes
+
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- 0af123e: Check `TransactionGroup` updates for concurrent changes, as single-record saves already are. An update queued with `ConcurrencyCheck` of `'log'` or `'enforce'` (per save, or the provider-wide setting) now gets a locked read of its row inside the group's transaction, before any of the group's statements run; in `'enforce'` mode a conflict rolls back the whole group, `Submit()` returns `false`, and the conflicting entity's `LatestResult.ConcurrencyConflict` names the fields. Groups with checking off do no extra work, and batched submits stay batched. Grouped saves from the browser now send each update's old values, and `ExecuteTransactionGroup` checks them the way the single-record update mutation does, so a form that saves child records alongside its main record no longer silently overwrites another user's change. Adds integration test IT173.
+- fff3a52: Waves 5.4, 5.5, and 5.6 performance & bundle-splitting improvements:
+  - **Wave 5.4**: Lazy `EntityInfo.Fields` / `EntityFieldInfo` instantiation on first field access, native structured-clone IndexedDB metadata caching in `ProviderBase` / `BrowserIndexedDBStorageProvider`, and `IT128 PB20` hydration benchmarks.
+  - **Wave 5.5**: Added `@memberjunction/ng-bootstrap/types` secondary entry point to decouple `ng-explorer-app` from eager dashboard registrations, switched `MarkdownArtifactViewerComponent` to `ChangeDetectionStrategy.OnPush`, and extended `check-browser-manifest-leakage.mjs` with bundle-splitting regression guards.
+  - **Wave 5.6**: Added `@memberjunction/ng-auth-services/preload` lightweight entry point for `MJExplorer/src/main.ts` and decoupled `@memberjunction/core-entities/schemas` Zod schemas from entity classes (with CodeGen support).
+- 7231715: Add cross-tab `SharedWorker` kernel (`SharedTabKernelClient`, `SharedTabKernelHost`, `SharedTabKernelStorageProvider`) multiplexing a single origin `graphql-ws` WebSocket across open tabs for `cacheInvalidation`, per-session `PushStatusUpdates`, generic `Subscribe`, sequence catch-up, and single-flight JWT refresh sync, alongside a shared Worker L1 `RunView`/`RunViews` coalescing cache and single-owner IndexedDB L1 + write deduplication layer with automatic `BroadcastChannel` + Web Locks fallback when `SharedWorker` is unavailable. Wire the worker into `MJExplorer`, update service-worker `ngsw-config.json` and `verify-sw-cache-shape.js` for `worker-*.js` bundles, and add `performance-benchmark.PB22`.
+- 44f7869: Wave 4.2a Angular idle CPU, FK record-name microtask coalescing, `AngularGraphQLDataProvider` background transport hook, and O(1) streaming markdown:
+  - `@memberjunction/graphql-dataprovider`: coalesce concurrent `GetEntityRecordName` cache misses within a microtask tick into a single batched `GetEntityRecordNames` query, add framework-neutral `ExecuteInBackgroundScope` hook on `GraphQLDataProvider` around WebSocket setup/watchdogs/subscriptions/timers, and support pre-constructed or `ClassFactory`-registered provider subclasses in `SetupGraphQLClient` and `ConnectGraphQLClient`.
+  - `@memberjunction/ng-shared-generic`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-workspace-initializer`, `@memberjunction/ng-realtime-widget`: add `@RegisterClass(GraphQLDataProvider)` `AngularGraphQLDataProvider` + `SetupAngularGraphQLClient` / `ConnectAngularGraphQLClient` delegating `ExecuteInBackgroundScope` to `NgZone.runOutsideAngular` so WebSocket traffic never triggers spurious Angular change-detection ticks while keeping `@memberjunction/graphql-dataprovider` 100% framework-agnostic.
+  - `@memberjunction/ng-markdown`: memoize `Marked` configuration in `MarkdownService` and incrementally render only the uncommitted tail block in `MarkdownComponent` during streaming (`O(1)` per chunk instead of `O(N^2)` full-document re-parse and `innerHTML` replacement).
+  - `@memberjunction/ng-base-forms`: replace unconditional 200ms `NgZone` dirty-state `setInterval` polling in `MjRecordFormContainerComponent` with event-driven `FormFieldEditCoordinator` + `BaseEntity` listeners and an edit-mode-only `runOutsideAngular` fallback; normalize UUID case comparison and sequence-guard async FK name lookups in `MjFormFieldComponent`.
+  - `@memberjunction/ng-entity-viewer`: defer `RecycleBinChipComponent` deleted-record count queries via `IntersectionObserver` until the chip enters the viewport and project only `Fields: ['RecordID']` with `SkipTotalRowCount: true`.
+  - `@memberjunction/ng-explorer-core`: detach `ChangeDetectorRef` for hidden/stacked tabs, off-DOM cached components, and inactive dual-region layouts while keeping active and visible side-by-side Golden Layout split-pane tabs live.
+- 7747b73: Wave 4.4 two-tier L1 frozen CoW + L2 Redis HASH cache, Redis Stream cluster invalidation sequence, cross-replica GraphQL PubSub fan-out, multi-tab browser invalidation multiplexer, and coalesced metadata storage persistence:
+  - `@memberjunction/core`: cache per-slot PK array indices via `WeakMap` in `LocalCacheManager.ApplyRowChanges` for $O(\Delta)$ Copy-on-Write row updates, compute `maxUpdatedAt` incrementally on non-displacing updates, delegate in-place row deltas via `ILocalStorageProvider.ApplyRunViewRowDelta`, and add trailing-edge coalesced/serialized `ScheduleSaveLocalMetadataToStorage` on `ProviderBase`.
+  - `@memberjunction/redis-provider`: add `TwoTierCacheStorageProvider` (byte-bounded L1 deep-frozen LRU cache with $O(\Delta)$ peer `row_delta` patching in front of L2 Redis), per-row Redis `HASH` storage (`useHashForRunViewSlots`) with Lua `APPLY_RUNVIEW_ROW_DELTA_SCRIPT` (`HSET`/`HDEL`), and atomic cluster epoch + Redis Stream `INCR`/`XADD`/`XRANGE` helpers.
+  - `@memberjunction/server` & `@memberjunction/server-bootstrap`: wrap shared Redis cache in `TwoTierCacheStorageProvider` (`WrapSharedCacheWithL1`), register `RedisStreamBroadcastProvider` (`'RedisStream'`) for cluster-wide monotonic `X-MJ-Server-ID` / `X-MJ-Cache-Seq` watermarks and `XRANGE` catch-up, and bridge all non-bespoke TypeGraphQL `@Subscription` topics across pods via `AttachRedisClusterPubSub`.
+  - `@memberjunction/graphql-dataprovider`: add `ClientTabInvalidationMultiplexer` electing a single leader browser tab via Web Locks to hold the `CacheInvalidation` WebSocket and relay invalidations + deduplicated catch-up watermarks to follower tabs over `BroadcastChannel` / `SharedWorker`.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/interactive-component-types@6.3.0-edge.1
+  - @memberjunction/lists-base@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+- 6fd9fb7: Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
+  as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+  saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+  (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
+  Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
+  signal), stores that decision with its reason on the run, and renders the trust verdict from it.
+
+  The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+  not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+  seeded-random holdout, so nothing deployed re-carves.
+
+  An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
+  An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+  - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
+    pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
+    `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate
+    record, the `gate` member of the `ps-run-results/v2` envelope). `TrustVerdicts.DeriveTrustVerdict` takes
+    `{ ValidationResults, Lineage }` and renders the stored gate decision; `TrustGrade`, `TrustModelInput`,
+    `MajorityBaselineFinding`, `TrustVerdicts.TrustDots` and the free functions `DeriveTrustVerdict`,
+    `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
+  - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
+    decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
+    and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+    `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+    renamed `trustTitle` / `headline`;
+    `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+    The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+    `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
+  - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
+    `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+    `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+    `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
+    the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
+    `buildImprovePrompt` are removed.
+  - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
+    (`test:gate-parity`, `test:gate-parity-refpipe`).
+  - `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+    Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+    values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+    and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+    baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+    before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+    minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
+  - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+    interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+    (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+    `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
+  - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
+
+  Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
+  version 1 of each, and the training path without them is removed.
+  - `@memberjunction/predictive-studio-core`: `ProtocolRows`, `ProtocolEdits`, `UnitEdits` (one owner of the unit and
+    protocol row writes, the next-version rules and the label version bump) and `LegacyPipelines` (the migration's
+    mapping from a pipeline's columns to a unit and a protocol, or the archive or hold reason). Stored rows whose date is
+    not a calendar day fail parse (`UtcDay.IsIsoDay`). `TrainRequest` and the `/train` contract are removed. New refusal
+    code `TIME_HOLDOUT_REQUIRED`.
+  - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
+    each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
+    (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+    legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
+    time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
+    after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
+    only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
+    assembly day only when no change history covers that day. A parent record hard-deleted after the decision date
+    is read from its Record Changes (its stored fields from its Delete row) and is uncovered from its Delete on; a
+    missing record with no Delete still refuses `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
+    `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
+    gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
+    `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
+    input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
+  - `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+    `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
+  - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+    Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+    protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+  - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+    its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+    row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+    setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+    a cloud provider.
+  - `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+    provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+    the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+    provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+    from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+    `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+    `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+    `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+    deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+    (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+    artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+    `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+    over its own storage. The local-disk model
+    artifact store and loader, and their active-provider lookup, are removed.
+  - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+    `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+    generated GraphQL schema, class registrations and record forms for the three new entities.
+  - `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+    `MJ: ML Evaluation Protocols` forms.
+  - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
+    protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
+    pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
+    aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
+    bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
+    PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+    `ChatEnvironmentId` from `PSResourceBase`.
+  - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+    `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+    key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
+  - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
+    pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
+    `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+    `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+    `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+    Provider on.
+  - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+  Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+  not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+  action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+  with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+  (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+  through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+  refused.
+  - Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`), a grouped non-forecast unit accepts only `cluster-bootstrap` intervals (`intervals-not-clustered`), and a migrated legacy pipeline bound to a grouped unit gets grouped folds (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error (`@memberjunction/predictive-studio`).
+  - Round 4 (2026-11-08): a grouped unit refuses any inner validation without its group key, `blocked-time` without a key included (`@memberjunction/predictive-studio-core`); the as-of history covers only the requested keys, a Delete in force wins on both readers before the created-after check, the not-updatable path included, an unreached history excludes under exclude-and-count on the stored-value reader as it already did on the replay reader, and a stored `__mj_CreatedAt` later than an earlier change row other than the history's opening Create dates a re-creation and is ignored (`@memberjunction/predictive-studio`); two standing matrix tests pin reader agreement on existence and which sidecar fold builders keep a group together (`@memberjunction/predictive-studio`, `@memberjunction/predictive-studio-sidecar`); a member × period unit naming no group key is grouped by its grain record, so it gets grouped folds and clustered intervals by default and refuses stratified folds (`@memberjunction/predictive-studio-core`), and a windowed aggregate counts a child hard-deleted after the decision day as its Delete row recorded it (`@memberjunction/predictive-studio`); change rows of one record at one instant are ordered by whether the record continues after that instant, which the next change row proves unless it is a Create and, at its last instant, a current row (a Delete ends the instant of a record that is gone, and precedes the Create of one that was re-created, so a record re-created at one instant and hard-deleted later reads its second incarnation between the two, and one created and deleted at one instant and re-created later reads deleted between the two), a windowed aggregate's child history is loaded once so coverage counts each child record once, and a child row or a join-key unit row deleted and re-created after the decision day is read from the Delete row that ended the incarnation standing then (`@memberjunction/predictive-studio`).
+
+### Patch Changes
+
+- 87ac205: Add parameterized `RunView` support via `RunViewParams.Parameters`:
+  - `@memberjunction/core`: Add `RunViewParameterScalar`, `RunViewParameterValue`, `RunViewParameters`, `RunViewParametersKey`, and `RunViewParams.Parameters`. Include canonicalized parameters in `RunViewParams.Equals` and `LocalCacheManager.GenerateRunViewFingerprint` (`prm:` segment when non-empty). Teach `FieldSecuritySQLGate` to recognize `@paramName` parameter tokens on both SQL Server and PostgreSQL dialects.
+  - `@memberjunction/generic-database-provider`: Add `BindExtraFilterParameters` using `SqlTokens.Lex` and `EditSet` to rewrite `@paramName` tokens in `ExtraFilter` to dialect-native bound placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and `NamedQueryParameter` bindings (with array expansion for `IN (@list)`). Thread bound parameters through `executeRunViewCore`, `RunViewsWithCacheCheck`, `getBatchedServerCacheStatus`, `getUpdatedRowsSince`, and `IsCoalescibleCountBatch`.
+  - `@memberjunction/sqlserver-dataprovider`: Support `NamedQueryParameter` and `TypedQueryParameter` lists in `ExecuteSQLBatch` and `ExecuteSQLBatchStatic` with parameter deduplication across shared `mssql.Request` batches, and forward `queryParameters` in `executeSQLForUserViewRunLogging` and `getBatchedServerCacheStatus`.
+  - `@memberjunction/postgresql-dataprovider`: Exclude `@paramName` and `$1` parameter tokens from column auto-quoting in `quoteFieldNamesInToken`.
+  - `@memberjunction/server`: Accept and validate `Parameters` (`GraphQLJSONObject`) on `RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`, and `RunViewsWithCacheCheck`.
+  - `@memberjunction/graphql-dataprovider`: Forward `RunViewParams.Parameters` in `InternalRunView`, `InternalRunViews`, and `RunViewsWithCacheCheck`.
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/interactive-component-types@6.3.0-edge.0
+  - @memberjunction/lists-base@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

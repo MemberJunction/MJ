@@ -8,6 +8,12 @@ import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor } from '../../scoring/types';
 
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+/** A model trained without a Training Snapshot: no record was a training row. */
+const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
+
+
 /**
  * The list scope loads its members as full entity objects, like the view and filter scopes, so scoring works for
  * an entity whose key is not called `ID` (feature columns are on the preloaded rows; nothing is re-read by an
@@ -216,7 +222,7 @@ class RecordingSidecar implements ISidecarPredictor {
   public Requests: PredictRequest[] = [];
   async predict(req: PredictRequest): Promise<PredictResponse> {
     this.Requests.push(req);
-    return { predictions: (req.rows ?? []).map((_r, i) => ({ score: 0.25 + i * 0.5, class: i === 0 ? 'lapse' : 'renew' })) };
+    return { predictions: (req.rows ?? []).map((_r, i) => ({ score: 0.25 + i * 0.5, class: i === 0 ? 'lapse' : 'renew', probabilities: null })), classOrder: null };
   }
 }
 
@@ -225,9 +231,9 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const entity = fakeEntity('Individuals', ['individual_id']);
     const provider = new ListProvider(entity, ['42', '43'], (id) => ({ individual_id: id, tenure: Number(id) - 40, events: 7 }));
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.set('file-1', new TextEncoder().encode('bytes'));
+    artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS } });
 
     const result = await runner.run({
       modelId: 'model-1',
@@ -251,9 +257,9 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const ids = Array.from({ length: 1500 }, (_v, i) => String(1000 + i));
     const provider = new ListProvider(entity, ids, (id) => ({ individual_id: id, tenure: 1, events: 2 }));
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.set('file-1', new TextEncoder().encode('bytes'));
+    artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS } });
 
     const result = await runner.run({
       modelId: 'model-1',

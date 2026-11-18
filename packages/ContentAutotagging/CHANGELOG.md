@@ -1,5 +1,188 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 8c2b0d0: Content pipeline: a driver can fetch a page of its own locators in one session. A driver may implement `FetchBatch({ URLs, ... })`, returning one result per locator (its bytes, or the error its fetch ended in). Stages gain an optional bulk step, `Prepare(records, context)`, that the processor runs over a page before any record runs (only for the run's first stage); Extract uses it to call `FetchBatch` once per source in the page, and each item then reads what came back for it. An item the batch did not return is fetched alone; one whose batch fetch failed fails (a permanent 4xx) or retries (anything else) alone, as a single fetch would; a `Prepare` that fails is logged and every record runs as before. The processor now pages a run whose first stage has a `Prepare` even when its last stage has no `Finalize`, finishing each record exactly as a single-record run does.
+- 8c2b0d0: Content pipeline: the website crawler's Discover gains sitemap seeding, walks in parts and page rendering, and Extract can read pages through a renderer.
+
+  `AutotagWebsite.Discover` now runs `WebsiteCrawl`: breadth-first over in-scope links (same root URL, pattern, `MaxDepth` and sibling-path rules as before), with its frontier and the URLs it has seen kept in a compact resume token, so a crawl past its deadline carries on in its next walk (each part reads at least one page, so a walk always moves on). New `Configuration.Website` settings: `UseSitemaps` (seed from the sitemaps robots.txt names, else /sitemap.xml, following sitemap indexes; a page whose `lastmod` is older than the walk's `Since` is not reported but its links are followed), `SitemapURLs`, `CrawlDelayMs` (default 1000), `MaxPages` and `RenderTimeoutMs`. The legacy `Autotag` crawl is unchanged.
+
+  Page rendering: `BasePageRenderer` (content-pipeline-base) is a registered way of loading a page as a browser builds it, chosen per source with `Configuration.PageRenderer`. The pipeline ships `Headless` (`HeadlessPageRenderer`), which loads pages in a headless Chromium through Playwright, an optional peer dependency imported only when a page is rendered; one browser is shared and closed after a minute idle. Every request a rendered page makes is refused when it resolves to a private or reserved address (MJ's SSRF guard), checked at every redirect hop (Playwright's route sees only a redirect's first request, so the renderer fetches each request without following redirects: the page's own redirects are checked and followed one navigation at a time, and those of what it loads are followed hop by hop in the route). The page may open no WebSocket. The source's session headers go only to the session's own origins, hop by hop. The crawler reads pages through the source's renderer, and Extract fetches a web page through it when the source names one and its driver has no `Fetch` of its own; a page the renderer reports as an error status fails as an HTTP fetch would. Login works as before, through the Access layer.
+
+- 8c2b0d0: Content pipeline: a Discover walk can run in parts, and a driver can report removals.
+
+  Walks in parts. A source too large to walk in one run had to finish in one go or start over every time. A driver's `Discover` may now end early by returning `{ ResumeToken }` (an `async *` generator's `return`), typically when the walk passes `DiscoverRequest.Deadline` (set from the new `Options.Tuning.DiscoverWalkBudgetMs`). The Discover stage keeps the token on the source in the new `ContentSource.DiscoverState` column (JSON, typed `IContentSourceDiscoverState`: `ResumeToken`, `WalkStartedAt`, `Mode`, `ItemsFound`) and hands it back as `DiscoverRequest.ResumeToken` on the next walk, which keeps the first part's `Since`. Until the walk finishes the source stays due (`ForceDiscovery` stays set, `LastDiscoveredAt` / `LastSyncedAt` do not move); the part that finishes stamps the first part's start and clears the state. The token is saved only when every item the part found commits: a part whose items could not be saved keeps the old token, so the next run walks that part again (and reports its removals again) instead of resuming past items that were never saved. A walk resumes only in the mode it started in. A Sync that runs in parts marks nothing for deletion by absence, since no single run saw the whole source.
+
+  Removals. A driver can yield `{ URL, Removed: true }` for a locator it knows is gone; once the walk's items have committed, the source's top-level item at that URL is marked `DeleteStatus = 'Pending'` for the Delete stage, without waiting for a Sync. Child items go with their parent, as with Sync.
+
+  Migration `V202611170732__v6.3.x__ContentPipeline_Discover_State` adds the column with its regenerated view, procedures, GraphQL type and form field.
+
+- 8c2b0d0: Content vector metadata: a field can be written under its own key, and added to the curated default. `VectorMetadata.Fields[<field>].MetadataKey` writes the field under another metadata key (for example `Date` as `ContentDate`, with `StoreAs: 'epochSeconds'`); the keys that identify a vector's record (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) are refused, logged, and the field left out. Under the curated default (no `FieldStrategy`), fields marked `Included: true` are now added to the curated set, so a source can keep it and add a field without listing every other one; a curated default with no field marked `Included` is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [c75494d]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/storage@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/tag-engine@6.3.0-edge.1
+  - @memberjunction/ai-vector-sync@6.3.0-edge.1
+  - @memberjunction/content-pipeline-base@6.3.0-edge.1
+  - @memberjunction/credentials@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/templates@6.3.0-edge.1
+  - @memberjunction/ai-segmentation@6.3.0-edge.1
+  - @memberjunction/ai-vectors@6.3.0-edge.1
+  - @memberjunction/entity-documents@6.3.0-edge.1
+  - @memberjunction/tag-engine-base@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+  - @memberjunction/network-utils@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [5850233]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/storage@6.3.0-edge.0
+  - @memberjunction/ai-vectors@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/entity-documents@6.3.0-edge.0
+  - @memberjunction/tag-engine@6.3.0-edge.0
+  - @memberjunction/tag-engine-base@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-segmentation@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+  - @memberjunction/ai-vector-sync@6.3.0-edge.0
+  - @memberjunction/content-pipeline-base@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.0
+  - @memberjunction/network-utils@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

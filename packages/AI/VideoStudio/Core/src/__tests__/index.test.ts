@@ -30,6 +30,7 @@ describe('@memberjunction/video-studio-core', () => {
             Concurrency: 'VIDEO_STUDIO_RENDER_CONCURRENCY',
             MaxTimeoutMs: 'VIDEO_STUDIO_RENDER_MAX_TIMEOUT_MS',
             AllowRoot: 'VIDEO_STUDIO_RENDER_ALLOW_ROOT',
+            Workers: 'VIDEO_STUDIO_RENDER_WORKERS',
         });
     });
 });

@@ -281,6 +281,64 @@ describe('WhiteboardState', () => {
       expect(() => WhiteboardState.FromJSON('{"nope":true}')).toThrow();
       expect(() => WhiteboardState.FromJSON('not json')).toThrow();
     });
+
+    it('R9-8 (case W2): should ensure idCounter never goes backwards after merge and does not overwrite existing items', () => {
+      const mergedPayload = JSON.stringify({
+        version: 2,
+        seq: 10,
+        idCounter: 2,
+        zCounter: 3,
+        pageCounter: 1,
+        activePageId: 'page-1',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            items: [
+              {
+                ID: 'shape-2',
+                Kind: 'shape',
+                Shape: 'rect',
+                X: 10,
+                Y: 10,
+                W: 100,
+                H: 60,
+                Label: 'Human Shape',
+                Z: 2,
+                Author: 'user',
+              },
+              {
+                ID: 'shape-3',
+                Kind: 'shape',
+                Shape: 'rect',
+                X: 120,
+                Y: 10,
+                W: 100,
+                H: 60,
+                Label: 'Agent Shape',
+                Z: 3,
+                Author: 'agent',
+              },
+            ],
+          },
+        ],
+      });
+
+      const loaded = state.LoadFromJSON(mergedPayload);
+      expect(loaded).toBe(true);
+      expect(state.GetItem('shape-3')?.Label).toBe('Agent Shape');
+
+      const newItem = state.AddItem(
+        { Kind: 'shape', Shape: 'rect', X: 200, Y: 10, W: 100, H: 60, Label: 'New Human Shape' },
+        'user',
+      );
+      expect(newItem).not.toBeNull();
+      expect(newItem?.ID).toBe('shape-4');
+      expect(state.GetItem('shape-3')).toBeDefined();
+      expect(state.GetItem('shape-3')?.Label).toBe('Agent Shape');
+      expect(state.GetItem('shape-4')).toBeDefined();
+      expect(state.GetItem('shape-4')?.Label).toBe('New Human Shape');
+    });
   });
 });
 

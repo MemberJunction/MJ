@@ -32,6 +32,7 @@ const SPECS: Record<string, { id: string; fields: FieldSpec[] }> = {
         ['SQLFullType', 'nvarchar'], ['SourceEntityID', 'uniqueidentifier'], ['SourceFieldName', 'nvarchar'], ['IsComputed', 'bit'],
         ['ComputationDescription', 'nvarchar'], ['IsSummary', 'bit'], ['SummaryDescription', 'nvarchar'], ['DetectionMethod', 'nvarchar'],
         ['AutoDetectConfidenceScore', 'decimal'], ['SourceEntityFieldID', 'uniqueidentifier'], ['IsNullable', 'bit'], ['SourceObjectName', 'nvarchar'],
+        ['InAllBranchVariants', 'bit'],
     ] },
     'MJ: Query Parameters': { id: 'E0000000-0000-0000-0000-000000000002', fields: [
         ['QueryID', 'uniqueidentifier'], ['Name', 'nvarchar'], ['Type', 'nvarchar'], ['IsRequired', 'bit'], ['DefaultValue', 'nvarchar'],
@@ -122,7 +123,7 @@ function field(name: string, sequence: number, overrides: Partial<QueryFieldFact
     return {
         Name: name, Sequence: sequence, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', IsNullable: false, IsComputed: false,
         SourceEntityID: null, SourceEntityFieldID: null, SourceFieldName: name, SourceObjectName: '__mj.vwThings', DocDescription: null,
-        SourceDescription: null, ...overrides,
+        SourceDescription: null, InAllBranchVariants: true, ...overrides,
     };
 }
 

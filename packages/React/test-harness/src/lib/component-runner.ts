@@ -1,5 +1,7 @@
 import { createRequire } from 'module';
 import { BrowserManager } from './browser-context';
+import { CreateRunViewResultNormalizer, ROW_TYPE_HINTS_KEY, WithRowTypeHints } from './row-type-shaping';
+import type { HintedRunViewResult, RowTypeHintParams, RunViewBridge, RunViewResultNormalizer } from './row-type-shaping';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 
 // ESM compatibility: require is not available in ESM, use createRequire
@@ -3127,7 +3129,8 @@ export class ComponentRunner {
           }
         }
 
-        return result;
+        // Field-type hints so the page can hand the component Explorer-shaped rows.
+        return WithRowTypeHints(result, util.md?.Entities, params);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -3183,7 +3186,7 @@ export class ComponentRunner {
           });
         }
 
-        return results;
+        return results.map((r, i) => WithRowTypeHints(r, util.md?.Entities, params[i]));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const entities = params.map(p => DescribeViewTarget(p)).join(', ');
@@ -3321,6 +3324,12 @@ export class ComponentRunner {
       }
     });
 
+    // The page-side half of Explorer-shaped RunView rows (see row-type-shaping.ts). Injected by
+    // source because it runs in the browser.
+    await page.evaluate(
+      `window.__mjNormalizeRunViewResult = (${CreateRunViewResultNormalizer.toString()})(${JSON.stringify(ROW_TYPE_HINTS_KEY)});`
+    );
+
     // Make them available in utilities with the mock metadata
     await page.evaluate(() => {
       // Use the mock metadata for synchronous access
@@ -3339,6 +3348,11 @@ export class ComponentRunner {
                              }
                            };
       
+      // Installed by the evaluate above; a missing one leaves rows as the bridge returned them.
+      const normalizeViewResult: RunViewResultNormalizer =
+        (window as Window & { __mjNormalizeRunViewResult?: RunViewResultNormalizer }).__mjNormalizeRunViewResult
+        ?? ((_params, result) => result);
+
       (window as any).__mjUtilities = {
         md: {
           // Use the mock metadata's Entities directly (synchronous)
@@ -3353,8 +3367,15 @@ export class ComponentRunner {
             await (window as any).__mjGetEntityObject(entityName)
         },
         rv: {
-          RunView: async (params: any) => await (window as any).__mjRunView(params),
-          RunViews: async (params: any) => await (window as any).__mjRunViews(params)
+          // Rows shaped as Explorer returns them: typed dates/numbers, getter-only entity objects.
+          RunView: async (params: RowTypeHintParams) =>
+            normalizeViewResult(params, await (window as Window & Partial<RunViewBridge>).__mjRunView!(params)),
+          RunViews: async (params: RowTypeHintParams[]) => {
+            const results: HintedRunViewResult[] = await (window as Window & Partial<RunViewBridge>).__mjRunViews!(params);
+            return Array.isArray(results)
+              ? results.map((r, i) => normalizeViewResult(params?.[i], r))
+              : results;
+          }
         },
         rq: {
           RunQuery: async (params: any) => await (window as any).__mjRunQuery(params)

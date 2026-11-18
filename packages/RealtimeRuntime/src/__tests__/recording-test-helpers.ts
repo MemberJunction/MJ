@@ -4,7 +4,8 @@ import type { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRea
 import type { IRecordingShardStore, PendingRecordingShard } from '../session/RecordingShardStore';
 import type { IRecordingTransport, RecordingTerminalInput, RecordingUploadOptions, RecordingUploadOutcome } from '../session/RecordingTransport';
 import type { RecordingShard } from '../session/RecordingShardWindow';
-import { RealtimeSessionRuntime } from '../session/RealtimeSessionRuntime';
+import { RealtimeSessionRuntime, type ClientCloseReason } from '../session/RealtimeSessionRuntime';
+import type { ISessionCloseBeacon } from '../session/SessionCloseBeacon';
 
 /** Bytes per fake Opus packet: small, fixed, and distinct per packet so a resend is recognisable. */
 export const FAKE_PACKET_BYTES = 20;
@@ -182,8 +183,21 @@ export class FakeRecordingTransport implements IRecordingTransport {
     }
 }
 
-/** A runtime whose recording store and transport are the test's fakes. */
+/** A page-close beacon that logs into the shared call log. */
+export class FakeSessionCloseBeacon implements ISessionCloseBeacon {
+    public readonly Closes: Array<{ AgentSessionId: string; CloseReason: ClientCloseReason }> = [];
+    constructor(public readonly Log: string[] = []) {}
+    public SendClose(agentSessionId: string, closeReason: ClientCloseReason): Promise<boolean> {
+        this.Log.push(`close:${agentSessionId}`);
+        this.Closes.push({ AgentSessionId: agentSessionId, CloseReason: closeReason });
+        return Promise.resolve(true);
+    }
+}
+
+/** A runtime whose recording store, transport and page-close beacon are the test's fakes. */
 export class FakeRecordingRuntime extends RealtimeSessionRuntime {
+    /** The beacon {@link RealtimeSessionRuntime.SendPageHideSignals} uses; null = the provider has no endpoint. */
+    public CloseBeacon: ISessionCloseBeacon | null = null;
     constructor(
         host: IRealtimeMediaHost,
         public Store: IRecordingShardStore,
@@ -196,5 +210,8 @@ export class FakeRecordingRuntime extends RealtimeSessionRuntime {
     }
     protected override createRecordingShardStore(): IRecordingShardStore {
         return this.Store;
+    }
+    protected override createSessionCloseBeacon(): ISessionCloseBeacon | null {
+        return this.CloseBeacon;
     }
 }

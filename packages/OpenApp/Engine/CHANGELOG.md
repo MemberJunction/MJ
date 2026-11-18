@@ -1,5 +1,126 @@
 # @memberjunction/open-app-engine
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 74950be: Open Apps can be installed from a folder in the consumer repository. `mj app install ./openapps/analytics` stores the app as a `file:` locator relative to the repository root (`file:openapps/analytics`), and `mj app upgrade`, `mj app remove` and `mj app check-updates` read the app from that folder. The folder, its `mj-app.json` and its SQL directories must be inside the repository with links resolved, so a link to a folder or file outside it is refused. The folder's version is the `version` in its `mj-app.json`. Its migrations, `-pg` migrations and teardown scripts are copied with the same rules as a GitHub download. Its npm packages are written as `workspace:*`, and the install stops before any change when a package of the app, or of any local dependency it installs, is not a project in the pnpm or yarn workspace. Remove reads the installed version's migrations and teardown scripts from the folder, so it stops before any change when the folder is at another version or was deleted; the `mj app remove` help says to restore the folder from git first.
+
+  A dependency can name another local app with a `file:` locator, but only from an app that is itself installed from a local folder. `mj app upgrade --reapply` runs the upgrade again at the installed version, so changes in a local folder apply without a version bump.
+
+  The engine reads every manifest, version and SQL file through an `OpenAppSource` (`GitHubAppSource` or `LocalAppSource`), selected by `ResolveAppSource`. GitHub installs call the GitHub client with the same arguments as before.
+
+  The deterministic integration tier has a new bundle, `open-app-local-source` (IT178), that installs, upgrades and removes apps from a throwaway pnpm workspace against the live database. `@memberjunction/testing-integration` exports its fixture type, `OpenAppLocalSourceFixture`.
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/record-cloning@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 8fb8a07: Open App CLI messages and exit codes: `mj app check-updates` and migration downloads explain a private repository the credential cannot read, the credential message names the token in use and covers fine-grained and SSO tokens; `mj app remove`/`enable`/`disable` exit 1 once on failure; `mj migrate` without `--schema` uses the schema from `mj-app.json` and logs it.
+- 76dc1bb: Open App config writer: key and section searches skip comments (the stock MJAPI header's example `module.exports` no longer receives writes) and edits stay inside their target array/object; the app schema goes to `excludeSchemas_append` when the host uses it; appending after a trailing comma no longer leaves an array hole, and a write that adds a hole is rejected; bare `entityPackageName` keys are recognized so installs stop adding quoted duplicates; upgrades add the schema to `excludeSchemas` only when the schema was renamed; the install summary no longer tells the operator to run CodeGen.
+- 064f9a9: `mj app upgrade`: when the package install fails after the package files were written, the upgrade restores every file its package step changed (workspace `package.json` files and lockfiles), skips the config step, and leaves the app at its previous version and status instead of finalizing it `Disabled`. The failure message says the schema stays migrated and gives the retry command (#5517).
+- a0079ce: Check hosts by parsed hostname instead of substring, as CodeQL flagged: the Teams webhook action accepts only https URLs on `webhook.office.com` or its subdomains (a URL with that text in its path or query no longer passes), and Azure AD issuer, Azure SQL host and Azure Blob upload detection match the host name itself.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/record-cloning@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

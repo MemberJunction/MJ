@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/ai-groq
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 2006748: Groq: recover a tool call from a `tool_use_failed` rejection instead of falling back to the envelope (#5847).
+  - Groq checks tool arguments against the declared schema and refuses a call whose types do not match (a boolean sent as the string "true"), although MJ's argument coercion would accept it. The Groq driver now reads the call out of the rejection's `failed_generation` (the Qwen `<function=…><parameter=…>` form and the JSON `{name, arguments}` form) and returns it as an ordinary tool-call result, when every call names a tool the request declared. Otherwise it rethrows as before.
+  - New optional `ChatResult.ToolCallsRecovered` flag marks such results.
+  - New `ToolCallingMode` value `'NativeRecovered'` on `MJ: AI Prompt Runs` and `MJ: AI Agent Run Steps` (migration + CodeGen). The prompt runner records it for a recovered hybrid `Native` turn; a `NativeImplicit` turn keeps its mode. Agent steps count tool calls on `NativeRecovered` turns.
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -1,5 +1,205 @@
 # @memberjunction/ai-mcp-server
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [1be3915]
+- Updated dependencies [ae69eec]
+- Updated dependencies [2b07be4]
+- Updated dependencies [019fd49]
+- Updated dependencies [8e41e43]
+- Updated dependencies [1618217]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [367a259]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [11f5574]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [e2390f0]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [c75494d]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [cb20f0f]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [0bad3a4]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [c17c7be]
+- Updated dependencies [31c2439]
+- Updated dependencies [442014c]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [579ff91]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/server@6.3.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/ai-agents@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/ai-agent-manager@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/api-keys@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/credentials@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/encryption@6.3.0-edge.1
+  - @memberjunction/auth-providers@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+  - @memberjunction/config@6.3.0-edge.1
+  - @memberjunction/dynamic-packages@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 3c4de2b: Fix escaping order in string handling flagged by CodeQL: Google Drive queries escape backslashes before quotes, and folder lookups, file-type filters and provider-specific values are escaped too (a name with a quote no longer breaks the query), skill frontmatter and `WWW-Authenticate` descriptions escape backslashes, Component Studio emits valid accessors for non-identifier display fields and quotes field names as string literals, HTML entity decoders decode each entity once (`&amp;lt;` stays `&lt;`), the mobile HTML renderer drops out-of-range numeric entities instead of throwing, new-user domain patterns treat regex metacharacters literally, and two no-op replaces in the LinkedIn article action are removed.
+- a0079ce: Check hosts by parsed hostname instead of substring, as CodeQL flagged: the Teams webhook action accepts only https URLs on `webhook.office.com` or its subdomains (a URL with that text in its path or query no longer passes), and Azure AD issuer, Azure SQL host and Azure Blob upload detection match the host name itself.
+- 68bc034: Add `mcpServerSettings.trustProxy` and `mcpServerSettings.auth.proxy.rateLimit` (`windowMs`, `limit`). `trustProxy` is applied as Express's `trust proxy` setting. Behind CloudFront or a load balancer, the OAuth proxy's per-IP rate limit, which also covers `/mcp`, now counts each client by its own address instead of making everyone share one 60-per-minute limit, and the limit can be sized (#6497).
+- 07b7840: Strip line breaks (CR, LF, U+2028, U+2029) from user-supplied values before logging them (MCP OAuth client registration and consent scopes, realtime diagnostics) to prevent log injection (CodeQL js/log-injection, #5569). A non-string `client_name` in a client registration is now logged as text instead of failing the registration.
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [ebd9132]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [38de1af]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [7069bfe]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/api-keys@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.0
+  - @memberjunction/server@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-agent-manager@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/auth-providers@6.3.0-edge.0
+  - @memberjunction/encryption@6.3.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.0
+  - @memberjunction/config@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

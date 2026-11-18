@@ -54,7 +54,7 @@ export async function ComputeQueryExtraction(input: QueryExtractionInput): Promi
     const outputRefusal = saveRefusal(input, [], output.DuplicateNames);
     if (outputRefusal) return resultOf(input, analysis, null, findings, outputRefusal);
     recordOutput(output, analysis, findings);
-    const fields = output.Failure === null ? fieldFacts(output.Columns, analysis, input, findings) : null;
+    const fields = output.Failure === null ? fieldFacts(output, analysis, input, findings) : null;
     return resultOf(input, analysis, fields, findings, null);
 }
 
@@ -120,10 +120,11 @@ function recordOutput(output: DescribedOutput, analysis: TemplateAnalysis, findi
 }
 
 /** The field facts of the described output, in order; unnamed columns are skipped and reported. */
-function fieldFacts(columns: readonly DescribedColumn[], analysis: TemplateAnalysis, input: QueryExtractionInput, findings: Findings): QueryFieldFact[] {
+function fieldFacts(output: DescribedOutput, analysis: TemplateAnalysis, input: QueryExtractionInput, findings: Findings): QueryFieldFact[] {
     const index = new EntityObjectIndex(input.Entities);
+    const branchOnlyNames = output.BranchOnlyColumnNames ?? new Set<string>();
     const facts: QueryFieldFact[] = [];
-    for (const column of columns) {
+    for (const column of output.Columns) {
         if (column.Name.trim().length === 0) {
             findings.Warnings.push(`Output column ${column.Ordinal} has no name, so it has no field row. Give it an alias.`);
             continue;
@@ -135,6 +136,7 @@ function fieldFacts(columns: readonly DescribedColumn[], analysis: TemplateAnaly
             SourceEntityID: source.SourceEntityID, SourceEntityFieldID: source.SourceEntityFieldID,
             SourceFieldName: source.SourceFieldName, SourceObjectName: source.SourceObjectName,
             DocDescription: analysis.FieldDocs.get(column.Name.toLowerCase()) ?? null, SourceDescription: source.SourceDescription,
+            InAllBranchVariants: !branchOnlyNames.has(column.Name.toLowerCase()),
         });
     }
     return facts;

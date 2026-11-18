@@ -91,10 +91,11 @@ export interface ValidationStrategy {
   /** Number of folds for `kfold`. */
   K?: number;
   /**
-   * Fraction reserved as the locked final holdout that the experiment search
-   * never sees — scored exactly once on the promoted model (plan §8.2).
+   * The holdout share of a pipeline saved before Evaluation Protocols. Only the legacy-pipeline migration reads it
+   * (`LegacyPipelines.LegacyProtocolInputs`), to give such a pipeline its protocol; a pipeline's bound Evaluation Protocol
+   * decides its holdout, so a pipeline built with one carries no fraction.
    */
-  LockedHoldoutFraction: number;
+  LockedHoldoutFraction?: number;
   /**
    * Column that orders the rows in time (e.g. `MonthIndex`) when the target is a forecast. Declaring it tells
    * Predictive Studio the model must be tested on later periods than it trained on; until that evaluation exists

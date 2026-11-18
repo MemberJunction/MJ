@@ -1,5 +1,361 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 44b885a: Harden governed artifacts, live collaboration, public guest sharing, and agent artifact tools (`NW-1` through `NW-6` plus adversarial security & correctness fixes):
+  - **Server & Database Read/Write Security**: Register `PostRunView`-protected artifact, collection, and anchored conversation entities at module load (`MJCoreEntitiesServer`, `MJServer`) and in `agent-data-policy-guard`; fail closed on non-system SQL `Aggregates` and smart-cache/differential/fast-path bypasses in `MJCore` (`ProviderBase`) & `GenericDatabaseProvider`; harden `MJCollectionEntityServer` reparenting (`CanDelete` + `oldParentId`/`newParentId` `CanEdit`), collection ancestry cascading, grantee self-delete ("Leave shared item"), owner-scoped `ListArtifactGuestShareLinks` query (with `artifact:read` API key scope enforcement), and `RealtimeClientSessionResolver` `AuthorizeSessionAccess` magic-link IDOR enforcement.
+  - **Public Guest Sharing & Viewer Sandboxing (`NW-1`)**: Add `MJArtifactGuestShareLink` migration (`V202611161958`) binding Frozen `ArtifactVersion` records to native anonymous `resource-share` `MagicLinkInvite` records (`MagicLinkService`, `POST /magic-link/redeem`, RS256 JWKS `#token=` + `ResolveGuestArtifactSnapshot`, with dormant `PublicLink` marked `@deprecated` via metadata), fail-closed HMAC frozen snapshot verification (`SnapshotVerified === true` required for `.pptx` export), `ComponentArtifactViewerPlugin` server + client fail-closed gates in `GuestSnapshotMode`, dual-field `EmbeddedArtifacts` inspection/scrubbing, nonce-scoped `PrintHtmlInSandboxedIframe` (`allow-modals allow-scripts` without `allow-same-origin`), raster image/whiteboard sandboxed print, URL scheme validation in `LibraryRemoteDrivePane`, and `[GuestSnapshotMode]` offline viewer isolation across Docs, Slides, and Sheets.
+  - **Agent Artifact Tools (`create_artifact` `InitialOperations` & `NW-3`–`NW-6`)**: Forward and atomically execute `initialOperations` / `InitialOperations` in `ArtifactToolManager.handleCreateArtifactTool` (both persisted and in-memory modes); enforce `ValidateEmbeddedArtifactAccess` when accepting document suggestions; wire production `RegisterServerArtifactFileBytesLoader` / `RegisterClientArtifactFileBytesLoader` and preserve `File`-mode `.xlsx` configuration metadata across suggestion/comment edits; enforce most-restrictive `ProtectedRanges` evaluation; and fix `NW-3` suggestion anchors/tabs and `NW-6` viewer initialization races (`ViewMode`, `NavigationAnchor`, Whiteboard selection/navigation).
+  - **CI, Standards, Documentation & Test Coverage**: Resolve all `check:guards`, `check:standards`, `check:dynamic-replace`, `check:codegen-tail`, `check:esm`, and `mj sync validate` checks; sync Docs/Slides/Sheets tool counts (`26 / 29 / 47`); and expand unit, HappyDOM, and live integration (`IT170`, `IT171`) coverage.
+
+- acd082e: Add collaborative MJ Documents, MJ Presentations (16:9 structured Slide Decks), MJ Spreadsheets (formulas, `=MJ.QUERY()` live governed tables, range charts, and round-trip `.xlsx` / `.csv` import & export), inline OLE Whiteboard editing, the Excel Office Add-in (`@memberjunction/excel-addin` + `@memberjunction/excel-addin-server`), and the unified **Library** application (`LibraryResource` + `<mj-library-workspace>`):
+  - **Real-time Collaboration & Governance (`@memberjunction/core-entities`, `@memberjunction/server`, `@memberjunction/ai-agents`)**: Yjs CRDT collaboration rooms over WebSocket (`ArtifactCollaborationServer`), viewer-scoped permission delegation (`ArtifactPermissionEngine` across ownership, host-entity delegates, direct grants, and cascaded collection grants), governed document blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `Artifact`, `InteractiveComponent`), `SlideDeckEngine`, and `SpreadsheetEngine`.
+  - **Collaborative Artifact Viewers (`@memberjunction/ng-artifacts`, `@memberjunction/ng-conversations`)**: Rich Markdown document editor with Suggesting mode and word-level tracked changes, `.docx` / `.pptx` / `.xlsx` import and export services, interactive 16:9 Slide Deck studio and presenter view, collaborative Spreadsheet studio, and explicit Save/Commit inline Whiteboard canvas editing.
+  - **Dedicated `Library` Application & Explorer Routing (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-application`, `@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`)**: Ships a dedicated header-pinned `Library` application (`DefaultForNewUser: true`) alongside an untouched `File Browser`, preserves `Collections` and user-scoped `Agent Activity` (with an authorized `All Users` scope toggle and `Tasks` -> `Agent Activity` nav migration via `MOVED_NAV_ITEMS`) in `Chat`, removes arbitrary row caps on shared items, queries exact per-artifact latest versions, bounds remote Connected Drive text previews to 100 KB, and adds version-aware + overwrite-safe Connected Drive exports.
+
+  **Upgrade & Environment Notes:**
+  - **Required Server HMAC Secrets**: Configure dedicated `>= 32`-character secrets on `MJAPI` for collaboration WebSocket tickets (`MJ_ARTIFACT_COLLAB_HMAC_SECRET`, e.g. `openssl rand -hex 32`) and frozen live-block snapshots (`MJ_FROZEN_BLOCK_HMAC_SECRET`, e.g. `openssl rand -hex 32`). Both endpoints fail closed if their secret is unset or shorter than 32 characters; `MJServer` logs a startup warning when either secret is missing, and collaborative viewers display a live-sync unavailable notice while remaining safely read-only.
+  - **Reverse-Proxy WebSocket URLs & Multi-Node Routing (`MJAPI_PUBLIC_URL`)**: `DocumentCollaborationService` derives the Yjs WebSocket endpoint directly from the browser's configured GraphQL URL unless `MJAPI_PUBLIC_URL` (`publicUrl`) is explicitly set on `MJAPI`, preventing `ws://localhost:4000` fallbacks behind reverse proxies. Multi-node `MJAPI` clusters should configure sticky WebSocket routing unless a distributed `ITicketReplayStore` is registered via `SetTicketReplayStore`.
+  - **Existing Users & `Library` App Visibility**: New users receive the `Library` application automatically via `DefaultForNewUser: true`. Existing users who already customized their `MJ: User Applications` rows retain their existing app selections; they can enable `Library` in the Explorer App Switcher / Settings, or administrators can provision `UserApplication` rows (`ApplicationID = 'DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A'`) for pre-existing active users as a one-time post-upgrade step.
+  - **Deployment / Rolling-Upgrade Note (`@memberjunction/server` + `@memberjunction/ng-artifacts`)**: `MJAPI` (`@memberjunction/server`) and `MJExplorer` (`@memberjunction/ng-artifacts`) require an **all-at-once coordinated deployment** rather than a mixed-version rolling upgrade. The collaboration protocol introduces incremental CRDT delta payloads on `version-saved` (`prevStateVectorB64` / `savedSnapshotB64`), the JSON `PayloadBase64` WebSocket relay envelope, and the `CollaborationTicketResult.ErrorCode` GraphQL field, which must be deployed together across server and web client bundles.
+
+  Application metadata (`metadata/applications`), authorization metadata (`metadata/authorizations`, `metadata/authorization-roles`), entity metadata (`metadata/entities`), and artifact type metadata (`metadata/artifact-types`) change, so the release requires a consolidated metadata sync migration.
+
+- cdcbfd1: Unify governed artifact tools and real-time collaborative workspaces across agents and Explorer viewers:
+  - Add governed artifact CoreActions and realtime channel / client-tool integrations (`ArtifactWorkspaceChannel`, live Explorer workspace actions, and realtime delegation routing) alongside updated Sage, Query Builder, and Loop agent prompts.
+  - Add multi-agent live collaboration presence indicators and cursor/region overlays across Markdown, Slide Deck, Whiteboard, and Spreadsheet viewers plus server Yjs relay awareness (`ArtifactCollaborationServer`).
+  - Resolve session-scoped alpha short IDs (e.g. `"D"`) to canonical `MJ: Artifacts` UUIDs in `ResolveEmbeddedArtifactId` and across `ArtifactToolManager`, `DocumentToolLibrary`, `SlideDeckToolLibrary`, and `SpreadsheetToolLibrary`, with frontend UUID guards before SQL `RunView` lookups.
+  - Add on-sheet floating charts (`Placement: 'sheet' | 'dock'`), drag/resize handles, comma-separated non-contiguous chart ranges and row/column orientation controls, a full Chart & Range Properties editor modal, and persisted horizontal chart-pane splitter height (`WorkbookSpec.PreferredObjectsPaneHeightPx`) synced across Yjs CRDT, XLSX metadata, and server room checkpoints.
+  - Add shared `<mj-context-menu>` overlay component and Docs/Slides/Sheets context-menu helpers with full keyboard navigation, viewport clamping, and mobile long-press support.
+  - Fix Explorer conversation chat change-detection (`NG0100`), suppress redundant `"Open Document"` action chips when an artifact is already opened inline, and prevent duplicate prompt emissions.
+
+### Patch Changes
+
+- 6ea73e6: Wave 5 UI bundle splitting, lazy loading, and ESBuild script minification safety:
+  - `@memberjunction/global`, `@memberjunction/core`: `BaseSingleton` detects a name-mangled build (its own class name no longer reads `BaseSingleton`) and then keys unstamped singletons by constructor, so unrelated classes the minifier gave the same name — even with byte-identical source — never share an instance. With real class names (Node, dev builds) it keys by name exactly as before, so duplicate copies of a class still share one instance even when their package versions differ. Stamped names and explicit `getInstance(className)` keys work in both modes. `BaseEngineRegistry` resolves names via `GetClassName` and registers a different engine class whose name is already taken under `Name#2`, `Name#3`… instead of overwriting the first engine's registration.
+  - `@memberjunction/ng-auth-services`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`: Move the seven built-in auth providers out of the main barrel into dedicated subpath exports (`./msal`, `./auth0`, `./okta`, `./cognito`, `./workos`, `./magic-link`, `./local-dev`), declare provider files in `sideEffects`, extract `HasMagicLinkSessionToken` to a zero-dependency helper, and add `LoadAuthProvider`/`PreloadActiveAuthProvider` so Explorer loads only the active IdP SDK before bootstrapping `AppModule` while `@memberjunction/ng-bootstrap` retains eager registration via `EAGER_AUTH_PROVIDERS`.
+  - `@memberjunction/ng-explorer-settings`, `@memberjunction/ng-dashboards`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-explorer-modules`: Extract lightweight `UserSettingsModule` (`./user-settings.module`) and `DashboardEditorModule` (`./dashboard-editor.module`), sever unused `AITestHarnessModule` plus eager `CoreDashboardsModule` / `ExplorerSettingsModule` imports from `ExplorerCoreModule`, `ShellModule`, `ProfileDialogComponent`, and `MJExplorerModulesBundle`, and split `LiveKitRoomResource`, `HumanHandoffConsoleResource`, and `MeetingsResource` into a lazy `LiveKitResourcesModule` registered via `LIVEKIT_LAZY_FEATURE_CONFIG`.
+  - `MJExplorer`: Enable `optimization.scripts = true` in `production` and `staging`, switch `main.ts` from `platformBrowserDynamic` to AOT `platformBrowser` with `PreloadActiveAuthProvider`, move `@angular/compiler` to `devDependencies` (removing `@angular/platform-browser-dynamic`), and remove unused MSAL imports from `AppModule`.
+
+- 44f7869: Wave 4.2a Angular idle CPU, FK record-name microtask coalescing, `AngularGraphQLDataProvider` background transport hook, and O(1) streaming markdown:
+  - `@memberjunction/graphql-dataprovider`: coalesce concurrent `GetEntityRecordName` cache misses within a microtask tick into a single batched `GetEntityRecordNames` query, add framework-neutral `ExecuteInBackgroundScope` hook on `GraphQLDataProvider` around WebSocket setup/watchdogs/subscriptions/timers, and support pre-constructed or `ClassFactory`-registered provider subclasses in `SetupGraphQLClient` and `ConnectGraphQLClient`.
+  - `@memberjunction/ng-shared-generic`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-workspace-initializer`, `@memberjunction/ng-realtime-widget`: add `@RegisterClass(GraphQLDataProvider)` `AngularGraphQLDataProvider` + `SetupAngularGraphQLClient` / `ConnectAngularGraphQLClient` delegating `ExecuteInBackgroundScope` to `NgZone.runOutsideAngular` so WebSocket traffic never triggers spurious Angular change-detection ticks while keeping `@memberjunction/graphql-dataprovider` 100% framework-agnostic.
+  - `@memberjunction/ng-markdown`: memoize `Marked` configuration in `MarkdownService` and incrementally render only the uncommitted tail block in `MarkdownComponent` during streaming (`O(1)` per chunk instead of `O(N^2)` full-document re-parse and `innerHTML` replacement).
+  - `@memberjunction/ng-base-forms`: replace unconditional 200ms `NgZone` dirty-state `setInterval` polling in `MjRecordFormContainerComponent` with event-driven `FormFieldEditCoordinator` + `BaseEntity` listeners and an edit-mode-only `runOutsideAngular` fallback; normalize UUID case comparison and sequence-guard async FK name lookups in `MjFormFieldComponent`.
+  - `@memberjunction/ng-entity-viewer`: defer `RecycleBinChipComponent` deleted-record count queries via `IntersectionObserver` until the chip enters the viewport and project only `Fields: ['RecordID']` with `SkipTotalRowCount: true`.
+  - `@memberjunction/ng-explorer-core`: detach `ChangeDetectorRef` for hidden/stacked tabs, off-DOM cached components, and inactive dual-region layouts while keeping active and visible side-by-side Golden Layout split-pane tabs live.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [484447a]
+- Updated dependencies [eaba2bc]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [92a4d65]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [12f453f]
+- Updated dependencies [c67470e]
+- Updated dependencies [3bd3bad]
+- Updated dependencies [bdf2257]
+- Updated dependencies [dfa6a4a]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [9532ed3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [7a6d72d]
+- Updated dependencies [27184ba]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [de2bf2e]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [0bad3a4]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [aa429c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [4f15ace]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/feature-pipelines@6.3.0-edge.1
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/communication-types@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/ng-artifacts@6.3.0-edge.1
+  - @memberjunction/ng-auth-services@6.3.0-edge.1
+  - @memberjunction/ng-conversations@6.3.0-edge.1
+  - @memberjunction/ng-explorer-core@6.3.0-edge.1
+  - @memberjunction/ng-shared@6.3.0-edge.1
+  - @memberjunction/ng-base-forms@6.3.0-edge.1
+  - @memberjunction/ai-realtime-client@6.3.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.3.0-edge.1
+  - @memberjunction/ng-file-storage@6.3.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.3.0-edge.1
+  - @memberjunction/ng-shared-generic@6.3.0-edge.1
+  - @memberjunction/entity-communications-base@6.3.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.3.0-edge.1
+  - @memberjunction/rubrics-base@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 9eb002d: Record unique keys as column sets and narrow `EntityField.IsUnique` (#4536). A new `EntityUniqueKey` table, kept in step with the catalog by CodeGen, holds every unique index or constraint as its key columns in order; `EntityInfo.UniqueKeySets` and `EntityInfo.IsUniqueFieldSet` expose them. `IsUnique` is now set only when a column alone is the key of an unfiltered unique index or is the sole primary key column; composite members, INCLUDE columns, filtered or partial indexes and composite primary key columns no longer count. Record cloning reads the key sets for collision checks, unique foreign keys and renames.
+- 1dd1af1: Add declarative entity lifecycle policies (`EntityLifecyclePolicyEngine` + `ServerOperationScopeManager` with state machines, per-state field-freeze rules, post-create immutability, and `'Standard' | 'AppendOnly' | 'ServerOperationOnly'` write authority), concurrency-safe scoped document auto-numbering (`DocumentNumberingEngine` + `DocumentSequenceCounter` table), batch/transaction-memoized cross-entity policies (`CrossEntityPolicyEngine` + `PreDelete` data hooks), and typed cross-app capabilities (`AppCapabilityRegistry` / `@RegisterAppCapability`).
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+- 6fd9fb7: Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
+  as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+  saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+  (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
+  Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
+  signal), stores that decision with its reason on the run, and renders the trust verdict from it.
+
+  The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+  not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+  seeded-random holdout, so nothing deployed re-carves.
+
+  An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
+  An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+  - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
+    pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
+    `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate
+    record, the `gate` member of the `ps-run-results/v2` envelope). `TrustVerdicts.DeriveTrustVerdict` takes
+    `{ ValidationResults, Lineage }` and renders the stored gate decision; `TrustGrade`, `TrustModelInput`,
+    `MajorityBaselineFinding`, `TrustVerdicts.TrustDots` and the free functions `DeriveTrustVerdict`,
+    `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
+  - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
+    decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
+    and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+    `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+    renamed `trustTitle` / `headline`;
+    `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+    The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+    `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
+  - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
+    `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+    `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+    `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
+    the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
+    `buildImprovePrompt` are removed.
+  - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
+    (`test:gate-parity`, `test:gate-parity-refpipe`).
+  - `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+    Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+    values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+    and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+    baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+    before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+    minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
+  - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+    interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+    (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+    `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
+  - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
+
+  Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
+  version 1 of each, and the training path without them is removed.
+  - `@memberjunction/predictive-studio-core`: `ProtocolRows`, `ProtocolEdits`, `UnitEdits` (one owner of the unit and
+    protocol row writes, the next-version rules and the label version bump) and `LegacyPipelines` (the migration's
+    mapping from a pipeline's columns to a unit and a protocol, or the archive or hold reason). Stored rows whose date is
+    not a calendar day fail parse (`UtcDay.IsIsoDay`). `TrainRequest` and the `/train` contract are removed. New refusal
+    code `TIME_HOLDOUT_REQUIRED`.
+  - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
+    each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
+    (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+    legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
+    time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
+    after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
+    only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
+    assembly day only when no change history covers that day. A parent record hard-deleted after the decision date
+    is read from its Record Changes (its stored fields from its Delete row) and is uncovered from its Delete on; a
+    missing record with no Delete still refuses `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
+    `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
+    gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
+    `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
+    input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
+  - `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+    `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
+  - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+    Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+    protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+  - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+    its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+    row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+    setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+    a cloud provider.
+  - `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+    provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+    the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+    provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+    from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+    `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+    `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+    `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+    deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+    (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+    artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+    `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+    over its own storage. The local-disk model
+    artifact store and loader, and their active-provider lookup, are removed.
+  - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+    `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+    generated GraphQL schema, class registrations and record forms for the three new entities.
+  - `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+    `MJ: ML Evaluation Protocols` forms.
+  - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
+    protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
+    pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
+    aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
+    bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
+    PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+    `ChatEnvironmentId` from `PSResourceBase`.
+  - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+    `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+    key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
+  - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
+    pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
+    `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+    `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+    `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+    Provider on.
+  - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+  Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+  not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+  action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+  with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+  (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+  through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+  refused.
+  - Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`), a grouped non-forecast unit accepts only `cluster-bootstrap` intervals (`intervals-not-clustered`), and a migrated legacy pipeline bound to a grouped unit gets grouped folds (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error (`@memberjunction/predictive-studio`).
+  - Round 4 (2026-11-08): a grouped unit refuses any inner validation without its group key, `blocked-time` without a key included (`@memberjunction/predictive-studio-core`); the as-of history covers only the requested keys, a Delete in force wins on both readers before the created-after check, the not-updatable path included, an unreached history excludes under exclude-and-count on the stored-value reader as it already did on the replay reader, and a stored `__mj_CreatedAt` later than an earlier change row other than the history's opening Create dates a re-creation and is ignored (`@memberjunction/predictive-studio`); two standing matrix tests pin reader agreement on existence and which sidecar fold builders keep a group together (`@memberjunction/predictive-studio`, `@memberjunction/predictive-studio-sidecar`); a member × period unit naming no group key is grouped by its grain record, so it gets grouped folds and clustered intervals by default and refuses stratified folds (`@memberjunction/predictive-studio-core`), and a windowed aggregate counts a child hard-deleted after the decision day as its Delete row recorded it (`@memberjunction/predictive-studio`); change rows of one record at one instant are ordered by whether the record continues after that instant, which the next change row proves unless it is a Create and, at its last instant, a current row (a Delete ends the instant of a record that is gone, and precedes the Create of one that was re-created, so a record re-created at one instant and hard-deleted later reads its second incarnation between the two, and one created and deleted at one instant and re-created later reads deleted between the two), a windowed aggregate's child history is loaded once so coverage counts each child record once, and a child row or a join-key unit row deleted and re-created after the decision day is read from the Delete row that ended the incarnation standing then (`@memberjunction/predictive-studio`).
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [a0079ce]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [1b282a0]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [5ac8ab8]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [eb5905c]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [cfc2fad]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [8230d04]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+- Updated dependencies [36ddd08]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/ng-artifacts@6.3.0-edge.0
+  - @memberjunction/ng-base-forms@6.3.0-edge.0
+  - @memberjunction/ng-conversations@6.3.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.3.0-edge.0
+  - @memberjunction/ng-explorer-core@6.3.0-edge.0
+  - @memberjunction/ng-file-storage@6.3.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.3.0-edge.0
+  - @memberjunction/ng-shared@6.3.0-edge.0
+  - @memberjunction/feature-pipelines@6.3.0-edge.0
+  - @memberjunction/ai-engine-base@6.3.0-edge.0
+  - @memberjunction/ai-realtime-client@6.3.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/ng-auth-services@6.3.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.3.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.3.0-edge.0
+  - @memberjunction/communication-types@6.3.0-edge.0
+  - @memberjunction/entity-communications-base@6.3.0-edge.0
+  - @memberjunction/rubrics-base@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

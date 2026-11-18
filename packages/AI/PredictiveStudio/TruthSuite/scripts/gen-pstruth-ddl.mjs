@@ -60,12 +60,16 @@ for (const id of ['T1p', 'T3', 'T4']) {
 }
 emit('GO');
 
+// The C1 corpus tables: their DDL is the hand-written migrations/V202610201300__pstruth_c1_corpus.sql, so they are not
+// printed above, but their entities take the same direct-SQL opt-in in their own metadata file.
+const C1_TABLES = ['C1Person', 'C1OrderHeader', 'C1DuesPeriod', 'C1NonduesLine', 'C1EventAttendance', 'C1CourseCompletion', 'C1Certification', 'C1CommitteeMembership'];
+
 if (process.argv.includes('--metadata')) {
   const entitiesDir = path.join(root, 'metadata', 'entities');
   mkdirSync(entitiesDir, { recursive: true });
   // Looked up by table, not by name: CodeGen (run at provision) picks its own display-style name ("PS Truth: Scn C2s"),
   // and this push renames each entity to the stable `PS Truth: <table>`.
-  const records = tables.map((t) => ({
+  const entityRecord = (t) => ({
     primaryKey: {
       ID: `@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=${t}`,
     },
@@ -78,9 +82,12 @@ if (process.argv.includes('--metadata')) {
       AllowDirectSQLUpdate: true,
       AllowDirectSQLDelete: true,
     },
-  }));
-  writeFileSync(path.join(entitiesDir, '.pstruth-entities.json'), `${JSON.stringify(records, null, 2)}\n`);
-  console.log(`wrote ${records.length} entity records to metadata/entities/.pstruth-entities.json`);
+  });
+  for (const [file, names] of [['.pstruth-entities.json', tables], ['.pstruth-c1-entities.json', C1_TABLES]]) {
+    const records = names.map(entityRecord);
+    writeFileSync(path.join(entitiesDir, file), `${JSON.stringify(records, null, 2)}\n`);
+    console.log(`wrote ${records.length} entity records to metadata/entities/${file}`);
+  }
 } else {
   process.stdout.write(`${lines.join('\n')}\n`);
 }

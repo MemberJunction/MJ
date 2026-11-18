@@ -21,6 +21,10 @@ import {
     ExcelAddinResolveSourceOutput,
     ExcelWorkbookSourceRequest,
 } from './catalog-types';
+import {
+    ExcelAddinEvaluateCustomFunctionInput,
+    ExcelAddinEvaluateCustomFunctionOutput,
+} from './custom-functions';
 
 /** Input for {@link ExcelAddinGetStatusOperation}; it takes none. */
 export type ExcelAddinStatusInput = Record<string, never>;
@@ -112,6 +116,20 @@ export class ExcelAddinGetEntityViewsOperation extends BaseRemotableOperation<Ex
  */
 export class ExcelAddinResolveSourceOperation extends BaseRemotableOperation<ExcelAddinResolveSourceInput, ExcelAddinResolveSourceOutput> {
     public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.ResolveSource;
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope: string = 'view:run';
+}
+
+/**
+ * Evaluates an Excel `=MJ.QUERY(...)` or `=MJ.VIEW(...)` custom function under the caller's
+ * scoped API key (`view:run` or `query:run`), stripping any `IsServerSet` parameters and
+ * projecting entity rows through RLS + FLS (`§ 7.1`, `§ 7.2`, `O8`).
+ */
+export class ExcelAddinEvaluateCustomFunctionOperation extends BaseRemotableOperation<
+    ExcelAddinEvaluateCustomFunctionInput,
+    ExcelAddinEvaluateCustomFunctionOutput
+> {
+    public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.EvaluateCustomFunction;
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope: string = 'view:run';
 }

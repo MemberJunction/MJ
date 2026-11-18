@@ -63,6 +63,12 @@ describe('PSRegistryComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-registry-detail"]')?.textContent).toContain('0.850');
   });
 
+  it("labels each master-list row's score with its metric, so a loss never reads as an unnamed number", () => {
+    const fixture = render([makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.41}' })]);
+    const cell = (query(fixture, '[data-testid="ps-registry-row"] .auc .v')?.textContent || '').replace(/\s+/g, ' ').trim();
+    expect(cell).toBe('Log Loss 0.410');
+  });
+
   it('offers Validate (not Archive) for a Draft model', () => {
     const fixture = render([makeModel({ Status: 'Draft' })]);
     expect(query(fixture, '[data-testid="ps-registry-validate"]')).not.toBeNull();
@@ -81,5 +87,30 @@ describe('PSRegistryComponent (DOM)', () => {
     (query(fixture, '[data-testid="ps-registry-validate"]') as HTMLElement).click();
     fixture.detectChanges();
     expect(query(fixture, '[data-testid="ps-confirm-modal"]')).not.toBeNull();
+  });
+
+  it('selects and highlights the deep-linked model when the link spells its ID in another case', () => {
+    const fixture = render([
+      makeModel({ ID: 'AAAAAAAA-0000-4000-8000-000000000001', Version: 1 }),
+      makeModel({ ID: 'BBBBBBBB-0000-4000-8000-000000000002', Version: 2 }),
+    ]);
+    fixture.componentInstance.InitialModelId = 'bbbbbbbb-0000-4000-8000-000000000002';
+    fixture.detectChanges();
+    expect(fixture.componentInstance.Selected.version).toBe(2);
+    const highlighted = queryAll(fixture, '[data-testid="ps-registry-row"].sel');
+    expect(highlighted.map((r) => r.textContent?.includes('v2'))).toEqual([true]);
+  });
+
+  it('shows and highlights the selected model when the selection spells its ID in another case', () => {
+    const fixture = render([
+      makeModel({ ID: 'AAAAAAAA-0000-4000-8000-000000000001', Version: 1 }),
+      makeModel({ ID: 'BBBBBBBB-0000-4000-8000-000000000002', Version: 2 }),
+    ]);
+    fixture.componentInstance.Select('bbbbbbbb-0000-4000-8000-000000000002');
+    // a row click marks the view dirty; a direct call does not
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.Selected.version).toBe(2);
+    expect(queryAll(fixture, '[data-testid="ps-registry-row"].sel').map((r) => r.textContent?.includes('v2'))).toEqual([true]);
   });
 });

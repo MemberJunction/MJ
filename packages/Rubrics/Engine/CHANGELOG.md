@@ -1,5 +1,152 @@
 # @memberjunction/rubrics
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+### Patch Changes
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/rubrics-base@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/rubrics-base@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

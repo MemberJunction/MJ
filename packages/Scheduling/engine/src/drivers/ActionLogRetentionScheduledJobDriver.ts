@@ -125,6 +125,9 @@ export class ActionLogRetentionScheduledJobDriver extends BaseScheduledJob {
                 OrderBy: 'StartedAt ASC',
                 MaxRows: maxDeletes,
                 ResultType: 'entity_object',
+                // The cutoff in the filter changes every run, so a cached entry would never be
+                // read again; read live.
+                BypassCache: true,
             },
             user,
         );

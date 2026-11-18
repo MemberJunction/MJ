@@ -135,8 +135,9 @@ Plain async functions over the MJ object model. They pick the right primitive:
   one round trip. Read-only card lists use `ResultType: 'simple'` with a narrowed
   `Fields` set for performance; anything that will be inspected/mutated uses
   `ResultType: 'entity_object'`.
-- **`Metadata`** — in-memory entity/query definitions (the Explorer entity and
-  query pickers read `Metadata.Entities` / `Metadata.Queries`; no network).
+- **`Metadata`** — in-memory entity definitions (the Explorer entity picker
+  reads `Metadata.Entities`; no network). The query picker reads saved-query
+  definitions from `QueryEngine`.
 - **`GetEntityObject` + `Load`/`InnerLoad`** — a single strongly-typed record
   (conversation thread, record detail, dashboard, artifact).
 - **`RunQuery`** — executes a saved, approved query by id (Explorer query runner

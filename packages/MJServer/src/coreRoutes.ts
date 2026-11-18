@@ -25,6 +25,7 @@ import { CreateRealtimeVerifyRouter, REALTIME_VERIFY_MOUNT_PATH, RealtimeSession
 import { CreateAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled, RegisterLocalDevAuthProvider } from './auth/localDevAuth.js';
 import type { StartupLogger } from './logging/StartupLogger.js';
+import { EventLoopStallMonitor, BuildHealthcheckPayload } from './eventLoopStallMonitor.js';
 
 type RouteLog = Pick<StartupLogger, 'LogIf'>;
 
@@ -36,10 +37,17 @@ export interface CoreAuthenticatedRouters {
     Widget?: Router;
 }
 
-/** `/healthcheck` — mounted first so platform probes never meet the auth middleware. */
-export function MountHealthcheckRoute(app: Application): void {
+/**
+ * `/healthcheck` (readiness) and `/healthcheck/live` (liveness) — mounted first so platform probes never
+ * meet the auth middleware. These answer once the server is ready; before that the startup gate
+ * (`startupGate.ts`) answers the same paths (503 with the phase, and 200 for liveness).
+ */
+export function MountHealthcheckRoute(app: Application, eventLoopMonitor?: EventLoopStallMonitor | null): void {
     app.get(ApiRoute('/healthcheck'), cors<cors.CorsRequest>(), (_req, res) => {
-        res.status(200).json({ status: 'ok' });
+        res.status(200).json(BuildHealthcheckPayload(eventLoopMonitor?.GetSnapshot() ?? null));
+    });
+    app.get(ApiRoute('/healthcheck/live'), cors<cors.CorsRequest>(), (_req, res) => {
+        res.status(200).json({ status: 'alive' });
     });
 }
 
@@ -55,7 +63,12 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     log.LogIf('verbose', `[eSignature] Webhook route registered at ${ApiRoute('/esignature')}/webhook/:driverKey`);
 
     // The `?token=` query param is the capability; an <audio>/<video> element can't send Authorization headers.
-    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter());
+    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter({
+        RateLimits: {
+            Upload: configInfo.rateLimiting?.routes?.mediaUpload,
+            Read: configInfo.rateLimiting?.routes?.mediaRead,
+        },
+    }));
     log.LogIf('verbose', `[Media] Streaming route registered at ${ApiRoute('/media')}/:fileId`);
 
     if (configInfo.realtime?.enabled) {
@@ -79,8 +92,7 @@ function mountLocalDevAuthPublic(app: Application, publicUrl: string, log: Route
     }
     RegisterLocalDevAuthProvider(publicUrl);
     if (!configInfo.magicLink?.enabled && !configInfo.widget?.enabled) {
-        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
-        log.LogIf('verbose', `[LocalDevAuth] Published RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+        log.LogIf('verbose', `[LocalDevAuth] Reusing shared RS256 JWKS endpoint at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
     }
     log.LogIf('verbose', `[LocalDevAuth] Local dev auth routes enabled at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/dev-login (localhost only)`);
 }
@@ -95,6 +107,10 @@ function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog):
         errorRedirectUrl: ApiRoute('/oauth/error', { absolute: true }),
         // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
         allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*'],
+        RateLimits: {
+            Callback: configInfo.rateLimiting?.routes?.oauthCallback,
+            Authenticated: configInfo.rateLimiting?.routes?.oauthAuthenticated,
+        },
     });
     // The callback is unauthenticated (called by the external auth server).
     app.use(ApiRoute('/oauth'), cors<cors.CorsRequest>(), callbackRouter);
@@ -107,15 +123,30 @@ function mountMagicLinkPublic(
     app: Application,
     publicUrl: string,
     log: RouteLog,
-): { authenticatedRouter: Router; service: MagicLinkService } | undefined {
-    if (!configInfo.magicLink?.enabled) {
-        return undefined;
+): { authenticatedRouter: Router | undefined; service: MagicLinkService } | undefined {
+    const magicLinkEnabled = Boolean(configInfo.magicLink?.enabled);
+    const guestShareEnabled = Boolean(configInfo.magicLink?.artifactGuestSharing?.enabled);
+
+    if (magicLinkEnabled || guestShareEnabled) {
+        const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
+        MagicLinkService.SetActiveInstance(service);
+        RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
+        log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+        return {
+            authenticatedRouter: magicLinkEnabled ? authenticatedRouter : undefined,
+            service,
+        };
     }
-    const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
-    RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
-    app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
-    log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
-    return { authenticatedRouter, service };
+
+    // Public web widget and local-dev auth share the /magic-link/jwks.json endpoint without
+    // exposing /magic-link/redeem or registering invite-redemption auth when magicLink & guest sharing are off.
+    if (configInfo.widget?.enabled || IsLocalDevAuthEnabled()) {
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
+        log.LogIf('verbose', `[MagicLink] Shared JWKS-only route registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+    }
+
+    return undefined;
 }
 
 /**
@@ -129,8 +160,7 @@ function mountWidgetPublic(app: Application, publicUrl: string, log: RouteLog): 
     const { publicRouter, authenticatedRouter } = CreateWidgetHandler(publicUrl, configInfo.widget);
     app.use(ApiRoute(WIDGET_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
     if (!configInfo.magicLink?.enabled) {
-        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
-        log.LogIf('verbose', `[Widget] Published reused signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json (magic-link flow disabled)`);
+        log.LogIf('verbose', `[Widget] Reusing shared RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json (magic-link flow disabled)`);
     }
     log.LogIf('verbose', `[Widget] Public routes registered at ${ApiRoute(WIDGET_MOUNT_PATH)}/session and ${ApiRoute(WIDGET_MOUNT_PATH)}/session/refresh`);
     return authenticatedRouter;

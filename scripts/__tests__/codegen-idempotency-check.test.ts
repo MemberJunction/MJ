@@ -5,6 +5,7 @@ import os from 'os';
 import {
   findSqlCaptureFiles,
   getLatestReport,
+  selectNewCaptureFiles,
   getGitDiff,
   getGitStatusPorcelain,
   toCreateOrAlter,
@@ -37,6 +38,15 @@ describe('CodeGen Idempotency Harness Unit Tests (§7.1)', () => {
       const futureTime = Date.now() + 1000000;
       const captures = findSqlCaptureFiles(futureTime);
       expect(captures.length).toBe(0);
+    });
+  });
+
+  describe('selectNewCaptureFiles', () => {
+    it('does not attribute a capture that existed before run 2 to run 2, however recent its mtime', () => {
+      const run1 = { fullPath: 'migrations/v5/CodeGen_Run_2026-10-30_17-42-14.sql', mtimeMs: 2000, size: 10 };
+      const run2 = { fullPath: 'migrations/v5/CodeGen_Run_2026-10-30_17-43-52.sql', mtimeMs: 3000, size: 10 };
+      expect(selectNewCaptureFiles([run1], [run1])).toEqual([]);
+      expect(selectNewCaptureFiles([run1], [run1, run2])).toEqual([run2]);
     });
   });
 

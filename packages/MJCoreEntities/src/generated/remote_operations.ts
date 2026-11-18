@@ -46,6 +46,189 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input payload for `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional specific `MJ: Artifact Versions.ID` (defaults to latest version when omitted). */
+    VersionID?: string | null;
+    /** Lifetime in hours (`1` to `720`). */
+    ExpiresInHours: number;
+    /** Optional label identifying the external recipient or review purpose. */
+    Label?: string | null;
+}
+
+/** Output payload returned by `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkOutput {
+    /** Unique share link ID (`MJ: Artifact Guest Share Links.ID`). */
+    LinkID: string;
+    /** Backing `MJ: Magic Link Invites.ID` that governs redemption, expiration, revocation, and audit. */
+    MagicLinkInviteID?: string;
+    /** Raw opaque Magic Link token (high-entropy secret redeemed once at `/magic-link/redeem?token=...`). */
+    Token: string;
+    /** Full or relative Magic Link redemption URL (e.g. `'/magic-link/redeem?token=...'` or `'https://api.../magic-link/redeem?token=...'`). */
+    ShareUrlPath: string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** Target `MJ: Artifact Versions.VersionNumber`. */
+    VersionNumber: number;
+    /** Always `'Frozen'` — live data queries never execute externally. */
+    ShareMode: 'Frozen';
+    /** ISO 8601 UTC expiration timestamp. */
+    ExpiresAt: string;
+    /** Optional recipient label. */
+    Label?: string;
+}
+
+/** Single `=MJ.AI(...)` cell evaluation request entry. */
+export interface ArtifactAiFormulaCellRequest {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 cell coordinate (e.g. `'C4'`). */
+    Address: string;
+    /** Prompt string extracted from `=MJ.AI(prompt, ...)`. */
+    Prompt: string;
+    /** Serialized resolved values of referenced cells/ranges. */
+    ContextValuesJSON: string;
+    /** Deterministic SHA/FNV input hash for cache deduplication. */
+    InputHash: string;
+}
+
+/** Input payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaInput {
+    /** Hosting `MJ: Artifacts` ID for mandatory permission & audit attribution. */
+    ArtifactID: string;
+    /** Batch of up to 50 `=MJ.AI(...)` cells explicitly triggered for evaluation. */
+    Cells: ArtifactAiFormulaCellRequest[];
+    /** Optional explicit AI model override name. */
+    ModelOverride?: string | null;
+}
+
+/** Result for a single evaluated `=MJ.AI(...)` cell. */
+export interface ArtifactAiFormulaCellResult {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 coordinate. */
+    Address: string;
+    /** Input hash corresponding to this evaluated output. */
+    InputHash: string;
+    /** Evaluated text/scalar value from the LLM. */
+    Value: string;
+    /** Non-fatal cell-level error message if evaluation failed. */
+    ErrorMessage?: string | null;
+    /** True when permission or quota check refused execution. */
+    AccessDenied?: boolean;
+}
+
+/** Output payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaOutput {
+    /** Evaluated cell results matching requested `Cells`. */
+    Results: ArtifactAiFormulaCellResult[];
+}
+
+export type ArtifactComplianceAuditDetailPrimitive = string | number | boolean | null | undefined;
+
+export type ArtifactComplianceAuditDetails = Record<
+    string,
+    ArtifactComplianceAuditDetailPrimitive | ArtifactComplianceAuditDetailPrimitive[] | Record<string, ArtifactComplianceAuditDetailPrimitive>
+>;
+
+/** Canonical artifact compliance audit event names aligned with `metadata/audit-log-types/`. */
+export type ArtifactComplianceAuditEventName =
+    | 'Artifact Block Frozen'
+    | 'Artifact Connected Drive Sync'
+    | 'Artifact Exported'
+    | 'Artifact Permission Changed'
+    | 'Artifact Guest Share Link';
+
+/** Input payload for `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditInput {
+    /** Canonical audit log type name (`MJ: Audit Log Types.Name`). */
+    AuditLogTypeName: ArtifactComplianceAuditEventName | string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional `MJ: Artifact Versions.ID`. */
+    ArtifactVersionID?: string | null;
+    /** Concise human-readable description stored in `Description`. */
+    Summary: string;
+    /** Optional structured details serialized to `Details` JSON. */
+    Details?: ArtifactComplianceAuditDetails;
+}
+
+/** Output payload returned by `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditOutput {
+    /** True when the audit row persisted (false only if DB/metadata is unavailable). */
+    Recorded: boolean;
+    /** Persisted `MJ: Audit Logs.ID` when recorded. */
+    AuditLogID?: string | null;
+}
+
+/** Input payload for `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** `LinkID` (`jti`) to revoke. */
+    LinkID: string;
+}
+
+/** Output payload returned by `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkOutput {
+    /** True when the link was found and marked revoked. */
+    Revoked: boolean;
+    /** Revoked link ID. */
+    LinkID: string;
+    /** ISO 8601 revocation timestamp. */
+    RevokedAt?: string;
+}
+
+/** Input payload for `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesInput {
+    /** Output artifact format (`'presentation'`, `'document'`, `'spreadsheet'`). */
+    TargetKind: 'presentation' | 'document' | 'spreadsheet' | (string & {});
+    /** Synthesis prompt / goal describing how sources should be combined. */
+    Goal: string;
+    /** Explicit source artifact IDs to read (`CanRead` required on each). */
+    SourceArtifactIds?: string[];
+    /** Optional collection to save the synthesized artifact into (`CanEdit` required). */
+    CollectionId?: string | null;
+    /** Optional title override for the newly created artifact. */
+    Title?: string | null;
+    /** Optional `@handle` of an active MJ AI Agent to author the synthesis. */
+    AgentHandle?: string | null;
+    /** When true (default), preserves live `Artifact` chart/range embeds from Spreadsheet sources. */
+    LinkChartsAndRanges?: boolean;
+}
+
+/** Output payload returned on successful execution of `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesOutput {
+    /** Created `MJ: Artifacts` ID. */
+    ArtifactID: string;
+    /** Created initial `MJ: Artifact Versions` ID (`v1`). */
+    VersionID: string;
+    /** Version number created (`1`). */
+    VersionNumber: number;
+    /** Final resolved artifact title. */
+    Title: string;
+    /** Resolved `MJ: Artifact Types` name (`Presentation`, `Markdown Document`, or `Excel Spreadsheet`). */
+    ArtifactTypeName: string;
+    /** Count of verified live chart/range embeds included in the synthesized artifact. */
+    LinkedChartCount: number;
+    /** Number of source artifacts combined. */
+    SourceCount: number;
+    /** Non-fatal synthesis/sanitization warnings. */
+    Warnings: string[];
+    /** True when deterministic fallback synthesis was used instead of a structured LLM response. */
+    UsedFallback: boolean;
+    /** `MJ: AIAgentRuns` ID when authored via a named agent handle. */
+    AgentRunID?: string | null;
+    /** Agent name when authored via a named agent handle. */
+    AgentName?: string | null;
+}
+
 /** Input for `Authorization.Check`. */
 export interface AuthorizationCheckInput {
     /**
@@ -511,7 +694,7 @@ export interface PredictiveStudioModelingPlanSpec {
         Priority: number;
     }>;
     /** Validation strategy for the search. */
-    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction?: number };
     /** Proposed resource budget for the experiment session. */
     ProposedBudget: PredictiveStudioBudget;
     /** User approval gate — execution does not begin until this is true. */
@@ -540,7 +723,7 @@ export interface PredictiveStudioStartExperimentSessionOutput {
     status: string;
 }
 
-/** Optional point-in-time assembly strategy for the train (mirrors the pipeline's stored AsOfStrategy). */
+/** A point-in-time assembly strategy, as `PredictiveStudio.TrainModel` accepted it before Prediction Units (see {@link RetiredTrainModelInputs}). */
 export interface PredictiveStudioTrainAsOf {
     /** How to anchor feature assembly in time: no anchoring, a column on the row, or an offset before the label event. */
     Mode: 'none' | 'column' | 'offset';
@@ -550,38 +733,67 @@ export interface PredictiveStudioTrainAsOf {
     OffsetDays?: number;
 }
 
-/** Input for `PredictiveStudio.TrainModel`. */
+/** Input for `PredictiveStudio.TrainModel`. The pipeline's Prediction Unit and Evaluation Protocol decide everything else. */
 export interface PredictiveStudioTrainModelInput {
     /** Id of the `MJ: ML Training Pipelines` row to train. */
     pipelineId: string;
     /** Optional `MJ: Experiment Session Iterations` id this run belongs to (NULL for a one-off standalone train). */
     experimentSessionIterationId?: string;
-    /** Optional cap on the number of training rows pulled from the target entity. */
-    maxRows?: number;
-    /** Optional primary-key field on the target entity (defaults to `ID`). */
-    primaryKeyField?: string;
-    /** Optional per-record label-event dates (keyed by record primary key), required when `asOf.Mode` is `offset`. */
-    labelEventDates?: Record<string, string>;
-    /** Optional as-of strategy override; when omitted the pipeline's stored `AsOfStrategy` is used. */
-    asOf?: PredictiveStudioTrainAsOf;
     /** Sidecar version string recorded in the model lineage for provenance. */
     sidecarVersion?: string;
 }
 
-/** Output of `PredictiveStudio.TrainModel` — the produced (Draft) model + its honest metrics. */
+/**
+ * Inputs `PredictiveStudio.TrainModel` accepted before Prediction Units. They are refused by name when present, even
+ * when empty or `asOf.Mode` is `none`: the Prediction Unit declares the decision date and the row key, and every
+ * eligible row is read (a capped read is not a complete read). Kept only so a caller (or a test probe) can type a
+ * payload that still sends them.
+ */
+export interface RetiredTrainModelInputs {
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    asOf?: PredictiveStudioTrainAsOf;
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    labelEventDates?: Record<string, string>;
+    /** Refused: every eligible row is read. */
+    maxRows?: number;
+    /** Refused: the Prediction Unit reads its rows keyed by the row entity's own primary key. */
+    primaryKeyField?: string;
+}
+
+/**
+ * Output of `PredictiveStudio.TrainModel`: the run's stored gate decision, its Training Snapshot and Evaluation
+ * Protocol, and the produced model when the decision ships one.
+ */
 export interface PredictiveStudioTrainModelOutput {
-    /** Id of the produced (Draft) `MJ: ML Models` row. */
-    modelId: string;
+    /** Id of the produced (Draft) `MJ: ML Models` row; absent when the gate decision ships no model (no-signal, or the existing rule kept). */
+    modelId?: string;
     /** Id of the `MJ: ML Training Runs` row recording this attempt. */
     trainingRunId: string;
-    /** Monotonic model version under the pipeline (`max(Version)+1`). */
-    version: number;
-    /** JSON of the metrics scored exactly once on the locked holdout the search never saw (the honest performance number). */
+    /** Monotonic model version under the pipeline; absent when no model is produced. */
+    version?: number;
+    /**
+     * JSON of the test-set scores measured once on the locked holdout (`{ "<metric>": value, … }`): the produced
+     * model's stored scores when a model exists (the member the gate ships), otherwise the trainer's finalist scores.
+     */
     holdoutMetrics?: string;
-    /** True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion. */
+    /** True when one feature dominates the finalist's predictions (possible target leakage); a flagged model stays Draft and needs human sign-off. */
     leakageFlagged: boolean;
-    /** Lifecycle status of the produced model (always `Draft` immediately after training). */
+    /** Lifecycle status of the produced model (`Draft`), `NoSignal` when the gate stored no-signal, or `KeptExistingRule` when it kept the existing rule. */
     status: string;
+    /** The `MJ: ML Training Snapshots` row the run trained on. */
+    trainingSnapshotId?: string;
+    /** The `MJ: ML Evaluation Protocols` row (exact version) the run was evaluated under. */
+    evaluationProtocolId?: string;
+    /** That protocol row's Version. */
+    evaluationProtocolVersion?: number;
+    /** The stored gate outcome. */
+    gateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal';
+    /** The decision-table branch the stored outcome came from (for example `b:keep-simple-baseline` or `c:no-signal`). */
+    gateBranch?: string;
+    /** The stored reason for the outcome, in words generated from the stored comparisons. */
+    gateReason?: string;
+    /** The member the gate ships (the model, a simple baseline or the existing rule); absent under no-signal. */
+    shipped?: string;
 }
 
 /** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
@@ -1759,6 +1971,91 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
 }
 
 // ============================================================
+// Artifact.CreateGuestShareLink — Create Artifact Guest Share Link
+// ============================================================
+/**
+ * Create Artifact Guest Share Link
+ * Issues a Frozen-only expiring read-only external guest share link for a governed artifact version and persists its hashed token record. Implemented by CreateGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.CreateGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactCreateGuestShareLinkOperation extends BaseRemotableOperation<CreateGuestShareLinkInput, CreateGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.CreateGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_01caf3b2c1223715";
+}
+
+// ============================================================
+// Artifact.EvaluateAiFormula — Evaluate Spreadsheet AI Formulas
+// ============================================================
+/**
+ * Evaluate Spreadsheet AI Formulas
+ * Explicitly evaluates a bounded batch (up to 50 cells) of opt-in =MJ.AI(...) spreadsheet formulas for an authorized editable artifact. Implemented by ArtifactEvaluateAiFormulaServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.EvaluateAiFormula'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactEvaluateAiFormulaOperation extends BaseRemotableOperation<ArtifactEvaluateAiFormulaInput, ArtifactEvaluateAiFormulaOutput> {
+    public readonly OperationKey = "Artifact.EvaluateAiFormula";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfa9c74da80db2e2";
+}
+
+// ============================================================
+// Artifact.LogComplianceAudit — Log Artifact Compliance Audit
+// ============================================================
+/**
+ * Log Artifact Compliance Audit
+ * Writes a structured compliance audit log entry (MJ: Audit Logs) for block freeze, connected drive sync, export, permission changes, and guest share link events. Implemented by ArtifactComplianceAuditServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.LogComplianceAudit'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactLogComplianceAuditOperation extends BaseRemotableOperation<ArtifactComplianceAuditInput, ArtifactComplianceAuditOutput> {
+    public readonly OperationKey = "Artifact.LogComplianceAudit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c53ebfd4d44baffa";
+}
+
+// ============================================================
+// Artifact.RevokeGuestShareLink — Revoke Artifact Guest Share Link
+// ============================================================
+/**
+ * Revoke Artifact Guest Share Link
+ * Revokes an active Frozen-only external guest share link by LinkID so subsequent resolution requests are rejected immediately. Implemented by RevokeGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.RevokeGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactRevokeGuestShareLinkOperation extends BaseRemotableOperation<RevokeGuestShareLinkInput, RevokeGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.RevokeGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5b54645435f81738";
+}
+
+// ============================================================
+// Artifact.SynthesizeFromSources — Synthesize Artifact From Sources
+// ============================================================
+/**
+ * Synthesize Artifact From Sources
+ * Synthesizes a new governed collaborative artifact (Presentation, Markdown Document, or Excel Spreadsheet) from one or more authorized source artifacts, preserving live chart and range embeds. Implemented by SynthesizeArtifactFromSourcesServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.SynthesizeFromSources'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactSynthesizeFromSourcesOperation extends BaseRemotableOperation<SynthesizeArtifactFromSourcesInput, SynthesizeArtifactFromSourcesOutput> {
+    public readonly OperationKey = "Artifact.SynthesizeFromSources";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f742777b8e08370e";
+}
+
+// ============================================================
 // Authorization.Check — Check Authorization
 // ============================================================
 /**
@@ -2059,7 +2356,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_6a24af7901f8dd8b";
+    public readonly ContractFingerprint = "ro_fp_869cb01adf6b0bbd";
 }
 
 // ============================================================
@@ -2067,7 +2364,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
 // ============================================================
 /**
  * Train ML Model
- * Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.
+ * Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).
  * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
  * under 'PredictiveStudio.TrainModel'. This generated base provides the typed contract only (client-safe).
  */
@@ -2076,7 +2373,7 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_470d23334fcd4964";
+    public readonly ContractFingerprint = "ro_fp_2b7f9d9a95e772b6";
 }
 
 // ============================================================

@@ -40,6 +40,8 @@ export interface FeatureValueKeyInput {
     ParametersHash: string | null;
     InputHash: string | null;
     Source: FeatureValueSource;
+    /** The ML Model that computed the values for an 'ML Model' process; null for prompt/human values. */
+    MLModelID?: string | null;
 }
 
 /** The pipeline pin's selection and hashes. Every method is static and takes plain data (pins are built as literals). */
@@ -110,6 +112,7 @@ export class FeatureValueKey {
             PipelineVersion: key.PipelineVersion,
             PromptVersionHash: key.PromptVersionHash,
             AIModelID: key.AIModelID ? NormalizeUUID(key.AIModelID) : null,
+            ...(key.MLModelID ? { MLModelID: NormalizeUUID(key.MLModelID) } : {}),
             ParametersHash: key.ParametersHash,
             InputHash: key.InputHash,
             Source: key.Source,

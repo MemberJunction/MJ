@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, NormalizeFinishReason } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message } from 'ollama';
 import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancellable-client';
@@ -307,7 +307,7 @@ export class OllamaLLM extends BaseLLM {
                     content: content,
                     thinking: thinking
                 },
-                finish_reason: response.done ? 'stop' : 'length',
+                finish_reason: NormalizeFinishReason(response.done_reason, response.done ? 'stop' : 'length'),
                 index: 0
             }];
             
@@ -518,10 +518,7 @@ export class OllamaLLM extends BaseLLM {
         usage: any | null | undefined
     ): ChatResult {
         // Extract finish reason from last chunk if available
-        let finishReason = 'stop';
-        if (lastChunk?.done === false) {
-            finishReason = 'length';
-        }
+        const finishReason = NormalizeFinishReason(lastChunk?.done_reason, lastChunk?.done === false ? 'length' : 'stop');
         
         // Extract usage metrics from accumulated usage or last chunk
         let promptTokens = 0;

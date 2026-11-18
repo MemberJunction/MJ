@@ -7,6 +7,9 @@ import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
 import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
 import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
+import type { CompositeFilter } from '../generic/filters/compositeFilter';
+import type { CompositeFilterDescriptor } from '../generic/filters/filter.types';
+import { CanonicalCompositeFilterKey } from '../generic/filters/compositeFilterSQL';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -68,9 +71,27 @@ export const KEYSET_PAGINATION_ORDERABLE_PK_TYPES: ReadonlyArray<string> = [
  */
 export function IsKeysetPaginationOrderableType(sqlTypeName: string | null | undefined): boolean {
     if (!sqlTypeName) return false;
-    // Strip parameterization like "nvarchar(255)" or "decimal(10, 2)"
-    const normalized = sqlTypeName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(normalized);
+    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(SqlTypeBaseName(sqlTypeName));
+}
+
+/**
+ * A SQL type name without its trailing parameter list, trimmed and lower-cased:
+ * `NVARCHAR(255)` → `nvarchar`, `decimal(10, 2)` → `decimal`, `int` → `int`.
+ *
+ * Returns what `type.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()` returned, but by index:
+ * that regex retries from every `(`, which is quadratic on a value holding many of them.
+ */
+export function SqlTypeBaseName(sqlTypeName: string): string {
+    const trimmed = sqlTypeName.trimEnd();
+    const close = trimmed.length - 1;
+    if (close >= 0 && trimmed[close] === ')') {
+        // The regex's `\(` matched the first `(` after the last earlier `)`.
+        const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1);
+        if (open !== -1 && open < close) {
+            return trimmed.substring(0, open).trim().toLowerCase();
+        }
+    }
+    return trimmed.trim().toLowerCase();
 }
 
 /**
@@ -113,6 +134,172 @@ export interface RunViewTelemetryOptions {
      * emitted in verbose telemetry logging so the intent is auditable (e.g. why a cache was bypassed).
      */
     Reason?: string;
+}
+
+/**
+ * Allowed scalar value types for a bound parameter in {@link RunViewParams.Parameters}.
+ */
+export type RunViewParameterScalar = string | number | boolean | Date | null;
+
+/**
+ * Allowed value for a bound parameter in {@link RunViewParams.Parameters}:
+ * a scalar value, or a non-empty array of scalars (expanded to comma-separated bound placeholders for `IN (@list)`).
+ */
+export type RunViewParameterValue = RunViewParameterScalar | readonly RunViewParameterScalar[];
+
+/**
+ * Map of named parameter values (`@paramName` in {@link RunViewParams.ExtraFilter}, keyed without the leading `@`).
+ */
+export type RunViewParameters = Record<string, RunViewParameterValue>;
+
+type CanonicalParameterScalar = string | number | boolean | null | { readonly $date: string };
+type CanonicalParameterValue = CanonicalParameterScalar | readonly CanonicalParameterScalar[];
+
+function normalizeParameterScalar(value: RunViewParameterScalar): CanonicalParameterScalar {
+    if (value instanceof Date) {
+        return { $date: value.toISOString() };
+    }
+    return value;
+}
+
+function normalizeParameterValue(value: RunViewParameterValue): CanonicalParameterValue {
+    if (Array.isArray(value)) {
+        return value.map((item: RunViewParameterScalar) => normalizeParameterScalar(item));
+    }
+    return normalizeParameterScalar(value as RunViewParameterScalar);
+}
+
+/**
+ * Validates and normalizes a {@link RunViewParameters} map, stripping any leading `@` from
+ * parameter keys and rejecting non-plain objects, prototype-pollution keys (`__proto__`,
+ * `constructor`, `prototype`), invalid parameter identifiers, duplicate keys after `@`-stripping
+ * (e.g. `{ status: 'A', '@status': 'B' }`), empty arrays, non-finite numbers, invalid Dates,
+ * and unsupported value types.
+ *
+ * Returns a `Map<string, RunViewParameterValue>` keyed by normalized parameter name (without `@`).
+ */
+export function NormalizeRunViewParameters(
+    parameters: RunViewParameters | undefined | null,
+): Map<string, RunViewParameterValue> {
+    const normalized = new Map<string, RunViewParameterValue>();
+    if (parameters === undefined || parameters === null) {
+        return normalized;
+    }
+    if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+        throw new Error(
+            'Invalid RunViewParams.Parameters: expected a plain object mapping parameter names to scalar or scalar-array values.',
+        );
+    }
+    const proto = Object.getPrototypeOf(parameters);
+    if (proto !== null && proto !== Object.prototype) {
+        throw new Error('Invalid RunViewParams.Parameters: expected a plain object.');
+    }
+
+    const validateScalar = (paramName: string, value: RunViewParameterScalar): RunViewParameterScalar => {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': numeric parameter values must be finite numbers.`);
+            }
+            return value;
+        }
+        if (value instanceof Date) {
+            if (Number.isNaN(value.getTime())) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': Date parameter value is invalid.`);
+            }
+            return value;
+        }
+        throw new Error(`Invalid RunView parameter '@${paramName}': unsupported value type '${typeof value}'.`);
+    };
+
+    const seenKeys = new Set<string>();
+    for (const rawKey of Object.getOwnPropertyNames(parameters)) {
+        if (rawKey === '__proto__' || rawKey === 'constructor' || rawKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            throw new Error(
+                `Invalid RunView parameter name '${rawKey}': parameter names must match @[A-Za-z_][A-Za-z0-9_]*.`,
+            );
+        }
+        if (cleanKey === '__proto__' || cleanKey === 'constructor' || cleanKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        if (seenKeys.has(cleanKey)) {
+            throw new Error(`Duplicate RunView parameter name '@${cleanKey}'.`);
+        }
+        seenKeys.add(cleanKey);
+
+        const rawVal = parameters[rawKey];
+        if (rawVal === undefined) {
+            continue;
+        }
+        if (Array.isArray(rawVal)) {
+            if (rawVal.length === 0) {
+                throw new Error(`RunView parameter '@${cleanKey}' cannot be an empty array.`);
+            }
+            normalized.set(
+                cleanKey,
+                rawVal.map((item: RunViewParameterScalar) => validateScalar(cleanKey, item)),
+            );
+        } else {
+            normalized.set(cleanKey, validateScalar(cleanKey, rawVal as RunViewParameterScalar));
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Extracts the set of valid normalized parameter names (without leading `@`) from a
+ * {@link RunViewParameters} map without throwing on malformed entries. Used by
+ * {@link FieldSecuritySQLGate} when screening `ExtraFilter` before parameter binding runs.
+ */
+export function ExtractRunViewParameterNames(
+    parameters: RunViewParameters | undefined | null,
+): ReadonlySet<string> {
+    const names = new Set<string>();
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return names;
+    }
+    for (const rawKey of Object.keys(parameters)) {
+        if (parameters[rawKey] === undefined) continue;
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            names.add(cleanKey);
+        }
+    }
+    return names;
+}
+
+/**
+ * Produces a deterministic, pipe-safe canonical string for {@link RunViewParams.Parameters}
+ * suitable for cache fingerprinting and {@link RunViewParams.Equals}.
+ * Returns `''` when `parameters` is undefined, null, or contains no defined keys.
+ */
+export function RunViewParametersKey(parameters?: RunViewParameters | null): string {
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return '';
+    }
+    const keys = Object.keys(parameters)
+        .filter((k) => parameters[k] !== undefined)
+        .sort((a, b) => {
+            const na = a.startsWith('@') ? a.slice(1) : a;
+            const nb = b.startsWith('@') ? b.slice(1) : b;
+            return na.localeCompare(nb);
+        });
+    if (keys.length === 0) {
+        return '';
+    }
+    const entries: [string, CanonicalParameterValue][] = keys.map((k) => {
+        const normalizedKey = k.startsWith('@') ? k.slice(1) : k;
+        return [normalizedKey, normalizeParameterValue(parameters[k])];
+    });
+    // Escape '|' as \u007c so parameter string values containing '|' never split pipe-delimited cache fingerprints.
+    return JSON.stringify(entries).replace(/\|/g, '\\u007c');
 }
 
 /**
@@ -203,6 +390,22 @@ export class RunViewParams {
      * before the query is executed.
      */
     ExtraFilter?: string | PlatformSQL;
+    /**
+     * Structured filter, ANDed with {@link ExtraFilter} when both are set. Compiled to parameterized
+     * SQL by the provider; never interpolated. Field names are validated against the entity and its
+     * field-level security; an unknown or unreadable field is refused.
+     */
+    Filter?: CompositeFilterDescriptor | CompositeFilter;
+    /**
+     * Optional map of named bind parameters referenced as `@paramName` in {@link ExtraFilter}.
+     * Keys omit the leading `@` (an optional `@` prefix is normalized).
+     *
+     * Each parameter value may be a scalar (`string | number | boolean | Date | null`) or a non-empty
+     * array of scalars (expanded to comma-separated bound placeholders for `IN (@list)` predicates).
+     * Bound via dialect-native placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and included in
+     * result-cache fingerprints and {@link RunViewParams.Equals}.
+     */
+    Parameters?: RunViewParameters;
     /**
      * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
      *
@@ -631,6 +834,7 @@ export class RunViewParams {
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
         if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (CanonicalCompositeFilterKey(a.Filter) !== CanonicalCompositeFilterKey(b.Filter)) return false;
         if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;
         if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;
@@ -652,6 +856,7 @@ export class RunViewParams {
         if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
         if (a.TimeZone !== b.TimeZone) return false;
         if (ViewPropertyValuesKey(a.Properties, a.ServerProperties) !== ViewPropertyValuesKey(b.Properties, b.ServerProperties)) return false;
+        if (RunViewParametersKey(a.Parameters) !== RunViewParametersKey(b.Parameters)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.

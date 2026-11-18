@@ -89,6 +89,11 @@ export interface QueryFieldFact {
     readonly DocDescription: string | null;
     /** The source entity field's description, used for a new row with no other description. */
     readonly SourceDescription: string | null;
+    /**
+     * Whether every described branch variant of the query returns this column (`true` by default
+     * when omitted or when the query has no conditional branches).
+     */
+    readonly InAllBranchVariants?: boolean;
 }
 
 /** The facts of one parameter the template reads. */

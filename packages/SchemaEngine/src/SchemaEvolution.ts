@@ -8,11 +8,12 @@ import type {
     ColumnModification,
     DatabasePlatform,
     ExistingTableInfo,
+    IndexDefinition,
     SchemaDiff,
     SchemaEvolutionInput,
     TableDefinition,
 } from './interfaces.js';
-import { DDLGenerator } from './DDLGenerator.js';
+import { DDLGenerator, GetDialect, ValidateIdentifier } from './DDLGenerator.js';
 
 /**
  * Computes schema diffs and generates ALTER TABLE migration SQL.
@@ -74,7 +75,66 @@ export class SchemaEvolution {
             }
         }
 
-        return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed };
+        // Compute Soft PK, Soft FK, and Organic Key indexes to ensure on the table
+        const addedIndexes = this.computeAddedIndexes(desired, existing, existingByName, modified, desiredNames);
+
+        return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed, AddedIndexes: addedIndexes };
+    }
+
+    private computeAddedIndexes(
+        desired: TableDefinition,
+        existing: ExistingTableInfo,
+        existingByName: Map<string, ExistingTableInfo['Columns'][number]>,
+        modified: ColumnModification[],
+        desiredNames: Set<string>
+    ): IndexDefinition[] {
+        const existingIndexSet = new Set((existing.Indexes ?? []).map(i => i.toLowerCase()));
+        const indexedTuples = new Set<string>();
+        const result: IndexDefinition[] = [];
+
+        if (desired.PrimaryKeyColumns && desired.PrimaryKeyColumns.length > 0) {
+            indexedTuples.add(desired.PrimaryKeyColumns.map(c => c.toLowerCase()).join(','));
+        }
+
+        const isColumnIndexable = (colName: string): boolean => {
+            const lower = colName.toLowerCase();
+            const mod = modified.find(m => m.ColumnName.toLowerCase() === lower);
+            if (mod) {
+                return !/\(\s*max\s*\)|^(ntext|text)$/i.test(mod.NewType.trim());
+            }
+            const ex = existingByName.get(lower);
+            if (ex) {
+                if (ex.MaxLength === -1) return false;
+                return !/\(\s*max\s*\)|^(ntext|text)$/i.test(ex.SqlType.trim());
+            }
+            return desiredNames.has(lower);
+        };
+
+        const addCandidate = (indexName: string, columns: string[]): void => {
+            if (columns.length === 0) return;
+            const tupleKey = columns.map(c => c.toLowerCase()).join(',');
+            if (indexedTuples.has(tupleKey)) return;
+            if (existingIndexSet.has(indexName.toLowerCase())) return;
+            if (!columns.every(isColumnIndexable)) return;
+            indexedTuples.add(tupleKey);
+            result.push({ IndexName: indexName, Columns: columns, Unique: false });
+        };
+
+        if (desired.SoftPrimaryKeys && desired.SoftPrimaryKeys.length > 0) {
+            addCandidate(`IX_${desired.SchemaName}_${desired.TableName}_PK`, desired.SoftPrimaryKeys);
+        }
+
+        for (const fk of desired.ForeignKeys?.filter(f => f.IsSoft) ?? []) {
+            addCandidate(`IX_${desired.SchemaName}_${desired.TableName}_FK_${fk.ColumnName}`, [fk.ColumnName]);
+        }
+
+        for (const cols of desired.OrganicKeys ?? []) {
+            if (cols.length > 0) {
+                addCandidate(`IX_${desired.SchemaName}_${desired.TableName}_OK_${cols.join('_')}`, cols);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -95,7 +155,8 @@ export class SchemaEvolution {
         tableName: string,
         platform: DatabasePlatform
     ): string {
-        const hasActiveOps = diff.AddedColumns.length > 0 || diff.ModifiedColumns.length > 0;
+        const addedIndexes = diff.AddedIndexes ?? [];
+        const hasActiveOps = diff.AddedColumns.length > 0 || diff.ModifiedColumns.length > 0 || addedIndexes.length > 0;
 
         if (!hasActiveOps && diff.RemovedColumns.length > 0) {
             throw new Error(
@@ -106,14 +167,63 @@ export class SchemaEvolution {
             );
         }
 
+        const d = GetDialect(platform);
+        const indexedColSet = new Set(
+            addedIndexes.flatMap(idx => idx.Columns.map(c => c.toLowerCase()))
+        );
         const statements: string[] = [];
 
         for (const col of diff.AddedColumns) {
-            statements.push(this.ddl.GenerateAlterTableAddColumn(schemaName, tableName, col, platform));
+            let colToEmit = col;
+            if (indexedColSet.has(col.Name.toLowerCase())) {
+                const rawSqlType = col.RawSqlType ?? d.ResolveAbstractType({
+                    type: col.Type,
+                    maxLength: col.MaxLength,
+                    precision: col.Precision,
+                    scale: col.Scale,
+                });
+                const capped = d.CapIndexableType(rawSqlType);
+                if (capped !== rawSqlType) {
+                    colToEmit = { ...col, RawSqlType: capped };
+                }
+            }
+            statements.push(this.ddl.GenerateAlterTableAddColumn(schemaName, tableName, colToEmit, platform));
         }
 
+        const droppedIndexNames = new Set<string>();
         for (const mod of diff.ModifiedColumns) {
-            statements.push(this.ddl.GenerateAlterTableAlterColumn(schemaName, tableName, mod, platform));
+            let modToEmit = mod;
+            if (indexedColSet.has(mod.ColumnName.toLowerCase())) {
+                for (const idx of addedIndexes) {
+                    if (
+                        idx.Columns.some(c => c.toLowerCase() === mod.ColumnName.toLowerCase()) &&
+                        !droppedIndexNames.has(idx.IndexName.toLowerCase())
+                    ) {
+                        droppedIndexNames.add(idx.IndexName.toLowerCase());
+                        statements.push(d.DropIndexIfExists(schemaName, tableName, idx.IndexName));
+                    }
+                }
+                const capped = d.CapIndexableType(mod.NewType);
+                if (capped !== mod.NewType) {
+                    modToEmit = { ...mod, NewType: capped };
+                }
+            }
+            statements.push(this.ddl.GenerateAlterTableAlterColumn(schemaName, tableName, modToEmit, platform));
+        }
+
+        for (const idx of addedIndexes) {
+            ValidateIdentifier(schemaName, 'schema');
+            ValidateIdentifier(tableName, 'table');
+            idx.Columns.forEach(c => ValidateIdentifier(c, 'index column'));
+            statements.push(
+                d.CreateIndexIfAbsent({
+                    schema: schemaName,
+                    tableName,
+                    indexName: idx.IndexName,
+                    columns: idx.Columns,
+                    unique: idx.Unique ?? false,
+                })
+            );
         }
 
         for (const colName of diff.RemovedColumns) {

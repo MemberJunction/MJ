@@ -265,6 +265,31 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="CompensationActionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CompensationInputMapping"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsIdempotent"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="ParentIDDepth"
             Type="textbox"
             [EditMode]="EditMode"
@@ -581,23 +606,23 @@
 
     <!-- Actions Section -->
     <mj-collapsible-panel
-        SectionKey="mJActions"
+        SectionKey="mJActionsParentID"
         SectionName="Actions"
         Icon="fa-solid fa-bolt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJActions')"
+        [BadgeCount]="GetSectionRowCount('mJActionsParentID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Actions','ParentID')"
-                [AllowLoad]="IsSectionExpanded('mJActions')"
+                [AllowLoad]="IsSectionExpanded('mJActionsParentID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionsParentID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -673,6 +698,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Actions (Compensation Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActionsCompensationActionID"
+        SectionName="Actions (Compensation Action ID)"
+        Icon="fa-solid fa-bolt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActionsCompensationActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','CompensationActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Actions','CompensationActionID')"
+                [AllowLoad]="IsSectionExpanded('mJActionsCompensationActionID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionsCompensationActionID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

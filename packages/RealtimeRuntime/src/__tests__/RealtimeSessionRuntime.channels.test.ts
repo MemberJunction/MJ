@@ -29,8 +29,13 @@ class RegisteredEcho extends LegacyEchoChannel {
 @RegisterClass(BaseRealtimeChannelClient, 'ScopedFormChannel')
 class RegisteredForm extends FormChannel {
     public Initialized = false;
+    public RestoredJson: string | null = null;
     protected override OnInitialize(): void {
         this.Initialized = true;
+    }
+    public override RestoreState(stateJson: string): boolean {
+        this.RestoredJson = stateJson;
+        return true;
     }
     public get ContextForTest(): RealtimeChannelContext | null {
         return this.Context;
@@ -85,6 +90,7 @@ class MintProvider {
     public readonly sessionId = 'transport-1';
     public Calls: MintCall[] = [];
     public Policy: RealtimeSessionClientPolicy | string | null = null;
+    public PriorChannelStatesJson: string | null = null;
     public RejectChannelScoping = false;
     constructor(public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }]) {}
     public async ExecuteGQL(query: string, variables: Record<string, unknown>): Promise<unknown> {
@@ -103,7 +109,7 @@ class MintProvider {
                 SessionConfigJson: '{}',
                 ModelName: 'Fake',
                 NarrationInstructionsTemplate: null,
-                PriorChannelStatesJson: null,
+                PriorChannelStatesJson: this.PriorChannelStatesJson,
             };
             if (this.Policy !== null && query.includes('ClientPolicyJson')) {
                 result.ClientPolicyJson = typeof this.Policy === 'string' ? this.Policy : JSON.stringify(this.Policy);
@@ -523,6 +529,26 @@ describe('RealtimeSessionRuntime — on-demand channels and the ContextTool prox
 
         const verb = await echo.ContextForTest!.DispatchContextAction!({ Target: { Channel: 'Form' }, Action: 'SetField', Params: { name: 'name', value: 'Ada' } });
         expect(verb.Success).toBe(true);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('mounts and restores an advertised on-demand channel automatically when PriorChannelStatesJson carries state for it', async () => {
+        stubRegistry([ECHO_ROW, FORM_ROW]);
+        const provider = new MintProvider();
+        provider.Policy = policy([
+            { Key: 'Echo', DisplayPolicy: 'open-on-start', MaxExposure: 'state', Source: 'default' },
+            { Key: 'Form', DisplayPolicy: 'on-demand', MaxExposure: 'state', Source: 'config' },
+        ]);
+        provider.PriorChannelStatesJson = JSON.stringify({ Form: '{"draft":"hello"}' });
+        const { runtime } = build(provider);
+        await start(runtime);
+
+        const form = runtime.ActiveChannels.find((c) => c.ChannelName === 'Form') as RegisteredForm | undefined;
+        expect(form).toBeDefined();
+        expect(form?.Initialized).toBe(true);
+        expect(form?.RestoredJson).toBe('{"draft":"hello"}');
+        expect(runtime.AdvertisedChannels).toEqual([]);
+        expect(runtime.HasChannelBeenUsed('Form')).toBe(true);
         await runtime.EndRealtimeSession();
     });
 

@@ -1,11 +1,38 @@
-import { describe, it, expect, vi } from 'vitest';
-import { EntityFieldInfo, EntityInfo, IMetadataProvider, QueryInfo, UserInfo } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityFieldInfo, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { MJUserViewEntityExtended, QueryEngine, ViewColumnInfo } from '@memberjunction/core-entities';
+
+/** The slice of a cached query that source resolution reads. */
+interface QueryStub {
+    ID: string;
+    Name: string;
+    UserCanRun: () => { canRun: boolean; deniedEntities: string[] };
+    QueryFields: Array<{ Name: string; Sequence: number; SQLBaseType: string | null }>;
+    QueryParameters: Array<{ Name: string; IsServerSet: boolean }>;
+}
+
+const { queryEngineStub } = vi.hoisted(() => {
+    const queries: QueryStub[] = [];
+    return {
+        queryEngineStub: {
+            Queries: queries,
+            Config: vi.fn(async () => undefined),
+            FindQueryByID: (id: string) => queries.find(q => q.ID.trim().toLowerCase() === id.trim().toLowerCase()),
+        },
+    };
+});
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
+    // GetProviderInstance: the engine bound to the request provider's connection (the same stub here).
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: vi.fn(() => queryEngineStub) },
+}));
 import {
     DataTypeForEntityField,
     DataTypeForSQLType,
     ExcelSourceError,
     ResolveSingleWorkbookSource,
+    ResolveViewByNameOrId,
     ResolveWorkbookSources,
 } from '../sources';
 
@@ -46,27 +73,29 @@ function viewStub(options: ViewStubOptions = {}): MJUserViewEntityExtended {
     return stub as unknown as MJUserViewEntityExtended;
 }
 
-function queryStub(canRun = true): QueryInfo {
+function queryStub(canRun = true): QueryStub {
     return {
         ID: QUERY_ID,
         Name: 'Renewals by Month',
-        UserCanRun: () => canRun,
-        Fields: [
+        UserCanRun: () => ({ canRun, deniedEntities: canRun ? [] : ['Members'] }),
+        QueryFields: [
             { Name: 'Month', Sequence: 1, SQLBaseType: 'date' },
             { Name: 'Count', Sequence: 2, SQLBaseType: 'int' },
             { Name: 'Notes', Sequence: 3, SQLBaseType: null },
         ],
-        Parameters: [
+        QueryParameters: [
             { Name: 'Year', IsServerSet: false },
             { Name: 'ChapterID', IsServerSet: true },
         ],
-    } as unknown as QueryInfo;
+    };
 }
 
-function providerWith(view: MJUserViewEntityExtended, queries: QueryInfo[] = [queryStub()]): IMetadataProvider {
+/** A provider whose deprecated query list is empty; `queries` go into the stubbed QueryEngine. */
+function providerWith(view: MJUserViewEntityExtended, queries: QueryStub[] = [queryStub()]): IMetadataProvider {
+    queryEngineStub.Queries.splice(0, queryEngineStub.Queries.length, ...queries);
     return {
         GetEntityObject: vi.fn(async () => view),
-        Queries: queries,
+        Queries: [],
     } as unknown as IMetadataProvider;
 }
 
@@ -143,6 +172,22 @@ describe('ResolveWorkbookSources — queries', () => {
     it('refuses a query the caller can\'t run', async () => {
         await expect(ResolveWorkbookSources([{ Kind: 'Query', ID: QUERY_ID }], providerWith(viewStub(), [queryStub(false)]), user))
             .rejects.toBeInstanceOf(ExcelSourceError);
+    });
+
+    it('loads QueryEngine as the caller, through the request provider', async () => {
+        queryEngineStub.Config.mockClear();
+        const provider = providerWith(viewStub());
+        await ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, provider, user);
+        expect(queryEngineStub.Config).toHaveBeenCalledWith(false, user, provider);
+        // The engine is the one bound to the request provider, not the process-wide singleton.
+        expect(QueryEngine.GetProviderInstance).toHaveBeenCalledWith(provider, expect.anything());
+    });
+
+    it('refuses a missing query and a denied query with the same message', async () => {
+        const denied = ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, providerWith(viewStub(), [queryStub(false)]), user);
+        await expect(denied).rejects.toThrow('That saved query doesn\'t exist, or you don\'t have access to it.');
+        const missing = ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, providerWith(viewStub(), []), user);
+        await expect(missing).rejects.toThrow('That saved query doesn\'t exist, or you don\'t have access to it.');
     });
 });
 
@@ -228,5 +273,80 @@ describe('data types', () => {
         expect(DataTypeForSQLType('datetimeoffset')).toBe('DateTime');
         expect(DataTypeForSQLType('')).toBe('Text');
         expect(DataTypeForSQLType(undefined)).toBe('Text');
+    });
+});
+
+describe('ResolveViewByNameOrId — =MJ.VIEW resolution', () => {
+    function makeEntity(id: string = ENTITY_ID): EntityInfo {
+        const entity = Object.create(EntityInfo.prototype) as EntityInfo;
+        const fields = [firstName, joinDate, updated, photo];
+        Object.assign(entity, {
+            ID: id,
+            Name: 'MJ: People',
+            DisplayName: 'People',
+            IncludeInAPI: true,
+            Status: 'Active',
+            GetUserPermisions: () => ({ CanRead: true }),
+        });
+        Object.defineProperty(entity, 'Fields', { get: () => fields });
+        return entity;
+    }
+
+    it('resolves a saved view by view Name on the target entity', async () => {
+        const entity = makeEntity();
+        const view = viewStub({
+            Columns: [
+                column('FirstName', firstName, { orderIndex: 0 }),
+                column('JoinDate', joinDate, { orderIndex: 1 }),
+            ],
+        });
+        Object.assign(view, { EntityID: ENTITY_ID });
+        const runViewSpy = vi.fn(async () => ({
+            Success: true,
+            Results: [{ ID: VIEW_ID, Name: 'Active Members', EntityID: ENTITY_ID, UserID: user.ID, IsShared: true }],
+        }));
+        const provider = Object.assign(providerWith(view), {
+            Entities: [entity],
+            RunView: runViewSpy,
+        }) as unknown as IMetadataProvider;
+
+        const resolved = await ResolveViewByNameOrId(entity, 'Active Members', provider, user);
+        expect(runViewSpy).toHaveBeenCalledTimes(1);
+        expect(resolved).toMatchObject({
+            Kind: 'View',
+            ID: VIEW_ID,
+            Name: 'Active Members',
+            EntityName: 'MJ: People',
+        });
+        expect(resolved.Columns.map(c => c.Name)).toEqual(['FirstName', 'JoinDate']);
+    });
+
+    it('refuses a view UUID that belongs to a different entity', async () => {
+        const entity = makeEntity();
+        const otherEntityId = '99999999-2F3A-4B5C-9D0E-1F2A3B4C5D6E';
+        const mismatchedView = viewStub({
+            Columns: [column('FirstName', firstName, { orderIndex: 0 })],
+        });
+        Object.assign(mismatchedView, { EntityID: otherEntityId });
+        const provider = Object.assign(providerWith(mismatchedView), {
+            Entities: [entity],
+        }) as unknown as IMetadataProvider;
+
+        await expect(ResolveViewByNameOrId(entity, VIEW_ID, provider, user))
+            .rejects.toThrow(/does not belong to entity/);
+    });
+
+    it('falls back to the entity\'s default columns when viewNameOrId is (Default) or omitted', async () => {
+        const entity = makeEntity();
+        const provider = Object.assign(providerWith(viewStub()), {
+            Entities: [entity],
+        }) as unknown as IMetadataProvider;
+
+        const fromDefault = await ResolveViewByNameOrId(entity, '(Default)', provider, user);
+        expect(fromDefault.Kind).toBe('Entity');
+        expect(fromDefault.Columns.map(c => c.Name)).toEqual(['FirstName', 'JoinDate']);
+
+        const fromEmpty = await ResolveViewByNameOrId(entity, undefined, provider, user);
+        expect(fromEmpty.Kind).toBe('Entity');
     });
 });

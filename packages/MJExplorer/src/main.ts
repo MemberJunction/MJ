@@ -1,5 +1,5 @@
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { AuthProviderCatalog, LoginScreenLoader } from '@memberjunction/ng-auth-services';
+import { platformBrowser } from '@angular/platform-browser';
+import { AuthProviderCatalog, LoginScreenLoader, PreloadActiveAuthProvider } from '@memberjunction/ng-auth-services/preload';
 import { environment } from './environments/environment';
 
 async function initAndBootstrap() {
@@ -17,13 +17,17 @@ async function initAndBootstrap() {
     LoginScreenLoader.Load(environment.GRAPHQL_URI),
   ]);
 
+  // Dynamically import only the active IdP driver before AppModule evaluates
+  // AuthServicesModule.forRoot(), keeping inactive IdP SDKs in lazy chunks.
+  await PreloadActiveAuthProvider(environment);
+
   // Dynamic import is REQUIRED here, not a convenience. A static import is hoisted, so AppModule
   // — and with it AuthServicesModule.forRoot — would evaluate before the await above ever ran,
   // making the preload pointless. This is the framework-ordering exception, the same reason
   // Angular's runtime-configuration guidance defers the root module import.
   const { AppModule } = await import('./app/app.module');
 
-  platformBrowserDynamic().bootstrapModule(AppModule)
+  platformBrowser().bootstrapModule(AppModule)
     .then(ref => {
       //LogStatus('Bootstrap success: ' + ref);
     })

@@ -212,13 +212,12 @@ export class FakeVoiceQueue implements AvatarVoiceQueue {
 }
 
 /**
- * A room outlet that records publishing, frames and attributes; publishing resolves unless told to fail, once
+ * A room outlet that records publishing and frames; publishing resolves unless told to fail, once
  * `PublishGate` (when set) resolves.
  */
 export class FakeOutlet implements AvatarVideoOutlet {
     public readonly Published: Array<{ Width: number; Height: number }> = [];
     public readonly Captured: AvatarVideoFrame[] = [];
-    public readonly Attributes: Array<Record<string, string>> = [];
     public Unpublished = 0;
     public FailPublish = false;
     public PublishGate: Promise<void> | null = null;
@@ -234,9 +233,6 @@ export class FakeOutlet implements AvatarVideoOutlet {
     }
     public async Unpublish(): Promise<void> {
         this.Unpublished++;
-    }
-    public async SetAttributes(attributes: Record<string, string>): Promise<void> {
-        this.Attributes.push(attributes);
     }
 }
 

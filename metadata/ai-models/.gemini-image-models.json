@@ -39,6 +39,7 @@
             "Status": "Active",
             "DriverClass": "GeminiImageGenerator",
             "APIName": "gemini-nano-banana-2.1",
+            "MaxInputTokens": 12000,
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -48,8 +49,8 @@
             "ID": "53238719-D12F-4BB5-AA90-F2562A313C98"
           },
           "sync": {
-            "lastModified": "2026-10-13T18:59:59.308Z",
-            "checksum": "6b9b06116716a859f91d86929db925091af8fe18eb63d5482a18b84033b0fb78"
+            "lastModified": "2026-11-18T00:23:28.172Z",
+            "checksum": "f7304944d10b2c9726a896e558ab21ab3828a6a972c70a3cc834d7935acc3f7c"
           }
         }
       ],

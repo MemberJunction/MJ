@@ -10,7 +10,7 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { existsSync, readdirSync, statSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, readFileSync, unlinkSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
@@ -171,6 +171,16 @@ export function findSqlCaptureFiles(afterTimestamp = 0) {
   return results;
 }
 
+/**
+ * The capture files a run created: those in `after` whose path was not already in `before`.
+ * Run 1 finishes writing its own capture (the Flyway rewrite in FinishSQLLogging) moments before
+ * run 2 starts, so an mtime window alone attributes run 1's file to run 2.
+ */
+export function selectNewCaptureFiles(before, after) {
+  const existing = new Set(before.map((c) => c.fullPath));
+  return after.filter((c) => !existing.has(c.fullPath));
+}
+
 export async function getLatestReport(afterTimestamp = 0) {
   const stateDir = path.join(os.homedir(), '.mj', 'codegen-state');
   if (!existsSync(stateDir)) return null;
@@ -201,7 +211,8 @@ export async function getLatestReport(afterTimestamp = 0) {
 
 export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
   log('Starting stage: warm-twice');
-  const tmpDir = os.tmpdir();
+  // A fresh private directory: a fixed name under the shared temp dir could be pre-created by another user.
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'mj-codegen-idempotency-'));
   const run1PatchPath = path.join(tmpDir, 'run1.patch');
   const run2PatchPath = path.join(tmpDir, 'run2.patch');
 
@@ -232,6 +243,7 @@ export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
 
   // Run 2
   log('Running CodeGen (run 2)...');
+  const capturesBeforeRun2 = findSqlCaptureFiles(0);
   const run2StartTime = Date.now();
   runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', ...(noAI ? ['--no-ai'] : [])], codegenEnv);
 
@@ -248,7 +260,7 @@ export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
   }
 
   // Assertion 2: No new CodeGen_Run_*.sql left behind by run 2
-  const run2Captures = findSqlCaptureFiles(run2StartTime - 1000);
+  const run2Captures = selectNewCaptureFiles(capturesBeforeRun2, findSqlCaptureFiles(run2StartTime - 1000));
   if (run2Captures.length > 0) {
     const files = run2Captures.map((c) => c.fullPath).join(', ');
     logError(`Surviving CodeGen_Run_*.sql found after run 2: ${files}`);
@@ -312,6 +324,9 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
   const beforeMjTs = existsSync('packages/MJCoreEntities/src/generated/entities/__mj.ts')
     ? readFileSync('packages/MJCoreEntities/src/generated/entities/__mj.ts', 'utf8')
     : '';
+  const beforeSchemasMjTs = existsSync('packages/MJCoreEntities/src/generated/schemas/__mj.ts')
+    ? readFileSync('packages/MJCoreEntities/src/generated/schemas/__mj.ts', 'utf8')
+    : '';
 
   try {
     // 1. Add probe column and refresh base view
@@ -353,6 +368,7 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
 
     const allowListRegexes = [
       /^packages\/MJCoreEntities\/src\/generated\/entities\/__mj\.ts$/,
+      /^packages\/MJCoreEntities\/src\/generated\/schemas\/__mj\.ts$/,
       /^packages\/MJCoreEntities\/src\/generated\/.*entity.*\.ts$/,
       /^packages\/MJCoreEntities\/src\/generated\/.*entity.*\.json$/,
       /^packages\/MJServer\/src\/generated\/generated\.ts$/,
@@ -380,15 +396,20 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
       throw new Error(`Stage single-column failed: changed files outside allow-list.`);
     }
 
-    // 4. Assert diff inside __mj.ts touches only IdempotencyProbe
-    const currentMjTs = readFileSync('packages/MJCoreEntities/src/generated/entities/__mj.ts', 'utf8');
-    const beforeLines = new Set(beforeMjTs.split('\n').map((l) => l.trim()));
-    for (const line of currentMjTs.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed && !beforeLines.has(trimmed)) {
-        if (!trimmed.includes(probeColumn) && trimmed !== '}' && trimmed !== '{' && trimmed !== '/**' && trimmed !== '*/' && !trimmed.startsWith('*')) {
-          logError(`__mj.ts diff contains unexpected modification: ${trimmed}`);
-          throw new Error('Stage single-column failed: __mj.ts modified outside probe property.');
+    // 4. Assert diff inside __mj.ts (and split schemas/__mj.ts) touches only IdempotencyProbe
+    for (const [label, filePath, beforeContent] of [
+      ['entities/__mj.ts', 'packages/MJCoreEntities/src/generated/entities/__mj.ts', beforeMjTs],
+      ['schemas/__mj.ts', 'packages/MJCoreEntities/src/generated/schemas/__mj.ts', beforeSchemasMjTs],
+    ]) {
+      const currentContent = readFileSync(filePath, 'utf8');
+      const beforeLines = new Set(beforeContent.split('\n').map((l) => l.trim()));
+      for (const line of currentContent.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !beforeLines.has(trimmed)) {
+          if (!trimmed.includes(probeColumn) && trimmed !== '}' && trimmed !== '{' && trimmed !== '/**' && trimmed !== '*/' && !trimmed.startsWith('*') && !trimmed.endsWith('`')) {
+            logError(`${label} diff contains unexpected modification: ${trimmed}`);
+            throw new Error(`Stage single-column failed: ${label} modified outside probe property.`);
+          }
         }
       }
     }

@@ -24,6 +24,13 @@ function makeBundle(overrides: Partial<RenderProjectBundle> = {}): RenderProject
     };
 }
 
+/**
+ * Wall-clock ceiling for the "completes quickly on pathological input" check. It guards against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 describe('RunStaticChecks', () => {
     describe('MJ_MISSING_ASSET', () => {
         it('flags relative references to missing files in HTML, CSS, SVG, and JS', () => {
@@ -289,7 +296,7 @@ describe('RunStaticChecks', () => {
             expect(unboundFor('<![CDATA[ 1 > 0 ]]>')).toEqual([expect.stringContaining('"0"')]);
         });
 
-        it('completes in under 200 ms on 50,000 repeated <!--, x + 50,000 ! + x in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {
+        it('completes quickly on 50,000 repeated <!--, x + 50,000 ! + x in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {
             const { IsAllowedNumericLiteral } = await import('../checks/static-checks.js');
 
             const commentAttackBundle = makeBundle({
@@ -297,13 +304,13 @@ describe('RunStaticChecks', () => {
             });
             const t0 = performance.now();
             expect(RunStaticChecks(commentAttackBundle)).toEqual([]);
-            expect(performance.now() - t0).toBeLessThan(200);
+            expect(performance.now() - t0).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
             const bangToken = 'x' + '!'.repeat(50_000) + 'x';
             const allowed = new Set(['42']);
             const t1 = performance.now();
             expect(IsAllowedNumericLiteral(bangToken, allowed)).toBe(false);
-            expect(performance.now() - t1).toBeLessThan(200);
+            expect(performance.now() - t1).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
             const jsAttackBundle = makeBundle({
                 Files: [
@@ -313,7 +320,7 @@ describe('RunStaticChecks', () => {
             });
             const t2 = performance.now();
             expect(RunStaticChecks(jsAttackBundle)).toEqual([]);
-            expect(performance.now() - t2).toBeLessThan(200);
+            expect(performance.now() - t2).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         });
     });
 });

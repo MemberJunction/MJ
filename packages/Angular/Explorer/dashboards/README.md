@@ -99,13 +99,15 @@ The Knowledge Hub application provides a suite of dashboards for managing vector
 - **Entity document selection**: Pick which entity document to search against
 - **Result cards**: Display matched records with relevance scores and metadata
 
-#### Duplicate Detection Dashboard
-- **Kanban board**: Organizes potential duplicates by status (Pending, Reviewed, Merged, Rejected)
-- **Comparison slide-in**: Side-by-side field diff showing which fields match, differ, or are empty
-- **Merge confirmation**: Dialog showing dependency counts and affected records before executing a merge
-- **Drag-and-drop**: Move duplicate pairs between kanban columns for triage
-- **Threshold controls**: Adjust potential and absolute match thresholds for the run
-- **Progress tracking**: Real-time progress reporting during detection runs
+#### Duplicate Detection Dashboard (`DuplicateDetectionResource`, Knowledge Hub → Duplicates)
+- **Run detection**: Pick an Active entity document and run detection over the whole entity. Creating the `MJ: Duplicate Runs` record starts detection on the server; progress arrives through the `PipelineProgress` GraphQL subscription, with a 15-second database poll as a fallback, and the page reconnects to a run still in progress.
+- **Threshold and reasoning controls**: Potential/Absolute Match sliders and the LLM Reasoning switch and threshold. All of them **save onto the entity document**; they are not one-run overrides.
+- **Kanban board**: One card per source record with all of its candidate matches, in **Pending Review**, **Approved** and **Rejected** columns. Approve, Reject or drag a card to set every match's `ApprovalStatus`. Filters for entity, score range and date range.
+- **Comparison slide-in**: Side-by-side view of the source record and every candidate, with differences-only mode, dependency counts per record, a survivor choice, per-field value selection, and per-candidate **Skip**. When LLM reasoning ran: the AI verdict and confidence, a "disagrees with the vector score" flag, a **Why?** popover with the model's reasoning, and the model's proposed survivor and field values pre-filled.
+- **Merge confirmation**: Dialog listing the survivor, field overrides, dependencies to transfer and records to delete, then `MergeRecords` through the component's provider. Read-only when the entity has `AllowRecordMerge = false`.
+- **Agent context and tools**: `SelectEntityDocument`, `RunDuplicateDetection`, `FilterDuplicatesByEntity`, `SetDuplicateDisplayMode`, `RefreshDuplicateDetection`. Approving, rejecting and merging are deliberately not exposed to the agent.
+
+See the [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md) for the full workflow, configuration and known limitations.
 
 #### Clustering Dashboard
 - **Scatter plot visualization**: Interactive SVG scatter plot powered by `@memberjunction/ng-clustering`
@@ -199,7 +201,7 @@ npm install @memberjunction/ng-dashboards
 | `@memberjunction/ng-shared`, `@memberjunction/ng-shared-generic` | Shared services, loading indicators |
 | `@memberjunction/ng-dashboard-viewer` | Dashboard rendering |
 | `@memberjunction/ng-query-viewer` | Query execution and display |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 | `d3` | Data visualization |
 | `codemirror` | Code editing |
 

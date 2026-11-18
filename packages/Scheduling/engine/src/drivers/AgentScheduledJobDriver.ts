@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, IsValidUUID } from '@memberjunction/global';
+import { RegisterClass, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -41,11 +41,6 @@ import {
  *   ConversationID?: string
  * }
  */
-interface GlobalUserCacheLookup {
-    Users: UserInfo[];
-    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
-}
-
 @RegisterClass(BaseScheduledJob, 'AgentScheduledJobDriver')
 export class AgentScheduledJobDriver extends BaseScheduledJob {
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
@@ -229,41 +224,5 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         }
 
         return agent;
-    }
-
-    /**
-     * Resolves the schedule owner's UserInfo when `schedule.OwnerUserID` is specified,
-     * ensuring scheduled agent runs execute under the schedule owner's security context
-     * rather than the background scheduler daemon user.
-     */
-    protected async resolveScheduleOwnerUser(
-        schedule: { ID?: string; Name?: string; OwnerUserID?: string | null },
-        fallbackContextUser: UserInfo
-    ): Promise<UserInfo> {
-        const ownerUserID = schedule.OwnerUserID?.trim();
-        if (!ownerUserID) {
-            return fallbackContextUser;
-        }
-        if (fallbackContextUser?.ID && fallbackContextUser.ID.trim().toLowerCase() === ownerUserID.toLowerCase()) {
-            return fallbackContextUser;
-        }
-        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
-        if (userCache && typeof userCache.FindUser === 'function') {
-            const ownerUser = await userCache.FindUser({ ID: ownerUserID });
-            if (ownerUser) {
-                if (ownerUser.IsActive === false) {
-                    throw new Error(
-                        `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
-                    );
-                }
-                return ownerUser;
-            }
-            if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
-                throw new Error(
-                    `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
-                );
-            }
-        }
-        return fallbackContextUser;
     }
 }

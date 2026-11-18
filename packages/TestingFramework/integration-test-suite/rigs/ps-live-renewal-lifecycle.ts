@@ -14,24 +14,28 @@
  *   `await new SomeOperation().Execute(input, { provider, user })` — the call marshals
  *   over GraphQL to MJAPI, which dispatches to the registered server operation.
  *
- * THROWAWAY: it creates a dedicated ML Algorithm row + an ML Training Pipeline, trains,
- * scores, promotes, then cleans up every row it created. It is NOT part of any build or
- * run-all harness.
+ * THROWAWAY: it reuses (or creates) the driver's ML Algorithm row, creates an ML Training
+ * Pipeline and binds it to version 1 of its Prediction Unit and Evaluation Protocol through the
+ * harness's pipeline migration (`lib/ps-rig-lifecycle.ts`, every row saved over GraphQL), trains,
+ * scores, promotes, then deletes every row it created through the harness cleanup (pipeline,
+ * unit, protocol, model, training runs, Training Snapshot and stored files, and the algorithm if
+ * it created it), children first — a row it cannot delete fails the rig. It is NOT part of any
+ * build or run-all harness.
  *
  * AUTH: system API key from MJ_API_KEY (x-mj-api-key) via the shared harness — no secrets here.
  *
- * USAGE (from the repo root, with MJAPI already up on :4000):
- *   npx tsx packages/MJServer/integration-test-scripts/ps-live-renewal-lifecycle.ts
+ * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-renewal-lifecycle.ts
  */
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
-import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
+import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
+import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
+import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLModelEntity,
-  MJMLTrainingRunEntity,
   PredictiveStudioTrainModelOperation,
   PredictiveStudioScoreRecordSetOperation,
   PredictiveStudioPromoteModelOperation,
@@ -89,35 +93,6 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
   return { md, route, user };
 }
 
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver
- * key. The TrainingEngine sends `pipeline.Algorithm` (the view's denormalized algorithm
- * NAME — NOT the DriverClass) to the sidecar, so we ensure a row whose Name IS the driver
- * key exists. Returns the row id + whether we created it (for cleanup).
- */
-async function ensureDriverNamedAlgorithm(md: Metadata, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const rv = new RunView();
-  const existing = await rv.RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY; // denormalized into vwMLTrainingPipelines.Algorithm → sent to sidecar
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
-}
-
 /** Resolve an entity's ID by name (throws if not found). */
 function entityId(md: Metadata, name: string): string {
   const e = md.EntityByName(name);
@@ -169,46 +144,13 @@ async function createPipeline(md: Metadata, user: UserInfo, algorithmId: string)
   return p;
 }
 
-/** Best-effort cleanup: delete the model, its training run(s), the pipeline, and (if created) the algorithm. */
-async function cleanup(md: Metadata, user: UserInfo, ids: {
-  pipelineId?: string; modelId?: string; algorithmId?: string; algorithmCreated?: boolean;
-}): Promise<void> {
-  banner('CLEANUP');
-  const rv = new RunView();
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`  skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // Training runs reference the pipeline (and the model); delete them first.
-  if (ids.pipelineId) {
-    const runs = await rv.RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of runs.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ML Training Run ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-  if (ids.algorithmId && ids.algorithmCreated) await del('MJ: ML Algorithms', ids.algorithmId);
-}
-
 async function main(): Promise<void> {
   const t0 = Date.now();
   const { md, route, user } = await connect();
 
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
-  let algorithm: { id: string; created: boolean } | undefined;
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
+  let cleanupFailures = 0;
 
   try {
     // ── 1. Resolve entities + algorithm ──────────────────────────────────────
@@ -223,14 +165,17 @@ async function main(): Promise<void> {
       console.log('  SKIP: Memberships entity not found — is AssociationDemo loaded? (exiting 0)');
       process.exit(0);
     }
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
+    algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
+    console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
-    banner('2. CREATE ML TRAINING PIPELINE');
-    const pipeline = await createPipeline(md, user, algorithm.id);
-    pipelineId = pipeline.ID;
+    banner('2. CREATE ML TRAINING PIPELINE + BIND UNIT AND PROTOCOL');
+    const pipeline = await createPipeline(md, user, algorithm.ID);
+    records.RecordPipeline(pipeline.ID);
     console.log(`  Pipeline ${pipeline.ID}`);
+    // Training refuses a pipeline without a Prediction Unit (UNIT_REQUIRED): bind version 1 of each, saved over GraphQL.
+    await BindUnitAndProtocol(route, user, pipeline, records);
+    console.log(`  Bound Prediction Unit ${pipeline.PredictionUnitID} and Evaluation Protocol ${pipeline.EvaluationProtocolID}`);
     console.log(`  Target: Memberships.Status (classification), Algorithm=${DRIVER_KEY}`);
     console.log(`  Features: select[AutoRenew, MembershipType] + onehot[MembershipType]`);
     console.log(`  Leakage deny: CancellationDate, CancellationReason, RenewalDate, EndDate, StartDate`);
@@ -252,8 +197,10 @@ async function main(): Promise<void> {
       throw new Error(`Training failed: ${trainResult.ErrorMessage}`);
     }
     const out = trainResult.Output;
-    modelId = out.modelId;
-    console.log(`  modelId       = ${out.modelId}`);
+    const shippedModelId = ShippedModelID(out, 'score and promote', RequireCheck);
+    if (shippedModelId === null) throw new Error(`Training shipped no model to score and promote: ${out.gateOutcome ?? 'no gate decision'}.`);
+    records.RecordModel(shippedModelId);
+    console.log(`  modelId       = ${shippedModelId}`);
     console.log(`  trainingRunId = ${out.trainingRunId}`);
     console.log(`  version       = ${out.version}`);
     console.log(`  status        = ${out.status}`);
@@ -265,7 +212,7 @@ async function main(): Promise<void> {
     const scoreStart = Date.now();
     const scoreResult = await new PredictiveStudioScoreRecordSetOperation().Execute(
       {
-        modelId: out.modelId,
+        modelId: shippedModelId,
         scope: { filter: { entityName: 'Memberships', extraFilter: '', maxRows: 25 } },
         dryRun: true,
       },
@@ -285,7 +232,7 @@ async function main(): Promise<void> {
     // ── 5. Promote (Draft → Validated) ───────────────────────────────────────
     banner('5. PROMOTE (PredictiveStudio.PromoteModel)');
     const promoteResult = await new PredictiveStudioPromoteModelOperation().Execute(
-      { modelId: out.modelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-renewal-lifecycle smoke test' },
+      { modelId: shippedModelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-renewal-lifecycle smoke test' },
       { provider: route, user },
     );
     console.log(`  Execute() Success=${promoteResult.Success}${promoteResult.ErrorMessage ? ` Error=${promoteResult.ErrorMessage}` : ''}`);
@@ -297,12 +244,10 @@ async function main(): Promise<void> {
     banner('LIFECYCLE COMPLETE');
     console.log(`  Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } finally {
-    await cleanup(md, user, {
-      pipelineId, modelId,
-      algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
-    });
+    banner('CLEANUP');
+    cleanupFailures = ReportCleanup(await DeleteRecordedRows(route, user, records, algorithm));
   }
-  process.exit(0);
+  process.exit(cleanupFailures === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

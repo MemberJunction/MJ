@@ -66,8 +66,9 @@ export class ChiefOfStaffApprovalsComponent extends BaseChiefOfStaffPage {
 
     protected override OnQueryParamsChanged(
         params: Record<string, string>,
-        _source: 'popstate' | 'deeplink',
+        source: 'popstate' | 'deeplink',
     ): void {
+        super.OnQueryParamsChanged(params, source);
         this.SearchText = params['search'] ?? '';
         this.publishAgentContext();
         this.cdr.markForCheck();

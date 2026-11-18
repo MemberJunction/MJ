@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, ClickAction, ScreencastFrame, TypeAction } from '@memberjunction/computer-use';
 import { RemoteBrowserAudioChunk } from '@memberjunction/remote-browser-base';
-import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
+import { CdpRemoteBrowserSession, ClampViewportToScreencastBounds } from '../cdp-remote-browser-session';
 import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter, LoopbackAudioCdpSessionBackend } from './fakes';
 
 /** Builds a session over fresh fakes with the given feature flags. */
@@ -406,3 +406,44 @@ describe('CdpRemoteBrowserSession — navigation restriction wiring', () => {
         expect(restrict).toHaveBeenCalledWith(['localhost:4200']);
     });
 });
+
+describe('CdpRemoteBrowserSession — viewport resize in place', () => {
+    it('ClampViewportToScreencastBounds keeps sizes within 1280 × 800 1:1 and scales larger sizes proportionally', () => {
+        expect(ClampViewportToScreencastBounds(540, 760)).toEqual({ Width: 540, Height: 760 });
+        expect(ClampViewportToScreencastBounds(1280, 800)).toEqual({ Width: 1280, Height: 800 });
+        // Maximized 16:9 pane (1600 × 900) scales down proportionally to 1280 × 720
+        expect(ClampViewportToScreencastBounds(1600, 900)).toEqual({ Width: 1280, Height: 720 });
+        // Tall pane (900 × 1200) scales by height cap (800 / 1200 = 2/3) → 600 × 800
+        expect(ClampViewportToScreencastBounds(900, 1200)).toEqual({ Width: 600, Height: 800 });
+        expect(ClampViewportToScreencastBounds(0, 500)).toBeNull();
+        expect(ClampViewportToScreencastBounds(500, -10)).toBeNull();
+    });
+
+    it('ResizeViewport resizes the open adapter in place, caps proportionally to 1280 × 800, and pushes a fresh frame without navigating', async () => {
+        const { session, adapter } = buildSession({ ScreenStreaming: true });
+
+        await session.ResizeViewport(540, 760);
+        expect(adapter.ViewportResizes).toEqual([{ Width: 540, Height: 760 }]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+        expect(adapter.NavigatedUrls).toEqual([]);
+
+        await session.ResizeViewport(1920, 1080);
+        expect(adapter.ViewportResizes).toEqual([
+            { Width: 540, Height: 760 },
+            { Width: 1280, Height: 720 },
+        ]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(2);
+        expect(adapter.NavigatedUrls).toEqual([]);
+    });
+
+    it('ResizeViewport ignores non-positive dimensions without touching the adapter or pushing a frame', async () => {
+        const { session, adapter } = buildSession({ ScreenStreaming: true });
+
+        await session.ResizeViewport(0, 600);
+        await session.ResizeViewport(600, -1);
+
+        expect(adapter.ViewportResizes).toEqual([]);
+        expect(adapter.CaptureScreencastFrameCount).toBe(0);
+    });
+});
+

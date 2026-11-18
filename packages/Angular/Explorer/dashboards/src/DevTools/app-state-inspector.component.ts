@@ -1,6 +1,8 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { IMetadataProvider } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { DevToolsPrefs } from './dev-tools-prefs';
 import { BuildAppStateInspectorAgentContext } from './dev-tools-agent-context';
@@ -186,6 +188,15 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         };
     }
 
+    /** How many saved queries the provider's QueryEngine holds; 0 when the user may not read them. */
+    private queryCount(provider: IMetadataProvider): number {
+        try {
+            return (QueryEngine.GetProviderInstance<QueryEngine>(provider, QueryEngine) as QueryEngine).Queries.length;
+        } catch {
+            return 0;
+        }
+    }
+
     private providerData(): unknown {
         const provider = this.ProviderToUse;
         if (!provider) return { error: 'No provider' };
@@ -193,7 +204,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
             type: provider.constructor.name,
             EntitiesCount: provider.Entities?.length ?? 0,
             ApplicationsCount: provider.Applications?.length ?? 0,
-            QueriesCount: provider.Queries?.length ?? 0,
+            QueriesCount: this.queryCount(provider),
             RolesCount: provider.Roles?.length ?? 0
         };
         if (provider instanceof GraphQLDataProvider) {

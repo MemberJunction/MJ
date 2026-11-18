@@ -1,5 +1,202 @@
 # @memberjunction/scheduling-engine
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 13a71da: Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
+  - Business Central posts to the connection's `ExternalSystemID` only, reads its Credential through `CredentialEngine`, and takes `AuthorityHost` from the Credential within an Entra ID allow list. A connection that kept its company only on the Credential must now set `ExternalSystemID`. QuickBooks `GetGLEntries` filters by `DocumentNumber`.
+  - Dropbox `ListObjects` returns every page and `SearchFiles` pages with a real cursor (`FileSearchOptions.pageToken`); Apollo retries a 429 with `Retry-After` up to 120 s.
+  - MS Graph `ForwardMessage` reads the mailbox from `ContextData.Email`; received messages carry `Direction` and `BCCRecipients`.
+  - Notification email/SMS go through `NOTIFICATION_EMAIL_PROVIDER` / `NOTIFICATION_SMS_PROVIDER` or `notifications.emailProvider` / `smsProvider` in `mj.config.cjs`; malformed `SecondaryScopes` rows are skipped and refused at save; uncached recipients get their roles read.
+  - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
+  - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
+  - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+  - Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
+
+### Patch Changes
+
+- c67470e: Add Living Report manual refresh and recurring schedule management endpoints (`RefreshLivingArtifact`, `GetArtifactLivingReportSchedule`, `UpsertArtifactLivingReportSchedule`, `DeleteArtifactLivingReportSchedule`) with strict owner-context execution (`BaseScheduledJob.resolveScheduleOwnerUser` in `ActionScheduledJobDriver`), cron DoS and IANA timezone validation (`LivingReportScheduleHelpers`), toolbar/schedule modal UI in `<mj-artifact-viewer-panel>`, direct Sheet Chart and Sheet Range ribbon insert actions in `MarkdownArtifactViewerComponent`, fix MSE codec fallback for bare `video/mp4` fMP4 frames and suspended `AudioContext` resumption in `ai-realtime-client`, align realtime avatar/voice defaults and tab audio continuity (`@memberjunction/ai-agents`, `metadata`), gate live channel tabs to used channels with auto-switching (`@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`), persist and restore `Workspace`, `Media`, and `Remote Browser` tabs in session review, and restore target agent name, multi-leg channels, and `on-demand` workspace channels on **Resume session** (`MJServer`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`).
+- 31c2439: MJAPI now reports event-loop stalls. When the loop is blocked for 1s or more, it logs one warning with how long, the heap, and the agent runs and scheduled jobs running in the process, and `/healthcheck` returns the latest `eventLoopLagMs` next to `status: 'ok'` (the heap stays in the log line, since `/healthcheck` is unauthenticated). Tune or turn it off with the new `eventLoopMonitor` config block (`enabled`, `warnThresholdMs`, `sampleIntervalMs`). `AgentRunWatchdog.TrackedRunIDs` and `SchedulingEngine.InflightJobIDs` are new read-only getters that name the work in flight. A finished agent run now leaves the watchdog's tracked set as soon as its final state is saved (it used to wait for the 5-minute prune), so the warning names only runs that are actually running.
+- 31c2439: The scheduler wakes only when a job is due: the poll timer is armed for the next due time (at most `scheduledJobs.routineIndexRefreshMinutes`, default 60), and the User Routine Dispatcher runs only when a user routine is due or needs seeding, so an idle MJAPI with scheduled jobs on lets a serverless database pause (#6217).
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [1be3915]
+- Updated dependencies [ae69eec]
+- Updated dependencies [2b07be4]
+- Updated dependencies [019fd49]
+- Updated dependencies [8e41e43]
+- Updated dependencies [1618217]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [367a259]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [31c2439]
+- Updated dependencies [442014c]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/notifications@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/ai-agents@6.3.0-edge.1
+  - @memberjunction/task-graph@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/integration-engine@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/record-set-processor-base@6.3.0-edge.1
+  - @memberjunction/record-set-processor@6.3.0-edge.1
+  - @memberjunction/rubrics@6.3.0-edge.1
+  - @memberjunction/materialization@6.3.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.3.0-edge.1
+  - @memberjunction/templates@6.3.0-edge.1
+  - @memberjunction/scheduling-base-types@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+
+### Patch Changes
+
+- 6bd8271: Shared-cache incident fixes: the scheduler's timestamp-filtered reads (due routines, wake-gate deltas, action-log retention) bypass the cache instead of writing a never-read entry per tick; `InvalidateEntityCaches` skips the storage lookup and registry rewrite for a non-cacheable entity with nothing indexed, and rewrites the registry only when it removed something; the Redis provider applies `options` on the URL path too and answers a read that takes longer than `readTimeoutMs` (default 2000 ms; `cacheSettings.redisReadTimeoutMs` / `REDIS_READ_TIMEOUT_MS` in MJServer) as a cache miss. When the index-group read a save uses to find peer slots times out, the slots it returns are removed once Redis answers.
+- 1ef6a72: The scheduler no longer runs a job a second time while it is still running, or straight after it finishes.
+  - `DispatchScheduledJobs` skips a job whose run this process is still tracking. A mid-run reload (any `ScheduledJob` save fires `OnJobChanged` → `Config(true)`) brings back the running job's pre-run `NextRunAt`, so the job read as due on every tick: it contended for its own lock, a `Queue`-mode job got a Cancelled "queued" run per tick, and a `Skip`-policy run that outlasted its next occurrence had its row full-saved mid-run.
+  - When a run finishes, its statistics and new `NextRunAt` are applied to the live `ScheduledJobs` entry as well as to the object the run started with. After a mid-run reload, the live entry kept the pre-run `NextRunAt`, and the next tick ran the job again. On a production tenant, a nightly sync started a second run 9 seconds after the first one completed.
+  - When the lease sweep reclaims a hung run, it counts the run as failed and moves the job to its next occurrence. Before, the same tick dispatched the job again, and so did every lease interval after it. A run is counted once: a hung run that settles later is not counted again, and a run that finished just as the sweep looked is not counted as failed.
+
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/task-graph@6.3.0-edge.0
+  - @memberjunction/rubrics@6.3.0-edge.0
+  - @memberjunction/record-set-processor@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/notifications@6.3.0-edge.0
+  - @memberjunction/materialization@6.3.0-edge.0
+  - @memberjunction/record-set-processor-base@6.3.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+  - @memberjunction/scheduling-base-types@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

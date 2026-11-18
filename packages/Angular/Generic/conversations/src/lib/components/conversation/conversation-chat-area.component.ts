@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -46,7 +46,7 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
 import { UserHoldsAuthorization } from '../../services/user-authorization';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName, GenerateAndApplyForkName, SaveForkName } from '../../services/conversation-naming';
-import type { ExportBranding } from '../../services/export.service';
+import type { ExportArtifactLinkTarget, ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import {
   CollectRealtimeSessionIDs,
@@ -137,6 +137,8 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
   AfterStopClickedEventArgs,
+  BeforeArtifactPanelOpenEventArgs,
+  AfterArtifactPanelOpenEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -254,6 +256,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
+        this.prepareStandbyRemoteBrowser(value);
         this.onConversationChanged(value);
       }
     }
@@ -424,12 +427,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() AllowForking = true;
 
+  private _allowRemoteBrowser = false;
   /**
    * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
    * that wants an agent-driven browser beside the chat sets true.
    */
-  @Input() AllowRemoteBrowser = false;
+  @Input()
+  set AllowRemoteBrowser(value: boolean) {
+    this._allowRemoteBrowser = value;
+    if (!value) {
+      this.standbyPreparedConversationId = null;
+      this.CloseRemoteBrowserPanel();
+      void this.remoteBrowser?.Close();
+    } else if (this.isInitialized) {
+      this.prepareStandbyRemoteBrowser(this.ConversationId);
+    }
+  }
+  get AllowRemoteBrowser(): boolean {
+    return this._allowRemoteBrowser;
+  }
+
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  @Input() set allowRemoteBrowser(value: ConversationChatAreaComponent['AllowRemoteBrowser']) {
+    this.AllowRemoteBrowser = value;
+  }
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  get allowRemoteBrowser(): ConversationChatAreaComponent['AllowRemoteBrowser'] {
+    return this.AllowRemoteBrowser;
+  }
 
   /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
@@ -824,7 +850,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() ExportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fa-solid fa-download';
 
   /** @deprecated Use {@link ExportButtonIcon}. */
   @Input() set exportButtonIcon(value: string) {
@@ -851,6 +877,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get exportBranding(): ExportBranding | null {
     return this.ExportBranding;
   }
+
+  /**
+   * Builds a link that opens an exported artifact in the host app; passed to the export
+   * modal. This package has no router, so only the host can build it. Null (default)
+   * exports artifacts with their IDs only.
+   */
+  @Input() ExportArtifactLink: ((target: ExportArtifactLinkTarget) => string | null) | null = null;
 
   /** Show the Share button in the conversation header. Default true. */
   @Input() ShowShareButton: boolean = true;
@@ -957,17 +990,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Whether an untagged message asks one fast typed decision which agent in the conversation
    * should answer it, instead of always going back to the last agent that answered. It replaces
    * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
-   * (250 ms). False (the default)
-   * changes nothing: no decision call, and today's routing. See
+   * (350 ms). On by default; false makes no decision call and keeps today's routing. See
    * `MessageInputComponent.EnableDecisionRouting`.
    *
-   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * While it is on, each qualifying message sends conversation text to the model behind the `Default Decision` prompt, which
    * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
    * the last 6 turns (150 characters each), each participant's name, description and last reply,
    * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
    * when the answer comes too late to be used.
    */
-  @Input() EnableDecisionRouting: boolean = false;
+  @Input() EnableDecisionRouting: boolean = true;
+
+  /**
+   * Opt-in Stage 6C.1 client-side Edge AI Pre-Discovery (`bge-small-en-v1.5` Top-5 ->
+   * `ms-marco-MiniLM-L-6-v2` in a lazy WASM Web Worker). Forwarded to
+   * `MessageInputComponent.EnableEdgePreDiscovery`.
+   */
+  @Input() EnableEdgePreDiscovery: boolean = false;
 
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
@@ -1413,6 +1452,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
 
   /**
+   * Emitted after an agent response message has been committed to the active conversation.
+   */
+  @Output() AgentMessageReceived = new EventEmitter<{
+    message: MJConversationDetailEntity;
+    agentResult: ExecuteAgentResult;
+  }>();
+
+  /**
    * @deprecated Use {@link AfterAgentTurn}.
    *
    * The same emitter under the old binding name, so a template still binding
@@ -1478,6 +1525,37 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Not fired when `BeforeStopClicked` was canceled.
    */
   @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
+
+  /**
+   * Cancelable — fired BEFORE the built-in right-hand artifact viewer drawer opens.
+   * Set `event.Cancel = true` to open the artifact in a host-managed workspace drawer
+   * instead; `ShowArtifactPanel` stays unchanged and `AfterArtifactPanelOpen` does not fire.
+   */
+  @Output() BeforeArtifactPanelOpen = new EventEmitter<BeforeArtifactPanelOpenEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeArtifactPanelOpen}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeArtifactPanelOpen) keeps working. Must stay AFTER BeforeArtifactPanelOpen: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeArtifactPanelOpen = this.BeforeArtifactPanelOpen;
+
+  /**
+   * Fired AFTER the built-in artifact viewer drawer opens.
+   * Not fired when `BeforeArtifactPanelOpen` was canceled.
+   */
+  @Output() AfterArtifactPanelOpen = new EventEmitter<AfterArtifactPanelOpenEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterArtifactPanelOpen}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterArtifactPanelOpen) keeps working. Must stay AFTER AfterArtifactPanelOpen: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterArtifactPanelOpen = this.AfterArtifactPanelOpen;
 
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
@@ -1630,11 +1708,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
   private scrollContainer?: ElementRef<HTMLElement>;
+  private messageScrollRootEl: HTMLElement | null = null;
 
   /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
   @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
     this.scrollContainer = ref;
-    this.watchScrollContent(ref?.nativeElement ?? null);
+    const nextEl = ref?.nativeElement ?? null;
+    if (nextEl !== this.messageScrollRootEl) {
+      // Defer updating the template-bound [ScrollRoot] reference past ViewChild resolution so
+      // Angular does not observe null -> HTMLDivElement within the same change-detection pass (NG0100).
+      Promise.resolve().then(() => {
+        if (!this.destroy$?.closed && (this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
+          this.messageScrollRootEl = nextEl;
+          this.cdr?.markForCheck?.();
+        }
+      });
+    }
+    this.watchScrollContent(nextEl);
   }
 
   /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
@@ -2790,7 +2880,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * discover it, which depends on layout having settled.
    */
   public get MessageScrollRoot(): HTMLElement | null {
-    return this.scrollContainer?.nativeElement ?? null;
+    return this.messageScrollRootEl;
   }
 
   /** @deprecated Use {@link MessageScrollRoot}. */
@@ -3755,7 +3845,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.ConversationId);
+    return !this.destroy$?.closed && UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -3777,10 +3867,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const browserConversation = this.remoteBrowser?.ConversationId;
     if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
       this.ShowRemoteBrowserPanel = false;
+      this.standbyPreparedConversationId = null;
       void this.remoteBrowser?.Close();
     }
+    this.prepareStandbyRemoteBrowser(this._conversationId);
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
+    this.hostInterceptedArtifactId = null;
     this.CanShareSelectedArtifact = false;
     this.CanEditSelectedArtifact = false;
     this.ShowArtifactsModal = false;
@@ -6731,6 +6824,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // the shown artifact when it gained a version, and switch to a retargeted one.
     await this.decideAndApplyArtifactPanel(artifactBaseline, event.message.ConversationID);
 
+    this.AgentMessageReceived?.emit({
+      message: event.message,
+      agentResult: event.agentResult as ExecuteAgentResult,
+    });
+
     // Force change detection to update the UI
     this.cdr.detectChanges();
   }
@@ -6959,6 +7057,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param baseline - From {@link snapshotArtifactPanelBaseline}, taken before the turn's reloads.
    * @param conversationId - The conversation this turn belongs to.
    */
+  private hostInterceptedArtifactId: string | null = null;
+
   private async decideAndApplyArtifactPanel(
     baseline: ArtifactPanelBaseline,
     conversationId: string | null | undefined
@@ -6970,9 +7070,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       UUIDsEqual(baseline.MapConversationId, baseline.conversationId) &&
       this.artifactMapGeneration === baseline.MapGeneration;
 
+    const hostIntercepted = !this.ShowArtifactPanel && this.hostInterceptedArtifactId != null;
     const action = DecideArtifactPanelAction({
-      panelOpen: this.ShowArtifactPanel,
-      selectedArtifactId: this.SelectedArtifactId,
+      panelOpen: this.ShowArtifactPanel || hostIntercepted,
+      selectedArtifactId: this.ShowArtifactPanel ? this.SelectedArtifactId : this.hostInterceptedArtifactId,
       before: baseline.Versions,
       after: this.allArtifactRefs(),
       baselineComparable,
@@ -6989,27 +7090,62 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Emits {@link BeforeArtifactPanelOpen} and returns `false` when a listener cancels it.
+   */
+  private emitBeforeArtifactPanelOpen(
+    artifactId: string,
+    versionNumber?: number,
+    versionId?: string
+  ): boolean {
+    const beforeArgs = new BeforeArtifactPanelOpenEventArgs(artifactId, versionNumber, versionId);
+    this.BeforeArtifactPanelOpen?.emit(beforeArgs);
+    if (beforeArgs.Cancel) {
+      this.hostInterceptedArtifactId = artifactId;
+      return false;
+    }
+    this.hostInterceptedArtifactId = null;
+    return true;
+  }
+
+  /**
    * Carry out the decision from {@link decideArtifactPanelAction}: open the panel on an artifact
    * version, refresh the already-open viewer, or do nothing.
    */
   private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
     switch (action.kind) {
       case 'open':
+        if (!this.emitBeforeArtifactPanelOpen(action.artifactId, action.versionNumber)) {
+          return;
+        }
         this.SelectedArtifactId = action.artifactId;
         this.SelectedVersionNumber = action.versionNumber;
+        this.SelectedTaskGraphPanel = null;
+        this.ShowRemoteBrowserPanel = false;
         this.ShowArtifactPanel = true;
+        this.cdr?.markForCheck?.();
+        this.AfterArtifactPanelOpen?.emit(
+          new AfterArtifactPanelOpenEventArgs(action.artifactId, action.versionNumber)
+        );
         await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
         // The permission load is async: the user may have switched conversations or picked a
         // different artifact while it was in flight, so only narrate what is still on screen.
         if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
+        this.cdr?.detectChanges?.();
         LogStatusEx({
           message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
           verboseOnly: true
         });
         return;
       case 'refresh':
+        if (!this.ShowArtifactPanel) {
+          await this.applyArtifactPanelAction(
+            { kind: 'open', artifactId: action.artifactId, versionNumber: action.versionNumber },
+            conversationId
+          );
+          return;
+        }
         // ONE channel, deliberately. Writing `selectedVersionNumber` as well would change the
         // viewer's `[versionNumber]` input in the same change-detection pass, and its `ngOnChanges`
         // would load the version a second time on top of the load this emission already starts —
@@ -7205,11 +7341,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OpenArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
     const conversationId = this.ConversationId;
+    this.ShowArtifactsModal = false;
+    if (!this.emitBeforeArtifactPanelOpen(artifactId, versionNumber)) {
+      return;
+    }
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = artifactId;
     this.SelectedVersionNumber = versionNumber;
     this.ShowArtifactPanel = true;
-    this.ShowArtifactsModal = false;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(artifactId, versionNumber)
+    );
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
@@ -7942,28 +8084,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OnArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     const conversationId = this.ConversationId;
-    this.artifactSelectionEpoch++;
-    this.SelectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
+    let resolvedVersionNumber: number | undefined;
     if (data.versionId) {
-      for (const artifactList of this.ArtifactsByDetailId.values()) {
-        for (const artifactInfo of artifactList) {
-          if (artifactInfo.artifactVersionId === data.versionId) {
-            this.SelectedVersionNumber = artifactInfo.versionNumber;
-            LogStatusEx({message: `📦 Opening artifact viewer for v${this.SelectedVersionNumber}`, verboseOnly: true});
+      for (const map of [this.ArtifactsByDetailId, this.SystemArtifactsByDetailId]) {
+        if (!map) {
+          continue;
+        }
+        for (const artifactList of map.values()) {
+          for (const artifactInfo of artifactList) {
+            if (UUIDsEqual(artifactInfo.artifactVersionId, data.versionId)) {
+              resolvedVersionNumber = artifactInfo.versionNumber;
+              break;
+            }
+          }
+          if (resolvedVersionNumber !== undefined) {
             break;
           }
         }
+        if (resolvedVersionNumber !== undefined) {
+          break;
+        }
       }
-    } else {
-      // No specific version, let viewer default to latest
-      this.SelectedVersionNumber = undefined;
     }
+
+    if (!this.emitBeforeArtifactPanelOpen(data.artifactId, resolvedVersionNumber, data.versionId)) {
+      return;
+    }
+    if (resolvedVersionNumber !== undefined) {
+      LogStatusEx({message: `📦 Opening artifact viewer for v${resolvedVersionNumber}`, verboseOnly: true});
+    }
+
+    this.artifactSelectionEpoch++;
+    this.SelectedArtifactId = data.artifactId;
+    this.SelectedVersionNumber = resolvedVersionNumber;
 
     this.SelectedTaskGraphPanel = null;
     this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(data.artifactId, resolvedVersionNumber, data.versionId)
+    );
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId, conversationId, data.artifactId);
@@ -8010,7 +8172,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   public ToggleRemoteBrowserPanel(): void {
     if (this.ShowRemoteBrowserPanel) {
-      this.CloseRemoteBrowserPanel();
+      this.HideRemoteBrowserPanel();
     } else {
       this.OpenRemoteBrowserPanel();
     }
@@ -8029,7 +8191,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  /** Hides the browser drawer while keeping the current browser session and page alive. */
+  public HideRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser and returns the conversation to standby (hiding it does not). */
   public CloseRemoteBrowserPanel(): void {
     if (!this.ShowRemoteBrowserPanel) {
       return;
@@ -8037,6 +8209,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
     void this.remoteBrowser?.Close();
+    this.standbyPreparedConversationId = null;
+    this.prepareStandbyRemoteBrowser(this.ConversationId);
     this.cdr.detectChanges();
   }
 
@@ -8060,15 +8234,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
-   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   * Prepares the standby remote browser controller for a conversation outside of template checking
+   * so `OnStateChange` (`cdr.detectChanges()`) never fires during change detection.
    */
-  public get EffectiveAppContext(): Record<string, unknown> | null {
+  private prepareStandbyRemoteBrowser(conversationId: string | null): void {
+    if (
+      !this.AllowRemoteBrowser ||
+      !conversationId ||
+      !this.agentClientService ||
+      UUIDsEqual(this.standbyPreparedConversationId, conversationId)
+    ) {
+      return;
+    }
+    this.standbyPreparedConversationId = conversationId;
+    this.ensureRemoteBrowser().SetConversation(conversationId);
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Pure & cached: it is bound to an input, so it never mutates state or fires CD.
+   */
+  public get EffectiveAppContext(): ConversationChatAreaComponent['AppContext'] {
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;
     }
-    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    const owns = controller.OwnsTools;
     let memo = this.effectiveAppContextMemo;
     if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
       memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
@@ -8076,7 +8267,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     return memo.Value;
   }
-  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
+  private standbyPreparedConversationId: string | null = null;
+  private effectiveAppContextMemo: { Base: ConversationChatAreaComponent['AppContext']; Version: number; Owns: boolean; Value: ConversationChatAreaComponent['AppContext'] } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable
@@ -8883,13 +9075,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const agentName = this.RealtimeReview?.AgentName ?? null;
+    const preferredModelId = this.RealtimeReview?.ModelID ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
-        null, // preferredModelId
+        preferredModelId,
         null, // clientTools
         null, // coAgentId
         null, // configOverridesJson
@@ -9215,7 +9408,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    const panelAlreadyOpen = this.SelectedArtifactId === artifactId && this.ShowArtifactPanel;
+    const panelAlreadyOpen = UUIDsEqual(this.SelectedArtifactId, artifactId) && this.ShowArtifactPanel;
     console.log(
       '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
         this.SelectedArtifactId +
@@ -9227,10 +9420,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
+      if (!this.emitBeforeArtifactPanelOpen(artifactId, undefined)) {
+        return;
+      }
       this.artifactSelectionEpoch++;
       this.SelectedArtifactId = artifactId;
       this.SelectedVersionNumber = undefined;
       this.ShowArtifactPanel = true;
+      this.AfterArtifactPanelOpen?.emit(
+        new AfterArtifactPanelOpenEventArgs(artifactId, undefined)
+      );
       try {
         await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
       } catch {
@@ -10179,13 +10378,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Find the message containing this artifact version
     let messageIdWithArtifact: string | null = null;
+    let resolvedVersionId: string | undefined;
 
     for (const [detailId, artifactList] of this.ArtifactsByDetailId.entries()) {
       for (const artifactInfo of artifactList) {
-        if (artifactInfo.artifactId === artifactIdToOpen) {
+        if (UUIDsEqual(artifactInfo.artifactId, artifactIdToOpen)) {
           // Found the artifact - check if version matches (if specified)
           if (versionNumberToOpen == null || artifactInfo.versionNumber === versionNumberToOpen) {
             messageIdWithArtifact = detailId;
+            if (versionNumberToOpen != null) {
+              resolvedVersionId = artifactInfo.artifactVersionId;
+            }
             console.log('✅ Found artifact in message:', detailId);
             break;
           }
@@ -10199,11 +10402,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
+    const resolvedVersionNumber = versionNumberToOpen ?? undefined;
+    if (!this.emitBeforeArtifactPanelOpen(artifactIdToOpen, resolvedVersionNumber, resolvedVersionId)) {
+      this.scrollToMessage(messageIdWithArtifact);
+      return;
+    }
+
     // Open the artifact panel
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = artifactIdToOpen;
-    this.SelectedVersionNumber = versionNumberToOpen ?? undefined;
+    this.SelectedVersionNumber = resolvedVersionNumber;
     this.ShowArtifactPanel = true;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(artifactIdToOpen, resolvedVersionNumber, resolvedVersionId)
+    );
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen, conversationId, artifactIdToOpen);

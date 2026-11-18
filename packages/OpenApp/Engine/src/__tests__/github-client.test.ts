@@ -1104,3 +1104,87 @@ describe('DownloadMigrations resolves the tag that exists', () => {
         expect(mocks.listTags).not.toHaveBeenCalled();
     });
 });
+
+// ── #4520: the unreadable-repo message names the token in use and every token kind's remedy ──────
+describe('UnreadableRepoMessage names the credential that was used (#4520)', () => {
+    async function unreadableMessage(options: GitHubClientOptions, url = 'https://github.com/Acme/Private'): Promise<string> {
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+        const result = await ValidateGitHubTag(url, '1.0.0', options);
+        return result.ErrorMessage ?? '';
+    }
+
+    it('names openApps.github.token, and that it outranks GITHUB_TOKEN, for a config token', async () => {
+        const message = await unreadableMessage({ Token: 'ghp_stale', TokenSource: 'Config' });
+        expect(message).toContain('openApps.github.token in mj.config.cjs');
+        expect(message).toContain('take precedence over GITHUB_TOKEN');
+    });
+
+    it('names the GITHUB_TOKEN environment variable for an environment token', async () => {
+        const message = await unreadableMessage({ Token: 'ghp_env', TokenSource: 'Environment' });
+        expect(message).toContain('the GITHUB_TOKEN environment variable');
+        expect(message).not.toContain('take precedence');
+    });
+
+    it('names the matching openApps.github.tokens entry when the per-repo map supplied the token', async () => {
+        const message = await unreadableMessage({
+            Token: 'ghp_default', TokenSource: 'Environment',
+            TokenMap: { 'https://github.com/Acme/Private': 'ghp_mapped' },
+        });
+        expect(message).toContain('openApps.github.tokens entry for https://github.com/Acme/Private');
+        expect(message).not.toContain('GITHUB_TOKEN environment variable');
+    });
+
+    it('falls back to "the supplied token" when the caller did not say where the token came from', async () => {
+        const message = await unreadableMessage({ Token: 'ghp_x' });
+        expect(message).toContain('the supplied token');
+    });
+
+    it('covers classic, fine-grained and SSO-enforced tokens, not only the classic repo scope', async () => {
+        const message = await unreadableMessage({ Token: 'ghp_x', TokenSource: 'Environment' });
+        expect(message).toContain("'repo' scope");
+        expect(message).toContain('fine-grained token lists Acme/Private under repository access with Contents: Read');
+        expect(message).toContain('SAML SSO');
+    });
+});
+
+// ── #4520: DownloadMigrations against a manifest repository the credential cannot read ──────────
+describe('DownloadMigrations on a 404 (#4520)', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'mj-dlmig404-'));
+    });
+
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('reports the unreadable repository instead of a bare "Not Found"', async () => {
+        mocks.getContent.mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+        stubRepoUnreadable();
+
+        const result = await DownloadMigrations('https://github.com/Acme/Private', undefined, 'migrations', dir, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Cannot read Acme/Private');
+        expect(result.ErrorMessage).toContain('no GitHub credential was supplied');
+    });
+
+    it('keeps the download failure, with the path and ref, when the repository is readable', async () => {
+        mocks.getContent.mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+        stubRepoReadable();
+
+        const result = await DownloadMigrations('https://github.com/Acme/App', undefined, 'migrations', dir, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Failed to download migrations: Not Found \(migrations in Acme\/App at ref/);
+    });
+
+    it('does not probe visibility for a non-404 failure', async () => {
+        mocks.getContent.mockRejectedValueOnce(Object.assign(new Error('server error'), { status: 500 }));
+
+        const result = await DownloadMigrations('https://github.com/Acme/App', undefined, 'migrations', dir, {});
+
+        expect(result.ErrorMessage).toBe('Failed to download migrations: server error');
+        expect(mocks.get).not.toHaveBeenCalled();
+    });
+});

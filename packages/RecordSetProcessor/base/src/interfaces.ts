@@ -71,6 +71,11 @@ export interface RecordProcessorContext {
     TriggeredBy?: TriggeredByValue;
     /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
     BypassCache?: boolean;
+    /**
+     * The run's stop signal ({@link RecordSetProcessOptions.Signal}), when the caller gave one. A processor doing
+     * long work on a record should pass it on, so that work stops too.
+     */
+    Signal?: AbortSignal;
 }
 
 /** Run-level summary context passed to {@link IRecordProcessor.BuildRunSummary} when a run completes. */
@@ -252,6 +257,14 @@ export interface RecordSetProcessOptions {
     LastRunAt?: Date | null;
     /** Overwrite values a person entered (default false); such a run skips no record on its watermark. */
     OverwriteHumanValues?: boolean;
+    /**
+     * Stops the run from the calling code: a worker that lost its lease, a cancelled job, a process shutting down.
+     * The run starts no record after the signal fires and ends `Paused`, without advancing its resume cursor past
+     * the page it was on, so the records it did not reach are processed by the next run. Records already started
+     * see the signal through {@link RecordProcessorContext.Signal}. The `CancellationRequested` flag on the run
+     * row still works as before; this is a second way to stop, for a caller that holds the run in memory.
+     */
+    Signal?: AbortSignal;
 }
 
 /** Strategy used to detect unchanged records when SkipUnchanged is enabled. */

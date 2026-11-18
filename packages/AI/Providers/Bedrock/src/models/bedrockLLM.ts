@@ -15,7 +15,8 @@ import {
   TrailingVolatileStateSplit,
   VolatileStateMessageMetadata,
   ErrorAnalyzer,
-  parseBase64DataUrl
+  parseBase64DataUrl,
+  NormalizeFinishReason
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { 
@@ -429,9 +430,12 @@ export class BedrockLLM extends BaseLLM {
       // cacheReadTokens / cacheWriteTokens default to 0; only Anthropic-on-Bedrock reports caching.
       let content = '';
       let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+      // Each model family names its stop reason differently; NormalizeFinishReason maps them.
+      let rawStopReason: string | undefined;
 
       if (this.isAnthropicModel(modelId)) {
         content = responseBody.content?.[0]?.text || '';
+        rawStopReason = responseBody.stop_reason;
         // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
         // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
         // are DISJOINT from input_tokens.
@@ -444,6 +448,7 @@ export class BedrockLLM extends BaseLLM {
         };
       } else if (modelId.startsWith('ai21.')) {
         content = responseBody.completions?.[0]?.data?.text || '';
+        rawStopReason = responseBody.completions?.[0]?.finishReason?.reason;
         // AI21 via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.prompt_tokens || 0,
@@ -454,6 +459,7 @@ export class BedrockLLM extends BaseLLM {
         };
       } else if (modelId.startsWith('amazon.titan-')) {
         content = responseBody.results?.[0]?.outputText || '';
+        rawStopReason = responseBody.results?.[0]?.completionReason;
         // Titan via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.inputTextTokenCount || 0,
@@ -464,6 +470,7 @@ export class BedrockLLM extends BaseLLM {
         };
       } else if (modelId.startsWith('meta.')) {
         content = responseBody.generation || '';
+        rawStopReason = responseBody.stop_reason;
         // Llama models via Bedrock may not provide token counts, and report no cache info.
         tokenUsage = {
           promptTokens: 0,
@@ -482,7 +489,7 @@ export class BedrockLLM extends BaseLLM {
           role: ChatMessageRole.assistant,
           content: content
         },
-        finish_reason: 'stop',
+        finish_reason: NormalizeFinishReason(rawStopReason),
         index: 0
       }];
       
@@ -673,7 +680,7 @@ export class BedrockLLM extends BaseLLM {
           role: ChatMessageRole.assistant,
           content: accumulatedContent ? accumulatedContent : ''
         },
-        finish_reason: lastChunk?.finishReason || 'stop',
+        finish_reason: NormalizeFinishReason(lastChunk?.finishReason),
         index: 0
       }],
       usage: finalUsage

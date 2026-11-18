@@ -318,6 +318,39 @@ When adding an option, keep `RelatedRecordCollectionOptions` and
 
 ---
 
+## 4. Server-Side Concurrency & Delta-Only Updates
+
+MemberJunction separates **disjoint-column safety** (enabled by default with zero extra database round-trips) from **same-column optimistic concurrency checking** (enforced automatically on GraphQL client mutations and opt-in on server-direct saves):
+
+- **Delta-only `spUpdate*` / `fn_update*` bindings (`deltaUpdates: true` by default).** When an existing row is saved on an entity with a CodeGen-generated update routine (`entityInfo.spUpdateGenerated === true`), `GenericDatabaseProvider.GenerateSaveSQL` binds **only dirty editable parameters** (plus the primary key) instead of sending every column on the entity. Because generated update routines declare `= NULL` parameter defaults and merge via `ISNULL(@Param, [Col])` (SQL Server) / `COALESCE(p_param, "Col")` (PostgreSQL) with `_Clear = 1` flags for explicit `NULL` writes, untouched columns remain unchanged in the database. If Writer A changes `Status` and Writer B concurrently changes `Notes`, both saves succeed in a single round-trip and neither overwrites the other's column. Forced saves (`IgnoreDirtyState: true`), `ReplayOnly` saves, entities with custom `spUpdate` implementations (`spUpdateGenerated === false`), or providers with the emergency kill-switch `databaseSettings.deltaUpdates: false` (`ProviderConfigDataBase.DeltaUpdates = false`) retain full-row parameter binding.
+- **Locked-row same-column conflict detection (`CheckUpdateConcurrency`).** When concurrency checking is active (`'log'` or `'enforce'`), `DatabaseProviderBase.Save()` compares the caller's pre-edit baseline (`Field.OldValue` or `EntitySaveOptions.ConcurrencyBaseline`) against the current database row **inside the save transaction**, under a row lock (`WITH (UPDLOCK, ROWLOCK)` on SQL Server; `FOR UPDATE` on PostgreSQL). Disjoint column edits merge cleanly; overlapping edits to the same column (`DetectFieldConcurrencyConflicts` in `@memberjunction/generic-database-provider`) trigger a structured warning (`'log'`) or abort and roll back the save (`'enforce'`), including full multi-level IS-A parent/child chain rollback and in-memory `Dirty` / `OldValue` restoration.
+
+### Configuration (`deltaUpdates` & `concurrencyCheck`)
+
+Configure provider-wide defaults in `mj.config.cjs` under `databaseSettings` (`ProviderConfigDataBase` when instantiating a provider directly), or override concurrency checking per save via `EntitySaveOptions.ConcurrencyCheck`:
+
+- `databaseSettings.deltaUpdates` (`boolean`, default `true`): Set to `false` only as an operational escape hatch to revert to full-row `spUpdate*` / `fn_update*` parameter binding without redeploying code.
+- `databaseSettings.concurrencyCheck` (`'off' | 'log' | 'enforce'`, default `'off'`): Controls the default mode for server-direct `entity.Save()` calls (agents, actions, scheduled jobs). GraphQL `UpdateRecord` mutations carrying client `OldValues___` **always** set `ConcurrencyCheck: 'enforce'` per save regardless of the server-wide default.
+
+| Mode | Behaviour on save |
+|---|---|
+| `'off'` (server default) | Skip the locked baseline read on server-direct saves (zero extra round-trips or row locks; delta updates still preserve concurrent writes to untouched columns). |
+| `'log'` | Read dirty columns under lock inside the save transaction; on overlapping change, emit a structured warning via `LogErrorEx` (`category: 'GenericDatabaseProvider.CheckUpdateConcurrency'`) naming the entity, conflicting fields, and redacted diff diagnostics, then proceed with the save. |
+| `'enforce'` (GraphQL `OldValues___` default) | Read dirty columns under lock inside the save transaction; on overlapping change, abort and roll back before `spUpdate*` commits, populate `entity.LatestResult.ConcurrencyConflict` (`{ ConflictingFields: string[] }`), and on GraphQL mutations persist a `SAVE_INCONSISTENCY` record to `MJ: Error Logs` and return a structured `CONCURRENT_MODIFICATION_CONFLICT` refusal (`RefusalExtensions`). |
+
+```typescript
+const saved = await order.Save({ ConcurrencyCheck: 'enforce' });
+if (!saved && order.LatestResult?.ConcurrencyConflict) {
+    for (const fieldName of order.LatestResult.ConcurrencyConflict.ConflictingFields) {
+        console.warn(`Concurrent edit conflict on field: ${fieldName}`);
+    }
+}
+```
+
+> **Current scope notes:** Queued `TransactionGroup` updates already use delta-only `spUpdate*` / `fn_update*` parameter binding (`deltaUpdates: true`), while locked-row `CheckUpdateConcurrency` inside `TransactionGroup.Submit()` is tracked as a dedicated follow-up ([PR #6490](https://github.com/MemberJunction/MJ/pull/6490)). Post-save SQL hydration of `RecordChange.FullRecordJSON` under concurrent delta updates is tracked in [PR #6489](https://github.com/MemberJunction/MJ/pull/6489).
+
+---
+
 ## Decision tree
 
 ```

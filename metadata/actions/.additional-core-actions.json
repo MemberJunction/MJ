@@ -1481,7 +1481,8 @@
     "fields": {
       "Name": "HTTP Request",
       "Config": {
-        "outputTrustLevel": "Untrusted"
+        "outputTrustLevel": "Untrusted",
+        "disallowWhenTainted": true
       },
       "Description": "Make HTTP requests with full control over headers, authentication, and request options",
       "DriverClass": "__HTTPRequest",
@@ -1734,8 +1735,8 @@
       "ID": "08D2ED22-D063-4E2C-80CD-ECFB50A83DAE"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:06.633Z",
-      "checksum": "98e6316b2014461eec1acfc0429bc11980352f004ed1c951389a00c60b705034"
+      "lastModified": "2026-11-10T23:41:27.334Z",
+      "checksum": "16e549d5a842fea1b5b89fbe5bedf6f012d3a3d3b1c0d42d28f63c7a3bf67cf2"
     }
   },
   {
@@ -1744,7 +1745,10 @@
       "Description": "Execute GraphQL queries and mutations with variable support",
       "DriverClass": "__GraphQLQuery",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1922,8 +1926,8 @@
       "ID": "F85E1F49-BC36-4E56-A73A-3B794F572B47"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:51.143Z",
-      "checksum": "1f963cf715aa5a4d07da3edc11622f4801df270e256f7b3b9e64a9750249c6de"
+      "lastModified": "2026-11-10T23:41:27.345Z",
+      "checksum": "1dca3de886b55ade37fdb066796c830cc6820b32520a03ba4269447feb1e3296"
     }
   },
   {
@@ -2155,7 +2159,10 @@
       "Description": "Add rate limiting to any API endpoint with automatic retry and backoff",
       "DriverClass": "__APIRateLimiter",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2336,8 +2343,8 @@
       "ID": "5786515E-3805-460F-8168-471EE4FC3D21"
     },
     "sync": {
-      "lastModified": "2026-06-21T22:23:53.922Z",
-      "checksum": "62ad4f65ed0f36f28324fdde4ba264603500f43aa8c1d74b91925ae05a112c9f"
+      "lastModified": "2026-11-10T23:41:27.357Z",
+      "checksum": "a582e30054241e58bf09df2e78dc915d245dee823fb211c4c23f64d7feda56a5"
     }
   },
   {
@@ -3590,7 +3597,10 @@
       "Description": "Send messages to Slack channels via incoming webhooks with rich formatting support",
       "DriverClass": "__SlackWebhook",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3768,8 +3778,8 @@
       "ID": "B04361E0-AC53-4BEC-8D4E-2D7C974B57BC"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:51.279Z",
-      "checksum": "a1be61a282cbe1fa5286abb74eba340be06fd90cc60590db7f483bff846a56d3"
+      "lastModified": "2026-11-10T23:41:27.372Z",
+      "checksum": "73d22fd4c87badc4c60f0e86fbfe08a21362203181572a2a4f060899bd5212c0"
     }
   },
   {
@@ -3778,7 +3788,10 @@
       "Description": "Send messages to Microsoft Teams channels via incoming webhooks with card formatting",
       "DriverClass": "__TeamsWebhook",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3974,8 +3987,8 @@
       "ID": "30906118-070F-4EB2-B990-82D39157DD8D"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:51.281Z",
-      "checksum": "16c51067008f068fb2923891c61573e32bc630d39b12e82f84b7f466e5e3cc16"
+      "lastModified": "2026-11-10T23:41:27.384Z",
+      "checksum": "c177baba4415761b452acd328baeb2d5a07618bef6a639a51245d1fdf7152e23"
     }
   },
   {

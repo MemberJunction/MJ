@@ -1,5 +1,5 @@
 import { BaseEntity, IMetadataProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, IsEmailShaped } from '@memberjunction/global';
 import { MJAIBridgeAgentIdentityEntity } from '@memberjunction/core-entities';
 
 /**
@@ -157,7 +157,7 @@ export function BuildDuplicateIdentityError(
 
 /** Loose email shape check: `local@domain.tld`, no spaces, single `@`. */
 function isEmailLike(value: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    return IsEmailShaped(value);
 }
 
 /** Loose E.164-ish phone check: optional leading `+`, 7–15 digits, common separators ignored. */

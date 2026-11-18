@@ -6,7 +6,8 @@
  *
  * Booting the server is far too heavy for a unit test, so this pins the order in the source:
  * the sweep is awaited before the scheduler, the integration sync worker (whose Start() polls
- * immediately), the HTTP listener, and pending RSU work.
+ * immediately), the startup gate opening (the port is bound earlier, but no request reaches the app
+ * until the gate opens), and pending RSU work.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +29,7 @@ describe('startup: the interrupted-run sweep runs before anything can start a ru
     it.each([
         ['the scheduled jobs service', 'scheduledJobsService.Start()'],
         ['the integration sync worker', 'integrationSyncWorker.Start()'],
-        ['the HTTP listener', 'httpServer.listen('],
+        ['the startup gate opening to requests', 'startup.MarkReady()'],
         ['pending RSU work', 'processRSUPendingWork().catch('],
     ])('precedes %s', (_label, needle) => {
         expect(sweep()).toBeLessThan(at(needle));

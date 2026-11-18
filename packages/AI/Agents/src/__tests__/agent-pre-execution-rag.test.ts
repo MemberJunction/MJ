@@ -7,6 +7,7 @@ vi.mock('@memberjunction/core-entities', () => {
     return {
         SearchEngineBase: {
             Instance: {
+                HasActiveAgentScopes: vi.fn(async () => true),
                 Config: vi.fn(async () => {}),
                 GetAgentScopes: vi.fn(() => []),
                 GetActiveScopeByID: vi.fn(() => undefined),
@@ -271,6 +272,23 @@ describe('AgentPreExecutionRAG', () => {
             expect(mockSearch.mock.calls[0][0].AISkillID).toBeUndefined();
         });
 
+        it('injects the semantic graph lane\'s results, with their provenance, from the same search', async () => {
+            const breadcrumb = '"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"';
+            mockSearch.mockResolvedValue({
+                ...emptySearch,
+                Results: [{
+                    ID: 'abv-1', EntityName: 'MJ: Entity Alternate Base Views', RecordID: 'abv-1', SourceType: 'SemanticGraph',
+                    ResultType: 'entity-record', Title: 'Invoices.Open', Snippet: `${breadcrumb} — Unpaid invoices`, Score: 0.012,
+                    ScoreBreakdown: { Graph: 0.012 }, Tags: ['MJ Canon'], MatchedAt: new Date(),
+                }],
+                TotalCount: 1,
+                SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Graph: 1 },
+            });
+            const result = await run();
+            expect(result?.formattedSystemMessage).toContain('source: SemanticGraph');
+            expect(result?.formattedSystemMessage).toContain(breadcrumb);
+        });
+
         describe('an audience (audienceReaders)', () => {
             const readerA = { ID: 'reader-a', Name: 'Reader A' } as unknown as UserInfo;
             const readerB = { ID: 'reader-b', Name: 'Reader B' } as unknown as UserInfo;
@@ -493,5 +511,22 @@ describe('AgentPreExecutionRAG', () => {
             expect((payload as { tables: { rows: unknown[] }[] }).tables[0].rows.length).toBe(1);
             expect(Array.isArray((payload as { computations: unknown[] }).computations)).toBe(true);
         });
+    });
+
+    it('skips SearchEngineBase.Config when HasActiveAgentScopes returns false', async () => {
+        const hasScopesSpy = vi.mocked(SearchEngineBase.Instance.HasActiveAgentScopes);
+        const configSpy = vi.mocked(SearchEngineBase.Instance.Config);
+        hasScopesSpy.mockResolvedValueOnce(false);
+
+        const rag = new AgentPreExecutionRAG();
+        const res = await rag.Execute({
+            agent: { ID: 'agent-no-scopes', Name: 'Empty' } as MJAIAgentEntity,
+            lastUserMessage: 'hello',
+            contextUser: fakeUser,
+        });
+
+        expect(res).toBeNull();
+        expect(hasScopesSpy).toHaveBeenCalledWith('agent-no-scopes', 'PreExecution', fakeUser);
+        expect(configSpy).not.toHaveBeenCalled();
     });
 });

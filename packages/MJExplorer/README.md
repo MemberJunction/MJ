@@ -31,7 +31,7 @@ graph TD
     E --> K
 
     subgraph "UI Libraries"
-        L["Kendo UI"]
+        L["MJ UI Components"]
         M["AG Grid"]
         N["Golden Layout"]
     end
@@ -184,7 +184,7 @@ packages/MJExplorer/
 
 | Library | Usage |
 |---------|-------|
-| Kendo UI for Angular | Grids, dropdowns, buttons, dialogs, inputs, navigation |
+| MJ UI Components | Grids, dropdowns, buttons, dialogs, inputs, navigation |
 | AG Grid | High-performance data grids |
 | Golden Layout | Flexible window management |
 | dhtmlx-gantt | Gantt chart visualization |

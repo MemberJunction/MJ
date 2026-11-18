@@ -557,6 +557,7 @@ A collection of utility functions for common string and JSON operations.
 | `CopyScalarsAndArrays<T>(input, resolveCircular?)` | Deep-copies scalar and array properties, optionally handling circular references |
 | `convertCamelCaseToHaveSpaces(s)` | `"AIAgentRun"` becomes `"AI Agent Run"` |
 | `stripWhitespace(s)` | Removes all whitespace from a string |
+| `UnwrapPhraseQuotes(term)` | Drops one pair of straight or curly double quotes wrapping a search term (`"a b"` becomes `a b`), for substring searches that have no phrase syntax |
 | `generatePluralName(singular, options?)` | Handles irregular and regular English pluralization |
 | `getIrregularPlural(word)` | Looks up irregular plural forms |
 | `adjustCasing(word, options?)` | Capitalizes first letter, entire word, or leaves as-is |
