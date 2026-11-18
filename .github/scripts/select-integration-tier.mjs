@@ -34,16 +34,25 @@
  *
  * So the tier is also skipped when the PR's *changes* already passed. `fingerprint` hashes the
  * patch the run tests — GitHub's PR merge commit against its first parent, the base it was
- * merged onto — including each touched file's before-image blob id. The hash is unchanged by a
- * catch-up merge that leaves the PR's files alone, and changes when the author edits anything
- * or the base branch edits a file the PR also touches (the case where the two can interact).
- * The workflow records a fingerprint after a green tier run and passes this script the record
- * (`--passed-marker`) when a later run of the same PR finds one.
+ * merged onto — including each touched file's before-image blob id, plus the base's
+ * `migrations/`, `metadata/` and `metadata-optional/` trees. The hash is unchanged by a
+ * catch-up merge that leaves the PR's files and those three trees alone. It changes when the
+ * author edits anything, when the base edits a file the PR also touches, and when the base adds
+ * or changes a migration, metadata, or an integration test definition: the tier migrates and
+ * pushes those before any test, so they change what it tests without sharing a file with the PR.
+ *
+ * The workflow records the passing run's URL under the fingerprint after a green tier run (a
+ * PR-scoped Actions cache entry). A cache entry alone proves nothing — any workflow a PR runs
+ * can write one, including from a commit the PR later drops — so before skipping, this script
+ * checks the recorded run through the GitHub API: it is a `pull_request` run of this workflow
+ * for this PR, its tier job succeeded, its fingerprint step logged this fingerprint, and at
+ * that run the PR had not changed this workflow or this script (or still carries the same
+ * version of them, so the change is in the final diff for review).
  *
  * ## Failing open
  *
  * Every doubt resolves to "run": an empty diff, an unreadable or empty build graph, a HEAD that
- * is not a merge commit, any exception. A wrong "run" costs one job; a wrong "skip" hides a
+ * is not a merge commit, a pass record that cannot be verified, any exception. A wrong "run" costs one job; a wrong "skip" hides a
  * break until the backstop. Merges to the protected branches, the nightly and manual
  * dispatches never consult this script — the workflow runs the tier unconditionally for every
  * event but `pull_request`.
@@ -51,14 +60,17 @@
  * ## Usage
  *
  *   node .github/scripts/select-integration-tier.mjs fingerprint
- *   node .github/scripts/select-integration-tier.mjs --changed=<file> --build-graph=<file> [--root=<dir>] [--passed-marker=<file>]
+ *   node .github/scripts/select-integration-tier.mjs --build-graph=<file> [--root=<dir>]
+ *       [--passed-marker=<file> --fingerprint=<sha256> --pr=<number>] [--changed=<file>]
  *
- * `fingerprint` writes `fingerprint=<sha256>` (empty when it cannot be computed) to
- * `$GITHUB_OUTPUT`. The default mode reads one changed path per line from `--changed`
- * (`git diff --name-only base...HEAD`), the turbo dry-run JSON from `--build-graph`, and the
- * optional record of an earlier passing run from `--passed-marker` (its URL; a missing or empty
- * file means none), and writes `integration=true|false` to `$GITHUB_OUTPUT` and the reasons to
- * `$GITHUB_STEP_SUMMARY` when those are set. Both modes always exit 0.
+ * Both run in a checkout of GitHub's PR merge commit. `fingerprint` writes
+ * `fingerprint=<sha256>` (empty when it cannot be computed) to `$GITHUB_OUTPUT`. The default
+ * mode takes the changed files from the merge commit itself (`--changed` substitutes a file of
+ * paths, for tests), the turbo dry-run JSON from `--build-graph`, and the optional pass record
+ * from `--passed-marker` (a run URL; missing or empty means none), which it verifies with
+ * `$GITHUB_TOKEN` against `$GITHUB_REPOSITORY`. It writes `integration=true|false` to
+ * `$GITHUB_OUTPUT` and the reasons to `$GITHUB_STEP_SUMMARY` when those are set. Both modes
+ * always exit 0.
  */
 
 import { readFileSync, existsSync, appendFileSync } from 'node:fs';
@@ -86,7 +98,25 @@ export const TRIGGER_GLOBS = [
     '.github/scripts/wait-for-mjapi.sh',
     '.github/scripts/check-fls-wire-bundles-ran.mjs',
     '.github/scripts/select-integration-tier.mjs',
+    'package.json',
+    'pnpm-workspace.yaml',
+    '.npmrc',
 ];
+
+/** Base-branch trees the tier migrates or pushes before any test runs; part of the fingerprint. */
+export const BASE_STATE_DIRS = ['migrations', 'metadata', 'metadata-optional'];
+
+/**
+ * The files that decide whether, and how honestly, the tier ran. A pass record is only trusted
+ * from a run where the PR had not changed them, or still carries the same version of them.
+ */
+export const TRUSTED_FILES = ['.github/workflows/integration.yml', '.github/scripts/select-integration-tier.mjs'];
+
+/** Names the verification looks up in a recorded run; they must match integration.yml. */
+export const WORKFLOW_PATH = '.github/workflows/integration.yml';
+export const TIER_JOB_NAME = 'Integration (SQL Server, deterministic)';
+export const CHANGES_JOB_NAME = 'Detect PR changes';
+const FINGERPRINT_LOG_PREFIX = 'PR change fingerprint: ';
 
 /** How many reasons the summary lists before it truncates. */
 const MAX_REASONS_SHOWN = 20;
@@ -192,25 +222,60 @@ export function decide(changedPaths, builtDirs, hasPackageJson) {
     return { run: reasons.size > 0, reasons: [...reasons], unbuiltPackages: [...unbuilt].sort() };
 }
 
+/** Run git in `cwd` and return its stdout as text. */
+function git(args, cwd) {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
 /**
- * SHA-256 of the patch a PR run tests: `HEAD` (GitHub's PR merge commit) against its first
- * parent (the base it was merged onto). Full blob ids and no rename detection keep the patch
- * text independent of git configuration. Throws when `HEAD` is not a two-parent merge commit,
- * since the first parent is then not known to be the base.
+ * Throw unless `HEAD` is a two-parent merge commit — GitHub's PR merge ref, whose first parent
+ * is the base it was merged onto and whose second is the PR head. Every comparison below relies
+ * on that shape.
  */
-export function computeFingerprint(cwd = process.cwd()) {
-    const commits = execFileSync('git', ['rev-list', '--parents', '-n', '1', 'HEAD'], { cwd, encoding: 'utf8' })
-        .trim()
-        .split(/\s+/);
+export function assertPrMergeCommit(cwd) {
+    const commits = git(['rev-list', '--parents', '-n', '1', 'HEAD'], cwd).trim().split(/\s+/);
     if (commits.length !== 3) {
         throw new Error(`HEAD has ${commits.length - 1} parent(s); expected the two-parent PR merge commit`);
     }
+}
+
+/** The tree or blob id of `rev:path`, or 'absent' when it does not exist. */
+function objectId(rev, path, cwd) {
+    try {
+        return git(['rev-parse', '--verify', '--quiet', `${rev}:${path}`], cwd).trim() || 'absent';
+    } catch {
+        return 'absent';
+    }
+}
+
+/**
+ * The files the PR merge commit changes against its base. Rename detection is off, so a file
+ * moved between packages lists both its old and its new path — the package it left changed too.
+ */
+export function changedPathsOfMergeCommit(cwd = process.cwd()) {
+    assertPrMergeCommit(cwd);
+    return git(['diff', '--name-only', '--no-renames', 'HEAD^1', 'HEAD'], cwd).split('\n').filter(Boolean);
+}
+
+/**
+ * SHA-256 over the patch a PR run tests (`HEAD` against its first parent, the base) and the
+ * base's tree ids for `BASE_STATE_DIRS`. The patch's `index` lines carry each touched file's
+ * before-image blob id, so a base edit to a PR file changes the hash; `--full-index` and
+ * `--no-renames` keep the text independent of git configuration (abbreviation length, rename
+ * settings). Throws when `HEAD` is not a two-parent merge commit.
+ */
+export function computeFingerprint(cwd = process.cwd()) {
+    assertPrMergeCommit(cwd);
     const patch = execFileSync(
         'git',
         ['diff', '--binary', '--full-index', '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', 'HEAD^1', 'HEAD'],
         { cwd, maxBuffer: 1024 * 1024 * 1024 },
     );
-    return createHash('sha256').update(patch).digest('hex');
+    const hash = createHash('sha256').update(patch);
+    for (const dir of BASE_STATE_DIRS) {
+        hash.update(`\nbase ${dir} ${objectId('HEAD^1', dir, cwd)}`);
+    }
+    return hash.digest('hex');
 }
 
 /** The URL recorded by an earlier passing run, or null when there is no record. */
@@ -218,6 +283,79 @@ export function readPassedMarker(path) {
     if (!path || !existsSync(path)) return null;
     const text = readFileSync(path, 'utf8').trim();
     return text.length > 0 ? text : null;
+}
+
+/** The numeric run id at the end of an Actions run URL. */
+export function parseRunId(url) {
+    const m = /\/actions\/runs\/(\d+)$/.exec(url.trim());
+    if (!m) throw new Error(`not an Actions run URL: ${url}`);
+    return m[1];
+}
+
+/** A GET helper for the GitHub REST API; returns parsed JSON, or text when `text` is set. */
+export function githubApi(token, apiUrl = 'https://api.github.com') {
+    return async (path, { text = false } = {}) => {
+        const res = await fetch(`${apiUrl}${path}`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+        });
+        if (!res.ok) throw new Error(`GET ${path} returned HTTP ${res.status}`);
+        return text ? res.text() : res.json();
+    };
+}
+
+/** Throw unless the run is a `pull_request` run of this workflow for PR `prNumber`. */
+function assertRunIsThisPrsTier(run, prNumber) {
+    if (run.path !== WORKFLOW_PATH) throw new Error(`the recorded run is of ${run.path}, not ${WORKFLOW_PATH}`);
+    if (run.event !== 'pull_request') throw new Error(`the recorded run was a ${run.event} run`);
+    if (!(run.pull_requests ?? []).some((p) => p.number === prNumber)) {
+        throw new Error(`the recorded run is not for PR #${prNumber}`);
+    }
+}
+
+/** Throw unless the run's tier job succeeded and its changes job logged `fingerprint`. */
+async function assertRunPassedWithFingerprint(api, repository, runId, fingerprint) {
+    const { jobs } = await api(`/repos/${repository}/actions/runs/${runId}/jobs?per_page=100`);
+    const tier = jobs.find((j) => j.name === TIER_JOB_NAME);
+    if (tier?.conclusion !== 'success') throw new Error(`its tier job concluded ${tier?.conclusion ?? 'missing'}`);
+    const changes = jobs.find((j) => j.name === CHANGES_JOB_NAME);
+    if (!changes) throw new Error(`it has no "${CHANGES_JOB_NAME}" job`);
+    const log = await api(`/repos/${repository}/actions/jobs/${changes.id}/logs`, { text: true });
+    const logged = log.split('\n').some((line) => line.trimEnd().endsWith(`${FINGERPRINT_LOG_PREFIX}${fingerprint}`));
+    if (!logged) throw new Error('its fingerprint differs from this run');
+}
+
+/**
+ * Throw unless, at the PR head `headSha` the recorded run tested, the PR had not changed any of
+ * `TRUSTED_FILES`, or still carries the same version of each now (so the change is in the final
+ * diff a reviewer sees). Fetches `headSha` when it is not present locally.
+ */
+export function assertTrustedFilesUnchangedByPr(headSha, cwd) {
+    try {
+        git(['cat-file', '-e', `${headSha}^{commit}`], cwd);
+    } catch {
+        git(['fetch', '--quiet', '--no-tags', 'origin', headSha], cwd);
+    }
+    const mergeBase = git(['merge-base', headSha, 'HEAD^1'], cwd).trim();
+    const touched = git(['diff', '--name-only', '--no-renames', mergeBase, headSha, '--', ...TRUSTED_FILES], cwd).trim();
+    if (touched === '') return;
+    for (const file of TRUSTED_FILES) {
+        if (objectId(headSha, file, cwd) !== objectId('HEAD^2', file, cwd)) {
+            throw new Error(`at that run the PR had a version of ${file} it no longer has`);
+        }
+    }
+}
+
+/**
+ * Verify a pass record before trusting it: resolves when run `runId` is a passing run of this
+ * workflow for PR `prNumber` that logged `fingerprint`, under workflow code the PR had not
+ * altered; rejects with the reason otherwise.
+ */
+export async function verifyPassRecord({ runId, fingerprint, prNumber, repository, api, cwd = process.cwd() }) {
+    if (!fingerprint) throw new Error('this run has no fingerprint');
+    const run = await api(`/repos/${repository}/actions/runs/${runId}`);
+    assertRunIsThisPrsTier(run, prNumber);
+    await assertRunPassedWithFingerprint(api, repository, runId, fingerprint);
+    assertTrustedFilesUnchangedByPr(run.head_sha, cwd);
 }
 
 /** Parse `--name=value` flags. */
@@ -237,7 +375,7 @@ export function formatSummary(decision) {
         lines.push(
             `**Skipped.** These exact PR changes already passed the tier: ${decision.passedRun}`,
             '',
-            'The base branch has moved since, but not in any file this PR changes. A new commit to the PR, or a base change to one of its files, runs the tier again; it also runs in full when this merges.',
+            'The base branch has moved since, but not in any file this PR changes, nor in migrations, metadata or test definitions. A new commit to the PR, or such a base change, runs the tier again; it also runs in full when this merges.',
         );
     } else if (decision.run) {
         lines.push('**Runs.** Why:', '');
@@ -255,26 +393,57 @@ export function formatSummary(decision) {
             'The tier still runs in full when this merges.',
         );
     }
+    if (decision.notes?.length) {
+        lines.push('', ...decision.notes.map((n) => `Note: ${n}`));
+    }
     return lines.join('\n') + '\n';
 }
 
-/** Compute the decision from the CLI inputs; any failure becomes a "run" decision. */
-function decideFromFiles(args) {
+/** The GitHub API client for this run, or null when there is no token to call it with. */
+function apiFromEnvironment() {
+    const token = process.env.GITHUB_TOKEN;
+    return token ? githubApi(token, process.env.GITHUB_API_URL) : null;
+}
+
+/**
+ * The verified pass record, if any: `{ passedRun }` when it checks out, `{ note }` explaining
+ * why a record that was found is not trusted, or `{}` when there is none.
+ */
+export async function checkPassRecord(args, root, api = apiFromEnvironment()) {
+    const url = readPassedMarker(args['passed-marker']);
+    if (url === null) return {};
     try {
-        const passedRun = readPassedMarker(args['passed-marker']);
-        if (passedRun !== null) {
-            return { run: false, reasons: [], unbuiltPackages: [], passedRun };
-        }
-        if (!args.changed || !args['build-graph']) {
-            throw new Error('usage: --changed=<file> --build-graph=<file> [--root=<dir>]');
-        }
-        const root = args.root ?? process.cwd();
-        const changed = readFileSync(args.changed, 'utf8').split('\n');
+        if (!api) throw new Error('GITHUB_TOKEN is not set');
+        await verifyPassRecord({
+            runId: parseRunId(url),
+            fingerprint: args.fingerprint,
+            prNumber: Number(args.pr),
+            repository: process.env.GITHUB_REPOSITORY,
+            api,
+            cwd: root,
+        });
+        return { passedRun: url };
+    } catch (e) {
+        return { note: `a pass record (${url}) was found but not trusted: ${e.message}` };
+    }
+}
+
+/** Compute the decision from the CLI inputs; any failure becomes a "run" decision. */
+async function decideFromInputs(args) {
+    const root = args.root ?? process.cwd();
+    const record = await checkPassRecord(args, root);
+    if (record.passedRun) {
+        return { run: false, reasons: [], unbuiltPackages: [], passedRun: record.passedRun };
+    }
+    const notes = record.note ? [record.note] : [];
+    try {
+        if (!args['build-graph']) throw new Error('usage: --build-graph=<file> is required');
+        const changed = args.changed ? readFileSync(args.changed, 'utf8').split('\n') : changedPathsOfMergeCommit(root);
         const builtDirs = builtPackageDirs(JSON.parse(readFileSync(args['build-graph'], 'utf8')));
-        return decide(changed, builtDirs, (dir) => existsSync(join(root, dir, 'package.json')));
+        return { ...decide(changed, builtDirs, (dir) => existsSync(join(root, dir, 'package.json'))), notes };
     } catch (e) {
         console.log(`::warning::Integration tier selection failed (${e.message}); running the tier.`);
-        return { run: true, reasons: [`selection failed: ${e.message}`], unbuiltPackages: [] };
+        return { run: true, reasons: [`selection failed: ${e.message}`], unbuiltPackages: [], notes };
     }
 }
 
@@ -290,12 +459,12 @@ function writeFingerprint() {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `fingerprint=${fingerprint}\n`);
 }
 
-function main() {
+async function main() {
     if (process.argv[2] === 'fingerprint') {
         writeFingerprint();
         return;
     }
-    const decision = decideFromFiles(parseArgs(process.argv.slice(2)));
+    const decision = await decideFromInputs(parseArgs(process.argv.slice(2)));
     const summary = formatSummary(decision);
     console.log(summary);
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `integration=${decision.run}\n`);
@@ -303,5 +472,5 @@ function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-    main();
+    await main();
 }

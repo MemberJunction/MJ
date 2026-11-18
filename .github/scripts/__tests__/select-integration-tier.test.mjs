@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,14 @@ import {
     decide,
     formatSummary,
     computeFingerprint,
+    changedPathsOfMergeCommit,
     readPassedMarker,
+    parseRunId,
+    verifyPassRecord,
+    checkPassRecord,
+    WORKFLOW_PATH,
+    TIER_JOB_NAME,
+    CHANGES_JOB_NAME,
 } from '../select-integration-tier.mjs';
 
 const SCRIPTS_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -81,6 +88,9 @@ describe('decide — fixture PRs', () => {
         '.github/workflows/integration.yml',
         '.github/scripts/wait-for-mjapi.sh',
         '.github/scripts/select-integration-tier.mjs',
+        'package.json',
+        'pnpm-workspace.yaml',
+        '.npmrc',
     ])('runs when a UI-only PR also changes %s', (path) => {
         const d = decide(['packages/Angular/Generic/artifacts/src/a.ts', path], BUILT, hasPackageJson);
         expect(d.run).toBe(true);
@@ -164,7 +174,9 @@ describe('formatSummary', () => {
 
 /**
  * A throwaway repo shaped like a GitHub PR run: `base` and `pr` branches, and `mergeRef()`
- * checks out a fresh merge of `pr` into `base` — parent 1 the base, as on refs/pull/N/merge.
+ * checks out a fresh merge of `pr` into `base` — parent 1 the base, as on refs/pull/N/merge —
+ * and returns its fingerprint. The root commit carries the files the selection cares about:
+ * the trusted workflow and script, a migration, and a built and an unbuilt package.
  */
 function prRepo() {
     const dir = mkdtempSync(join(tmpdir(), 'select-tier-git-'));
@@ -174,16 +186,31 @@ function prRepo() {
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'pipe'],
         });
-    const write = (file, text) => writeFileSync(join(dir, file), text);
+    const write = (file, text) => {
+        mkdirSync(dirname(join(dir, file)), { recursive: true });
+        writeFileSync(join(dir, file), text);
+    };
     const commit = (branch, file, text) => {
         git('checkout', '-q', branch);
         write(file, text);
         git('add', file);
         git('commit', '-q', '-m', `${branch}: ${file}`);
     };
+    const move = (branch, from, to) => {
+        git('checkout', '-q', branch);
+        mkdirSync(dirname(join(dir, to)), { recursive: true });
+        git('mv', from, to);
+        git('commit', '-q', '-m', `${branch}: move ${from}`);
+    };
     git('init', '-q', '-b', 'base');
     write('pr-file.txt', 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\n');
     write('other.txt', 'other\n');
+    write(WORKFLOW_PATH, 'name: Integration Tier\n');
+    write('.github/scripts/select-integration-tier.mjs', '// selector\n');
+    write('migrations/V1__init.sql', 'SELECT 1;\n');
+    write('packages/MJCore/package.json', '{"name":"@memberjunction/core"}\n');
+    write('packages/MJCore/src/register.ts', 'export const x = 1;\n');
+    write('packages/Angular/X/package.json', '{"name":"ng-x"}\n');
     git('add', '.');
     git('commit', '-q', '-m', 'root');
     git('branch', 'pr');
@@ -193,18 +220,20 @@ function prRepo() {
         git('merge', '-q', '--no-ff', '--no-edit', 'pr');
         return computeFingerprint(dir);
     };
-    return { dir, git, commit, mergeRef };
+    const prHead = () => git('rev-parse', 'pr').trim();
+    return { dir, git, commit, move, mergeRef, prHead };
 }
 
-describe('computeFingerprint', () => {
-    const repos = [];
-    afterEach(() => repos.splice(0).forEach((r) => rmSync(r.dir, { recursive: true, force: true })));
-    const repo = () => {
-        const r = prRepo();
-        repos.push(r);
-        return r;
-    };
+/** Repos created by a test, removed after it. */
+const repos = [];
+afterEach(() => repos.splice(0).forEach((r) => rmSync(r.dir, { recursive: true, force: true })));
+const repo = () => {
+    const r = prRepo();
+    repos.push(r);
+    return r;
+};
 
+describe('computeFingerprint', () => {
     it('is unchanged by a catch-up merge where the base moved only in files the PR does not touch', () => {
         const r = repo();
         const before = r.mergeRef();
@@ -219,6 +248,16 @@ describe('computeFingerprint', () => {
         expect(r.mergeRef()).not.toBe(before);
     });
 
+    it.each(['migrations/V2__new.sql', 'metadata/entities/.new.json', 'metadata-optional/integration-test/tests/.it999.json'])(
+        'changes when the base adds %s, which the tier migrates or pushes before testing',
+        (file) => {
+            const r = repo();
+            const before = r.mergeRef();
+            r.commit('base', file, 'new on the base branch\n');
+            expect(r.mergeRef()).not.toBe(before);
+        },
+    );
+
     it('changes when the author adds a commit', () => {
         const r = repo();
         const before = r.mergeRef();
@@ -230,6 +269,17 @@ describe('computeFingerprint', () => {
         const r = repo();
         r.git('checkout', '-q', 'pr');
         expect(() => computeFingerprint(r.dir)).toThrow(/expected the two-parent PR merge commit/);
+    });
+});
+
+describe('changedPathsOfMergeCommit', () => {
+    it('lists both paths of a file moved out of a package, so the package it left counts as changed', () => {
+        const r = repo();
+        r.move('pr', 'packages/MJCore/src/register.ts', 'packages/Angular/X/src/register.ts');
+        r.mergeRef();
+        const paths = changedPathsOfMergeCommit(r.dir);
+        expect(paths).toContain('packages/MJCore/src/register.ts');
+        expect(paths).toContain('packages/Angular/X/src/register.ts');
     });
 });
 
@@ -248,39 +298,155 @@ describe('readPassedMarker', () => {
     });
 });
 
+describe('parseRunId', () => {
+    it('reads the id from an Actions run URL and rejects anything else', () => {
+        expect(parseRunId('https://github.com/MemberJunction/MJ/actions/runs/44201461128\n')).toBe('44201461128');
+        expect(() => parseRunId('https://example.test/runs/1')).toThrow(/not an Actions run URL/);
+    });
+});
+
+describe('verifyPassRecord', () => {
+    const PR = 7;
+
+    /** A fake API serving one recorded run, its jobs and its changes-job log. */
+    function fakeApi({ run, jobs, log }) {
+        return async (path, { text = false } = {}) => {
+            if (path.endsWith('/logs')) return text ? log : JSON.parse(log);
+            if (path.includes('/jobs')) return { jobs };
+            return run;
+        };
+    }
+
+    /** The API view of an honest passing run at PR head `headSha` that logged `fingerprint`. */
+    function honestRun(headSha, fingerprint, overrides = {}) {
+        return {
+            run: { path: WORKFLOW_PATH, event: 'pull_request', pull_requests: [{ number: PR }], head_sha: headSha, ...overrides.run },
+            jobs: overrides.jobs ?? [
+                { name: CHANGES_JOB_NAME, id: 11, conclusion: 'success' },
+                { name: TIER_JOB_NAME, id: 12, conclusion: 'success' },
+            ],
+            log: overrides.log ?? `2026-11-17T00:00:00.0000000Z PR change fingerprint: ${fingerprint}\n`,
+        };
+    }
+
+    const verify = (r, fingerprint, api) => verifyPassRecord({ runId: '1', fingerprint, prNumber: PR, repository: 'o/r', api, cwd: r.dir });
+
+    it('trusts an honest passing run of the same changes after an unrelated catch-up merge', async () => {
+        const r = repo();
+        const fingerprint = r.mergeRef();
+        const head = r.prHead();
+        r.commit('base', 'other.txt', 'moved on the base branch\n');
+        expect(r.mergeRef()).toBe(fingerprint);
+        await expect(verify(r, fingerprint, fakeApi(honestRun(head, fingerprint)))).resolves.toBeUndefined();
+    });
+
+    it.each([
+        ['a run of another workflow', { run: { path: '.github/workflows/test.yml' } }, /not \.github\/workflows\/integration\.yml/],
+        ['a push run', { run: { event: 'push' } }, /was a push run/],
+        ['a run for another PR', { run: { pull_requests: [{ number: 8 }] } }, /not for PR #7/],
+        ['a run whose tier job failed', { jobs: [{ name: CHANGES_JOB_NAME, id: 11 }, { name: TIER_JOB_NAME, id: 12, conclusion: 'failure' }] }, /concluded failure/],
+        ['a run that logged another fingerprint', { log: 'PR change fingerprint: 0000\n' }, /fingerprint differs/],
+    ])('rejects %s', async (_label, overrides, reason) => {
+        const r = repo();
+        const fingerprint = r.mergeRef();
+        await expect(verify(r, fingerprint, fakeApi(honestRun(r.prHead(), fingerprint, overrides)))).rejects.toThrow(reason);
+    });
+
+    it('rejects a record from a run where the PR had changed the workflow, once that change is dropped', async () => {
+        const r = repo();
+        r.commit('pr', WORKFLOW_PATH, 'name: Integration Tier\n# tampered: tier job just echoes\n');
+        const tamperedHead = r.prHead();
+        r.commit('pr', WORKFLOW_PATH, 'name: Integration Tier\n');
+        const fingerprint = r.mergeRef();
+        // The tampered run could have logged (and cached) any fingerprint, including this one.
+        await expect(verify(r, fingerprint, fakeApi(honestRun(tamperedHead, fingerprint)))).rejects.toThrow(
+            /had a version of \.github\/workflows\/integration\.yml it no longer has/,
+        );
+    });
+
+    it('trusts a run where the PR changed the workflow when the PR still carries that version', async () => {
+        const r = repo();
+        r.commit('pr', WORKFLOW_PATH, 'name: Integration Tier\n# reviewed change\n');
+        const fingerprint = r.mergeRef();
+        await expect(verify(r, fingerprint, fakeApi(honestRun(r.prHead(), fingerprint)))).resolves.toBeUndefined();
+    });
+
+    it('checkPassRecord skips only on a record that verifies, and says why it distrusts one', async () => {
+        const r = repo();
+        const fingerprint = r.mergeRef();
+        const marker = join(r.dir, '..', `${r.dir.split('/').pop()}-run.txt`);
+        writeFileSync(marker, 'https://github.com/o/r/actions/runs/1\n');
+        try {
+            const args = { 'passed-marker': marker, fingerprint, pr: String(PR) };
+            await expect(checkPassRecord(args, r.dir, fakeApi(honestRun(r.prHead(), fingerprint)))).resolves.toEqual({
+                passedRun: 'https://github.com/o/r/actions/runs/1',
+            });
+            const pushRun = fakeApi(honestRun(r.prHead(), fingerprint, { run: { event: 'push' } }));
+            const distrusted = await checkPassRecord(args, r.dir, pushRun);
+            expect(distrusted.passedRun).toBeUndefined();
+            expect(distrusted.note).toMatch(/was found but not trusted: the recorded run was a push run/);
+        } finally {
+            rmSync(marker, { force: true });
+        }
+    });
+
+    it('rejects when this run has no fingerprint, the API fails, or the run head cannot be fetched', async () => {
+        const r = repo();
+        const fingerprint = r.mergeRef();
+        await expect(verify(r, '', fakeApi(honestRun(r.prHead(), fingerprint)))).rejects.toThrow(/no fingerprint/);
+        const failing = async () => {
+            throw new Error('GET /x returned HTTP 403');
+        };
+        await expect(verify(r, fingerprint, failing)).rejects.toThrow(/HTTP 403/);
+        await expect(verify(r, fingerprint, fakeApi(honestRun('0'.repeat(40), fingerprint)))).rejects.toThrow();
+    });
+});
+
 describe('CLI', () => {
     let dir;
     afterEach(() => dir && rmSync(dir, { recursive: true, force: true }));
 
+    /** Run the selection in `cwd` with `args`; return the output value and the summary. */
+    function spawnSelect(cwd, args, outDir) {
+        const output = join(outDir, 'out');
+        const summary = join(outDir, 'summary.md');
+        writeFileSync(output, '');
+        const r = spawnSync(process.execPath, [SCRIPT, ...args], {
+            cwd,
+            encoding: 'utf8',
+            env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary, GITHUB_TOKEN: '', GITHUB_REPOSITORY: 'o/r' },
+        });
+        expect(r.status).toBe(0);
+        return { value: readFileSync(output, 'utf8').trim(), summary: readFileSync(summary, 'utf8') };
+    }
+
     /** Run the script against a fixture changed-file list and build graph; return its output value. */
     function runCli(changed, graph, marker) {
         dir = mkdtempSync(join(tmpdir(), 'select-tier-'));
-        const output = join(dir, 'out');
-        const summary = join(dir, 'summary.md');
-        writeFileSync(output, '');
         writeFileSync(join(dir, 'changed.txt'), changed.join('\n'));
         if (graph !== undefined) writeFileSync(join(dir, 'graph.json'), graph);
         if (marker !== undefined) writeFileSync(join(dir, 'run.txt'), marker);
-        const r = spawnSync(
-            process.execPath,
+        const { value, summary } = spawnSelect(
+            REPO_ROOT,
             [
-                SCRIPT,
                 `--changed=${join(dir, 'changed.txt')}`,
                 `--build-graph=${join(dir, 'graph.json')}`,
                 `--root=${REPO_ROOT}`,
                 `--passed-marker=${join(dir, 'run.txt')}`,
+                '--fingerprint=abc',
+                '--pr=7',
             ],
-            { encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary } },
+            dir,
         );
-        expect(r.status).toBe(0);
-        runCli.summary = readFileSync(summary, 'utf8');
-        return readFileSync(output, 'utf8').trim();
+        runCli.summary = summary;
+        return value;
     }
 
-    it('writes integration=false when these changes already passed, even for a core change', () => {
+    it('does not trust a pass record it cannot verify: the tier runs and the summary says why', () => {
         const graph = JSON.stringify(dryRun(['packages/MJCore', 'packages/MJAPI']));
-        expect(runCli(['packages/MJCore/src/index.ts'], graph, 'https://example.test/runs/42\n')).toBe('integration=false');
-        expect(runCli.summary).toContain('already passed the tier: https://example.test/runs/42');
+        const url = 'https://github.com/o/r/actions/runs/42';
+        expect(runCli(['packages/MJCore/src/index.ts'], graph, `${url}\n`)).toBe('integration=true');
+        expect(runCli.summary).toContain(`a pass record (${url}) was found but not trusted: GITHUB_TOKEN is not set`);
     });
 
     it('applies the package rule when the pass record is empty', () => {
@@ -288,23 +454,30 @@ describe('CLI', () => {
         expect(runCli(['packages/MJCore/src/index.ts'], graph, '')).toBe('integration=true');
     });
 
+    it('takes the changed files from the merge commit, so a file moved out of a built package runs the tier', () => {
+        const r = repo();
+        r.move('pr', 'packages/MJCore/src/register.ts', 'packages/Angular/X/src/register.ts');
+        r.mergeRef();
+        dir = mkdtempSync(join(tmpdir(), 'select-tier-'));
+        writeFileSync(join(dir, 'graph.json'), JSON.stringify(dryRun(['packages/MJCore'])));
+        const { value, summary } = spawnSelect(r.dir, [`--build-graph=${join(dir, 'graph.json')}`, `--root=${r.dir}`], dir);
+        expect(value).toBe('integration=true');
+        expect(summary).toContain('packages/MJCore is built by the integration tier');
+    });
+
     it('fingerprint mode writes the merge commit fingerprint', () => {
-        const r = prRepo();
-        dir = r.dir;
+        const r = repo();
         const expected = r.mergeRef();
-        const output = join(dir, '..', `${dir.split('/').pop()}-out`);
+        dir = mkdtempSync(join(tmpdir(), 'select-tier-fp-'));
+        const output = join(dir, 'out');
         writeFileSync(output, '');
-        try {
-            const res = spawnSync(process.execPath, [SCRIPT, 'fingerprint'], {
-                cwd: dir,
-                encoding: 'utf8',
-                env: { ...process.env, GITHUB_OUTPUT: output },
-            });
-            expect(res.status).toBe(0);
-            expect(readFileSync(output, 'utf8')).toBe(`fingerprint=${expected}\n`);
-        } finally {
-            rmSync(output, { force: true });
-        }
+        const res = spawnSync(process.execPath, [SCRIPT, 'fingerprint'], {
+            cwd: r.dir,
+            encoding: 'utf8',
+            env: { ...process.env, GITHUB_OUTPUT: output },
+        });
+        expect(res.status).toBe(0);
+        expect(readFileSync(output, 'utf8')).toBe(`fingerprint=${expected}\n`);
     });
 
     it('fingerprint mode writes an empty fingerprint, exit 0, outside a merge commit', () => {
