@@ -4,7 +4,7 @@ import { PublicPageContext } from '../public-page-context';
 function makeContext(navigate: (url: string) => void = () => undefined): PublicPageContext {
   return new PublicPageContext({
     Slug: 'lumen',
-    Path: '/p/lumen/plans',
+    SubPath: 'plans',
     Search: '?plan=team&ref=ad',
     MJAPIURL: 'https://host/api',
     Navigate: navigate,

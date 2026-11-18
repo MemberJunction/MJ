@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ReadConfiguredPublicPages, type OpenAppPublicPageEntry } from './manifest.js';
+import { PUBLIC_PAGE_SLUG_PATTERN } from '@memberjunction/open-app-engine';
+import { ReadConfiguredPublicPages, ReadFileIfExists, type OpenAppPublicPageEntry } from './manifest.js';
 
 /** Folder in the site folder that holds one HTML file per page. */
 const PUBLIC_PAGE_HTML_FOLDER = 'public-pages';
@@ -11,9 +12,6 @@ const PUBLIC_PAGE_PATH_PREFIX = '/p/';
 
 /** The Azure Static Web Apps config file in the site folder. */
 const STATIC_WEB_APP_CONFIG_FILE = 'staticwebapp.config.json';
-
-/** The slug rule of `publicPages` in mj-app.json: lowercase words joined by single hyphens. */
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** A JSON value, as read from a config file. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
@@ -45,7 +43,7 @@ function escapeHtml(text: string): string {
 /** The enabled pages. Throws on a slug that does not follow the slug rule, because the slug is a file name and an address. */
 function enabledPages(entries: OpenAppPublicPageEntry[]): OpenAppPublicPageEntry[] {
     const pages = entries.filter((entry) => entry.Enabled !== false);
-    const invalid = pages.find((page) => !SLUG_PATTERN.test(page.Slug));
+    const invalid = pages.find((page) => !PUBLIC_PAGE_SLUG_PATTERN.test(page.Slug));
     if (invalid) {
         throw new Error(`Public page slug '${invalid.Slug}' of app '${invalid.AppName}' must be lowercase letters and digits joined by single hyphens.`);
     }
@@ -78,15 +76,13 @@ export function BuildPublicPageHtml(indexHtml: string, page: OpenAppPublicPageEn
     if (!page.Title && !page.Description) {
         return indexHtml;
     }
-    let html = indexHtml;
-    if (page.Title) {
-        const title = `<title>${escapeHtml(page.Title)}</title>`;
-        html = /<title>[\s\S]*?<\/title>/i.test(html) ? html.replace(/<title>[\s\S]*?<\/title>/i, () => title) : html.replace(/<\/head>/i, () => `${title}\n</head>`);
-    }
-    const tags = previewTags(page).map((tag) => `  ${tag}`).join('\n');
-    return /<\/title>/i.test(html)
-        ? html.replace(/<\/title>/i, () => `</title>\n${tags}`)
-        : html.replace(/<\/head>/i, () => `${tags}\n</head>`);
+    const titlePattern = /<title>[\s\S]*?<\/title>/i;
+    const currentTitle = indexHtml.match(titlePattern)?.[0];
+    const title = page.Title ? `<title>${escapeHtml(page.Title)}</title>` : currentTitle;
+    const head = [...(title ? [title] : []), ...previewTags(page).map((tag) => `  ${tag}`)].join('\n');
+    return currentTitle
+        ? indexHtml.replace(titlePattern, () => head)
+        : indexHtml.replace(/<\/head>/i, () => `${head}\n</head>`);
 }
 
 /**
@@ -95,11 +91,10 @@ export function BuildPublicPageHtml(indexHtml: string, page: OpenAppPublicPageEn
  * @returns the number of files written
  */
 export function WritePublicPageHtmlFiles(siteDir: string, entries: OpenAppPublicPageEntry[]): number {
-    const indexPath = join(siteDir, 'index.html');
-    if (!existsSync(indexPath)) {
+    const indexHtml = ReadFileIfExists(join(siteDir, 'index.html'));
+    if (indexHtml === null) {
         throw new Error(`No index.html in ${siteDir}. Build MJ Explorer first.`);
     }
-    const indexHtml = readFileSync(indexPath, 'utf-8');
     const pages = enabledPages(entries);
     if (pages.length > 0) {
         mkdirSync(join(siteDir, PUBLIC_PAGE_HTML_FOLDER), { recursive: true });
@@ -139,10 +134,11 @@ function isRoute(value: JsonValue): value is StaticWebAppRoute {
  */
 export function WriteStaticWebAppRoutes(siteDir: string, entries: OpenAppPublicPageEntry[]): boolean {
     const configPath = join(siteDir, STATIC_WEB_APP_CONFIG_FILE);
-    if (!existsSync(configPath)) {
+    const configText = ReadFileIfExists(configPath);
+    if (configText === null) {
         return false;
     }
-    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as JsonObject;
+    const config = JSON.parse(configText) as JsonObject;
     const current = config['routes'];
     const routes = Array.isArray(current) ? current.filter(isRoute) : [];
     const updated = ApplyPublicPageRoutes(routes, entries);

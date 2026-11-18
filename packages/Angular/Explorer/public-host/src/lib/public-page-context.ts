@@ -1,12 +1,11 @@
-import { signal, type Signal } from '@angular/core';
+import { Directive, inject, signal, type Signal } from '@angular/core';
 import type { PublicLoginScreen } from '@memberjunction/theme-engine';
-import { ReadPublicPageSubPath } from './public-path';
-import { BuildSignInURL } from './public-host-urls';
+import { BuildSignInURL } from './public-pages';
 
 /** What the public host knows when it creates a page's context. */
 export interface PublicPageContextConfig {
   Slug: string;
-  Path: string;
+  SubPath: string;
   Search: string;
   MJAPIURL: string;
   /** Opens a URL in the current tab. */
@@ -31,7 +30,7 @@ export class PublicPageContext {
 
   constructor(config: PublicPageContextConfig) {
     this.Slug = config.Slug;
-    this.SubPath = ReadPublicPageSubPath(config.Path);
+    this.SubPath = config.SubPath;
     this.QueryParams = new URLSearchParams(config.Search);
     this.MJAPIURL = config.MJAPIURL;
     this.navigate = config.Navigate;
@@ -56,4 +55,14 @@ export class PublicPageContext {
   public StartSignIn(): void {
     this.navigate(BuildSignInURL());
   }
+}
+
+/**
+ * Base class for a public page from an Open App. The page is a standalone component that the
+ * public host renders at `/p/<slug>` for visitors who are not signed in.
+ */
+@Directive()
+export abstract class BasePublicPage {
+  /** The public host's services: slug, query, MJAPI URL, brand and the sign-in link. */
+  protected readonly Context = inject(PublicPageContext);
 }

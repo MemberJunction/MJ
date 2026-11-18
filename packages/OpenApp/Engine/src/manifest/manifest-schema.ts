@@ -223,14 +223,14 @@ const templateUserSchema = z.object({
 // ── Public Pages ──────────────────────────────────────────
 
 /** Public page slug: lowercase alphanumeric words joined by single hyphens. */
-const publicPageSlugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const PUBLIC_PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * A page the app serves before sign-in, at `/p/<slug>` in the host.
  * `package` must be a browser-capable package the app declares in `packages.client` or `packages.shared`.
  */
 const publicPageSchema = z.object({
-    slug: z.string().max(64).regex(publicPageSlugRegex, 'slug must be lowercase letters and digits, words joined by single hyphens'),
+    slug: z.string().max(64).regex(PUBLIC_PAGE_SLUG_PATTERN, 'slug must be lowercase letters and digits, words joined by single hyphens'),
     package: z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     export: z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier'),
     /** The page title, and the title of its link preview. */

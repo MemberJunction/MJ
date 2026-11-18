@@ -7,7 +7,7 @@
  */
 
 // Manifest schema and validation
-export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-schema.js';
+export { MjAppManifestSchema, mjAppManifestSchema, PUBLIC_PAGE_SLUG_PATTERN } from './manifest/manifest-schema.js';
 export type { MJAppManifest, ManifestPackageEntry, ManifestPublicPage, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';

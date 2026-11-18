@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import type { z } from 'zod';
 import { dirname, resolve } from 'node:path';
-import { GetOptionalConfig } from '../../config.js';
+import { GetOptionalConfig, type PublicPageEntrySchema } from '../../config.js';
 
 /** A client dynamic-package entry as read from mj.config `dynamicPackages.client`. */
 export interface OpenAppClientEntry {
@@ -10,17 +11,7 @@ export interface OpenAppClientEntry {
 }
 
 /** A public page entry as read from mj.config `publicPages`. */
-export interface OpenAppPublicPageEntry {
-    AppName: string;
-    Slug: string;
-    PackageName: string;
-    ExportName: string;
-    /** Page title for the page's HTML and link preview */
-    Title?: string;
-    /** Link preview text */
-    Description?: string;
-    Enabled?: boolean;
-}
+export type OpenAppPublicPageEntry = z.input<typeof PublicPageEntrySchema>;
 
 const OPEN_APP_BOOTSTRAP_BEGIN = '// ===== BEGIN Open App client bootstrap (managed by `mj app` / `mj codegen manifest`) =====';
 const OPEN_APP_BOOTSTRAP_END = '// ===== END Open App client bootstrap =====';
@@ -162,6 +153,18 @@ export function BuildPublicPagesFile(entries: OpenAppPublicPageEntry[]): string 
     ].join('\n');
 }
 
+/** Reads a text file, or returns null when there is no file at `filePath`. */
+export function ReadFileIfExists(filePath: string): string | null {
+    try {
+        return readFileSync(filePath, 'utf-8');
+    } catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+            return null;
+        }
+        throw error;
+    }
+}
+
 /**
  * Writes the public pages file at `filePath`, creating its folder when missing.
  * Leaves the file untouched when its content is already current.
@@ -170,7 +173,7 @@ export function BuildPublicPagesFile(entries: OpenAppPublicPageEntry[]): string 
  */
 export function WritePublicPagesFile(filePath: string, entries: OpenAppPublicPageEntry[]): boolean {
     const content = BuildPublicPagesFile(entries);
-    if (existsSync(filePath) && readFileSync(filePath, 'utf-8') === content) {
+    if (ReadFileIfExists(filePath) === content) {
         return false;
     }
     mkdirSync(dirname(filePath), { recursive: true });

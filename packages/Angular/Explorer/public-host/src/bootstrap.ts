@@ -5,6 +5,5 @@
  * @module @memberjunction/ng-public-host/bootstrap
  */
 
-export * from './lib/try-start-public-page';
-export * from './lib/public-page-entry';
-export { IsPublicPagePath, PUBLIC_PAGE_PATH_PREFIX } from './lib/public-path';
+export { TryStartPublicPage } from './lib/public-pages';
+export type { PublicHostConfig, PublicHostEnvironment, PublicPageEntry } from './lib/public-pages';
