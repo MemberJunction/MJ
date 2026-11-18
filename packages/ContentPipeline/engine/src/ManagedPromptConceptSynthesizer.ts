@@ -18,6 +18,7 @@ import {
     SynthesizeConceptResult,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
+    UNRANKED_AUTHORITY_LABEL,
 } from '@memberjunction/content-pipeline-base';
 
 /** Primary registration key for the deterministic concept synthesizer. */
@@ -48,7 +49,10 @@ export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
 
         // Chunks are already sorted highest authority first, but guarantee deterministic ordering
         const sortedChunks = [...cluster.Chunks].sort((a, b) => {
-            const tierDiff = GetAuthorityTierRank(b.AuthorityTier) - GetAuthorityTierRank(a.AuthorityTier);
+            const tiers = request.AuthorityTiers ?? [];
+            const tierDiff =
+                GetAuthorityTierRank(b.AuthorityTierID ?? b.AuthorityTier, tiers) -
+                GetAuthorityTierRank(a.AuthorityTierID ?? a.AuthorityTier, tiers);
             if (tierDiff !== 0) {
                 return tierDiff;
             }
@@ -250,14 +254,14 @@ export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
 
         sections.push(
             `### Authority & Provenance\n` +
-                `- **Highest Authority Tier**: \`${cluster.HighestAuthorityTier}\`\n` +
+                `- **Highest Authority Tier**: \`${cluster.HighestAuthorityTier ?? UNRANKED_AUTHORITY_LABEL}\`\n` +
                 `- **Concept Type**: \`${cluster.InferredConceptType}\`\n` +
                 `- **Supporting Chunks**: ${sortedChunks.length}`,
         );
 
         const topPassages = sortedChunks.slice(0, 3).map((chunk, idx) => {
             const headingLabel = chunk.HeadingPath ? ` (${chunk.HeadingPath})` : '';
-            const tierLabel = chunk.AuthorityTier ?? cluster.HighestAuthorityTier;
+            const tierLabel = chunk.AuthorityTier ?? cluster.HighestAuthorityTier ?? UNRANKED_AUTHORITY_LABEL;
             return `${idx + 1}. **[${tierLabel}]${headingLabel}**: ${this.buildExcerpt(chunk.Text, 300)}`;
         });
 

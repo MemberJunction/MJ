@@ -18,19 +18,25 @@ import {
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
     MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJQueryEntity,
 } from '@memberjunction/core-entities';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     ExistingGraphConceptSeed,
+    FindAuthorityTier,
     GraphAuthorityTier,
     GraphAuthorityTierDescriptor,
     GraphConceptType,
     GraphConceptTypeDescriptor,
+    GraphTypeDescriptor,
+    GroundingModeFromGraphTypeValue,
     ResolvedGraphOverlayConfig,
     SchemaGroundingTarget,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
+    TaxonomyModeFromGraphTypeValue,
 } from '@memberjunction/content-pipeline-base';
 import { WhereEqual } from '../Filters.js';
 import type { GraphStageUpsertStatus, IGraphOverlayStore } from './GraphStage.js';
@@ -72,9 +78,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         for (const row of result.Results ?? []) {
             this.conceptIDByNameCache.set(`${graphID.toLowerCase()}::${row.Name.trim().toLowerCase()}`, row.ID);
             const parsedSynonyms = row.Synonyms ? (SafeJSONParse<string[]>(row.Synonyms) ?? []) : [];
-            const tierName = row.AuthorityTierID
-                ? (tierNameByID.get(row.AuthorityTierID.toLowerCase()) ?? row.AuthorityTier ?? 'Reference')
-                : 'Reference';
+            const tierName = (row.AuthorityTierID ? tierNameByID.get(row.AuthorityTierID.toLowerCase()) : undefined) ?? row.AuthorityTier ?? undefined;
             seeds.push({
                 ConceptID: row.ID,
                 Name: row.Name,
@@ -89,6 +93,48 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             });
         }
         return seeds;
+    }
+
+    /**
+     * The `MJ: Graph Types` row of the graph, with its overlay defaults. Returns `null` when the graph
+     * or its type cannot be read. Two plain reads rather than one subquery, so the filter stays
+     * dialect-neutral.
+     */
+    public async LoadGraphType(
+        graphID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphTypeDescriptor | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const graphResult = await rv.RunView<MJGraphEntity>(
+            { EntityName: 'MJ: Graphs', Fields: ['ID', 'GraphTypeID'], ExtraFilter: WhereEqual({ ID: graphID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const graphTypeID = graphResult.Success ? graphResult.Results?.[0]?.GraphTypeID : undefined;
+        if (!graphTypeID) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph '${graphID}' could not be read: ${graphResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        const typeResult = await rv.RunView<MJGraphTypeEntity>(
+            { EntityName: 'MJ: Graph Types', ExtraFilter: WhereEqual({ ID: graphTypeID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const row = typeResult.Success ? typeResult.Results?.[0] : undefined;
+        if (!row) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph type '${graphTypeID}' could not be read: ${typeResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        return {
+            ID: row.ID,
+            Name: row.Name,
+            Description: row.Description,
+            IsCanon: row.IsCanon,
+            Rank: row.Rank,
+            IconClass: row.IconClass,
+            DefaultAuthorityTierID: row.DefaultAuthorityTierID,
+            DefaultConceptTaxonomyMode: TaxonomyModeFromGraphTypeValue(row.DefaultConceptTaxonomyMode),
+            DefaultGroundingMode: GroundingModeFromGraphTypeValue(row.DefaultGroundingMode),
+        };
     }
 
     public async LoadConceptTypes(
@@ -386,13 +432,11 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         if (concept.AuthorityTierID) {
             return concept.AuthorityTierID;
         }
-        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
-        const norm = concept.AuthorityTier.trim().toLowerCase().replace(/\s+/g, '');
-        const matched = tiers.find((t) => t.Name.trim().toLowerCase().replace(/\s+/g, '') === norm);
-        if (matched) {
-            return matched.ID;
+        if (!concept.AuthorityTier) {
+            return null; // unranked
         }
-        return tiers.find((t) => t.Name.trim().toLowerCase() === 'reference')?.ID ?? null;
+        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
+        return FindAuthorityTier(concept.AuthorityTier, tiers)?.ID ?? null;
     }
 
     private async ensureEdgeTypesLoaded(

@@ -28,6 +28,14 @@ import {
 import type { MJGraphEdgeEntityType, MJGraphEntityType, MJGraphTypeEntityType } from '../generated/entities/__mj';
 import { QueryEngine } from '../engines/QueryEngine';
 import {
+    GraphAccessPolicyRegistry,
+    type BaseGraphEdgeAccessPolicy,
+    type BaseGraphNodeAccessPolicy,
+    type GraphAccessPolicyContext,
+    type GraphNodeAccessDecision,
+    type GraphPolicyNode,
+} from './GraphAccessPolicy';
+import {
     BaseGraphEdgeProvider,
     FormatGraphNodeKey,
     IsGraphDataProvider,
@@ -61,6 +69,11 @@ export const GRAPH_MAX_STORED_EDGES_PER_STEP = 1000;
  * so an API caller cannot enter it; only server code that names this key can.
  */
 export const GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION = 'ContentPipeline.GraphStage.ApproveInferredEdges';
+/**
+ * How deeply access policies may nest (a concept's visibility following its chunks', a chunk's
+ * following its document's). Past this depth every node is hidden, so a cycle cannot recurse forever.
+ */
+const MAX_POLICY_DEPTH = 3;
 /** Per-hop decay applied to best-first path scores, so near nodes outrank far ones. */
 const HOP_DECAY = 0.85;
 
@@ -826,7 +839,60 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             }
         }
 
-        return Array.from(results.values()).sort((a, b) => compareStrings(a.ID, b.ID));
+        const allowed = await this.applyEdgePolicies(Array.from(results.values()), principals, provider, options.IncludeProposed === true);
+        return allowed.sort((a, b) => compareStrings(a.ID, b.ID));
+    }
+
+    /**
+     * Runs each edge type's access policy, for every principal: an edge survives only if every
+     * principal's policy allows it. Edge types with no policy pass through. A policy that throws hides
+     * every edge it governs.
+     */
+    private async applyEdgePolicies(
+        edges: GraphEdgeView[],
+        principals: UserInfo[],
+        provider: GraphDataProvider,
+        includeProposed: boolean,
+    ): Promise<GraphEdgeView[]> {
+        const byType = new Map<string, GraphEdgeView[]>();
+        for (const edge of edges) {
+            const list = byType.get(edge.TypeName) ?? [];
+            list.push(edge);
+            byType.set(edge.TypeName, list);
+        }
+        const hidden = new Set<string>();
+        for (const [typeName, typeEdges] of byType) {
+            const policy = GraphAccessPolicyRegistry.GetEdgePolicy(typeName);
+            if (!policy) {
+                continue;
+            }
+            for (const principal of principals) {
+                const allowed = await this.allowedEdges(typeName, policy, typeEdges, principal, provider, includeProposed);
+                for (const e of typeEdges) {
+                    if (!allowed.has(e.ID)) {
+                        hidden.add(e.ID);
+                    }
+                }
+            }
+        }
+        return edges.filter((e) => !hidden.has(e.ID));
+    }
+
+    private async allowedEdges(
+        typeName: string,
+        policy: BaseGraphEdgeAccessPolicy,
+        edges: GraphEdgeView[],
+        principal: UserInfo,
+        provider: GraphDataProvider,
+        includeProposed: boolean,
+    ): Promise<Set<string>> {
+        try {
+            return await policy.FilterEdges(edges, this.policyContext(principal, provider, includeProposed, 0));
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`GraphEngine: the access policy for edge type '${typeName}' failed; hiding its edges: ${msg}`);
+            return new Set<string>();
+        }
     }
 
     private touchesFrontier(
@@ -1229,9 +1295,15 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         principal: UserInfo,
         provider: GraphDataProvider,
         includeProposed: boolean,
+        policyDepth = 0,
     ): Promise<Map<string, GraphNodeView>> {
         const visible = new Map<string, GraphNodeView>();
+        if (policyDepth > MAX_POLICY_DEPTH) {
+            LogError(`GraphEngine: access policies nested more than ${MAX_POLICY_DEPTH} deep; hiding ${nodes.length} node(s).`);
+            return visible;
+        }
         const buckets = new Map<string, DataNodeBucket>();
+        const replaced = new Map<string, { Policy: BaseGraphNodeAccessPolicy; Nodes: GraphPolicyNode[] }>();
         const seen = new Set<string>();
         for (const node of nodes) {
             const key = this.nodeKey(node, provider);
@@ -1248,7 +1320,17 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 continue;
             }
             const entity = provider.EntityByName(node.EntityName);
-            if (!entity || !CanUserReadEntity(entity, principal)) {
+            if (!entity) {
+                continue;
+            }
+            const policy = GraphAccessPolicyRegistry.GetNodePolicy(entity.Name);
+            if (policy?.Mode === 'Replace') {
+                const group = replaced.get(entity.Name) ?? { Policy: policy, Nodes: [] };
+                group.Nodes.push({ Key: key, Ref: node });
+                replaced.set(entity.Name, group);
+                continue;
+            }
+            if (!CanUserReadEntity(entity, principal)) {
                 continue;
             }
             const bucket = buckets.get(entity.Name) ?? { Entity: entity, Nodes: [] };
@@ -1256,7 +1338,124 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             buckets.set(entity.Name, bucket);
         }
         await this.resolveDataNodes(Array.from(buckets.values()), principal, provider, includeProposed, visible);
+        const ctx = this.policyContext(principal, provider, includeProposed, policyDepth);
+        await this.readReplacedNodes(replaced, ctx, visible);
+        await this.applyNodePolicies(nodes, ctx, visible);
         return visible;
+    }
+
+    /** What a policy may use while deciding for `principal`; nested checks run one level deeper. */
+    private policyContext(
+        principal: UserInfo,
+        provider: GraphDataProvider,
+        includeProposed: boolean,
+        policyDepth: number,
+    ): GraphAccessPolicyContext {
+        return {
+            Principal: principal,
+            Provider: provider,
+            IncludeProposed: includeProposed,
+            NodeKey: (node) => this.nodeKey(node, provider),
+            IsCanonGraph: (graphID) => this.isCanonGraphID(graphID),
+            ResolveVisibleKeys: async (refs) => {
+                const normalized = refs.map((r) => this.normalizeNodeRef(r, provider));
+                const found = await this.resolveNodesForPrincipal(normalized, principal, provider, includeProposed, policyDepth + 1);
+                return new Set(found.keys());
+            },
+        };
+    }
+
+    /** `Replace` policies read their own nodes; a policy that throws hides its nodes. */
+    private async readReplacedNodes(
+        replaced: Map<string, { Policy: BaseGraphNodeAccessPolicy; Nodes: GraphPolicyNode[] }>,
+        ctx: GraphAccessPolicyContext,
+        visible: Map<string, GraphNodeView>,
+    ): Promise<void> {
+        for (const [entityName, group] of replaced) {
+            try {
+                const views = await group.Policy.ReadNodes(group.Nodes, ctx);
+                for (const n of group.Nodes) {
+                    const view = views.get(n.Key);
+                    if (view) {
+                        visible.set(n.Key, view);
+                    }
+                }
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`GraphEngine: the Replace access policy for '${entityName}' failed; hiding its nodes: ${msg}`);
+            }
+        }
+    }
+
+    /**
+     * Runs each visible node's entity policy over it. `Hidden` (or a missing decision) removes the
+     * node; `Redacted` keeps it with the neutral label and no description. A policy that throws hides
+     * every node it governs.
+     */
+    private async applyNodePolicies(
+        nodes: GraphNodeRef[],
+        ctx: GraphAccessPolicyContext,
+        visible: Map<string, GraphNodeView>,
+    ): Promise<void> {
+        const groups = new Map<string, { Policy: BaseGraphNodeAccessPolicy; Nodes: GraphPolicyNode[] }>();
+        for (const node of nodes) {
+            const key = ctx.NodeKey(node);
+            const view = visible.get(key);
+            if (!view || metadataNodeKind(view.EntityName)) {
+                continue;
+            }
+            const policy = GraphAccessPolicyRegistry.GetNodePolicy(view.EntityName);
+            if (!policy) {
+                continue;
+            }
+            const group = groups.get(view.EntityName) ?? { Policy: policy, Nodes: [] };
+            if (!group.Nodes.some((n) => n.Key === key)) {
+                group.Nodes.push({ Key: key, Ref: node, View: view });
+            }
+            groups.set(view.EntityName, group);
+        }
+        for (const [entityName, group] of groups) {
+            const decisions = await this.decideNodes(entityName, group.Policy, group.Nodes, ctx);
+            for (const n of group.Nodes) {
+                this.applyNodeDecision(n, decisions.get(n.Key) ?? 'Hidden', visible);
+            }
+        }
+    }
+
+    private async decideNodes(
+        entityName: string,
+        policy: BaseGraphNodeAccessPolicy,
+        nodes: GraphPolicyNode[],
+        ctx: GraphAccessPolicyContext,
+    ): Promise<Map<string, GraphNodeAccessDecision>> {
+        try {
+            return await policy.FilterNodes(nodes, ctx);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`GraphEngine: the access policy for '${entityName}' failed; hiding its nodes: ${msg}`);
+            return new Map<string, GraphNodeAccessDecision>();
+        }
+    }
+
+    private applyNodeDecision(node: GraphPolicyNode, decision: GraphNodeAccessDecision, visible: Map<string, GraphNodeView>): void {
+        if (decision === 'Hidden') {
+            visible.delete(node.Key);
+            return;
+        }
+        const view = visible.get(node.Key);
+        if (decision === 'Redacted' && view) {
+            visible.set(node.Key, { ...view, Label: NeutralGraphNodeLabel(view.EntityName, view.RecordID), Description: null });
+        }
+    }
+
+    /** `true` when `graphID` is an active graph whose graph type has `IsCanon = 1`. */
+    private isCanonGraphID(graphID: string): boolean {
+        const graph = this.Graphs.find((g) => UUIDsEqual(g.ID, graphID));
+        if (!graph) {
+            return false;
+        }
+        const graphType = this.GraphTypes.find((t) => UUIDsEqual(t.ID, graph.GraphTypeID));
+        return graphType?.IsCanon === true;
     }
 
     private resolveMetadataNode(

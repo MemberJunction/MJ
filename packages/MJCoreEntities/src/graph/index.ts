@@ -1,6 +1,8 @@
 export * from './BaseGraphEdgeProvider';
 export * from './GraphExpansion';
 export * from './GraphEngine';
+export * from './GraphAccessPolicy';
+export * from './policies/ProvenanceAccessPolicies';
 export * from './providers/ForeignKeyEdgeProvider';
 export * from './providers/JoinEntityEdgeProvider';
 export * from './providers/QueryEdgeProvider';
@@ -16,6 +18,7 @@ import { LoadRecordLinkEdgeProvider } from './providers/RecordLinkEdgeProvider';
 import { LoadEntityMetadataEdgeProvider } from './providers/EntityMetadataEdgeProvider';
 import { LoadQueryMetadataEdgeProvider } from './providers/QueryMetadataEdgeProvider';
 import { LoadAlternateBaseViewEdgeProvider } from './providers/AlternateBaseViewEdgeProvider';
+import { LoadProvenanceAccessPolicies } from './policies/ProvenanceAccessPolicies';
 
 /**
  * Tree-shaking anchor registering all 7 built-in {@link BaseGraphEdgeProvider} subclasses.
@@ -28,4 +31,5 @@ export function LoadGraphEdgeProviders(): void {
     LoadEntityMetadataEdgeProvider();
     LoadQueryMetadataEdgeProvider();
     LoadAlternateBaseViewEdgeProvider();
+    LoadProvenanceAccessPolicies();
 }
