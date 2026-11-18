@@ -4,17 +4,24 @@
  */
 
 import type { ColumnDefinition, DatabaseDocumentation, TableDefinition } from '../types/state.js';
-import type { ColumnMeasure, RelationshipProbeOrigin, RelationshipProbeSpec, TableQualityProbeColumn, TableQualityProbeSpec } from '../types/data-quality.js';
+import type {
+  ColumnMeasure,
+  RelationshipComparisonMode,
+  RelationshipProbeOrigin,
+  RelationshipProbeSpec,
+  TableQualityProbeColumn,
+  TableQualityProbeSpec,
+} from '../types/data-quality.js';
 import type { ResolvedDataQualityConfig } from './DataQualityConfig.js';
-import { IsFutureLookingName, IsQuantityName, TypeMismatch, type RuleContext } from './DataQualityRules.js';
+import { IsFutureLookingName, IsQuantityName, type RuleContext } from './DataQualityRules.js';
 import { BaseTypeName } from './QualityProbeSQL.js';
 import type { QualityDialect } from './QualityProbeSQL.js';
 import { FindTable, OrphanProbeOrigin, RelationshipKey, TableRelationships, type Relationship } from './Relationships.js';
 
 /** Text longer than this is not checked for numbers or dates stored as text. */
 const MAX_LENGTH_FOR_STORED_AS_TEXT = 255;
-/** Text longer than this is not compared for spelling variants (SQL Server compares as NVARCHAR(4000)). */
-const MAX_LENGTH_FOR_VARIANTS = 4000;
+/** Text longer than this is not compared for spelling variants (SQL Server compares `NVARCHAR(3999) + N'|'`). */
+const MAX_LENGTH_FOR_VARIANTS = 3999;
 /** Types that cannot be compared for equality, so they are left out of the duplicate-row check. */
 const NOT_COMPARABLE = new Set(['xml', 'image', 'text', 'ntext', 'geography', 'geometry', 'hierarchyid', 'sql_variant', 'json']);
 
@@ -106,6 +113,19 @@ export interface PlannedRelationshipProbe {
   Spec: RelationshipProbeSpec;
 }
 
+function isGuidBaseType(baseType: string): boolean {
+  return baseType === 'uniqueidentifier' || baseType === 'uuid';
+}
+
+function comparisonModeForPair(dialect: QualityDialect, childType: string, parentType: string): RelationshipComparisonMode {
+  const a = BaseTypeName(childType);
+  const b = BaseTypeName(parentType);
+  if (a === b) return 'direct';
+  if (dialect.TypeFamily(childType) === 'numeric' && dialect.TypeFamily(parentType) === 'numeric') return 'numeric';
+  if (isGuidBaseType(a) || isGuidBaseType(b)) return 'caseInsensitiveText';
+  return 'text';
+}
+
 /**
  * Every relationship of the database that needs an orphan probe: discovered keys, and declared
  * constraints the database does not guarantee. Keys in `skip` are left out.
@@ -117,17 +137,17 @@ export function PlanRelationshipProbes(context: RuleContext, skip: (key: string)
   const out: PlannedRelationshipProbe[] = [];
   for (const schema of state.schemas) {
     for (const table of schema.tables) {
-      for (const r of TableRelationships(schema.name, table)) {
+      for (const r of TableRelationships(schema.name, table, context.RejectedForeignKeys)) {
         const origin = OrphanProbeOrigin(r);
         if (!origin) continue;
         const key = RelationshipKey(r);
         if (skip(key)) continue;
         const parent = FindTable(state.schemas, r.Parent.Schema, r.Parent.Table);
         if (!parent || r.Child.Columns.length !== r.Parent.Columns.length) continue;
-        const columnsExist =
-          r.Child.Columns.every((c) => table.columns.some((col) => col.name.toLowerCase() === c.toLowerCase())) &&
-          r.Parent.Columns.every((c) => parent.columns.some((col) => col.name.toLowerCase() === c.toLowerCase()));
-        if (!columnsExist) continue;
+        const childColumns = r.Child.Columns.map((c) => table.columns.find((col) => col.name.toLowerCase() === c.toLowerCase()));
+        const parentColumns = r.Parent.Columns.map((c) => parent.columns.find((col) => col.name.toLowerCase() === c.toLowerCase()));
+        if (childColumns.some((c) => !c) || parentColumns.some((c) => !c)) continue;
+        const comparisons = childColumns.map((col, idx) => comparisonModeForPair(context.Dialect, col!.dataType, parentColumns[idx]!.dataType));
         out.push({
           Key: key,
           Relationship: r,
@@ -135,7 +155,8 @@ export function PlanRelationshipProbes(context: RuleContext, skip: (key: string)
           Spec: {
             Child: { ...r.Child, Columns: [...r.Child.Columns] },
             Parent: { ...r.Parent, Columns: [...r.Parent.Columns] },
-            CompareAsText: TypeMismatch(context, r) !== undefined,
+            CompareAsText: comparisons.some((m) => m !== 'direct'),
+            ColumnComparisons: comparisons,
             CountUnreferencedParents: Checks.UnreferencedParentRows,
           },
         });

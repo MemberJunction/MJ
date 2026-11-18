@@ -170,6 +170,14 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(header).toContain('import { z } from "zod"');
         });
 
+        it('omits zod import when includeZodImport is false', () => {
+            const header = generator.GenerateEntitySubClassFileHeader(false, false, false);
+            expect(header).not.toContain('import { z } from "zod"');
+            expect(header).not.toContain('export const loadModule');
+            expect(header).toContain('BaseEntity');
+            expect(header).toContain('RegisterClass');
+        });
+
         it('should import from @memberjunction/core', () => {
             const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('@memberjunction/core');
@@ -512,6 +520,93 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).toContain('Config_: z.');
             expect(result).not.toMatch(/(?<![_])Config: z\./);
         });
+
+        it('AssembleSchemaFile emits standalone Zod schema file without entity classes', () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: true, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: false, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'ID', RelatedEntity: '', DefaultValue: '', Description: '' },
+                    { Name: 'Name', CodeName: 'Name', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'Name', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ]
+            };
+
+            const fileContent = generator.AssembleSchemaFile([entity as Parameters<typeof generator.AssembleSchemaFile>[0][0]]);
+            expect(fileContent).toContain('import { z } from "zod";');
+            expect(fileContent).toContain('export const ActionSchema = z.object({');
+            expect(fileContent).toContain('export type ActionEntityType = z.infer<typeof ActionSchema>;');
+            expect(fileContent).not.toContain('class ActionEntity');
+            expect(fileContent).not.toContain('@RegisterClass');
+            expect(fileContent).not.toContain('BaseEntity');
+        });
+
+        it('AssembleEntitySubclassFile omits zod and re-exports split schemas when splitSchemaFileName is given', async () => {
+            vi.mocked(Metadata).mockImplementation(function () { return { EntityByName: () => undefined } as unknown as Metadata; });
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: true, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: false, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'ID', RelatedEntity: '', DefaultValue: '', Description: '' },
+                    { Name: 'Name', CodeName: 'Name', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'Name', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ],
+                EntityObjectSubclassName: '', EntityObjectSubclassImport: '', ExternalDataSourceID: null, AllowDeleteAPI: true,
+                AllowCreateAPI: true, AllowUpdateAPI: true, CascadeDeletes: false, IsChildType: false, Status: 'Active',
+                SchemaName: '__mj', BaseTable: 'Action', BaseView: 'vwActions', Description: '',
+            };
+
+            const splitContent = await generator.AssembleEntitySubclassFile(
+                {} as Parameters<typeof generator.AssembleEntitySubclassFile>[0],
+                [entity as Parameters<typeof generator.AssembleEntitySubclassFile>[1][0]],
+                true,
+                false,
+                '__mj',
+            );
+            expect(SyntaxErrors(splitContent)).toEqual([]);
+            expect(splitContent).not.toContain('import { z } from "zod";');
+            expect(splitContent).not.toContain('export const ActionSchema = z.object(');
+            expect(splitContent).toContain("export * from '../schemas/__mj.js';");
+            expect(splitContent).toContain("import type {\n  ActionEntityType\n} from '../schemas/__mj.js';");
+            expect(splitContent).toContain("export class ActionEntity extends BaseEntity<ActionEntityType>");
+
+            const monolithContent = await generator.AssembleEntitySubclassFile(
+                {} as Parameters<typeof generator.AssembleEntitySubclassFile>[0],
+                [entity as Parameters<typeof generator.AssembleEntitySubclassFile>[1][0]],
+                true,
+                true,
+            );
+            expect(monolithContent).toContain('import { z } from "zod";');
+            expect(monolithContent).toContain('export const ActionSchema = z.object({');
+            expect(monolithContent).not.toContain("from '../schemas/");
+        });
+
+        it('GenerateAllEntitySubClasses skips creating a brand-new empty schemas.ts when entities is empty', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            const existsMock = vi.mocked(fs.existsSync);
+
+            writeMock.mockClear();
+            existsMock.mockImplementation((p) => !String(p).endsWith('schemas.ts'));
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('entity_subclasses.ts'))).toBe(true);
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(false);
+
+            // Restores overwrite behavior if schemas.ts already exists on disk (so orphaned exports get cleared)
+            writeMock.mockClear();
+            existsMock.mockReturnValue(true);
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(true);
+        });
     });
     describe('generated validators', () => {
         type FieldSpec = { Name: string; Type: string; AllowsNull?: boolean; IsPrimaryKey?: boolean };
@@ -584,6 +679,8 @@ describe('EntitySubClassGeneratorBase', () => {
             const without = await emit();
             expect(without).toContain('import { RegisterClass } from "@memberjunction/global";');
             expect(without).not.toContain('UUIDsEqual');
+            expect(without).not.toContain('import { z } from "zod";');
+            expect(without).toContain("export * from '../schemas/app.js';");
         });
 
         it('emits one method for two stored rows of the same field-level CHECK and logs the dropped row (#5834)', () => {

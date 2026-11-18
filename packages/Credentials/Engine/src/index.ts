@@ -10,7 +10,8 @@ export {
     CredentialResolutionError,
     CredentialExpiredError,
     CredentialNotFoundError,
-    CredentialOwnerMismatchError
+    CredentialOwnerMismatchError,
+    CredentialValuesUnreadableError
 } from './expiration';
 
 export type {

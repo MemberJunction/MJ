@@ -31,4 +31,19 @@ describe('TestSuite CLI command (--shard and --transport flags)', () => {
     expect(passedFlags.transport).toBe('server');
     expect(passedFlags.shard).toBe('2/3');
   });
+
+  it('forwards each --test to SuiteCommand.execute', async () => {
+    const executeSpy = vi.spyOn(SuiteCommand.prototype, 'execute').mockResolvedValue(undefined);
+    const config = new Config({ root: process.cwd() });
+    vi.spyOn(config, 'runHook').mockResolvedValue({ successes: [], failures: [] });
+    const cmd = new TestSuite(
+      ['--name', 'MJ Explorer Regression Suite', '--test', 'T001 - Login Smoke', '--test', 'T002 - Data Explorer Open Record'],
+      config,
+    );
+
+    await cmd.run();
+
+    const [, passedFlags] = executeSpy.mock.calls[0];
+    expect(passedFlags.test).toEqual(['T001 - Login Smoke', 'T002 - Data Explorer Open Record']);
+  });
 });

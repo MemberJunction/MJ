@@ -1,5 +1,190 @@
 # @memberjunction/ai-core-plus
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 13a71da: Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
+  - Business Central posts to the connection's `ExternalSystemID` only, reads its Credential through `CredentialEngine`, and takes `AuthorityHost` from the Credential within an Entra ID allow list. A connection that kept its company only on the Credential must now set `ExternalSystemID`. QuickBooks `GetGLEntries` filters by `DocumentNumber`.
+  - Dropbox `ListObjects` returns every page and `SearchFiles` pages with a real cursor (`FileSearchOptions.pageToken`); Apollo retries a 429 with `Retry-After` up to 120 s.
+  - MS Graph `ForwardMessage` reads the mailbox from `ContextData.Email`; received messages carry `Direction` and `BCCRecipients`.
+  - Notification email/SMS go through `NOTIFICATION_EMAIL_PROVIDER` / `NOTIFICATION_SMS_PROVIDER` or `notifications.emailProvider` / `smsProvider` in `mj.config.cjs`; malformed `SecondaryScopes` rows are skipped and refused at save; uncached recipients get their roles read.
+  - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
+  - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
+  - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+  - Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
+
+- 5c0fba9: Add `AIPrompt.TimeoutMS`, a per-prompt bound on each model call (#3064, #3133).
+  - New nullable `TimeoutMS` column on `MJ: AI Prompts` (migration + CodeGen: entity, GraphQL and form field). It must be positive; NULL means the prompt sets no bound.
+  - The runner resolves the timeout as the caller's `AIPromptParams.timeoutMS`, then the prompt's `TimeoutMS`, then the runner's `DefaultPromptTimeoutMS`. A caller passing `0` opts that call out of any bound.
+  - The parallel coordinator applies the prompt's `TimeoutMS` to each task in place of its default backstop.
+  - `getEffectiveTimeoutMS` now takes the prompt as its first argument; a subclass that calls or overrides it must pass the prompt.
+
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- 1864853: A Loop agent's relocated specialization now renders with the same native tool-calling flags as the system prompt. The agent pre-renders a relocated child prompt into the trailing runtime-state message before a model is selected, so it rendered without `_NATIVE_TOOL_CALLING` / `_NATIVE_CONTROL_FLOW`, which the prompt runner sets from the selected model's tool-calling decision: a child prompt worded for the native or envelope path got the envelope wording while the system prompt got the native one. `AIPromptParams` gains an optional `OnTemplateDataFinalized` callback that the runner calls once the flags are set and before the prompt renders; the agent uses it to render the trailing message again and swaps it in when the text changed (keeping the first build if the re-render fails). A failover attempt whose decision differs still re-renders only the system prompt.
+- cdcbfd1: Unify governed artifact tools and real-time collaborative workspaces across agents and Explorer viewers:
+  - Add governed artifact CoreActions and realtime channel / client-tool integrations (`ArtifactWorkspaceChannel`, live Explorer workspace actions, and realtime delegation routing) alongside updated Sage, Query Builder, and Loop agent prompts.
+  - Add multi-agent live collaboration presence indicators and cursor/region overlays across Markdown, Slide Deck, Whiteboard, and Spreadsheet viewers plus server Yjs relay awareness (`ArtifactCollaborationServer`).
+  - Resolve session-scoped alpha short IDs (e.g. `"D"`) to canonical `MJ: Artifacts` UUIDs in `ResolveEmbeddedArtifactId` and across `ArtifactToolManager`, `DocumentToolLibrary`, `SlideDeckToolLibrary`, and `SpreadsheetToolLibrary`, with frontend UUID guards before SQL `RunView` lookups.
+  - Add on-sheet floating charts (`Placement: 'sheet' | 'dock'`), drag/resize handles, comma-separated non-contiguous chart ranges and row/column orientation controls, a full Chart & Range Properties editor modal, and persisted horizontal chart-pane splitter height (`WorkbookSpec.PreferredObjectsPaneHeightPx`) synced across Yjs CRDT, XLSX metadata, and server room checkpoints.
+  - Add shared `<mj-context-menu>` overlay component and Docs/Slides/Sheets context-menu helpers with full keyboard navigation, viewport clamping, and mobile long-press support.
+  - Fix Explorer conversation chat change-detection (`NG0100`), suppress redundant `"Open Document"` action chips when an artifact is already opened inline, and prevent duplicate prompt emissions.
+
+### Patch Changes
+
+- ae69eec: Fix a race that could lose an agent's feedback request. Since agent run steps began saving without blocking the run, a root agent's Chat or Plan step could raise its `MJ: AI Agent Requests` row before the step's own INSERT had landed. The request has a foreign key to the step (`FK_AIAgentRequest_OriginatingStep`), so its save failed; the failure was logged and swallowed, and the run paused `AwaitingFeedback` with no request to answer or resume from. `createFeedbackRequest` now waits for the step's queued saves to settle first, through a new `AgentRunStepSaveQueue.Settled(step)`.
+- a1d83dc: Flow agent in-run gaps: an in-run Flow that reaches a Human step stops with a message naming the step instead of "Unknown step type"; a refused in-run `startAtStep` ends the run with its own message instead of ten "No current step" retries; a dispatched run refuses `skipSteps` as it refuses `startAtStep`; no routing Decision step is recorded for a run refused before its first step; an in-run Flow can reach a sub-agent named on its own step without a ParentID or relationship row; and an Agent task that runs with no submitting run is now logged.
+- 49731ee: Actions run outside an agent run now carry that run's scope (#5624): realtime direct tools and delegated target-agent runs get the session's server-built scope (an unscoped run's when it has none), and Test Runtime Action passes its caller's `RunScope` and `Audience` to the action under test. A nested Scoped Search then refuses a tenant or skill the run does not carry.
+- b5c4a3c: Computer Use runs on the agent run's API keys (#4807): `ComputerUseAction` passes the run's `RuntimeAPIKeyResolver` and `CredentialScope` to the engine, which hands them to its controller, judge and heal prompts. `AIPromptParams.APIKeyResolver` is consulted in the legacy key tier after explicit `apiKeys` and before environment keys, and is inherited by internal prompts with the rest of the execution scope.
+- 9066253: Move Wave 6C edge agent pre-discovery Platt calibration parameters into `ModelConfiguration.Decision.Calibrations` metadata (`metadata/ai-models/.edge-discovery-models.json`) for `ms-marco-MiniLM-L-6-v2 (Local)` and resolve them via `FindDecisionCalibration` and `ApplyPlattCalibration` (keeping the verified `{ A: 1.0, B: 3.8 }` PoC fit as fallback when metadata is unloaded or unsynced).
+- e781aec: Add Wave 6C client-side Edge AI agent pre-discovery and client-only semantic Cmd+K Omnibox:
+  - **Shared Lazy WASM Edge AI Worker (`@memberjunction/ng-conversations`, `@memberjunction/ng-explorer-app`)**: Pre-bundles quantized `Xenova/bge-small-en-v1.5` (`q8`) and `Xenova/ms-marco-MiniLM-L-6-v2` (`q8`) into `assets/edge-ai.worker.js` (`device: 'wasm'`, `dtype: 'q8'`) with zero initial bundle overhead, per-user/session `SimpleVectorService` `'float32'` catalog caching, strict query deadlines, and a circuit-breaker fallback — shipped directly in `@memberjunction/ng-conversations` / `@memberjunction/ng-explorer-app` assets with zero host-app boilerplate.
+  - **Stage 6C.1 Edge Agent Pre-Discovery (`@memberjunction/ai-core-plus`, `@memberjunction/conversations-runtime`, `@memberjunction/ai-agents`, `@memberjunction/server`)**: Computes an untrusted advisory `EdgePreDiscoveryHint` (top-5 candidates + `logit >= -2.0` confidence gate). Server remains guard of truth, verifying `AIAgentPermissionHelper.HasPermission`, `AllowedAgentIDs`, and `IsRunnable` / `IsDirectlyDiscoverable` at both GraphQL ingress (`RunAIAgentResolver`) and `BaseAgent.InjectDecisionDiscovery`, discarding unauthorized/unknown IDs silently and falling back cleanly to `SearchEntity` / server `Jev` / `Sage`.
+  - **Stage 6C.2 Client-Only Semantic Omnibox (`@memberjunction/ng-explorer-core`)**: Adds `OmnibarSemanticIndexService` backed by `'float32'` `SimpleVectorService` and the shared `bge-small-en-v1.5` worker over browser-resident metadata (Entities, Saved Views, Dashboards, Apps/Navigation, Agents) for sub-15ms offline semantic matching with zero `PreviewSearch` GraphQL calls when offline and graceful fallback when cold/unavailable.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/templates-base-types@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+- b9fda3f: Preserve conversation continuity across long-call realtime reconnects and xAI transport drops.
+  - Separate replaceable ambient state snapshots (`StateKey`, bounded by `MaxStateChars = 4,000`) and wire-only operational status notes (`Ephemeral: true`) from durable spoken turns and tool calls in `RealtimeConversationMemory`, and pin opening user/assistant turns (`MaxPinnedHeadChars = 2,400`) when middle conversation entries must be evicted on ultra-long calls.
+  - Coalesce and delta-diff live `AppContext$` updates in `ClientContextChannel` via `DiffAppContextSnapshot` (sending compact deltas on the wire while storing only the single latest full screen snapshot under `StateKey: 'app-context'`), and tag interactive channel state snapshots (`BaseRealtimeChannelClient`), video-source transitions (`VideoSourceArbiter`), media-kit summaries (`MediaChannelServer`), and delegation/drop narration (`RealtimeDelegationNarrator`, `RealtimeSessionRunner`) with replaceable `StateKey` or `Ephemeral: true`.
+  - Default xAI Grok Voice client, server, and model metadata (`Grok Voice`, `Grok Voice Think Fast 2.0`, `Grok Voice 3.0`) to `TrustNativeResumption: false` so every xAI reconnect replays full `RealtimeConversationMemory` instead of relying on lossy `?conversation_id=` resumption; make native-resumption lineage breaks sticky across the session in `RealtimeSessionResumption` and preserve native resumption handles across local offline outages (`IsNetworkOnline`).
+  - Propagate `RealtimeContextNoteOptions` across all client and server realtime drivers, fixing AssemblyAI mid-reconnect context loss and multi-reconnect `system_prompt` duplication.
+
+### Patch Changes
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/templates-base-types@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

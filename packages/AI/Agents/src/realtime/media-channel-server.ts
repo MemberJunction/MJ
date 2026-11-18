@@ -73,7 +73,7 @@ export class MediaChannelServer extends BaseRealtimeChannelServer implements IRe
             overrideCollectionID,
         );
         if (note) {
-            this.Context?.SendContextNote?.(note);
+            this.Context?.SendContextNote?.(note, { StateKey: 'agent-media-kit' });
         }
     }
 

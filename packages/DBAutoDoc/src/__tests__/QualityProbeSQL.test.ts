@@ -4,13 +4,16 @@ import {
   BuildExactDistributionStatement,
   BuildRelationshipProbeStatement,
   BuildTableProbeStatement,
-  BuildTableProbeStatements,
   MYSQL_QUALITY_DIALECT,
   POSTGRESQL_QUALITY_DIALECT,
   ParseProbeRow,
   QualityDialectFor,
   SQL_SERVER_QUALITY_DIALECT,
 } from '../quality/QualityProbeSQL';
+import { PlanRelationshipProbes } from '../quality/ProbePlanner';
+import { ResolveDataQualityConfig } from '../quality/DataQualityConfig';
+import { CreateRuleContext } from '../quality/DataQualityRules';
+import type { DatabaseDocumentation } from '../types/state';
 import type { RelationshipProbeSpec, TableQualityProbeSpec } from '../types/data-quality';
 
 const spec: TableQualityProbeSpec = {
@@ -77,16 +80,20 @@ describe('table probe SQL', () => {
     expect(Sql).toContain('FROM `Sales`.`Order`');
   });
 
-  it('splits wide tables into batches with distinct aliases', () => {
+  it('splits wide tables into batches with distinct aliases, and keeps trailing spaces distinct on SQL Server', () => {
     const wide: TableQualityProbeSpec = {
       ...spec,
       Columns: Array.from({ length: 5 }, (_, i) => ({ Name: `C${i}`, DataType: 'int', Measures: ['NonNull' as const] })),
     };
-    const statements = BuildTableProbeStatements(wide, SQL_SERVER_QUALITY_DIALECT, 2);
+    const statements = [0, 2, 4].map((start) => BuildTableProbeStatement(wide, wide.Columns.slice(start, start + 2), SQL_SERVER_QUALITY_DIALECT, start));
     expect(statements).toHaveLength(3);
     const aliases = statements.flatMap((s) => s.Aliases.filter((a) => a.Column).map((a) => a.Alias));
     expect(new Set(aliases).size).toBe(5);
     expect(aliases).toEqual(['c0_nonnull', 'c1_nonnull', 'c2_nonnull', 'c3_nonnull', 'c4_nonnull']);
+
+    const { Sql: variantSql } = BuildTableProbeStatement(spec, [spec.Columns[0]], SQL_SERVER_QUALITY_DIALECT);
+    expect(variantSql).toContain("CAST(CAST([Status] AS NVARCHAR(3999)) + N'|' AS NVARCHAR(4000)) COLLATE Latin1_General_BIN2");
+    expect(BuildExactDistributionStatement('dbo', 'T', 'Status', 50, SQL_SERVER_QUALITY_DIALECT)).toContain('DATALENGTH([Status])');
   });
 
   it('quotes identifiers by doubling the closing delimiter', () => {
@@ -132,6 +139,76 @@ describe('relationship probe SQL', () => {
   it('packs several relationships into one statement', () => {
     const { Aliases } = BuildRelationshipProbeStatement([composite, composite], SQL_SERVER_QUALITY_DIALECT);
     expect(Aliases.filter((a) => a.Measure === 'OrphanRows').map((a) => a.Relationship)).toEqual([0, 1]);
+  });
+
+  it('compares numeric mismatches numerically and GUID-vs-text mismatches case-insensitively', () => {
+    const doc: DatabaseDocumentation = {
+      version: '1',
+      summary: {
+        createdAt: '',
+        lastModified: '',
+        totalIterations: 0,
+        totalPromptsRun: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        totalSchemas: 1,
+        totalTables: 3,
+        totalColumns: 4,
+      },
+      database: { name: 'db', server: 's', analyzedAt: '', provider: 'sqlserver' },
+      phases: { descriptionGeneration: [] },
+      schemas: [
+        {
+          name: 'dbo',
+          descriptionIterations: [],
+          tables: [
+            {
+              name: 'Item',
+              rowCount: 10,
+              dependsOn: [],
+              dependents: [],
+              descriptionIterations: [],
+              columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }],
+            },
+            {
+              name: 'Account',
+              rowCount: 10,
+              dependsOn: [],
+              dependents: [],
+              descriptionIterations: [],
+              columns: [{ name: 'Id', dataType: 'uniqueidentifier', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }],
+            },
+            {
+              name: 'Child',
+              rowCount: 10,
+              dependsOn: [
+                { schema: 'dbo', table: 'Item', column: 'ItemRef', referencedColumn: 'Id' },
+                { schema: 'dbo', table: 'Account', column: 'AccountGuidText', referencedColumn: 'Id' },
+              ],
+              dependents: [],
+              descriptionIterations: [],
+              columns: [
+                { name: 'ItemRef', dataType: 'numeric(10,2)', isNullable: true, isPrimaryKey: false, isForeignKey: true, descriptionIterations: [] },
+                { name: 'AccountGuidText', dataType: 'varchar', maxLength: 36, isNullable: true, isPrimaryKey: false, isForeignKey: true, descriptionIterations: [] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const planned = PlanRelationshipProbes(CreateRuleContext(doc, ResolveDataQualityConfig(undefined)), () => false);
+    expect(planned).toHaveLength(2);
+    expect(planned[0].Spec.ColumnComparisons).toEqual(['numeric']);
+    expect(planned[1].Spec.ColumnComparisons).toEqual(['caseInsensitiveText']);
+
+    const { Sql } = BuildRelationshipProbeStatement(
+      planned.map((p) => p.Spec),
+      SQL_SERVER_QUALITY_DIALECT,
+    );
+    expect(Sql).toContain('CAST(p.[Id] AS DECIMAL(38, 10)) = CAST(c.[ItemRef] AS DECIMAL(38, 10))');
+    expect(Sql).toContain('LOWER(LTRIM(RTRIM(CAST(p.[Id] AS NVARCHAR(4000))))) = LOWER(LTRIM(RTRIM(CAST(c.[AccountGuidText] AS NVARCHAR(4000)))))');
   });
 });
 

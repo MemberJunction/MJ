@@ -4,7 +4,18 @@ import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntit
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import {
+  ClientRealtimeSessionConfig,
+  DEFAULT_REALTIME_AUDIO_TRACKS,
+  JSONObject,
+  JSONValue,
+  ParseRealtimeAvatarStatus,
+  ParseRealtimeClientTransport,
+  RealtimeToolDefinition,
+  RealtimeTrackDescriptor,
+  RealtimeTrackDirection,
+  type RealtimeContextNoteOptions,
+} from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -1959,6 +1970,7 @@ export class RealtimeSessionRuntime {
       // as soon as the control channel is usable (which may be right now, or a moment after Connect).
       this.catalogNotePending = true;
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
 
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
@@ -2505,14 +2517,14 @@ export class RealtimeSessionRuntime {
   /**
    * Feeds a background context note into the live model (no spoken reply is requested) — the
    * perception channel interactive surfaces use (e.g. the whiteboard's coalesced scene deltas).
-   * No-op when no session is live.
+   * No-op when no session is live or resuming mid-call.
    */
-  public SendContextNote(text: string): void {
+  public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
     const trimmed = text?.trim() ?? '';
-    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+    if (trimmed.length === 0 || !this.client || (!this.isSessionLive() && !this._resuming$.value)) {
       return;
     }
-    this.client.SendContextNote(trimmed);
+    this.client.SendContextNote(trimmed, options);
   }
 
   /**
@@ -3473,20 +3485,126 @@ export class RealtimeSessionRuntime {
 
   /** The channel whose surface the user is looking at, kept so it applies to an arbiter created after it was set. */
   private focusedChannelKey: string | null = null;
+  /** Normalized channel key (or `null` for Activity) last reported via a `[surface]` context note; `undefined` before first note. */
+  private lastNotedFocusedChannel: string | null | undefined = undefined;
+  /** True when focus changed before the control channel reached `listening` and should flush once live. */
+  private focusedChannelNotePending = false;
 
   /**
    * Tells the session which channel's surface the user is looking at (`null` for none, e.g. the activity tab).
    * When the model can see only one video source and several are live, the one the user is looking at is the one
-   * it sees (after an explicit pick, and after a camera or screen share the user started). Safe to call before the
-   * session is live: it applies when the connection comes up.
+   * it sees (after an explicit pick, and after a camera or screen share the user started). Also emits a compact
+   * `[surface]` context note so the live model stays aware of what the user is looking at. Safe to call before
+   * the session is live: it applies and flushes when the connection comes up.
    *
    * @param channelKey The focused channel's key, as it appears on {@link VideoSources$} entries' `ChannelKey`.
    */
   public SetFocusedChannel(channelKey: string | null): void {
-    this.focusedChannelKey = channelKey;
+    const normalizedInput = channelKey && channelKey.trim().length > 0 ? channelKey.trim() : null;
+    this.focusedChannelKey = normalizedInput;
     if (this.client) {
-      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(channelKey);
+      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(normalizedInput);
     }
+    const normalizedCompare = normalizedInput ? NormalizeChannelKey(normalizedInput) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      return;
+    }
+    if (!this.isSessionLive()) {
+      if (normalizedInput !== null || this.lastNotedFocusedChannel !== undefined) {
+        this.focusedChannelNotePending = true;
+      }
+      return;
+    }
+    this.emitFocusedChannelNote(normalizedInput, normalizedCompare);
+  }
+
+  /** Flushes a deferred focused-surface note once the realtime control channel is live. */
+  private flushFocusedChannelNote(): void {
+    if (!this.focusedChannelNotePending || !this.isSessionLive()) {
+      return;
+    }
+    const normalizedCompare = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      this.focusedChannelNotePending = false;
+      return;
+    }
+    this.emitFocusedChannelNote(this.focusedChannelKey, normalizedCompare);
+  }
+
+  /** Sends a compact `[surface]` context note describing the surface the user just focused. */
+  private emitFocusedChannelNote(channelKey: string | null, normalizedCompare: string | null): void {
+    const verb = this.lastNotedFocusedChannel === undefined ? 'is viewing' : 'switched view to';
+    this.lastNotedFocusedChannel = normalizedCompare;
+    this.focusedChannelNotePending = false;
+    if (normalizedCompare === null) {
+      this.SendContextNote(`[surface] user ${verb} Activity (transcript/activity view)`, {
+        StateKey: 'focused-surface',
+      });
+      return;
+    }
+    const channel = this._activeChannels$.value.find((c) => NormalizeChannelKey(c.ChannelName) === normalizedCompare);
+    if (!channel) {
+      this.SendContextNote(`[surface] user ${verb} ${channelKey}`, { StateKey: 'focused-surface' });
+      return;
+    }
+    const title = channel.TabTitle ?? channel.ChannelName;
+    if (channel.Exposure === 'none') {
+      this.SendContextNote(
+        `[surface] user ${verb} ${title} (${channel.ChannelName}) {"exposure":"none"}`,
+        { StateKey: 'focused-surface' },
+      );
+      return;
+    }
+    let stateSuffix = '';
+    try {
+      const state = channel.GetState();
+      if (state && Object.keys(state).length > 0) {
+        const serialized = JSON.stringify(state);
+        stateSuffix = serialized.length > 1200 ? ` ${serialized.slice(0, 1197)}...` : ` ${serialized}`;
+      }
+    } catch {
+      stateSuffix = '';
+    }
+    this.SendContextNote(
+      `[surface] user ${verb} ${title} (${channel.ChannelName})${stateSuffix}`,
+      { StateKey: 'focused-surface' },
+    );
+  }
+
+  /**
+   * Returns a read-only JSON snapshot of the user's currently focused surface and every active
+   * channel's title, exposure, and state (omitting state when `Exposure === 'none'`).
+   */
+  public GetSurfaceSnapshot(): JSONObject {
+    const focusedNormalized = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    const channels: JSONObject[] = [];
+    for (const plugin of this._activeChannels$.value) {
+      const isFocused =
+        focusedNormalized !== null && NormalizeChannelKey(plugin.ChannelName) === focusedNormalized;
+      const entry: JSONObject = {
+        ChannelKey: plugin.ChannelName,
+        Title: plugin.TabTitle ?? plugin.ChannelName,
+        Exposure: plugin.Exposure,
+        IsFocused: isFocused,
+      };
+      if (plugin.Exposure !== 'none') {
+        try {
+          entry.State = plugin.GetState();
+        } catch {
+          entry.StateError = 'Unable to read channel state';
+        }
+      }
+      channels.push(entry);
+    }
+    const focusedEntry = channels.find((c) => c.IsFocused === true);
+    const activeSurface =
+      focusedNormalized !== null
+        ? (typeof focusedEntry?.ChannelKey === 'string' ? focusedEntry.ChannelKey : this.focusedChannelKey)
+        : 'activity';
+    return {
+      ActiveSurface: activeSurface,
+      ActiveChannels: channels,
+    };
   }
 
   /** Stops following the arbiter and clears {@link VideoSources$}. Safe to call when nothing is watched. */
@@ -3967,7 +4085,7 @@ export class RealtimeSessionRuntime {
     ];
     const note = BuildChannelCatalogNote(entries);
     if (note) {
-      this.SendContextNote(note);
+      this.SendContextNote(note, { StateKey: 'channel-catalog' });
     }
   }
 
@@ -3998,7 +4116,8 @@ export class RealtimeSessionRuntime {
       get Provider(): IMetadataProvider {
         return service.Provider;
       },
-      SendContextNote: (text: string) => this.SendContextNote(text),
+      SendContextNote: (text: string, options?: RealtimeContextNoteOptions) => this.SendContextNote(text, options),
+      GetSurfaceSnapshot: () => this.GetSurfaceSnapshot(),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
@@ -4185,23 +4304,48 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
+    let restoredAnyActive = false;
     for (const plugin of this._activeChannels$.value) {
-      this.restorePriorChannelState(plugin);
+      if (this.restorePriorChannelState(plugin)) {
+        restoredAnyActive = true;
+      }
+    }
+    // Mount any advertised ('on-demand') channels that carry saved prior-session state so
+    // Workspace / Browser / etc. resume visibly right where the prior session left off.
+    let mountedAdvertised = false;
+    for (const prepared of [...this.advertisedChannels]) {
+      const state = this.priorChannelStates[prepared.Plugin.ChannelName];
+      if (typeof state !== 'string' || state.length === 0) {
+        continue;
+      }
+      mountedAdvertised = true;
+      this.mountAdvertisedChannel(prepared.Plugin).catch((error) => {
+        console.warn(`[RealtimeSession] Failed to mount advertised channel '${prepared.Plugin.ChannelName}' on resume:`, error);
+      });
+    }
+    // Re-publish ActiveChannels$ when already-mounted channels restored prior state without
+    // an advertised mount emitting afterward, so listeners see updated HasChannelBeenUsed().
+    if (restoredAnyActive && !mountedAdvertised) {
+      this._activeChannels$.next([...this._activeChannels$.value]);
     }
   }
 
   /** Offers one plugin its prior-session state, if there is one. Rejections and throws are logged, never fatal. */
-  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): void {
+  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): boolean {
     const state = this.priorChannelStates[plugin.ChannelName];
     if (typeof state !== 'string' || state.length === 0) {
-      return;
+      return false;
     }
     try {
-      if (!plugin.RestoreState(state)) {
-        console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      if (plugin.RestoreState(state)) {
+        this.usedChannelNames.add(plugin.ChannelName);
+        return true;
       }
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      return false;
     } catch (error) {
       console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+      return false;
     }
   }
 
@@ -4303,6 +4447,9 @@ export class RealtimeSessionRuntime {
     // nothing to dispose — only the bookkeeping to forget.
     this.discardUnmountedChannels();
     this.catalogNotePending = false;
+    this.focusedChannelKey = null;
+    this.lastNotedFocusedChannel = undefined;
+    this.focusedChannelNotePending = false;
     this.resolvedChannels.clear();
     this.priorChannelStates = {};
     this.sessionClientTools = null;
@@ -4617,6 +4764,7 @@ export class RealtimeSessionRuntime {
     if (mapped) {
       this.setConnectionState(mapped);
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
     }
   }
 
@@ -5053,9 +5201,9 @@ export class RealtimeSessionRuntime {
           await this.mountAdvertisedChannel(plugin);
         }
         await plugin.OnDelegationArtifacts(artifacts);
-        if (!isOpen) {
-          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
-        }
+        // Always reveal/mark the channel active when it took delegated artifacts, even for `open-on-start` channels
+        // (e.g. ArtifactWorkspace) whose surface tab stays hidden until first activity.
+        this.noteChannelActivity(plugin);
       } catch (error) {
         console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
       }
@@ -5644,7 +5792,7 @@ export class RealtimeSessionRuntime {
     if (!client) {
       return;
     }
-    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`);
+    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`, { Ephemeral: true });
     // Floods of small updates AGGREGATE: each distinct message joins the digest buffer,
     // and ONE spoken update fires per window (first at ~5s into the burst, then every
     // ~8s). The buffer is discarded if the final result lands first.

@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- 5563937: Every Gemini request now opens with a fixed user turn ("Proceed with the task described in the system instructions.") and a short model turn, unless the conversation already opens with that turn. Gemini's implicit cache reuses a previous request only when the new request repeats it past the system instruction into the first `contents` turn; a match on the system instruction alone is not reused. An agent loop's first and second calls began with different turns (the first call's only turn is per-turn state that the second replaces), so the second call never hit the cache. Measured on Gemini 3.8 Flash with a ~20k-token system instruction: 0 of 8 second calls hit without the fixed turn, 7 of 8 with it, each caching all but the last ~2,050 tokens of the previous request. In Skip, second calls went from 0% to 76–84% cached. A user turn of only empty text is dropped (as an empty model turn already was), so a request whose only user message is empty never ends on the anchor's model turn, which Gemini rejects. Vertex AI shares this code.
+- c51c6f3: Add `GeminiDecision`, a `BaseDecision` driver for Google's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`), and the `Gemini Decision 1` model (type Decision, `PowerRank` 61, $0.10 per million input tokens, no output charge; up to 1,000 questions, 255 Choice options and 255 Score levels per call, 262,144 input tokens) with two Inference Provider routes: Google direct (`GeminiDecision`, `gemini-decision-1`, preferred) and OpenRouter (`OpenRouterDecision`, pinned `google/gemini-decision-1-20261111`). Gemini's questions and answers use the System One shape, so `GeminiDecision` extends `BaseHostedSystemOneDecision` and adapts the `x-goog-api-key` header, `input` in place of `state`, `total_input_tokens`/`total_output_tokens` usage, and `prompt_feedback.block_reason` input-filter blocks (which fail with the block reason as a failover-eligible `ModelError`). Google's `400` (`INVALID_ARGUMENT` and `invalid_request`) and `403 PERMISSION_DENIED` responses are pinned to failover-eligible `ModelError`, keeping `Default Decision`'s failover loop running while leaving `401` a fatal `Authentication` error. MJ sends text only. `Gemini Decision 1` is not bound to `Default Decision` (which selects `Jev` or `LLM Decision` first), but as an active `Decision` model it joins `Default Decision`'s power-matched fallback list on hosts with a `Google` or `OpenRouter` vendor credential (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`); set `Status = 'Inactive'` on the corresponding model-vendor row to keep `Default Decision` off it.
+- 6f1109b: Consecutive user text messages are no longer combined into one Gemini turn: they are kept apart by a short model turn (`GEMINI_USER_TURN_SEPARATOR_TEXT`, "OK"). Gemini's implicit cache reuses a previous request only when the new request repeats it, and a user turn that grows from one request to the next is never reused. An agent on the envelope path keeps action results, retries and runtime state as user messages, so every request was the system prompt plus one changing turn and nothing after the system prompt was cached. Measured on Gemini 3.8 Flash, the separated form caches everything up to about 2,050 tokens before the end of the previous request. Function-response turns are unchanged: they still follow the model turn that made the calls. Vertex AI shares this code.
+
+### Patch Changes
+
+- a1c367b: `ChatResult` `finish_reason` now means the same on every driver (#4335): new `NormalizeFinishReason` maps Anthropic `end_turn`/`stop_sequence`, Gemini `STOP` and similar to `'stop'`, `max_tokens`/`MAX_TOKENS` to `'length'`, refusals and safety blocks to `'content_filter'` and `tool_use` to `'tool_calls'`; unknown values pass through. Anthropic (which reported `"completed"`), Gemini, Mistral, Bedrock, Ollama and LM Studio use it in streaming and non-streaming results. LM Studio streaming now reads the finished prediction's stats: a prediction LM Studio stopped or whose model it unloaded is a retriable failure instead of a truncated answer, and token counts come from the stats; non-streaming also fails on `modelUnloaded` (#5651). The tool-calling conformance kit drops its `OrdinaryFinishReason` knob and expects `'stop'`.
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 755b210: Realtime long-call reconnect fixes from the final review of #6462.
+  - Security: a relay session (Vertex, HuggingFace) now persists only routing fields on its `MJ: AI Agent Sessions` row, so its owner, including a `Widget Guest`, can no longer read the system prompt, tools or initial context the relay keeps from the browser. A relay refresh that reaches an MJAPI instance without the in-memory snapshot is refused with a clear error instead of minting from the persisted copy. A direct session's persisted copy drops the duplicate provider config.
+  - A credential refresh re-authorizes the agent the session was minted for, from server-written state, not from the editable `Config.targetAgentID`.
+  - A failed planned move that goes back to the old connection now mints at most one credential per reconnect cycle, so a provider outage during the soft window no longer exhausts the per-session mint limit.
+  - A loss of the old connection while the call waits on it, or while an attempt is in flight, goes to the running reconnect at once: input is held from that moment, Gemini no longer ends the call, and OpenAI-protocol drivers no longer go back to a dead transport.
+  - The wait on the old connection follows a goAway, a shrinking connection limit and early timers; a host state handler that throws while the call goes back no longer wedges the cycle.
+  - A credential that a refresh replaced after the attempt connected still gets its move before it expires (Gemini).
+  - OpenAI Live reports `listening` again after a move; HuggingFace keeps the call when its old socket closes during a move; Gemini holds a reply owed to speech held during a failed attempt.
+  - Server sessions (OpenAI family, OpenAI Live, ElevenLabs, AssemblyAI, Inworld) hold a tool result sent during a reconnect and deliver it once on the new connection. The server OpenAI session keeps user turns in order and no longer merges two utterances, keeps frames that arrive with `session.created` on a reconnect, and no longer leaves an unhandled rejection when it discards a connecting socket.
+  - Overlapping `CloseSession` calls are shared on the normalized session ID, and the runtime skips its page-close beacon only after its own close succeeded.
+
+- b5df80e: Realtime long-call reconnect fixes found by a live smoke test of #6462: catalog timing reaches browser clients; bounded reconnect recovery window; OpenAI/xAI recover from a lost transport; Gemini token uses and token-expiry moves; input and answers survive a move; seed order on OpenAI; refresh rate limit sized from the real move cadence; tab close closes the agent session.
+- 28cec7d: Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
+  - **4-Layer ModelConfiguration & Timing Cascade (`@memberjunction/ai`, `@memberjunction/ai-engine-base`, `@memberjunction/ai-agents`):** Add `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` to `RealtimeConfigurationSettings` (`IAIConfiguration.ts` and `modelConfiguration.ts`), propagate them through `REALTIME_SHARED_CONFIG_KEYS`, `ScrubRealtimeSharedConfigKeys`, `ExtractRealtimeTimingConfig`, `ResolveRealtimeTiming`, and `GetModelCatalogSessionSettings`, and seed realtime models (`Gemini 3.8 Live`, `Gemini 3.8 Live Extended Thinking`, `Gemini 3.1 Flash Live`, `Grok Voice` family, `GPT Realtime` family, `GPT-Live 1`, `ElevenLabs Agents`, `Eleven Realtime`) in `.ai-models.json`.
+  - **Shared Conversation Memory & Reconnect Controller (`@memberjunction/ai`):** Promote `RealtimeConversationMemory`, `RenderRealtimeMemorySeed`, `RenderRealtimeMemorySeedAsContextNote`, `RenderLateToolResultNote`, `ResumePreamble`, and the unified I/O-free `RealtimeReconnectController` into `@memberjunction/ai` so every server and browser realtime driver shares bounded FIFO turn/tool memory (`MaxSeedChars = 24,000`), soft/hard connection-duration timers, credential refresh scheduling, per-attempt abort signals, native-to-seed fallback, and rapid-reconnect circuit-breaking (`reconnect-loop-breaker`).
+  - **Server-Side Orchestration, Protected Session Snapshot & Relay Continuity (`@memberjunction/ai`, `@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/server`):** Add `CallDurationSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, `TrustsNativeResumption`, proactive timer orchestration, and `ReconnectSession` on `BaseRealtimeModel` / `BaseRealtimeSession`; persist `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` behind `RunWithTrustedSessionConfigWrites` (`PROTECTED_SESSION_CONFIG_KEYS`); add `RealtimeProxyRegistry.Instance.ExtendRelaySession` and timer rescheduling in `RealtimeRelayTunnel` so relayed calls survive past the 30-minute relay lease; seed `RealtimeSessionRunner`'s re-opened session from `RealtimeConversationMemory` (`InitialContext`); clear Gemini's uncompressed-video connection limit when the last bridged video source ends (`@memberjunction/ai-bridge-server`); add rate-limited `RefreshRealtimeClientSessionToken` in `RealtimeClientSessionResolver`.
+  - **Browser Runtime, Client Drivers & Continuous Recording (`@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`):** Add `ApplySessionConfigTiming`, proactive timer arming on `'listening'`, `ScheduleCredentialRefresh`, and `Reconnect(context)` across `BaseRealtimeClient` and all client/server drivers (`Gemini`, `Vertex`, `OpenAI`, `OpenAI Live`, `xAI`, `ElevenLabs`, `Eleven`, `AssemblyAI`, `Inworld`, `HuggingFace`); wire `SetTokenRefreshCallback` in `RealtimeSessionRuntime`; update `RealtimeAudioRecorder.AttachRemoteStream` so WebRTC reconnects rebind replacement remote audio streams into a single continuous recording file without gaps.
+
+- b9fda3f: Preserve conversation continuity across long-call realtime reconnects and xAI transport drops.
+  - Separate replaceable ambient state snapshots (`StateKey`, bounded by `MaxStateChars = 4,000`) and wire-only operational status notes (`Ephemeral: true`) from durable spoken turns and tool calls in `RealtimeConversationMemory`, and pin opening user/assistant turns (`MaxPinnedHeadChars = 2,400`) when middle conversation entries must be evicted on ultra-long calls.
+  - Coalesce and delta-diff live `AppContext$` updates in `ClientContextChannel` via `DiffAppContextSnapshot` (sending compact deltas on the wire while storing only the single latest full screen snapshot under `StateKey: 'app-context'`), and tag interactive channel state snapshots (`BaseRealtimeChannelClient`), video-source transitions (`VideoSourceArbiter`), media-kit summaries (`MediaChannelServer`), and delegation/drop narration (`RealtimeDelegationNarrator`, `RealtimeSessionRunner`) with replaceable `StateKey` or `Ephemeral: true`.
+  - Default xAI Grok Voice client, server, and model metadata (`Grok Voice`, `Grok Voice Think Fast 2.0`, `Grok Voice 3.0`) to `TrustNativeResumption: false` so every xAI reconnect replays full `RealtimeConversationMemory` instead of relying on lossy `?conversation_id=` resumption; make native-resumption lineage breaks sticky across the session in `RealtimeSessionResumption` and preserve native resumption handles across local offline outages (`IsNetworkOnline`).
+  - Propagate `RealtimeContextNoteOptions` across all client and server realtime drivers, fixing AssemblyAI mid-reconnect context loss and multi-reconnect `system_prompt` duplication.
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

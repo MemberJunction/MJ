@@ -23,6 +23,7 @@ interface FakeRun {
     Success?: boolean;
     CompletedAt?: Date;
     ErrorMessage?: string | null;
+    CancellationReason?: string | null;
     FinalPayload?: string | null;
     FinalPayloadObject?: object | null;
     Steps: [];
@@ -40,6 +41,8 @@ interface AgentInternals {
     finalizeRun: (outcome: string) => Promise<void>;
     finalizeAgentRun: (finalStep: BaseAgentNextStep) => Promise<{ success: boolean }>;
     createFailureResult: (message: string) => Promise<{ success: boolean }>;
+    createCancelledResult: (message: string) => Promise<{ success: boolean }>;
+    _runAbortController: AbortController | null;
     endRun: (params: ExecuteAgentParams) => Promise<void>;
 }
 
@@ -114,6 +117,34 @@ describe('BaseAgent untracks the run from the watchdog on every terminal path', 
         expect(result.success).toBe(false);
         expect(run.Status).toBe('Failed');
         expect(AgentRunWatchdog.Instance.TrackedCount).toBe(0);
+    });
+
+    it('createCancelledResult for a run the watchdog force-failed finalizes Failed with the watchdog message (#4883)', async () => {
+        const { internals, run } = trackedAgent();
+        const message = '[watchdog] Run force-failed: no liveness heartbeat for over 5 minute(s) (owning process presumed dead)';
+        const controller = new AbortController();
+        controller.abort(message);
+        internals._runAbortController = controller;
+
+        const result = await internals.createCancelledResult('Cancelled during execution');
+
+        expect(result.success).toBe(false);
+        expect(run.Status).toBe('Failed');
+        expect(run.ErrorMessage).toBe(message);
+        expect(run.CancellationReason).toBeUndefined();
+        expect(AgentRunWatchdog.Instance.TrackedCount).toBe(0);
+    });
+
+    it('createCancelledResult for any other abort still finalizes Cancelled', async () => {
+        const { internals, run } = trackedAgent();
+        const controller = new AbortController();
+        controller.abort(AgentRunWatchdog.UserCancelAbortReason);
+        internals._runAbortController = controller;
+
+        await internals.createCancelledResult('Cancelled during execution');
+
+        expect(run.Status).toBe('Cancelled');
+        expect(run.CancellationReason).toBe('User Request');
     });
 
     it("Execute's teardown untracks the run even when the subclass finalizeRun hook throws", async () => {

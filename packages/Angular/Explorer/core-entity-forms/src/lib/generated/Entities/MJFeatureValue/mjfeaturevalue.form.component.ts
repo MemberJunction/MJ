@@ -20,6 +20,7 @@ export class MJFeatureValueFormComponent extends BaseFormComponent {
             { sectionKey: 'featureDetails', sectionName: 'Feature Details', isExpanded: true },
             { sectionKey: 'featureValues', sectionName: 'Feature Values', isExpanded: true },
             { sectionKey: 'aIInsights', sectionName: 'AI Insights', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

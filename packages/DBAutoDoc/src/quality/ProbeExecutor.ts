@@ -8,7 +8,7 @@
  */
 
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import { DescribeProbeFailure } from '../drivers/probeErrors.js';
+import { DescribeProbeFailure, IsProbeTimeout, PROBE_TIMEOUT_REASON } from '../drivers/probeErrors.js';
 import type { BoundedQueryOutcome } from '../types/data-quality.js';
 import type {
   ColumnMeasure,
@@ -28,8 +28,6 @@ import {
   type ProbeStatement,
   type QualityDialect,
 } from './QualityProbeSQL.js';
-
-const TIMEOUT_REASON = 'probe exceeded its timeout';
 
 export interface ProbeOptions {
   TimeoutMs: number;
@@ -104,8 +102,9 @@ export async function ProbeTable(
       record(statement, result.Values);
       return;
     }
-    if (batch.length <= 1 || result.Reason === TIMEOUT_REASON) {
-      for (const column of batch) failed[column.Name] = result.Reason;
+    if (batch.length <= 1 || IsProbeTimeout(result.Reason, result.Code)) {
+      const reason = IsProbeTimeout(result.Reason, result.Code) ? PROBE_TIMEOUT_REASON : result.Reason;
+      for (const column of batch) failed[column.Name] = reason;
       return;
     }
     const half = Math.ceil(batch.length / 2);
@@ -117,7 +116,9 @@ export async function ProbeTable(
     // Nothing per column: one COUNT(*) still gives the exact row count.
     const statement = BuildTableProbeStatement(spec, [], dialect);
     const result = await run(driver, statement, options.TimeoutMs);
-    if (result.Ok !== true) return result;
+    if (result.Ok !== true) {
+      return IsProbeTimeout(result.Reason, result.Code) ? { ...result, Reason: PROBE_TIMEOUT_REASON } : result;
+    }
     record(statement, result.Values);
   } else {
     const size = Math.max(1, Math.floor(options.ColumnBatchSize));
@@ -128,7 +129,9 @@ export async function ProbeTable(
       // Every batch failed. If even COUNT(*) fails, the table is unreadable: report that once.
       const statement = BuildTableProbeStatement(spec, [], dialect);
       const result = await run(driver, statement, options.TimeoutMs);
-      if (result.Ok !== true) return result;
+      if (result.Ok !== true) {
+        return IsProbeTimeout(result.Reason, result.Code) ? { ...result, Reason: PROBE_TIMEOUT_REASON } : result;
+      }
       record(statement, result.Values);
     }
   }
@@ -171,8 +174,9 @@ export async function ProbeRelationships(
       };
     });
   }
-  if (specs.length === 1 || result.Reason === TIMEOUT_REASON) {
-    return specs.map(() => ({ Ok: false, Reason: result.Reason, Code: result.Code }));
+  if (specs.length === 1 || IsProbeTimeout(result.Reason, result.Code)) {
+    const reason = IsProbeTimeout(result.Reason, result.Code) ? PROBE_TIMEOUT_REASON : result.Reason;
+    return specs.map(() => ({ Ok: false, Reason: reason, Code: result.Code }));
   }
   const outcomes: RelationshipProbeOutcome[] = [];
   for (const spec of specs) {

@@ -1,5 +1,5 @@
 ---
-"@memberjunction/db-auto-doc": minor
+"@memberjunction/db-auto-doc": patch
 ---
 
 Add a data quality phase (`analysis.dataQuality`, on by default). It reports orphaned and untrusted

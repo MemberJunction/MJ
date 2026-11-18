@@ -64,6 +64,7 @@ export const DEFAULT_DATA_QUALITY_THRESHOLDS: Required<DataQualityThresholds> = 
   futureDateToleranceDays: 1,
   orphanWarningPercent: 5,
   lengthAtCapacityMinDeclared: 8,
+  lengthAtCapacityMinRows: 5,
   rowCountDriftRatio: 0.1,
 };
 

@@ -283,6 +283,58 @@ describe('DataQualityRunner', () => {
     expect(probe?.Reason).toBe('columns are not comparable (type mismatch)');
     expect(JSON.stringify(s.phases.dataQuality)).not.toContain('AA:1');
   });
+
+  it('does not split a failing batch on MySQL execution timeout or SQL Server lock timeout', async () => {
+    const columns = [
+      col('A', 'nvarchar', stats(100, 5, 0), { maxLength: 20 }),
+      col('B', 'nvarchar', stats(100, 5, 0), { maxLength: 20 }),
+      col('C', 'nvarchar', stats(100, 5, 0), { maxLength: 20 }),
+      col('D', 'nvarchar', stats(100, 5, 0), { maxLength: 20 }),
+    ];
+    for (const msg of [
+      'Query execution was interrupted, maximum statement execution time exceeded',
+      'Lock request time out period exceeded.',
+    ]) {
+      let calls = 0;
+      const driver = {
+        ExecuteBounded: async () => {
+          calls++;
+          throw new Error(msg);
+        },
+      } as unknown as BaseAutoDocDriver;
+      const s = state([table('T', 100, columns)]);
+      await runner(undefined, driver).RunMeasurementPass(s);
+      // 1 batch call + 1 fallback COUNT(*) check — never O(N) column splits!
+      expect(calls).toBe(2);
+      expect(s.phases.dataQuality?.TableProbes['dbo.T']?.Outcome).toBe('skipped');
+      expect(s.phases.dataQuality?.TableProbes['dbo.T']?.Reason).toBe('probe exceeded its timeout');
+    }
+  });
+
+  it('keeps stored orphan rates for pruning and re-derives findings after pruning under pruning-only / skip-data-quality', async () => {
+    const { Driver, Sql } = fakeDriver((sql) => ok([rowFor(sql, { rows_: 100, r0_checked: 100, r0_orphans: 80 })]));
+    const customers = table('Customer', 100, []);
+    const orders = table('Order', 100, [col('CustomerId', 'int', stats(100, 50, 0), { isForeignKey: true })], {
+      dependsOn: [{ schema: 'dbo', table: 'Customer', column: 'CustomerId', referencedColumn: 'Id' }],
+    });
+    const s = state([customers, orders]);
+    await runner(undefined, Driver).RunMeasurementPass(s);
+    runner(undefined, Driver).DeriveAndStore(s);
+    expect(s.dataQuality?.some((f) => f.Kind === 'OrphanedForeignKey')).toBe(true);
+
+    const beforeSqlCount = Sql.length;
+    const pruningOnlyRunner = new DataQualityRunner(undefined, { Driver, SkipProbes: true });
+    await pruningOnlyRunner.RunMeasurementPass(s);
+    expect(Sql.length).toBe(beforeSqlCount);
+    // Pruning still sees stored orphan rates:
+    expect(pruningOnlyRunner.PruningTableFindings(s, 'dbo', orders).some((f) => f.Kind === 'OrphanedForeignKey')).toBe(true);
+
+    // Pruning removes the bad FK; DeriveAndStore drops the stale OrphanedForeignKey finding!
+    orders.dependsOn = [];
+    orders.columns.find((c) => c.name === 'CustomerId')!.isForeignKey = false;
+    pruningOnlyRunner.DeriveAndStore(s);
+    expect(s.dataQuality?.some((f) => f.Kind === 'OrphanedForeignKey')).toBe(false);
+  });
 });
 
 describe('statistics normalisation', () => {

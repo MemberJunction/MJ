@@ -25,6 +25,7 @@ import {
   type DeltaTokenError,
   type DeltaTokenPayload,
 } from '@memberjunction/lists-base';
+import { TrimTrailingChars } from '@memberjunction/global';
 
 export class DeltaTokenVerificationError extends Error {
   public readonly Code: DeltaTokenError;
@@ -71,7 +72,7 @@ function getSecret(): string {
 // Base64URL helpers
 // ---------------------------------------------------------------------------
 function bufferToBase64Url(buf: Buffer): string {
-  return buf.toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return TrimTrailingChars(buf.toString('base64'), '=').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
 function base64UrlToBuffer(s: string): Buffer {

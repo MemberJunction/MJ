@@ -104,9 +104,28 @@ export function IsSvgContent(content: string): boolean {
   const hasSvgClosing = content.toLowerCase().includes('</svg>');
 
   // Also accept self-closing SVG (rare but valid)
-  const isSelfClosing = content.toLowerCase().match(/<svg[^>]*\/>/);
+  return (startsWithSvg && hasSvgClosing) || hasSelfClosingSvgTag(content.toLowerCase());
+}
 
-  return (startsWithSvg && hasSvgClosing) || !!isSelfClosing;
+/**
+ * Whether lower-cased `content` holds a `<svg … />` tag: an `<svg` whose next `>` follows a `/`.
+ * Same answer as `/<svg[^>]*\/>/`, found by index: that regex rescans to the next `>` from every
+ * `<svg`, which is quadratic on text full of unclosed openings (CodeQL js/polynomial-redos).
+ * Openings that share one `>` share the answer, so each `>` is checked once.
+ */
+function hasSelfClosingSvgTag(content: string): boolean {
+  let open = content.indexOf('<svg');
+  while (open !== -1) {
+    const tagEnd = content.indexOf('>', open + 4);
+    if (tagEnd === -1) {
+      return false;
+    }
+    if (tagEnd > open + 4 && content[tagEnd - 1] === '/') {
+      return true;
+    }
+    open = content.indexOf('<svg', tagEnd + 1);
+  }
+  return false;
 }
 
 /** @deprecated Use {@link IsSvgContent}. */

@@ -159,6 +159,18 @@ describe('ExcelAddinServerExtension', () => {
             expect((await fetch(`${origin}/api/office/excel/assets/icon-32.png`)).status).toBe(200);
             expect((await fetch(`${origin}/api/office/excel/`)).status).toBe(404);
         });
+
+        it('serves custom function metadata at /functions.json', async () => {
+            const response = await fetch(`${origin}/api/office/excel/functions.json`);
+            expect(response.status).toBe(200);
+            expect(response.headers.get('cache-control')).toBe('no-cache');
+            const metadata = (await response.json()) as {
+                functions: Array<{ id: string; name: string; parameters: Array<{ name: string }> }>;
+            };
+            expect(metadata.functions.map(f => f.id)).toEqual(['QUERY', 'VIEW']);
+            const viewFn = metadata.functions.find(f => f.id === 'VIEW');
+            expect(viewFn?.parameters.map(p => p.name)).toEqual(['entityNameOrId', 'viewNameOrId', 'filter', 'includeHeaders']);
+        });
     });
 
     it('turns the add-in on and off with Initialize and Shutdown', async () => {

@@ -17,7 +17,7 @@ import {
   type IMetadataProvider,
   type RoleInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
 import {
   type MJMagicLinkInviteEntity,
   type MJMagicLinkRedemptionEntity,
@@ -40,6 +40,7 @@ import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSe
 import type { IServerExtensionMagicLinkService } from '@memberjunction/server-extensions-core';
 import type {
   CreateMagicLinkInviteParams,
+  MintableMagicLinkInviteKind,
   CreateMagicLinkInviteResult,
   ManageMagicLinkInviteResult,
   MagicLinkJWTClaims,
@@ -118,6 +119,75 @@ export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigin
   return false;
 }
 
+/** The invite columns {@link ValidateInviteShape} resolves from create parameters. */
+export interface InviteShape {
+  Ok: true;
+  Email: string | null;
+  IdentityMode: MJMagicLinkInviteEntity['IdentityMode'];
+  Kind: MJMagicLinkInviteEntity['Kind'];
+  ResourceTypeID: string | null;
+  ResourceID: string | null;
+}
+
+/** Why {@link ValidateInviteShape} refused a request. */
+export interface InviteShapeError {
+  Ok: false;
+  Error: string;
+}
+
+/** Kinds `CreateInvite` mints; anything else (including `anonymous-embed`) is refused. */
+const MINTABLE_KINDS: readonly MintableMagicLinkInviteKind[] = ['app-session', 'resource-share'];
+
+/**
+ * Checks the identity-mode, kind and resource fields of an invite request and resolves the column
+ * values to write. Pure: reads only `params`.
+ *
+ * - `email` mode (the default) requires an email, which becomes the redeeming user's identity.
+ * - `anonymous` mode takes an optional email as a delivery address only: it is stored on the
+ *   invite and used to send the link, but redemption never reads it, so it binds no identity.
+ * - `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them.
+ * - `anonymous-embed` is not minted here (its framing-domain and tier checks do not exist yet).
+ */
+export function ValidateInviteShape(params: CreateMagicLinkInviteParams): InviteShape | InviteShapeError {
+  const identityMode = params.IdentityMode ?? 'email';
+  if (identityMode !== 'email' && identityMode !== 'anonymous') {
+    return { Ok: false, Error: `IdentityMode '${String(identityMode)}' is not supported.` };
+  }
+  const email = params.email?.trim() ? params.email.trim() : null;
+  if (identityMode === 'email' && !email) {
+    return { Ok: false, Error: 'An email-mode invite requires an email address.' };
+  }
+  const kind = params.Kind ?? 'app-session';
+  if (!MINTABLE_KINDS.includes(kind)) {
+    return { Ok: false, Error: `Invite kind '${String(kind)}' cannot be minted through MagicLinkService.` };
+  }
+  const resourceTypeId = params.ResourceTypeID?.trim() ? params.ResourceTypeID.trim() : null;
+  const resourceId = params.ResourceID?.trim() ? params.ResourceID.trim() : null;
+  if (kind === 'resource-share' && (!resourceTypeId || !resourceId)) {
+    return { Ok: false, Error: "A 'resource-share' invite requires both ResourceTypeID and ResourceID." };
+  }
+  if (kind !== 'resource-share' && (resourceTypeId || resourceId)) {
+    return { Ok: false, Error: "ResourceTypeID and ResourceID are only valid on a 'resource-share' invite." };
+  }
+
+  return { Ok: true, Email: email, IdentityMode: identityMode, Kind: kind, ResourceTypeID: resourceTypeId, ResourceID: resourceId };
+}
+
+/**
+ * What redemption does about an application's role rows: `open` (no rows — grant nothing, the app
+ * stays open to everyone), `already-granted` (the role has a row), or `grant` (an allowlist that
+ * lacks the role — add it). Pure.
+ */
+export function DecideAppAccessGrant(
+  applicationRoles: ReadonlyArray<{ RoleID: string }>,
+  roleId: string,
+): 'open' | 'already-granted' | 'grant' {
+  if (applicationRoles.length === 0) {
+    return 'open';
+  }
+  return applicationRoles.some((r) => UUIDsEqual(r.RoleID, roleId)) ? 'already-granted' : 'grant';
+}
+
 /**
  * Magic-link service. One instance per server, constructed with the resolved
  * public URL and the validated config. Implements {@link IServerExtensionMagicLinkService}
@@ -125,10 +195,69 @@ export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigin
  * via `context.services.GetMagicLinkService?.()`.
  */
 export class MagicLinkService implements IServerExtensionMagicLinkService {
+  private static readonly _activeInstanceStoreKey = '___MJ_ACTIVE_MAGIC_LINK_SERVICE___';
+
+  /** Returns the active process-wide MagicLinkService registered at server boot, or null if not initialized. */
+  public static GetActiveInstance(): MagicLinkService | null {
+    const store = GetGlobalObjectStore();
+    return (store[MagicLinkService._activeInstanceStoreKey] as MagicLinkService | undefined) ?? null;
+  }
+
+  /** Registers (or clears) the active process-wide MagicLinkService instance. */
+  public static SetActiveInstance(instance: MagicLinkService | null): void {
+    const store = GetGlobalObjectStore();
+    if (instance) {
+      store[MagicLinkService._activeInstanceStoreKey] = instance;
+    } else {
+      delete store[MagicLinkService._activeInstanceStoreKey];
+    }
+  }
+
   constructor(
     private readonly publicUrl: string,
     private readonly config: MagicLinkConfig,
-  ) {}
+  ) {
+    if (!MagicLinkService.GetActiveInstance()) {
+      MagicLinkService.SetActiveInstance(this);
+    }
+  }
+
+  /**
+   * Mints an anonymous `resource-share` Magic Link invite after an internal server operation
+   * has already verified resource-level sharing permission (e.g. `ArtifactPermissionEngine.CanShare`).
+   * Refuses any non-`resource-share` or non-`anonymous` invite shape.
+   */
+  public async CreateResourceShareInvite(
+    params: CreateMagicLinkInviteParams,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<CreateMagicLinkInviteResult> {
+    if (!this.config.artifactGuestSharing?.enabled) {
+      return {
+        success: false,
+        error: 'External artifact guest sharing is disabled on this server (magicLink.artifactGuestSharing.enabled is false).',
+      };
+    }
+    if (params.Kind !== 'resource-share' || params.IdentityMode !== 'anonymous') {
+      return {
+        success: false,
+        error: "CreateResourceShareInvite only permits Kind='resource-share' with IdentityMode='anonymous'.",
+      };
+    }
+    return this.createInviteInternal(params, actingUser, provider, true);
+  }
+
+  /**
+   * Revokes an active `resource-share` Magic Link invite after an internal server operation
+   * has verified resource-level share/delete permission on the backing resource.
+   */
+  public async RevokeResourceShareInvite(
+    inviteId: string,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ManageMagicLinkInviteResult> {
+    return this.revokeInviteInternal(inviteId, actingUser, provider, true);
+  }
 
   /**
    * Creates a single-use, app-scoped invite, persists its hashed token, and
@@ -143,16 +272,30 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     creatingUser: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<CreateMagicLinkInviteResult> {
+    return this.createInviteInternal(params, creatingUser, provider, false);
+  }
+
+  private async createInviteInternal(
+    params: CreateMagicLinkInviteParams,
+    creatingUser: UserInfo,
+    provider: IMetadataProvider | undefined,
+    trustedResourceShareCaller: boolean,
+  ): Promise<CreateMagicLinkInviteResult> {
     try {
       const md = provider ?? Metadata.Provider;
 
-      // Authorization: only Owners (or members of configured issuer roles) may
-      // mint invites. Without this, ANY authenticated user — including an
-      // external user already holding a restricted magic-link session — could
-      // issue invites and escalate.
-      const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
-      if (!CanIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
-        return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
+      if (!trustedResourceShareCaller) {
+        if (this.config.enabled === false) {
+          return { success: false, errorCode: 'forbidden', error: 'Magic link invites are disabled on this server.' };
+        }
+        // Authorization: only Owners (or members of configured issuer roles) may
+        // mint invites. Without this, ANY authenticated user — including an
+        // external user already holding a restricted magic-link session — could
+        // issue invites and escalate.
+        const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+        if (!CanIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+          return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
+        }
       }
 
       const validatedRedirectUrl = params.RedirectUrl?.trim() ? params.RedirectUrl.trim() : undefined;
@@ -189,15 +332,28 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
         return { success: false, error: `Application '${params.ApplicationId}' not found.` };
       }
 
+      const checked = ValidateInviteShape(params);
+      if ('Error' in checked) {
+        return { success: false, error: checked.Error };
+      }
+      const shape: InviteShape = checked;
+
       const rawToken = GenerateRawToken();
       const tokenHash = HashToken(rawToken);
       const expiresInHours = params.ExpiresInHours ?? this.config.defaultExpiresInHours;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000);
 
-      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
+      const persistenceUser = trustedResourceShareCaller
+        ? (this.resolveProvisioningContextUser() ?? creatingUser)
+        : creatingUser;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, persistenceUser);
       invite.NewRecord();
       invite.TokenHash = tokenHash;
-      invite.Email = params.email;
+      invite.Email = shape.Email;
+      invite.IdentityMode = shape.IdentityMode;
+      invite.Kind = shape.Kind;
+      invite.ResourceTypeID = shape.ResourceTypeID;
+      invite.ResourceID = shape.ResourceID;
       invite.ApplicationID = params.ApplicationId;
       invite.RoleID = roleId;
       invite.ExpiresAt = expiresAt;
@@ -214,7 +370,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       // the single ApplicationID/RoleID. Additive — the columns stay authoritative for
       // redemption today; this populates the child tables for the eventual switch to
       // multi-scope reads. Best-effort so a child-row hiccup never fails issuance.
-      await this.writeInviteScopeChildRows(invite.ID, params.ApplicationId, roleId, creatingUser, md);
+      await this.writeInviteScopeChildRows(invite.ID, params.ApplicationId, roleId, persistenceUser, md);
 
       let redirectBindingToken: string | undefined;
       if (validatedRedirectUrl) {
@@ -231,8 +387,10 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       const redemptionUrl = this.buildRedemptionUrl(rawToken, redirectBindingToken);
 
       let emailSent = false;
-      if (params.SendEmail !== false && this.config.communicationProvider) {
-        emailSent = await this.sendInviteEmail(params.email, redemptionUrl, app.Name, creatingUser);
+      // An email-mode invite goes to its user's address; an anonymous one only to its optional
+      // delivery address. With no address the caller delivers the returned link itself.
+      if (shape.Email && params.SendEmail !== false && this.config.communicationProvider) {
+        emailSent = await this.sendInviteEmail(shape.Email, redemptionUrl, app.Name, creatingUser);
       }
 
       return {
@@ -259,20 +417,37 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     actingUser: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<ManageMagicLinkInviteResult> {
+    return this.revokeInviteInternal(inviteId, actingUser, provider, false);
+  }
+
+  private async revokeInviteInternal(
+    inviteId: string,
+    actingUser: UserInfo,
+    provider: IMetadataProvider | undefined,
+    trustedResourceShareCaller: boolean,
+  ): Promise<ManageMagicLinkInviteResult> {
     try {
-      const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
-      if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
-        return { success: false, errorCode: 'forbidden', error: 'Not authorized to revoke magic-link invites.' };
+      if (!trustedResourceShareCaller) {
+        const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+        if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+          return { success: false, errorCode: 'forbidden', error: 'Not authorized to revoke magic-link invites.' };
+        }
       }
       if (!inviteId?.trim()) {
         return { success: false, errorCode: 'not_found', error: 'Invite ID is required.' };
       }
 
       const md = provider ?? Metadata.Provider;
-      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, actingUser);
+      const persistenceUser = trustedResourceShareCaller
+        ? (this.resolveProvisioningContextUser() ?? actingUser)
+        : actingUser;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, persistenceUser);
       const loaded = await invite.Load(inviteId.trim());
       if (!loaded) {
         return { success: false, errorCode: 'not_found', error: `Invite '${inviteId}' not found.` };
+      }
+      if (trustedResourceShareCaller && invite.Kind !== 'resource-share') {
+        return { success: false, errorCode: 'forbidden', error: 'Resource-share revocation can only revoke resource-share invites.' };
       }
 
       if (invite.Status === 'Revoked') {
@@ -466,6 +641,15 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
 
       // Fast, friendly pre-check (returns a precise reason). NOT the authority —
       // the atomic consume below is what actually enforces single-use.
+      const allowResourceShareOnly = Boolean(
+        this.config.artifactGuestSharing?.enabled &&
+          invite.Kind === 'resource-share' &&
+          invite.IdentityMode === 'anonymous',
+      );
+      if (this.config.enabled === false && !allowResourceShareOnly) {
+        return done({ success: false, errorCode: 'invalid', error: 'Magic link invites are disabled on this server.' });
+      }
+
       const eligibility = EvaluateInvite(invite, Date.now());
       if (!eligibility.ok) {
         return done({ success: false, errorCode: eligibility.errorCode, error: `Invite is ${eligibility.errorCode}.` });
@@ -479,6 +663,28 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       if (!this.isInviterActive(invite.CreatedByUserID)) {
         LogError(`[MagicLink] Invite ${invite.ID} rejected: inviter ${invite.CreatedByUserID} is not an active user.`);
         return done({ success: false, errorCode: 'invalid', error: 'The user who issued this invite is no longer active.' });
+      }
+
+      let resourceTypeName: string | undefined;
+      if (invite.ResourceTypeID) {
+        const rtRes = await rv.RunView<{ Name?: string }>(
+          {
+            EntityName: 'MJ: Resource Types',
+            ExtraFilter: `ID = '${EscapeSQLString(invite.ResourceTypeID)}'`,
+            Fields: ['Name'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          contextUser,
+        );
+        const rawRtName = rtRes.Success ? rtRes.Results?.[0]?.Name : undefined;
+        if (typeof rawRtName === 'string' && rawRtName.trim().length > 0) {
+          resourceTypeName = rawRtName.trim();
+        }
+      }
+      if (invite.Kind === 'resource-share' && (!resourceTypeName || !invite.ResourceID)) {
+        LogError(`[MagicLink] Resource-share invite ${invite.ID} is missing valid ResourceType (${invite.ResourceTypeID}) or ResourceID (${invite.ResourceID}).`);
+        return done({ success: false, errorCode: 'server_error', error: 'Invite resource metadata is incomplete.' });
       }
 
       const role = md.Roles.find((r) => UUIDsEqual(r.ID, invite.RoleID));
@@ -527,6 +733,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
         // anon redemptions share the Anonymous principal). Carried into the redemption audit row.
         sessionId: isAnon ? GenerateSessionId() : undefined,
         // Resource-share scope (Phase 5): the single shared resource this link grants.
+        resourceType: resourceTypeName,
         resourceId: invite.ResourceID ?? undefined,
         nowSeconds,
         ttlSeconds: this.config.sessionTokenTtlHours * 3600,
@@ -653,7 +860,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
   private allowedRedirectOrigins(): string[] {
     const origins: string[] = [];
     const candidates: readonly (string | undefined)[] = [
-      this.config.explorerUrl ?? configInfo.magicLink?.explorerUrl,
+      this.config.explorerUrl ?? configInfo.magicLink?.explorerUrl ?? process.env.MJ_MAGIC_LINK_EXPLORER_URL,
       ...(this.config.allowedRedirectOrigins ?? configInfo.magicLink?.allowedRedirectOrigins ?? []),
       ...(configInfo.cors?.allowedOrigins ?? []),
     ];
@@ -681,6 +888,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     // write any UserRole/UserApplication for it — the anon user must never accrete
     // scope (that would make every anon visitor a superuser). Scope rides on the
     // per-session JWT claims; enforcement is claims-based, not role-based.
+    // An anonymous invite's Email is a delivery address only and is deliberately not read here.
     if (invite.IdentityMode === 'anonymous') {
       return this.resolveAnonymousPrincipal();
     }
@@ -870,20 +1078,38 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     }
   }
 
-  /** Idempotently ensures the role has CanAccess to the application (Application Role). */
+  /**
+   * Ensures the invite's role can reach the application, without changing who else can.
+   *
+   * An application with no `MJ: Application Roles` rows is OPEN: every user reaches it. Writing
+   * its first row would turn it into an allowlist of that one role and revoke it from everyone
+   * else, so redemption never creates the first row; the invitee reaches an open application
+   * through open mode. An application that already has rows (an allowlist) gets the invited role
+   * added once, as before.
+   */
   private async ensureAppAccess(roleId: string, applicationId: string, contextUser: UserInfo): Promise<void> {
     try {
       const rv = new RunView();
-      const res = await rv.RunView(
+      const res = await rv.RunView<{ ID: string; RoleID: string }>(
         {
           EntityName: 'MJ: Application Roles',
-          ExtraFilter: `RoleID = '${roleId}' AND ApplicationID = '${applicationId}'`,
+          ExtraFilter: `ApplicationID = '${EscapeSQLString(applicationId)}'`,
+          Fields: ['ID', 'RoleID'],
           ResultType: 'simple',
         },
         contextUser,
       );
-      if (res.Success && (res.Results?.length ?? 0) > 0) {
-        return; // already granted
+      if (!res.Success) {
+        LogError(`[MagicLink] Could not read Application Roles for application ${applicationId}: ${res.ErrorMessage ?? 'unknown'}`);
+        return;
+      }
+      const decision = DecideAppAccessGrant(res.Results ?? [], roleId);
+      if (decision === 'open') {
+        LogStatus(`[MagicLink] Application ${applicationId} is open (no Application Roles); role ${roleId} reaches it without a grant.`);
+        return;
+      }
+      if (decision === 'already-granted') {
+        return;
       }
       const md = new Metadata(); // global-provider-ok: server-side magic-link provisioning; runs under the server's single default provider
       const appRole = await md.GetEntityObject<MJApplicationRoleEntity>('MJ: Application Roles', contextUser);
@@ -892,7 +1118,9 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       appRole.RoleID = roleId;
       appRole.CanAccess = true;
       appRole.CanAdmin = false;
-      if (!(await appRole.Save())) {
+      if (await appRole.Save()) {
+        LogStatus(`[MagicLink] Granted role ${roleId} access to allowlisted application ${applicationId}.`);
+      } else {
         LogError(`[MagicLink] Failed to grant app access: ${appRole.LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
     } catch (e) {

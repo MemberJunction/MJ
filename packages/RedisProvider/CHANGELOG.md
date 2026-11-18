@@ -1,5 +1,97 @@
 # @memberjunction/redis-provider
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 7747b73: Wave 4.4 two-tier L1 frozen CoW + L2 Redis HASH cache, Redis Stream cluster invalidation sequence, cross-replica GraphQL PubSub fan-out, multi-tab browser invalidation multiplexer, and coalesced metadata storage persistence:
+  - `@memberjunction/core`: cache per-slot PK array indices via `WeakMap` in `LocalCacheManager.ApplyRowChanges` for $O(\Delta)$ Copy-on-Write row updates, compute `maxUpdatedAt` incrementally on non-displacing updates, delegate in-place row deltas via `ILocalStorageProvider.ApplyRunViewRowDelta`, and add trailing-edge coalesced/serialized `ScheduleSaveLocalMetadataToStorage` on `ProviderBase`.
+  - `@memberjunction/redis-provider`: add `TwoTierCacheStorageProvider` (byte-bounded L1 deep-frozen LRU cache with $O(\Delta)$ peer `row_delta` patching in front of L2 Redis), per-row Redis `HASH` storage (`useHashForRunViewSlots`) with Lua `APPLY_RUNVIEW_ROW_DELTA_SCRIPT` (`HSET`/`HDEL`), and atomic cluster epoch + Redis Stream `INCR`/`XADD`/`XRANGE` helpers.
+  - `@memberjunction/server` & `@memberjunction/server-bootstrap`: wrap shared Redis cache in `TwoTierCacheStorageProvider` (`WrapSharedCacheWithL1`), register `RedisStreamBroadcastProvider` (`'RedisStream'`) for cluster-wide monotonic `X-MJ-Server-ID` / `X-MJ-Cache-Seq` watermarks and `XRANGE` catch-up, and bridge all non-bespoke TypeGraphQL `@Subscription` topics across pods via `AttachRedisClusterPubSub`.
+  - `@memberjunction/graphql-dataprovider`: add `ClientTabInvalidationMultiplexer` electing a single leader browser tab via Web Locks to hold the `CacheInvalidation` WebSocket and relay invalidations + deduplicated catch-up watermarks to follower tabs over `BroadcastChannel` / `SharedWorker`.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [2d938cf]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 6bd8271: Shared-cache incident fixes: the scheduler's timestamp-filtered reads (due routines, wake-gate deltas, action-log retention) bypass the cache instead of writing a never-read entry per tick; `InvalidateEntityCaches` skips the storage lookup and registry rewrite for a non-cacheable entity with nothing indexed, and rewrites the registry only when it removed something; the Redis provider applies `options` on the URL path too and answers a read that takes longer than `readTimeoutMs` (default 2000 ms; `cacheSettings.redisReadTimeoutMs` / `REDIS_READ_TIMEOUT_MS` in MJServer) as a cache miss. When the index-group read a save uses to find peer slots times out, the slots it returns are removed once Redis answers.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

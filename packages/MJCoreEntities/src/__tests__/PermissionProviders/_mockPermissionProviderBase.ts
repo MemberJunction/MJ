@@ -29,7 +29,9 @@
 
 export type PermissionAction = 'Read' | 'Create' | 'Update' | 'Delete' | 'Share' | 'Execute' | 'Admin';
 
-export interface MockRunViewLike {
+export type PermissionRowRecord = Record<string, string | number | boolean | null | undefined>;
+
+export interface MockRunViewLike<TResult = PermissionRowRecord> {
     new (): {
         RunView: (args: {
             EntityName: string;
@@ -37,7 +39,7 @@ export interface MockRunViewLike {
             Fields?: string[];
             ResultType?: string;
             MaxRows?: number;
-        }) => Promise<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }>;
+        }) => Promise<{ Success: boolean; Results: TResult[]; ErrorMessage?: string }>;
     };
 }
 
@@ -51,12 +53,12 @@ export interface MockRunViewLike {
 // inside a function and returned — TypeScript must name its type in the emitted declaration, and it
 // cannot do that for a type with non-public members. Providers extending this mock are unaffected;
 // the real PermissionProviderBase keeps its own visibility.
-export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
+export function buildPermissionProviderBase<TResult = PermissionRowRecord>(RunViewCtor: MockRunViewLike<TResult>) {
     abstract class MockPermissionProviderBase {
         readonly DomainName: string = '';
 
-        async GetPermissionsGrantedByUser(): Promise<unknown[]> { return []; }
-        async GetPermissionsSharedWithUser(): Promise<unknown[]> { return []; }
+        async GetPermissionsGrantedByUser(): Promise<never[]> { return []; }
+        async GetPermissionsSharedWithUser(): Promise<never[]> { return []; }
         GetResourceTypes(): string[] { return []; }
 
         public buildNormalizedPermission(args: {
@@ -95,12 +97,12 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
             return out;
         }
 
-        public async fetchRows<T>(
+        public async fetchRows(
             entityName: string,
             extraFilter: string,
             fields: string[],
             _methodName: string
-        ): Promise<T[]> {
+        ): Promise<TResult[]> {
             const rv = new RunViewCtor();
             const result = await rv.RunView({
                 EntityName: entityName,
@@ -109,7 +111,7 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
                 ResultType: 'simple',
             });
             if (!result.Success) return [];
-            return (result.Results as T[]) ?? [];
+            return result.Results ?? [];
         }
 
         public async bulkLookupNames(
@@ -120,15 +122,22 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
             const map = new Map<string, string>();
             if (ids.length === 0) return map;
             const escaped = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
-            const rows = await this.fetchRows<{ ID: string } & Record<string, string | null>>(
+            const rows = await this.fetchRows(
                 entityName,
                 `ID IN (${escaped})`,
                 ['ID', nameField],
                 'bulkLookupNames'
             );
             for (const r of rows) {
-                const name = r[nameField];
-                if (name) map.set(r.ID, name);
+                if (r == null || typeof r !== 'object') continue;
+                const rowFields = new Map<string, string | number | boolean | null | undefined>(
+                    Object.entries(r)
+                );
+                const id = rowFields.get('ID');
+                const name = rowFields.get(nameField);
+                if (typeof id === 'string' && typeof name === 'string' && name) {
+                    map.set(id, name);
+                }
             }
             return map;
         }

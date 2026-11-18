@@ -111,6 +111,32 @@ describe('ColumnStatsCache.MergeIntoSchemas', () => {
     expect(s?.min).toBe(1);
     expect(s?.max).toBe(99);
   });
+
+  it('replaces failed all-zero sampling counts on a non-empty table with the re-queried cache counts', () => {
+    const cache = new ColumnStatsCache();
+    cache.SetColumnStats(cached('C', { totalRows: 200, distinctCount: 40, nullCount: 60, nullPercentage: 0.3, uniqueness: 0.2 }));
+    const schemas = schemaWith({
+      totalRows: 0,
+      distinctCount: 0,
+      uniquenessRatio: 0,
+      nullCount: 0,
+      nullPercentage: 0,
+      sampleValues: [],
+      minLength: 2,
+      maxLength: 8,
+    });
+    cache.MergeIntoSchemas(schemas);
+    const s = schemas[0].tables[0].columns[0].statistics;
+    expect(s).toMatchObject({
+      totalRows: 200,
+      distinctCount: 40,
+      uniquenessRatio: 0.2,
+      nullCount: 60,
+      nullPercentage: 30,
+      minLength: 2,
+      maxLength: 8,
+    });
+  });
 });
 
 describe('drivers report an empty table as zero rows', () => {

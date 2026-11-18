@@ -31,10 +31,10 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
+import { ActionParam, MJActionEntityExtended, RunActionParams, type ActionRunScope } from '@memberjunction/actions-base';
 import {
     BaseRealtimeModel,
     BuildRealtimeRelayUrl,
@@ -68,6 +68,8 @@ import {
     MJAIPromptRunEntityExtended,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
+    type ExecuteAgentParams,
+    type InputArtifact,
     AppContextSnapshot,
     FormatAppContextNote,
     ResolvePromptRunUserID,
@@ -94,10 +96,15 @@ import { ChooseRealtimeVendorForAvatar, ReadRealtimeVideoOutputRow, RealtimeMode
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
+import { GovernedArtifactService } from '../GovernedArtifactService';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
 import { BridgeRealtimeUsageRecorder } from './bridge-realtime-usage-recorder';
+import {
+    CollectDelegatedRunArtifacts,
+    ExtractDirectActionArtifacts,
+} from './realtime-artifact-helpers';
 import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
@@ -185,6 +192,33 @@ export interface RealtimeHostToolsResolutionContext {
  */
 export type RealtimeHostToolsResolver = (resolved: RealtimeHostToolsResolutionContext) => RealtimeToolDefinition[] | undefined;
 
+/** Recursive JSON value type used inside realtime config/payload parsing (avoids `any`/`unknown`). */
+type RealtimeJsonScalar = string | number | boolean | null | undefined;
+type RealtimeJsonValue = RealtimeJsonScalar | RealtimeJsonValue[] | { [key: string]: RealtimeJsonValue };
+type RealtimeJsonObject = Record<string, RealtimeJsonValue>;
+
+interface RunActionParamsWithProvider extends RunActionParams {
+    Provider?: IMetadataProvider;
+}
+
+/**
+ * Compact descriptor of an artifact already created or referenced in the conversation,
+ * injected into the co-agent's system prompt so a voice call started mid-thread can
+ * open or revise existing Docs, Sheets, Slides, or Components by ID instead of recreating them.
+ */
+export interface ConversationArtifactSummary {
+    /** Canonical `MJ: Artifacts.ID` UUID. */
+    ArtifactID: string;
+    /** Display name of the artifact. */
+    Name: string;
+    /** Canonical artifact type name (e.g. `Markdown Document`, `Excel Spreadsheet`, `Presentation`). */
+    Type?: string;
+    /** Latest saved `MJ: Artifact Versions.ID` on the conversation branch, if known. */
+    LatestVersionID?: string;
+    /** Latest saved version number on the conversation branch, if known. */
+    LatestVersionNumber?: number;
+}
+
 /**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
  *
@@ -213,6 +247,16 @@ export interface PrepareClientSessionInput {
      * environment key) is consulted. Absent ⇒ `'Any'`.
      */
     CredentialScope?: AICredentialScope;
+    /**
+     * The scope of the agent run that prepares the session (`BaseAgent.StartBridgeRealtimeSession` passes the run's
+     * validated scope, as every action call in that run is handed it). Direct tool calls and delegated target-agent
+     * runs carry it (#5624). Set only by server code from a run's validated scope, never from the session's
+     * owner-editable `Config`. Absent ⇒ the session is an unscoped run: direct tool calls still carry a `RunScope`,
+     * with every field null, so an action that scopes by tenant refuses one the model names.
+     */
+    RunScope?: ActionRunScope;
+    /** The skills active in the run that prepares the session, carried with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -248,6 +292,11 @@ export interface PrepareClientSessionInput {
     AppContext?: AppContextSnapshot;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
+    /**
+     * Artifacts already created or attached in the conversation before this call started,
+     * surfaced so the co-agent can open or update existing artifacts by ID without recreating them.
+     */
+    ConversationArtifacts?: ConversationArtifactSummary[];
     /**
      * Tools the HOST (not the co-agent runtime) declares AND executes — e.g. a phone call's `transfer_call`,
      * `send_dtmf` and `end_call`. They are added to the session's tool set but, unlike {@link ExtraTools}, are
@@ -628,7 +677,7 @@ function toPersistedMintSnapshot(snapshot: InMemoryRealtimeMintSnapshot, model: 
 }
 
 /** Whether a persisted mint snapshot is a relay session's, whose session params only its minting instance holds. */
-function isRelayMintSnapshot(candidate: unknown): boolean {
+function isRelayMintSnapshot(candidate: PersistedRealtimeMintSnapshot | RealtimeJsonValue | object | undefined): boolean {
     return typeof candidate === 'object' && candidate !== null && (candidate as Partial<PersistedRealtimeMintSnapshot>).transport === 'relay';
 }
 
@@ -684,6 +733,15 @@ export interface ExecuteRelayedToolInput {
      * from server-side state, never from a client-writable source such as a session's `Config`.
      */
     DirectActions?: RealtimeDirectActionsConfig;
+    /**
+     * The session's run scope ({@link PrepareClientSessionInput.RunScope}), passed to direct tool calls as
+     * `RunActionParams.RunScope` and to delegated target-agent runs as their scope (#5624). Pass it only from
+     * server-side state, never from a client-writable source such as a session's `Config`. Absent ⇒ an unscoped
+     * run: direct tool calls carry a `RunScope` with every field null.
+     */
+    RunScope?: ActionRunScope;
+    /** The session's active skills, passed with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The tool call the browser relayed from the provider. */
     Call: RealtimeToolCall;
     /**
@@ -726,6 +784,10 @@ export interface ExecuteRelayedToolInput {
      * which is correct for every non-elevated caller.
      */
     AttributionUserID?: string;
+    /** Optional conversation id associated with this voice session so delegated agents can access conversation artifacts. */
+    ConversationID?: string;
+    /** Optional artifact ledger passed by the host (merged with the live session ledger) for delegated target-agent runs. */
+    ConversationArtifacts?: ConversationArtifactSummary[];
 }
 
 /**
@@ -905,7 +967,7 @@ async function closeBridgedSessionWithin(close: () => Promise<void>, waitMs: num
                 `[Bridged usage] ${label}: the model session took more than ${waitMs} ms to close; its runs are finalized ` +
                     `without waiting, so usage it reports while closing is not stored.`,
             );
-            closing.catch((error: unknown) =>
+            closing.catch((error: Error | string | number | boolean | object | null | undefined) =>
                 LogError(`[Bridged usage] ${label}: closing the model session failed: ${error instanceof Error ? error.message : String(error)}`),
             );
         }
@@ -1031,6 +1093,77 @@ export class RealtimeClientSessionService {
         ttlMs: 4 * 60 * 60 * 1000,
     });
 
+    /** Maps session id -> live accumulated artifacts touched, created, or seeded during the voice session. */
+    protected readonly sessionArtifacts = new MJLruCache<string, ConversationArtifactSummary[]>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
+
+    /** Maps session id -> associated ConversationID recorded during session prep. */
+    protected readonly sessionConversationIds = new MJLruCache<string, string>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
+
+    /** Records/merges artifacts into the live session ledger, deduplicating by normalized ArtifactID. */
+    public RecordSessionArtifacts(
+        agentSessionID: string | undefined,
+        items?: ReadonlyArray<ConversationArtifactSummary | DelegatedRunArtifact>,
+    ): ConversationArtifactSummary[] {
+        const key = agentSessionID?.trim();
+        if (!key) {
+            return [];
+        }
+        const existing = this.sessionArtifacts.Get(key) ?? [];
+        const byNormId = new Map<string, ConversationArtifactSummary>();
+        for (const item of existing) {
+            const norm = NormalizeUUID((item.ArtifactID ?? '').trim());
+            if (norm) {
+                byNormId.set(norm, item);
+            }
+        }
+        for (const item of items ?? []) {
+            const rawId = (item.ArtifactID ?? '').trim();
+            const norm = NormalizeUUID(rawId);
+            if (!norm) {
+                continue;
+            }
+            const prior = byNormId.get(norm);
+            const isSummary = 'LatestVersionID' in item || 'LatestVersionNumber' in item || 'Type' in item;
+            const summaryItem = isSummary ? (item as ConversationArtifactSummary) : undefined;
+            const delegatedItem = !isSummary ? (item as DelegatedRunArtifact) : undefined;
+            const hasNewerPriorVersion =
+                prior?.LatestVersionNumber !== undefined &&
+                (summaryItem?.LatestVersionNumber === undefined
+                    ? isSummary
+                    : summaryItem.LatestVersionNumber < prior.LatestVersionNumber);
+            const merged: ConversationArtifactSummary = {
+                ArtifactID: rawId,
+                Name: item.Name?.trim() || prior?.Name || 'Untitled Artifact',
+                Type: summaryItem?.Type ?? delegatedItem?.ArtifactTypeName ?? prior?.Type,
+                LatestVersionID: hasNewerPriorVersion
+                    ? prior?.LatestVersionID
+                    : summaryItem?.LatestVersionID ?? (delegatedItem?.ArtifactVersionID || undefined) ?? prior?.LatestVersionID,
+                LatestVersionNumber: hasNewerPriorVersion
+                    ? prior?.LatestVersionNumber
+                    : summaryItem?.LatestVersionNumber ?? prior?.LatestVersionNumber,
+            };
+            byNormId.set(norm, merged);
+        }
+        const mergedList = Array.from(byNormId.values());
+        this.sessionArtifacts.Set(key, mergedList);
+        return mergedList;
+    }
+
+    /** Returns the live deduplicated artifact ledger for the given voice session. */
+    public GetSessionArtifacts(agentSessionID: string | undefined): ConversationArtifactSummary[] {
+        const key = agentSessionID?.trim();
+        if (!key) {
+            return [];
+        }
+        return [...(this.sessionArtifacts.Get(key) ?? [])];
+    }
+
     /**
      * Builds a wire-name to action map from candidate actions, sanitizing each
      * action's name and deduplicating collisions (first action wins).
@@ -1115,7 +1248,7 @@ export class RealtimeClientSessionService {
      * never explicitly removed — the TTL/maxSize eviction here is what keeps that scenario bounded
      * instead of an unbounded per-process leak.
      */
-    private readonly promptRunWriteChains = new MJLruCache<string, Promise<unknown>>({
+    private readonly promptRunWriteChains = new MJLruCache<string, Promise<void>>({
         maxSize: 5_000,
         ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. any realistic session duration
     });
@@ -1484,7 +1617,7 @@ export class RealtimeClientSessionService {
     }
 
     private validatePersistedMintSnapshot(
-        candidate: unknown,
+        candidate: PersistedRealtimeMintSnapshot | RealtimeJsonValue | object | undefined,
         expectedCoAgentID?: string,
     ): InMemoryRealtimeMintSnapshot | null {
         if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -1569,14 +1702,14 @@ export class RealtimeClientSessionService {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<{ Snapshot: unknown; AgentID: string } | null> {
+    ): Promise<{ Snapshot: PersistedRealtimeMintSnapshot | RealtimeJsonValue; AgentID: string } | null> {
         try {
             const session = await provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', contextUser);
             if (!(await session.Load(agentSessionID)) || !session.Config_) {
                 return null;
             }
-            const configObj = JSON.parse(session.Config_) as Record<string, unknown>;
-            return { Snapshot: configObj['realtimeMintSnapshot'], AgentID: session.AgentID };
+            const configObj = JSON.parse(session.Config_) as { realtimeMintSnapshot?: PersistedRealtimeMintSnapshot | RealtimeJsonValue };
+            return { Snapshot: configObj.realtimeMintSnapshot, AgentID: session.AgentID };
         } catch (error) {
             LogError(`RealtimeClientSessionService.loadPersistedMintSnapshot failed: ${error instanceof Error ? error.message : String(error)}`);
             return null;
@@ -1790,6 +1923,9 @@ export class RealtimeClientSessionService {
                             TargetAgentID: wiring.Input.TargetAgentID,
                             AllowedAgents: wiring.AllowedAgents,
                             DirectActions: wiring.Prep.EffectiveConfig?.realtime?.directActions,
+                            // The preparing run's scope and skills, from the server-built prep input.
+                            RunScope: wiring.Input.RunScope,
+                            ActiveSkillIDs: wiring.Input.ActiveSkillIDs,
                             OnProgress: (progress) => wiring.Narrator.HandleProgress(progress),
                             Call: call,
                         },
@@ -1886,6 +2022,16 @@ export class RealtimeClientSessionService {
         provider: IMetadataProvider
     ): Promise<RealtimeSessionParamsPrep> {
         await this.configureEngine(contextUser, provider);
+
+        const sessionKey = input.AgentSessionID?.trim();
+        if (sessionKey) {
+            if (input.ConversationID?.trim()) {
+                this.sessionConversationIds.Set(sessionKey, input.ConversationID.trim());
+            }
+            if (input.ConversationArtifacts?.length) {
+                this.RecordSessionArtifacts(sessionKey, input.ConversationArtifacts);
+            }
+        }
 
         const coAgent = this.resolveCoAgent(input);
         if (!coAgent) {
@@ -2854,7 +3000,7 @@ export class RealtimeClientSessionService {
             return [];
         }
         try {
-            const parsed: unknown = JSON.parse(raw);
+            const parsed = JSON.parse(raw) as RealtimeJsonValue;
             return Array.isArray(parsed) ? (parsed as Array<{ role: string; content: string }>) : [];
         } catch {
             return [];
@@ -3724,9 +3870,10 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
+        const artifacts = this.formatConversationArtifacts(input.ConversationArtifacts);
         const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, artifacts, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -3861,9 +4008,15 @@ export class RealtimeClientSessionService {
                 `Knowledge Hub" → ContextTool with action 'NavigateToApp'; "open this record"; "switch to the X tab"). ` +
                 `Do NOT route in-app navigation/actions through '${INVOKE_TARGET_AGENT_TOOL_NAME}', and NEVER say you ` +
                 `need an active session id or a screen snapshot to do them — calling 'ContextTool' is all that's ` +
-                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation. ` +
+                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data / artifact creation work, not navigation. ` +
                 `When a channel note lists interactive channels you can use, 'ContextTool' also addresses ONE of ` +
-                `them: add "target": { "channel": "<channel name>" } and use that channel's action names.`;
+                `them: add "target": { "channel": "<channel name>" } and use that channel's action names (for example, ` +
+                `in 'ArtifactWorkspace' call ContextTool with action 'open' and params { "artifactId": "<id>" } or ` +
+                `{ "name": "<title>" }; call action 'navigate_to_anchor' with params { "artifactId"?: "<id>", ` +
+                `"sheet"?: "<sheet>", "range"?: "<A1:D10>", "heading"?: "<section>", "blockId"?: "<id>", ` +
+                `"slideNumber"?: <1-based n>, "elementId"?: "<id>", "highlightMs"?: <ms> } to jump the user's viewer straight to a cell, section, slide, ` +
+                `or element; and call action 'set_view_mode' with params { "artifactId"?: "<id>", "mode": "edit" | "suggest" | "diff" | "present" } to ` +
+                `switch viewer mode. Watch 'selection_changed' context events to see what the user highlighted).`;
         }
 
         return clause;
@@ -3886,7 +4039,10 @@ export class RealtimeClientSessionService {
         }
         return (
             'Earlier in this conversation (a previous live session that you are now resuming), ' +
-            'you and the user discussed the following. Treat it as shared context you both remember:\n' +
+            'you and the user discussed the following. Treat it as shared context you both remember — ' +
+            'pick up naturally mid-conversation without giving a fresh cold introduction or asking the ' +
+            'user to repeat what was already covered, and refer to restored Workspace/Whiteboard/Browser/Media ' +
+            'surfaces when helpful:\n' +
             text
         );
     }
@@ -3967,6 +4123,38 @@ export class RealtimeClientSessionService {
             })
             .filter(line => line.length > 0);
         return lines.length > 0 ? `Conversation so far:\n${lines.join('\n')}` : '';
+    }
+
+    /**
+     * Formats artifacts already created or attached in the conversation before this call started
+     * so the co-agent can open or revise them by ID rather than duplicating them.
+     *
+     * @param artifacts The deduplicated conversation artifact summaries, or undefined.
+     * @returns The formatted section, or empty string when none exist.
+     */
+    private formatConversationArtifacts(artifacts?: ConversationArtifactSummary[]): string {
+        if (!artifacts || artifacts.length === 0) {
+            return '';
+        }
+        const lines = artifacts
+            .filter(a => a.ArtifactID && a.Name)
+            .map(a => {
+                const typePart = a.Type ? `, Type: ${a.Type}` : '';
+                const verPart = typeof a.LatestVersionNumber === 'number' ? `, LatestVersion: v${a.LatestVersionNumber}` : '';
+                return `- "${a.Name}" (ArtifactID: ${a.ArtifactID}${typePart}${verPart})`;
+            });
+        if (lines.length === 0) {
+            return '';
+        }
+        return (
+            'Artifacts already in this conversation (to display a Doc, Spreadsheet, or Presentation in the workspace use ContextTool with ' +
+            'target={ "channel": "ArtifactWorkspace" }, action="open", params={ "artifactId": "<ArtifactID>" }; ' +
+            'to jump the viewer to a specific section, cell range, or slide use action="navigate_to_anchor" with ' +
+            'params={ "artifactId"?: "<ArtifactID>", "sheet"?: "<sheet>", "range"?: "<A1:D10>", "heading"?: "<heading>", "blockId"?: "<id>", "slideNumber"?: <1-based n>, "elementId"?: "<id>", "highlightMs"?: <ms> }; ' +
+            'to change mode use action="set_view_mode" with params={ "artifactId"?: "<ArtifactID>", "mode": "edit" | "suggest" | "diff" | "present" }; ' +
+            'to revise an existing artifact via invoke-target-agent, include its ArtifactID so the agent updates it instead of creating a duplicate):\n' +
+            lines.join('\n')
+        );
     }
 
     /**
@@ -4138,7 +4326,7 @@ export class RealtimeClientSessionService {
     ): RealtimeToolBroker {
         const deps: RealtimeToolBrokerDeps = {
             DelegateToTarget: (request) => this.delegateToTarget(input, request, contextUser, provider),
-            ExecuteTool: (call) => this.executeNonTargetTool(call, input, contextUser)
+            ExecuteTool: (call) => this.executeNonTargetTool(call, input, contextUser, provider)
         };
         return new RealtimeToolBroker(deps);
     }
@@ -4175,6 +4363,9 @@ export class RealtimeClientSessionService {
         try {
             const result = await this.runDelegatedAgent(input, request, resolution.Agent, contextUser, provider);
             const artifacts = await this.createDelegatedRunArtifacts(result, contextUser, provider);
+            if (artifacts?.length && input.AgentSessionID?.trim()) {
+                this.RecordSessionArtifacts(input.AgentSessionID, artifacts);
+            }
             return this.buildDelegatedResult(request.CallID, result, artifacts);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -4251,7 +4442,7 @@ export class RealtimeClientSessionService {
     /** Parses the optional `agent` (colleague name) from an `invoke-target-agent` call's arguments JSON. */
     private parseDelegateAgentName(argumentsJson: string): string | undefined {
         try {
-            const parsed = JSON.parse(argumentsJson) as { agent?: unknown };
+            const parsed = JSON.parse(argumentsJson) as { agent?: RealtimeJsonValue };
             if (typeof parsed.agent === 'string' && parsed.agent.trim().length > 0) {
                 return parsed.agent.trim();
             }
@@ -4287,9 +4478,10 @@ export class RealtimeClientSessionService {
         provider: IMetadataProvider
     ): Promise<DelegatedRunArtifact[] | undefined> {
         const paused = result.agentRun?.Status === 'AwaitingFeedback';
-        const payload = result.payload as Record<string, unknown> | null | undefined;
-        const hasPayload = payload != null && Object.keys(payload).length > 0;
-        if (!result.success || paused || !hasPayload) {
+        const payload = result.payload;
+        const hasPayload = payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
+        const hasTouched = (result.touchedArtifacts?.length ?? 0) > 0;
+        if (!hasTouched && (!result.success || paused || !hasPayload)) {
             return undefined;
         }
         try {
@@ -4302,39 +4494,30 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * The DB-backed artifact-creation seam: runs `AgentRunner.ProcessAgentArtifacts` WITHOUT a
-     * conversation detail (the voice path has none — the artifact + version are created and the
-     * junction link is skipped), then loads the artifact header for its display name.
-     *
-     * Artifacts whose Visibility resolved to `System Only` (the agent's ArtifactCreationMode) are
-     * created but NOT surfaced to the overlay — matching how chat hides them from users.
-     *
-     * **Overridable seam** so tests can exercise {@link createDelegatedRunArtifacts}' eligibility
-     * guards without a DB.
-     *
-     * @param result The delegated agent execution result (payload + agentRun).
-     * @param contextUser The calling user.
-     * @param provider The request-scoped metadata provider.
-     * @returns The produced artifact descriptor(s), or `undefined`.
+     * The DB-backed artifact-creation seam: surfaces collaborative artifacts touched during the run
+     * (`result.touchedArtifacts`) plus any payload artifact created by `AgentRunner.ProcessAgentArtifacts`
+     * (without a conversation detail on voice paths). Payload artifacts are created only on completed,
+     * successful runs (paused/failed runs still surface touched governed artifacts).
      */
     protected async processRunArtifacts(
         result: ExecuteAgentResult,
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<DelegatedRunArtifact[] | undefined> {
+        const paused = result.agentRun?.Status === 'AwaitingFeedback';
+        const canProcessPayload = result.success && !paused;
         const runner = new AgentRunner(provider);
-        const info = await runner.ProcessAgentArtifacts(result, undefined, undefined, contextUser, provider);
-        if (!info) {
-            return undefined;
-        }
-        const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-        if (!(await artifact.Load(info.artifactId))) {
-            return undefined;
-        }
-        if (artifact.Visibility === 'System Only') {
-            return undefined; // created for system purposes, never user-surfaced
-        }
-        return [{ ArtifactID: info.artifactId, ArtifactVersionID: info.versionId, Name: artifact.Name }];
+        return CollectDelegatedRunArtifacts({
+            Result: result,
+            ContextUser: contextUser,
+            Provider: provider,
+            ...(canProcessPayload
+                ? {
+                    ProcessPayloadArtifacts: (r) =>
+                        runner.ProcessAgentArtifacts(r, undefined, undefined, contextUser, provider),
+                }
+                : {}),
+        });
     }
 
     /**
@@ -4364,6 +4547,49 @@ export class RealtimeClientSessionService {
         const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
         const runner = new AgentRunner(provider);
         const combined = this.combineSignals(request.AbortSignal, input.AbortSignal);
+
+        const sessionKey = input.AgentSessionID?.trim();
+        const sessionSummaries = sessionKey
+            ? this.RecordSessionArtifacts(sessionKey, input.ConversationArtifacts)
+            : (input.ConversationArtifacts ?? []);
+        const effectiveConversationId =
+            input.ConversationID?.trim() || (sessionKey ? this.sessionConversationIds.Get(sessionKey) : undefined);
+
+        const resolvedInputArtifacts: InputArtifact[] = [];
+        for (const summary of sessionSummaries) {
+            try {
+                const loaded = await GovernedArtifactService.Instance.LoadReadableArtifactState(
+                    provider,
+                    contextUser,
+                    summary.ArtifactID,
+                );
+                if (loaded.state) {
+                    const st = loaded.state;
+                    resolvedInputArtifacts.push({
+                        name: st.name,
+                        typeName: st.typeName,
+                        content: st.content,
+                        artifactId: st.artifactId,
+                        ...(st.versionId ? { versionId: st.versionId } : {}),
+                        versionNumber: st.versionNumber,
+                        ...(st.description ? { description: st.description } : {}),
+                        ...(st.mimeType ? { mimeType: st.mimeType } : {}),
+                        ...(st.toolLibraryClass ? { toolLibraryClass: st.toolLibraryClass } : {}),
+                    });
+                }
+            } catch {
+                // Non-fatal: individual unreadable/evicted artifact does not abort delegated run
+            }
+        }
+
+        const runData: Record<string, RealtimeJsonValue | AppContextSnapshot | ConversationArtifactSummary[]> = {};
+        if (input.AppContext) {
+            runData.appContext = input.AppContext;
+        }
+        if (sessionSummaries.length > 0) {
+            runData.conversationArtifacts = sessionSummaries;
+        }
+
         try {
             return await runner.RunAgent({
                 agent: target,
@@ -4378,14 +4604,37 @@ export class RealtimeClientSessionService {
                 parentRun: parentRun ?? undefined,
                 agentSessionID: input.AgentSessionID,
                 sessionID: input.BrowserSessionID,
-                data: input.AppContext ? { appContext: input.AppContext } : undefined,
+                ...(effectiveConversationId ? { conversationId: effectiveConversationId } : {}),
+                ...(resolvedInputArtifacts.length > 0 ? { inputArtifacts: resolvedInputArtifacts } : {}),
+                data: Object.keys(runData).length > 0 ? runData : undefined,
                 onProgress: input.OnProgress,
                 lastRunId: input.ResumeRunID,
-                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined,
+                // The session's run scope and active skills (#5624), as BaseAgent hands a sub-agent its own.
+                ...this.delegatedRunScope(input)
             });
         } finally {
             combined.Dispose();
         }
+    }
+
+    /**
+     * The scope a delegated target-agent run starts with: the session's ({@link ExecuteRelayedToolInput.RunScope}) and
+     * its active skills, in the `ExecuteAgentParams` fields BaseAgent propagates to a sub-agent. Nothing for a session
+     * with no scope, so the delegated run is unscoped, as before.
+     */
+    private delegatedRunScope(input: ExecuteRelayedToolInput): Pick<
+        ExecuteAgentParams,
+        'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'SearchScopeIDs' | 'parentActivatedSkillIDs'
+    > {
+        const scope = input.RunScope;
+        return {
+            ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
+            ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
+            ...(scope?.SecondaryScopes ? { SecondaryScopes: { ...scope.SecondaryScopes } } : {}),
+            ...(scope?.SearchScopeIDs?.length ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+            ...(input.ActiveSkillIDs?.length ? { parentActivatedSkillIDs: [...input.ActiveSkillIDs] } : {}),
+        };
     }
 
     /**
@@ -4410,7 +4659,8 @@ export class RealtimeClientSessionService {
                 Success: true,
                 Output: `You need an answer from the user before you can continue this work. Ask them, in your own first-person voice: ${question}`,
                 PausedRunID: result.agentRun.ID,
-                RunID: result.agentRun.ID
+                RunID: result.agentRun.ID,
+                ...(artifacts ? { Artifacts: artifacts } : {}),
             };
         }
         return {
@@ -4601,6 +4851,30 @@ export class RealtimeClientSessionService {
                 type: schemaType,
                 description: p.Description || p.Name
             };
+            if (p.IsArray) {
+                const lowerName = p.Name.trim().toLowerCase();
+                if (lowerName === 'operations' || lowerName === 'initialoperations') {
+                    propSchema.items = {
+                        type: 'object',
+                        description: 'Single governed artifact tool invocation inside the array.',
+                        properties: {
+                            tool: {
+                                type: 'string',
+                                description: 'Exact artifact tool name, e.g. "write_cells", "insert_block_after", "add_slide".'
+                            },
+                            input: {
+                                type: 'object',
+                                description: 'JSON arguments object matching the selected tool\'s inputSchema.'
+                            }
+                        },
+                        required: ['tool']
+                    };
+                } else if (p.ValueType === 'Simple Object' || p.ValueType === 'BaseEntity Sub-Class') {
+                    propSchema.items = { type: 'object' };
+                } else {
+                    propSchema.items = { type: 'string' };
+                }
+            }
             properties[p.Name] = propSchema;
             if (p.IsRequired) {
                 required.push(p.Name);
@@ -4641,7 +4915,8 @@ export class RealtimeClientSessionService {
     protected async executeNonTargetTool(
         call: RealtimeToolCall,
         input?: ExecuteRelayedToolInput,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<ToolExecutionResult> {
         if (!input?.TargetAgentID) {
             return {
@@ -4703,12 +4978,24 @@ export class RealtimeClientSessionService {
                 Type: 'Input'
             }));
 
-            const runParams = new RunActionParams();
+            const runParams: RunActionParamsWithProvider = new RunActionParams();
             runParams.Action = action;
             runParams.ContextUser = executingUser;
             runParams.Params = actionParams;
             runParams.Filters = [];
-            runParams.Context = { AgentID: target.ID };
+            if (provider) {
+                runParams.Provider = provider;
+            }
+            // The session's run scope and active skills, as BaseAgent stamps them on every action call in a run
+            // (#5624). The arguments are model-written, so without them a Scoped Search here runs as a direct call
+            // and searches whatever tenant and skill the model names.
+            runParams.RunScope = this.directToolRunScope(input);
+            runParams.Context = {
+                AgentID: target.ID,
+                AgentName: target.Name,
+                ...(input.ParentRunID ? { AgentRunID: input.ParentRunID } : {}),
+                ActiveSkillIDs: [...(input.ActiveSkillIDs ?? [])]
+            };
 
             let timerHandle: ReturnType<typeof setTimeout> | undefined;
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -4732,11 +5019,16 @@ export class RealtimeClientSessionService {
             });
 
             const outputText = result.Message || (result.Success ? 'Action completed successfully.' : 'Action failed.');
+            const actionArtifacts = ExtractDirectActionArtifacts(action.Name, result.Success, result.Params);
+            if (actionArtifacts?.length && input.AgentSessionID?.trim()) {
+                this.RecordSessionArtifacts(input.AgentSessionID, actionArtifacts);
+            }
 
             return {
                 CallID: call.CallID,
                 Success: result.Success,
-                Output: outputText
+                Output: outputText,
+                ...(actionArtifacts ? { Artifacts: actionArtifacts } : {})
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -4746,6 +5038,22 @@ export class RealtimeClientSessionService {
                 Output: `Action '${action.Name}' failed: ${message}`
             };
         }
+    }
+
+    /**
+     * The `RunScope` a direct tool call carries: the session's ({@link ExecuteRelayedToolInput.RunScope}), copied so
+     * an action cannot change what the next call sees, or an unscoped run's (every field null) when the session has
+     * none. Never absent: an absent `RunScope` tells an action it is called outside any run.
+     */
+    private directToolRunScope(input: ExecuteRelayedToolInput): ActionRunScope {
+        const scope = input.RunScope;
+        if (!scope) {
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        }
+        const secondary = scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
+            : null;
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
     }
 
     /**
@@ -4799,19 +5107,19 @@ export class RealtimeClientSessionService {
      * @returns The parsed arguments record.
      * @throws ToolArgumentsError with actionable message when arguments are present but unparseable.
      */
-    protected parseActionParams(argumentsJson?: string): Record<string, unknown> {
+    protected parseActionParams(argumentsJson?: string): RealtimeJsonObject {
         if (!argumentsJson || argumentsJson.trim() === '') {
             return {};
         }
-        let parsed: unknown;
+        let parsed: RealtimeJsonValue;
         try {
-            parsed = JSON.parse(argumentsJson);
+            parsed = JSON.parse(argumentsJson) as RealtimeJsonValue;
         } catch (err) {
             const syntaxMsg = err instanceof Error ? err.message : String(err);
             throw new ToolArgumentsError(`Unparseable JSON arguments: ${syntaxMsg}. Please provide valid JSON formatted arguments.`);
         }
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
+            return parsed as RealtimeJsonObject;
         }
         throw new ToolArgumentsError(`Tool arguments must be a JSON object, but received ${Array.isArray(parsed) ? 'an array' : typeof parsed}. Please format arguments as a JSON object.`);
     }
@@ -4825,7 +5133,7 @@ export class RealtimeClientSessionService {
      */
     private parseDelegateRequestText(argumentsJson: string): string {
         try {
-            const parsed = JSON.parse(argumentsJson) as { request?: unknown };
+            const parsed = JSON.parse(argumentsJson) as { request?: RealtimeJsonValue };
             if (typeof parsed.request === 'string') {
                 return parsed.request;
             }

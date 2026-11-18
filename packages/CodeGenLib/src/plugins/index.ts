@@ -31,12 +31,15 @@ forms, GraphQL resolvers, Action subclasses, and DB schema JSON.
 
 Use --skipdb to regenerate code from existing metadata only; --skipfiles to run
 database-side operations only. --force-advanced-gen re-runs the LLM-driven
-advanced generation for ALL entities (bypasses changed-entity scoping).`;
+advanced generation for ALL entities (bypasses changed-entity scoping).
+--all-schemas re-emits the generated files of every schema, not only schemas
+with a new or modified entity.`;
 
   static Examples = [
     { command: '<%= config.bin %> <%= command.id %>', description: 'Run the full code generation pipeline' },
     { command: '<%= config.bin %> <%= command.id %> --skipdb', description: 'Regenerate code files without touching the database' },
     { command: '<%= config.bin %> <%= command.id %> --format=json', description: 'Emit a machine-readable result for an agent' },
+    { command: '<%= config.bin %> <%= command.id %> --all-schemas', description: 'Re-emit generated files for every schema (e.g. after rebuilding a database from migrations)' },
   ];
 
   /** @deprecated Use {@link Examples}. */
@@ -65,6 +68,10 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       description:
         'Directory for CodeGen_Run_*.sql (EntityField INSERTs and other metadata SQL). Open Apps default to ./migrations/codegen. Do not point this at MJ/migrations/v*.',
     }),
+    'all-schemas': Flags.boolean({
+      description:
+        'Re-emit generated files for every schema, not only schemas with a new or modified entity. Files are still written only when their content changes. Same as fileEmit.dirtySchemaOnly: false in mj.config.cjs, for this run.',
+    }),
     'skip-commands': Flags.boolean({
       description:
         'Skip running BEFORE and AFTER shell commands configured in mj.config. Can also be set with MJ_CODEGEN_SKIP_COMMANDS=1.',
@@ -82,11 +89,12 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       { name: '--skipfiles', type: 'boolean', description: 'Run DB-side operations only (no code files)' },
       { name: '--force-advanced-gen', type: 'boolean', description: 'Re-run advanced generation for all entities' },
       { name: '--no-ai', type: 'boolean', description: 'Disable AI-driven advanced generation (same as MJ_CODEGEN_NO_AI=1)' },
+      { name: '--all-schemas', type: 'boolean', description: 'Re-emit generated files for every schema (same as fileEmit.dirtySchemaOnly: false)' },
       { name: '--skip-commands', type: 'boolean', description: 'Skip running BEFORE/AFTER commands (same as MJ_CODEGEN_SKIP_COMMANDS=1)' },
       { name: '--sql-output-dir', type: 'string', description: 'Directory for CodeGen_Run metadata SQL (Open Apps: ./migrations/codegen)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
-    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --skip-commands', 'mj codegen --format=json'],
+    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --all-schemas', 'mj codegen --skip-commands', 'mj codegen --format=json'],
     runtime: { class: 'slow', typicalSeconds: 45, note: 'scales with entity count; full run far slower than a single-entity change' },
   };
 
@@ -132,6 +140,11 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       this.Host.Log('--no-ai: advanced generation disabled.');
     }
 
+    if (flags['all-schemas']) {
+      ApplyAllSchemasFlag(configInfo.fileEmit);
+      this.Host.Log('--all-schemas: re-emitting generated files for every schema (write-if-changed still applies).');
+    }
+
     if (flags['skip-commands'] || process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
       process.env.MJ_CODEGEN_SKIP_COMMANDS = '1';
       this.Host.Log('--skip-commands: before/after shell commands skipped.');
@@ -147,6 +160,16 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
   protected async Cleanup(result: MJCLIResult): Promise<void> {
     process.exit(result.success ? 0 : 1);
   }
+}
+
+/**
+ * `--all-schemas` (#5163): rebuild every schema's generated files this run, as
+ * `fileEmit.dirtySchemaOnly: false` does from config. Without it a database run skips any
+ * schema whose files exist and that has no new or modified entity, so a database rebuilt
+ * from migrations never refreshes them. Write-if-changed still keeps unchanged files as is.
+ */
+export function ApplyAllSchemasFlag(fileEmit: { dirtySchemaOnly: boolean }): void {
+  fileEmit.dirtySchemaOnly = false;
 }
 
 /** Tree-shaking / dynamic-load anchor — referenced by the CLI plugin loader. */

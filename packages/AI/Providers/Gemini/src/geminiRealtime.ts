@@ -35,6 +35,7 @@ import {
     type RealtimeClientTransport,
     type RealtimeReconnectContext,
     type RealtimeReconnectFailureCode,
+    type RealtimeContextNoteOptions,
     RealtimeDiagLog,
     NormalizeTurnDetectionSettings,
     type RealtimeTurnDetectionSettings,
@@ -2136,10 +2137,11 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
      *
      * @param text The context note to append to the conversation.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
         this.enqueueOrRun(() => {
             this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });

@@ -87,10 +87,11 @@ export default class Analyze extends Command {
         resumeFromState: flags.resume,
         reanalyzeBelowConfidence,
         maxIterations,
-        // --pruning-only runs the FK pruning pass alone; sampling would be new work it never asked for
+        // --pruning-only runs the FK pruning pass alone; sampling and new quality probes are skipped,
+        // while stored orphan rates remain active for pruning and findings are re-derived afterward.
         skipSampling: flags['skip-sampling'] || flags['pruning-only'],
-        // Likewise for the data quality probes
-        skipDataQuality: flags['skip-data-quality'] || flags['pruning-only'],
+        skipDataQuality: flags['skip-data-quality'],
+        pruningOnly: flags['pruning-only'],
         onProgress: (message, data) => {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);

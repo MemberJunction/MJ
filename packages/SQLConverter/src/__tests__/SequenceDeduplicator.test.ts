@@ -203,4 +203,57 @@ describe('SequenceDeduplicator', () => {
     // Later file (V002) should be the one bumped
     expect(result.fixes[0].file).toContain('V002');
   });
+
+  // Issue #3166: committed .pg.sql files are history and may already be applied. Only the
+  // files a convert run just wrote may change.
+  describe('writableFiles (issue #3166)', () => {
+    it('leaves a committed file untouched and renumbers the new file', () => {
+      const committed = makeEntityFieldInsert('AAA', 100048, 'Committed');
+      writeFileSync(join(tmpDir, 'V001__committed.pg.sql'), committed);
+      writeFileSync(join(tmpDir, 'V002__new.pg.sql'), makeEntityFieldInsert('AAA', 100048, 'New'));
+
+      const result = DeduplicateEntityFieldSequences(tmpDir, false, new Set(['V002__new.pg.sql']));
+      expect(result.fixes).toHaveLength(1);
+      expect(result.fixes[0].file).toBe('V002__new.pg.sql');
+      expect(readFileSync(join(tmpDir, 'V001__committed.pg.sql'), 'utf-8')).toBe(committed);
+      expect(readFileSync(join(tmpDir, 'V002__new.pg.sql'), 'utf-8')).toContain('100049,');
+    });
+
+    it('renumbers the earlier file when only it was written by this run', () => {
+      const committed = makeEntityFieldInsert('AAA', 100048, 'Committed');
+      writeFileSync(join(tmpDir, 'V001__new.pg.sql'), makeEntityFieldInsert('AAA', 100048, 'New'));
+      writeFileSync(join(tmpDir, 'V002__committed.pg.sql'), committed);
+
+      const result = DeduplicateEntityFieldSequences(tmpDir, false, new Set(['V001__new.pg.sql']));
+      expect(result.fixes).toHaveLength(1);
+      expect(result.fixes[0].file).toBe('V001__new.pg.sql');
+      expect(readFileSync(join(tmpDir, 'V002__committed.pg.sql'), 'utf-8')).toBe(committed);
+    });
+
+    it('renumbers a new entry once when it collides with several committed files', () => {
+      writeFileSync(join(tmpDir, 'V001__new.pg.sql'), makeEntityFieldInsert('AAA', 100048, 'New'));
+      writeFileSync(join(tmpDir, 'V002__committed.pg.sql'), makeEntityFieldInsert('AAA', 100048, 'C1'));
+      writeFileSync(join(tmpDir, 'V003__committed.pg.sql'), makeEntityFieldInsert('AAA', 100048, 'C2'));
+
+      const result = DeduplicateEntityFieldSequences(tmpDir, false, new Set(['V001__new.pg.sql']));
+      expect(result.fixes).toHaveLength(1);
+      expect(result.committedCollisions).toHaveLength(1);
+      const rewritten = readFileSync(join(tmpDir, 'V001__new.pg.sql'), 'utf-8');
+      expect(rewritten.match(/auto-bumped/g)).toHaveLength(1);
+    });
+
+    it('reports a collision between two committed files without editing either', () => {
+      const a = makeEntityFieldInsert('AAA', 100048, 'A');
+      const b = makeEntityFieldInsert('AAA', 100048, 'B');
+      writeFileSync(join(tmpDir, 'V001__a.pg.sql'), a);
+      writeFileSync(join(tmpDir, 'V002__b.pg.sql'), b);
+
+      const result = DeduplicateEntityFieldSequences(tmpDir, false, new Set<string>());
+      expect(result.totalCollisions).toBe(1);
+      expect(result.fixes).toHaveLength(0);
+      expect(result.committedCollisions).toHaveLength(1);
+      expect(readFileSync(join(tmpDir, 'V001__a.pg.sql'), 'utf-8')).toBe(a);
+      expect(readFileSync(join(tmpDir, 'V002__b.pg.sql'), 'utf-8')).toBe(b);
+    });
+  });
 });

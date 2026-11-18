@@ -1,9 +1,9 @@
-import { ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
+import { ActionParam, ActionResultSimple, ResolveCompanyIntegration } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+
 
 /**
  * Base class for all LMS-related actions.
@@ -68,36 +68,26 @@ export abstract class BaseLMSAction extends BaseAction {
   /**
    * Gets the company integration record for the specified company and LMS
    */
-  protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
+  protected async getCompanyIntegration(companyId: string, contextUser: UserInfo, companyIntegrationId?: string | null): Promise<MJCompanyIntegrationEntity> {
     this.validateUUID(companyId, 'CompanyID');
 
     // Validate integration name before SQL interpolation
     const safeIntegrationName = this.validateIntegrationName(this.integrationName);
 
     // Check cache first
-    if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
+    if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)
+      && (!companyIntegrationId || UUIDsEqual(this._companyIntegration.ID, companyIntegrationId))) {
       return this._companyIntegration;
     }
 
-    const rv = new RunView();
-    const result = await rv.RunView<MJCompanyIntegrationEntity>(
-      {
-        EntityName: 'MJ: Company Integrations',
-        ExtraFilter: `CompanyID = '${companyId}' AND Integration = '${safeIntegrationName}'`,
-        ResultType: 'entity_object',
-      },
-      contextUser,
-    );
-
-    if (!result.Success) {
-      throw new Error(`Failed to retrieve company integration: ${result.ErrorMessage}`);
-    }
-
-    if (!result.Results || result.Results.length === 0) {
-      throw new Error(`No ${this.integrationName} integration found for company ${companyId}. Please configure the integration first.`);
-    }
-
-    this._companyIntegration = result.Results[0];
+    // #4929: active connections only, and a refusal naming the candidates when there are several, instead of the
+    // first row.
+    this._companyIntegration = await ResolveCompanyIntegration({
+      CompanyID: companyId,
+      IntegrationNames: [safeIntegrationName],
+      CompanyIntegrationID: companyIntegrationId,
+      ContextUser: contextUser,
+    });
     return this._companyIntegration;
   }
 

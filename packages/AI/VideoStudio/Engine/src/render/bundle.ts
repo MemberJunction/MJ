@@ -1,9 +1,24 @@
 import { RunView, type IMetadataProvider, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
 import {
     BuildDataCheckInputs,
+    BuildNarrationCueTable,
     BuildRenderDataSnapshot,
+    DEFAULT_MUSIC_DUCK_DB,
+    DEFAULT_MUSIC_EVENT_SECONDS,
+    DEFAULT_MUSIC_GAIN_WITH_NARRATION_DB,
+    DEFAULT_MUSIC_GAIN_WITHOUT_NARRATION_DB,
+    DEFAULT_MUSIC_SWELL_DB,
+    DEFAULT_SFX_GAIN_DB,
+    FindUnresolvedNarrationCues,
     WithChartKit,
+    WithNarrationCues,
+    type AudioCue,
     type CheckIssue,
+    type NarrationLine,
+    type RenderAudioMixPlan,
+    type RenderAudioNarrationTrack,
+    type RenderAudioSfxTrack,
+    type RenderMusicGainEvent,
     type CheckRequest,
     type RenderCompositionFile,
     type RenderProjectBundle,
@@ -18,6 +33,7 @@ import {
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import type { VideoStudioSettings } from '../settings.js';
+import { BuildDefaultAudioSettings, type VideoRenderAudioSettings } from './render-settings.js';
 import { ReadStoredFile, ReadStoredFileWithType } from '../storage.js';
 
 /**
@@ -388,30 +404,18 @@ export async function BuildRenderBundle(
             continue;
         }
         const bytes = await ReadStoredFile(audioFileId, ctx.ContextUser, ctx.Provider);
-        const relativePath =
-            line.StagedPath?.trim() || `audio/${SanitizeStageKey(line.Key)}.mp3`;
+        const placement = resolveNarrationPlacement(line, beats);
         assets.push({
             Key: line.Key,
-            RelativePath: relativePath,
+            RelativePath: placement.Src,
             DataBase64: bytes.toString('base64'),
             MimeType: 'audio/mpeg',
         });
-        const matchingBeat = beats.find((b) => b.Key === line.BeatKey);
-        const startSeconds =
-            typeof line.StartSeconds === 'number' && Number.isFinite(line.StartSeconds)
-                ? line.StartSeconds
-                : matchingBeat?.StartSeconds ?? 0;
-        const durationSeconds =
-            typeof line.DurationSeconds === 'number' && line.DurationSeconds > 0
-                ? line.DurationSeconds
-                : matchingBeat && matchingBeat.EndSeconds > matchingBeat.StartSeconds
-                  ? matchingBeat.EndSeconds - matchingBeat.StartSeconds
-                  : undefined;
         autoAudioTracks.push({
             Id: `narration-${SanitizeStageKey(line.Key)}`,
-            Src: relativePath,
-            StartSeconds: startSeconds,
-            DurationSeconds: durationSeconds,
+            Src: placement.Src,
+            StartSeconds: placement.StartSeconds,
+            DurationSeconds: placement.DurationSeconds,
             Volume: 1,
         });
     }
@@ -477,7 +481,7 @@ export async function BuildRenderBundle(
     const seed = typeof spec.Render?.Seed === 'number' ? spec.Render.Seed : 1;
     const entryFile = source.EntryFile?.trim() || 'index.html';
 
-    const withChartKit = WithChartKit({
+    const withChartKit = withRuntimeHelpers(spec, {
         Format: format,
         EntryFile: entryFile,
         Files: files,
@@ -500,6 +504,158 @@ export async function BuildRenderBundle(
     return {
         ...withChartKit,
         Files: [...filteredFiles, { Path: 'mj/fonts.css', Content: fontsCss }],
+    };
+}
+
+/**
+ * Stages the composition runtime helpers: `mj/chart-kit.js` and `mj/narration-cues.js` (word timings
+ * for `window.mjCue`, with the `<script>` tag added to the entry file).
+ */
+function withRuntimeHelpers(spec: VideoGenerationSpec, bundle: RenderProjectBundle): RenderProjectBundle {
+    return WithNarrationCues(WithChartKit(bundle), spec);
+}
+
+/**
+ * Bundle path, master-timeline start, and duration of a staged narration clip. Falls back to the
+ * owning beat's start and length when Pre-Production has not resolved them.
+ */
+function resolveNarrationPlacement(
+    line: NarrationLine,
+    beats: VideoGenerationSpec['Beats'],
+): { Src: string; StartSeconds: number; DurationSeconds?: number } {
+    const matchingBeat = beats.find((b) => b.Key === line.BeatKey);
+    const startSeconds =
+        typeof line.StartSeconds === 'number' && Number.isFinite(line.StartSeconds)
+            ? line.StartSeconds
+            : matchingBeat?.StartSeconds ?? 0;
+    const durationSeconds =
+        typeof line.DurationSeconds === 'number' && line.DurationSeconds > 0
+            ? line.DurationSeconds
+            : matchingBeat && matchingBeat.EndSeconds > matchingBeat.StartSeconds
+              ? matchingBeat.EndSeconds - matchingBeat.StartSeconds
+              : undefined;
+    return {
+        Src: line.StagedPath?.trim() || `audio/${SanitizeStageKey(line.Key)}.mp3`,
+        StartSeconds: startSeconds,
+        DurationSeconds: durationSeconds,
+    };
+}
+
+function buildNarrationTracks(spec: VideoGenerationSpec): RenderAudioNarrationTrack[] {
+    if (spec.Audio?.Narration?.Enabled === false || !Array.isArray(spec.Audio?.Narration?.Script)) {
+        return [];
+    }
+    const beats = Array.isArray(spec.Beats) ? spec.Beats : [];
+    const tracks: RenderAudioNarrationTrack[] = [];
+    for (const line of spec.Audio.Narration.Script) {
+        if (!line?.AudioFileID?.trim()) {
+            continue;
+        }
+        const placement = resolveNarrationPlacement(line, beats);
+        if (placement.DurationSeconds === undefined) {
+            continue;
+        }
+        tracks.push({
+            Key: line.Key,
+            ...(line.BeatKey ? { BeatKey: line.BeatKey } : {}),
+            Src: placement.Src,
+            StartSeconds: placement.StartSeconds,
+            DurationSeconds: placement.DurationSeconds,
+            Text: line.SpokenText?.trim() || line.Text,
+            ...(line.WordTimings && line.WordTimings.length > 0 ? { WordTimings: line.WordTimings } : {}),
+        });
+    }
+    return tracks;
+}
+
+function buildMusicTrack(spec: VideoGenerationSpec, hasNarration: boolean): RenderAudioMixPlan['Music'] {
+    const music = spec.Audio?.Music;
+    if (!music) {
+        return undefined;
+    }
+    const gainDb =
+        typeof music.GainDb === 'number' && Number.isFinite(music.GainDb)
+            ? music.GainDb
+            : hasNarration
+              ? DEFAULT_MUSIC_GAIN_WITH_NARRATION_DB
+              : DEFAULT_MUSIC_GAIN_WITHOUT_NARRATION_DB;
+    const assetKey = music.AssetKey?.trim();
+    if (assetKey) {
+        const staged = (spec.Assets?.Approved ?? []).find((a) => a.Key === assetKey)?.StagedPath?.trim();
+        return staged ? { Src: staged, GainDb: gainDb } : undefined;
+    }
+    return music.Synthesized ? { Synthesized: { ...music.Synthesized }, GainDb: gainDb } : undefined;
+}
+
+function buildSfxTrack(spec: VideoGenerationSpec, cue: AudioCue): RenderAudioSfxTrack | undefined {
+    const base = {
+        Key: cue.Key,
+        StartSeconds: Math.max(0, Number.isFinite(cue.TimestampSeconds) ? cue.TimestampSeconds : 0),
+        GainDb: typeof cue.GainDb === 'number' && Number.isFinite(cue.GainDb) ? cue.GainDb : DEFAULT_SFX_GAIN_DB,
+        ...(typeof cue.DurationSeconds === 'number' && cue.DurationSeconds > 0 ? { DurationSeconds: cue.DurationSeconds } : {}),
+    };
+    const assetKey = cue.AssetKey?.trim();
+    if (assetKey) {
+        const staged = (spec.Assets?.Approved ?? []).find((a) => a.Key === assetKey)?.StagedPath?.trim();
+        return staged ? { ...base, Src: staged } : undefined;
+    }
+    return cue.Synth ? { ...base, Synth: cue.Synth } : undefined;
+}
+
+function buildMusicEvent(cue: AudioCue): RenderMusicGainEvent | undefined {
+    if (cue.Kind !== 'MusicDuck' && cue.Kind !== 'MusicSwell') {
+        return undefined;
+    }
+    const isDuck = cue.Kind === 'MusicDuck';
+    const gainDb = typeof cue.GainDb === 'number' && Number.isFinite(cue.GainDb) ? cue.GainDb : isDuck ? DEFAULT_MUSIC_DUCK_DB : DEFAULT_MUSIC_SWELL_DB;
+    return {
+        Key: cue.Key,
+        Kind: isDuck ? 'Duck' : 'Swell',
+        StartSeconds: Math.max(0, Number.isFinite(cue.TimestampSeconds) ? cue.TimestampSeconds : 0),
+        DurationSeconds: typeof cue.DurationSeconds === 'number' && cue.DurationSeconds > 0 ? cue.DurationSeconds : DEFAULT_MUSIC_EVENT_SECONDS,
+        GainDb: isDuck ? -Math.abs(gainDb) : Math.abs(gainDb),
+    };
+}
+
+/**
+ * Builds the soundtrack plan sent with every render (`RenderRequest.AudioMix`, §8): staged narration
+ * clips on the master timeline, music (licensed track or opt-in synthesized bed) that the worker ducks
+ * under every line, sound effects (staged files or synthesized), explicit `MusicDuck` / `MusicSwell`
+ * events, and the configured loudness target and audio check thresholds. Pure.
+ */
+export function BuildRenderAudioMix(
+    spec: VideoGenerationSpec,
+    durationSeconds: number,
+    audioSettings: VideoRenderAudioSettings = BuildDefaultAudioSettings(),
+): RenderAudioMixPlan {
+    const narration = buildNarrationTracks(spec);
+    const cues = Array.isArray(spec.Audio?.Cues) ? spec.Audio.Cues : [];
+    const sfx: RenderAudioSfxTrack[] = [];
+    const events: RenderMusicGainEvent[] = [];
+    for (const cue of cues) {
+        if (cue?.Kind === 'Sfx') {
+            const track = buildSfxTrack(spec, cue);
+            if (track) {
+                sfx.push(track);
+            }
+        } else if (cue) {
+            const event = buildMusicEvent(cue);
+            if (event) {
+                events.push(event);
+            }
+        }
+    }
+    const music = buildMusicTrack(spec, narration.length > 0);
+    return {
+        DurationSeconds: durationSeconds,
+        Seed: typeof spec.Render?.Seed === 'number' ? spec.Render.Seed : 1,
+        Narration: narration,
+        ...(music ? { Music: music } : {}),
+        Sfx: sfx,
+        MusicEvents: events,
+        Ducking: { ...audioSettings.Ducking },
+        Loudness: { ...audioSettings.Loudness },
+        Checks: { ...audioSettings.Checks },
     };
 }
 
@@ -584,6 +740,8 @@ export function BuildCheckRequest(
  * - `Audio` / `'Error'`: any narration line in `Audio.Narration.Script` missing `AudioFileID`
  * - `Audio` / `'Error'`: `Audio.Music.AssetKey` is set and the matching asset in `Assets.Approved`
  *   is missing or has no `StagedPath`
+ * - `Lint` / `'Error'` (`UnresolvedNarrationCue`): a composition calls `mjCue` / `mjCueEnd` /
+ *   `MJNarration.Cue` with a literal line key that does not exist, or a word that line never speaks
  */
 export function CheckProductionRules(
     spec: VideoGenerationSpec,
@@ -654,5 +812,35 @@ export function CheckProductionRules(
         }
     }
 
+    issues.push(...checkNarrationCueReferences(spec, narrationScript));
+    return issues;
+}
+
+/**
+ * Flags literal `mjCue('<line>', '<word>')` calls in the composition sources that cannot resolve, so the
+ * element is not silently timed to the start of the line instead of the word.
+ */
+function checkNarrationCueReferences(spec: VideoGenerationSpec, narrationScript: readonly NarrationLine[]): CheckIssue[] {
+    const table = BuildNarrationCueTable(narrationScript);
+    const issues: CheckIssue[] = [];
+    for (const [format, source] of Object.entries(spec.Output?.Source ?? {})) {
+        if (!source?.Files) {
+            continue;
+        }
+        for (const miss of FindUnresolvedNarrationCues(source.Files, table)) {
+            const why =
+                miss.Reason === 'UnknownLine'
+                    ? `narration line "${miss.LineKey}" does not exist (or has no timing yet)`
+                    : `narration line "${miss.LineKey}" never says "${miss.Phrase}"`;
+            issues.push({
+                Code: 'UnresolvedNarrationCue',
+                Category: 'Lint',
+                Severity: 'Error',
+                File: miss.File,
+                Line: miss.Line,
+                Message: `${format} ${miss.File}:${miss.Line}: mjCue('${miss.LineKey}', '${miss.Phrase}') cannot resolve: ${why}. Use a word from that line's Audio.Narration.Script[].WordTimings.`,
+            });
+        }
+    }
     return issues;
 }

@@ -1,0 +1,4710 @@
+import { Injectable, OnDestroy } from '@angular/core';
+import { BehaviorSubject, Subject, Observable } from 'rxjs';
+import * as Y from 'yjs';
+import * as syncProtocol from 'y-protocols/sync';
+import * as awarenessProtocol from 'y-protocols/awareness';
+import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
+import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
+import { GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import {
+  ArtifactPermissionEngine,
+  DocumentLiveBlockEngine,
+  SlideDeckEngine,
+  SpreadsheetEngine,
+  type DocumentBlockSpec,
+  type DocumentBlockKind,
+  type MJScheduledJobEntity,
+  type ResolvedArtifactPermissions,
+  type SlideDeckSpec,
+  type SlideSpec,
+  type WorkbookSpec,
+  type WorksheetSpec,
+  type SpreadsheetCellSpec,
+  type SpreadsheetNamedRangeSpec,
+} from '@memberjunction/core-entities';
+import {
+  ComputeBoundedSequenceDiff as computeBoundedSequenceDiffFromUtil,
+  ComputeLineDiff as computeLineDiffFromUtil,
+  type SequenceDiffOp,
+} from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
+
+export type { SequenceDiffOp } from '../utils/line-diff';
+export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
+
+/**
+ * Extended artifact permission verification result distinguishing explicit server denial
+ * (`AccessRevoked === true`) from transient network/GraphQL verification errors
+ * (`PermissionVerifyError === true`, which still fails closed as read-only while offering Retry).
+ */
+export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions {
+  AccessRevoked?: boolean;
+  PermissionVerifyError?: boolean;
+}
+
+const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+const SAFE_AWARENESS_COLOR_RE =
+  /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+
+/**
+ * Validates a CSS color or `--mj-*` design token from untrusted Yjs awareness state,
+ * rejecting arbitrary CSS payloads such as `url(...)` exfiltration beacons.
+ */
+export function SanitizeAwarenessColor(rawColor: string | null | undefined): string {
+  if (typeof rawColor !== 'string') {
+    return 'var(--mj-brand-primary)';
+  }
+  const trimmed = rawColor.trim();
+  return SAFE_AWARENESS_COLOR_RE.test(trimmed) ? trimmed : 'var(--mj-brand-primary)';
+}
+
+/**
+ * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
+ * (such as `alice@example.com` or `foo.bar@baz.co`) by requiring `@` to appear at start-of-string
+ * or immediately after whitespace or opening punctuation (`[\s([{"']`).
+ */
+export function ExtractAnchoredCommentMentions(text: string): string[] {
+  if (!text) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const handles: string[] = [];
+  const matcher = new RegExp(ANCHORED_COMMENT_MENTION_SOURCE, 'g');
+  for (const match of text.matchAll(matcher)) {
+    const handle = match[1];
+    if (handle && !seen.has(handle)) {
+      seen.add(handle);
+      handles.push(handle);
+    }
+  }
+  return handles;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = (hostname || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+}
+
+const MSG_SYNC = 0;
+const MSG_AWARENESS = 1;
+const MSG_CONTROL = 2;
+const MSG_PERMISSION_STATE = 3;
+
+const MINT_COLLABORATION_TICKET_MUTATION = `
+  mutation MintArtifactCollaborationTicket($artifactId: String!) {
+    MintArtifactCollaborationTicket(artifactId: $artifactId) {
+      Success
+      Ticket
+      WsPath
+      WsUrl
+      ExpiresAt
+      CanRead
+      CanEdit
+      ErrorCode
+      ErrorMessage
+    }
+  }
+`;
+
+const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean, $thumbnailDataUrl: String) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion, thumbnailDataUrl: $thumbnailDataUrl) {
+      Success
+      VersionID
+      VersionNumber
+      ErrorMessage
+    }
+  }
+`;
+
+export const RESTORE_ARTIFACT_VERSION_MUTATION = `
+  mutation RestoreArtifactVersion($artifactId: String!, $sourceVersionId: String!) {
+    RestoreArtifactVersion(artifactId: $artifactId, sourceVersionId: $sourceVersionId) {
+      Success
+      ErrorMessage
+      VersionID
+      VersionNumber
+    }
+  }
+`;
+
+const EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION = `
+  mutation ExecuteAnchoredCommentAgentMention(
+    $artifactId: String!
+    $agentHandle: String!
+    $agentMode: String!
+    $commentBody: String!
+    $anchorQuote: String
+    $conversationId: String
+  ) {
+    ExecuteAnchoredCommentAgentMention(
+      artifactId: $artifactId
+      agentHandle: $agentHandle
+      agentMode: $agentMode
+      commentBody: $commentBody
+      anchorQuote: $anchorQuote
+      conversationId: $conversationId
+    ) {
+      Success
+      AgentHandle
+      AgentMode
+      ReplyBody
+      UpdatedContent
+      VersionID
+      VersionNumber
+      ErrorMessage
+    }
+  }
+`;
+
+const RESOLVE_ARTIFACT_PERMISSIONS_QUERY = `
+  query ResolveArtifactPermissions($artifactId: String!) {
+    ResolveArtifactPermissions(artifactId: $artifactId) {
+      ArtifactID
+      CanRead
+      CanEdit
+      CanDelete
+      CanShare
+      Source
+      Reason
+    }
+  }
+`;
+
+const FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION = `
+  mutation FreezeDocumentLiveBlock($specJson: String!, $acknowledgeSecurityWarning: Boolean!, $hostArtifactId: String) {
+    FreezeDocumentLiveBlock(
+      specJson: $specJson
+      acknowledgeSecurityWarning: $acknowledgeSecurityWarning
+      hostArtifactId: $hostArtifactId
+    ) {
+      Success
+      ErrorMessage
+      UpdatedSpecJSON
+    }
+  }
+`;
+
+const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
+  query VerifyFrozenBlockSnapshot($specJson: String!, $hostArtifactId: String!) {
+    VerifyFrozenBlockSnapshot(specJson: $specJson, hostArtifactId: $hostArtifactId) {
+      Valid
+      SnapshotVerified
+      ErrorMessage
+    }
+  }
+`;
+
+const REFRESH_LIVING_ARTIFACT_MUTATION = `
+  mutation RefreshLivingArtifact($artifactId: String!, $versionComments: String, $forceSaveIfUnchanged: Boolean) {
+    RefreshLivingArtifact(
+      artifactId: $artifactId
+      versionComments: $versionComments
+      forceSaveIfUnchanged: $forceSaveIfUnchanged
+    ) {
+      Success
+      Changed
+      SavedNewVersion
+      ArtifactVersionID
+      VersionNumber
+      DiffSummary
+      HighlightLines
+      ErrorMessage
+    }
+  }
+`;
+
+const GET_LIVING_REPORT_SCHEDULE_QUERY = `
+  query GetArtifactLivingReportSchedule($artifactId: String!) {
+    GetArtifactLivingReportSchedule(artifactId: $artifactId) {
+      Success
+      ErrorMessage
+      Schedule {
+        ScheduleID
+        Name
+        CronExpression
+        Timezone
+        Status
+        Enabled
+        ForceSaveIfUnchanged
+        LastRunAt
+        NextRunAt
+        RunCount
+        SuccessCount
+        FailureCount
+        IsCallerScheduleOwner
+        CanDelete
+      }
+    }
+  }
+`;
+
+const UPSERT_LIVING_REPORT_SCHEDULE_MUTATION = `
+  mutation UpsertArtifactLivingReportSchedule(
+    $artifactId: String!
+    $cronExpression: String!
+    $timezone: String
+    $name: String
+    $enabled: Boolean
+    $forceSaveIfUnchanged: Boolean
+    $scheduleId: String
+  ) {
+    UpsertArtifactLivingReportSchedule(
+      artifactId: $artifactId
+      cronExpression: $cronExpression
+      timezone: $timezone
+      name: $name
+      enabled: $enabled
+      forceSaveIfUnchanged: $forceSaveIfUnchanged
+      scheduleId: $scheduleId
+    ) {
+      Success
+      ErrorMessage
+      Schedule {
+        ScheduleID
+        Name
+        CronExpression
+        Timezone
+        Status
+        Enabled
+        ForceSaveIfUnchanged
+        LastRunAt
+        NextRunAt
+        RunCount
+        SuccessCount
+        FailureCount
+        IsCallerScheduleOwner
+        CanDelete
+      }
+    }
+  }
+`;
+
+const DELETE_LIVING_REPORT_SCHEDULE_MUTATION = `
+  mutation DeleteArtifactLivingReportSchedule($artifactId: String!, $scheduleId: String!) {
+    DeleteArtifactLivingReportSchedule(artifactId: $artifactId, scheduleId: $scheduleId) {
+      Success
+      Deleted
+      ErrorMessage
+    }
+  }
+`;
+
+const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000] as const;
+export const MAX_RECONNECT_ATTEMPTS = 10;
+export const COLLAB_SECRET_UNCONFIGURED_CODE = 'COLLAB_SECRET_UNCONFIGURED';
+export const MERGE_CONFLICT_WARNING_MESSAGE =
+  "Some agent edits weren't applied because you were editing the same text.";
+
+/**
+ * Strongly-typed event emitted when the collaboration server rejects one or more incoming
+ * agent edit hunks because concurrent live human edits touched the same region.
+ */
+export interface CollaborationMergeConflictEvent {
+  ArtifactID: string;
+  VersionID?: string;
+  VersionNumber?: number;
+  RejectedHunksCount: number;
+  Source?: string;
+  RoomEpoch?: string;
+  Timestamp: string;
+  ActorUserID?: string;
+  LocalUserID?: string;
+}
+
+/**
+ * Minimal structural contract for displaying non-blocking collaboration toast notifications.
+ */
+export interface CollaborationNotificationSink {
+  CreateSimpleNotification: (
+    message: string,
+    style?: 'none' | 'success' | 'error' | 'warning' | 'info',
+    hideAfter?: number,
+  ) => void;
+}
+
+interface CollaborationControlFramePayload {
+  type?: string;
+  action?: string;
+  payload?: string;
+  canEdit?: boolean;
+  canRead?: boolean;
+  artifactId?: string;
+  versionId?: string;
+  versionNumber?: number;
+  rejectedHunksCount?: number;
+  rejectedHunkCount?: number;
+  source?: string;
+  roomEpoch?: string;
+  timestamp?: string;
+  actorUserId?: string;
+}
+
+/**
+ * Strict fallback check for thrown errors or legacy responses without `ErrorCode`.
+ * Returns `true` strictly when `message` explicitly contains the structured error code token
+ * `'COLLAB_SECRET_UNCONFIGURED'` or one of the exact environment variable identifiers
+ * `'MJ_ARTIFACT_COLLAB_HMAC_SECRET'` / `'MJ_COLLABORATION_TICKET_SECRET'`.
+ *
+ * Never uses generic `/ticket.*not configured/i` regexes so unrelated errors (such as
+ * `"Jira ticket integration is not configured"`) never lock documents read-only.
+ */
+function isCollaborationSecretUnconfiguredMessage(message: string | null | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+  return (
+    message.includes(COLLAB_SECRET_UNCONFIGURED_CODE) ||
+    message.includes('MJ_ARTIFACT_COLLAB_HMAC_SECRET') ||
+    message.includes('MJ_COLLABORATION_TICKET_SECRET')
+  );
+}
+
+function isCollaborationSecretUnconfiguredTicket(ticketData: CollaborationTicketPayload): boolean {
+  if (ticketData.ErrorCode === COLLAB_SECRET_UNCONFIGURED_CODE) {
+    return true;
+  }
+  if (ticketData.ErrorCode && ticketData.ErrorCode.trim().length > 0) {
+    return false;
+  }
+  return isCollaborationSecretUnconfiguredMessage(ticketData.ErrorMessage);
+}
+
+export interface CollaborationTicketPayload {
+  Success: boolean;
+  Ticket?: string | null;
+  WsPath?: string | null;
+  WsUrl?: string | null;
+  wsUrl?: string | null;
+  ExpiresAt?: string | null;
+  CanRead?: boolean | null;
+  CanEdit?: boolean | null;
+  ErrorCode?: string | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerArtifactPermissionsPayload {
+  ArtifactID?: string | null;
+  CanRead?: boolean | null;
+  CanEdit?: boolean | null;
+  CanDelete?: boolean | null;
+  CanShare?: boolean | null;
+  Source?: ResolvedArtifactPermissions['Source'] | string | null;
+  Reason?: string | null;
+}
+
+export interface ServerFreezeLiveBlockPayload {
+  Success: boolean;
+  ErrorMessage?: string | null;
+  UpdatedSpecJSON?: string | null;
+  UpdatedBlockSpecJson?: string | null;
+}
+
+export interface ServerVerifyFrozenSnapshotPayload {
+  Valid?: boolean | null;
+  SnapshotVerified?: boolean | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerCommitInlineEditPayload {
+  Success: boolean;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerAnchoredCommentAgentMentionPayload {
+  Success: boolean;
+  AgentHandle?: string | null;
+  AgentMode?: string | null;
+  ReplyBody?: string | null;
+  UpdatedContent?: string | null;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerRestoreArtifactVersionPayload {
+  Success: boolean;
+  ErrorMessage?: string | null;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+}
+
+export interface ServerRefreshLivingArtifactPayload {
+  Success: boolean;
+  Changed: boolean;
+  SavedNewVersion: boolean;
+  ArtifactVersionID?: string | null;
+  VersionNumber?: number | null;
+  DiffSummary?: string | null;
+  HighlightLines?: string[] | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerLivingReportScheduleItemPayload {
+  ScheduleID: string;
+  Name: string;
+  CronExpression: string;
+  Timezone: string;
+  Status: MJScheduledJobEntity['Status'];
+  Enabled: boolean;
+  ForceSaveIfUnchanged: boolean;
+  LastRunAt?: string | null;
+  NextRunAt?: string | null;
+  RunCount: number;
+  SuccessCount: number;
+  FailureCount: number;
+  IsCallerScheduleOwner?: boolean | null;
+  CanDelete?: boolean | null;
+}
+
+export interface ServerLivingReportScheduleResultPayload {
+  Success: boolean;
+  Schedule?: ServerLivingReportScheduleItemPayload | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerDeleteLivingReportSchedulePayload {
+  Success: boolean;
+  Deleted: boolean;
+  ErrorMessage?: string | null;
+}
+
+export interface LivingReportScheduleSummary {
+  ScheduleID: string;
+  Name: string;
+  CronExpression: string;
+  Timezone: string;
+  Status: MJScheduledJobEntity['Status'];
+  Enabled: boolean;
+  ForceSaveIfUnchanged: boolean;
+  LastRunAt?: string;
+  NextRunAt?: string;
+  RunCount: number;
+  SuccessCount: number;
+  FailureCount: number;
+  IsCallerScheduleOwner: boolean;
+  CanDelete: boolean;
+}
+
+export interface RefreshLivingArtifactResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Changed: boolean;
+  SavedNewVersion: boolean;
+  ArtifactVersionID?: string;
+  VersionNumber?: number;
+  DiffSummary?: string;
+  HighlightLines: string[];
+  ErrorMessage?: string;
+}
+
+export interface LivingReportScheduleResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Schedule?: LivingReportScheduleSummary;
+  ErrorMessage?: string;
+}
+
+export interface DeleteLivingReportScheduleResult {
+  HandledByServer: boolean;
+  Success: boolean;
+  Deleted: boolean;
+  ErrorMessage?: string;
+}
+
+export interface CollaborationGraphQLResponseMap {
+  MintArtifactCollaborationTicket?: CollaborationTicketPayload | null;
+  ResolveArtifactPermissions?: ServerArtifactPermissionsPayload | null;
+  ResolveArtifactUserPermissions?: ServerArtifactPermissionsPayload | null;
+  FreezeDocumentLiveBlock?: ServerFreezeLiveBlockPayload | null;
+  VerifyFrozenBlockSnapshot?: ServerVerifyFrozenSnapshotPayload | null;
+  CommitArtifactInlineEdit?: ServerCommitInlineEditPayload | null;
+  ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
+  RestoreArtifactVersion?: ServerRestoreArtifactVersionPayload | null;
+  RefreshLivingArtifact?: ServerRefreshLivingArtifactPayload | null;
+  GetArtifactLivingReportSchedule?: ServerLivingReportScheduleResultPayload | null;
+  UpsertArtifactLivingReportSchedule?: ServerLivingReportScheduleResultPayload | null;
+  DeleteArtifactLivingReportSchedule?: ServerDeleteLivingReportSchedulePayload | null;
+  errors?: Array<{ message?: string }> | null;
+  error?: string | null;
+}
+
+export type CollaborationGraphQLVariables = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+export interface CollaborationGraphQLProviderLike {
+  ExecuteGQL: (
+    query: string,
+    variables?: CollaborationGraphQLVariables,
+  ) => Promise<CollaborationGraphQLResponseMap | null | undefined>;
+  ConfigData?: {
+    URL?: string;
+    WSURL?: string;
+    MJAPIURL?: string;
+  };
+}
+
+export interface ResolvedCollaborationEndpoint {
+  Mode: 'connect' | 'local' | 'revoked';
+  WsUrl: string;
+  CanEdit?: boolean;
+  HasBackend?: boolean;
+  LiveSyncUnavailable?: boolean;
+  LiveSyncErrorReason?: string;
+}
+
+function isGraphQLCollaborationProvider(
+  provider: IMetadataProvider | CollaborationGraphQLProviderLike | null | undefined,
+): provider is CollaborationGraphQLProviderLike {
+  if (!provider || typeof provider !== 'object') {
+    return false;
+  }
+  if (provider instanceof GraphQLDataProvider) {
+    return true;
+  }
+  return 'ExecuteGQL' in provider && typeof provider.ExecuteGQL === 'function';
+}
+
+function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | null): IMetadataProvider | null {
+  if (explicitProvider) {
+    return explicitProvider;
+  }
+  return Metadata.Provider ?? null; // global-provider-ok: fallback when Angular caller did not supply a bound provider
+}
+
+function extractGraphQLErrorMessage(gqlRes: CollaborationGraphQLResponseMap | null | undefined): string {
+  if (!gqlRes) {
+    return '';
+  }
+  if (Array.isArray(gqlRes.errors) && gqlRes.errors.length > 0) {
+    const messages = gqlRes.errors
+      .map((e) => (e?.message ?? '').trim())
+      .filter((m) => m.length > 0);
+    if (messages.length > 0) {
+      return messages.join('; ');
+    }
+  }
+  return typeof gqlRes.error === 'string' ? gqlRes.error.trim() : '';
+}
+
+function normalizeLivingReportSchedule(
+  raw: ServerLivingReportScheduleItemPayload | null | undefined,
+): LivingReportScheduleSummary | undefined {
+  if (!raw || !raw.ScheduleID) {
+    return undefined;
+  }
+  return {
+    ScheduleID: raw.ScheduleID,
+    Name: raw.Name,
+    CronExpression: raw.CronExpression,
+    Timezone: raw.Timezone,
+    Status: raw.Status,
+    Enabled: Boolean(raw.Enabled),
+    ForceSaveIfUnchanged: Boolean(raw.ForceSaveIfUnchanged),
+    LastRunAt: raw.LastRunAt ?? undefined,
+    NextRunAt: raw.NextRunAt ?? undefined,
+    RunCount: Number(raw.RunCount ?? 0),
+    SuccessCount: Number(raw.SuccessCount ?? 0),
+    FailureCount: Number(raw.FailureCount ?? 0),
+    IsCallerScheduleOwner: Boolean(raw.IsCallerScheduleOwner),
+    CanDelete: Boolean(raw.CanDelete),
+  };
+}
+
+function isUnsupportedRestoreMutationError(message: string): boolean {
+  return /Cannot query field ['"]?RestoreArtifactVersion['"]?|Unknown field ['"]?RestoreArtifactVersion['"]?|RestoreArtifactVersion.*not defined/i.test(
+    message,
+  );
+}
+
+function decodeBase64ToUint8Array(input: string): Uint8Array | null {
+  try {
+    const trimmed = input.trim();
+    if (!trimmed || !/^[A-Za-z0-9+/=_-]+$/.test(trimmed)) {
+      return null;
+    }
+    const normalized = trimmed.replace(/-/g, '+').replace(/_/g, '/');
+    if (typeof atob === 'function') {
+      const bin = atob(normalized);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        out[i] = bin.charCodeAt(i);
+      }
+      return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bounded Myers O((M+N)D) sequence diff with common prefix/suffix trimming and
+ * linear Patience-style unique-hash-anchor fallback when `(m + n) > maxSequenceSum`
+ * or edit distance `D` exceeds `maxEditDistance`.
+ */
+export function ComputeBoundedSequenceDiff<T>(
+  oldItems: readonly T[],
+  newItems: readonly T[],
+  equals: (a: T, b: T) => boolean,
+  keyFn: (item: T) => string,
+  maxEditDistance = 2000,
+  maxSequenceSum = 10000,
+): SequenceDiffOp[] {
+  return computeBoundedSequenceDiffFromUtil(
+    oldItems,
+    newItems,
+    equals,
+    keyFn,
+    maxEditDistance,
+    maxSequenceSum,
+  );
+}
+
+/**
+ * Connection status for a collaborative document editing session.
+ */
+export type CollaborationConnectionStatus =
+  | 'connected'
+  | 'connecting'
+  | 'local'
+  | 'readonly'
+  | 'revoked'
+  | 'disconnected'
+  | 'error';
+
+/**
+ * Structural coordinate for live agent presence across Docs, Slides, Sheets, and Whiteboards.
+ */
+export interface CollaboratorAgentLocation {
+  Domain: 'spreadsheet' | 'document' | 'slides' | 'whiteboard' | 'generic';
+  SheetID?: string;
+  SheetName?: string;
+  Range?: string;
+  SlideID?: string;
+  SlideNumber?: number;
+  ElementID?: string;
+  SectionHeading?: string;
+  BlockID?: string;
+  StartLine?: number;
+  EndLine?: number;
+}
+
+/**
+ * Active collaborator presence metadata broadcast via Yjs awareness.
+ */
+export interface CollaboratorPresence {
+  ClientID: number;
+  UserID: string;
+  Name: string;
+  Email?: string;
+  Color: string;
+  ActiveBlockID?: string;
+  CanEdit: boolean;
+  IsAgent?: boolean;
+  AgentPresenceKey?: string;
+  AgentRunID?: string;
+  AgentName?: string;
+  ActingForUserID?: string;
+  ActingForUserName?: string;
+  ActingForUserEmail?: string;
+  AgentPhase?: 'enter' | 'working' | 'settled' | 'exit';
+  ToolName?: string;
+  ActionSummary?: string;
+  AgentLocation?: CollaboratorAgentLocation;
+  TimestampMs?: number;
+}
+
+/**
+ * Item in the Left Table of Contents (TOC) & Block Outline rail.
+ */
+export interface DocumentOutlineItem {
+  ID: string;
+  Kind: 'heading' | 'block';
+  Level: number;
+  Title: string;
+  StartLine: number;
+  BlockType?: DocumentBlockKind;
+  BlockMode?: DocumentBlockSpec['Mode'];
+}
+
+/**
+ * Rendered segment of a collaborative document (either a Markdown block or a `:::mj-block` directive).
+ */
+export interface DocumentRenderSegment {
+  SegmentID: string;
+  Kind: 'markdown' | 'mj-block';
+  BlockKind: 'heading' | 'paragraph' | 'callout' | 'code' | 'table' | 'list' | 'mj-block';
+  StartLine: number;
+  EndLine: number;
+  RawMarkdown: string;
+  HeadingLevel?: number;
+  HeadingText?: string;
+  Descriptor?: DocumentBlockSpec;
+}
+
+/**
+ * Slash command entry available when typing `/` in the Docs editor.
+ */
+export interface DocumentSlashCommand {
+  Command: string;
+  Label: string;
+  Description: string;
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
+  Icon: string;
+  BlockType?: DocumentBlockKind;
+  Snippet?: string;
+}
+
+/**
+ * Tracked suggestion item in Suggest mode or proposed by an `@mention` agent.
+ */
+export interface DocumentSuggestionItem {
+  SuggestionID: string;
+  BlockID: string;
+  Heading?: string;
+  Quote?: string;
+  AuthorName: string;
+  AuthorUserID?: string;
+  CreatedAt: string;
+  OriginalMarkdown: string;
+  ProposedMarkdown: string;
+  Rationale: string;
+  Status: 'Pending' | 'Accepted' | 'Rejected';
+}
+
+/**
+ * Anchored `DocBlock` comment thread (`MJ: Conversations` + `MJ: Conversation Details`).
+ */
+export interface DocumentAnchoredThread {
+  ConversationID: string;
+  AnchorKey: string;
+  AnchorLabel: string;
+  QuotedText: string;
+  Status: 'Open' | 'Resolved';
+  AgentMode: 'suggest' | 'edit' | 'comment';
+  CreatedAt: string;
+  Messages: Array<{
+    DetailID: string;
+    UserName: string;
+    Role: 'User' | 'Agent';
+    Message: string;
+    CreatedAt: string;
+    Mentions: string[];
+  }>;
+}
+
+/**
+ * Single line in a side-by-side / unified version diff.
+ */
+export interface DocumentDiffLine {
+  Type: 'same' | 'added' | 'removed';
+  OldLineNumber: number | null;
+  NewLineNumber: number | null;
+  Content: string;
+}
+
+/**
+ * Summary and line breakdown of a version diff comparison.
+ */
+export interface DocumentDiffResult {
+  AddedLines: number;
+  RemovedLines: number;
+  UnchangedLines: number;
+  Lines: DocumentDiffLine[];
+}
+
+/**
+ * Contiguous span in a word-level inline redline diff (`equal`, `delete`, or `insert`).
+ */
+export interface DocumentWordDiffSpan {
+  Type: 'equal' | 'delete' | 'insert';
+  Text: string;
+  HunkID?: string;
+}
+
+/**
+ * Granular word/phrase-level tracked edit hunk inside a block, supporting independent
+ * Accept / Reject just like Word Track Changes and Google Docs Suggesting Mode.
+ */
+export interface DocumentWordChangeHunk {
+  HunkID: string;
+  Kind: 'replace' | 'insert' | 'delete';
+  DeletedText: string;
+  InsertedText: string;
+  ContextBefore: string;
+  ContextAfter: string;
+  /** Resulting block Markdown if ONLY this hunk is accepted on top of OriginalMarkdown */
+  AcceptedMarkdown: string;
+  /** Resulting ProposedMarkdown if ONLY this hunk is rejected (reverted to Original) */
+  RejectedProposedMarkdown: string;
+}
+
+/**
+ * Complete word-level redline diff and granular change hunks for a block suggestion.
+ */
+export interface DocumentWordDiffResult {
+  Spans: DocumentWordDiffSpan[];
+  Hunks: DocumentWordChangeHunk[];
+}
+
+/**
+ * Local unsent draft captured when a server `'room-reset'` replaces a diverged document,
+ * so the editor can present a non-destructive recovery choice without clobbering the reset baseline.
+ */
+export interface CollaborationResetConflictDraft {
+  ArtifactID: string;
+  BaseBeforeReset: string;
+  LocalDraft: string;
+  ResetBaseline: string;
+  CapturedAt: string;
+}
+
+const FROZEN_VERIFICATION_CACHE_MAX_SIZE = 200;
+
+function canonicalVerificationKey(blockId: string | undefined, payload: string): string {
+  // Exact canonical key (bounded by LRU size 200) eliminates lossy 32-bit hash collisions cleanly.
+  return `${blockId ?? ''}:${payload}`;
+}
+
+/**
+ * Active Yjs collaboration session bound to a single artifact.
+ */
+export class DocumentCollaborationSession {
+  public readonly ArtifactID: string;
+  public Doc: Y.Doc;
+  public ContentText: Y.Text;
+  public Awareness: awarenessProtocol.Awareness;
+
+  private socket: WebSocket | null = null;
+  private status: CollaborationConnectionStatus = 'local';
+  private transport: 'websocket' | 'local-only';
+  private canEdit: boolean;
+  private applyingRemote = false;
+  private readonly initialSeedContent: string;
+  private overrideSeedContent: string | null = null;
+  private seededInDoc = false;
+  private hasCompletedInitialSync = false;
+  private liveSyncUnavailable = false;
+  private liveSyncErrorReason = '';
+  private lastSyncedRemoteContent = '';
+  private hasUnsentLocalEdits = false;
+  private hasRetried4401Ticket = false;
+  private retrying4401 = false;
+  private pendingResetConflictDraft: CollaborationResetConflictDraft | null = null;
+  private docUpdateHandler:
+    | ((update: Uint8Array, origin: string | number | symbol | object | null | undefined) => void)
+    | null = null;
+  private suggestionsMapRef: Y.Map<string> | null = null;
+  private suggestionsObserver:
+    | ((event: Y.YMapEvent<string>, tr: Y.Transaction) => void)
+    | null = null;
+  private awarenessChangeHandler: (() => void) | null = null;
+  private awarenessUpdateHandler:
+    | ((
+        changed: { added: number[]; updated: number[]; removed: number[] },
+        origin: string | number | symbol | object | null | undefined,
+      ) => void)
+    | null = null;
+  private destroyed = false;
+  private recoverable = true;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectGeneration = 0;
+  private configuredWsUrlOverride: string | null = null;
+  private configuredProvider: IMetadataProvider | null = null;
+  private readonly localUser: { id: string; name: string; email?: string; color?: string };
+  private readonly endpointResolver?: (
+    artifactId: string,
+    wsUrlOverride?: string | null,
+    provider?: IMetadataProvider | null,
+  ) => Promise<ResolvedCollaborationEndpoint>;
+  private readonly onMergeConflict?: (event: CollaborationMergeConflictEvent) => void;
+  private readonly onDestroyed?: (session: DocumentCollaborationSession) => void;
+
+  private readonly contentChanged$ = new Subject<string>();
+  private readonly statusChanged$ = new Subject<CollaborationConnectionStatus>();
+  private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
+  private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
+  private readonly mergeConflict$ = new Subject<CollaborationMergeConflictEvent>();
+  private readonly roomResetConflict$ = new Subject<CollaborationResetConflictDraft | null>();
+  private readonly suggestionsChanged$ = new Subject<void>();
+  private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
+  private readonly canUndo$ = new BehaviorSubject<boolean>(false);
+  private readonly canRedo$ = new BehaviorSubject<boolean>(false);
+  private undoManager: Y.UndoManager | null = null;
+  private readonly undoStateListener = (): void => {
+    this.syncUndoRedoSubjects();
+  };
+
+  public get YDoc(): Y.Doc {
+    return this.Doc;
+  }
+
+  public get Transport(): 'websocket' | 'local-only' {
+    return this.transport;
+  }
+
+  public get HasCompletedInitialSync(): boolean {
+    return this.hasCompletedInitialSync;
+  }
+
+  public get LiveSyncUnavailable(): boolean {
+    return this.liveSyncUnavailable;
+  }
+
+  public get HasPendingReconnect(): boolean {
+    return this.reconnectTimer !== null;
+  }
+
+  public get ReconnectAttempts(): number {
+    return this.reconnectAttempts;
+  }
+
+  public get IsReconnectExhausted(): boolean {
+    return (
+      this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS &&
+      !this.HasPendingReconnect &&
+      (!this.socket || this.socket.readyState !== WebSocket.OPEN)
+    );
+  }
+
+  public get LiveSyncErrorReason(): string {
+    return this.liveSyncErrorReason;
+  }
+
+  public get OnLiveSyncUnavailable$(): Observable<boolean> {
+    return this.liveSyncUnavailable$.asObservable();
+  }
+
+  /**
+   * True only when live sync is not degraded/unavailable, the user has edit permission,
+   * AND (either the session is local-only or the initial `syncStep2` handshake from
+   * `/collaboration/yjs` has completed).
+   */
+  public get CanMutateDocument(): boolean {
+    return (
+      !this.liveSyncUnavailable &&
+      this.canEdit &&
+      (this.transport === 'local-only' || this.hasCompletedInitialSync)
+    );
+  }
+
+  public get ContentChanged$(): Observable<string> {
+    return this.contentChanged$.asObservable();
+  }
+
+  public get RemoteContent$(): Observable<string> {
+    return this.contentChanged$.asObservable();
+  }
+
+  public get StatusChanged$(): Observable<CollaborationConnectionStatus> {
+    return this.statusChanged$.asObservable();
+  }
+
+  public get CollaboratorsChanged$(): Observable<CollaboratorPresence[]> {
+    return this.collaboratorsChanged$.asObservable();
+  }
+
+  public get VersionSaved$(): Observable<{ versionId: string; versionNumber: number }> {
+    return this.versionSaved$.asObservable();
+  }
+
+  public get MergeConflict$(): Observable<CollaborationMergeConflictEvent> {
+    return this.mergeConflict$.asObservable();
+  }
+
+  public get RoomResetConflict$(): Observable<CollaborationResetConflictDraft | null> {
+    return this.roomResetConflict$.asObservable();
+  }
+
+  public get PendingResetConflictDraft(): CollaborationResetConflictDraft | null {
+    return this.pendingResetConflictDraft;
+  }
+
+  public ApplyResetConflictDraft(): boolean {
+    const draft = this.pendingResetConflictDraft;
+    if (!draft || !this.CanMutateDocument) {
+      return false;
+    }
+    this.SetContent(draft.LocalDraft);
+    this.pendingResetConflictDraft = null;
+    this.roomResetConflict$.next(null);
+    return true;
+  }
+
+  public DismissResetConflictDraft(): void {
+    if (this.pendingResetConflictDraft !== null) {
+      this.pendingResetConflictDraft = null;
+      this.roomResetConflict$.next(null);
+    }
+  }
+
+  public get SuggestionsChanged$(): Observable<void> {
+    return this.suggestionsChanged$.asObservable();
+  }
+
+  public GetSharedSuggestionsRaw(): Map<string, string> {
+    const result = new Map<string, string>();
+    const map = this.Doc.getMap<string>('suggestions');
+    map.forEach((value, key) => {
+      result.set(key, value);
+    });
+    return result;
+  }
+
+  public SetSharedSuggestionRaw(id: string, serializedJson: string): void {
+    if (this.destroyed || !this.CanMutateDocument || !id) {
+      return;
+    }
+    const map = this.Doc.getMap<string>('suggestions');
+    this.Doc.transact(() => {
+      map.set(id, serializedJson);
+    }, 'local');
+  }
+
+  public DeleteSharedSuggestion(id: string): void {
+    if (this.destroyed || !this.CanMutateDocument || !id) {
+      return;
+    }
+    const map = this.Doc.getMap<string>('suggestions');
+    if (map.has(id)) {
+      this.Doc.transact(() => {
+        map.delete(id);
+      }, 'local');
+    }
+  }
+
+  public get CanUndo(): boolean {
+    return this.canUndo$.value;
+  }
+
+  public get CanRedo(): boolean {
+    return this.canRedo$.value;
+  }
+
+  public get CanUndo$(): Observable<boolean> {
+    return this.canUndo$.asObservable();
+  }
+
+  public get CanRedo$(): Observable<boolean> {
+    return this.canRedo$.asObservable();
+  }
+
+  public Undo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canUndo()) {
+      return false;
+    }
+    this.undoManager.undo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  public Redo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canRedo()) {
+      return false;
+    }
+    this.undoManager.redo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  /**
+   * Closes the current undo capture window so subsequent edits form a distinct undo step
+   * (e.g., when moving focus between blocks, cells, or slides).
+   */
+  public StopUndoCapture(): void {
+    this.undoManager?.stopCapturing();
+  }
+
+  public get Recoverable(): boolean {
+    return this.recoverable;
+  }
+
+  public ResetReconnectAttempts(): void {
+    this.reconnectAttempts = 0;
+  }
+
+  public get Status(): CollaborationConnectionStatus {
+    return this.status;
+  }
+
+  public get CanEdit(): boolean {
+    return this.canEdit;
+  }
+
+  public get IsDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  /**
+   * Updates the session's client-side edit capability after async permission resolution or `[readonly]` changes.
+   */
+  public SetCanEdit(canEdit: boolean): void {
+    if (this.destroyed || this.status === 'revoked') {
+      return;
+    }
+    this.canEdit = canEdit;
+    const currentState = this.Awareness.getLocalState() ?? {};
+    const userState =
+      (currentState['user'] as {
+        userId?: string | number;
+        name?: string;
+        email?: string;
+        color?: string;
+        activeBlockId?: string;
+        canEdit?: boolean;
+      } | undefined) ?? {};
+    this.Awareness.setLocalStateField('user', {
+      ...userState,
+      canEdit,
+    });
+    if (this.liveSyncUnavailable) {
+      this.setStatus('readonly');
+    } else if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.setStatus(canEdit ? 'connected' : 'readonly');
+    } else if (!canEdit && this.status !== 'error') {
+      this.setStatus('readonly');
+    } else if (
+      this.status !== 'connecting' &&
+      this.status !== 'error' &&
+      this.status !== 'disconnected'
+    ) {
+      this.setStatus('local');
+    }
+  }
+
+  /**
+   * Returns the current string content of the shared Yjs `Y.Text('content')` CRDT
+   * (or the reconstructed `SlideDeckSpec` / `WorkbookSpec` JSON when the room hosts a deck or workbook).
+   */
+  public GetContent(): string {
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
+    if (slideOrder.length > 0) {
+      const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+      if (reconstructed) {
+        return reconstructed;
+      }
+    }
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    if (worksheetsById.size > 0) {
+      const reconstructed = this.reconstructWorkbookJsonFromCrdt();
+      if (reconstructed) {
+        return reconstructed;
+      }
+    }
+    const yText = this.ContentText.toString();
+    const seedFallback = this.overrideSeedContent ?? this.initialSeedContent;
+    if (yText.length === 0 && !this.seededInDoc && seedFallback.length > 0) {
+      return seedFallback;
+    }
+    return yText;
+  }
+
+  constructor(
+    artifactId: string,
+    initialContent: string,
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
+    canEdit = true,
+    deferInitialSeedForRemoteSync = false,
+    endpointResolver?: (
+      artifactId: string,
+      wsUrlOverride?: string | null,
+      provider?: IMetadataProvider | null,
+    ) => Promise<ResolvedCollaborationEndpoint>,
+    onMergeConflict?: (event: CollaborationMergeConflictEvent) => void,
+    onDestroyed?: (session: DocumentCollaborationSession) => void,
+  ) {
+    this.localUser = user;
+    this.ArtifactID = artifactId;
+    this.canEdit = canEdit;
+    this.transport = deferInitialSeedForRemoteSync ? 'websocket' : 'local-only';
+    this.hasCompletedInitialSync = this.transport === 'local-only';
+    this.initialSeedContent = initialContent ?? '';
+    this.lastSyncedRemoteContent = this.initialSeedContent;
+    this.endpointResolver = endpointResolver;
+    this.onMergeConflict = onMergeConflict;
+    this.onDestroyed = onDestroyed;
+    this.Doc = new Y.Doc();
+    this.ContentText = this.Doc.getText('content');
+    if (initialContent && this.transport === 'local-only') {
+      this.Doc.transact(() => {
+        this.ContentText.insert(0, initialContent);
+        this.populateSlideDeckCrdtIfPresentation(initialContent);
+        this.populateSpreadsheetCrdtIfWorkbook(initialContent);
+      }, 'init');
+      this.seededInDoc = true;
+    }
+
+    this.Awareness = new awarenessProtocol.Awareness(this.Doc);
+    this.Awareness.setLocalStateField('user', {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      color: SanitizeAwarenessColor(user.color),
+      canEdit,
+      isAgent: user.isAgent,
+      role: user.role,
+    });
+
+    this.bindDocObservers(this.Doc);
+    this.initUndoManager(this.Doc);
+    this.bindAwarenessObservers(this.Awareness);
+  }
+
+  private bindAwarenessObservers(awareness: awarenessProtocol.Awareness): void {
+    this.detachAwarenessObservers(awareness);
+    const changeHandler = (): void => {
+      if (!this.destroyed && awareness === this.Awareness) {
+        this.collaboratorsChanged$.next(this.GetCollaborators());
+      }
+    };
+    const updateHandler = (
+      changed: { added: number[]; updated: number[]; removed: number[] },
+      origin: string | number | symbol | object | null | undefined,
+    ): void => {
+      if (
+        this.destroyed ||
+        awareness !== this.Awareness ||
+        origin === 'remote' ||
+        !this.socket ||
+        this.socket.readyState !== WebSocket.OPEN
+      ) {
+        return;
+      }
+      const changedClients = changed.added.concat(changed.updated, changed.removed);
+      if (changedClients.length === 0) {
+        return;
+      }
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, MSG_AWARENESS);
+      encoding.writeVarUint8Array(
+        encoder,
+        awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients),
+      );
+      this.socket.send(encoding.toUint8Array(encoder));
+    };
+    this.awarenessChangeHandler = changeHandler;
+    this.awarenessUpdateHandler = updateHandler;
+    awareness.on('change', changeHandler);
+    awareness.on('update', updateHandler);
+  }
+
+  private detachAwarenessObservers(awareness: awarenessProtocol.Awareness): void {
+    if (this.awarenessChangeHandler) {
+      awareness.off('change', this.awarenessChangeHandler);
+      this.awarenessChangeHandler = null;
+    }
+    if (this.awarenessUpdateHandler) {
+      awareness.off('update', this.awarenessUpdateHandler);
+      this.awarenessUpdateHandler = null;
+    }
+  }
+
+  private rebindAwarenessToDoc(nextDoc: Y.Doc): void {
+    const prevAwareness = this.Awareness;
+    const prevLocalState = prevAwareness.getLocalState();
+    this.detachAwarenessObservers(prevAwareness);
+    prevAwareness.destroy();
+
+    const nextAwareness = new awarenessProtocol.Awareness(nextDoc);
+    if (prevLocalState) {
+      nextAwareness.setLocalState(prevLocalState);
+    }
+    this.Awareness = nextAwareness;
+    this.bindAwarenessObservers(nextAwareness);
+  }
+
+  private bindDocObservers(doc: Y.Doc): void {
+    const handler = (
+      update: Uint8Array,
+      origin: string | number | symbol | object | null | undefined,
+    ): void => {
+      if (doc !== this.Doc) {
+        return;
+      }
+      if (origin === 'remote') {
+        if (
+          this.ContentText.length > 0 ||
+          doc.getArray<string>('slideOrder').length > 0 ||
+          doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+          this.hasCompletedInitialSync = true;
+          this.setLiveSyncUnavailable(false);
+        }
+      } else if (origin !== 'init') {
+        const sent = this.sendYjsUpdate(update);
+        if (!sent) {
+          this.hasUnsentLocalEdits = true;
+        }
+      }
+      this.contentChanged$.next(this.GetContent());
+    };
+    this.docUpdateHandler = handler;
+    doc.on('update', handler);
+
+    const suggestionsMap = doc.getMap<string>('suggestions');
+    const suggestionsObs = (): void => {
+      if (!this.destroyed && doc === this.Doc) {
+        this.suggestionsChanged$.next();
+      }
+    };
+    this.suggestionsMapRef = suggestionsMap;
+    this.suggestionsObserver = suggestionsObs;
+    suggestionsMap.observe(suggestionsObs);
+  }
+
+  private detachDocObservers(doc: Y.Doc): void {
+    if (this.docUpdateHandler) {
+      doc.off('update', this.docUpdateHandler);
+      this.docUpdateHandler = null;
+    }
+    if (this.suggestionsMapRef && this.suggestionsObserver) {
+      this.suggestionsMapRef.unobserve(this.suggestionsObserver);
+      this.suggestionsMapRef = null;
+      this.suggestionsObserver = null;
+    }
+  }
+
+  private initUndoManager(doc: Y.Doc): void {
+    this.destroyUndoManager();
+    const scopes = [
+      this.ContentText,
+      doc.getMap<string>('slidesById'),
+      doc.getArray<string>('slideOrder'),
+      doc.getMap<string>('deckMeta'),
+      doc.getMap<string>('sheetCellsByCoord'),
+      doc.getMap<string>('worksheetsById'),
+      doc.getArray<string>('sheetOrder'),
+      doc.getMap<string>('workbookMeta'),
+    ];
+    this.undoManager = new Y.UndoManager(scopes, {
+      trackedOrigins: new Set<string>(['local']),
+      captureTimeout: 500,
+    });
+    this.undoManager.on('stack-item-added', this.undoStateListener);
+    this.undoManager.on('stack-item-popped', this.undoStateListener);
+    this.undoManager.on('stack-cleared', this.undoStateListener);
+    this.syncUndoRedoSubjects();
+  }
+
+  private destroyUndoManager(): void {
+    if (this.undoManager) {
+      this.undoManager.off('stack-item-added', this.undoStateListener);
+      this.undoManager.off('stack-item-popped', this.undoStateListener);
+      this.undoManager.off('stack-cleared', this.undoStateListener);
+      this.undoManager.destroy();
+      this.undoManager = null;
+    }
+    if (!this.destroyed) {
+      if (this.canUndo$.value) {
+        this.canUndo$.next(false);
+      }
+      if (this.canRedo$.value) {
+        this.canRedo$.next(false);
+      }
+    }
+  }
+
+  private syncUndoRedoSubjects(): void {
+    if (this.destroyed) {
+      return;
+    }
+    const nextCanUndo = this.undoManager?.canUndo() ?? false;
+    const nextCanRedo = this.undoManager?.canRedo() ?? false;
+    if (this.canUndo$.value !== nextCanUndo) {
+      this.canUndo$.next(nextCanUndo);
+    }
+    if (this.canRedo$.value !== nextCanRedo) {
+      this.canRedo$.next(nextCanRedo);
+    }
+  }
+
+  /**
+   * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload without
+   * destroying `this.Awareness`, preserves any unsent local line edits on top of the reset baseline,
+   * rebinds observers, and emits `RemoteContent$` / `ContentChanged$`.
+   */
+  public ApplyRoomReset(payload: string): void {
+    if (this.destroyed) {
+      return;
+    }
+    const unsentLocalSnapshot = this.hasUnsentLocalEdits ? this.GetContent() : null;
+    const baseBeforeReset = this.lastSyncedRemoteContent;
+
+    const previousDoc = this.Doc;
+    this.destroyUndoManager();
+    this.detachDocObservers(previousDoc);
+
+    const nextDoc = new Y.Doc();
+    this.Doc = nextDoc;
+    this.ContentText = nextDoc.getText('content');
+    this.seededInDoc = false;
+    this.overrideSeedContent = null;
+
+    this.applyingRemote = true;
+    try {
+      const binaryBytes = decodeBase64ToUint8Array(payload);
+      let appliedBinary = false;
+      if (binaryBytes && binaryBytes.byteLength > 0) {
+        try {
+          Y.applyUpdate(nextDoc, binaryBytes, 'remote');
+          appliedBinary =
+            this.ContentText.length > 0 ||
+            nextDoc.getArray<string>('slideOrder').length > 0 ||
+            nextDoc.getMap<string>('worksheetsById').size > 0;
+        } catch {
+          appliedBinary = false;
+        }
+      }
+      if (!appliedBinary && payload.length > 0) {
+        nextDoc.transact(() => {
+          this.ContentText.insert(0, payload);
+          this.populateSlideDeckCrdtIfPresentation(payload);
+          this.populateSpreadsheetCrdtIfWorkbook(payload);
+        }, 'remote');
+      }
+      if (
+        this.ContentText.length > 0 ||
+        nextDoc.getArray<string>('slideOrder').length > 0 ||
+        nextDoc.getMap<string>('worksheetsById').size > 0
+      ) {
+        this.seededInDoc = true;
+      }
+    } finally {
+      this.applyingRemote = false;
+    }
+
+    this.hasCompletedInitialSync = true;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.reconnectAttempts = 0;
+    }
+    this.setLiveSyncUnavailable(false);
+    if (this.status === 'readonly' && this.canEdit) {
+      this.status = 'local';
+    }
+    this.hasUnsentLocalEdits = false;
+    const resetBaseline = this.GetContent();
+    this.lastSyncedRemoteContent = resetBaseline;
+
+    this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
+    this.rebindAwarenessToDoc(nextDoc);
+    previousDoc.destroy();
+
+    // Preserve diverged unsent local edits in pendingResetConflictDraft for explicit recovery
+    // instead of blindly appending lines at EOF or silently discarding structured JSON drafts.
+    if (
+      unsentLocalSnapshot !== null &&
+      unsentLocalSnapshot !== baseBeforeReset &&
+      unsentLocalSnapshot !== resetBaseline &&
+      this.canEdit
+    ) {
+      this.pendingResetConflictDraft = {
+        ArtifactID: this.ArtifactID,
+        BaseBeforeReset: baseBeforeReset,
+        LocalDraft: unsentLocalSnapshot,
+        ResetBaseline: resetBaseline,
+        CapturedAt: new Date().toISOString(),
+      };
+      this.roomResetConflict$.next(this.pendingResetConflictDraft);
+    }
+
+    this.statusChanged$.next(this.status);
+    this.contentChanged$.next(this.GetContent());
+    this.suggestionsChanged$.next();
+  }
+
+  /**
+   * Resets unsent local CRDT items after an out-of-band server commit (`CommitInlineEditOnServer`
+   * while the WebSocket is disconnected) so a subsequent reconnect receives the server's state
+   * cleanly without duplicating items committed over HTTP.
+   */
+  public AdoptOutOfBandCommittedContent(committedContent: string): void {
+    if (this.destroyed || this.transport !== 'websocket') {
+      return;
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+    const previousDoc = this.Doc;
+    this.destroyUndoManager();
+    this.detachDocObservers(previousDoc);
+    const nextDoc = new Y.Doc();
+    this.Doc = nextDoc;
+    this.ContentText = nextDoc.getText('content');
+    this.seededInDoc = false;
+    this.overrideSeedContent = committedContent;
+    this.lastSyncedRemoteContent = committedContent;
+    this.hasUnsentLocalEdits = false;
+    this.hasCompletedInitialSync = false;
+    this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
+    this.rebindAwarenessToDoc(nextDoc);
+    previousDoc.destroy();
+    this.statusChanged$.next(this.status);
+  }
+
+  /**
+   * Acquires a single-use collaboration ticket (when `GraphQLDataProvider` is configured)
+   * and connects to the MJServer `/collaboration/yjs` WebSocket endpoint with automatic
+   * exponential-backoff reconnection on transient disconnects.
+   */
+  public async Connect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    const is4401Retry = this.retrying4401;
+    this.retrying4401 = false;
+    if (!is4401Retry) {
+      this.hasRetried4401Ticket = false;
+    }
+    if (this.destroyed || typeof WebSocket === 'undefined') {
+      if (this.transport === 'local-only') {
+        this.ensureLocalSeedIfUnseeded();
+      }
+      if (!this.destroyed) {
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+      }
+      return;
+    }
+
+    this.configuredWsUrlOverride = wsUrl ?? null;
+    this.configuredProvider = provider ?? null;
+    const generation = ++this.connectGeneration;
+    this.clearReconnectTimer();
+
+    let targetWsUrl = wsUrl ?? '';
+    try {
+      if (this.endpointResolver) {
+        const resolved = await this.endpointResolver(this.ArtifactID, wsUrl, provider);
+        if (this.destroyed || generation !== this.connectGeneration) {
+          return;
+        }
+        if (resolved.Mode === 'revoked') {
+          this.canEdit = false;
+          this.recoverable = false;
+          this.clearReconnectTimer();
+          this.setStatus('revoked');
+          return;
+        }
+        if (resolved.Mode === 'local' || !resolved.WsUrl) {
+          if (resolved.LiveSyncUnavailable === true) {
+            this.setLiveSyncUnavailable(true, resolved.LiveSyncErrorReason ?? '');
+            this.recoverable = false;
+            this.clearReconnectTimer();
+            this.setStatus('readonly');
+            return;
+          }
+          this.recoverable = true;
+          this.setLiveSyncUnavailable(false);
+          if (resolved.LiveSyncErrorReason) {
+            this.liveSyncErrorReason = resolved.LiveSyncErrorReason;
+          }
+          if (resolved.HasBackend === false && this.transport === 'local-only') {
+            this.ensureLocalSeedIfUnseeded();
+          }
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+          if (
+            resolved.HasBackend === true ||
+            (resolved.HasBackend !== false && this.transport === 'websocket')
+          ) {
+            this.scheduleReconnect();
+          }
+          return;
+        }
+        if (resolved.CanEdit === false) {
+          this.canEdit = false;
+        }
+        this.recoverable = true;
+        this.setLiveSyncUnavailable(false);
+        this.transport = 'websocket';
+        targetWsUrl = resolved.WsUrl;
+      } else if (!targetWsUrl) {
+        if (this.transport === 'local-only') {
+          this.ensureLocalSeedIfUnseeded();
+        }
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+        return;
+      } else {
+        this.recoverable = true;
+        this.transport = 'websocket';
+      }
+
+      if (this.destroyed || generation !== this.connectGeneration) {
+        return;
+      }
+
+      this.closeActiveSocketWithoutReconnect();
+
+      this.setStatus('connecting');
+      const ws = new WebSocket(targetWsUrl);
+      ws.binaryType = 'arraybuffer';
+      this.socket = ws;
+
+      ws.onopen = () => {
+        if (this.destroyed || this.socket !== ws) {
+          ws.close();
+          return;
+        }
+        this.recoverable = true;
+        this.setLiveSyncUnavailable(false);
+        this.clearReconnectTimer();
+        this.setStatus(this.canEdit ? 'connected' : 'readonly');
+
+        // Standard Yjs state-vector handshake: send sync-step-1 (stateVector).
+        // Server responds with sync-step-2 + its own sync-step-1, and ApplyBinaryFrame
+        // replies with client sync-step-2 (missing client updates) without full-doc resends.
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, MSG_SYNC);
+        syncProtocol.writeSyncStep1(encoder, this.Doc);
+        ws.send(encoding.toUint8Array(encoder));
+
+        const awarenessEncoder = encoding.createEncoder();
+        encoding.writeVarUint(awarenessEncoder, MSG_AWARENESS);
+        encoding.writeVarUint8Array(
+          awarenessEncoder,
+          awarenessProtocol.encodeAwarenessUpdate(this.Awareness, [this.Awareness.clientID]),
+        );
+        ws.send(encoding.toUint8Array(awarenessEncoder));
+      };
+
+      ws.onmessage = (event: MessageEvent) => {
+        if (this.destroyed) {
+          return;
+        }
+        if (typeof event.data === 'string') {
+          const msg = SafeJSONParse<CollaborationControlFramePayload>(event.data);
+          if (msg) {
+            this.handleControlPayload(msg);
+          }
+          return;
+        }
+        if (event.data instanceof ArrayBuffer) {
+          this.ApplyBinaryFrame(new Uint8Array(event.data));
+        } else if (ArrayBuffer.isView(event.data)) {
+          this.ApplyBinaryFrame(
+            new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength),
+          );
+        }
+      };
+
+      ws.onclose = (event: CloseEvent) => {
+        if (this.socket === ws) {
+          this.socket = null;
+        }
+        if (this.destroyed) {
+          return;
+        }
+        if (event.code === 4403) {
+          this.canEdit = false;
+          this.recoverable = false;
+          this.clearReconnectTimer();
+          this.setStatus('revoked');
+          return;
+        }
+        this.recoverable = true;
+        if (event.code === 4401) {
+          this.clearReconnectTimer();
+          if (!this.hasRetried4401Ticket && this.endpointResolver) {
+            this.hasRetried4401Ticket = true;
+            this.retrying4401 = true;
+            this.setStatus('connecting');
+            void this.Connect(this.configuredWsUrlOverride, this.configuredProvider);
+            return;
+          }
+          this.setLiveSyncUnavailable(true, 'Collaboration ticket expired. Please refresh to reconnect.');
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+          return;
+        }
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+        this.scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        if (!this.destroyed && this.status === 'connecting') {
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+        }
+      };
+    } catch (err) {
+      LogError(err);
+      this.recoverable = true;
+      this.setStatus(this.canEdit ? 'local' : 'readonly');
+      if (this.transport === 'websocket') {
+        this.scheduleReconnect();
+      }
+    }
+  }
+
+  /**
+   * Resets automatic exponential-backoff exhaustion (`reconnectAttempts = 0`) and immediately
+   * attempts a fresh ticket-authenticated WebSocket connection.
+   */
+  public async Retry(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
+    this.recoverable = true;
+    const nextWsUrl = wsUrl !== undefined ? wsUrl : this.configuredWsUrlOverride;
+    const nextProvider = provider !== undefined ? provider : this.configuredProvider;
+    await this.Connect(nextWsUrl, nextProvider);
+  }
+
+  /**
+   * Alias for {@link Retry} that resets reconnect backoff attempts and reconnects immediately.
+   */
+  public async Reconnect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    await this.Retry(wsUrl, provider);
+  }
+
+  /**
+   * Updates the local `Y.Text('content')` value with minimal diff insertion/deletion.
+   */
+  public SetContent(newMarkdown: string): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    const current = this.ContentText.toString();
+    if (current === newMarkdown) {
+      return;
+    }
+    this.seededInDoc = true;
+
+    let prefixLen = 0;
+    const minLen = Math.min(current.length, newMarkdown.length);
+    while (prefixLen < minLen && current[prefixLen] === newMarkdown[prefixLen]) {
+      prefixLen++;
+    }
+
+    let oldSuffix = current.length;
+    let newSuffix = newMarkdown.length;
+    while (
+      oldSuffix > prefixLen &&
+      newSuffix > prefixLen &&
+      current[oldSuffix - 1] === newMarkdown[newSuffix - 1]
+    ) {
+      oldSuffix--;
+      newSuffix--;
+    }
+
+    const deleteLen = oldSuffix - prefixLen;
+    const insertText = newMarkdown.slice(prefixLen, newSuffix);
+
+    this.Doc.transact(() => {
+      if (deleteLen > 0) {
+        this.ContentText.delete(prefixLen, deleteLen);
+      }
+      if (insertText.length > 0) {
+        this.ContentText.insert(prefixLen, insertText);
+      }
+      this.populateSlideDeckCrdtIfPresentation(newMarkdown);
+      this.populateSpreadsheetCrdtIfWorkbook(newMarkdown);
+    }, 'local');
+  }
+
+  /**
+   * Surgically updates a single slide in `slidesById` (`Y.Map`) and appends its `SlideID` to `slideOrder` (`Y.Array`)
+   * if not yet present, enabling conflict-free concurrent multi-slide editing (`Accept #1`).
+   */
+  public UpdateSlideInDeck(slide: SlideSpec, fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slidesById = this.Doc.getMap<string>('slidesById');
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      slidesById.set(slide.SlideID, JSON.stringify(slide));
+      const existingOrder = slideOrder.toArray();
+      if (!existingOrder.includes(slide.SlideID)) {
+        slideOrder.push([slide.SlideID]);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Reorders the presentation deck via the shared `slideOrder` (`Y.Array<string>`) CRDT
+   * without overwriting individual slide contents in `slidesById` (`Accept #1`).
+   */
+  public ReorderSlidesInDeck(orderedSlideIds: string[], fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      const existing = slideOrder.toArray();
+      const nextOrder = [...orderedSlideIds];
+      for (const id of existing) {
+        if (!nextOrder.includes(id)) {
+          nextOrder.push(id);
+        }
+      }
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextOrder);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Deletes a slide by `slideId` from `slidesById` (`Y.Map`) and `slideOrder` (`Y.Array`).
+   */
+  public DeleteSlideFromDeck(slideId: string, fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slidesById = this.Doc.getMap<string>('slidesById');
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      slidesById.delete(slideId);
+      const nextOrder = slideOrder.toArray().filter((id) => id !== slideId);
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextOrder);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Updates deck-level metadata (`Title`, `Subtitle`, `AspectRatio`, `Theme`, `Master`) in `deckMeta` (`Y.Map`)
+   * without touching individual slide entries in `slidesById`.
+   */
+  public UpdateDeckMeta(deck: SlideDeckSpec): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(deck));
+      }
+      const deckMeta = this.Doc.getMap<string>('deckMeta');
+      deckMeta.set('DeckID', deck.DeckID);
+      deckMeta.set('Title', deck.Title);
+      deckMeta.set('Subtitle', deck.Subtitle ?? '');
+      deckMeta.set('AspectRatio', deck.AspectRatio);
+      deckMeta.set('Theme', JSON.stringify(deck.Theme));
+      deckMeta.set('Master', JSON.stringify(deck.Master));
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Surgically updates a single spreadsheet cell in `sheetCellsByCoord` (`Y.Map`) keyed by
+   * `${sheetId}::${cell.RowID}::${cell.ColumnID}` (`§ 6.2`, `Accept #1`).
+   * Concurrent row/column insertions (`worksheetsById`) and formula edits (`sheetCellsByCoord`)
+   * touch disjoint Yjs maps and merge cleanly without overwriting one another.
+   */
+  public UpdateSpreadsheetCell(
+    sheetId: string,
+    cell: SpreadsheetCellSpec,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Deletes a single spreadsheet cell from `sheetCellsByCoord` (`Y.Map`).
+   */
+  public DeleteSpreadsheetCell(
+    sheetId: string,
+    rowId: string,
+    colId: string,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      sheetCellsByCoord.delete(`${sheetId}::${rowId}::${colId}`);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Applies a batch of spreadsheet cell updates and deletions inside a single `'local'`
+   * Yjs transaction so multi-cell paste or range clear forms one atomic undo/redo step.
+   */
+  public BatchUpdateSpreadsheetCells(
+    sheetId: string,
+    updates: ReadonlyArray<SpreadsheetCellSpec>,
+    deletes: ReadonlyArray<{ rowId: string; colId: string }> = [],
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    if (updates.length === 0 && deletes.length === 0) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      for (const cell of updates) {
+        sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      }
+      for (const del of deletes) {
+        sheetCellsByCoord.delete(`${sheetId}::${del.rowId}::${del.colId}`);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Surgically updates worksheet structural metadata (`Rows`, `Columns`, `LiveTables`, `Charts`,
+   * `EmbeddedArtifacts`, `Sort`, `Filters`, `FrozenRows`, `FrozenColumns`) in `worksheetsById` (`Y.Map`)
+   * without touching individual cell entries in `sheetCellsByCoord` (`Accept #1`).
+   */
+  public UpdateWorksheetStructure(
+    sheet: WorksheetSpec,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+      const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+      const wsWithoutCells: WorksheetSpec = {
+        ...sheet,
+        Cells: {},
+      };
+      worksheetsById.set(sheet.SheetID, JSON.stringify(wsWithoutCells));
+      const existingOrder = sheetOrder.toArray();
+      if (!existingOrder.includes(sheet.SheetID)) {
+        sheetOrder.push([sheet.SheetID]);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Updates workbook-level metadata (`Title`, `ActiveSheetID`, `NamedRanges`, and `sheetOrder`)
+   * in `workbookMeta` (`Y.Map`) and `sheetOrder` (`Y.Array`).
+   */
+  public UpdateWorkbookMetadata(workbook: WorkbookSpec): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      this.populateSpreadsheetCrdtIfWorkbook(
+        SpreadsheetEngine.Instance.SerializeWorkbook(workbook),
+      );
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
+   * to compact the active room into a new immutable `MJ: Artifact Versions` record.
+   */
+  public RequestSaveVersion(thumbnailDataUrl?: string | null): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
+      return false;
+    }
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_CONTROL);
+    const framePayload: { action: 'save-version'; thumbnailDataUrl?: string } = {
+      action: 'save-version',
+    };
+    if (thumbnailDataUrl && thumbnailDataUrl.startsWith('data:image/')) {
+      framePayload.thumbnailDataUrl = thumbnailDataUrl;
+    }
+    encoding.writeVarString(encoder, JSON.stringify(framePayload));
+    this.socket.send(encoding.toUint8Array(encoder));
+    return true;
+  }
+
+  /**
+   * Broadcasts the user's currently focused block ID to collaborators via Yjs awareness.
+   */
+  public SetActiveBlock(blockId: string | undefined): void {
+    const currentState = this.Awareness.getLocalState() ?? {};
+    const userState =
+      (currentState['user'] as {
+        userId?: string | number;
+        name?: string;
+        email?: string;
+        color?: string;
+        activeBlockId?: string;
+        canEdit?: boolean;
+      } | undefined) ?? {};
+    this.Awareness.setLocalStateField('user', {
+      ...userState,
+      activeBlockId: blockId,
+    });
+  }
+
+  /**
+   * Returns all active collaborators from the Yjs Awareness state map.
+   */
+  private deriveActiveBlockIdFromLocation(
+    loc: CollaboratorAgentLocation | undefined,
+  ): string | undefined {
+    if (!loc) {
+      return undefined;
+    }
+    if (loc.Domain === 'spreadsheet') {
+      const sheet = loc.SheetID || loc.SheetName;
+      if (sheet && loc.Range) {
+        return `${sheet}:${loc.Range}`;
+      }
+      return loc.Range || sheet || undefined;
+    }
+    if (loc.Domain === 'slides') {
+      if (loc.SlideID) {
+        return loc.SlideID;
+      }
+      if (typeof loc.SlideNumber === 'number') {
+        return `Slide ${loc.SlideNumber}`;
+      }
+    }
+    if (loc.Domain === 'document') {
+      return loc.BlockID || loc.SectionHeading || undefined;
+    }
+    return loc.ElementID || loc.BlockID || undefined;
+  }
+
+  public GetCollaborators(): CollaboratorPresence[] {
+    const result: CollaboratorPresence[] = [];
+    this.Awareness.getStates().forEach(
+      (
+        state: {
+          agentPhase?: CollaboratorPresence['AgentPhase'];
+          agentLocation?: CollaboratorAgentLocation;
+          user?: {
+            userId?: string | number;
+            name?: string;
+            email?: string;
+            color?: string;
+            activeBlockId?: string;
+            canEdit?: boolean;
+            isAgent?: boolean;
+            role?: string;
+            agentPresenceKey?: string;
+            agentRunId?: string;
+            agentName?: string;
+            actingForUserId?: string;
+            actingForUserName?: string;
+            actingForUserEmail?: string;
+            agentPhase?: CollaboratorPresence['AgentPhase'];
+            toolName?: string;
+            actionSummary?: string;
+            agentLocation?: CollaboratorAgentLocation;
+            timestampMs?: number;
+          };
+        },
+        clientId: number,
+      ) => {
+        const u = state.user;
+        if (u && typeof u.name === 'string') {
+          const isAgent = u.isAgent === true;
+          const agentLocation = state.agentLocation ?? u.agentLocation;
+          const activeBlockId =
+            typeof u.activeBlockId === 'string'
+              ? u.activeBlockId
+              : this.deriveActiveBlockIdFromLocation(agentLocation);
+          result.push({
+            ClientID: clientId,
+            UserID: String(u.userId ?? clientId),
+            Name: u.name,
+            Email: typeof u.email === 'string' ? u.email : undefined,
+            Color: SanitizeAwarenessColor(typeof u.color === 'string' ? u.color : undefined),
+            ActiveBlockID: activeBlockId,
+            CanEdit: u.canEdit !== false,
+            IsAgent: isAgent,
+            AgentPresenceKey:
+              isAgent && typeof u.agentPresenceKey === 'string' ? u.agentPresenceKey : undefined,
+            AgentRunID: isAgent && typeof u.agentRunId === 'string' ? u.agentRunId : undefined,
+            AgentName: isAgent && typeof u.agentName === 'string' ? u.agentName : undefined,
+            ActingForUserID:
+              isAgent && typeof u.actingForUserId === 'string' ? u.actingForUserId : undefined,
+            ActingForUserName:
+              isAgent && typeof u.actingForUserName === 'string' ? u.actingForUserName : undefined,
+            ActingForUserEmail:
+              isAgent && typeof u.actingForUserEmail === 'string'
+                ? u.actingForUserEmail
+                : undefined,
+            AgentPhase: isAgent ? (state.agentPhase ?? u.agentPhase) : undefined,
+            ToolName: isAgent && typeof u.toolName === 'string' ? u.toolName : undefined,
+            ActionSummary:
+              isAgent && typeof u.actionSummary === 'string' ? u.actionSummary : undefined,
+            AgentLocation: isAgent ? agentLocation : undefined,
+            TimestampMs: isAgent && typeof u.timestampMs === 'number' ? u.timestampMs : undefined,
+          });
+        }
+      },
+    );
+    return result;
+  }
+
+  /**
+   * Cleanly cancels any pending reconnect timer, closes the WebSocket, and destroys the Yjs document.
+   */
+  public Destroy(): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      awarenessProtocol.removeAwarenessStates(this.Awareness, [this.Awareness.clientID], 'local');
+    }
+    this.destroyed = true;
+    this.connectGeneration++;
+    this.clearReconnectTimer();
+    this.closeActiveSocketWithoutReconnect();
+    this.detachAwarenessObservers(this.Awareness);
+    this.detachDocObservers(this.Doc);
+    this.contentChanged$.complete();
+    this.statusChanged$.complete();
+    this.collaboratorsChanged$.complete();
+    this.versionSaved$.complete();
+    this.mergeConflict$.complete();
+    this.roomResetConflict$.complete();
+    this.suggestionsChanged$.complete();
+    this.liveSyncUnavailable$.complete();
+    this.destroyUndoManager();
+    this.canUndo$.complete();
+    this.canRedo$.complete();
+    this.Awareness.destroy();
+    this.Doc.destroy();
+    this.onDestroyed?.(this);
+  }
+
+  /**
+   * Applies an incoming `y-protocols` binary frame (`sync = 0`, `awareness = 1`,
+   * `control = 2`, or `permission-status = 3`) from the collaboration server.
+   */
+  public ApplyBinaryFrame(frame: Uint8Array): void {
+    const decoder = decoding.createDecoder(frame);
+    const msgType = decoding.readVarUint(decoder);
+
+    if (msgType === MSG_SYNC) {
+      const subDecoder = decoding.clone(decoder);
+      const syncMsgType = decoding.readVarUint(subDecoder);
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, MSG_SYNC);
+      this.applyingRemote = true;
+      try {
+        syncProtocol.readSyncMessage(decoder, encoder, this.Doc, 'remote');
+      } finally {
+        this.applyingRemote = false;
+      }
+      if (encoding.length(encoder) > 1 && this.socket?.readyState === WebSocket.OPEN) {
+        this.socket.send(encoding.toUint8Array(encoder));
+      }
+      if (syncMsgType === syncProtocol.messageYjsSyncStep2) {
+        this.hasCompletedInitialSync = true;
+        this.hasRetried4401Ticket = false;
+        this.reconnectAttempts = 0;
+        this.setLiveSyncUnavailable(false);
+        this.overrideSeedContent = null;
+        if (
+          this.transport === 'local-only' &&
+          !this.seededInDoc &&
+          this.ContentText.length === 0 &&
+          this.initialSeedContent.length > 0 &&
+          this.canEdit
+        ) {
+          this.seededInDoc = true;
+          this.Doc.transact(() => {
+            this.ContentText.insert(0, this.initialSeedContent);
+            this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
+            this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
+          }, 'local');
+        } else if (
+          this.ContentText.length > 0 ||
+          this.Doc.getArray<string>('slideOrder').length > 0 ||
+          this.Doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+        }
+        this.lastSyncedRemoteContent = this.GetContent();
+        this.statusChanged$.next(this.status);
+      } else if (syncMsgType === syncProtocol.messageYjsUpdate) {
+        if (this.hasCompletedInitialSync) {
+          this.reconnectAttempts = 0;
+        }
+        if (
+          this.ContentText.length > 0 ||
+          this.Doc.getArray<string>('slideOrder').length > 0 ||
+          this.Doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+        }
+        this.lastSyncedRemoteContent = this.GetContent();
+      } else {
+        if (this.hasCompletedInitialSync) {
+          this.reconnectAttempts = 0;
+        }
+        if (this.ContentText.length > 0) {
+          this.seededInDoc = true;
+        }
+      }
+    } else if (msgType === MSG_AWARENESS) {
+      const update = decoding.readVarUint8Array(decoder);
+      awarenessProtocol.applyAwarenessUpdate(this.Awareness, update, 'remote');
+    } else if (msgType === MSG_CONTROL || msgType === MSG_PERMISSION_STATE) {
+      const jsonStr = decoding.readVarString(decoder);
+      const parsed = SafeJSONParse<CollaborationControlFramePayload>(jsonStr);
+      if (!parsed) {
+        return;
+      }
+      this.handleControlPayload(parsed);
+    }
+  }
+
+  private handleControlPayload(parsed: CollaborationControlFramePayload): void {
+    if ((parsed.type === 'room-reset' || parsed.action === 'room-reset') && typeof parsed.payload === 'string') {
+      this.ApplyRoomReset(parsed.payload);
+      return;
+    }
+    if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
+      this.versionSaved$.next({
+        versionId: parsed.versionId ?? '',
+        versionNumber: parsed.versionNumber,
+      });
+      return;
+    }
+    if (parsed.action === 'merge-conflict' || parsed.type === 'merge-conflict') {
+      this.emitMergeConflictFromPayload(parsed);
+      return;
+    }
+    if (parsed.action === 'readonly-rejected') {
+      this.canEdit = false;
+      this.setStatus('readonly');
+    } else if (
+      parsed.action === 'permission-revoked' ||
+      parsed.type === 'permission-revoked' ||
+      parsed.canRead === false
+    ) {
+      this.canEdit = false;
+      this.recoverable = false;
+      this.clearReconnectTimer();
+      this.setStatus('revoked');
+    } else if (parsed.canEdit === false) {
+      this.canEdit = false;
+      this.setStatus('readonly');
+    } else if (parsed.canEdit === true) {
+      this.canEdit = true;
+      this.setStatus('connected');
+    }
+  }
+
+  private emitMergeConflictFromPayload(parsed: CollaborationControlFramePayload): void {
+    const rejectedCount =
+      typeof parsed.rejectedHunksCount === 'number'
+        ? parsed.rejectedHunksCount
+        : typeof parsed.rejectedHunkCount === 'number'
+          ? parsed.rejectedHunkCount
+          : 0;
+    const conflictEvent: CollaborationMergeConflictEvent = {
+      ArtifactID:
+        typeof parsed.artifactId === 'string' && parsed.artifactId.trim().length > 0
+          ? parsed.artifactId
+          : this.ArtifactID,
+      VersionID: typeof parsed.versionId === 'string' ? parsed.versionId : undefined,
+      VersionNumber: typeof parsed.versionNumber === 'number' ? parsed.versionNumber : undefined,
+      RejectedHunksCount: rejectedCount,
+      Source: typeof parsed.source === 'string' ? parsed.source : undefined,
+      RoomEpoch: typeof parsed.roomEpoch === 'string' ? parsed.roomEpoch : undefined,
+      Timestamp:
+        typeof parsed.timestamp === 'string' && parsed.timestamp.trim().length > 0
+          ? parsed.timestamp
+          : new Date().toISOString(),
+      ActorUserID:
+        typeof parsed.actorUserId === 'string' && parsed.actorUserId.trim().length > 0
+          ? parsed.actorUserId.trim()
+          : undefined,
+      LocalUserID: this.localUser?.id,
+    };
+    this.onMergeConflict?.(conflictEvent);
+    if (!this.destroyed) {
+      this.mergeConflict$.next(conflictEvent);
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.destroyed || this.liveSyncUnavailable) {
+      return;
+    }
+    this.clearReconnectTimer();
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.recoverable = true;
+      this.setStatus('error');
+      return;
+    }
+    const baseDelay =
+      RECONNECT_BACKOFF_MS[Math.min(this.reconnectAttempts, RECONNECT_BACKOFF_MS.length - 1)];
+    const jitter = Math.floor(Math.random() * 250);
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.destroyed && !this.liveSyncUnavailable) {
+        void this.Connect(this.configuredWsUrlOverride, this.configuredProvider);
+      }
+    }, baseDelay + jitter);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private setLiveSyncUnavailable(unavailable: boolean, reason = ''): void {
+    this.liveSyncUnavailable = unavailable;
+    this.liveSyncErrorReason = unavailable ? reason : '';
+    if (!this.destroyed && this.liveSyncUnavailable$.value !== unavailable) {
+      this.liveSyncUnavailable$.next(unavailable);
+    }
+  }
+
+  private closeActiveSocketWithoutReconnect(): void {
+    if (!this.socket) {
+      return;
+    }
+    const ws = this.socket;
+    this.socket = null;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    try {
+      ws.close();
+    } catch (err) {
+      LogError(err);
+    }
+  }
+
+  private ensureLocalSeedIfUnseeded(): void {
+    if (!this.seededInDoc && this.ContentText.length === 0 && this.initialSeedContent.length > 0) {
+      this.seededInDoc = true;
+      this.Doc.transact(() => {
+        this.ContentText.insert(0, this.initialSeedContent);
+        this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
+        this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
+      }, 'init');
+    }
+  }
+
+  private populateSlideDeckCrdtIfPresentation(rawContent: string): void {
+    const trimmed = (rawContent ?? '').trim();
+    if (!trimmed.startsWith('{') || !trimmed.includes('"Slides"')) {
+      return;
+    }
+    const parsed = SafeJSONParse<Partial<SlideDeckSpec>>(trimmed);
+    if (!parsed || !Array.isArray(parsed.Slides) || parsed.Slides.length === 0) {
+      return;
+    }
+    const deckMeta = this.Doc.getMap<string>('deckMeta');
+    const slidesById = this.Doc.getMap<string>('slidesById');
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
+
+    deckMeta.set('DeckID', parsed.DeckID || 'deck-1');
+    deckMeta.set('Title', parsed.Title || 'Presentation');
+    deckMeta.set('Subtitle', parsed.Subtitle || '');
+    deckMeta.set('AspectRatio', parsed.AspectRatio === '4:3' ? '4:3' : '16:9');
+    if (parsed.Theme) {
+      deckMeta.set('Theme', JSON.stringify(parsed.Theme));
+    }
+    if (parsed.Master) {
+      deckMeta.set('Master', JSON.stringify(parsed.Master));
+    }
+
+    const nextIds: string[] = [];
+    const nextIdSet = new Set<string>();
+    for (const slide of parsed.Slides) {
+      if (slide && typeof slide.SlideID === 'string' && slide.SlideID.trim()) {
+        slidesById.set(slide.SlideID, JSON.stringify(slide));
+        nextIds.push(slide.SlideID);
+        nextIdSet.add(slide.SlideID);
+      }
+    }
+    const staleSlideIds: string[] = [];
+    slidesById.forEach((_raw, slideId) => {
+      if (!nextIdSet.has(slideId)) {
+        staleSlideIds.push(slideId);
+      }
+    });
+    for (const staleId of staleSlideIds) {
+      slidesById.delete(staleId);
+    }
+    const currentOrder = slideOrder.toArray();
+    const sameOrder =
+      currentOrder.length === nextIds.length &&
+      currentOrder.every((id, idx) => id === nextIds[idx]);
+    if (!sameOrder) {
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextIds);
+    }
+  }
+
+  private reconstructSlideDeckJsonFromCrdt(): string | null {
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
+    const slidesById = this.Doc.getMap<string>('slidesById');
+    const deckMeta = this.Doc.getMap<string>('deckMeta');
+    if (slideOrder.length === 0 || slidesById.size === 0) {
+      return null;
+    }
+
+    const orderedIds = slideOrder.toArray();
+    const placedIds = new Set<string>();
+    const slides: SlideSpec[] = [];
+
+    for (const id of orderedIds) {
+      const rawSlide = slidesById.get(id);
+      if (rawSlide && !placedIds.has(id)) {
+        const parsedSlide = SafeJSONParse<SlideSpec>(rawSlide);
+        if (parsedSlide) {
+          slides.push({
+            ...parsedSlide,
+            SlideNumber: slides.length + 1,
+          });
+          placedIds.add(id);
+        }
+      }
+    }
+
+    slidesById.forEach((rawSlide, id) => {
+      if (!placedIds.has(id)) {
+        const parsedSlide = SafeJSONParse<SlideSpec>(rawSlide);
+        if (parsedSlide) {
+          slides.push({
+            ...parsedSlide,
+            SlideNumber: slides.length + 1,
+          });
+          placedIds.add(id);
+        }
+      }
+    });
+
+    if (slides.length === 0) {
+      return null;
+    }
+
+    let baseDeck: Partial<SlideDeckSpec> = {};
+    const currentText = this.ContentText.toString().trim();
+    if (currentText.startsWith('{')) {
+      baseDeck = SafeJSONParse<Partial<SlideDeckSpec>>(currentText) ?? {};
+    }
+
+    let theme = baseDeck.Theme;
+    const rawTheme = deckMeta.get('Theme');
+    if (rawTheme) {
+      theme = SafeJSONParse<SlideDeckSpec['Theme']>(rawTheme) ?? theme;
+    }
+
+    let master = baseDeck.Master;
+    const rawMaster = deckMeta.get('Master');
+    if (rawMaster) {
+      master = SafeJSONParse<SlideDeckSpec['Master']>(rawMaster) ?? master;
+    }
+
+    const merged: Partial<SlideDeckSpec> = {
+      ...baseDeck,
+      SchemaVersion: '1.0',
+      DeckID: deckMeta.get('DeckID') || baseDeck.DeckID || 'deck-1',
+      Title: deckMeta.get('Title') || baseDeck.Title || 'Presentation',
+      Subtitle: deckMeta.has('Subtitle') ? (deckMeta.get('Subtitle') || undefined) : baseDeck.Subtitle,
+      AspectRatio: (deckMeta.get('AspectRatio') as '16:9' | '4:3') || baseDeck.AspectRatio || '16:9',
+      Theme: theme,
+      Master: master,
+      Slides: slides,
+      UpdatedAt: baseDeck.UpdatedAt || new Date().toISOString(),
+    };
+
+    return JSON.stringify(merged, null, 2);
+  }
+
+  private syncContentTextFromSlideCrdt(): void {
+    const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+    if (!reconstructed) {
+      return;
+    }
+    const current = this.ContentText.toString();
+    if (current !== reconstructed) {
+      if (current.length > 0) {
+        this.ContentText.delete(0, current.length);
+      }
+      this.ContentText.insert(0, reconstructed);
+    }
+  }
+
+  private populateSpreadsheetCrdtIfWorkbook(rawContent: string): void {
+    const trimmed = (rawContent ?? '').trim();
+    if (!trimmed.startsWith('{') || !trimmed.includes('"Worksheets"')) {
+      return;
+    }
+    const parsed = SafeJSONParse<Partial<WorkbookSpec>>(trimmed);
+    if (!parsed || !Array.isArray(parsed.Worksheets) || parsed.Worksheets.length === 0) {
+      return;
+    }
+    const workbookMeta = this.Doc.getMap<string>('workbookMeta');
+    const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+
+    workbookMeta.set('WorkbookID', parsed.WorkbookID || 'wb-1');
+    workbookMeta.set('Title', parsed.Title || 'Workbook');
+    workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
+    workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+    if (typeof parsed.CreatedAt === 'string' && parsed.CreatedAt.length > 0) {
+      workbookMeta.set('CreatedAt', parsed.CreatedAt);
+    }
+    if (
+      typeof parsed.PreferredObjectsPaneHeightPx === 'number' &&
+      Number.isFinite(parsed.PreferredObjectsPaneHeightPx) &&
+      parsed.PreferredObjectsPaneHeightPx > 0
+    ) {
+      workbookMeta.set('PreferredObjectsPaneHeightPx', String(Math.round(parsed.PreferredObjectsPaneHeightPx)));
+    } else {
+      workbookMeta.delete('PreferredObjectsPaneHeightPx');
+    }
+
+    const nextSheetIds: string[] = [];
+    const activeCellKeys = new Set<string>();
+
+    for (const ws of parsed.Worksheets) {
+      if (!ws || typeof ws.SheetID !== 'string' || !ws.SheetID.trim()) {
+        continue;
+      }
+      nextSheetIds.push(ws.SheetID);
+      const wsWithoutCells: WorksheetSpec = {
+        ...ws,
+        Cells: {},
+      };
+      worksheetsById.set(ws.SheetID, JSON.stringify(wsWithoutCells));
+
+      for (const cell of Object.values(ws.Cells ?? {})) {
+        if (cell && cell.RowID && cell.ColumnID) {
+          const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
+          activeCellKeys.add(coordKey);
+          sheetCellsByCoord.set(coordKey, JSON.stringify(cell));
+        }
+      }
+    }
+
+    const staleCellKeys: string[] = [];
+    sheetCellsByCoord.forEach((_val, key) => {
+      if (!activeCellKeys.has(key)) {
+        staleCellKeys.push(key);
+      }
+    });
+    for (const k of staleCellKeys) {
+      sheetCellsByCoord.delete(k);
+    }
+
+    const staleSheetIds: string[] = [];
+    worksheetsById.forEach((_val, id) => {
+      if (!nextSheetIds.includes(id)) {
+        staleSheetIds.push(id);
+      }
+    });
+    for (const id of staleSheetIds) {
+      worksheetsById.delete(id);
+    }
+
+    const currentOrder = sheetOrder.toArray();
+    const sameOrder =
+      currentOrder.length === nextSheetIds.length &&
+      currentOrder.every((id, idx) => id === nextSheetIds[idx]);
+    if (!sameOrder) {
+      sheetOrder.delete(0, sheetOrder.length);
+      sheetOrder.insert(0, nextSheetIds);
+    }
+  }
+
+  private reconstructWorkbookJsonFromCrdt(): string | null {
+    const workbookMeta = this.Doc.getMap<string>('workbookMeta');
+    const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+    if (worksheetsById.size === 0) {
+      return null;
+    }
+
+    const orderedIds = sheetOrder.toArray();
+    const placedIds = new Set<string>();
+    const worksheets: WorksheetSpec[] = [];
+
+    const hydrateSheet = (rawSheet: string): WorksheetSpec | null => {
+      const ws = SafeJSONParse<WorksheetSpec>(rawSheet);
+      if (!ws) {
+        return null;
+      }
+      ws.Cells = ws.Cells ?? {};
+      return ws;
+    };
+
+    for (const id of orderedIds) {
+      const raw = worksheetsById.get(id);
+      if (raw && !placedIds.has(id)) {
+        const ws = hydrateSheet(raw);
+        if (ws) {
+          worksheets.push(ws);
+          placedIds.add(id);
+        }
+      }
+    }
+    worksheetsById.forEach((raw, id) => {
+      if (!placedIds.has(id)) {
+        const ws = hydrateSheet(raw);
+        if (ws) {
+          worksheets.push(ws);
+          placedIds.add(id);
+        }
+      }
+    });
+
+    if (worksheets.length === 0) {
+      return null;
+    }
+
+    const sheetMap = new Map<string, WorksheetSpec>();
+    const rowMapBySheet = new Map<string, Map<string, WorksheetSpec['Rows'][number]>>();
+    const colMapBySheet = new Map<string, Map<string, WorksheetSpec['Columns'][number]>>();
+    for (const ws of worksheets) {
+      sheetMap.set(ws.SheetID, ws);
+      const rMap = new Map<string, WorksheetSpec['Rows'][number]>();
+      for (const r of ws.Rows) {
+        rMap.set(r.RowID, r);
+      }
+      rowMapBySheet.set(ws.SheetID, rMap);
+      const cMap = new Map<string, WorksheetSpec['Columns'][number]>();
+      for (const c of ws.Columns) {
+        cMap.set(c.ColumnID, c);
+      }
+      colMapBySheet.set(ws.SheetID, cMap);
+    }
+
+    sheetCellsByCoord.forEach((rawCell, coordKey) => {
+      const sep1 = coordKey.indexOf('::');
+      if (sep1 < 0) return;
+      const sheetId = coordKey.slice(0, sep1);
+      const ws = sheetMap.get(sheetId);
+      if (!ws) return;
+      const cell = SafeJSONParse<SpreadsheetCellSpec>(rawCell);
+      if (!cell) {
+        return;
+      }
+      const row = rowMapBySheet.get(sheetId)?.get(cell.RowID);
+      const col = colMapBySheet.get(sheetId)?.get(cell.ColumnID);
+      if (!row || !col) {
+        return;
+      }
+      const addr = `${col.Letter}${row.Index}`;
+      cell.Address = addr;
+      ws.Cells[addr] = cell;
+    });
+
+    let namedRanges: SpreadsheetNamedRangeSpec[] = [];
+    const rawNamedRanges = workbookMeta.get('NamedRanges');
+    if (rawNamedRanges) {
+      namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
+    }
+
+    const rawPrefPaneHeight = workbookMeta.get('PreferredObjectsPaneHeightPx');
+    const parsedPrefPaneHeight = rawPrefPaneHeight ? Number(rawPrefPaneHeight) : NaN;
+
+    const nowIso = new Date().toISOString();
+    const preservedCreatedAt = workbookMeta.get('CreatedAt') || nowIso;
+    const wb: WorkbookSpec = {
+      WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
+      Title: workbookMeta.get('Title') || 'Workbook',
+      ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
+      Worksheets: worksheets,
+      NamedRanges: namedRanges,
+      ...(Number.isFinite(parsedPrefPaneHeight) && parsedPrefPaneHeight > 0
+        ? { PreferredObjectsPaneHeightPx: Math.round(parsedPrefPaneHeight) }
+        : {}),
+      CreatedAt: preservedCreatedAt,
+      UpdatedAt: nowIso,
+    };
+
+    // Bind `wb` in SpreadsheetEngine before per-sheet reindex so cross-sheet
+    // `FormulaStable` references (@SHEET_CELL, @SHEET_RANGE, etc.) resolve instead of #REF!
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+    for (const ws of wb.Worksheets) {
+      SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
+    }
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+    return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+  }
+
+  private syncContentTextFromSpreadsheetCrdt(): void {
+    const reconstructed = this.reconstructWorkbookJsonFromCrdt();
+    if (!reconstructed) {
+      return;
+    }
+    const current = this.ContentText.toString();
+    if (current !== reconstructed) {
+      if (current.length > 0) {
+        this.ContentText.delete(0, current.length);
+      }
+      this.ContentText.insert(0, reconstructed);
+    }
+  }
+
+  private sendYjsUpdate(update: Uint8Array): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
+      return false;
+    }
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_SYNC);
+    syncProtocol.writeUpdate(encoder, update);
+    this.socket.send(encoding.toUint8Array(encoder));
+    this.hasUnsentLocalEdits = false;
+    return true;
+  }
+
+  private setStatus(next: CollaborationConnectionStatus): void {
+    this.status = next;
+    this.statusChanged$.next(next);
+  }
+}
+
+/**
+ * Service providing real-time Yjs document sessions, block segmentation, TOC outline extraction,
+ * `/` slash command registry, Suggest mode diffing, and anchored `DocBlock` comment management.
+ */
+@Injectable({
+  providedIn: 'root',
+})
+export class DocumentCollaborationService implements OnDestroy {
+  private readonly frozenSnapshotVerificationCache = new Map<string, boolean>();
+  private readonly inFlightFrozenVerifications = new Map<string, Promise<boolean>>();
+  private readonly activeSessions = new Map<string, Set<DocumentCollaborationSession>>();
+  private readonly mergeConflicts$ = new Subject<CollaborationMergeConflictEvent>();
+  private readonly toastedMergeConflicts = new WeakSet<CollaborationMergeConflictEvent>();
+  private notificationSink: CollaborationNotificationSink | null = null;
+  private boundWindowTarget: Window | null = null;
+  private boundDocumentTarget: Document | null = null;
+  private serviceDestroyed = false;
+
+  private readonly handleWindowOnline = (): void => {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    for (const [artifactId, sessions] of Array.from(this.activeSessions.entries())) {
+      let shouldRetry = false;
+      for (const session of Array.from(sessions)) {
+        if (
+          !session.IsDestroyed &&
+          session.Transport === 'websocket' &&
+          session.Recoverable &&
+          !session.LiveSyncUnavailable &&
+          session.Status !== 'revoked' &&
+          (session.Status === 'error' ||
+            session.HasPendingReconnect ||
+            session.Status === 'disconnected')
+        ) {
+          session.ResetReconnectAttempts();
+          shouldRetry = true;
+        }
+      }
+      if (shouldRetry) {
+        void this.Retry(artifactId);
+      }
+    }
+  };
+
+  private readonly handleDocumentVisibilityChange = (): void => {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+      return;
+    }
+    for (const [artifactId, sessions] of Array.from(this.activeSessions.entries())) {
+      let shouldRetry = false;
+      for (const session of Array.from(sessions)) {
+        if (
+          !session.IsDestroyed &&
+          session.Transport === 'websocket' &&
+          session.Status === 'error' &&
+          session.Recoverable &&
+          !session.LiveSyncUnavailable
+        ) {
+          session.ResetReconnectAttempts();
+          shouldRetry = true;
+        }
+      }
+      if (shouldRetry) {
+        void this.Retry(artifactId);
+      }
+    }
+  };
+
+  constructor() {
+    this.ensureBrowserRecoveryListenersBound();
+  }
+
+  public ngOnDestroy(): void {
+    this.serviceDestroyed = true;
+    this.unbindBrowserRecoveryListeners();
+    this.mergeConflicts$.complete();
+  }
+
+  /**
+   * Registers an explicit notification sink (used by unit tests or custom hosts) when the global
+   * `MJNotificationService` singleton is not mounted.
+   */
+  public SetNotificationSink(sink: CollaborationNotificationSink | null | undefined): void {
+    this.notificationSink = sink ?? null;
+  }
+
+  /**
+   * Stream of `merge-conflict` control events emitted across all active collaboration sessions.
+   */
+  public get MergeConflicts$(): Observable<CollaborationMergeConflictEvent> {
+    return this.mergeConflicts$.asObservable();
+  }
+
+  /**
+   * Surfaces the non-blocking merge-conflict warning toast at most once per conflict event.
+   */
+  public NotifyMergeConflictToastOnce(
+    event: CollaborationMergeConflictEvent,
+    fallbackNotifier?: CollaborationNotificationSink | null,
+  ): boolean {
+    if (this.toastedMergeConflicts.has(event)) {
+      return false;
+    }
+    const actorId = typeof event.ActorUserID === 'string' ? event.ActorUserID.trim() : '';
+    const localId = typeof event.LocalUserID === 'string' ? event.LocalUserID.trim() : '';
+    if (
+      actorId.length > 0 &&
+      localId.length > 0 &&
+      localId !== 'local-user' &&
+      !UUIDsEqual(actorId, localId)
+    ) {
+      return false;
+    }
+    const globalStore = GetGlobalObjectStore();
+    const globalCandidate = globalStore
+      ? (globalStore['___SINGLETON__MJNotificationService'] as
+          | CollaborationNotificationSink
+          | undefined)
+      : undefined;
+    const notifier: CollaborationNotificationSink | undefined =
+      this.notificationSink ?? fallbackNotifier ?? globalCandidate ?? undefined;
+    if (!notifier || typeof notifier.CreateSimpleNotification !== 'function') {
+      return false;
+    }
+    this.toastedMergeConflicts.add(event);
+    notifier.CreateSimpleNotification(MERGE_CONFLICT_WARNING_MESSAGE, 'warning', 5000);
+    return true;
+  }
+
+  /**
+   * Resets reconnect exhaustion and re-attempts WebSocket collaboration for active session(s)
+   * bound to `artifactId`.
+   */
+  public async Retry(
+    artifactId: string,
+    wsUrl?: string | null,
+    provider?: IMetadataProvider | null,
+  ): Promise<boolean> {
+    if (!artifactId) {
+      return false;
+    }
+    const sessions = this.activeSessions.get(artifactId);
+    if (!sessions || sessions.size === 0) {
+      return false;
+    }
+    const liveSessions = Array.from(sessions).filter((s) => !s.IsDestroyed);
+    if (liveSessions.length === 0) {
+      return false;
+    }
+    const nonConnected = liveSessions.filter((s) => s.Status !== 'connected');
+    const targets = nonConnected.length > 0 ? nonConnected : liveSessions;
+    for (const session of targets) {
+      await session.Retry(wsUrl, provider);
+    }
+    return true;
+  }
+  private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
+    {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
+    {
+      Command: '/paragraph',
+      Label: 'Paragraph',
+      Description: 'Standard body text paragraph block',
+      Category: 'Structure',
+      Icon: 'fa-paragraph',
+      Snippet: '\n',
+    },
+    {
+      Command: '/heading-1',
+      Label: 'Heading 1',
+      Description: 'Large top-level section heading (#)',
+      Category: 'Structure',
+      Icon: 'fa-heading',
+      Snippet: '# Section Title\n',
+    },
+    {
+      Command: '/heading-2',
+      Label: 'Heading 2',
+      Description: 'Medium subsection heading (##)',
+      Category: 'Structure',
+      Icon: 'fa-heading',
+      Snippet: '## Subsection Title\n',
+    },
+    {
+      Command: '/heading-3',
+      Label: 'Heading 3',
+      Description: 'Compact topic heading (###)',
+      Category: 'Structure',
+      Icon: 'fa-heading',
+      Snippet: '### Topic Heading\n',
+    },
+    {
+      Command: '/bullet-list',
+      Label: 'Bulleted List',
+      Description: 'Unordered bulleted list (- item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ul',
+      Snippet: '- \n',
+    },
+    {
+      Command: '/numbered-list',
+      Label: 'Numbered List',
+      Description: 'Ordered numbered list (1. item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ol',
+      Snippet: '1. \n',
+    },
+    {
+      Command: '/table',
+      Label: 'Table',
+      Description: 'Insert a Markdown data table with headers',
+      Category: 'Structure',
+      Icon: 'fa-table',
+      Snippet: '| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n| Value 1 | Value 2 | Value 3 |\n',
+    },
+    {
+      Command: '/callout',
+      Label: 'Callout Box',
+      Description: 'Highlighted note, tip, or warning callout block',
+      Category: 'Structure',
+      Icon: 'fa-circle-info',
+      Snippet: '> [!NOTE]\n> Important context or decision takeaway for collaborators.\n',
+    },
+    {
+      Command: '/task-list',
+      Label: 'Task Checklist',
+      Description: 'Actionable checklist with completion checkboxes',
+      Category: 'Structure',
+      Icon: 'fa-list-check',
+      Snippet: '- [ ] First action item\n- [ ] Second action item\n',
+    },
+    {
+      Command: '/code',
+      Label: 'Code Block',
+      Description: 'Syntax-highlighted fenced code snippet',
+      Category: 'Structure',
+      Icon: 'fa-code',
+      Snippet: '```typescript\n// Code snippet\n```\n',
+    },
+    {
+      Command: '/entity-view',
+      Label: 'Live View',
+      Description: 'Embed a live MemberJunction View (Default View or Saved View)',
+      Category: 'Live Data',
+      Icon: 'fa-table-list',
+      BlockType: 'EntityView',
+    },
+    {
+      Command: '/saved-query',
+      Label: 'Live Query',
+      Description: 'Embed a parameterized MemberJunction Query with live refresh or snapshot',
+      Category: 'Live Data',
+      Icon: 'fa-database',
+      BlockType: 'SavedQuery',
+    },
+    {
+      Command: '/dashboard',
+      Label: 'Dashboard Part',
+      Description: 'Embed an interactive MemberJunction dashboard KPI or chart part',
+      Category: 'Live Data',
+      Icon: 'fa-chart-pie',
+      BlockType: 'DashboardPart',
+    },
+    {
+      Command: '/component',
+      Label: 'Interactive Component',
+      Description: 'Embed a registered MemberJunction interactive component spec',
+      Category: 'Live Data',
+      Icon: 'fa-puzzle-piece',
+      BlockType: 'InteractiveComponent',
+    },
+    {
+      Command: '/whiteboard',
+      Label: 'Inline Whiteboard',
+      Description: 'Embed an interactive Whiteboard canvas with inline editing',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-chalkboard',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/artifact',
+      Label: 'Embed Existing Artifact',
+      Description: 'Embed any MemberJunction Artifact with version pinning and inline rendering',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-cube',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-chart',
+      Label: 'Spreadsheet Chart',
+      Description: 'Embed a live chart from an MJ Spreadsheet workbook with version pinning',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-chart-column',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-range',
+      Label: 'Spreadsheet Range',
+      Description: 'Embed a live cell range (e.g. A1:D8) from an MJ Spreadsheet workbook',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-table-cells',
+      BlockType: 'Artifact',
+    },
+  ];
+
+  /**
+   * Returns true when either an explicit WebSocket override URL or a `GraphQLDataProvider`
+   * capable of minting single-use collaboration tickets is available.
+   */
+  public HasCollaborationBackend(
+    providerOverride?: IMetadataProvider | null,
+    baseUrlOverride?: string | null,
+  ): boolean {
+    if (baseUrlOverride && baseUrlOverride.trim().length > 0) {
+      return true;
+    }
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    return isGraphQLCollaborationProvider(provider);
+  }
+
+  /**
+   * Creates a new Yjs collaboration session for the given artifact.
+   */
+  public CreateSession(
+    artifactId: string,
+    initialContent: string,
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
+    canEdit = true,
+    deferInitialSeedForRemoteSync = false,
+  ): DocumentCollaborationSession {
+    this.ensureBrowserRecoveryListenersBound();
+    const session = new DocumentCollaborationSession(
+      artifactId,
+      initialContent,
+      user,
+      canEdit,
+      deferInitialSeedForRemoteSync,
+      (artId, wsOverride, provOverride) =>
+        this.ResolveCollaborationEndpoint(artId, wsOverride, provOverride),
+      (conflictEvent) => this.handleSessionMergeConflict(conflictEvent),
+      (destroyedSession) => this.unregisterActiveSession(destroyedSession),
+    );
+    this.registerActiveSession(session);
+    return session;
+  }
+
+  private registerActiveSession(session: DocumentCollaborationSession): void {
+    const existing = this.activeSessions.get(session.ArtifactID);
+    if (existing) {
+      existing.add(session);
+    } else {
+      this.activeSessions.set(session.ArtifactID, new Set([session]));
+    }
+  }
+
+  private unregisterActiveSession(session: DocumentCollaborationSession): void {
+    const existing = this.activeSessions.get(session.ArtifactID);
+    if (!existing) {
+      return;
+    }
+    existing.delete(session);
+    if (existing.size === 0) {
+      this.activeSessions.delete(session.ArtifactID);
+    }
+  }
+
+  private handleSessionMergeConflict(event: CollaborationMergeConflictEvent): void {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    this.NotifyMergeConflictToastOnce(event);
+    this.mergeConflicts$.next(event);
+  }
+
+  private ensureBrowserRecoveryListenersBound(): void {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function' &&
+      typeof window.removeEventListener === 'function' &&
+      this.boundWindowTarget !== window
+    ) {
+      if (this.boundWindowTarget) {
+        this.boundWindowTarget.removeEventListener('online', this.handleWindowOnline);
+      }
+      this.boundWindowTarget = window;
+      window.addEventListener('online', this.handleWindowOnline);
+    }
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function' &&
+      typeof document.removeEventListener === 'function' &&
+      this.boundDocumentTarget !== document
+    ) {
+      if (this.boundDocumentTarget) {
+        this.boundDocumentTarget.removeEventListener(
+          'visibilitychange',
+          this.handleDocumentVisibilityChange,
+        );
+      }
+      this.boundDocumentTarget = document;
+      document.addEventListener('visibilitychange', this.handleDocumentVisibilityChange);
+    }
+  }
+
+  private unbindBrowserRecoveryListeners(): void {
+    if (this.boundWindowTarget && typeof this.boundWindowTarget.removeEventListener === 'function') {
+      this.boundWindowTarget.removeEventListener('online', this.handleWindowOnline);
+    }
+    this.boundWindowTarget = null;
+    if (
+      this.boundDocumentTarget &&
+      typeof this.boundDocumentTarget.removeEventListener === 'function'
+    ) {
+      this.boundDocumentTarget.removeEventListener(
+        'visibilitychange',
+        this.handleDocumentVisibilityChange,
+      );
+    }
+    this.boundDocumentTarget = null;
+  }
+
+  /**
+   * Acquires a single-use collaboration ticket via `GraphQLDataProvider.ExecuteGQL` (unless an
+   * explicit test `wsUrl` with query parameters is supplied directly) and resolves the
+   * authenticated WebSocket URL.
+   */
+  public async ResolveCollaborationEndpoint(
+    artifactId: string,
+    baseUrlOverride?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<ResolvedCollaborationEndpoint> {
+    if (!artifactId || !artifactId.trim()) {
+      return { Mode: 'local', WsUrl: '', HasBackend: false };
+    }
+
+    const trimmedOverride = baseUrlOverride?.trim() || '';
+    if (trimmedOverride && trimmedOverride.includes('?')) {
+      const directUrl = this.ResolveCollaborationWebSocketUrl(
+        artifactId,
+        trimmedOverride,
+        null,
+        null,
+        providerOverride,
+      );
+      return directUrl
+        ? { Mode: 'connect', WsUrl: directUrl, HasBackend: true }
+        : { Mode: 'local', WsUrl: '', HasBackend: true };
+    }
+
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(MINT_COLLABORATION_TICKET_MUTATION, {
+          artifactId,
+        });
+        const ticketData = gqlRes?.MintArtifactCollaborationTicket;
+        if (!ticketData) {
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            HasBackend: true,
+            LiveSyncUnavailable: false,
+            LiveSyncErrorReason: 'Collaboration ticket payload missing.',
+          };
+        }
+        if (ticketData.CanRead === false) {
+          return { Mode: 'revoked', WsUrl: '', CanEdit: false, HasBackend: true };
+        }
+        if (!ticketData.Success || !ticketData.Ticket) {
+          const errorMessage = ticketData.ErrorMessage || '';
+          const secretUnconfigured = isCollaborationSecretUnconfiguredTicket(ticketData);
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            CanEdit:
+              secretUnconfigured && typeof ticketData.CanEdit === 'boolean'
+                ? ticketData.CanEdit
+                : undefined,
+            HasBackend: true,
+            LiveSyncUnavailable: secretUnconfigured,
+            LiveSyncErrorReason:
+              errorMessage ||
+              (secretUnconfigured
+                ? 'Collaboration ticket signing secret is not configured.'
+                : 'Temporary collaboration ticket error.'),
+          };
+        }
+        const explicitTicketWsUrl = (ticketData.wsUrl ?? ticketData.WsUrl ?? '').trim();
+        const fallbackTicketWsPath = (ticketData.WsPath ?? '/collaboration/yjs').trim() || '/collaboration/yjs';
+        const rawTicketWs = explicitTicketWsUrl || fallbackTicketWsPath;
+        const wsUrl = this.ResolveCollaborationWebSocketUrl(
+          artifactId,
+          trimmedOverride || null,
+          ticketData.Ticket,
+          rawTicketWs,
+          providerOverride,
+          fallbackTicketWsPath,
+        );
+        if (!wsUrl) {
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            HasBackend: true,
+            LiveSyncUnavailable: false,
+            LiveSyncErrorReason: 'Unable to resolve collaboration WebSocket URL.',
+          };
+        }
+        return {
+          Mode: 'connect',
+          WsUrl: wsUrl,
+          CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+          HasBackend: true,
+        };
+      } catch (err) {
+        LogError(err);
+        const reason = err instanceof Error ? err.message : String(err);
+        const secretUnconfigured = isCollaborationSecretUnconfiguredMessage(reason);
+        return {
+          Mode: 'local',
+          WsUrl: '',
+          HasBackend: true,
+          LiveSyncUnavailable: secretUnconfigured,
+          LiveSyncErrorReason: reason,
+        };
+      }
+    }
+
+    if (trimmedOverride) {
+      const fallbackOverrideUrl = this.ResolveCollaborationWebSocketUrl(
+        artifactId,
+        trimmedOverride,
+        null,
+        null,
+        providerOverride,
+      );
+      return fallbackOverrideUrl
+        ? { Mode: 'connect', WsUrl: fallbackOverrideUrl, HasBackend: true }
+        : { Mode: 'local', WsUrl: '', HasBackend: true };
+    }
+
+    return { Mode: 'local', WsUrl: '', HasBackend: false };
+  }
+
+  /**
+   * Resolves the WebSocket URL for `/collaboration/yjs`:
+   * 1. If `wsPath` (`ticketPayload.wsUrl` / `WsUrl`) is a real configured public URL (or matches local dev
+   *    when `window.location.hostname` is also loopback), uses that URL directly and appends `artifactId` + `ticket`.
+   * 2. Whenever `ticket.WsUrl` is empty/undefined OR points to `localhost`/`127.0.0.1` while `window.location.hostname`
+   *    is NOT `localhost`/`127.0.0.1`, derives the WebSocket URL from the active GraphQL endpoint URL
+   *    (`GraphQLDataProvider` config URL -> `http(s)` replaced with `ws(s)` + reverse-proxy prefix + collaboration WS path).
+   */
+  public ResolveCollaborationWebSocketUrl(
+    artifactId: string,
+    baseUrlOverride?: string | null,
+    ticket?: string | null,
+    wsPath?: string | null,
+    providerOverride?: IMetadataProvider | null,
+    fallbackWsSubPath?: string | null,
+  ): string {
+    const fallbackRelativeBase =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost';
+    const browserHostname =
+      typeof window !== 'undefined' && window.location?.hostname
+        ? window.location.hostname.trim()
+        : '';
+
+    const trimmedOverride = baseUrlOverride?.trim() || '';
+    if (trimmedOverride && trimmedOverride.includes('?') && !ticket) {
+      try {
+        const parsed = new URL(trimmedOverride, fallbackRelativeBase);
+        parsed.protocol = parsed.protocol.replace(/^http/i, 'ws');
+        if (!parsed.pathname || parsed.pathname === '/') {
+          parsed.pathname = wsPath?.trim() || '/collaboration/yjs';
+        }
+        if (!parsed.searchParams.has('artifactId')) {
+          parsed.searchParams.set('artifactId', artifactId);
+        }
+        return parsed.toString();
+      } catch (err) {
+        LogError(err);
+        return '';
+      }
+    }
+
+    let rawPathOrUrl = wsPath && wsPath.trim() ? wsPath.trim() : '';
+    if (/^(wss?|https?):\/\//i.test(rawPathOrUrl)) {
+      try {
+        const parsedWs = new URL(rawPathOrUrl);
+        const isLoopbackTicketOnRemoteOrigin =
+          isLoopbackHostname(parsedWs.hostname) &&
+          browserHostname.length > 0 &&
+          !isLoopbackHostname(browserHostname);
+        if (!isLoopbackTicketOnRemoteOrigin) {
+          parsedWs.protocol = parsedWs.protocol.replace(/^http/i, 'ws');
+          if (!parsedWs.searchParams.has('artifactId')) {
+            parsedWs.searchParams.set('artifactId', artifactId);
+          }
+          if (ticket && !parsedWs.searchParams.has('ticket')) {
+            parsedWs.searchParams.set('ticket', ticket);
+          }
+          return parsedWs.toString();
+        }
+        // Ignore loopback ticket.WsUrl on remote browser origins; preserve path and derive from GraphQL URL below
+        rawPathOrUrl = (fallbackWsSubPath && fallbackWsSubPath.trim()) || parsedWs.pathname || '/collaboration/yjs';
+      } catch (err) {
+        LogError(err);
+        return '';
+      }
+    }
+
+    let endpointUrl = trimmedOverride;
+    if (!endpointUrl) {
+      const provider = resolveDefaultMetadataProvider(providerOverride);
+      if (isGraphQLCollaborationProvider(provider) && provider.ConfigData) {
+        endpointUrl =
+          provider.ConfigData.URL ||
+          provider.ConfigData.MJAPIURL ||
+          provider.ConfigData.WSURL ||
+          '';
+      }
+    }
+    if (!endpointUrl && browserHostname.length > 0 && !isLoopbackHostname(browserHostname)) {
+      endpointUrl = fallbackRelativeBase;
+    }
+
+    if (!endpointUrl) {
+      return '';
+    }
+
+    try {
+      const parsedEndpoint = new URL(endpointUrl, fallbackRelativeBase);
+      const wsOrigin = parsedEndpoint.origin.replace(/^http/i, 'ws');
+      // Strip only a trailing /graphql segment while preserving any reverse-proxy prefix (e.g. /api-prefix)
+      const basePath = parsedEndpoint.pathname
+        .replace(/\/graphql\/?$/i, '')
+        .replace(/\/+$/, '');
+      const targetSubPath = rawPathOrUrl || '/collaboration/yjs';
+      const normalizedSubPath = targetSubPath.startsWith('/') ? targetSubPath : `/${targetSubPath}`;
+      const combinedPath =
+        basePath &&
+        normalizedSubPath !== basePath &&
+        !normalizedSubPath.startsWith(`${basePath}/`)
+          ? `${basePath}${normalizedSubPath}`
+          : normalizedSubPath;
+      const query = ticket
+        ? `?artifactId=${encodeURIComponent(artifactId)}&ticket=${encodeURIComponent(ticket)}`
+        : `?artifactId=${encodeURIComponent(artifactId)}`;
+      return `${wsOrigin}${combinedPath}${query}`;
+    } catch (err) {
+      LogError(err);
+      return '';
+    }
+  }
+
+  /**
+   * Resolves effective permissions (`CanRead`, `CanEdit`, `CanDelete`, `CanShare`) for `artifactId`
+   * on the server via `ResolveArtifactPermissions` so server-registered delegates (such as
+   * `bizapps-collaboration` space items) are evaluated on the server, falling back to
+   * `ArtifactPermissionEngine.Instance.ResolvePermissions` when no GraphQL endpoint is available in tests.
+   *
+   * Distinguishes an explicit server denial (`AccessRevoked: true`, `PermissionVerifyError: false`)
+   * from a transient GraphQL/network error (`PermissionVerifyError: true`, `AccessRevoked: false`)
+   * while maintaining fail-closed read-only safety in both cases.
+   */
+  public async ResolvePermissionsFromServer(
+    artifactId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<VerifiedArtifactPermissions | null> {
+    if (!artifactId || !artifactId.trim()) {
+      return null;
+    }
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!provider) {
+      return null;
+    }
+
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(RESOLVE_ARTIFACT_PERMISSIONS_QUERY, {
+          artifactId,
+        });
+        const serverPerms =
+          gqlRes?.ResolveArtifactPermissions ?? gqlRes?.ResolveArtifactUserPermissions;
+        if (serverPerms && typeof serverPerms === 'object') {
+          const canRead = Boolean(serverPerms.CanRead);
+          const rawSource = serverPerms.Source;
+          const validSource: ResolvedArtifactPermissions['Source'] =
+            rawSource === 'Owner' ||
+            rawSource === 'Delegate' ||
+            rawSource === 'ArtifactPermission' ||
+            rawSource === 'CollectionPermission' ||
+            rawSource === 'Denied'
+              ? rawSource
+              : canRead
+                ? 'Delegate'
+                : 'Denied';
+          return {
+            ArtifactID: serverPerms.ArtifactID || artifactId,
+            CanRead: canRead,
+            CanEdit: Boolean(serverPerms.CanEdit),
+            CanDelete: Boolean(serverPerms.CanDelete),
+            CanShare: Boolean(serverPerms.CanShare),
+            Source: validSource,
+            Reason: serverPerms.Reason || '',
+            AccessRevoked: !canRead,
+            PermissionVerifyError: false,
+          };
+        }
+      } catch (err) {
+        LogError(err);
+      }
+      // Fail closed when a GraphQL collaboration provider is configured and permission verification fails transiently
+      return {
+        ArtifactID: artifactId,
+        CanRead: false,
+        CanEdit: false,
+        CanDelete: false,
+        CanShare: false,
+        Source: 'Denied',
+        Reason: 'Failed to verify artifact permissions on server.',
+        AccessRevoked: false,
+        PermissionVerifyError: true,
+      };
+    }
+
+    const currentUser = provider.CurrentUser;
+    if (!currentUser) {
+      return null;
+    }
+    try {
+      const localPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+        provider,
+        artifactId,
+        currentUser,
+      );
+      return {
+        ...localPerms,
+        AccessRevoked: !localPerms.CanRead,
+        PermissionVerifyError: false,
+      };
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  /**
+   * Alias for {@link FreezeLiveBlockOnServer} used by Document, Slide Deck, and Spreadsheet viewers.
+   */
+  public async FreezeLiveBlock(
+    spec: DocumentBlockSpec,
+    acknowledgeSecurityWarning: boolean,
+    hostArtifactId?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
+    return this.FreezeLiveBlockOnServer(
+      spec,
+      acknowledgeSecurityWarning,
+      hostArtifactId,
+      providerOverride,
+    );
+  }
+
+  /**
+   * Freezes a live MJ block strictly via the server `FreezeDocumentLiveBlock` GraphQL mutation so the snapshot
+   * receives a server-signed `hmac-sha256:...` `SnapshotContentHash`. Never falls back to client-side signing.
+   */
+  public async FreezeLiveBlockOnServer(
+    spec: DocumentBlockSpec,
+    acknowledgeSecurityWarning: boolean,
+    hostArtifactId?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION, {
+          specJson: JSON.stringify(spec),
+          acknowledgeSecurityWarning,
+          hostArtifactId: hostArtifactId ?? '',
+        });
+        const freezePayload = gqlRes?.FreezeDocumentLiveBlock;
+        if (freezePayload) {
+          if (!freezePayload.Success) {
+            return {
+              Success: false,
+              ErrorMessage: freezePayload.ErrorMessage || 'Failed to freeze live block on server.',
+            };
+          }
+          const rawJson = freezePayload.UpdatedSpecJSON ?? freezePayload.UpdatedBlockSpecJson;
+          const parsedSpec = rawJson ? SafeJSONParse<DocumentBlockSpec>(rawJson) : null;
+          if (parsedSpec) {
+            this.recordFrozenSnapshotVerification(parsedSpec, true);
+            return { Success: true, UpdatedSpec: parsedSpec };
+          }
+        }
+        return {
+          Success: false,
+          ErrorMessage: 'Server did not return a frozen block payload.',
+        };
+      } catch (err) {
+        LogError(err);
+        return {
+          Success: false,
+          ErrorMessage: err instanceof Error ? err.message : 'Failed to freeze live block on server.',
+        };
+      }
+    }
+
+    const user = provider?.CurrentUser;
+    if (!provider || !user) {
+      return {
+        Success: false,
+        ErrorMessage: 'Metadata provider or user context unavailable.',
+      };
+    }
+    try {
+      const localRes = await DocumentLiveBlockEngine.Instance.FreezeBlock(
+        spec,
+        user,
+        acknowledgeSecurityWarning,
+        provider,
+      );
+      if (localRes.Success && localRes.UpdatedSpec) {
+        this.recordFrozenSnapshotVerification(localRes.UpdatedSpec, true);
+      }
+      return localRes;
+    } catch (err) {
+      return {
+        Success: false,
+        ErrorMessage:
+          err instanceof Error
+            ? err.message
+            : 'Server collaboration endpoint is required to freeze live blocks.',
+      };
+    }
+  }
+
+  private computeFrozenVerificationCacheKey(
+    block: DocumentBlockSpec & { SourceType?: string; SourceID?: string },
+    hostArtifactId?: string | null,
+  ): string {
+    const snap = block.FrozenSnapshot;
+    if (!snap) {
+      return '';
+    }
+    const resolvedSourceType = block.SourceType ?? block.Kind ?? '';
+    const resolvedSourceId =
+      block.SourceID ??
+      block.ViewID ??
+      block.QueryID ??
+      block.ArtifactID ??
+      block.DashboardID ??
+      block.ComponentID ??
+      block.EntityName ??
+      block.QueryName ??
+      '';
+    const payload = JSON.stringify({
+      HostArtifactID: (hostArtifactId ?? '').trim().toLowerCase(),
+      BlockID: block.BlockID,
+      SourceType: resolvedSourceType,
+      SourceID: resolvedSourceId,
+      FrozenAt: snap.FrozenAt,
+      FrozenByUserID: snap.FrozenByUserID,
+      FrozenByUserName: snap.FrozenByUserName,
+      Columns: snap.Columns,
+      Rows: snap.Rows,
+      TotalRowCount: snap.TotalRowCount,
+      ArtifactContentSnapshot: snap.ArtifactContentSnapshot ?? '',
+      ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? '',
+      SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged,
+      SnapshotContentHash: snap.SnapshotContentHash ?? '',
+    });
+    return canonicalVerificationKey(block.BlockID, payload);
+  }
+
+  private getCachedFrozenVerification(key: string): boolean | undefined {
+    if (!key || !this.frozenSnapshotVerificationCache.has(key)) {
+      return undefined;
+    }
+    const val = this.frozenSnapshotVerificationCache.get(key);
+    if (val !== undefined) {
+      // Touch for LRU ordering
+      this.frozenSnapshotVerificationCache.delete(key);
+      this.frozenSnapshotVerificationCache.set(key, val);
+    }
+    return val;
+  }
+
+  private recordFrozenSnapshotVerification(
+    block: DocumentBlockSpec,
+    verified: boolean,
+    hostArtifactId?: string | null,
+  ): void {
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
+    if (!key) {
+      return;
+    }
+    if (this.frozenSnapshotVerificationCache.has(key)) {
+      this.frozenSnapshotVerificationCache.delete(key);
+    } else if (this.frozenSnapshotVerificationCache.size >= FROZEN_VERIFICATION_CACHE_MAX_SIZE) {
+      const oldestKey = this.frozenSnapshotVerificationCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.frozenSnapshotVerificationCache.delete(oldestKey);
+      }
+    }
+    this.frozenSnapshotVerificationCache.set(key, verified);
+  }
+
+  /**
+   * Returns true ONLY when a frozen block's `FrozenSnapshot` has been verified by the server
+   * (`VerifyFrozenSnapshotOnServer` or `FreezeLiveBlockOnServer`, or an explicit server execution result).
+   * Never uses client-side secrets or format-only regex matching (`Blocker 1`).
+   */
+  public IsFrozenSnapshotVerified(
+    block: DocumentBlockSpec | null | undefined,
+    cachedExecutionResult?: {
+      FrozenMetadata?: { SnapshotVerified?: boolean };
+      FrozenSnapshot?: { SnapshotVerified?: boolean };
+    } | null,
+    hostArtifactId?: string | null,
+  ): boolean {
+    if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    if (cachedExecutionResult?.FrozenSnapshot?.SnapshotVerified === true) {
+      return true;
+    }
+    if (cachedExecutionResult?.FrozenSnapshot?.SnapshotVerified === false) {
+      return false;
+    }
+    if (cachedExecutionResult?.FrozenMetadata?.SnapshotVerified === true) {
+      return true;
+    }
+    if (cachedExecutionResult?.FrozenMetadata?.SnapshotVerified === false) {
+      return false;
+    }
+    const snap = block.FrozenSnapshot;
+    if (
+      snap.SecurityWarningAcknowledged !== true ||
+      typeof snap.SnapshotContentHash !== 'string' ||
+      snap.SnapshotContentHash.trim().length === 0
+    ) {
+      return false;
+    }
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
+    return key ? this.getCachedFrozenVerification(key) === true : false;
+  }
+
+  /**
+   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot` bound to `hostArtifactId`,
+   * returning cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
+   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`, `S-b`).
+   */
+  public async VerifyFrozenSnapshotOnServer(
+    block: DocumentBlockSpec,
+    hostArtifactId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<boolean> {
+    if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    const normalizedHostId = (hostArtifactId ?? '').trim();
+    if (!normalizedHostId) {
+      return false;
+    }
+    const snap = block.FrozenSnapshot;
+    if (
+      snap.SecurityWarningAcknowledged !== true ||
+      typeof snap.SnapshotContentHash !== 'string' ||
+      snap.SnapshotContentHash.trim().length === 0
+    ) {
+      this.recordFrozenSnapshotVerification(block, false, normalizedHostId);
+      return false;
+    }
+    const cacheKey = this.computeFrozenVerificationCacheKey(block, normalizedHostId);
+    if (cacheKey) {
+      const cached = this.getCachedFrozenVerification(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const inFlight = this.inFlightFrozenVerifications.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
+      const runVerification = async (): Promise<boolean> => {
+        try {
+          const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
+            specJson: JSON.stringify(block),
+            hostArtifactId: normalizedHostId,
+          });
+          const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
+          if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
+            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified, normalizedHostId);
+            return verifyPayload.SnapshotVerified;
+          }
+        } catch (err) {
+          LogError(err);
+          // Do NOT poison verification cache on transient network/GraphQL errors.
+          return false;
+        } finally {
+          if (cacheKey) {
+            this.inFlightFrozenVerifications.delete(cacheKey);
+          }
+        }
+        return false;
+      };
+
+      const promise = runVerification();
+      if (cacheKey) {
+        this.inFlightFrozenVerifications.set(cacheKey, promise);
+      }
+      return promise;
+    }
+    return this.IsFrozenSnapshotVerified(block, undefined, normalizedHostId);
+  }
+
+  /**
+   * Commits an artifact content save through the server collaboration room (`CommitArtifactInlineEdit`)
+   * when a GraphQL provider is active so the live Yjs room and working state stay synchronized with the saved version.
+   */
+  public async CommitInlineEditOnServer(
+    artifactId: string,
+    content: string,
+    saveVersion = true,
+    providerOverride?: IMetadataProvider | null,
+    thumbnailDataUrl?: string | null,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(COMMIT_ARTIFACT_INLINE_EDIT_MUTATION, {
+        artifactId,
+        content,
+        saveVersion,
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
+      });
+      const payload = gqlRes?.CommitArtifactInlineEdit;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage: 'Server did not return CommitArtifactInlineEdit response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage: err instanceof Error ? err.message : 'Failed to commit artifact edit on server.',
+      };
+    }
+  }
+
+  /**
+   * Restores a historical artifact version strictly via the server `RestoreArtifactVersion` GraphQL mutation
+   * so version restore uses an explicit authenticated server mutation.
+   */
+  public async RestoreArtifactVersion(
+    artifactId: string,
+    sourceVersionId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{
+    Success: boolean;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+    Supported: boolean;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { Success: false, Supported: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(RESTORE_ARTIFACT_VERSION_MUTATION, {
+        artifactId,
+        sourceVersionId,
+      });
+      const payload = gqlRes?.RestoreArtifactVersion;
+      if (!payload) {
+        const gqlErrorMsg =
+          gqlRes?.error ||
+          (gqlRes?.errors && gqlRes.errors.length > 0 ? gqlRes.errors[0]?.message : undefined);
+        if (gqlErrorMsg && isUnsupportedRestoreMutationError(gqlErrorMsg)) {
+          return {
+            Success: false,
+            Supported: false,
+            ErrorMessage: gqlErrorMsg,
+          };
+        }
+        return {
+          Success: false,
+          Supported: true,
+          ErrorMessage: gqlErrorMsg || 'Server did not return RestoreArtifactVersion response.',
+        };
+      }
+      return {
+        Success: Boolean(payload.Success),
+        Supported: true,
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isUnsupportedRestoreMutationError(msg)) {
+        return {
+          Success: false,
+          Supported: false,
+          ErrorMessage: msg,
+        };
+      }
+      LogError(err);
+      return {
+        Success: false,
+        Supported: true,
+        ErrorMessage: msg || 'Failed to restore artifact version on server.',
+      };
+    }
+  }
+
+  /**
+   * Dispatches an `@mention` in an anchored comment thread to the server (`ExecuteAnchoredCommentAgentMention`),
+   * enforcing `ArtifactPermissionEngine` (`CanEdit` for `'edit'`, `CanRead` for `'comment'`/`'suggest'`).
+   */
+  public async ExecuteAnchoredCommentAgentMention(
+    artifactId: string,
+    agentHandle: string,
+    agentMode: 'comment' | 'suggest' | 'edit',
+    commentBody: string,
+    anchorQuote?: string,
+    providerOverride?: IMetadataProvider | null,
+    conversationId?: string,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    ReplyBody?: string;
+    UpdatedContent?: string;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION, {
+        artifactId,
+        agentHandle,
+        agentMode,
+        commentBody,
+        anchorQuote: anchorQuote ?? null,
+        conversationId: conversationId ?? null,
+      });
+      const payload = gqlRes?.ExecuteAnchoredCommentAgentMention;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage: 'Server did not return ExecuteAnchoredCommentAgentMention response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        ReplyBody: payload.ReplyBody ?? undefined,
+        UpdatedContent: payload.UpdatedContent ?? undefined,
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to execute anchored comment agent mention.',
+      };
+    }
+  }
+
+  /**
+   * Alias for {@link ExecuteAnchoredCommentAgentMention} exposing `ReplyMessage` alongside `ReplyBody`.
+   */
+  public async DispatchAnchoredCommentAgentMention(
+    artifactId: string,
+    agentHandle: string,
+    agentMode: 'comment' | 'suggest' | 'edit',
+    commentBody: string,
+    anchorQuote?: string,
+    providerOverride?: IMetadataProvider | null,
+    conversationId?: string,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    ReplyBody?: string;
+    ReplyMessage?: string;
+    UpdatedContent?: string;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const res = await this.ExecuteAnchoredCommentAgentMention(
+      artifactId,
+      agentHandle,
+      agentMode,
+      commentBody,
+      anchorQuote,
+      providerOverride,
+      conversationId,
+    );
+    return {
+      ...res,
+      ReplyMessage: res.ReplyBody,
+    };
+  }
+
+  /**
+   * Executes a server-side Living Report refresh (`RefreshLivingArtifact`) for an editable Document,
+   * Slide Deck, or Spreadsheet, updating live blocks/tables/formulas and persisting a new version if changed.
+   */
+  public async RefreshLivingArtifactNow(
+    artifactId: string,
+    options?: {
+      VersionComments?: string;
+      ForceSaveIfUnchanged?: boolean;
+    },
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<RefreshLivingArtifactResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return {
+        HandledByServer: false,
+        Success: false,
+        Changed: false,
+        SavedNewVersion: false,
+        HighlightLines: [],
+      };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(REFRESH_LIVING_ARTIFACT_MUTATION, {
+        artifactId,
+        versionComments: options?.VersionComments ?? null,
+        forceSaveIfUnchanged: Boolean(options?.ForceSaveIfUnchanged),
+      });
+      const payload = gqlRes?.RefreshLivingArtifact;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          Changed: false,
+          SavedNewVersion: false,
+          HighlightLines: [],
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return RefreshLivingArtifact response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Changed: Boolean(payload.Changed),
+        SavedNewVersion: Boolean(payload.SavedNewVersion),
+        ArtifactVersionID: payload.ArtifactVersionID ?? undefined,
+        VersionNumber:
+          typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        DiffSummary: payload.DiffSummary ?? undefined,
+        HighlightLines: Array.isArray(payload.HighlightLines) ? payload.HighlightLines : [],
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        Changed: false,
+        SavedNewVersion: false,
+        HighlightLines: [],
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to refresh Living Report artifact.',
+      };
+    }
+  }
+
+  /**
+   * Loads the active or paused `MJ: Scheduled Jobs` Living Report schedule bound to `artifactId`.
+   */
+  public async GetLivingReportSchedule(
+    artifactId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<LivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(GET_LIVING_REPORT_SCHEDULE_QUERY, {
+        artifactId,
+      });
+      const payload = gqlRes?.GetArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return GetArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Schedule: normalizeLivingReportSchedule(payload.Schedule),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to load Living Report schedule.',
+      };
+    }
+  }
+
+  /**
+   * Creates or updates a Living Report recurring schedule for `artifactId`.
+   */
+  public async UpsertLivingReportSchedule(
+    input: {
+      ArtifactID: string;
+      CronExpression: string;
+      Timezone?: string;
+      Name?: string;
+      Enabled?: boolean;
+      ForceSaveIfUnchanged?: boolean;
+      ScheduleID?: string;
+    },
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<LivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(UPSERT_LIVING_REPORT_SCHEDULE_MUTATION, {
+        artifactId: input.ArtifactID,
+        cronExpression: input.CronExpression,
+        timezone: input.Timezone ?? 'UTC',
+        name: input.Name ?? null,
+        enabled: input.Enabled ?? true,
+        forceSaveIfUnchanged: Boolean(input.ForceSaveIfUnchanged),
+        scheduleId: input.ScheduleID ?? null,
+      });
+      const payload = gqlRes?.UpsertArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return UpsertArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Schedule: normalizeLivingReportSchedule(payload.Schedule),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to save Living Report schedule.',
+      };
+    }
+  }
+
+  /**
+   * Deletes the Living Report schedule `scheduleId` bound to `artifactId`.
+   */
+  public async DeleteLivingReportSchedule(
+    artifactId: string,
+    scheduleId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<DeleteLivingReportScheduleResult> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false, Deleted: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(DELETE_LIVING_REPORT_SCHEDULE_MUTATION, {
+        artifactId,
+        scheduleId,
+      });
+      const payload = gqlRes?.DeleteArtifactLivingReportSchedule;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          Deleted: false,
+          ErrorMessage:
+            extractGraphQLErrorMessage(gqlRes) ||
+            'Server did not return DeleteArtifactLivingReportSchedule response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        Deleted: Boolean(payload.Deleted),
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        Deleted: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to delete Living Report schedule.',
+      };
+    }
+  }
+
+  /**
+   * Returns `/slash` commands filtered by an optional query string.
+   */
+  public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
+    const trimmed = query.trim().toLowerCase().replace(/^\//, '');
+    if (!trimmed) {
+      return [...enabledCommands];
+    }
+    return enabledCommands.filter(
+      (cmd) =>
+        cmd.Command.toLowerCase().includes(trimmed) ||
+        cmd.Label.toLowerCase().includes(trimmed) ||
+        cmd.Description.toLowerCase().includes(trimmed) ||
+        cmd.Category.toLowerCase().includes(trimmed),
+    );
+  }
+
+  /**
+   * Segments a Markdown document into discrete blocks and `:::mj-block` directives
+   * so each block can be rendered, edited, anchored with `DocBlock` comments, or toggled inline.
+   */
+  public ParseDocumentSegments(markdown: string): DocumentRenderSegment[] {
+    const normalized = (markdown ?? '').replace(/\r\n/g, '\n');
+    const rawSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(normalized);
+    const segments: DocumentRenderSegment[] = [];
+
+    for (const rawSeg of rawSegments) {
+      if (rawSeg.Type === 'mj-block' && rawSeg.BlockSpec) {
+        segments.push({
+          SegmentID: rawSeg.BlockSpec.BlockID,
+          Kind: 'mj-block',
+          BlockKind: 'mj-block',
+          StartLine: rawSeg.StartLine,
+          EndLine: rawSeg.EndLine,
+          RawMarkdown: rawSeg.RawText,
+          Descriptor: rawSeg.BlockSpec,
+        });
+      } else {
+        const trimmed = rawSeg.RawText.trim();
+        if (trimmed.length > 0) {
+          segments.push(
+            ...this.splitProseIntoLogicalBlocks(rawSeg.RawText, rawSeg.StartLine, rawSeg.EndLine),
+          );
+        }
+      }
+    }
+
+    return segments;
+  }
+
+  /**
+   * Extracts the Table of Contents (headings + embedded MJ blocks) from the Markdown document.
+   */
+  public ExtractOutline(markdown: string): DocumentOutlineItem[] {
+    const segments = this.ParseDocumentSegments(markdown);
+    const items: DocumentOutlineItem[] = [];
+
+    for (const seg of segments) {
+      if (seg.Kind === 'mj-block' && seg.Descriptor) {
+        const desc = seg.Descriptor;
+        items.push({
+          ID: desc.BlockID,
+          Kind: 'block',
+          Level: 2,
+          Title: desc.Title ?? desc.EntityName ?? desc.QueryName ?? desc.ArtifactType ?? desc.Kind,
+          StartLine: seg.StartLine,
+          BlockType: desc.Kind,
+          BlockMode: desc.Mode,
+        });
+      } else if (seg.BlockKind === 'heading' && seg.HeadingText) {
+        items.push({
+          ID: seg.SegmentID,
+          Kind: 'heading',
+          Level: seg.HeadingLevel ?? 1,
+          Title: seg.HeadingText,
+          StartLine: seg.StartLine,
+        });
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Computes live word, character, line, and embedded block counts for the document status bar.
+   */
+  public ComputeWordStats(markdown: string): {
+    Words: number;
+    Characters: number;
+    Lines: number;
+    LiveBlocks: number;
+    EmbeddedArtifacts: number;
+  } {
+    const normalized = (markdown ?? '').replace(/\r\n/g, '\n');
+    const parsed = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(normalized);
+    const blockSegs = parsed.filter((d) => d.Type === 'mj-block' && d.BlockSpec);
+    const words = normalized
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length > 0).length;
+    const lines = normalized.length === 0 ? 0 : normalized.split('\n').length;
+    const liveBlocks = blockSegs.filter((d) => d.BlockSpec?.Kind !== 'Artifact').length;
+    const embeddedArtifacts = blockSegs.filter((d) => d.BlockSpec?.Kind === 'Artifact').length;
+
+    return {
+      Words: normalized.trim().length === 0 ? 0 : words,
+      Characters: normalized.length,
+      Lines: lines,
+      LiveBlocks: liveBlocks,
+      EmbeddedArtifacts: embeddedArtifacts,
+    };
+  }
+
+  /**
+   * Computes a deterministic line-by-line diff between two document versions using
+   * common prefix/suffix trimming, bounded Myers O((M+N)D), and linear unique-anchor fallback.
+   */
+  public ComputeLineDiff(oldContent: string, newContent: string): DocumentDiffResult {
+    return computeLineDiffFromUtil(oldContent, newContent);
+  }
+
+  /**
+   * Computes a Word / Google-Docs-style token-level redline diff and granular word/phrase change hunks
+   * between an original block and a proposed block using bounded Myers + prefix/suffix trimming.
+   */
+  public ComputeWordLevelDiff(oldContent: string, newContent: string): DocumentWordDiffResult {
+    const tokenize = (text: string): string[] =>
+      (text ?? '').replace(/\r\n/g, '\n').match(/[A-Za-z0-9_]+|\s+|[^\sA-Za-z0-9_]+/g) ?? [];
+
+    const oldTokens = tokenize(oldContent);
+    const newTokens = tokenize(newContent);
+
+    const seqOps = ComputeBoundedSequenceDiff(
+      oldTokens,
+      newTokens,
+      (a, b) => a === b,
+      (tok) => tok,
+    );
+
+    const rawOps: Array<{ Type: 'equal' | 'delete' | 'insert'; Text: string }> = seqOps.map((op) => {
+      if (op.Kind === 'equal') {
+        return { Type: 'equal', Text: oldTokens[op.OldIndex] };
+      }
+      if (op.Kind === 'delete') {
+        return { Type: 'delete', Text: oldTokens[op.OldIndex] };
+      }
+      return { Type: 'insert', Text: newTokens[op.NewIndex] };
+    });
+
+    // Coalesce consecutive operations of the same type
+    const coalesced: DocumentWordDiffSpan[] = [];
+    for (const op of rawOps) {
+      const prev = coalesced[coalesced.length - 1];
+      if (prev && prev.Type === op.Type) {
+        prev.Text += op.Text;
+      } else {
+        coalesced.push({ Type: op.Type, Text: op.Text });
+      }
+    }
+
+    // Group adjacent non-equal spans (including single whitespace bridges inside a phrase edit) into granular Hunks
+    interface HunkGroup {
+      HunkID: string;
+      StartIdx: number;
+      EndIdx: number;
+      DeletedText: string;
+      InsertedText: string;
+    }
+
+    const groups: HunkGroup[] = [];
+    let idx = 0;
+    let hunkCounter = 1;
+    while (idx < coalesced.length) {
+      if (coalesced[idx].Type === 'equal') {
+        idx++;
+        continue;
+      }
+      const startIdx = idx;
+      let endIdx = idx;
+      let deletedText = '';
+      let insertedText = '';
+
+      while (endIdx < coalesced.length) {
+        const span = coalesced[endIdx];
+        if (span.Type === 'delete') {
+          deletedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        if (span.Type === 'insert') {
+          insertedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        // If an 'equal' span is purely horizontal whitespace between two edits, absorb it into the phrase hunk
+        if (
+          span.Type === 'equal' &&
+          /^[ \t]+$/.test(span.Text) &&
+          endIdx + 1 < coalesced.length &&
+          coalesced[endIdx + 1].Type !== 'equal'
+        ) {
+          deletedText += span.Text;
+          insertedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        break;
+      }
+
+      const hunkId = `hunk-${hunkCounter++}`;
+      for (let k = startIdx; k < endIdx; k++) {
+        if (coalesced[k].Type !== 'equal') {
+          coalesced[k].HunkID = hunkId;
+        }
+      }
+      groups.push({
+        HunkID: hunkId,
+        StartIdx: startIdx,
+        EndIdx: endIdx,
+        DeletedText: deletedText,
+        InsertedText: insertedText,
+      });
+      idx = endIdx;
+    }
+
+    const hunks: DocumentWordChangeHunk[] = groups
+      .filter((g) => g.DeletedText.trim() !== g.InsertedText.trim())
+      .map((g) => {
+        const delTrim = g.DeletedText.trim();
+        const insTrim = g.InsertedText.trim();
+        const kind: DocumentWordChangeHunk['Kind'] =
+          delTrim && insTrim ? 'replace' : insTrim ? 'insert' : 'delete';
+
+        // Reconstruct text before and after this hunk
+        let beforeText = '';
+        for (let k = 0; k < g.StartIdx; k++) {
+          if (coalesced[k].Type !== 'insert') {
+            beforeText += coalesced[k].Text;
+          }
+        }
+        let afterText = '';
+        for (let k = g.EndIdx; k < coalesced.length; k++) {
+          if (coalesced[k].Type !== 'insert') {
+            afterText += coalesced[k].Text;
+          }
+        }
+
+        // AcceptedMarkdown: apply ONLY this hunk to oldContent
+        let acceptedMd = '';
+        for (let k = 0; k < coalesced.length; k++) {
+          const inCurrentHunk = k >= g.StartIdx && k < g.EndIdx;
+          const s = coalesced[k];
+          if (inCurrentHunk) {
+            if (s.Type === 'equal' || s.Type === 'insert') {
+              acceptedMd += s.Text;
+            }
+          } else {
+            if (s.Type === 'equal' || s.Type === 'delete') {
+              acceptedMd += s.Text;
+            }
+          }
+        }
+
+        // RejectedProposedMarkdown: revert ONLY this hunk in newContent back to oldContent
+        let rejectedProposedMd = '';
+        for (let k = 0; k < coalesced.length; k++) {
+          const inCurrentHunk = k >= g.StartIdx && k < g.EndIdx;
+          const s = coalesced[k];
+          if (inCurrentHunk) {
+            if (s.Type === 'equal' || s.Type === 'delete') {
+              rejectedProposedMd += s.Text;
+            }
+          } else {
+            if (s.Type === 'equal' || s.Type === 'insert') {
+              rejectedProposedMd += s.Text;
+            }
+          }
+        }
+
+        return {
+          HunkID: g.HunkID,
+          Kind: kind,
+          DeletedText: delTrim || g.DeletedText,
+          InsertedText: insTrim || g.InsertedText,
+          ContextBefore: beforeText.slice(-36).replace(/^\S*\s/, ''),
+          ContextAfter: afterText.slice(0, 36).replace(/\s\S*$/, ''),
+          AcceptedMarkdown: acceptedMd,
+          RejectedProposedMarkdown: rejectedProposedMd,
+        };
+      });
+
+    return {
+      Spans: coalesced,
+      Hunks: hunks,
+    };
+  }
+
+  private splitProseIntoLogicalBlocks(raw: string, baseStartLine: number, _endLine: number): DocumentRenderSegment[] {
+    const lines = raw.split('\n');
+    const result: DocumentRenderSegment[] = [];
+    let idx = 0;
+
+    while (idx < lines.length) {
+      while (idx < lines.length && lines[idx].trim().length === 0) {
+        idx++;
+      }
+      if (idx >= lines.length) {
+        break;
+      }
+
+      const blockStartIdx = idx;
+      const rawFirstLine = lines[idx].trimStart();
+      const firstLine = lines[idx].trim();
+
+      // Heading block (including freshly turned-into empty headings like "# " or "## ")
+      const headingMatch = /^(#{1,6})(?:\s+(.*)|$)$/.exec(rawFirstLine);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = (headingMatch[2] ?? '').trim();
+        const slug = text
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        const startLine = baseStartLine + blockStartIdx;
+        result.push({
+          SegmentID: `heading-${startLine}-${slug || 'section'}`,
+          Kind: 'markdown',
+          BlockKind: 'heading',
+          StartLine: startLine,
+          EndLine: startLine,
+          RawMarkdown: lines[idx],
+          HeadingLevel: level,
+          HeadingText: text,
+        });
+        idx++;
+        continue;
+      }
+
+      // Fenced code block
+      if (firstLine.startsWith('```')) {
+        const codeLines = [lines[idx]];
+        idx++;
+        while (idx < lines.length && !lines[idx].trim().startsWith('```')) {
+          codeLines.push(lines[idx]);
+          idx++;
+        }
+        if (idx < lines.length) {
+          codeLines.push(lines[idx]);
+          idx++;
+        }
+        const startLine = baseStartLine + blockStartIdx;
+        result.push({
+          SegmentID: `code-${startLine}`,
+          Kind: 'markdown',
+          BlockKind: 'code',
+          StartLine: startLine,
+          EndLine: baseStartLine + idx - 1,
+          RawMarkdown: codeLines.join('\n'),
+        });
+        continue;
+      }
+
+      // Paragraph / table / callout / list until blank line or next heading
+      const chunkLines: string[] = [];
+      while (
+        idx < lines.length &&
+        lines[idx].trim().length > 0 &&
+        !/^#{1,6}(?:\s+|$)/.test(lines[idx].trimStart()) &&
+        !lines[idx].trim().startsWith('```')
+      ) {
+        chunkLines.push(lines[idx]);
+        idx++;
+      }
+
+      const chunkRaw = chunkLines.join('\n');
+      const startLine = baseStartLine + blockStartIdx;
+      const endLine = baseStartLine + idx - 1;
+      let blockKind: DocumentRenderSegment['BlockKind'] = 'paragraph';
+      if (firstLine.startsWith('>')) {
+        blockKind = 'callout';
+      } else if (firstLine.startsWith('|')) {
+        blockKind = 'table';
+      } else if (/^[-*+](?:\s+|$)/.test(rawFirstLine) || /^\d+\.(?:\s+|$)/.test(rawFirstLine)) {
+        blockKind = 'list';
+      }
+
+      result.push({
+        SegmentID: `${blockKind}-${startLine}`,
+        Kind: 'markdown',
+        BlockKind: blockKind,
+        StartLine: startLine,
+        EndLine: endLine,
+        RawMarkdown: chunkRaw,
+      });
+    }
+
+    return result;
+  }
+}

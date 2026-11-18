@@ -6,7 +6,7 @@
  * always single-column.
  */
 
-import type { SchemaDefinition, TableDefinition } from '../types/state.js';
+import type { DatabaseDocumentation, SchemaDefinition, TableDefinition } from '../types/state.js';
 import type { RelationshipProbeOrigin } from '../types/data-quality.js';
 
 export interface TableRef {
@@ -31,8 +31,31 @@ function bareTableName(name: string): string {
   return name.includes('.') ? (name.split('.').pop() ?? name) : name;
 }
 
-/** Every relationship a table references, in `dependsOn` order. */
-export function TableRelationships(schemaName: string, table: TableDefinition): Relationship[] {
+/** Key matching an undeclared FK entry (`childSchema.childTable.childCol->parentSchema.parentTable.parentCol`). */
+export function UndeclaredForeignKeyId(
+  childSchema: string,
+  childTable: string,
+  childColumn: string,
+  parentSchema: string,
+  parentTable: string,
+  parentColumn: string,
+): string {
+  return `${childSchema}.${bareTableName(childTable)}.${childColumn}->${parentSchema}.${bareTableName(parentTable)}.${parentColumn}`.toLowerCase();
+}
+
+/** Set of undeclared FK IDs whose discovery/pruning status is `'rejected'`. */
+export function RejectedForeignKeyIds(state: DatabaseDocumentation): Set<string> {
+  const out = new Set<string>();
+  for (const fk of state.phases.keyDetection?.discovered?.foreignKeys ?? []) {
+    if (fk.status === 'rejected') {
+      out.add(UndeclaredForeignKeyId(fk.schemaName, fk.sourceTable, fk.sourceColumn, fk.targetSchema, fk.targetTable, fk.targetColumn));
+    }
+  }
+  return out;
+}
+
+/** Every relationship a table references, in `dependsOn` order (excluding rejected undeclared keys when supplied). */
+export function TableRelationships(schemaName: string, table: TableDefinition, rejectedFKs?: ReadonlySet<string>): Relationship[] {
   const declared = new Map<string, Relationship>();
   const out: Relationship[] = [];
   for (const dep of table.dependsOn) {
@@ -57,6 +80,9 @@ export function TableRelationships(schemaName: string, table: TableDefinition): 
       declared.set(key, relationship);
       out.push(relationship);
     } else {
+      if (rejectedFKs?.has(UndeclaredForeignKeyId(schemaName, table.name, dep.column, dep.schema, parentTable, parentColumn))) {
+        continue;
+      }
       out.push({
         Child: { Schema: schemaName, Table: table.name, Columns: [dep.column] },
         Parent: { Schema: dep.schema, Table: parentTable, Columns: [parentColumn] },

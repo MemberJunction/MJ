@@ -105,6 +105,7 @@ async function settle(): Promise<void> {
 }
 
 function resetListeners(): void {
+    ResolverBase.ResetEntityMessageListenersForTests();
     const store = MJGlobal.Instance.GetGlobalObjectStore();
     const subscriptions = store[SUBSCRIPTIONS_KEY] as Map<string, Subscription> | undefined;
     subscriptions?.forEach(s => s.unsubscribe());

@@ -8,8 +8,9 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import {
+    GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
     MJActionEntity,
     MJEntityAlternateBaseViewEntity,
     MJGraphAuthorityTierEntity,
@@ -328,7 +329,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             edgeEntity.Description = edge.Description;
             edgeEntity.Attributes = edge.Attributes ? JSON.stringify(edge.Attributes) : null;
 
-            if (await edgeEntity.Save()) {
+            if (await this.saveEdgeUnderPipelinePolicy(edgeEntity, contextUser)) {
                 savedCount++;
             } else {
                 LogError(
@@ -338,6 +339,26 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         }
 
         return savedCount;
+    }
+
+    /**
+     * Saves an edge this stage synthesized inside the {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}
+     * server operation scope, bound to the run's user. The edge's `Approved` status comes from the
+     * content source's `GraphOverlay` policy, not from that user (the scheduler's user, an on-demand
+     * runner or an uploader), so `MJGraphEdgeEntityServer` accepts a new `Inferred` + `Approved` edge in
+     * this scope without `Graph: Approve Edges`. The scope covers only this save: no API caller can
+     * enter it, and it approves nothing but a newly created `Inferred` edge.
+     */
+    private saveEdgeUnderPipelinePolicy(edgeEntity: MJGraphEdgeEntity, contextUser: UserInfo): Promise<boolean> {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
+                source: 'ServerEngine',
+                allowedEntities: ['MJ: Graph Edges'],
+                userId: contextUser.ID,
+            },
+            () => edgeEntity.Save(),
+        );
     }
 
     private async resolveConceptTypeID(

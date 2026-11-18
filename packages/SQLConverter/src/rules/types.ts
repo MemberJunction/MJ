@@ -12,6 +12,7 @@ export type StatementType =
   | 'CREATE_TABLE'
   | 'CREATE_VIEW'
   | 'CREATE_INDEX'
+  | 'DROP_INDEX'
   | 'CREATE_PROCEDURE'
   | 'CREATE_FUNCTION'
   | 'CREATE_TRIGGER'
@@ -37,6 +38,7 @@ export type StatementType =
   | 'SKIP_SQLSERVER'
   | 'SKIP_NOCHECK'
   | 'SKIP_PRINT'
+  | 'REFRESH_VIEW'
   | 'UNKNOWN';
 
 /**
@@ -138,6 +140,19 @@ export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 export const GAP_MARKER_EXEC_SKIPPED = '-- SKIPPED: EXEC block';
 
 /**
+ * ProcedureToFunctionRule / TriggerRule: a routine in an Open App schema that is not CodeGen
+ * output (a hand-written trigger or procedure). The whole source is written as comments under
+ * this marker so a person can author the PostgreSQL version (issue #5364 items 7 and 8).
+ */
+export const GAP_MARKER_NEEDS_HAND_AUTHORING = '-- NEEDS HAND AUTHORING';
+
+/**
+ * BatchConverter: the output holds fewer converted saves than the mj-sync log's `-- Save …`
+ * markers announce, so some saves vanished without a marker of their own (issue #6097).
+ */
+export const GAP_MARKER_MISSING_SAVES = '-- MISSING SAVES';
+
+/**
  * Marker comments the converter writes into its own output at the points where it
  * KNOWINGLY could not produce real SQL. Single source of truth: every emitter writes
  * one of these strings and `convertFile`'s gap scan looks for exactly these, so an
@@ -149,7 +164,9 @@ export const GAP_MARKER_EXEC_SKIPPED = '-- SKIPPED: EXEC block';
 export const CONVERSION_GAP_MARKERS = [
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
+  GAP_MARKER_NEEDS_HAND_AUTHORING,
   GAP_MARKER_EXEC_SKIPPED,
+  GAP_MARKER_MISSING_SAVES,
 ] as const;
 
 /** Conversion statistics tracking */
@@ -188,6 +205,11 @@ export interface ConversionStats {
   ErrorBatches: string[];
   /** The marker lines themselves, so a caller can print WHICH statements were not converted. */
   GapBatches: string[];
+  /**
+   * Named, non-blocking warnings: work the converter cannot do that a person finishes by hand,
+   * which does not fail the run (today: one per `sp_refreshview`, issue #5649).
+   */
+  Warnings: string[];
 }
 
 /** Groups for ordering the output */
@@ -260,6 +282,7 @@ export function CreateConversionStats(): ConversionStats {
     SkippedBatches: [],
     ErrorBatches: [],
     GapBatches: [],
+    Warnings: [],
   };
 }
 

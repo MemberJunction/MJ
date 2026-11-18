@@ -49,6 +49,8 @@ export interface AnalysisOptions {
   skipSampling?: boolean;
   /** Skip the data quality phase for this run (no new probes, no findings) */
   skipDataQuality?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
+  /** Skip new SQL probes while keeping stored data quality measurements active for pruning and re-derivation */
+  pruningOnly?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 export interface OrchestratorResult {
@@ -67,6 +69,7 @@ export class AnalysisOrchestrator {
   private maxIterationsOverride?: number;
   private skipSampling?: boolean;
   private skipDataQuality?: boolean;
+  private pruningOnly?: boolean;
 
   constructor(options: AnalysisOptions) {
     this.config = options.config;
@@ -76,6 +79,7 @@ export class AnalysisOrchestrator {
     this.maxIterationsOverride = options.maxIterations;
     this.skipSampling = options.skipSampling;
     this.skipDataQuality = options.skipDataQuality;
+    this.pruningOnly = options.pruningOnly;
   }
 
   /**
@@ -277,6 +281,7 @@ export class AnalysisOrchestrator {
         Driver: db.getDriver(),
         OnProgress: (message, data) => this.onProgress(message, data),
         SkipRequested: this.skipDataQuality === true,
+        SkipProbes: this.pruningOnly === true,
         Save: async () => {
           stateManager.updateSummary(state);
           await stateManager.save(state);
@@ -316,7 +321,7 @@ export class AnalysisOrchestrator {
         this.config.analysis.keyVerification ?? {}
       );
       analysisEngine.SetKeyVerifier(keyVerifier);
-      analysisEngine.SetDataQuality(dataQuality);
+      analysisEngine.SetDataQuality(dataQuality, state);
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -521,12 +526,15 @@ export class AnalysisOrchestrator {
 
       // Generate additionalSchemaInfo.json for CodeGen soft FK/PK + organic key support
       const schemaInfoGen = new AdditionalSchemaInfoGenerator();
-      const schemaInfo = schemaInfoGen.generate(state, { OrganicKeys: organicKeyOutput });
+      const schemaInfo = schemaInfoGen.generate(state, {
+        OrganicKeys: organicKeyOutput,
+        FoldSpellingVariants: dataQuality.IsActive(state) && dataQuality.Config.Checks.CaseWhitespaceVariants,
+      });
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 
       const qualityGen = new DataQualityReportGenerator();
-      if (qualityGen.HasReport(state)) {
+      if (dataQuality.IsActive(state) && qualityGen.HasReport(state)) {
         await fs.writeFile(path.join(runFolder, 'data-quality.md'), qualityGen.GenerateMarkdown(state), 'utf-8');
         await fs.writeFile(path.join(runFolder, 'data-quality.json'), qualityGen.GenerateJson(state), 'utf-8');
       }

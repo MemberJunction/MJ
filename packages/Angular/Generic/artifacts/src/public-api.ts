@@ -11,6 +11,11 @@ export * from './lib/services/artifact-file.service';
 export * from './lib/services/analyze-artifact.service';
 export * from './lib/services/interactive-form-apply.service';
 export * from './lib/services/artifact-preview-resolver.service';
+export * from './lib/services/document-collaboration.service';
+export * from './lib/services/document-import-export.service';
+export * from './lib/services/slide-deck-export.service';
+export * from './lib/services/artifact-version-diff.service';
+export * from './lib/services/artifact-ai-assistant-bridge';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -26,6 +31,15 @@ export * from './lib/components/previews/audio-artifact-preview.component';
 
 // Snapshot helpers (pure functions for creating DataSnapshots from artifact content)
 export * from './lib/snapshot-helpers';
+export { ComputeLineDiff, type LineDiffLine, type LineDiffResult } from './lib/utils/line-diff';
+export * from './lib/utils/artifact-suggestion-normalizer.util';
+export * from './lib/utils/frozen-snapshot-verification.util';
+export {
+  CaptureRenderedElementThumbnail,
+  CaptureThumbnailForDriverIfAllowed,
+  SerializeSvgToDataUrl,
+  type CaptureRenderedThumbnailOptions,
+} from './lib/utils/artifact-dom-capture';
 
 // Artifact type plugin viewer (loads appropriate plugin based on DriverClass)
 export * from './lib/components/artifact-type-plugin-viewer.component';
@@ -34,11 +48,23 @@ export * from './lib/components/artifact-type-plugin-viewer.component';
 export * from './lib/components/artifact-viewer-panel.component';
 export * from './lib/components/artifact-version-history.component';
 export * from './lib/components/artifact-message-card.component';
+export * from './lib/components/context-menu/context-menu.types';
+export * from './lib/components/context-menu/context-menu-position.util';
+export * from './lib/components/context-menu/mj-context-menu.component';
+export * from './lib/components/version-diff/artifact-version-compare.component';
+export * from './lib/components/version-diff/git-diff-lines-view.component';
+export * from './lib/components/version-diff/docs-version-diff.component';
+export * from './lib/components/version-diff/slides-version-diff.component';
+export * from './lib/components/version-diff/spreadsheet-version-diff.component';
+export * from './lib/components/version-diff/component-version-diff.component';
+export * from './lib/components/version-diff/query-version-diff.component';
 
 // Plugin components
 export * from './lib/components/plugins/json-artifact-viewer.component';
 export * from './lib/components/plugins/code-artifact-viewer.component';
 export * from './lib/components/plugins/markdown-artifact-viewer.component';
+export * from './lib/components/plugins/slide-deck-artifact-viewer.component';
+export * from './lib/components/plugins/spreadsheet-artifact-viewer.component';
 export * from './lib/components/plugins/html-artifact-viewer.component';
 export * from './lib/components/plugins/svg-artifact-viewer.component';
 export * from './lib/components/plugins/component-artifact-viewer.component';
@@ -69,4 +95,14 @@ export * from './lib/components/plugins/video-production/video-beat-strip.compon
 export * from './lib/components/plugins/video-production/video-production-storyboard-tab.component';
 export * from './lib/components/plugins/video-production/video-production-review-tab.component';
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
+export * from './lib/components/presence/artifact-agent-presence-bar.component';
+export * from './lib/components/presence/artifact-agent-region-indicator.component';
+export * from './lib/components/plugins/artifact-command-palette.component';
+export {
+  SanitizeHtmlForSandboxedFrame,
+  SanitizeSvgForSandboxedFrame,
+  BuildSandboxedHtmlDocument,
+  OpenHtmlInSandboxedWindow,
+  PrintHtmlInSandboxedIframe,
+} from './lib/utils/html-sandbox.util';
 

@@ -20,6 +20,7 @@ import { ErdClusterGenerator } from '../generators/ErdClusterGenerator.js';
 import { ERD_DEFAULTS, ErdColumnMode, ErdConfig, ErdMode } from '../types/config.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { DataQualityReportGenerator } from '../generators/DataQualityReportGenerator.js';
+import { ResolveDataQualityConfig } from '../quality/DataQualityConfig.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import type { AutoDocExporter, AutoDocExporterOptions, AutoDocPluginConfigEntry } from '../plugins/types.js';
 import type { DatabaseDocumentation } from '../types/state.js';
@@ -313,11 +314,15 @@ export default class Export extends Command {
       if (flags['schema-info']) {
         spinner.start('Generating additional schema info for CodeGen');
         const schemaInfoGen = new AdditionalSchemaInfoGenerator();
+        const qualityCfg = config ? ResolveDataQualityConfig(config.analysis?.dataQuality) : undefined;
         const schemaInfo = schemaInfoGen.generate(state, {
           ApprovedOnly: flags['approved-only'],
           ConfidenceThreshold: parseFloat(flags['confidence-threshold']),
           DiscoveredOnly: flags['schema-info-discovered-only'],
-          ConfirmedOnly: flags['schema-info-confirmed-only']
+          ConfirmedOnly: flags['schema-info-confirmed-only'],
+          ...(qualityCfg !== undefined
+            ? { FoldSpellingVariants: qualityCfg.Enabled && qualityCfg.Checks.CaseWhitespaceVariants && state.phases?.dataQuality?.Status !== 'skipped' }
+            : {})
         });
 
         const schemaInfoPath = path.join(outputDir, 'additionalSchemaInfo.json');

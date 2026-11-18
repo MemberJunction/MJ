@@ -236,12 +236,17 @@ export type TableQualityProbeOutcome =
     }
   | { Ok: false; Reason: string; Code?: string };
 
+/** How one column pair of an orphan probe is compared when the two sides' types differ. */
+export type RelationshipComparisonMode = 'direct' | 'numeric' | 'caseInsensitiveText' | 'text';
+
 /** One relationship to probe for orphans. Composite keys list every column in key order. */
 export interface RelationshipProbeSpec {
   Child: { Schema: string; Table: string; Columns: string[] };
   Parent: { Schema: string; Table: string; Columns: string[] };
-  /** The two sides' types differ: compare as text, which avoids conversion errors. */
+  /** Fallback when {@link ColumnComparisons} is omitted: compare all pairs as text when true. */
   CompareAsText: boolean;
+  /** Per-column comparison strategy in key order (`numeric` for decimal-vs-int, `caseInsensitiveText` for GUID-vs-text). */
+  ColumnComparisons?: RelationshipComparisonMode[];
   CountUnreferencedParents: boolean;
 }
 

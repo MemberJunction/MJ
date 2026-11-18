@@ -22,7 +22,7 @@ import type {
 import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import type { ResolvedDataQualityConfig } from './DataQualityConfig.js';
 import { BaseTypeName, QualityDialectFor, SqlServerSentinelDates, type QualityDialect, type QualityTypeFamily } from './QualityProbeSQL.js';
-import { FindTable, RelationshipKey, TableRelationships, type Relationship } from './Relationships.js';
+import { FindTable, RejectedForeignKeyIds, RelationshipKey, TableRelationships, type Relationship } from './Relationships.js';
 
 /** Everything a rule may read. */
 export interface RuleContext {
@@ -31,11 +31,38 @@ export interface RuleContext {
   Dialect: QualityDialect;
   /** The clock FutureDate compares against. */
   Now: Date;
+  /** Lower-cased `schema.table.col->schema.table.col` keys of pruned/rejected undeclared FKs. */
+  RejectedForeignKeys?: ReadonlySet<string>;
+  /** Lower-cased `schema.table` names referenced by at least one active FK across the database. */
+  ReferencedTables?: ReadonlySet<string>;
+}
+
+function buildReferencedTables(state: DatabaseDocumentation, rejectedFKs: ReadonlySet<string>): Set<string> {
+  const referenced = new Set<string>();
+  for (const schema of state.schemas) {
+    for (const table of schema.tables) {
+      if ((table.dependents?.length ?? 0) > 0 && rejectedFKs.size === 0) {
+        referenced.add(`${schema.name}.${table.name}`.toLowerCase());
+      }
+      for (const r of TableRelationships(schema.name, table, rejectedFKs)) {
+        referenced.add(`${r.Parent.Schema}.${r.Parent.Table}`.toLowerCase());
+      }
+    }
+  }
+  return referenced;
 }
 
 /** Build a rule context for a state. */
 export function CreateRuleContext(state: DatabaseDocumentation, config: ResolvedDataQualityConfig, now: Date = new Date()): RuleContext {
-  return { State: state, Config: config, Dialect: QualityDialectFor(state.database.provider ?? 'sqlserver'), Now: now };
+  const rejectedFKs = RejectedForeignKeyIds(state);
+  return {
+    State: state,
+    Config: config,
+    Dialect: QualityDialectFor(state.database.provider ?? 'sqlserver'),
+    Now: now,
+    RejectedForeignKeys: rejectedFKs,
+    ReferencedTables: buildReferencedTables(state, rejectedFKs),
+  };
 }
 
 const SEVERITY_ORDER: Record<DataQualitySeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -134,7 +161,7 @@ function tableFindings(
         SchemaName: schemaName,
         TableName: table.name,
         Measures: { Estimate: table.rowCountEstimate, Exact: rows },
-        Message: `The catalog estimated ${count(table.rowCountEstimate)} rows; the exact count is ${count(rows)} (statistics may be stale).`,
+        Message: `The catalog estimated ${rowsWord(table.rowCountEstimate)}; the exact count is ${count(rows)} (statistics may be stale).`,
       });
     }
   }
@@ -157,7 +184,8 @@ function tableFindings(
     });
   }
 
-  if (Checks.IsolatedTable && rows !== 0 && table.dependsOn.length === 0 && !isReferenced(context.State, schemaName, table.name)) {
+  const activeRelationships = TableRelationships(schemaName, table, context.RejectedForeignKeys);
+  if (Checks.IsolatedTable && rows !== 0 && activeRelationships.length === 0 && !isReferenced(context, schemaName, table)) {
     push(out, {
       Kind: 'IsolatedTable',
       Severity: 'info',
@@ -180,18 +208,21 @@ function tableFindings(
       SchemaName: schemaName,
       TableName: table.name,
       Measures: { DuplicateRows: probe.DuplicateRows, Rows: total, Share: ratio(probe.DuplicateRows, total) },
-      Message: `${count(probe.DuplicateRows)} rows${total > 0 ? ` (${percent(probe.DuplicateRows, total)})` : ''} are exact copies of another row.`,
+      Message: `${rowsWord(probe.DuplicateRows)}${total > 0 ? ` (${percent(probe.DuplicateRows, total)})` : ''} ${probe.DuplicateRows === 1 ? 'is an exact copy' : 'are exact copies'} of another row.`,
       Approximate: probe.DuplicateRowsApproximate === true ? true : undefined,
     });
   }
 }
 
-function isReferenced(state: DatabaseDocumentation, schemaName: string, tableName: string): boolean {
-  for (const schema of state.schemas) {
-    for (const table of schema.tables) {
-      for (const dep of table.dependsOn) {
-        const target = dep.table.includes('.') ? dep.table.split('.').pop() : dep.table;
-        if (dep.schema.toLowerCase() === schemaName.toLowerCase() && target?.toLowerCase() === tableName.toLowerCase()) return true;
+function isReferenced(context: RuleContext, schemaName: string, table: TableDefinition): boolean {
+  if (context.ReferencedTables) {
+    return context.ReferencedTables.has(`${schemaName}.${table.name}`.toLowerCase());
+  }
+  if ((table.dependents?.length ?? 0) > 0 && (context.RejectedForeignKeys?.size ?? 0) === 0) return true;
+  for (const s of context.State.schemas) {
+    for (const t of s.tables) {
+      for (const r of TableRelationships(s.name, t, context.RejectedForeignKeys)) {
+        if (r.Parent.Schema.toLowerCase() === schemaName.toLowerCase() && r.Parent.Table.toLowerCase() === table.name.toLowerCase()) return true;
       }
     }
   }
@@ -241,7 +272,7 @@ function columnFindings(
         Scope: 'column',
         Source: 'statistics',
         Measures: { Rows: n },
-        Message: `Every one of ${count(n)} rows is NULL: the column appears unused.`,
+        Message: `Every one of ${rowsWord(n)} is NULL: the column appears unused.`,
       });
     }
     return; // nothing else can be said about a column with no values
@@ -266,7 +297,8 @@ function columnFindings(
     });
   }
 
-  if (column.isForeignKey) {
+  const activeForeignKey = isActiveForeignKeyColumn(context, schemaName, table, column);
+  if (activeForeignKey) {
     if (Checks.ForeignKeyMostlyNull && nullPercent >= Thresholds.foreignKeyMostlyNullPercent) {
       push(out, {
         ...base,
@@ -310,11 +342,11 @@ function columnFindings(
       Scope: 'column',
       Source: 'statistics',
       Measures: { Rows: n },
-      Message: `Declared nullable but never NULL across ${count(n)} rows.`,
+      Message: `Declared nullable but never NULL across ${rowsWord(n)}.`,
     });
   }
 
-  const keyLike = !column.isPrimaryKey && !column.isForeignKey && isIdentifierType(column.dataType, family, column.maxLength);
+  const keyLike = !column.isPrimaryKey && !activeForeignKey && isIdentifierType(column.dataType, family, column.maxLength);
   const uniquelyIndexed = IsUniquelyIndexed(table, column.name);
   if (keyLike && uniquelyIndexed === false && nonNull >= Thresholds.minRowsForUniqueness) {
     const uniqueness = distinct / nonNull;
@@ -338,7 +370,7 @@ function columnFindings(
         Scope: 'column',
         Source: 'statistics',
         Measures: { Rows: n },
-        Message: `Unique and never NULL across ${count(n)} rows, with no primary key or unique index: a natural or alternate key candidate.`,
+        Message: `Unique and never NULL across ${rowsWord(n)}, with no primary key or unique index: a natural or alternate key candidate.`,
       });
     }
   }
@@ -352,6 +384,23 @@ function columnFindings(
   if (family === 'text' || family === 'fixedText') {
     textFindings(context, column, measured, nonNull, distinct, family, base, out);
   }
+}
+
+function isActiveForeignKeyColumn(context: RuleContext, schemaName: string, table: TableDefinition, column: ColumnDefinition): boolean {
+  if (!column.isForeignKey) return false;
+  if (column.foreignKeyReferences?.constraintName) return true;
+  const rejected = context.RejectedForeignKeys;
+  if (!rejected || rejected.size === 0) return true;
+  const prefix = `${schemaName}.${table.name}.${column.name}->`.toLowerCase();
+  let wasRejected = false;
+  for (const id of rejected) {
+    if (id.startsWith(prefix)) {
+      wasRejected = true;
+      break;
+    }
+  }
+  if (!wasRejected) return true;
+  return TableRelationships(schemaName, table, rejected).some((r) => r.Child.Columns.some((c) => c.toLowerCase() === column.name.toLowerCase()));
 }
 
 type ColumnBase = { SchemaName: string; TableName: string; ColumnName: string };
@@ -375,7 +424,7 @@ function negativeFinding(
     Measures: negatives !== undefined ? { NegativeRows: negatives, Share: ratio(negatives, nonNull) } : { Min: min ?? 0 },
     Message:
       negatives !== undefined
-        ? `${count(negatives)} rows (${percent(negatives, nonNull)}) are negative in a column named like a quantity.`
+        ? `${rowsWord(negatives)} (${percent(negatives, nonNull)}) ${negatives === 1 ? 'is' : 'are'} negative in a column named like a quantity.`
         : `Values go as low as ${min} in a column named like a quantity.`,
   });
 }
@@ -408,7 +457,7 @@ function dateFindings(
         SampleValues: samples(context, placeholder ? [placeholder] : []),
         Message:
           rows !== undefined
-            ? `${count(rows)} rows (${percent(rows, nonNull)}) hold a placeholder date${placeholder ? ` such as ${placeholder}` : ''} instead of NULL.`
+            ? `${rowsWord(rows)} (${percent(rows, nonNull)}) ${rows === 1 ? 'holds' : 'hold'} a placeholder date${placeholder ? ` such as ${placeholder}` : ''} instead of NULL.`
             : `The range ${placeholder === min ? 'starts' : 'ends'} at the placeholder date ${placeholder}: some rows use it instead of NULL.`,
       });
     }
@@ -428,7 +477,7 @@ function dateFindings(
         Measures: rows !== undefined ? { FutureRows: rows, Share: ratio(rows, nonNull) } : {},
         Message:
           rows !== undefined
-            ? `${count(rows)} rows (${percent(rows, nonNull)}) are dated in the future${max ? `, up to ${max}` : ''}.`
+            ? `${rowsWord(rows)} (${percent(rows, nonNull)}) ${rows === 1 ? 'is' : 'are'} dated in the future${max ? `, up to ${max}` : ''}.`
             : `The latest value, ${max}, is in the future.`,
       });
     }
@@ -453,8 +502,10 @@ function textFindings(
     const shortest = toNumber(s.minLength);
     // Every value exactly the declared length is a fixed format (an account number), not truncation.
     const fixedFormat = shortest !== undefined && shortest >= column.maxLength;
-    if (longest !== undefined && longest >= column.maxLength && !fixedFormat) {
-      const atCapacity = measured?.AtCapacityRows;
+    const atCapacity = measured?.AtCapacityRows;
+    // When probed, a handful of rows at the declared length (e.g. a single 15-character code) is not truncation.
+    const enoughAtCapacity = atCapacity === undefined || atCapacity >= Thresholds.lengthAtCapacityMinRows;
+    if (longest !== undefined && longest >= column.maxLength && !fixedFormat && enoughAtCapacity) {
       const average = toNumber(s.avgLength) ?? 0;
       const severe = average >= 0.9 * column.maxLength || (atCapacity !== undefined && ratio(atCapacity, nonNull) >= 0.05);
       push(out, {
@@ -469,7 +520,7 @@ function textFindings(
           AverageLength: round1(average),
           ...(atCapacity !== undefined ? { AtCapacityRows: atCapacity } : {}),
         },
-        Message: `The longest value fills all ${column.maxLength} declared characters${atCapacity !== undefined ? ` (${count(atCapacity)} rows)` : ''}: values may have been cut off.`,
+        Message: `The longest value fills all ${column.maxLength} declared characters${atCapacity !== undefined ? ` (${rowsWord(atCapacity)})` : ''}: values may have been cut off.`,
       });
     }
   }
@@ -486,7 +537,7 @@ function textFindings(
       Scope: 'column',
       Source: 'probe',
       Measures: { BlankRows: blank, Share: share },
-      Message: `${count(blank)} rows (${percent(blank, nonNull)}) are empty or whitespace-only strings, used instead of NULL.`,
+      Message: `${rowsWord(blank)} (${percent(blank, nonNull)}) ${blank === 1 ? 'is an empty or whitespace-only string' : 'are empty or whitespace-only strings'}, used instead of NULL.`,
     });
   }
 
@@ -499,7 +550,7 @@ function textFindings(
       Scope: 'column',
       Source: 'probe',
       Measures: { UntrimmedRows: rows, Share: ratio(rows, nonNull) },
-      Message: `${count(rows)} rows (${percent(rows, nonNull)}) have leading or trailing whitespace.`,
+      Message: `${rowsWord(rows)} (${percent(rows, nonNull)}) ${rows === 1 ? 'has' : 'have'} leading or trailing whitespace.`,
     });
   }
 
@@ -563,7 +614,7 @@ function textFindings(
 function relationshipFindings(context: RuleContext, schemaName: string, table: TableDefinition, out: DataQualityFinding[]): void {
   const { Checks, Thresholds } = context.Config;
   const phase = context.State.phases.dataQuality;
-  for (const r of TableRelationships(schemaName, table)) {
+  for (const r of TableRelationships(schemaName, table, context.RejectedForeignKeys)) {
     const related = {
       SchemaName: r.Parent.Schema,
       TableName: r.Parent.Table,
@@ -621,7 +672,7 @@ function relationshipFindings(context: RuleContext, schemaName: string, table: T
         Scope: 'relationship',
         Source: 'probe',
         Measures: { CheckedRows: checked, OrphanRows: orphans, OrphanRate: rate },
-        Message: `${count(orphans)} of ${count(checked)} non-null rows (${percent(orphans, checked)}) have no matching row in ${parentName}${r.Declared ? '' : ': parent rows were deleted, or this is not a real reference'}.`,
+        Message: `${count(orphans)} of ${count(checked)} non-null rows (${percent(orphans, checked)}) ${orphans === 1 ? 'has' : 'have'} no matching row in ${parentName}${r.Declared ? '' : ': parent rows were deleted, or this is not a real reference'}.`,
       });
     }
     if (Checks.UnreferencedParentRows && probed.ParentRows !== undefined && probed.UnreferencedParentRows !== undefined && probed.ParentRows > 0) {
@@ -634,7 +685,7 @@ function relationshipFindings(context: RuleContext, schemaName: string, table: T
           Scope: 'relationship',
           Source: 'probe',
           Measures: { ParentRows: probed.ParentRows, UnreferencedRows: probed.UnreferencedParentRows, Share: share },
-          Message: `${count(probed.UnreferencedParentRows)} of ${count(probed.ParentRows)} rows in ${parentName} (${percent(probed.UnreferencedParentRows, probed.ParentRows)}) are never referenced from here.`,
+          Message: `${count(probed.UnreferencedParentRows)} of ${count(probed.ParentRows)} rows in ${parentName} (${percent(probed.UnreferencedParentRows, probed.ParentRows)}) ${probed.UnreferencedParentRows === 1 ? 'is' : 'are'} never referenced from here.`,
         });
       }
     }
@@ -760,6 +811,10 @@ function round4(x: number): number {
 
 function count(n: number): string {
   return n.toLocaleString('en-US');
+}
+
+function rowsWord(n: number): string {
+  return `${count(n)} row${n === 1 ? '' : 's'}`;
 }
 
 /** The ISO date (`YYYY-MM-DD`) of a statistics value, which is a Date in memory and a string after a save. */

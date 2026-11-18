@@ -767,6 +767,24 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         });
     });
 
+    it('defaults the render capture worker count to the container CPU quota, and keeps an explicit request value', async () => {
+        const seenWorkers: Array<number | undefined> = [];
+        const baseProvider = createProvider();
+        const capturingProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async (handle) => baseProvider.IsContainerRunning(handle),
+            Provision: async (key, config) => baseProvider.Provision(key, config),
+            Finalize: async (handle, outcome) => {
+                const raw = await fs.readFile(path.join(handle.HostWorkspacePath ?? '', 'request.json'), 'utf8');
+                seenWorkers.push((JSON.parse(raw) as { Workers?: number }).Workers);
+                await baseProvider.Finalize(handle, outcome);
+            },
+        };
+        const driver = new DockerRenderDriver({ ...makeDockerSettings(), Docker: { ...makeDockerSettings().Docker, Cpus: 3.5 } }, capturingProvider);
+        await driver.Render(CreateMinimalRenderRequest());
+        await driver.Render({ ...CreateMinimalRenderRequest(), Workers: 1 });
+        expect(seenWorkers).toEqual([3, 1]);
+    });
+
     it('rejects oversized video output and VideoSizeBytes mismatches with Code === "Internal" before reading file bytes', async () => {
         const probeDir = await makeTempDir();
         const probeFile = path.join(probeDir, 'probe.txt');

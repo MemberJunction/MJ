@@ -499,4 +499,86 @@ describe('data quality helpers', () => {
   it('builds stable ids', () => {
     expect(FindingId({ Kind: 'AlwaysNull', SchemaName: 'dbo', TableName: 'T', ColumnName: 'C' })).toBe('AlwaysNull:dbo.T.C');
   });
+
+  it('suppresses LengthAtCapacity when only 1 probed row reaches max length and uses singular row grammar', () => {
+    const code = col('CreditCardApprovalCode', 'varchar', stats(1000, 900, 0, { minLength: 8, maxLength: 15, avgLength: 11 }), { maxLength: 15 });
+    const singleHit = state([keyed('SalesOrderHeader', 1000, [code])], 'sqlserver', phaseWith({ 'dbo.SalesOrderHeader': { CreditCardApprovalCode: { NonNullRows: 1000, AtCapacityRows: 1 } } }));
+    expect(kinds(derive(singleHit), 'CreditCardApprovalCode')).not.toContain('LengthAtCapacity');
+
+    const withOverride = derive(singleHit, { thresholds: { lengthAtCapacityMinRows: 1 } });
+    const finding = withOverride.find((f) => f.Kind === 'LengthAtCapacity');
+    expect(finding?.Message).toContain('(1 row)');
+    expect(finding?.Message).not.toContain('1 rows');
+  });
+
+  it('ignores rejected undeclared foreign keys when deriving relationship, column, and isolated-table findings', () => {
+    const parent = keyed('Parent', 200, []);
+    const childFk = col('ParentId', 'int', stats(200, 200, 190), { isForeignKey: true });
+    const child = keyed('Child', 200, [childFk], {
+      dependsOn: [{ schema: 'dbo', table: 'Parent', column: 'ParentId', referencedColumn: 'Id' }],
+    });
+    const s = state([parent, child]);
+    s.phases.dataQuality = {
+      Status: 'completed',
+      StartedAt: '',
+      ProbesEnabled: true,
+      TotalTables: 2,
+      TablesProbed: 0,
+      TablesSkipped: 0,
+      TablesFailed: 0,
+      RelationshipsProbed: 1,
+      RelationshipsFailed: 0,
+      ProbeDurationMs: 0,
+      TableProbes: {},
+      RelationshipProbes: {
+        'dbo.child(parentid)->dbo.parent(id)': {
+          ProbedAt: '',
+          Child: { Schema: 'dbo', Table: 'Child', Columns: ['ParentId'] },
+          Parent: { Schema: 'dbo', Table: 'Parent', Columns: ['Id'] },
+          Origin: 'Discovered',
+          Outcome: 'ok',
+          CheckedRows: 10,
+          OrphanRows: 9,
+          DurationMs: 1,
+        },
+      },
+    };
+    s.phases.keyDetection = {
+      startedAt: '',
+      tokenBudget: { allocated: 1000, used: 0, remaining: 1000 },
+      discovered: {
+        primaryKeys: [],
+        foreignKeys: [
+          {
+            schemaName: 'dbo',
+            sourceTable: 'Child',
+            sourceColumn: 'ParentId',
+            targetSchema: 'dbo',
+            targetTable: 'Parent',
+            targetColumn: 'Id',
+            confidence: 40,
+            status: 'rejected',
+            evidence: {
+              namingMatch: 0.5,
+              valueOverlap: 0.1,
+              cardinalityRatio: 1,
+              dataTypeMatch: true,
+              nullHandling: 'nullable',
+              sampleSize: 10,
+              orphanCount: 9,
+              warnings: [],
+            },
+            discoveredInIteration: 1,
+            validatedByLLM: false,
+          },
+        ],
+      },
+    };
+
+    const findings = derive(s);
+    expect(findings.map((f) => f.Kind)).not.toContain('OrphanedForeignKey');
+    expect(findings.map((f) => f.Kind)).not.toContain('ForeignKeyMostlyNull');
+    expect(findings.map((f) => f.Kind)).not.toContain('OneToOne');
+    expect(findings.filter((f) => f.Kind === 'IsolatedTable').map((f) => f.TableName).sort()).toEqual(['Child', 'Parent']);
+  });
 });

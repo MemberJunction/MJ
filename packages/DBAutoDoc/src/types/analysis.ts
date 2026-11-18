@@ -70,6 +70,8 @@ export interface TableAnalysisContext {
   existingIndexes?: string[];
   /** Data quality facts about the table and its relationships, one sentence each. */
   dataQuality?: string[]; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
+  /** True when any column, table, or relationship quality finding exists for this table. */
+  hasDataQuality?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 /**

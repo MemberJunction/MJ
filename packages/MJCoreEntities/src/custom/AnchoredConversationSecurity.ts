@@ -4,6 +4,7 @@ import type {
     MJConversationEntity,
     MJConversationEntity_IConversationAnchorMetadata
 } from '../generated/entity_subclasses';
+import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 
 /**
  * Union of allowed `AnchorType` values on `MJ: Conversations`, derived directly
@@ -44,6 +45,12 @@ export interface AnchoredConversationCandidate {
 }
 
 /**
+ * Strongly-typed field value stored in linked entity records for anchored conversation security.
+ */
+export type AnchoredFieldValue = string | number | boolean | Date | object | null | undefined;
+export type AnchoredRecordValues = Record<string, AnchoredFieldValue>;
+
+/**
  * Safely parses `AnchorMetadata` from either an already-parsed object or a raw JSON string.
  * Returns `null` when empty or malformed.
  */
@@ -62,7 +69,7 @@ export function ParseConversationAnchorMetadata(
             return null;
         }
         try {
-            const parsed: unknown = JSON.parse(trimmed);
+            const parsed = JSON.parse(trimmed) as AnchoredFieldValue;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 return parsed as MJConversationEntity_IConversationAnchorMetadata;
             }
@@ -280,7 +287,7 @@ export async function UserCanReadLinkedRecord(
     try {
         const rv = RunView.FromMetadataProvider(provider);
         const pkFieldNames = entityInfo.PrimaryKeys.map((pk) => pk.Name);
-        const result = await rv.RunView<Record<string, unknown>>(
+        const result = await rv.RunView<AnchoredRecordValues>(
             {
                 EntityName: entityInfo.Name,
                 ExtraFilter: pkFilter,
@@ -304,6 +311,20 @@ export async function UserCanReadLinkedRecord(
                 Reason: 'You do not have access to the linked record.',
                 EntityInfo: entityInfo
             };
+        }
+        if (entityInfo.Name.trim().toLowerCase() === 'mj: artifacts') {
+            const artifactPerm = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                linkedRecordId,
+                user
+            );
+            if (!artifactPerm.CanRead) {
+                return {
+                    Allowed: false,
+                    Reason: artifactPerm.Reason || 'You do not have permission to view this artifact.',
+                    EntityInfo: entityInfo
+                };
+            }
         }
         return { Allowed: true, Reason: null, EntityInfo: entityInfo };
     } catch (error) {
@@ -382,6 +403,11 @@ export async function FilterAnchoredConversationsForUser<T extends AnchoredConve
 }
 
 /**
+ * Alias for {@link FilterAnchoredConversationsForUser} used by artifact viewer components.
+ */
+export const FilterReadableAnchoredConversations = FilterAnchoredConversationsForUser;
+
+/**
  * Deterministic Stage 1 detector for FLS-governed fields referenced by a comment.
  *
  * Runs only when `entityInfo.FieldLevelSecurityApplies` is `true`. Checks:
@@ -399,7 +425,7 @@ export function DetectReferencedRestrictedFieldsDeterministic(
     messageText: string | null | undefined,
     anchorType: MJConversationEntity['AnchorType'],
     anchorKey: string | null | undefined,
-    recordValues?: Readonly<Record<string, unknown>> | null
+    recordValues?: Readonly<AnchoredRecordValues> | null
 ): string[] {
     if (!entityInfo || !entityInfo.FieldLevelSecurityApplies) {
         return [];
@@ -480,7 +506,7 @@ function containsWholePhrase(haystackLower: string, phraseLower: string): boolea
     return regex.test(haystackLower);
 }
 
-function buildRestrictedValueCandidates(rawVal: unknown): string[] {
+function buildRestrictedValueCandidates(rawVal: AnchoredFieldValue): string[] {
     if (rawVal === null || rawVal === undefined || typeof rawVal === 'boolean') {
         return [];
     }

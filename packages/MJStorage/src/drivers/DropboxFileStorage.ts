@@ -800,19 +800,25 @@ export class DropboxFileStorage extends FileStorageBase {
     try {
       const normalizedPath = this._normalizePath(prefix);
 
-      const response = await this._client.filesListFolder({
+      let page = await this._client.filesListFolder({
         path: normalizedPath,
         recursive: false,
         include_media_info: false,
         include_deleted: false,
         include_has_explicit_shared_members: false,
       });
+      // Dropbox returns a folder in pages; follow the cursor until has_more is false (#4439).
+      const entries = [...page.result.entries];
+      while (page.result.has_more) {
+        page = await this._client.filesListFolderContinue({ cursor: page.result.cursor });
+        entries.push(...page.result.entries);
+      }
 
       const objects: StorageObjectMetadata[] = [];
       const prefixes: string[] = [];
 
       // Process entries
-      for (const entry of response.result.entries) {
+      for (const entry of entries) {
         // Skip deleted entries
         if (entry['.tag'] === 'deleted') {
           continue;
@@ -1465,6 +1471,7 @@ export class DropboxFileStorage extends FileStorageBase {
    * - File type filtering converts extensions to Dropbox file categories
    * - Date filters use server_modified timestamp
    * - Path prefix restricts search to a specific folder and its subfolders
+   * - Results are paged: when `hasMore` is true, pass `nextPageToken` back as `options.pageToken` for the next page
    *
    * @example
    * ```typescript
@@ -1508,8 +1515,11 @@ export class DropboxFileStorage extends FileStorageBase {
         }
       }
 
-      // Execute search using Dropbox Search API v2
-      const response = await this._client.filesSearchV2(searchOptions);
+      // Execute search using Dropbox Search API v2. A page token is the cursor of the previous page;
+      // the continuation carries the original query and options (#4439).
+      const response = options?.pageToken
+        ? await this._client.filesSearchContinueV2({ cursor: options.pageToken })
+        : await this._client.filesSearchV2(searchOptions);
 
       const results: FileSearchResult[] = [];
 
@@ -1609,7 +1619,8 @@ export class DropboxFileStorage extends FileStorageBase {
         results,
         totalMatches: undefined, // Dropbox doesn't provide total count
         hasMore,
-        nextPageToken: hasMore ? 'continue' : undefined, // Dropbox uses continue endpoint for pagination
+        // The caller pages: pass this back as `options.pageToken` to get the next page.
+        nextPageToken: hasMore ? response.result.cursor : undefined,
       };
     } catch (error) {
       console.error('Error searching files in Dropbox', { query, options, error });

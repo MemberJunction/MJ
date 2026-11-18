@@ -64,15 +64,20 @@ vi.mock('@memberjunction/actions-base', () => ({
     }
 }));
 
+import { MJGlobal } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { BaseAccountingAction } from '../base/base-accounting-action';
 import { QuickBooksBaseAction } from '../providers/quickbooks/quickbooks-base.action';
 import {
     ACCOUNTING_ERP_INTEGRATION_ALIASES,
+    ACCOUNTING_VERBS,
     CanonicalERPIntegrationName,
     ERP_INTEGRATION,
     ERPIntegrationNameAliases,
+    ErpPluginKey,
 } from '../constants';
+import { GetBudgetAction } from '../verbs/get-budget.action';
+import { GetVendorBillsAction } from '../verbs/get-vendor-bills.action';
 
 const COMPANY_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 const OTHER_COMPANY_ID = 'aaaaaaaa-0000-4000-8000-000000000002';
@@ -649,3 +654,144 @@ describe('QuickBooksBaseAction', () => {
         });
     });
 });
+
+describe('Stateless ERP verb dispatchers', () => {
+    describe('GetBudgetAction', () => {
+        let action: GetBudgetAction;
+
+        beforeEach(() => {
+            action = new GetBudgetAction();
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReset();
+        });
+
+        it('should have the correct description', () => {
+            expect(action.Description).toBe("Retrieves budget entries from the company's ERP for a fiscal year.");
+        });
+
+        it('should return PROVIDER_NOT_REGISTERED when no plugin is registered for the ERP', async () => {
+            mockRunViewResults([bcRow(CI_PROD, 'BC Production', 'business-central')]);
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({
+                Resolved: false,
+                Instance: null,
+            });
+
+            const result = await action['InternalRunAction']({
+                Params: [
+                    { Name: 'CompanyID', Value: COMPANY_ID, Type: 'Input' },
+                    { Name: 'FiscalYear', Value: 2024, Type: 'Input' },
+                ],
+                ContextUser: {} as never,
+            });
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PROVIDER_NOT_REGISTERED');
+            expect(result.Message).toBe(
+                `No ERP plugin registered for ${ErpPluginKey(ACCOUNTING_VERBS.GetBudget, ERP_INTEGRATION.BusinessCentral)}`
+            );
+            expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+                expect.anything(),
+                `${ACCOUNTING_VERBS.GetBudget}:${ERP_INTEGRATION.BusinessCentral}`
+            );
+        });
+
+        it('should dispatch to the registered plugin under ${verb}:${integrationName}', async () => {
+            mockRunViewResults([bcRow(CI_PROD, 'BC Production', 'business-central')]);
+            const mockRun = vi.fn().mockResolvedValue({
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Params: [],
+            });
+            const mockPlugin = { Run: mockRun };
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({
+                Resolved: true,
+                Instance: mockPlugin as never,
+            });
+
+            const runParams = {
+                Params: [
+                    { Name: 'CompanyID', Value: COMPANY_ID, Type: 'Input' },
+                    { Name: 'FiscalYear', Value: 2024, Type: 'Input' },
+                ],
+                ContextUser: {} as never,
+            };
+            const result = await action['InternalRunAction'](runParams);
+
+            expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+                expect.anything(),
+                `${ACCOUNTING_VERBS.GetBudget}:${ERP_INTEGRATION.BusinessCentral}`
+            );
+            expect(mockRun).toHaveBeenCalledWith(runParams);
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+        });
+    });
+
+    describe('GetVendorBillsAction', () => {
+        let action: GetVendorBillsAction;
+
+        beforeEach(() => {
+            action = new GetVendorBillsAction();
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReset();
+        });
+
+        it('should have the correct description', () => {
+            expect(action.Description).toBe("Retrieves open or posted vendor bills (AP) from the company's ERP.");
+        });
+
+        it('should return PROVIDER_NOT_REGISTERED when no plugin is registered for the ERP', async () => {
+            mockRunViewResults([bcRow(CI_PROD, 'BC Production', 'business-central')]);
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({
+                Resolved: false,
+                Instance: null,
+            });
+
+            const result = await action['InternalRunAction']({
+                Params: [
+                    { Name: 'CompanyID', Value: COMPANY_ID, Type: 'Input' },
+                ],
+                ContextUser: {} as never,
+            });
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PROVIDER_NOT_REGISTERED');
+            expect(result.Message).toBe(
+                `No ERP plugin registered for ${ErpPluginKey(ACCOUNTING_VERBS.GetVendorBills, ERP_INTEGRATION.BusinessCentral)}`
+            );
+            expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+                expect.anything(),
+                `${ACCOUNTING_VERBS.GetVendorBills}:${ERP_INTEGRATION.BusinessCentral}`
+            );
+        });
+
+        it('should dispatch to the registered plugin under ${verb}:${integrationName}', async () => {
+            mockRunViewResults([bcRow(CI_PROD, 'BC Production', 'business-central')]);
+            const mockRun = vi.fn().mockResolvedValue({
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Params: [],
+            });
+            const mockPlugin = { Run: mockRun };
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({
+                Resolved: true,
+                Instance: mockPlugin as never,
+            });
+
+            const runParams = {
+                Params: [
+                    { Name: 'CompanyID', Value: COMPANY_ID, Type: 'Input' },
+                ],
+                ContextUser: {} as never,
+            };
+            const result = await action['InternalRunAction'](runParams);
+
+            expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+                expect.anything(),
+                `${ACCOUNTING_VERBS.GetVendorBills}:${ERP_INTEGRATION.BusinessCentral}`
+            );
+            expect(mockRun).toHaveBeenCalledWith(runParams);
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+        });
+    });
+});
+

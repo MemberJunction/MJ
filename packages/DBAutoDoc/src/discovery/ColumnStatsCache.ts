@@ -5,6 +5,8 @@
  */
 
 import { CachedColumnStats, TableStatsCache } from '../types/discovery.js';
+import { SchemaDefinition } from '../types/state.js';
+import { BuildCachedColumnStats } from './ColumnStatsBuilder.js';
 
 export class ColumnStatsCache {
   private tableCache: Map<string, TableStatsCache> = new Map();
@@ -349,15 +351,58 @@ export class ColumnStatsCache {
   }
 
   /**
-   * Merge cached stats into schema column definitions.
-   *
-   * A column the sampling pass already measured keeps its statistics: the cache only adds the
-   * fields sampling does not produce (`dataPattern`, `minValue`/`maxValue`). Replacing them dropped
-   * the value distribution, the numeric range and the length statistics, and wrote the cache's 0–1
-   * null fraction where the prompt expects a 0–100 percentage. A column sampling did not reach
-   * (sampling skipped) gets its statistics from the cache, with the percentage converted.
+   * Seed the cache from the statistics the sampling pass left on each column, so discovery does not
+   * query the database again for numbers it already has. Columns without statistics, columns whose
+   * sampling count query failed (all-zero counts on a non-empty table), and columns already in the
+   * cache are left alone so discovery can still query them. Returns the number of columns seeded.
    */
-  public MergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+  public SeedFromSchemas(schemas: SchemaDefinition[]): number {
+    let seeded = 0;
+    for (const schema of schemas) {
+      for (const table of schema.tables) {
+        const soleDeclaredPK = table.columns.filter(c => c.isPrimaryKey).length === 1;
+        for (const column of table.columns) {
+          const s = column.statistics;
+          if (!s || !Number.isFinite(s.totalRows) || !Number.isFinite(s.distinctCount) || !Number.isFinite(s.nullCount)) {
+            continue;
+          }
+          if (s.totalRows === 0 && (table.rowCount ?? 0) > 0) {
+            continue;
+          }
+          if (this.hasColumnStats(schema.name, table.name, column.name)) {
+            continue;
+          }
+          this.setColumnStats(BuildCachedColumnStats({
+            SchemaName: schema.name,
+            TableName: table.name,
+            ColumnName: column.name,
+            DataType: column.dataType,
+            TotalRows: s.totalRows,
+            NullCount: s.nullCount,
+            DistinctCount: s.distinctCount,
+            SampleValues: s.sampleValues ?? [],
+            MinValue: s.minValue ?? s.min,
+            MaxValue: s.maxValue ?? s.max,
+            AvgLength: s.avgLength,
+            ValueDistribution: s.valueDistribution,
+            QueryTimeMs: s.queryTimeMs ?? 0,
+            IsPrimaryKey: soleDeclaredPK && column.isPrimaryKey
+          }));
+          seeded++;
+        }
+      }
+    }
+    return seeded;
+  }
+
+  /**
+   * Write the cache back onto the schema's columns. A column the sampling pass already measured keeps
+   * every field sampling recorded (its counts, 0–100 percentages, numeric and length statistics) and
+   * gains what only discovery computes, such as the data pattern. When sampling skipped the column or
+   * its count query failed (all-zero counts on a non-empty table), the cache supplies the counts with
+   * the null fraction converted to 0–100.
+   */
+  public MergeIntoSchemas(schemas: SchemaDefinition[]): void {
     for (const schema of schemas) {
       for (const table of schema.tables) {
         const cacheKey = `${schema.name}.${table.name}`;
@@ -369,25 +414,12 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          const existing = column.statistics;
-          if (existing) {
-            column.statistics = {
-              ...existing,
-              dataPattern: existing.dataPattern ?? cachedStats.dataPattern,
-              minValue: existing.minValue ?? cachedStats.minValue,
-              maxValue: existing.maxValue ?? cachedStats.maxValue,
-              computedAt: existing.computedAt ?? cachedStats.computedAt,
-              queryTimeMs: existing.queryTimeMs ?? cachedStats.queryTimeMs
-            };
-            continue;
-          }
-
-          column.statistics = {
+          // The cache holds a 0–1 fraction (its detectors use it); column statistics hold 0–100.
+          const fromCache: import('../types/state.js').ColumnStatistics = {
             totalRows: cachedStats.totalRows,
             distinctCount: cachedStats.distinctCount,
             uniquenessRatio: cachedStats.uniqueness,
             nullCount: cachedStats.nullCount,
-            // The cache holds a 0–1 fraction (its detectors use it); column statistics hold 0–100.
             nullPercentage: cachedStats.totalRows > 0 ? (cachedStats.nullCount / cachedStats.totalRows) * 100 : 0,
             dataPattern: cachedStats.dataPattern,
             sampleValues: cachedStats.sampleValues,
@@ -399,6 +431,47 @@ export class ColumnStatsCache {
             avgLength: cachedStats.avgLength,
             computedAt: cachedStats.computedAt,
             queryTimeMs: cachedStats.queryTimeMs
+          };
+
+          const existing = column.statistics;
+          if (!existing) {
+            column.statistics = fromCache;
+            continue;
+          }
+
+          const failedSamplingCounts =
+            existing.totalRows === 0 &&
+            existing.distinctCount === 0 &&
+            ((table.rowCount ?? 0) > 0 || cachedStats.totalRows > 0);
+          if (failedSamplingCounts) {
+            column.statistics = {
+              ...existing,
+              totalRows: fromCache.totalRows,
+              distinctCount: fromCache.distinctCount,
+              uniquenessRatio: fromCache.uniquenessRatio,
+              nullCount: fromCache.nullCount,
+              nullPercentage: fromCache.nullPercentage,
+              dataPattern: existing.dataPattern ?? fromCache.dataPattern,
+              sampleValues: existing.sampleValues?.length ? existing.sampleValues : fromCache.sampleValues,
+              valueDistribution: existing.valueDistribution?.length ? existing.valueDistribution : fromCache.valueDistribution,
+              min: existing.min ?? fromCache.min,
+              max: existing.max ?? fromCache.max,
+              minValue: existing.minValue ?? fromCache.minValue,
+              maxValue: existing.maxValue ?? fromCache.maxValue,
+              avgLength: existing.avgLength ?? fromCache.avgLength,
+              computedAt: fromCache.computedAt,
+              queryTimeMs: fromCache.queryTimeMs
+            };
+            continue;
+          }
+
+          column.statistics = {
+            ...existing,
+            dataPattern: existing.dataPattern ?? cachedStats.dataPattern,
+            minValue: existing.minValue ?? cachedStats.minValue,
+            maxValue: existing.maxValue ?? cachedStats.maxValue,
+            computedAt: existing.computedAt ?? cachedStats.computedAt,
+            queryTimeMs: existing.queryTimeMs ?? cachedStats.queryTimeMs
           };
         }
       }

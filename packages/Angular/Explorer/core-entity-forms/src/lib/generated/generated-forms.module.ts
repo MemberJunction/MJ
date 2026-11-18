@@ -119,11 +119,13 @@ import { MJArchiveConfigurationFormComponent } from "./Entities/MJArchiveConfigu
 import { MJArchiveRunDetailFormComponent } from "./Entities/MJArchiveRunDetail/mjarchiverundetail.form.component";
 import { MJArchiveRunFormComponent } from "./Entities/MJArchiveRun/mjarchiverun.form.component";
 import { MJArtifactFormComponent } from "./Entities/MJArtifact/mjartifact.form.component";
+import { MJArtifactGuestShareLinkFormComponent } from "./Entities/MJArtifactGuestShareLink/mjartifactguestsharelink.form.component";
 import { MJArtifactPermissionFormComponent } from "./Entities/MJArtifactPermission/mjartifactpermission.form.component";
 import { MJArtifactTypeFormComponent } from "./Entities/MJArtifactType/mjartifacttype.form.component";
 import { MJArtifactUseFormComponent } from "./Entities/MJArtifactUse/mjartifactuse.form.component";
 import { MJArtifactVersionAttributeFormComponent } from "./Entities/MJArtifactVersionAttribute/mjartifactversionattribute.form.component";
 import { MJArtifactVersionFormComponent } from "./Entities/MJArtifactVersion/mjartifactversion.form.component";
+import { MJArtifactWorkingStateFormComponent } from "./Entities/MJArtifactWorkingState/mjartifactworkingstate.form.component";
 import { MJAuditLogFormComponent } from "./Entities/MJAuditLog/mjauditlog.form.component";
 import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlogtype.form.component";
 import { MJAuthenticationProviderFormComponent } from "./Entities/MJAuthenticationProvider/mjauthenticationprovider.form.component";
@@ -1093,6 +1095,7 @@ declarations: [
     MJAIAgentPersonaFormComponent,
     MJAIModalityFormComponent,
     MJAISkillSearchScopeFormComponent,
+    MJArtifactGuestShareLinkFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
     MJConversationArtifactFormComponent,
     MJEntityOrganicKeyRelatedEntityFormComponent,
@@ -1122,6 +1125,7 @@ declarations: [
     MJAIAgentStepPathFormComponent,
     MJAIPersonaFormComponent,
     MJActionExecutionLogFormComponent,
+    MJArtifactWorkingStateFormComponent,
     MJCompanyIntegrationSyncWatermarkFormComponent,
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,

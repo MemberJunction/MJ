@@ -105,8 +105,16 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         return 7200;
     }
 
+    /**
+     * Defaults to `false`: xAI's `?conversation_id=<id>` server-side resumption currently drops
+     * `conversation.item.create` `message` items (`SendContextNote`, `SendText`, and post-drop
+     * `seedConversationAfterMove` history), causing Grok Voice to forget injected context and
+     * replayed turns across reconnects. Text-seed replay into a fresh conversation preserves both
+     * spoken and injected turns losslessly; callers can still opt into native resumption explicitly
+     * via `TrustNativeResumption: true` on `ClientRealtimeSessionConfig`.
+     */
     protected override get DefaultTrustsNativeResumption(): boolean {
-        return true;
+        return false;
     }
 
     // ── Transport hooks ────────────────────────────────────────────────────────

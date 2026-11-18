@@ -216,7 +216,10 @@ SELECT
                                                AS "IsVirtual",
     src_cls.oid                                AS object_id,
     NULL::text                                 AS "DefaultConstraintName",
-    pg_get_expr(ad.adbin, ad.adrelid)          AS "DefaultValue",
+    -- generated column: pg_attrdef holds the generation expression, not a default (#6511)
+    CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL
+         ELSE pg_get_expr(ad.adbin, ad.adrelid) END
+                                               AS "DefaultValue",
     NULL::text                                 AS "ComputedColumnDefinition",
     COALESCE(
         col_description(src_cls.oid, a.attnum),
@@ -325,6 +328,17 @@ WHERE
 
 /** Set of catalog view names for quick lookup */
 const CATALOG_VIEW_NAMES = new Set(PG_CATALOG_VIEWS.keys());
+
+/**
+ * The hand-written PostgreSQL definition of one of MJ's catalog wrapper views (they read SQL
+ * Server's `sys.*` tables, which have no mechanical translation), or undefined for any other view.
+ * The definitions name the core schema `__mj`; `coreSchema` replaces it.
+ */
+export function GetPGCatalogViewDefinition(viewName: string, coreSchema: string = '__mj'): string | undefined {
+  const sql = PG_CATALOG_VIEWS.get(viewName);
+  if (sql === undefined || coreSchema === '__mj') return sql;
+  return sql.replace(/\b__mj\./g, () => `${coreSchema}.`);
+}
 
 export class CatalogViewRule implements IConversionRule {
   Name = 'CatalogViewRule';

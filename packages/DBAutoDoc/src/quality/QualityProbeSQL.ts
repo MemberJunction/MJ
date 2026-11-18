@@ -11,7 +11,13 @@
  * Timeouts are not in this SQL. `BaseAutoDocDriver.ExecuteBounded` applies each engine's own bound.
  */
 
-import type { ColumnMeasure, RelationshipProbeSpec, TableQualityProbeColumn, TableQualityProbeSpec } from '../types/data-quality.js';
+import type {
+  ColumnMeasure,
+  RelationshipComparisonMode,
+  RelationshipProbeSpec,
+  TableQualityProbeColumn,
+  TableQualityProbeSpec,
+} from '../types/data-quality.js';
 
 export type QualityProvider = 'sqlserver' | 'postgresql' | 'mysql';
 
@@ -46,6 +52,10 @@ export interface QualityDialect {
   IsFutureDate(expression: string, days: number): string;
   /** The expression as text, for comparing two keys of different types. */
   AsText(expression: string): string;
+  /** The expression as a wide decimal/numeric, so `5.00` (`numeric(10,2)`) matches `5` (`int`) without overflow. */
+  AsNumeric(expression: string): string;
+  /** The expression as trimmed lower-case text, so GUIDs match regardless of upper/lower-case formatting. */
+  AsLowerTrimmedText(expression: string): string;
   /** Query hint appended to every probe statement (SQL Server: one core per probe), or ''. */
   Suffix(): string;
   /** The family a column's declared type belongs to on this engine. */
@@ -126,8 +136,9 @@ export const SQL_SERVER_QUALITY_DIALECT: QualityDialect = {
   CountAll: () => 'COUNT_BIG(*)',
   CountNonNull: (e) => `COUNT_BIG(${e})`,
   CountWhere: (c) => `COUNT_BIG(CASE WHEN ${c} THEN 1 END)`,
-  // A binary collation makes DISTINCT case-sensitive; the default collation folds case.
-  CountDistinctExact: (e) => `COUNT_BIG(DISTINCT CAST(${e} AS NVARCHAR(4000)) COLLATE Latin1_General_BIN2)`,
+  // A binary collation makes DISTINCT case-sensitive; appending a non-space sentinel keeps trailing
+  // spaces distinct too (T-SQL pads shorter strings with spaces before `=` / DISTINCT even under BIN2).
+  CountDistinctExact: (e) => `COUNT_BIG(DISTINCT CAST(CAST(${e} AS NVARCHAR(3999)) + N'|' AS NVARCHAR(4000)) COLLATE Latin1_General_BIN2)`,
   CountDistinctFolded: (e) => `COUNT_BIG(DISTINCT LOWER(LTRIM(RTRIM(CAST(${e} AS NVARCHAR(4000))))) COLLATE Latin1_General_BIN2)`,
   // LTRIM(RTRIM()) rather than TRIM(), which needs SQL Server 2017.
   Trim: (e) => `LTRIM(RTRIM(${e}))`,
@@ -143,6 +154,8 @@ export const SQL_SERVER_QUALITY_DIALECT: QualityDialect = {
   },
   IsFutureDate: (e, days) => `${e} > DATEADD(day, ${Math.floor(days)}, SYSDATETIME())`,
   AsText: (e) => `CAST(${e} AS NVARCHAR(4000))`,
+  AsNumeric: (e) => `CAST(${e} AS DECIMAL(38, 10))`,
+  AsLowerTrimmedText: (e) => `LOWER(LTRIM(RTRIM(CAST(${e} AS NVARCHAR(4000)))))`,
   Suffix: () => 'OPTION (MAXDOP 1)',
   TypeFamily: (dataType) => {
     const t = BaseTypeName(dataType);
@@ -173,6 +186,8 @@ export const POSTGRESQL_QUALITY_DIALECT: QualityDialect = {
   IsSentinelDate: (e) => `(NOT isfinite(${e}) OR ${e}::date IN (DATE '0001-01-01', DATE '1900-01-01', DATE '1970-01-01', DATE '9999-12-31'))`,
   IsFutureDate: (e, days) => `${e} > now() + interval '${Math.floor(days)} days'`,
   AsText: (e) => `${e}::text`,
+  AsNumeric: (e) => `${e}::numeric`,
+  AsLowerTrimmedText: (e) => `lower(btrim(${e}::text, ${PG_WHITESPACE}))`,
   Suffix: () => '',
   TypeFamily: (dataType) => {
     const t = BaseTypeName(dataType);
@@ -199,6 +214,8 @@ export const MYSQL_QUALITY_DIALECT: QualityDialect = {
   IsSentinelDate: (e) => `(CAST(${e} AS CHAR) LIKE '0000-00-00%' OR DATE(${e}) IN ('1000-01-01', '1970-01-01', '9999-12-31'))`,
   IsFutureDate: (e, days) => `${e} > NOW() + INTERVAL ${Math.floor(days)} DAY`,
   AsText: (e) => `CAST(${e} AS CHAR)`,
+  AsNumeric: (e) => `CAST(${e} AS DECIMAL(38, 10))`,
+  AsLowerTrimmedText: (e) => `LOWER(TRIM(CAST(${e} AS CHAR)))`,
   Suffix: () => '',
   TypeFamily: (dataType) => {
     const t = BaseTypeName(dataType);
@@ -310,16 +327,6 @@ export function BuildTableProbeStatement(spec: TableQualityProbeSpec, columns: T
   return { Sql: withSuffix(d, sql), Aliases: aliases };
 }
 
-/** Split a table spec into batches of at most `batchSize` columns, one statement each. */
-export function BuildTableProbeStatements(spec: TableQualityProbeSpec, d: QualityDialect, batchSize: number): ProbeStatement[] {
-  const size = Math.max(1, Math.floor(batchSize));
-  const statements: ProbeStatement[] = [];
-  for (let start = 0; start < spec.Columns.length; start += size) {
-    statements.push(BuildTableProbeStatement(spec, spec.Columns.slice(start, start + size), d, start));
-  }
-  return statements;
-}
-
 /** Exact duplicate rows: all rows minus distinct rows over the comparable columns. Two scans. */
 export function BuildDuplicateRowsStatement(spec: TableQualityProbeSpec, d: QualityDialect): ProbeStatement | undefined {
   const columns = spec.DuplicateRowColumns ?? [];
@@ -328,6 +335,19 @@ export function BuildDuplicateRowsStatement(spec: TableQualityProbeSpec, d: Qual
   const list = columns.map((c) => d.Quote(c)).join(', ');
   const sql = `SELECT\n  (SELECT ${d.CountAll()} FROM ${t}) - (SELECT ${d.CountAll()} FROM (SELECT DISTINCT ${list} FROM ${t}) distinct_rows) AS duplicate_rows`;
   return { Sql: withSuffix(d, sql), Aliases: [{ Alias: 'duplicate_rows', Measure: 'DuplicateRows' }] };
+}
+
+function formatComparisonSide(d: QualityDialect, expression: string, mode: RelationshipComparisonMode): string {
+  switch (mode) {
+    case 'numeric':
+      return d.AsNumeric(expression);
+    case 'caseInsensitiveText':
+      return d.AsLowerTrimmedText(expression);
+    case 'text':
+      return d.AsText(expression);
+    case 'direct':
+      return expression;
+  }
 }
 
 /**
@@ -341,15 +361,16 @@ export function BuildRelationshipProbeStatement(specs: RelationshipProbeSpec[], 
   specs.forEach((spec, i) => {
     const child = tableName(d, spec.Child.Schema, spec.Child.Table);
     const parent = tableName(d, spec.Parent.Schema, spec.Parent.Table);
-    const side = (alias: string, column: string) => (spec.CompareAsText ? d.AsText(`${alias}.${d.Quote(column)}`) : `${alias}.${d.Quote(column)}`);
+    const modeAt = (k: number): RelationshipComparisonMode => spec.ColumnComparisons?.[k] ?? (spec.CompareAsText ? 'text' : 'direct');
+    const side = (alias: string, column: string, k: number) => formatComparisonSide(d, `${alias}.${d.Quote(column)}`, modeAt(k));
     const checked = spec.Child.Columns.map((c) => `c.${d.Quote(c)} IS NOT NULL`).join(' AND ');
-    const match = spec.Child.Columns.map((c, k) => `${side('p', spec.Parent.Columns[k])} = ${side('c', c)}`).join(' AND ');
+    const match = spec.Child.Columns.map((c, k) => `${side('p', spec.Parent.Columns[k], k)} = ${side('c', c, k)}`).join(' AND ');
     select.push(`(SELECT ${d.CountAll()} FROM ${child} c WHERE ${checked}) AS r${i}_checked`);
     aliases.push({ Alias: `r${i}_checked`, Relationship: i, Measure: 'CheckedRows' });
     select.push(`(SELECT ${d.CountAll()} FROM ${child} c WHERE ${checked} AND NOT EXISTS (SELECT 1 FROM ${parent} p WHERE ${match})) AS r${i}_orphans`);
     aliases.push({ Alias: `r${i}_orphans`, Relationship: i, Measure: 'OrphanRows' });
     if (spec.CountUnreferencedParents) {
-      const referenced = spec.Child.Columns.map((c, k) => `${side('c', c)} = ${side('p', spec.Parent.Columns[k])}`).join(' AND ');
+      const referenced = spec.Child.Columns.map((c, k) => `${side('c', c, k)} = ${side('p', spec.Parent.Columns[k], k)}`).join(' AND ');
       select.push(`(SELECT ${d.CountAll()} FROM ${parent} p) AS r${i}_parents`);
       aliases.push({ Alias: `r${i}_parents`, Relationship: i, Measure: 'ParentRows' });
       select.push(`(SELECT ${d.CountAll()} FROM ${parent} p WHERE NOT EXISTS (SELECT 1 FROM ${child} c WHERE ${referenced})) AS r${i}_unreferenced`);
@@ -361,8 +382,8 @@ export function BuildRelationshipProbeStatement(specs: RelationshipProbeSpec[], 
 
 /**
  * The exact (case- and whitespace-sensitive) value distribution of one column, most frequent
- * first. Needed on SQL Server, whose default collation folds case in `GROUP BY`, so the sampled
- * distribution never shows the spellings a value list must fold.
+ * first. Needed on SQL Server, whose default collation folds case in `GROUP BY` and whose string
+ * comparison ignores trailing spaces unless `DATALENGTH` is grouped alongside the binary collation.
  */
 export function BuildExactDistributionStatement(schema: string, table: string, column: string, limit: number, d: QualityDialect): string {
   const q = d.Quote(column);
@@ -373,7 +394,7 @@ export function BuildExactDistributionStatement(schema: string, table: string, c
       const exact = `CAST(${q} AS NVARCHAR(4000)) COLLATE Latin1_General_BIN2`;
       return withSuffix(
         d,
-        `SELECT TOP ${n} ${exact} AS value, COUNT_BIG(*) AS frequency FROM ${t} WHERE ${q} IS NOT NULL GROUP BY ${exact} ORDER BY COUNT_BIG(*) DESC`,
+        `SELECT TOP ${n} ${exact} AS value, COUNT_BIG(*) AS frequency FROM ${t} WHERE ${q} IS NOT NULL GROUP BY ${exact}, DATALENGTH(${q}) ORDER BY COUNT_BIG(*) DESC`,
       );
     }
     case 'postgresql':

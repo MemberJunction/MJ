@@ -57,6 +57,9 @@ export interface ContentVectorTarget {
 const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
 /** SQL column types stored as JS numbers in vector metadata without an explicit StoreAs. */
 const NUMERIC_SQL_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint', 'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney']);
+/** Keys that identify a vector's record; a field's `MetadataKey` may not take them. */
+const RESERVED_METADATA_KEYS: ReadonlySet<string> = new Set(['Entity', 'RecordID', 'ContentItemID', 'Sequence']);
+
 /** Truncation limit when `VectorMetadata.DefaultTruncationLimit` is unset (the JSONType's documented default). */
 const DOCUMENTED_DEFAULT_TRUNCATION = 1000;
 
@@ -125,6 +128,10 @@ export class ContentVectorMetadataBuilder {
 
         if (!strategy) {
             this.AddCuratedMetadata(meta, item, metaCfg);
+            // Fields marked Included add to the curated set (for example Date, stored as ContentDate).
+            if (Object.values(metaCfg?.Fields ?? {}).some((f) => f?.Included === true)) {
+                this.AddStrategyDisplayFields(meta, item.GetAll() as Record<string, unknown>, contentItemEntity, { ...metaCfg, FieldStrategy: 'include' });
+            }
         } else {
             const all = item.GetAll() as Record<string, unknown>;
             this.AddEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
@@ -328,20 +335,40 @@ export class ContentVectorMetadataBuilder {
     ): void {
         const storeAs = metaCfg?.Fields?.[field.Name]?.StoreAs;
         const fieldType = field.Type?.toLowerCase() ?? '';
+        const key = this.MetadataKeyFor(field, metaCfg);
+        if (!key) {
+            return;
+        }
 
         if (storeAs === 'epochSeconds' || storeAs === 'epochMilliseconds') {
             const ms = new Date(String(value)).getTime();
-            if (!Number.isNaN(ms)) meta[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
+            if (!Number.isNaN(ms)) meta[key] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
         } else if (storeAs === 'number' || (storeAs == null && NUMERIC_SQL_TYPES.has(fieldType))) {
             const n = Number(value);
-            if (!Number.isNaN(n)) meta[field.Name] = n;
+            if (!Number.isNaN(n)) meta[key] = n;
         } else if (storeAs === 'boolean') {
-            meta[field.Name] = Boolean(value);
+            meta[key] = Boolean(value);
         } else if (fieldType === 'uniqueidentifier' && typeof value === 'string' && IsValidUUID(value)) {
-            meta[field.Name] = NormalizeUUID(value);
+            meta[key] = NormalizeUUID(value);
         } else {
-            meta[field.Name] = String(value).substring(0, this.ResolveMetadataTruncationLimit(field, metaCfg));
+            meta[key] = String(value).substring(0, this.ResolveMetadataTruncationLimit(field, metaCfg));
         }
+    }
+
+    /**
+     * The key a field is written under: its `MetadataKey` when set, else its name. A `MetadataKey` naming one of
+     * the identity keys is refused (logged, and the field left out): it would break attribution of the vector.
+     */
+    protected MetadataKeyFor(field: EntityFieldInfo, metaCfg: VectorMetadataConfig | undefined): string | null {
+        const mapped = metaCfg?.Fields?.[field.Name]?.MetadataKey?.trim();
+        if (!mapped) {
+            return field.Name;
+        }
+        if (RESERVED_METADATA_KEYS.has(mapped)) {
+            LogError(`[ContentVectorMetadata] Field "${field.Name}" cannot be written as "${mapped}": that key identifies the vector's record. Leaving it out.`);
+            return null;
+        }
+        return mapped;
     }
 
     /** Per-field truncation: explicit override → field MaxLength (if small) → configured default. */

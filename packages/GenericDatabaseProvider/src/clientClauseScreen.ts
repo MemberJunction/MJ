@@ -1,4 +1,4 @@
-import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
+import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, IsPostRunViewProtectedEntity, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
 import {
     FindForbiddenFunctionCalls,
     IsKeyword,
@@ -395,6 +395,11 @@ export class ClientClauseScreen {
      * does. For any other entity, a granted read covers every row and field of its base view.
      */
     public static AssertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+        if (IsPostRunViewProtectedEntity(entity.Name)) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' enforces row-level access via server RunView hooks — SQL that reads its base view directly cannot apply those hooks; read that entity with RunView`,
+            );
+        }
         if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
             throw new Error(
                 `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — SQL that reads its base view directly cannot apply that filter; read that entity with RunView`,

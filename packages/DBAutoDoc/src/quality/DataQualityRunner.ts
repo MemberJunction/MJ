@@ -38,8 +38,10 @@ const EXACT_DISTRIBUTION_LIMIT = 200;
 export interface DataQualityRunnerOptions {
   Driver: BaseAutoDocDriver;
   OnProgress?: (message: string, data?: Record<string, unknown>) => void;
-  /** `--skip-data-quality`: take no new measurements and derive no findings. */
+  /** `--skip-data-quality`: take no new measurements and derive no new report for this run. */
   SkipRequested?: boolean;
+  /** `--pruning-only`: take no new SQL measurements, but keep stored measurements active for pruning and re-derivation. */
+  SkipProbes?: boolean;
   /** Saves state; called at checkpoints. */
   Save?: () => Promise<void>;
   /** The clock, for FutureDate. Defaults to now. */
@@ -49,6 +51,10 @@ export interface DataQualityRunnerOptions {
 export class DataQualityRunner {
   private readonly config: ResolvedDataQualityConfig;
   private readonly options: DataQualityRunnerOptions;
+  private cachedState?: DatabaseDocumentation;
+  private cachedStamp?: string;
+  private cachedContext?: RuleContext;
+  private cachedTableFindings = new Map<string, DataQualityFinding[]>();
 
   constructor(config: DataQualityConfig | undefined, options: DataQualityRunnerOptions) {
     this.config = ResolveDataQualityConfig(config);
@@ -68,6 +74,7 @@ export class DataQualityRunner {
 
   /** Correct row counts, probe tables and the relationships known so far. */
   public async RunMeasurementPass(state: DatabaseDocumentation): Promise<void> {
+    this.invalidateCache();
     if (!this.config.Enabled || this.options.SkipRequested) {
       if (!state.phases.dataQuality) {
         state.phases.dataQuality = this.newPhase(state, 'skipped');
@@ -80,6 +87,10 @@ export class DataQualityRunner {
     const existing = state.phases.dataQuality;
     if (existing?.Status === 'skipped') {
       this.progress('Data quality: skipped by the run that produced this state');
+      return;
+    }
+    if (this.options.SkipProbes) {
+      this.progress('Data quality: keeping stored measurements (pruning-only)');
       return;
     }
 
@@ -138,36 +149,89 @@ export class DataQualityRunner {
 
   /** Probe relationships added since the measurement pass (keys the model proposed). */
   public async RunRelationshipPass(state: DatabaseDocumentation): Promise<void> {
+    this.invalidateCache();
     const phase = state.phases.dataQuality;
-    if (!this.IsActive(state) || !phase || !this.config.Probes) return;
+    if (!this.IsActive(state) || !phase || !this.config.Probes || this.options.SkipProbes) return;
     const started = Date.now();
     const before = phase.RelationshipsProbed + phase.RelationshipsFailed;
     await this.probeRelationships(this.context(state), phase, Number.POSITIVE_INFINITY);
     phase.ProbeDurationMs += Date.now() - started;
     this.updateCounts(phase);
+    this.invalidateCache();
     const added = phase.RelationshipsProbed + phase.RelationshipsFailed - before;
     if (added > 0) this.progress('Data quality: probed relationships proposed during descriptions', { relationships: added });
   }
 
   /** Derive the findings from the current state and store them. Returns them. */
   public DeriveAndStore(state: DatabaseDocumentation): DataQualityFinding[] {
+    this.invalidateCache();
     const phase = state.phases.dataQuality;
-    if (!this.IsActive(state) || !phase) return state.dataQuality ?? [];
+    if (!phase || phase.Status === 'skipped' || !this.config.Enabled) return state.dataQuality ?? [];
+    if (!this.IsActive(state) && state.dataQuality === undefined) return [];
     const findings = DeriveFindings(this.context(state));
     state.dataQuality = findings;
     phase.FindingsDerivedAt = new Date().toISOString();
     phase.FindingCounts = CountBySeverity(findings);
-    this.progress('Data quality findings', { findings: findings.length, ...phase.FindingCounts });
+    if (this.IsActive(state)) {
+      this.progress('Data quality findings', { findings: findings.length, ...phase.FindingCounts });
+    }
     return findings;
   }
 
   /** Findings for one table, from the current state, for the description prompt. Empty when the phase is off. */
   public TableFindings(state: DatabaseDocumentation, schemaName: string, table: TableDefinition): DataQualityFinding[] {
     if (!this.IsActive(state) || !state.phases.dataQuality) return [];
-    return DeriveTableFindings(this.context(state), schemaName, table);
+    return this.cachedFindingsForTable(state, schemaName, table);
+  }
+
+  /** Findings for one table from stored measurements, used by FK pruning even when new probes were skipped. */
+  public PruningTableFindings(state: DatabaseDocumentation, schemaName: string, table: TableDefinition): DataQualityFinding[] {
+    const phase = state.phases.dataQuality;
+    if (!this.config.Enabled || !phase || phase.Status === 'skipped') return [];
+    return this.cachedFindingsForTable(state, schemaName, table);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+
+  private invalidateCache(): void {
+    this.cachedState = undefined;
+    this.cachedStamp = undefined;
+    this.cachedContext = undefined;
+    this.cachedTableFindings.clear();
+  }
+
+  private stateStamp(state: DatabaseDocumentation): string {
+    let edges = 0;
+    let pkCount = 0;
+    for (const s of state.schemas) {
+      for (const t of s.tables) {
+        edges += t.dependsOn.length;
+        for (const c of t.columns) if (c.isPrimaryKey) pkCount++;
+      }
+    }
+    const fks = state.phases.keyDetection?.discovered?.foreignKeys ?? [];
+    let rejected = 0;
+    for (const fk of fks) if (fk.status === 'rejected') rejected++;
+    const relProbes = Object.keys(state.phases.dataQuality?.RelationshipProbes ?? {}).length;
+    const tblProbes = Object.keys(state.phases.dataQuality?.TableProbes ?? {}).length;
+    return `${edges}:${pkCount}:${fks.length}:${rejected}:${tblProbes}:${relProbes}`;
+  }
+
+  private cachedFindingsForTable(state: DatabaseDocumentation, schemaName: string, table: TableDefinition): DataQualityFinding[] {
+    const stamp = this.stateStamp(state);
+    if (this.cachedState !== state || this.cachedStamp !== stamp || !this.cachedContext) {
+      this.cachedState = state;
+      this.cachedStamp = stamp;
+      this.cachedContext = this.context(state);
+      this.cachedTableFindings.clear();
+    }
+    const key = `${schemaName}.${table.name}`;
+    const hit = this.cachedTableFindings.get(key);
+    if (hit) return hit;
+    const derived = DeriveTableFindings(this.cachedContext, schemaName, table);
+    this.cachedTableFindings.set(key, derived);
+    return derived;
+  }
 
   private context(state: DatabaseDocumentation): RuleContext {
     return CreateRuleContext(state, this.config, this.options.Now?.() ?? new Date());

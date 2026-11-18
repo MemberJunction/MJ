@@ -53,6 +53,8 @@ export interface DataQualityThresholds {
     orphanWarningPercent?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
     /** LengthAtCapacity only for declared character lengths at or above this. Default 8. */
     lengthAtCapacityMinDeclared?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** LengthAtCapacity when probed: minimum rows at full declared length before reporting truncation. Default 5. */
+    lengthAtCapacityMinRows?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
     /** StaleRowCountEstimate when |estimate - exact| / exact is at least this. Default 0.1. */
     rowCountDriftRatio?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
 }
