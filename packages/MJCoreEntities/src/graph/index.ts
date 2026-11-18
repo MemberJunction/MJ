@@ -2,6 +2,7 @@ export * from './BaseGraphEdgeProvider';
 export * from './GraphExpansion';
 export * from './GraphEngine';
 export * from './GraphAccessPolicy';
+export * from './RecordRelations';
 export * from './policies/ProvenanceAccessPolicies';
 export * from './providers/ForeignKeyEdgeProvider';
 export * from './providers/JoinEntityEdgeProvider';

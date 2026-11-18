@@ -10,6 +10,7 @@ import {
     type GraphNodeRef,
     type GraphProviderContext,
 } from '../BaseGraphEdgeProvider';
+import { GRAPH_SHARES_CONCEPT_EDGE_TYPE } from '../RecordRelations';
 
 /** Configuration for {@link SharedConceptEdgeProvider}. */
 export interface SharedConceptEdgeProviderConfig {
@@ -23,7 +24,6 @@ export interface SharedConceptEdgeProviderConfig {
     MaxRowsPerStep?: number;
 }
 
-const DEFAULT_EDGE_TYPE = 'SharesConceptWith';
 const SOURCED_FROM = 'SourcedFrom';
 
 type RecordDocRow = { ID: string; EntityID: string; RecordID: string };
@@ -73,7 +73,7 @@ export class SharedConceptEdgeProvider extends BaseGraphEdgeProvider<SharedConce
         ctx: GraphProviderContext<SharedConceptEdgeProviderConfig>,
     ): Promise<GraphEdgeView[]> {
         const config = ctx.Config ?? {};
-        const edgeType = config.EdgeType?.trim() || DEFAULT_EDGE_TYPE;
+        const edgeType = config.EdgeType?.trim() || GRAPH_SHARES_CONCEPT_EDGE_TYPE;
         if (request.Nodes.length === 0 || !MatchesEdgeTypeFilter(edgeType, request.EdgeTypes)) {
             return [];
         }
