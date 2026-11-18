@@ -21,7 +21,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ExcludeByUUIDs, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
     MJActionFilterEntity,
@@ -404,8 +404,9 @@ export class WorkflowSpecSync {
             context.ContextUser,
         );
         if (!result.Success) throw new Error(`could not read the binding's invocations: ${result.ErrorMessage}`);
+        const keep = new UUIDSet(keepInvocationTypeIDs);
         for (const invocation of result.Results ?? []) {
-            if (keepInvocationTypeIDs.some((id) => UUIDsEqual(id, invocation.InvocationTypeID))) continue;
+            if (keep.Has(invocation.InvocationTypeID)) continue;
             invocation.Status = 'Disabled';
             if (!(await invocation.Save())) {
                 throw new Error(`could not disable a removed invocation: ${invocation.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -436,10 +437,11 @@ export class WorkflowSpecSync {
             context.ContextUser,
         );
         if (!params.Success) throw new Error(`could not read the workflow's bindings: ${params.ErrorMessage}`);
-        const ownedIDs = (params.Results ?? [])
-            .filter((p) => p.Value != null && UUIDsEqual(p.Value, agentID))
-            .map((p) => p.EntityActionID)
-            .filter((id) => !keepBindingIDs.some((k) => UUIDsEqual(k, id)));
+        const ownedIDs = ExcludeByUUIDs(
+            (params.Results ?? []).filter((p) => p.Value != null && UUIDsEqual(p.Value, agentID)).map((p) => p.EntityActionID),
+            keepBindingIDs,
+            (id) => id,
+        );
         if (ownedIDs.length === 0) return;
 
         const bindings = await rv.RunView<MJEntityActionEntity>(

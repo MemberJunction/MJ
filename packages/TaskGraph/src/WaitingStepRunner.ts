@@ -17,7 +17,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { ResolveHumanTaskProvider, type HumanTaskRaiseResult } from './HumanTaskProvider';
@@ -229,8 +229,9 @@ export class WaitingStepRunner {
     /** Fails the graph's overdue External / provider-Human steps, and tells providers to withdraw. */
     private async expire(provider: IMetadataProvider, parentTaskID: string, waiting: readonly MJTaskEntity[]): Promise<number> {
         const expiredIDs = await this.claims.ExpireWaitingSteps(provider, parentTaskID, WAITING_STEP_MARKER, this.contextUser());
+        const byID = IndexByUUID(waiting);
         for (const id of expiredIDs) {
-            const task = waiting.find((t) => UUIDsEqual(t.ID, id));
+            const task = byID.Get(id);
             if (!task || WaitingStepKindOf(task) !== 'ProviderHuman') continue;
             await this.withdraw(task, provider);
         }
