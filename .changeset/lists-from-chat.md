@@ -9,6 +9,8 @@
 "@memberjunction/ng-list-management": minor
 "@memberjunction/testing-integration": minor
 "@memberjunction/integration-test-suite": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
 ---
 
 Lists made in a conversation now keep themselves current.
