@@ -25402,6 +25402,16 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Origin: z.union([z.literal('Declared'), z.literal('Inferred')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+        * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph

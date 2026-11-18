@@ -1733,6 +1733,17 @@
           "primaryKey": {
             "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - MJ Docs in the Semantic Graph",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AA08B116-DF0B-4FE8-9D7E-E4C1461639CC"
+          }
         }
       ]
     },

@@ -47904,6 +47904,32 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
      */
     GraphOverlay?: MJContentSourceEntity_IContentSourceGraphOverlayConfig;
+    /**
+     * Optional artifact indexing for a push-only (`Upload`) source. When set, the Content Pipeline's
+     * `ArtifactGraphIndexer` pushes the latest version of every artifact of these types into this
+     * source as it is saved, one Content Item per artifact, linked to the `MJ: Artifacts` record
+     * so graph access follows the artifact's own permissions. Combine with `GraphOverlay` to put
+     * the documents into a graph.
+     */
+    Artifacts?: MJContentSourceEntity_IContentSourceArtifactsConfiguration;
+}
+
+/**
+ * Which artifacts a push-only source indexes, and how eagerly.
+ */
+export interface MJContentSourceEntity_IContentSourceArtifactsConfiguration {
+    /** `MJ: Artifact Types` names whose versions are indexed, e.g. `["Markdown Document"]`. Matched case-insensitively. */
+    ArtifactTypes?: string[];
+    /**
+     * Quiet period after the last save of an artifact before it is indexed, in milliseconds.
+     * Collaborative editing saves often; indexing waits for the edits to settle. Default 10000.
+     */
+    DebounceMs?: number;
+    /**
+     * When false, the source is skipped by the indexer while keeping what it already indexed.
+     * Default true.
+     */
+    Enabled?: boolean;
 }
 
 /**
@@ -73892,6 +73918,24 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+    * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.
+    */
+    get Origin(): 'Declared' | 'Inferred' {
+        return this.Get('Origin');
+    }
+    set Origin(value: 'Declared' | 'Inferred') {
+        this.Set('Origin', value);
     }
 
     /**

@@ -297,6 +297,9 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             entity.NewRecord();
             entity.GraphID = graphID;
             entity.Status = status;
+            // Synthesized from document chunks: the provenance access policy keeps it behind its
+            // sources even after they are retracted (an authored concept stays 'Declared').
+            entity.Origin = 'Inferred';
         }
 
         const conceptTypeID = await this.resolveConceptTypeID(concept, contextUser, provider);

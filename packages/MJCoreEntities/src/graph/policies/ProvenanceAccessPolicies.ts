@@ -46,7 +46,7 @@ type WithID = { ID: string };
 type ChunkRow = WithID & Pick<MJContentItemChunkEntityType, 'ContentItemID'>;
 type ItemRow = WithID & Pick<MJContentItemEntityType, 'EntityRecordDocumentID'>;
 type RecordDocRow = WithID & Pick<MJEntityRecordDocumentEntityType, 'EntityID' | 'RecordID'>;
-type ConceptRow = WithID & Pick<MJGraphConceptEntityType, 'GraphID' | 'Status'>;
+type ConceptRow = WithID & Pick<MJGraphConceptEntityType, 'GraphID' | 'Status' | 'Origin'>;
 type SourcedFromRow = WithID & Pick<MJGraphEdgeEntityType, 'SourceRecordID' | 'TargetEntityID' | 'TargetRecordID'>;
 
 /**
@@ -135,9 +135,15 @@ export class ContentChunkProvenancePolicy extends BaseGraphNodeAccessPolicy {
 }
 
 /**
- * A concept is visible when it is `Approved` in a Canon graph (a steward approving it publishes it),
- * when it has no recorded sources (it was authored, not synthesized), or when the viewer can see at
- * least one of the chunks it was synthesized from.
+ * A concept synthesized from documents can quote any of them: its name, description and
+ * specification are built from their chunks. So:
+ * - `Approved` in a Canon graph: visible (a steward approving it publishes it);
+ * - `Declared` (authored, not synthesized) with no recorded sources: visible;
+ * - `Inferred` with no recorded sources left (its documents were removed or re-indexed): hidden,
+ *   because what it says came from documents this viewer can no longer be checked against;
+ * - every source chunk visible to the viewer: visible;
+ * - some visible: redacted (the node stays, with a neutral label and no text);
+ * - none visible: hidden.
  */
 @RegisterClass(BaseGraphNodeAccessPolicy, GRAPH_CONCEPTS_ENTITY)
 export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
@@ -147,7 +153,7 @@ export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
     ): Promise<Map<string, GraphNodeAccessDecision>> {
         const ids = nodes.map((n) => n.Ref.RecordID);
         const [concepts, sources] = await Promise.all([
-            readRows<ConceptRow>(ctx, GRAPH_CONCEPTS_ENTITY, ['ID', 'GraphID', 'Status'], idFilter(ids)),
+            readRows<ConceptRow>(ctx, GRAPH_CONCEPTS_ENTITY, ['ID', 'GraphID', 'Status', 'Origin'], idFilter(ids)),
             this.readSourceChunks(ids, ctx),
         ]);
         if (!concepts || !sources) {
@@ -177,9 +183,13 @@ export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
             return 'Visible';
         }
         if (chunkRefs.length === 0) {
+            return concept.Origin === 'Inferred' ? 'Hidden' : 'Visible';
+        }
+        const seen = chunkRefs.filter((ref) => visibleChunks.has(ctx.NodeKey(ref))).length;
+        if (seen === chunkRefs.length) {
             return 'Visible';
         }
-        return chunkRefs.some((ref) => visibleChunks.has(ctx.NodeKey(ref))) ? 'Visible' : 'Hidden';
+        return seen > 0 ? 'Redacted' : 'Hidden';
     }
 
     /** Chunks each concept was synthesized from, keyed by concept ID; `null` on a failed read. */

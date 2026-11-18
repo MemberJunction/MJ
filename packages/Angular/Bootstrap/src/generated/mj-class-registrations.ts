@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (500 classes)
+// @memberjunction/core-entities (504 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -47,12 +47,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -538,6 +541,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -947,12 +951,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -1122,13 +1129,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentSourceTypeParamEntity,
     MJContentTypeAttributeEntity,
     MJContentTypeEntity,
-    MJConversationArtifactEntity,
-    MJConversationArtifactPermissionEntity,
-    MJConversationArtifactVersionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJConversationArtifactEntity,
+    MJConversationArtifactPermissionEntity,
+    MJConversationArtifactVersionEntity,
     MJConversationBranchEntity,
     MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
@@ -1326,13 +1333,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
-    MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
-    MJRecordProcessWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -1446,6 +1453,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -1529,14 +1537,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
-    AIPromptCategoryHierarchyPanel,
-    ActionCategoryHierarchyPanel,
-    BrandKitAssetsPanelComponent,
-    BrandKitGenerationPolicyPanelComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1733,14 +1741,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    LibraryResource,
-    ListDetailResource,
-    OmnibarAgentProvider,
-    OmnibarCommandProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    LibraryResource,
+    ListDetailResource,
+    OmnibarAgentProvider,
+    OmnibarCommandProvider,
     OmnibarRecordProvider,
     OmnibarSearchProvider,
     QueryResource,
@@ -1761,7 +1769,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 805;
+export const CLASS_REGISTRATIONS_COUNT = 809;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

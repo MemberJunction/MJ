@@ -199,6 +199,32 @@ export interface IContentSourceConfiguration {
      * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
      */
     GraphOverlay?: IContentSourceGraphOverlayConfig;
+    /**
+     * Optional artifact indexing for a push-only (`Upload`) source. When set, the Content Pipeline's
+     * `ArtifactGraphIndexer` pushes the latest version of every artifact of these types into this
+     * source as it is saved, one Content Item per artifact, linked to the `MJ: Artifacts` record
+     * so graph access follows the artifact's own permissions. Combine with `GraphOverlay` to put
+     * the documents into a graph.
+     */
+    Artifacts?: IContentSourceArtifactsConfiguration;
+}
+
+/**
+ * Which artifacts a push-only source indexes, and how eagerly.
+ */
+export interface IContentSourceArtifactsConfiguration {
+    /** `MJ: Artifact Types` names whose versions are indexed, e.g. `["Markdown Document"]`. Matched case-insensitively. */
+    ArtifactTypes?: string[];
+    /**
+     * Quiet period after the last save of an artifact before it is indexed, in milliseconds.
+     * Collaborative editing saves often; indexing waits for the edits to settle. Default 10000.
+     */
+    DebounceMs?: number;
+    /**
+     * When false, the source is skipped by the indexer while keeping what it already indexed.
+     * Default true.
+     */
+    Enabled?: boolean;
 }
 
 /**

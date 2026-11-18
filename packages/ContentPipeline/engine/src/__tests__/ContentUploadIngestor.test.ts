@@ -42,6 +42,8 @@ interface SavedContentItem {
     SegmentationStatus: string;
     EmbeddingStatus: string;
     DeleteStatus: string | null;
+    Text?: string | null;
+    Checksum?: string | null;
 }
 
 interface SavedERD {
@@ -392,6 +394,18 @@ function createFakeEnvironment() {
                     },
                     set DeleteStatus(v: string | null) {
                         record.DeleteStatus = v;
+                    },
+                    get Text() {
+                        return record.Text ?? null;
+                    },
+                    set Text(v: string | null) {
+                        record.Text = v;
+                    },
+                    get Checksum() {
+                        return record.Checksum ?? null;
+                    },
+                    set Checksum(v: string | null) {
+                        record.Checksum = v;
                     },
                     NewRecord: () => {
                         itemSeq += 1;
@@ -1661,6 +1675,90 @@ describe('ContentUploadIngestor', () => {
         const root = items.find((i) => i.ID === 'ITEM-UPLOAD-1');
         expect(root?.FileID).toBe('FILE-600');
         expect(root?.DeleteStatus).toBeNull();
+    });
+
+    describe('IngestText / RemoveText (record text, one Content Item per record)', () => {
+        const origin = { EntityName: 'MJ: Collaboration Space Items', RecordID: 'SPACE-ITEM-7' };
+
+        it('creates an already-extracted item at a record:// URL linked to the record, and is a no-op for identical text', async () => {
+            const env = createFakeEnvironment();
+            const first = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Pricing policy', Text: '# Pricing\nAll prices are net.',
+                ContextUser: env.contextUser, Provider: env.provider,
+            });
+            expect(first.Unchanged).toBe(false);
+            expect(first.ReplacedContentItemID).toBeNull();
+            expect(env.items).toHaveLength(1);
+            const item = env.items[0];
+            expect(item.URL).toBe('record://MJ%3A%20Collaboration%20Space%20Items/SPACE-ITEM-7');
+            expect(item.Text).toBe('# Pricing\nAll prices are net.');
+            expect(item.Checksum).toMatch(/^[0-9a-f]{64}$/);
+            expect(item.ExtractionStatus).toBe('Complete');
+            expect(item.SegmentationStatus).toBe('Pending');
+            expect(item.FileID).toBeNull();
+            expect(item.EntityRecordDocumentID).toBe(first.EntityRecordDocumentID);
+            expect(env.erds).toHaveLength(1);
+            expect(env.erds[0].RecordID).toBe('SPACE-ITEM-7');
+
+            const again = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Pricing policy', Text: '# Pricing\nAll prices are net.',
+                ContextUser: env.contextUser, Provider: env.provider,
+            });
+            expect(again).toMatchObject({ Unchanged: true, ContentItemID: first.ContentItemID, ReplacedContentItemID: null });
+            expect(env.items).toHaveLength(1);
+            expect(env.erds).toHaveLength(1);
+        });
+
+        it('replaces the earlier item when the text changes, removing it with its chunks', async () => {
+            const env = createFakeEnvironment();
+            const removeSpy = vi.spyOn(ContentUploadIngestor.prototype, 'Remove').mockResolvedValue({ ContentItemIDs: [], DependentsMarked: 0 });
+            const first = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Doc', Text: 'version one', ContextUser: env.contextUser, Provider: env.provider,
+            });
+            const second = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Doc', Text: 'version two', ContextUser: env.contextUser, Provider: env.provider,
+            });
+            expect(second.Unchanged).toBe(false);
+            expect(second.ReplacedContentItemID).toBe(first.ContentItemID);
+            expect(second.ContentItemID).not.toBe(first.ContentItemID);
+            expect(removeSpy).toHaveBeenCalledWith(expect.objectContaining({ ContentItemID: first.ContentItemID, RunNow: true }));
+            expect(second.EntityRecordDocumentID).toBe(first.EntityRecordDocumentID);
+        });
+
+        it('refuses a source whose driver is not push-only, and a missing ContextUser', async () => {
+            const env = createFakeEnvironment();
+            await expect(
+                ContentUploadIngestor.IngestText({ ContentSourceID: 'SRC-RSS-1', Origin: origin, Name: 'x', Text: 'x', ContextUser: env.contextUser, Provider: env.provider }),
+            ).rejects.toThrow(/not push-only/);
+            await expect(
+                new ContentUploadIngestor(env.provider, undefined).IngestText({ ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'x', Text: 'x', ContextUser: undefined as never }),
+            ).rejects.toThrow(/ContextUser/);
+            expect(env.items).toHaveLength(0);
+        });
+
+        it('Remove accepts a record:// item (not only upload://) and marks it for deletion', async () => {
+            const env = createFakeEnvironment();
+            const pushed = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Doc', Text: 'text', ContextUser: env.contextUser, Provider: env.provider,
+            });
+            const removed = await ContentUploadIngestor.RemoveText({ ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, ContextUser: env.contextUser, Provider: env.provider });
+            expect(removed?.ContentItemIDs).toEqual([pushed.ContentItemID]);
+            expect(env.items.find((i) => i.ID === pushed.ContentItemID)?.DeleteStatus).toBe('Pending');
+        });
+
+        it('RemoveText removes the record\'s item, and returns null when the record has nothing indexed', async () => {
+            const env = createFakeEnvironment();
+            const removeSpy = vi.spyOn(ContentUploadIngestor.prototype, 'Remove').mockResolvedValue({ ContentItemIDs: ['x'], DependentsMarked: 2 });
+            expect(await ContentUploadIngestor.RemoveText({ ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, ContextUser: env.contextUser, Provider: env.provider })).toBeNull();
+            expect(removeSpy).not.toHaveBeenCalled();
+
+            const pushed = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Doc', Text: 'text', ContextUser: env.contextUser, Provider: env.provider,
+            });
+            const removed = await ContentUploadIngestor.RemoveText({ ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, RunNow: true, ContextUser: env.contextUser, Provider: env.provider });
+            expect(removed).toEqual({ ContentItemIDs: ['x'], DependentsMarked: 2 });
+            expect(removeSpy).toHaveBeenCalledWith(expect.objectContaining({ ContentItemID: pushed.ContentItemID, RunNow: true }));
+        });
     });
 
     it('Sync and Discover over an Upload source return Skipped, mark zero existing uploaded items for deletion, and stamp LastDiscoveredAt / LastSyncedAt', async () => {

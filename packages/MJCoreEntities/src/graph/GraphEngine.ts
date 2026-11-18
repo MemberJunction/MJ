@@ -70,6 +70,15 @@ export const GRAPH_MAX_STORED_EDGES_PER_STEP = 1000;
  */
 export const GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION = 'ContentPipeline.GraphStage.ApproveInferredEdges';
 /**
+ * Server operation key under which the Content Pipeline retracts the evidence of a chunk it is
+ * deleting: the `Inferred` edges that have that chunk as an endpoint. Deleting an `Approved` edge is
+ * otherwise a review decision that needs `Graph: Approve Edges`, but an edge whose evidence is gone
+ * is not one a person decided to keep, so `MJGraphEdgeEntityServer` allows deleting an `Inferred`
+ * edge inside this scope. A `Declared` edge is never covered. Like the approval scope, no API caller
+ * can enter it.
+ */
+export const GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION = 'ContentPipeline.Delete.RetractInferredEdges';
+/**
  * How deeply access policies may nest (a concept's visibility following its chunks', a chunk's
  * following its document's). Past this depth every node is hidden, so a cycle cannot recurse forever.
  */

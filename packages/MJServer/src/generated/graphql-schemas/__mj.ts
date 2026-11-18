@@ -63562,6 +63562,10 @@ export class MJGraphConcept_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph."}) 
+    @MaxLength(20)
+    Origin?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Graph?: string;
@@ -63618,6 +63622,9 @@ export class CreateMJGraphConceptInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Origin?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -63657,6 +63664,9 @@ export class UpdateMJGraphConceptInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Origin?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

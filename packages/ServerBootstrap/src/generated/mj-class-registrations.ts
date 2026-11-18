@@ -247,7 +247,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (500 classes)
+// @memberjunction/core-entities (504 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -258,12 +258,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -749,6 +752,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -2022,12 +2026,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -2134,13 +2141,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveConfigurationEntityEntity,
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
-    MJArtifactEntity,
-    MJArtifactGuestShareLinkEntity,
-    MJArtifactPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
+    MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
@@ -2338,13 +2345,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMCPServerEntity,
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
-    MJMCPToolFavoriteEntity,
-    MJMLAlgorithmEntity,
-    MJMLAlgorithmUseCaseEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMCPToolFavoriteEntity,
+    MJMLAlgorithmEntity,
+    MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
@@ -2521,6 +2528,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     LiveKitBridge,
@@ -2541,14 +2549,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PerHundredThousandTokensPriceUnitType,
     PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
-    PerThousandTokensPriceUnitType,
-    TimePerHourPriceUnitType,
-    TimePerMinutePriceUnitType,
-    RexRecommendationsProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
+    RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
     LoopbackBridge,
     OpenAISipBridge,
@@ -2745,14 +2753,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EventLoopLagProbe,
     HealthLiveCrudVerificationOperation,
     HealthObservatoryMinuteSeriesOperation,
-    HealthOtelStatusOperation,
-    HealthPreviewSharePackageOperation,
-    HealthRecentRingBufferEventsOperation,
-    HealthRunCheckOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    HealthOtelStatusOperation,
+    HealthPreviewSharePackageOperation,
+    HealthRecentRingBufferEventsOperation,
+    HealthRunCheckOperation,
     HealthTelemetryAggregatesOperation,
     LiveEntityCrudProbe,
     MetadataCacheParityProbe,
@@ -2949,14 +2957,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
-    TaskGraphForceCompleteTaskServerOperation,
-    TaskGraphGetStatusServerOperation,
-    TaskGraphOverrideEdgeServerOperation,
-    TaskGraphPauseServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TaskGraphForceCompleteTaskServerOperation,
+    TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSetBreakpointsServerOperation,
@@ -3153,14 +3161,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     Create_Conversation_Record_Action,
     DataMapperAction,
     DelayAction,
-    DeleteDirectoryAction,
-    DeleteObjectAction,
-    DeleteRecordAction,
-    DirectoryExistsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DeleteDirectoryAction,
+    DeleteObjectAction,
+    DeleteRecordAction,
+    DirectoryExistsAction,
     DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
@@ -3367,7 +3375,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1389;
+export const CLASS_REGISTRATIONS_COUNT = 1393;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

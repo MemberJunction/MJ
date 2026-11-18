@@ -50,6 +50,7 @@ const P = {
     ConceptMixed: 'c3000000-0000-4000-8000-000000000002',
     ConceptCanonPrivate: 'c3000000-0000-4000-8000-000000000003',
     ConceptAuthored: 'c3000000-0000-4000-8000-000000000004',
+    ConceptOrphaned: 'c3000000-0000-4000-8000-0000000000aa',
     ConceptProposedCanonPrivate: 'c3000000-0000-4000-8000-000000000005',
 } as const;
 
@@ -74,8 +75,14 @@ function sourcedFrom(conceptId: string, graphId: string, chunkId: string): FakeR
     );
 }
 
-function concept(id: string, graphId: string, status: 'Approved' | 'Proposed', name: string): FakeRow {
-    return { ID: id, GraphID: graphId, Graph: '', Name: name, Description: `${name} description`, ConceptType: 'Term', Status: status };
+function concept(
+    id: string,
+    graphId: string,
+    status: 'Approved' | 'Proposed',
+    name: string,
+    origin: 'Declared' | 'Inferred' = 'Inferred',
+): FakeRow {
+    return { ID: id, GraphID: graphId, Graph: '', Name: name, Description: `${name} description`, ConceptType: 'Term', Status: status, Origin: origin };
 }
 
 function provenanceRows(): Record<string, FakeRow[]> {
@@ -93,7 +100,8 @@ function provenanceRows(): Record<string, FakeRow[]> {
             concept(P.ConceptMixed, P.GraphKnowledge, 'Approved', 'Shared Pricing'),
             concept(P.ConceptCanonPrivate, IDS.GraphCanon, 'Approved', 'Approved Canon Policy'),
             concept(P.ConceptProposedCanonPrivate, IDS.GraphCanon, 'Proposed', 'Proposed Canon Policy'),
-            concept(P.ConceptAuthored, P.GraphKnowledge, 'Approved', 'Authored Concept'),
+            concept(P.ConceptAuthored, P.GraphKnowledge, 'Approved', 'Authored Concept', 'Declared'),
+            concept(P.ConceptOrphaned, P.GraphKnowledge, 'Approved', 'Orphaned Concept', 'Inferred'),
         ],
         'MJ: Graph Edges': [
             sourcedFrom(P.ConceptPrivate, P.GraphKnowledge, P.ChunkPrivate),
@@ -290,9 +298,15 @@ describe('Graph access policies', () => {
             expect(await visibleRecordIds(engine, [conceptRef(P.ConceptPrivate)], executive)).toEqual([P.ConceptPrivate]);
         });
 
-        it('shows a concept when at least one of its sources is visible', async () => {
+        it('redacts a concept when only some of its sources are visible, since its text can quote any of them', async () => {
             const { engine } = await engineWith(provenanceRows());
-            expect(await visibleRecordIds(engine, [conceptRef(P.ConceptMixed)], analyst)).toEqual([P.ConceptMixed]);
+            const visible = Array.from((await engine.FilterNodesForUser([conceptRef(P.ConceptMixed)], analyst)).values());
+            expect(visible.map((v) => v.RecordID)).toEqual([P.ConceptMixed]);
+            expect(visible[0].Label).not.toBe('Shared Pricing');
+            expect(visible[0].Description).toBeNull();
+
+            const forExecutive = Array.from((await engine.FilterNodesForUser([conceptRef(P.ConceptMixed)], executive)).values());
+            expect(forExecutive[0].Label).toBe('Shared Pricing');
         });
 
         it('shows an Approved Canon concept even when every source is private, but not a Proposed one', async () => {
@@ -304,6 +318,11 @@ describe('Graph access policies', () => {
         it('shows an authored concept that has no recorded sources', async () => {
             const { engine } = await engineWith(provenanceRows());
             expect(await visibleRecordIds(engine, [conceptRef(P.ConceptAuthored)], analyst)).toEqual([P.ConceptAuthored]);
+        });
+
+        it('hides a synthesized concept whose sources were all retracted, instead of treating it as authored', async () => {
+            const { engine } = await engineWith(provenanceRows());
+            expect(await visibleRecordIds(engine, [conceptRef(P.ConceptOrphaned)], executive)).toEqual([]);
         });
 
         it('applies the audience intersection: a concept shared with a reader who cannot see its source is hidden', async () => {
