@@ -62,7 +62,7 @@ These touch something Canon reads or will read. Their owners need do nothing unl
 
 | Pull request | Why it matters to Canon |
 |---|---|
-| [MJ 6583](https://github.com/MemberJunction/MJ/pull/6583) | Makes saved-query metadata on `Metadata` opt-in. Canon code must read queries through `QueryEngine`. |
+| [MJ 6583](https://github.com/MemberJunction/MJ/pull/6583) (merged Nov 17) | Makes saved-query metadata on `Metadata` opt-in. Canon code must read queries through `QueryEngine`. |
 | [MJ 6505](https://github.com/MemberJunction/MJ/pull/6505) | DBAutoDoc data-quality checks, a possible later source of evidence. |
 | [MJ 6589](https://github.com/MemberJunction/MJ/pull/6589) | Ranks actions and skills to suggest. Skills are Layer 4. |
 | [MJ 6642](https://github.com/MemberJunction/MJ/pull/6642) (merged Nov 16) | Fingerprints query and view definitions. Useful if Canon metrics later drive triggers. |
@@ -145,7 +145,7 @@ MJ 6586 certifies schema descriptions and wants query history as evidence.
 | 2 | Learning loop and proposal ledger | MJ 6213, MJ 4155 R4 | `arie-glazier-bcc` | 6213 revised per decisions 2 to 5 and merged |
 | 3 | Skip on Canon | Skip client 50, Skip-Brain 677, Skip-Brain 612 | `MS-BC` | All three merged or closed, using core promotion and shipped vocabulary |
 | 4 | Schema knowledge | MJ 6586 | `ct-bc` | Decision 7 written into 6586; merged |
-| 5 | Graph access control | New, see [below](#workstream-5-graph-access-control) | `cmbrock-BC` | 5a merged; 5b to 5d filed as `canon` issues with a design sketch, ready for the December 3 review |
+| 5 | Graph access control | [MJ 6731](https://github.com/MemberJunction/MJ/pull/6731) (5a); issues [6723](https://github.com/MemberJunction/MJ/issues/6723), [6724](https://github.com/MemberJunction/MJ/issues/6724), [6725](https://github.com/MemberJunction/MJ/issues/6725) (5b to 5d) | `cmbrock-BC` | 5a merged; 5b to 5d filed as `canon` issues with a design sketch, ready for the December 3 review |
 
 Owner confirmations: `MS-BC` accepted workstreams 3 and 4 and the 6404 split ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6930640383)), then handed workstream 4 to `ct-bc`, who was already driving the 6586 roadmap ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6952518939)); `MS-BC` reviews its Canon interface section. `ct-bc` agreed decisions 1 to 7 and confirmed workstream 4 and folding MJ 4155 R4, with its Off / Propose / Auto mode, into MJ 6213's ledger ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6962182228)). `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstream 5 ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6952739756)). The non-Canon part of 6404 is now [MJ 6688](https://github.com/MemberJunction/MJ/pull/6688).
 
@@ -222,3 +222,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-17 | `MS-BC` accepted decisions 1 to 7 and workstreams 3 and 4; the non-Canon part of MJ 6404 moved to MJ 6688. Watched MJ 6642 merged. Added workstream 5, graph access control, owned by `cmbrock-BC`, with 5a as a named exception to the freeze. |
 | 2026-11-17 | Workstream 4 handed from `MS-BC` to `ct-bc`. |
 | 2026-11-17 | `ct-bc` and `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstreams 4 and 5. |
+| 2026-11-18 | `cmbrock-BC` opened MJ 6731 for workstream 5a and filed issues 6723, 6724 and 6725 for 5b to 5d. Watched MJ 6583 merged. |
