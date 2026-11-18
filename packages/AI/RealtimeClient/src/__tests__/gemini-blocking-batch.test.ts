@@ -5,8 +5,10 @@
  * - every result of a batch goes out, in order;
  * - context notes and narrations still wait for the reply (typed text barges in, as before);
  * - an open client turn is committed once, after the batch's LAST result;
- * - the tool-batch barrier's timeout releases queued results and a held commit;
- * - a no-output backstop releases the turn when the model never answers.
+ * - the tool-batch barrier's timeout releases queued results first, then ONE held commit;
+ * - a commit held across a connection move goes out once the move completes;
+ * - a no-output backstop releases the turn when the model never answers (a single call too);
+ * - only the batch's OTHER owed calls hold the commit (a stale result does not complete the batch).
  *
  * Controls that must NOT move: a single call, NON_BLOCKING tooling, and the `interactionStatus` idle profile.
  */
@@ -247,12 +249,136 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
 
         it('Disconnect clears the backstop', async () => {
             const { client } = await connect(BLOCKING);
+            const base = vi.getTimerCount(); // the connection's own timers
+            toolCall(client, 'a'); // +1: the tool-batch barrier
+            client.SendToolResult('a', '{}'); // the barrier is cleared and the backstop armed
+            expect(vi.getTimerCount()).toBe(base + 1);
+
+            await client.Disconnect();
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('a barrier timeout sends the queued results first and ONE commit last (SF1)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b', 'c');
+            client.SendText('x'); // takes the floor before any result
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            expect(session.Wire).toEqual(['note:ctx', 'text:x']);
+
+            vi.advanceTimersByTime(BARRIER_MS); // c is never answered
+
+            expect(session.Wire).toEqual(['note:ctx', 'text:x', 'tool:a', 'tool:b', 'commit']);
+        });
+
+        it('a commit held when the barrier fires during a connection move goes out once the move completes (SF2)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}'); // b is never answered
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a']);
+
+            client['connectionReady'] = false; // the session starts to move
+            vi.advanceTimersByTime(BARRIER_MS);
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a']);
+
+            client['handleResumed'](); // native resumption completes the move
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
+            expect(client.IsBusy).toBe(true); // busy for the reply the commit asks for
+        });
+
+        it('a held commit also goes out when a failed move goes back to the old connection (SF2)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+
+            client['connectionReady'] = false;
+            vi.advanceTimersByTime(BARRIER_MS);
+            expect(client['ResumeOnOldConnection']()).toBe(true);
+
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
+        });
+
+        it('a backstop that fires during a move keeps the held commit for the new connection (N3)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}'); // b is never answered: the commit is held
+
+            client['connectionReady'] = false; // a move that takes longer than barrier + backstop
+            vi.advanceTimersByTime(BARRIER_MS + BACKSTOP_MS);
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a']); // nothing to the connection being left
+
+            client['handleResumed']();
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
+        });
+
+        it('a stale result while a new batch is owed neither commits early nor holds the batch (N1)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'p', 'old');
+            client.SendToolResult('p', '{}');
+            vi.advanceTimersByTime(BARRIER_MS); // old is expired
+            toolCall(client, 'x', 'y');
+            client.SendContextNote('ctx');
+
+            client.SendToolResult('old', '{}'); // late: the new frame dropped it
+            client.SendToolResult('x', '{}');
+            client.SendToolResult('y', '{}');
+
+            expect(session.Wire).toEqual(['tool:p', 'note:ctx', 'tool:old', 'tool:x', 'tool:y', 'commit']);
+        });
+
+        it('a duplicate result mid-batch stays queued behind the reply and the batch completes (P6)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b', 'c');
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('b', '{"again":true}'); // queued behind the reply, as before
+            client.SendToolResult('c', '{}');
+
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'tool:b', 'tool:c', 'commit']);
+        });
+
+        it('an interactionStatus IDLE frame on a turnComplete model does not clear the backstop (N2)', async () => {
+            const { client, session } = await connect(BLOCKING);
             toolCall(client, 'a');
             client.SendToolResult('a', '{}');
-            expect(vi.getTimerCount()).toBeGreaterThan(0);
-            await client.Disconnect();
+            client.SendContextNote('queued');
+            client.Emit({ interactionStatus: 'IDLE' } as unknown as LiveServerMessage);
 
-            expect(vi.getTimerCount()).toBe(0);
+            vi.advanceTimersByTime(BACKSTOP_MS);
+
+            expect(client.IsBusy).toBe(false);
+            expect(session.Wire).toEqual(['tool:a', 'note:queued']);
+        });
+
+        it('a second toolCall frame mid-batch keeps a note from slipping between results (N4)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+            toolCall(client, 'c'); // joins the started batch
+            client.SendContextNote('note');
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('c', '{}');
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
+
+            modelSpeaks(client);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c', 'note:note']);
+        });
+
+        it('typed text mid-batch barges in: a note queued mid-batch goes out before it (N5)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('queued note');
+            client.SendText('barge in');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:a', 'note:queued note', 'text:barge in', 'tool:b', 'commit']);
         });
     });
 
