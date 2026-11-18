@@ -1,5 +1,5 @@
-import { ChangeDetectorRef, Component, ViewEncapsulation, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, UserInfo } from '@memberjunction/core';
+import { ChangeDetectorRef, Component, OnDestroy, ViewEncapsulation, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
@@ -13,6 +13,22 @@ import { AnalyzeArtifactService, InteractiveFormApplyService, NavigationRequest 
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+
+interface GqlArtifactPermissionsResult {
+  ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+  ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+}
+
+interface GqlCapableProvider {
+  ExecuteGQL(
+    query: string,
+    variables?: Record<string, string | number | boolean | null>,
+  ): Promise<GqlArtifactPermissionsResult>;
+}
+
+function isGqlCapableProvider(provider: IMetadataProvider | null | undefined): provider is IMetadataProvider & GqlCapableProvider {
+  return typeof (provider as Partial<GqlCapableProvider> | null | undefined)?.ExecuteGQL === 'function';
+}
 
 /**
  * Artifact Resource - displays versioned content artifacts
@@ -30,6 +46,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
           [artifactId]="artifactId"
           [currentUser]="currentUser"
           [environmentId]="environmentId"
+          [VersionNumber]="VersionNumber"
           [showSaveToCollection]="true"
           [canShare]="CanShare"
           [canEdit]="CanEdit"
@@ -51,11 +68,13 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   `],
   encapsulation: ViewEncapsulation.None
 })
-export class ArtifactResource extends BaseResourceComponent {
+export class ArtifactResource extends BaseResourceComponent implements OnDestroy {
   private readonly analyzeService = inject(AnalyzeArtifactService);
   private readonly applyService = inject(InteractiveFormApplyService);
   private readonly cdr = inject(ChangeDetectorRef, { optional: true });
   private permissionRequestSeq = 0;
+  private loadCompleteTimer: ReturnType<typeof setTimeout> | null = null;
+  public VersionNumber: number | undefined = undefined;
 
   /**
    * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
@@ -66,11 +85,11 @@ export class ArtifactResource extends BaseResourceComponent {
    * panel's placement and spot an installed contribution with the same key before writing
    * anything.
    */
-  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+  async OnApplyFormRequested(event: { spec: ComponentSpec; entityName: string }): Promise<void> {
     const additional = (this.navigationService.AppContextSnapshot$.value?.AdditionalContext ?? null) as
       { Form?: FormAgentContext } | null;
     await this.applyService.ConfirmAndApply(
-      event.spec as ComponentSpec,
+      event.spec,
       event.entityName,
       this.ProviderToUse,
       additional?.Form ?? null,
@@ -78,7 +97,7 @@ export class ArtifactResource extends BaseResourceComponent {
   }
 
   /** @deprecated Use {@link OnApplyFormRequested}. */
-  async onApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+  async onApplyFormRequested(event: { spec: ComponentSpec; entityName: string }): Promise<void> {
     return this.OnApplyFormRequested(event);
   }
 
@@ -151,6 +170,19 @@ export class ArtifactResource extends BaseResourceComponent {
     this.EnvironmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
         || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
+    // Get version number if explicitly configured or passed via query params ('latest' keeps undefined)
+    const rawVersion =
+      this.GetQueryParams()['version'] ??
+      this.GetQueryParams()['versionNumber'] ??
+      this.Data?.Configuration?.['version'] ??
+      this.Data?.Configuration?.['versionNumber'];
+    const parsedVersion = typeof rawVersion === 'number'
+      ? rawVersion
+      : typeof rawVersion === 'string' && rawVersion.trim().toLowerCase() !== 'latest'
+        ? Number.parseInt(rawVersion, 10)
+        : NaN;
+    this.VersionNumber = Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : undefined;
+
     // Get artifact ID from resource data (setter triggers ResolveArtifactPermissions)
     if (this.Data && this.Data.ResourceRecordID) {
       this.artifactId = this.Data.ResourceRecordID;
@@ -159,7 +191,18 @@ export class ArtifactResource extends BaseResourceComponent {
       this.CanShare = false;
     }
 
-    setTimeout(() => this.NotifyLoadComplete(), 100);
+    this.loadCompleteTimer = setTimeout(() => {
+      this.loadCompleteTimer = null;
+      this.NotifyLoadComplete();
+    }, 100);
+  }
+
+  override ngOnDestroy(): void {
+    if (this.loadCompleteTimer != null) {
+      clearTimeout(this.loadCompleteTimer);
+      this.loadCompleteTimer = null;
+    }
+    super.ngOnDestroy();
   }
 
   /**
@@ -203,17 +246,8 @@ export class ArtifactResource extends BaseResourceComponent {
     targetArtifactId: string,
     user: UserInfo,
   ): Promise<{ CanEdit?: boolean; CanShare?: boolean }> {
-    const providerWithGql = this.ProviderToUse as unknown as {
-      ExecuteGQL?: (
-        query: string,
-        variables?: Record<string, unknown>,
-      ) => Promise<{
-        ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
-        ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
-      }>;
-    };
-
-    if (typeof providerWithGql?.ExecuteGQL === 'function') {
+    const provider = this.ProviderToUse;
+    if (isGqlCapableProvider(provider)) {
       try {
         const query = `
           query ResolveArtifactUserPermissions($artifactId: String!) {
@@ -228,7 +262,7 @@ export class ArtifactResource extends BaseResourceComponent {
             }
           }
         `;
-        const gqlResult = await providerWithGql.ExecuteGQL(query, { artifactId: targetArtifactId });
+        const gqlResult = await provider.ExecuteGQL(query, { artifactId: targetArtifactId });
         const resolved =
           gqlResult?.ResolveArtifactUserPermissions ?? gqlResult?.ResolveArtifactPermissions;
         if (resolved && typeof resolved.CanEdit === 'boolean') {
@@ -264,9 +298,12 @@ export class ArtifactResource extends BaseResourceComponent {
       });
 
       // Route to the new conversation in the Conversations nav item
-      await this.navigationService.OpenNavItemByName('Conversations', {
-        conversationId: result.conversationId,
-      });
+      await this.navigationService.OpenNavItemByName(
+        'Conversations',
+        { conversationId: result.conversationId },
+        undefined,
+        { queryParams: { conversationId: result.conversationId } },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
       MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);

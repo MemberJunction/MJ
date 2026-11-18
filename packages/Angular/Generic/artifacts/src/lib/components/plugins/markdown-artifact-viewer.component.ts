@@ -1,5 +1,5 @@
-import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
+import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -9,6 +9,8 @@ import {
   FilterReadableAnchoredConversations,
   SpreadsheetEngine,
   UserInfoEngine,
+  type ArtifactTypeThumbnailPolicy,
+  type BlockRecord,
   type WorksheetSpec,
   type DocumentBlockColumn,
   type DocumentBlockSpec,
@@ -20,11 +22,27 @@ import {
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
+  QueryEngine,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subscription } from 'rxjs';
-import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import {
+  ArtifactNavigationAnchor,
+  ArtifactViewerViewMode,
+  BaseArtifactViewerPluginComponent,
+  IArtifactVersionDiffViewer,
+  type PreVerifiedFrozenSnapshotEntry,
+} from '../base-artifact-viewer.component';
+import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
+import {
+  BuildCanonicalDocumentSuggestionRecord,
+  NormalizeDocumentSuggestion,
+  ParseSuggestionsFromConfiguration,
+  ReadArtifactVersionConfigurationSafe,
+  UpsertArtifactSuggestionInVersionConfiguration,
+} from '../../utils/artifact-suggestion-normalizer.util';
+import { MJ_EMBEDDED_ARTIFACT_ANCESTORS, MJ_MAX_EMBED_DEPTH } from '../artifact-type-plugin-viewer.component';
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { DocsVersionDiffComponent } from '../version-diff/docs-version-diff.component';
 import { EscapeHtml } from '../previews/office-preview.logic';
@@ -36,6 +54,7 @@ import {
   MERGE_CONFLICT_WARNING_MESSAGE,
   type CollaborationConnectionStatus,
   type CollaborationMergeConflictEvent,
+  type CollaborationResetConflictDraft,
   type CollaboratorPresence,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
@@ -66,6 +85,7 @@ import {
   type DocsLiveRecordLinkContext,
   type DocsTableAlignment,
 } from './context-menus/docs-context-menu.helper';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 export type DocsEditingStyle = 'simple' | 'blocks';
@@ -95,9 +115,7 @@ export type DocsToolbarItemKey =
   | 'ask-ai';
 
 export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
-  'outline',
   'format',
-  'insert-block',
   'comments',
 ];
 
@@ -167,6 +185,24 @@ export interface DocsPermissionEntry {
   IsOwner: boolean;
 }
 
+export interface FrozenBlockDriftComparison {
+  BlockID: string;
+  Loading: boolean;
+  ErrorMessage?: string;
+  CheckedAt?: string;
+  AddedRows: number;
+  RemovedRows: number;
+  ModifiedCells: number;
+  UnchangedRows: number;
+  SampleDiffs: Array<{
+    Kind: 'added' | 'removed' | 'modified';
+    RowLabel: string;
+    Summary: string;
+  }>;
+  LiveRowCount: number;
+  FrozenRowCount: number;
+}
+
 export interface DocsSelectionSnapshot {
   segmentId: string;
   listItemIndex?: number;
@@ -226,7 +262,7 @@ interface DocsInlineToken {
               data-testid="mode-preview-btn"
               (click)="SetViewMode('preview')"
             >
-              <i class="fas fa-eye"></i> Read
+              <i class="fa-solid fa-eye"></i> Read
             </button>
             @if (CanUserEdit) {
               <button
@@ -237,7 +273,7 @@ interface DocsInlineToken {
                 data-testid="mode-edit-btn"
                 (click)="SetViewMode('edit')"
               >
-                <i class="fas fa-pen-to-square"></i> Write
+                <i class="fa-solid fa-pen-to-square"></i> Write
               </button>
             }
           </div>
@@ -253,7 +289,7 @@ interface DocsInlineToken {
                 (mousedown)="OnToolbarActionMousedown($event)"
                 (click)="UndoDocument()"
               >
-                <i class="fas fa-rotate-left"></i>
+                <i class="fa-solid fa-rotate-left"></i>
               </button>
               <button
                 type="button"
@@ -264,7 +300,7 @@ interface DocsInlineToken {
                 (mousedown)="OnToolbarActionMousedown($event)"
                 (click)="RedoDocument()"
               >
-                <i class="fas fa-rotate-right"></i>
+                <i class="fa-solid fa-rotate-right"></i>
               </button>
             </div>
           }
@@ -280,13 +316,13 @@ interface DocsInlineToken {
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="SetViewMode(ViewMode === 'suggest' ? 'edit' : 'suggest')"
             >
-              <i class="fas fa-code-pull-request"></i>
+              <i class="fa-solid fa-code-pull-request"></i>
               <span>Suggest</span>
               @if (PendingSuggestionsCount > 0) {
                 <span class="mj-docs-badge mj-docs-badge--brand">{{ PendingSuggestionsCount }}</span>
               }
               @if (ViewMode === 'suggest') {
-                <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+                <i class="fa-solid fa-xmark mj-docs-active-mode-chip__close"></i>
               }
             </button>
           }
@@ -300,9 +336,9 @@ interface DocsInlineToken {
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="SetEditingStyle('simple')"
             >
-              <i class="fas fa-cubes"></i>
+              <i class="fa-solid fa-cubes"></i>
               <span>Blocks</span>
-              <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+              <i class="fa-solid fa-xmark mj-docs-active-mode-chip__close"></i>
             </button>
           }
 
@@ -315,9 +351,9 @@ interface DocsInlineToken {
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="SetViewMode(CanUserEdit ? 'edit' : 'preview')"
             >
-              <i class="fas" [ngClass]="ViewMode === 'source' ? 'fa-code' : 'fa-code-compare'"></i>
+              <i class="fa-solid" [ngClass]="ViewMode === 'source' ? 'fa-code' : 'fa-code-compare'"></i>
               <span>{{ ViewMode === 'source' ? 'Source' : 'Diff' }}</span>
-              <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+              <i class="fa-solid fa-xmark mj-docs-active-mode-chip__close"></i>
             </button>
           }
 
@@ -335,13 +371,13 @@ interface DocsInlineToken {
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="ExecuteToolbarItem(item, false, $event)"
             >
-              <i class="fas" [ngClass]="item.Icon"></i>
+              <i class="fa-solid" [ngClass]="item.Icon"></i>
               <span>{{ item.Label }}</span>
               @if (item.Badge != null) {
                 <span class="mj-docs-badge mj-docs-badge--brand">{{ item.Badge }}</span>
               }
               @if (item.HasChevron) {
-                <i class="fas" [ngClass]="item.ChevronUp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                <i class="fa-solid" [ngClass]="item.ChevronUp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
               }
             </button>
           }
@@ -351,19 +387,19 @@ interface DocsInlineToken {
           @if (IsAiAssistantEnabled && CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
             <button
               type="button"
-              class="mj-docs-btn mj-docs-btn--accent"
+              class="mj-docs-btn mj-docs-btn--ai"
               title="Open slide-in AI Assistant for this document (/ai)"
               data-testid="docs-ask-ai-quick-btn"
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="OpenAskAiAssistant()"
             >
-              <i class="fas fa-wand-magic-sparkles"></i>
-              <span>Ask AI</span>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI</span>
             </button>
           }
-          <!-- Compact Collaboration Presence Pill -->
+          <!-- Compact Collaboration Presence Indicator (full status on hover) -->
           <div
-            class="mj-docs-presence-pill"
+            class="mj-docs-presence-pill mj-docs-presence-pill--compact"
             [class.mj-docs-presence-pill--connected]="CollaborationStatus === 'connected'"
             [class.mj-docs-presence-pill--readonly]="
               CollaborationStatus === 'readonly' || CollaborationStatus === 'revoked'
@@ -374,7 +410,6 @@ interface DocsInlineToken {
             data-testid="collaboration-presence-pill"
           >
             <span class="mj-docs-presence-dot"></span>
-            <span>{{ GetCompactCollaborationStatusLabel() }}</span>
             @if (CollaborationStatus === 'error') {
               <button
                 type="button"
@@ -424,9 +459,11 @@ interface DocsInlineToken {
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="ExecuteToolbarItem(item, false, $event)"
             >
-              <i class="fas" [ngClass]="item.Icon"></i>
-              <span>{{ item.Label }}</span>
-              @if (item.Badge != null) {
+              <i class="fa-solid" [ngClass]="item.Icon"></i>
+              @if (item.Key !== 'comments') {
+                <span>{{ item.Label }}</span>
+              }
+              @if (item.Badge != null && (typeof item.Badge !== 'number' || item.Badge > 0)) {
                 <span class="mj-docs-badge" [class.mj-docs-badge--brand]="item.Active">{{ item.Badge }}</span>
               }
             </button>
@@ -439,14 +476,29 @@ interface DocsInlineToken {
               [class.mj-docs-btn--primary]="HasUnsavedChanges"
               [class.mj-docs-btn--saved-quiet]="!HasUnsavedChanges"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Save Document Version' : 'All changes saved'"
+              [title]="HasUnsavedChanges ? 'Save Document Version' : 'All changes synced — no unsaved changes'"
               data-testid="save-doc-version-btn"
               (click)="OnSaveDocumentVersion()"
             >
-              <i class="fas" [ngClass]="HasUnsavedChanges ? 'fa-cloud-arrow-up' : 'fa-check'"></i>
+              @if (HasUnsavedChanges) {
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              } @else {
+                <span class="mj-docs-saved-dot" aria-hidden="true"></span>
+              }
               <span>{{ IsSavingVersion ? 'Saving…' : HasUnsavedChanges ? 'Save Version' : 'Saved' }}</span>
             </button>
           }
+
+          <button
+            type="button"
+            class="mj-docs-btn mj-docs-cmdk-btn"
+            title="Search all document commands, blocks, suggest mode, diff & export (Cmd/Ctrl+K)"
+            data-testid="docs-cmdk-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenCommandPalette()"
+          >
+            <span class="mj-docs-kbd-tag">⌘K</span>
+          </button>
 
           <!-- Progressive Disclosure Tools & View Menu (...) with per-action Thumbtack Pinning -->
           <div class="mj-docs-more-menu-wrap" #moreMenuWrap>
@@ -459,7 +511,7 @@ interface DocsInlineToken {
               data-testid="toggle-more-tools-btn"
               (click)="ToggleMoreToolsMenu($event)"
             >
-              <i class="fas fa-ellipsis"></i>
+              <i class="fa-solid fa-ellipsis"></i>
             </button>
 
             <div class="mj-docs-more-menu" [hidden]="!ShowMoreToolsMenu" data-testid="docs-more-tools-menu">
@@ -497,7 +549,7 @@ interface DocsInlineToken {
                         (mousedown)="OnToolbarActionMousedown($event)"
                         (click)="ExecuteToolbarItem(item, true, $event)"
                       >
-                        <i class="fas" [ngClass]="item.Icon"></i>
+                        <i class="fa-solid" [ngClass]="item.Icon"></i>
                         <span class="mj-docs-more-menu__item-label">{{ item.MenuLabel }}</span>
                         @if (item.StatusTag) {
                           <span class="mj-docs-badge">{{ item.StatusTag }}</span>
@@ -518,7 +570,7 @@ interface DocsInlineToken {
                         (mousedown)="OnToolbarActionMousedown($event)"
                         (click)="ToggleToolbarItemPin(item.Key, $event)"
                       >
-                        <i class="fas fa-thumbtack"></i>
+                        <i class="fa-solid fa-thumbtack"></i>
                       </button>
                     </div>
                   }
@@ -531,7 +583,7 @@ interface DocsInlineToken {
                         (mousedown)="OnToolbarActionMousedown($event)"
                         (click)="TriggerFileImport(); CloseMoreToolsMenu()"
                       >
-                        <i class="fas fa-file-import"></i>
+                        <i class="fa-solid fa-file-import"></i>
                         <span class="mj-docs-more-menu__item-label">Import .docx or .md…</span>
                       </button>
                     </div>
@@ -555,10 +607,10 @@ interface DocsInlineToken {
           data-testid="docs-format-ribbon"
         >
           <button type="button" class="mj-docs-btn" title="Bold" data-testid="fmt-bold-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('**', '**')">
-            <i class="fas fa-bold"></i>
+            <i class="fa-solid fa-bold"></i>
           </button>
           <button type="button" class="mj-docs-btn" title="Italic" data-testid="fmt-italic-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('*', '*')">
-            <i class="fas fa-italic"></i>
+            <i class="fa-solid fa-italic"></i>
           </button>
           <span class="mj-docs-ribbon-sep"></span>
           <button type="button" class="mj-docs-btn" title="Heading 1" data-testid="fmt-h1-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('# ', '')">
@@ -572,10 +624,10 @@ interface DocsInlineToken {
           </button>
           <span class="mj-docs-ribbon-sep"></span>
           <button type="button" class="mj-docs-btn" title="Bullet List" data-testid="fmt-list-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- ', '')">
-            <i class="fas fa-list-ul"></i> List
+            <i class="fa-solid fa-list-ul"></i> List
           </button>
           <button type="button" class="mj-docs-btn" title="Task List" data-testid="fmt-checklist-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- [ ] ', '')">
-            <i class="fas fa-list-check"></i> Checklist
+            <i class="fa-solid fa-list-check"></i> Checklist
           </button>
           <button
             type="button"
@@ -585,7 +637,7 @@ interface DocsInlineToken {
             (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n', '')"
           >
-            <i class="fas fa-table"></i> Table
+            <i class="fa-solid fa-table"></i> Table
           </button>
           <button
             type="button"
@@ -595,11 +647,32 @@ interface DocsInlineToken {
             (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('> [!NOTE]\n> ', '')"
           >
-            <i class="fas fa-circle-info"></i> Callout
+            <i class="fa-solid fa-circle-info"></i> Callout
+          </button>
+          <span class="mj-docs-ribbon-sep"></span>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Chart (/sheet-chart)"
+            data-testid="fmt-sheet-chart-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-chart')"
+          >
+            <i class="fa-solid fa-chart-column"></i> Sheet Chart
+          </button>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Range (/sheet-range)"
+            data-testid="fmt-sheet-range-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-range')"
+          >
+            <i class="fa-solid fa-table-cells"></i> Sheet Range
           </button>
           <span class="mj-docs-ribbon-hint">
-            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>, or
-            <strong>Whiteboard</strong>
+            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>,
+            <strong>Sheet Chart/Range</strong>, or <strong>Whiteboard</strong>
           </span>
           <button
             type="button"
@@ -611,7 +684,7 @@ interface DocsInlineToken {
             (mousedown)="OnToolbarActionMousedown($event)"
             (click)="ToggleFormattingRibbonPinned()"
           >
-            <i class="fas fa-thumbtack"></i>
+            <i class="fa-solid fa-thumbtack"></i>
             <span>{{ FormattingRibbonPinned ? 'Pinned' : 'Pin Ribbon' }}</span>
           </button>
         </div>
@@ -621,7 +694,7 @@ interface DocsInlineToken {
       @if (ShowSlashMenu) {
         <div class="mj-docs-slash-popover" data-testid="slash-command-menu">
           <div class="mj-docs-slash-popover__header">
-            <i class="fas fa-terminal"></i>
+            <i class="fa-solid fa-terminal"></i>
             <input
               type="text"
               class="mj-docs-slash-input"
@@ -632,7 +705,7 @@ interface DocsInlineToken {
               data-testid="slash-search-input"
             />
             <button type="button" class="mj-docs-btn" (click)="CloseSlashMenu()">
-              <i class="fas fa-xmark"></i>
+              <i class="fa-solid fa-xmark"></i>
             </button>
           </div>
           <div class="mj-docs-slash-popover__list">
@@ -646,7 +719,7 @@ interface DocsInlineToken {
                 (click)="ExecuteSlashCommand(cmd)"
               >
                 <div class="mj-docs-slash-item__icon">
-                  <i class="fas" [ngClass]="cmd.Icon"></i>
+                  <i class="fa-solid" [ngClass]="cmd.Icon"></i>
                 </div>
                 <div class="mj-docs-slash-item__body">
                   <div class="mj-docs-slash-item__title">
@@ -670,7 +743,7 @@ interface DocsInlineToken {
           data-testid="docs-live-sync-unavailable-banner"
         >
           <span>
-            <i class="fas fa-plug-circle-xmark"></i>
+            <i class="fa-solid fa-plug-circle-xmark"></i>
             Live collaborative sync is unavailable on this server — viewing in read-only mode.
           </span>
         </div>
@@ -682,7 +755,7 @@ interface DocsInlineToken {
           data-testid="docs-permission-verify-error-banner"
         >
           <span>
-            <i class="fas fa-triangle-exclamation"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i>
             Couldn't verify permissions — Retry
           </span>
           <button
@@ -695,13 +768,102 @@ interface DocsInlineToken {
           </button>
         </div>
       }
+      @if (PendingResetConflictDraft; as conflictDraft) {
+        <div
+          class="mj-docs-status-banner mj-docs-status-banner--warning"
+          role="alert"
+          data-testid="docs-reset-conflict-banner"
+        >
+          <span>
+            <i class="fa-solid fa-code-merge"></i>
+            Collaborative room reset detected at {{ conflictDraft.CapturedAt }}. Your unsent local edits are preserved — recover them or keep the server snapshot.
+          </span>
+          <div class="mj-docs-reset-conflict__actions">
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--primary"
+              data-testid="apply-reset-conflict-btn"
+              (click)="ApplyResetConflictDraft()"
+            >
+              Restore My Draft
+            </button>
+            <button
+              type="button"
+              class="mj-docs-btn"
+              data-testid="dismiss-reset-conflict-btn"
+              (click)="DismissResetConflictDraft()"
+            >
+              Keep Server Version
+            </button>
+          </div>
+        </div>
+      }
 
       <!-- Status Banner when Notification is Active -->
       @if (StatusBannerMessage) {
         <div class="mj-docs-status-banner" data-testid="docs-status-banner">
-          <i class="fas fa-circle-check"></i>
+          <i class="fa-solid fa-circle-check"></i>
           <span>{{ StatusBannerMessage }}</span>
           <button type="button" class="mj-docs-btn" (click)="StatusBannerMessage = ''">Dismiss</button>
+        </div>
+      }
+
+      <!-- NW-1 Live-vs-Frozen Drift Governance Banner -->
+      @let frozenBlocks = FrozenBlocksInDocument;
+      @if (frozenBlocks.length > 0) {
+        <div class="mj-docs-drift-banner" data-testid="docs-frozen-drift-banner">
+          <div class="mj-docs-drift-banner__main">
+            <i class="fa-solid fa-snowflake"></i>
+            <span>
+              <strong>{{ frozenBlocks.length }} Frozen Live {{ frozenBlocks.length === 1 ? 'Block' : 'Blocks' }}</strong>
+            </span>
+            @for (fb of frozenBlocks; track fb.BlockID) {
+              @let isVerified = IsSnapshotVerified(fb);
+              @let preVerified = GetBlockPreVerifiedSnapshot(fb);
+              <span class="mj-docs-frozen-chip" [attr.data-testid]="'docs-frozen-chip-' + fb.BlockID">
+                <i
+                  class="fa-solid"
+                  [class.fa-shield-halved]="isVerified"
+                  [class.fa-triangle-exclamation]="!isVerified"
+                  [title]="isVerified ? 'Snapshot verified' : 'Snapshot signature unverified'"
+                ></i>
+                <span>{{ fb.Title || fb.BlockID }}</span>
+                @if (isVerified && (fb.FrozenSnapshot?.FrozenByUserName || fb.FrozenSnapshot?.FrozenByUserID || preVerified?.FrozenByUserName)) {
+                  <span class="mj-docs-frozen-meta">
+                    signed by {{ fb.FrozenSnapshot?.FrozenByUserName || preVerified?.FrozenByUserName || fb.FrozenSnapshot?.FrozenByUserID }}
+                  </span>
+                }
+              </span>
+            }
+          </div>
+          <div class="mj-docs-drift-banner__actions">
+            <button
+              type="button"
+              class="mj-docs-btn"
+              data-testid="docs-compare-frozen-live-btn"
+              (click)="CompareAllFrozenBlocksWithLive()"
+            >
+              <i class="fa-solid fa-scale-balanced"></i> Compare with Live
+            </button>
+            @if (CanUserEdit) {
+              <button
+                type="button"
+                class="mj-docs-btn"
+                data-testid="docs-refreeze-all-btn"
+                (click)="RefreezeAllFrozenBlocks()"
+              >
+                <i class="fa-solid fa-rotate"></i> Re-Freeze All
+              </button>
+              <button
+                type="button"
+                class="mj-docs-btn"
+                data-testid="docs-switch-all-live-btn"
+                (click)="SwitchAllFrozenBlocksToLive()"
+              >
+                <i class="fa-solid fa-bolt"></i> Switch All to Live
+              </button>
+            }
+          </div>
         </div>
       }
 
@@ -720,10 +882,12 @@ interface DocsInlineToken {
                   data-testid="close-outline-rail-btn"
                   (click)="ToggleOutlineRail()"
                 >
-                  <i class="fas fa-xmark"></i>
+                  <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
-              <span class="mj-docs-outline-stats">{{ WordStats.Words }} words · {{ WordStats.Lines }} lines</span>
+              <span class="mj-docs-outline-stats" data-testid="docs-outline-stats">
+                {{ WordStats.Words }} words · {{ EstimatedReadingMinutes }} min read · {{ WordStats.Lines }} lines
+              </span>
             </div>
 
             @if (OutlineItems.length === 0) {
@@ -742,10 +906,10 @@ interface DocsInlineToken {
                     (contextmenu)="OnDocsOutlineContextMenu($event, item)"
                   >
                     @if (item.Kind === 'heading') {
-                      <i class="fas fa-hashtag mj-docs-outline-icon"></i>
+                      <i class="fa-solid fa-hashtag mj-docs-outline-icon"></i>
                       <span class="mj-docs-outline-title">{{ item.Title }}</span>
                     } @else {
-                      <i class="fas fa-cube mj-docs-outline-icon mj-docs-outline-icon--block"></i>
+                      <i class="fa-solid fa-cube mj-docs-outline-icon mj-docs-outline-icon--block"></i>
                       <span class="mj-docs-outline-title">{{ item.Title }}</span>
                       <span class="mj-docs-badge" [class.mj-docs-badge--live]="item.BlockMode === 'Live'">
                         {{ item.BlockType === 'Artifact' ? 'Inline' : item.BlockMode }}
@@ -757,8 +921,8 @@ interface DocsInlineToken {
             }
 
             <div class="mj-docs-outline-rail__footer">
-              <div><i class="fas fa-bolt"></i> {{ WordStats.LiveBlocks }} Live MJ Blocks</div>
-              <div><i class="fas fa-chalkboard"></i> {{ WordStats.EmbeddedArtifacts }} Embedded Artifacts</div>
+              <div><i class="fa-solid fa-bolt"></i> {{ WordStats.LiveBlocks }} Live MJ Blocks</div>
+              <div><i class="fa-solid fa-chalkboard"></i> {{ WordStats.EmbeddedArtifacts }} Embedded Artifacts</div>
             </div>
           </aside>
         }
@@ -768,11 +932,17 @@ interface DocsInlineToken {
           @if (ViewMode === 'source') {
             <!-- Raw Markdown Source Mode -->
             <div class="mj-docs-source-container" data-testid="docs-source-editor">
+              @if (CanUserEdit && HasUneditableLockedSegments) {
+                <div class="mj-docs-status-banner mj-docs-status-banner--warning" data-testid="docs-source-lock-notice">
+                  <i class="fa-solid fa-lock"></i>
+                  <span>Source editing is read-only because this document contains owner-locked sections. Use Write mode to edit unlocked sections.</span>
+                </div>
+              }
               <mj-code-editor
-                [(ngModel)]="MarkdownContent"
-                (ngModelChange)="OnMarkdownChanged($event)"
+                [ngModel]="MarkdownContent"
+                (ngModelChange)="OnSourceMarkdownChanged($event)"
                 [language]="'markdown'"
-                [readonly]="!CanUserEdit"
+                [readonly]="!CanUserEdit || HasUneditableLockedSegments"
                 style="width: 100%; height: 100%;"
               >
               </mj-code-editor>
@@ -793,7 +963,7 @@ interface DocsInlineToken {
                       }
                     </select>
                   </label>
-                  <i class="fas fa-arrow-right"></i>
+                  <i class="fa-solid fa-arrow-right"></i>
                   <span class="mj-docs-badge mj-docs-badge--brand">Current Working Document</span>
                 </div>
                 <div class="mj-docs-diff-stats">
@@ -807,7 +977,7 @@ interface DocsInlineToken {
                       data-testid="restore-base-version-btn"
                       (click)="RestoreComparisonBase()"
                     >
-                      <i class="fas fa-rotate-left"></i> Restore Base Version
+                      <i class="fa-solid fa-rotate-left"></i> Restore Base Version
                     </button>
                   }
                 </div>
@@ -838,9 +1008,45 @@ interface DocsInlineToken {
               [class.mj-docs-page--simple]="IsSimpleNoteMode"
               [class.mj-docs-page--blocks]="!IsSimpleNoteMode"
             >
+              @if (FrontmatterHeader; as fm) {
+                <header
+                  class="mj-docs-frontmatter-hero"
+                  [style.--mj-docs-fm-accent]="fm.Accent || null"
+                  data-testid="docs-frontmatter-hero"
+                >
+                  @if (fm.Category) {
+                    <span class="mj-docs-fm-category">{{ fm.Category }}</span>
+                  }
+                  @if (fm.Title) {
+                    <h1 class="mj-docs-fm-title">{{ fm.Title }}</h1>
+                  }
+                  @if (fm.Subtitle) {
+                    <p class="mj-docs-fm-subtitle">{{ fm.Subtitle }}</p>
+                  }
+                  <div class="mj-docs-fm-meta">
+                    @if (fm.Author) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-user"></i> {{ fm.Author }}
+                      </span>
+                    }
+                    @if (fm.Date) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-calendar"></i> {{ fm.Date }}
+                      </span>
+                    }
+                    <span class="mj-docs-fm-meta-item">
+                      <i class="fa-regular fa-clock"></i> {{ EstimatedReadingMinutes }} min read
+                    </span>
+                    @for (tag of fm.Tags; track tag) {
+                      <span class="mj-docs-fm-tag">#{{ tag }}</span>
+                    }
+                  </div>
+                </header>
+              }
+
               @if (ViewMode === 'suggest' && CanUserEdit) {
                 <div class="mj-docs-suggest-banner" data-testid="docs-suggest-mode-banner">
-                  <i class="fas fa-code-pull-request"></i>
+                  <i class="fa-solid fa-code-pull-request"></i>
                   <span>
                     <strong>Suggest Mode Active:</strong> Edit any heading, paragraph, list item, callout, or table cell
                     directly in place below — your changes are tracked as pending suggestions and committed when you click
@@ -853,7 +1059,7 @@ interface DocsInlineToken {
                       data-testid="commit-all-suggestions-btn"
                       (click)="CommitPendingSuggestions()"
                     >
-                      <i class="fas fa-check-double"></i>
+                      <i class="fa-solid fa-check-double"></i>
                       <span>Accept All ({{ PendingSuggestionsCount }})</span>
                     </button>
                   }
@@ -888,6 +1094,7 @@ interface DocsInlineToken {
                       <button
                         type="button"
                         class="mj-docs-simple-plus-btn"
+                        [disabled]="!CanEditSegment(seg)"
                         title="Add line or insert block below (/)"
                         [attr.data-testid]="'simple-insert-below-btn-' + seg.SegmentID"
                         (mousedown)="OnToolbarActionMousedown($event)"
@@ -902,38 +1109,42 @@ interface DocsInlineToken {
                         <button
                           type="button"
                           class="mj-docs-handle-btn"
+                          [disabled]="!CanEditSegment(seg)"
                           title="Move Block Up"
                           [attr.data-testid]="'move-up-btn-' + seg.SegmentID"
                           (click)="MoveSegment(seg, -1)"
                         >
-                          <i class="fas fa-arrow-up"></i>
+                          <i class="fa-solid fa-arrow-up"></i>
                         </button>
                         <button
                           type="button"
                           class="mj-docs-handle-btn"
+                          [disabled]="!CanEditSegment(seg)"
                           title="Move Block Down"
                           [attr.data-testid]="'move-down-btn-' + seg.SegmentID"
                           (click)="MoveSegment(seg, 1)"
                         >
-                          <i class="fas fa-arrow-down"></i>
+                          <i class="fa-solid fa-arrow-down"></i>
                         </button>
                         <button
                           type="button"
                           class="mj-docs-handle-btn"
+                          [disabled]="!CanEditSegment(seg)"
                           title="Insert Block Below (/)"
                           [attr.data-testid]="'insert-below-btn-' + seg.SegmentID"
                           (click)="OpenSlashMenuForSegment(seg)"
                         >
-                          <i class="fas fa-plus"></i>
+                          <i class="fa-solid fa-plus"></i>
                         </button>
                         <button
                           type="button"
                           class="mj-docs-handle-btn"
+                          [disabled]="!CanEditSegment(seg)"
                           title="Delete Block"
                           [attr.data-testid]="'delete-block-btn-' + seg.SegmentID"
                           (click)="DeleteSegment(seg)"
                         >
-                          <i class="fas fa-trash-can"></i>
+                          <i class="fa-solid fa-trash-can"></i>
                         </button>
                       }
                       <button
@@ -943,7 +1154,7 @@ interface DocsInlineToken {
                         [attr.data-testid]="'anchor-comment-btn-' + seg.SegmentID"
                         (click)="OpenAnchorCommentForSegment(seg)"
                       >
-                        <i class="fas fa-comment-medical"></i>
+                        <i class="fa-solid fa-comment-medical"></i>
                         @if (GetThreadCountForAnchor(seg.SegmentID) > 0) {
                           <span class="mj-docs-handle-count">{{ GetThreadCountForAnchor(seg.SegmentID) }}</span>
                         }
@@ -952,11 +1163,12 @@ interface DocsInlineToken {
                         <button
                           type="button"
                           class="mj-docs-handle-btn"
-                          title="Propose Tracked Suggestion on Block"
+                          [disabled]="!CanEditSegment(seg)"
+                          [title]="CanEditSegment(seg) ? 'Propose Tracked Suggestion on Block' : 'Section locked by owner'"
                           [attr.data-testid]="'propose-suggestion-btn-' + seg.SegmentID"
                           (click)="OpenSuggestionModalForSegment(seg)"
                         >
-                          <i class="fas fa-lightbulb"></i>
+                          <i class="fa-solid fa-lightbulb"></i>
                         </button>
                       }
                     </div>
@@ -980,7 +1192,7 @@ interface DocsInlineToken {
                                   (click)="ToggleHeadingCollapse(seg)"
                                 >
                                   <i
-                                    class="fas"
+                                    class="fa-solid"
                                     [ngClass]="IsHeadingCollapsed(seg) ? 'fa-chevron-right' : 'fa-chevron-down'"
                                   ></i>
                                 </button>
@@ -988,6 +1200,7 @@ interface DocsInlineToken {
                                   type="button"
                                   class="mj-docs-heading-level-pill"
                                   [hidden]="IsSimpleNoteMode"
+                                  [disabled]="!CanEditSegment(seg)"
                                   title="Click to cycle heading level (H1–H4)"
                                   (click)="CycleHeadingLevel(seg)"
                                 >
@@ -1002,7 +1215,7 @@ interface DocsInlineToken {
                                   (click)="ToggleHeadingLock(seg)"
                                 >
                                   <i
-                                    class="fas"
+                                    class="fa-solid"
                                     [ngClass]="IsSegmentLocked(seg) ? 'fa-lock' : 'fa-lock-open'"
                                   ></i>
                                 </button>
@@ -1024,7 +1237,7 @@ interface DocsInlineToken {
                                     title="This section is protected by a document lock"
                                     [attr.data-testid]="'locked-section-badge-' + seg.SegmentID"
                                   >
-                                    <i class="fas fa-lock"></i> Locked
+                                    <i class="fa-solid fa-lock"></i> Locked
                                   </span>
                                 }
                                 @if (IsHeadingCollapsed(seg)) {
@@ -1033,7 +1246,7 @@ interface DocsInlineToken {
                                     class="mj-docs-collapsed-section-pill"
                                     (click)="ToggleHeadingCollapse(seg)"
                                   >
-                                    <i class="fas fa-layer-group"></i>
+                                    <i class="fa-solid fa-layer-group"></i>
                                     {{ GetCollapsedChildCount(seg) }} block(s) hidden · Expand
                                   </button>
                                 }
@@ -1046,23 +1259,25 @@ interface DocsInlineToken {
                                   [attr.data-testid]="'editable-table-' + seg.SegmentID"
                                 >
                                   <div class="mj-docs-editable-table__toolbar" [hidden]="IsSimpleNoteMode">
-                                    <span><i class="fas fa-table"></i> Interactive Table</span>
+                                    <span><i class="fa-solid fa-table"></i> Interactive Table</span>
                                     <div class="mj-docs-editable-table__actions">
                                       <button
                                         type="button"
                                         class="mj-docs-btn"
+                                        [disabled]="!CanEditSegment(seg)"
                                         [attr.data-testid]="'table-add-row-' + seg.SegmentID"
                                         (click)="AddTableRow(seg)"
                                       >
-                                        <i class="fas fa-plus"></i> Row
+                                        <i class="fa-solid fa-plus"></i> Row
                                       </button>
                                       <button
                                         type="button"
                                         class="mj-docs-btn"
+                                        [disabled]="!CanEditSegment(seg)"
                                         [attr.data-testid]="'table-add-col-' + seg.SegmentID"
                                         (click)="AddTableColumn(seg)"
                                       >
-                                        <i class="fas fa-plus"></i> Column
+                                        <i class="fa-solid fa-plus"></i> Column
                                       </button>
                                     </div>
                                   </div>
@@ -1076,6 +1291,7 @@ interface DocsInlineToken {
                                             [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                             [innerHTML]="RenderInlineEditableHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
+                                            (input)="OnEditableBlockDomDirty(seg)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
                                             (contextmenu)="OnDocsTableCellContextMenu($event, seg, 0, cIdx, true)"
                                           ></th>
@@ -1092,6 +1308,7 @@ interface DocsInlineToken {
                                               [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                               [innerHTML]="RenderInlineEditableHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
+                                              (input)="OnEditableBlockDomDirty(seg)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
                                               (contextmenu)="OnDocsTableCellContextMenu($event, seg, rIdx, cIdx, false)"
                                             ></td>
@@ -1116,6 +1333,7 @@ interface DocsInlineToken {
                                           type="checkbox"
                                           class="mj-docs-task-checkbox"
                                           [checked]="item.Checked"
+                                          [disabled]="!CanEditSegment(seg)"
                                           [attr.data-testid]="'task-checkbox-' + seg.SegmentID + '-' + item.Index"
                                           (change)="ToggleTaskListItem(seg, item.Index, $event)"
                                         />
@@ -1142,9 +1360,10 @@ interface DocsInlineToken {
                                   type="button"
                                   class="mj-docs-btn mj-docs-list-add-btn"
                                   [hidden]="IsSimpleNoteMode"
+                                  [disabled]="!CanEditSegment(seg)"
                                   (click)="AddListItem(seg)"
                                 >
-                                  <i class="fas fa-plus"></i> Add Item
+                                  <i class="fa-solid fa-plus"></i> Add Item
                                 </button>
                               </div>
                             }
@@ -1156,9 +1375,10 @@ interface DocsInlineToken {
                                   [attr.data-testid]="'editable-callout-' + seg.SegmentID"
                                 >
                                   <div class="mj-docs-editable-callout__header">
-                                    <i class="fas fa-circle-info"></i>
+                                    <i class="fa-solid fa-circle-info"></i>
                                     <select
                                       [ngModel]="callout.CalloutType"
+                                      [disabled]="!CanEditSegment(seg)"
                                       (ngModelChange)="UpdateCalloutType(seg, $event)"
                                       aria-label="Callout Type"
                                     >
@@ -1191,11 +1411,12 @@ interface DocsInlineToken {
                                   [attr.data-testid]="'editable-code-' + seg.SegmentID"
                                 >
                                   <div class="mj-docs-editable-code__header">
-                                    <span><i class="fas fa-code"></i> Code Block</span>
+                                    <span><i class="fa-solid fa-code"></i> Code Block</span>
                                     <input
                                       type="text"
                                       class="mj-docs-code-lang-input"
                                       [ngModel]="codeBlock.Language"
+                                      [disabled]="!CanEditSegment(seg)"
                                       (ngModelChange)="UpdateCodeBlockLanguage(seg, $event)"
                                       placeholder="language"
                                     />
@@ -1207,6 +1428,8 @@ interface DocsInlineToken {
                                     data-placeholder="Code snippet…"
                                     [attr.data-testid]="'editable-code-body-' + seg.SegmentID"
                                     [textContent]="codeBlock.Code"
+                                    (focus)="OnSegmentSurfaceFocus(seg)"
+                                    (input)="OnEditableBlockDomDirty(seg)"
                                     (blur)="CommitEditableCodeBlock(seg, $event)"
                                     (keydown)="OnEditableBlockKeydown(seg, $event)"
                                   ></pre>
@@ -1237,11 +1460,14 @@ interface DocsInlineToken {
                             (dblclick)="OnPreviewBlockDoubleClick(seg)"
                           >
                             <mj-markdown
-                              [data]="seg.RawMarkdown"
-                              [enableCollapsibleHeadings]="true"
-                              [enableLineNumbers]="false"
-                              [enableSmartypants]="true"
-                              [enableHtml]="true"
+                              [Data]="seg.RawMarkdown"
+                              [EnableCollapsibleHeadings]="true"
+                              [EnableLineNumbers]="false"
+                              [EnableHighlight]="true"
+                              [EnableSmartypants]="true"
+                              [EnableCodeCopy]="true"
+                              [EnableHeadingIds]="true"
+                              [EnableHtml]="false"
                             ></mj-markdown>
                           </div>
                         }
@@ -1264,12 +1490,12 @@ interface DocsInlineToken {
                                 (click)="ToggleBlockCollapsed(seg.Descriptor)"
                               >
                                 <i
-                                  class="fas"
+                                  class="fa-solid"
                                   [ngClass]="IsBlockCollapsed(seg.Descriptor) ? 'fa-chevron-right' : 'fa-chevron-down'"
                                 ></i>
                               </button>
                               <i
-                                class="fas"
+                                class="fa-solid"
                                 [ngClass]="
                                   seg.Descriptor.ArtifactType === 'Whiteboard' ? 'fa-chalkboard' : 'fa-cube'
                                 "
@@ -1298,7 +1524,7 @@ interface DocsInlineToken {
                                   [attr.data-testid]="'update-from-source-workbook-btn-' + seg.Descriptor.BlockID"
                                   (click)="UpdateEmbeddedArtifactToLatestVersion(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-arrow-up-from-bracket"></i>
+                                  <i class="fa-solid fa-arrow-up-from-bracket"></i>
                                   <span>
                                     Update from Source Workbook (v{{ GetEmbeddedArtifactVersion(seg.Descriptor)?.VersionNumber || 1 }} → v{{ newerVer.VersionNumber }})
                                   </span>
@@ -1311,22 +1537,24 @@ interface DocsInlineToken {
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
+                                  [disabled]="!CanEditSegment(seg)"
                                   title="Change Embedded Artifact or Display Settings"
                                   [attr.data-testid]="'configure-block-btn-' + seg.Descriptor.BlockID"
                                   (click)="OpenConfigureBlockModal(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-sliders"></i>
+                                  <i class="fa-solid fa-sliders"></i>
                                   <span>Configure</span>
                                 </button>
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
+                                  [disabled]="!CanEditSegment(seg)"
                                   [class.mj-docs-btn--primary]="IsInlineEditingBlock(seg.Descriptor.BlockID)"
                                   [attr.data-testid]="'toggle-inline-ole-btn-' + seg.Descriptor.BlockID"
                                   (click)="ToggleInlineArtifactEdit(seg.Descriptor)"
                                 >
                                   <i
-                                    class="fas"
+                                    class="fa-solid"
                                     [ngClass]="
                                       IsInlineEditingBlock(seg.Descriptor.BlockID)
                                         ? 'fa-check'
@@ -1344,11 +1572,12 @@ interface DocsInlineToken {
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
+                                  [disabled]="!CanEditSegment(seg)"
                                   title="Toggle Version Pin (Pinned vs. Track Latest)"
                                   [attr.data-testid]="'toggle-pin-ole-btn-' + seg.Descriptor.BlockID"
                                   (click)="TogglePinArtifactVersion(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-thumbtack"></i>
+                                  <i class="fa-solid fa-thumbtack"></i>
                                   <span>{{ GetPinArtifactVersionButtonLabel(seg.Descriptor) }}</span>
                                 </button>
                               }
@@ -1360,7 +1589,7 @@ interface DocsInlineToken {
                                 (click)="ToggleExpandOleBlock(seg.Descriptor)"
                               >
                                 <i
-                                  class="fas"
+                                  class="fa-solid"
                                   [ngClass]="
                                     ExpandedOleBlockID === seg.Descriptor.BlockID ? 'fa-compress' : 'fa-expand'
                                   "
@@ -1373,7 +1602,7 @@ interface DocsInlineToken {
                                 title="Comment on Embedded Artifact"
                                 (click)="OpenAnchorCommentForSegment(seg)"
                               >
-                                <i class="fas fa-comment"></i>
+                                <i class="fa-solid fa-comment"></i>
                               </button>
                             </div>
                           </div>
@@ -1389,8 +1618,9 @@ interface DocsInlineToken {
                               <mj-artifact-type-plugin-viewer
                                 [Provider]="Provider"
                                 [artifactVersion]="embeddedVer"
-                                [ArtifactTypeName]="seg.Descriptor.ArtifactType || 'Whiteboard'"
-                                [readonly]="!IsInlineEditingBlock(seg.Descriptor.BlockID)"
+                                [ArtifactTypeName]="GetEmbeddedArtifactTypeName(seg.Descriptor)"
+                                [AncestorArtifactIDs]="EffectiveAncestorArtifactIDs"
+                                [readonly]="!CanEditSegment(seg) || !IsInlineEditingBlock(seg.Descriptor.BlockID)"
                                 (ContentCommitted)="OnEmbeddedArtifactContentCommitted(seg.Descriptor, $event)"
                               ></mj-artifact-type-plugin-viewer>
                             } @else {
@@ -1399,7 +1629,7 @@ interface DocsInlineToken {
                                 [attr.data-testid]="'ole-artifact-placeholder-' + seg.Descriptor.BlockID"
                               >
                                 @if (IsEmbeddedArtifactLoading(seg.Descriptor)) {
-                                  <i class="fas fa-spinner fa-spin"></i> Loading embedded artifact…
+                                  <i class="fa-solid fa-spinner fa-spin"></i> Loading embedded artifact…
                                 } @else {
                                   <span>{{ GetEmbeddedArtifactError(seg.Descriptor) || 'Embedded artifact unavailable or access denied.' }}</span>
                                 }
@@ -1429,11 +1659,11 @@ interface DocsInlineToken {
                                 (click)="ToggleBlockCollapsed(seg.Descriptor)"
                               >
                                 <i
-                                  class="fas"
+                                  class="fa-solid"
                                   [ngClass]="IsBlockCollapsed(seg.Descriptor) ? 'fa-chevron-right' : 'fa-chevron-down'"
                                 ></i>
                               </button>
-                              <i class="fas" [ngClass]="GetLiveBlockIcon(seg.Descriptor.Kind)"></i>
+                              <i class="fa-solid" [ngClass]="GetLiveBlockIcon(seg.Descriptor.Kind)"></i>
                               <strong>{{
                                 seg.Descriptor.Title ||
                                   seg.Descriptor.EntityName ||
@@ -1463,6 +1693,7 @@ interface DocsInlineToken {
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
+                                  [disabled]="!CanEditSegment(seg)"
                                   [title]="
                                     seg.Descriptor.Kind === 'EntityView'
                                       ? 'Change Entity, View, Filter, or Display Settings'
@@ -1473,7 +1704,7 @@ interface DocsInlineToken {
                                   [attr.data-testid]="'configure-block-btn-' + seg.Descriptor.BlockID"
                                   (click)="OpenConfigureBlockModal(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-sliders"></i>
+                                  <i class="fa-solid fa-sliders"></i>
                                   <span>
                                     {{
                                       seg.Descriptor.Kind === 'EntityView'
@@ -1492,46 +1723,64 @@ interface DocsInlineToken {
                                   title="Refresh Live Data"
                                   (click)="RefreshLiveBlock(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-arrows-rotate"></i> Refresh
+                                  <i class="fa-solid fa-arrows-rotate"></i> Refresh
                                 </button>
                                 @if (CanUserEdit) {
                                   <button
                                     type="button"
                                     class="mj-docs-btn"
+                                    [disabled]="!CanEditSegment(seg)"
                                     title="Freeze Snapshot into Document"
                                     [attr.data-testid]="'freeze-block-btn-' + seg.Descriptor.BlockID"
                                     (click)="PromptFreezeBlock(seg.Descriptor)"
                                   >
-                                    <i class="fas fa-snowflake"></i> Freeze Snapshot
+                                    <i class="fa-solid fa-snowflake"></i> Freeze Snapshot
                                   </button>
                                 }
-                              } @else if (CanUserEdit) {
+                              } @else {
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
-                                  title="Restore Live Mode"
-                                  [attr.data-testid]="'unfreeze-block-btn-' + seg.Descriptor.BlockID"
-                                  (click)="UnfreezeLiveBlock(seg.Descriptor)"
+                                  title="Compare this frozen snapshot with live viewer data"
+                                  [attr.data-testid]="'compare-live-btn-' + seg.Descriptor.BlockID"
+                                  (click)="CompareFrozenBlockWithLive(seg.Descriptor)"
                                 >
-                                  <i class="fas fa-bolt"></i> Switch to Live
+                                  <i class="fa-solid fa-code-compare"></i>
+                                  {{ OpenDriftPanelBlockID === seg.Descriptor.BlockID ? 'Hide Drift' : 'Compare with Live' }}
                                 </button>
+                                @if (CanUserEdit) {
+                                  <button
+                                    type="button"
+                                    class="mj-docs-btn"
+                                    [disabled]="!CanEditSegment(seg)"
+                                    title="Restore Live Mode"
+                                    [attr.data-testid]="'unfreeze-block-btn-' + seg.Descriptor.BlockID"
+                                    (click)="UnfreezeLiveBlock(seg.Descriptor)"
+                                  >
+                                    <i class="fa-solid fa-bolt"></i> Switch to Live
+                                  </button>
+                                }
                               }
                             </div>
                           </div>
 
                           @if (seg.Descriptor.Mode === 'Frozen' && seg.Descriptor.FrozenSnapshot) {
                             @if (IsSnapshotVerified(seg.Descriptor)) {
+                              @let preVerifiedSnap = GetBlockPreVerifiedSnapshot(seg.Descriptor);
                               <div class="mj-docs-live-block__provenance" data-testid="frozen-provenance-banner">
-                                <i class="fas fa-shield-halved"></i>
+                                <i class="fa-solid fa-shield-halved"></i>
                                 <span>
-                                  Frozen snapshot captured at <strong>{{ seg.Descriptor.FrozenSnapshot.FrozenAt }}</strong>
+                                  Verified Snapshot captured at
+                                  <strong>{{ seg.Descriptor.FrozenSnapshot.FrozenAt || preVerifiedSnap?.FrozenAt }}</strong>
                                   @if (
                                     seg.Descriptor.FrozenSnapshot.FrozenByUserName ||
+                                    preVerifiedSnap?.FrozenByUserName ||
                                     seg.Descriptor.FrozenSnapshot.FrozenByUserID
                                   ) {
                                     by
                                     <strong>{{
                                       seg.Descriptor.FrozenSnapshot.FrozenByUserName ||
+                                        preVerifiedSnap?.FrozenByUserName ||
                                         seg.Descriptor.FrozenSnapshot.FrozenByUserID
                                     }}</strong>
                                   }
@@ -1543,12 +1792,82 @@ interface DocsInlineToken {
                                 data-testid="unverified-snapshot-banner"
                                 [attr.data-block-id]="seg.Descriptor.BlockID"
                               >
-                                <i class="fas fa-triangle-exclamation"></i>
+                                <i class="fa-solid fa-triangle-exclamation"></i>
                                 <span>
                                   Unverified Snapshot — signature missing or invalid (captured at
                                   {{ seg.Descriptor.FrozenSnapshot.FrozenAt }})
                                 </span>
                               </div>
+                            }
+
+                            @if (OpenDriftPanelBlockID === seg.Descriptor.BlockID) {
+                              @if (GetFrozenDriftComparison(seg.Descriptor.BlockID); as drift) {
+                                <div
+                                  class="mj-docs-drift-panel"
+                                  [attr.data-testid]="'frozen-drift-panel-' + seg.Descriptor.BlockID"
+                                >
+                                  <div class="mj-docs-drift-panel__header">
+                                    <strong>
+                                      <i class="fa-solid fa-code-compare"></i>
+                                      Live vs. Frozen Comparison
+                                    </strong>
+                                    @if (drift.Loading) {
+                                      <span class="mj-docs-picker-muted">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Checking live query…
+                                      </span>
+                                    } @else if (drift.CheckedAt) {
+                                      <span class="mj-docs-picker-muted">Checked {{ drift.CheckedAt }}</span>
+                                    }
+                                  </div>
+                                  @if (drift.ErrorMessage) {
+                                    <div class="mj-docs-live-block__error">
+                                      <i class="fa-solid fa-triangle-exclamation"></i>
+                                      <span>{{ drift.ErrorMessage }}</span>
+                                    </div>
+                                  } @else if (!drift.Loading) {
+                                    <div class="mj-docs-drift-panel__summary" [attr.data-testid]="'drift-summary-' + seg.Descriptor.BlockID">
+                                      <span class="mj-docs-badge mj-docs-badge--live">+{{ drift.AddedRows }} new rows</span>
+                                      <span class="mj-docs-badge">-{{ drift.RemovedRows }} removed</span>
+                                      <span class="mj-docs-badge mj-docs-badge--brand">{{ drift.ModifiedCells }} updated cells</span>
+                                      <span class="mj-docs-badge">{{ drift.UnchangedRows }} unchanged</span>
+                                    </div>
+                                    @if (drift.SampleDiffs.length > 0) {
+                                      <ul class="mj-docs-drift-panel__list">
+                                        @for (item of drift.SampleDiffs; track $index) {
+                                          <li>
+                                            <span class="mj-docs-badge">{{ item.Kind }}</span>
+                                            <strong>{{ item.RowLabel }}:</strong>
+                                            <span>{{ item.Summary }}</span>
+                                          </li>
+                                        }
+                                      </ul>
+                                    } @else {
+                                      <div class="mj-docs-picker-muted">Frozen snapshot matches current live rows cleanly.</div>
+                                    }
+                                    @if (CanUserEdit) {
+                                      <div class="mj-docs-drift-panel__actions">
+                                        <button
+                                          type="button"
+                                          class="mj-docs-btn mj-docs-btn--primary"
+                                          [disabled]="!CanEditSegment(seg)"
+                                          [attr.data-testid]="'refreeze-block-btn-' + seg.Descriptor.BlockID"
+                                          (click)="RefreezeFrozenBlock(seg.Descriptor)"
+                                        >
+                                          <i class="fa-solid fa-snowflake"></i> Re-Freeze Snapshot
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="mj-docs-btn"
+                                          [disabled]="!CanEditSegment(seg)"
+                                          (click)="UnfreezeLiveBlock(seg.Descriptor)"
+                                        >
+                                          <i class="fa-solid fa-bolt"></i> Switch to Live
+                                        </button>
+                                      </div>
+                                    }
+                                  }
+                                </div>
+                              }
                             }
                           }
 
@@ -1558,7 +1877,7 @@ interface DocsInlineToken {
                               execResult.StrippedServerSetParameters.length > 0
                             ) {
                               <div class="mj-docs-live-block__security-note" data-testid="block-security-note">
-                                <i class="fas fa-lock"></i>
+                                <i class="fa-solid fa-lock"></i>
                                 <span>
                                   Stripped server-only params: {{ execResult.StrippedServerSetParameters.join(', ') }}
                                 </span>
@@ -1568,7 +1887,7 @@ interface DocsInlineToken {
                             <div class="mj-docs-live-block__body" [hidden]="IsBlockCollapsed(seg.Descriptor)">
                               @if (!execResult.Success) {
                                 <div class="mj-docs-live-block__error">
-                                  <i class="fas fa-triangle-exclamation"></i>
+                                  <i class="fa-solid fa-triangle-exclamation"></i>
                                   <span>{{ execResult.ErrorMessage }}</span>
                                 </div>
                               } @else if (execResult.Columns.length > 0) {
@@ -1585,12 +1904,12 @@ interface DocsInlineToken {
                                               <span>{{ col.DisplayName || col.Name }}</span>
                                               @if (col.IsPrimaryKey) {
                                                 <i
-                                                  class="fas fa-key mj-docs-col-hdr__icon"
+                                                  class="fa-solid fa-key mj-docs-col-hdr__icon"
                                                   title="Primary Key — click cell to open record"
                                                 ></i>
                                               } @else if (col.IsForeignKey) {
                                                 <i
-                                                  class="fas fa-link mj-docs-col-hdr__icon"
+                                                  class="fa-solid fa-link mj-docs-col-hdr__icon"
                                                   [title]="'Linked to ' + (col.TargetEntityName || 'related record') + ' — click cell to open'"
                                                 ></i>
                                               }
@@ -1623,7 +1942,7 @@ interface DocsInlineToken {
                                                   (click)="OnBlockRecordCellClick(seg.Descriptor, col, row, $event)"
                                                 >
                                                   <i
-                                                    class="fas"
+                                                    class="fa-solid"
                                                     [ngClass]="
                                                       col.IsForeignKey
                                                         ? 'fa-arrow-up-right-from-square'
@@ -1671,7 +1990,7 @@ interface DocsInlineToken {
                                       [attr.data-testid]="'block-prev-page-' + seg.Descriptor.BlockID"
                                       (click)="ChangeBlockPage(seg.Descriptor, -1, execResult.Rows.length)"
                                     >
-                                      <i class="fas fa-chevron-left"></i> Prev
+                                      <i class="fa-solid fa-chevron-left"></i> Prev
                                     </button>
                                     <span class="mj-docs-pager__page-num">
                                       Page {{ GetBlockPageNumber(seg.Descriptor) }} /
@@ -1687,7 +2006,7 @@ interface DocsInlineToken {
                                       [attr.data-testid]="'block-next-page-' + seg.Descriptor.BlockID"
                                       (click)="ChangeBlockPage(seg.Descriptor, 1, execResult.Rows.length)"
                                     >
-                                      Next <i class="fas fa-chevron-right"></i>
+                                      Next <i class="fa-solid fa-chevron-right"></i>
                                     </button>
                                   </div>
                                 </div>
@@ -1710,7 +2029,7 @@ interface DocsInlineToken {
                           >
                             <div class="mj-docs-suggestion-card__header">
                               <span>
-                                <i class="fas fa-code-pull-request"></i>
+                                <i class="fa-solid fa-code-pull-request"></i>
                                 Suggestion by <strong>{{ sug.AuthorName }}</strong>
                                 @if (wordDiff.Hunks.length > 0) {
                                   <span class="mj-docs-suggestion-count-pill">
@@ -1762,20 +2081,22 @@ interface DocsInlineToken {
                                         <button
                                           type="button"
                                           class="mj-docs-btn mj-docs-btn--xs mj-docs-btn--primary"
+                                          [disabled]="!CanEditSuggestionTarget(sug)"
                                           title="Accept only this word/phrase edit"
                                           [attr.data-testid]="'accept-hunk-btn-' + sug.SuggestionID + '-' + hunk.HunkID"
                                           (click)="AcceptSuggestionHunk(sug, hunk)"
                                         >
-                                          <i class="fas fa-check"></i>
+                                          <i class="fa-solid fa-check"></i>
                                         </button>
                                         <button
                                           type="button"
                                           class="mj-docs-btn mj-docs-btn--xs"
+                                          [disabled]="!CanEditSuggestionTarget(sug)"
                                           title="Reject only this word/phrase edit"
                                           [attr.data-testid]="'reject-hunk-btn-' + sug.SuggestionID + '-' + hunk.HunkID"
                                           (click)="RejectSuggestionHunk(sug, hunk)"
                                         >
-                                          <i class="fas fa-xmark"></i>
+                                          <i class="fa-solid fa-xmark"></i>
                                         </button>
                                       </div>
                                     }
@@ -1789,19 +2110,21 @@ interface DocsInlineToken {
                                 <button
                                   type="button"
                                   class="mj-docs-btn mj-docs-btn--primary"
+                                  [disabled]="!CanEditSuggestionTarget(sug)"
                                   [attr.data-testid]="'accept-suggestion-btn-' + sug.SuggestionID"
                                   (click)="AcceptSuggestion(sug)"
                                 >
-                                  <i class="fas fa-check"></i>
+                                  <i class="fa-solid fa-check"></i>
                                   {{ wordDiff.Hunks.length > 1 ? 'Accept All (' + wordDiff.Hunks.length + ')' : 'Accept' }}
                                 </button>
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
+                                  [disabled]="!CanEditSuggestionTarget(sug)"
                                   [attr.data-testid]="'reject-suggestion-btn-' + sug.SuggestionID"
                                   (click)="RejectSuggestion(sug)"
                                 >
-                                  <i class="fas fa-xmark"></i>
+                                  <i class="fa-solid fa-xmark"></i>
                                   {{ wordDiff.Hunks.length > 1 ? 'Reject All' : 'Reject' }}
                                 </button>
                               </div>
@@ -1824,7 +2147,7 @@ interface DocsInlineToken {
                   (keydown.enter)="AppendOrFocusTrailingParagraph()"
                 >
                   <span class="mj-docs-trailing-flow-zone__hint">
-                    <i class="fas fa-plus"></i>
+                    <i class="fa-solid fa-plus"></i>
                     <span>Click or press Enter to continue writing, or type <kbd>/</kbd> for commands…</span>
                   </span>
                 </div>
@@ -1837,7 +2160,7 @@ interface DocsInlineToken {
         @if (ShowCommentsDrawer) {
           <aside class="mj-docs-comments-drawer" data-testid="docs-comments-drawer">
             <div class="mj-docs-comments-drawer__header">
-              <h4><i class="fas fa-comments"></i> Anchored Comments</h4>
+              <h4><i class="fa-solid fa-comments"></i> Anchored Comments</h4>
               <div class="mj-docs-comments-filter">
                 <button
                   type="button"
@@ -1869,7 +2192,7 @@ interface DocsInlineToken {
             <!-- New Anchored Comment / @mention Agent Composer -->
             <div class="mj-docs-comment-composer" data-testid="anchored-comment-composer">
               <div class="mj-docs-comment-composer__anchor">
-                <i class="fas fa-anchor"></i>
+                <i class="fa-solid fa-anchor"></i>
                 <span>Anchor: <strong>{{ SelectedAnchorLabel || SelectedAnchorKey || 'Document Root' }}</strong></span>
               </div>
               @if (SelectedAnchorQuote) {
@@ -1894,11 +2217,11 @@ interface DocsInlineToken {
                 <button
                   type="button"
                   class="mj-docs-btn mj-docs-btn--primary"
-                  [disabled]="!NewCommentText.trim()"
+                  [disabled]="IsPostingComment || !NewCommentText.trim()"
                   data-testid="post-anchored-comment-btn"
                   (click)="PostAnchoredComment()"
                 >
-                  <i class="fas fa-paper-plane"></i> Post
+                  <i class="fa-solid fa-paper-plane"></i> Post
                 </button>
               </div>
             </div>
@@ -1918,7 +2241,7 @@ interface DocsInlineToken {
                   >
                     <div class="mj-docs-thread-card__header">
                       <span class="mj-docs-thread-anchor" (click)="FocusAnchorBlock(thread.AnchorKey)">
-                        <i class="fas fa-crosshairs"></i> {{ thread.AnchorLabel }}
+                        <i class="fa-solid fa-crosshairs"></i> {{ thread.AnchorLabel }}
                       </span>
                       <button
                         type="button"
@@ -1933,7 +2256,7 @@ interface DocsInlineToken {
                       <div class="mj-docs-thread-card__quote">"{{ thread.QuotedText }}"</div>
                     }
                     <div class="mj-docs-thread-messages">
-                      @for (msg of thread.Messages; track msg.DetailID) {
+                      @for (msg of thread.Messages; track msg.DetailID + '::' + $index) {
                         <div
                           class="mj-docs-thread-msg"
                           [class.mj-docs-thread-msg--agent]="msg.Role === 'Agent'"
@@ -1947,6 +2270,26 @@ interface DocsInlineToken {
                           <div class="mj-docs-thread-msg__body">{{ msg.Message }}</div>
                         </div>
                       }
+                    </div>
+                    <div class="mj-docs-thread-reply" [attr.data-testid]="'thread-reply-box-' + thread.ConversationID">
+                      <input
+                        type="text"
+                        class="mj-docs-thread-reply__input"
+                        placeholder="Reply in thread (use @Agent to mention)…"
+                        [ngModel]="GetThreadReplyDraft(thread.ConversationID)"
+                        (ngModelChange)="SetThreadReplyDraft(thread.ConversationID, $event)"
+                        (keydown.enter)="ReplyToAnchoredThread(thread)"
+                        [attr.data-testid]="'thread-reply-input-' + thread.ConversationID"
+                      />
+                      <button
+                        type="button"
+                        class="mj-docs-btn mj-docs-btn--xs mj-docs-btn--primary"
+                        [disabled]="!GetThreadReplyDraft(thread.ConversationID).trim() || ReplyingThreadIds.has(thread.ConversationID)"
+                        [attr.data-testid]="'thread-reply-submit-' + thread.ConversationID"
+                        (click)="ReplyToAnchoredThread(thread)"
+                      >
+                        <i class="fa-solid fa-reply"></i> Reply
+                      </button>
                     </div>
                   </div>
                 }
@@ -1962,7 +2305,7 @@ interface DocsInlineToken {
           <div class="mj-docs-modal" role="dialog" aria-labelledby="freeze-modal-title">
             <div class="mj-docs-modal__header">
               <h3 id="freeze-modal-title">
-                <i class="fas fa-triangle-exclamation"></i> Freeze Live MJ Data Snapshot?
+                <i class="fa-solid fa-triangle-exclamation"></i> Freeze Live MJ Data Snapshot?
               </h3>
             </div>
             <div class="mj-docs-modal__body">
@@ -1998,7 +2341,7 @@ interface DocsInlineToken {
                 data-testid="confirm-freeze-btn"
                 (click)="ConfirmFreezeBlock()"
               >
-                <i class="fas fa-snowflake"></i> Confirm Freeze Snapshot
+                <i class="fa-solid fa-snowflake"></i> Confirm Freeze Snapshot
               </button>
               <button type="button" class="mj-docs-btn" (click)="CancelFreezeBlock()">Cancel</button>
             </div>
@@ -2021,7 +2364,7 @@ interface DocsInlineToken {
                 title="Close"
                 (click)="CancelBlockInsertModal()"
               >
-                <i class="fas fa-xmark"></i>
+                <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
 
@@ -2039,7 +2382,7 @@ interface DocsInlineToken {
                     }
                   </div>
                   <div class="mj-docs-picker-combobox">
-                    <i class="fas fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
+                    <i class="fa-solid fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
                     <input
                       type="text"
                       class="mj-docs-picker-combobox__input"
@@ -2064,7 +2407,7 @@ interface DocsInlineToken {
                         title="Clear entity"
                         (click)="ClearSelectedEntity()"
                       >
-                        <i class="fas fa-xmark"></i>
+                        <i class="fa-solid fa-xmark"></i>
                       </button>
                     }
                     <button
@@ -2074,7 +2417,7 @@ interface DocsInlineToken {
                       (click)="ToggleEntityPickerDropdown()"
                       data-testid="toggle-entity-picker-btn"
                     >
-                      <i class="fas" [ngClass]="ShowEntityPickerDropdown ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                      <i class="fa-solid" [ngClass]="ShowEntityPickerDropdown ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                   </div>
 
@@ -2111,7 +2454,7 @@ interface DocsInlineToken {
                                 <span class="mj-docs-picker-option__sub">{{ opt.Name }} · {{ opt.Subtitle }}</span>
                               </span>
                               @if (opt.Name === NewBlockEntityName) {
-                                <i class="fas fa-check mj-docs-picker-option__check"></i>
+                                <i class="fa-solid fa-check mj-docs-picker-option__check"></i>
                               }
                             </button>
                           }
@@ -2126,7 +2469,7 @@ interface DocsInlineToken {
                   <div class="mj-docs-field__label-row">
                     <span>View Configuration</span>
                     @if (IsLoadingEntityViews) {
-                      <span class="mj-docs-picker-muted"><i class="fas fa-spinner fa-spin"></i> Loading views…</span>
+                      <span class="mj-docs-picker-muted"><i class="fa-solid fa-spinner fa-spin"></i> Loading views…</span>
                     }
                   </div>
                   <div class="mj-docs-view-mode-cards" role="radiogroup" aria-label="View Mode">
@@ -2138,7 +2481,7 @@ interface DocsInlineToken {
                       data-testid="view-mode-default-btn"
                     >
                       <div class="mj-docs-view-mode-card__top">
-                        <i class="fas fa-table-columns"></i>
+                        <i class="fa-solid fa-table-columns"></i>
                         <strong>Default View</strong>
                       </div>
                       <span class="mj-docs-view-mode-card__desc">
@@ -2154,7 +2497,7 @@ interface DocsInlineToken {
                       data-testid="view-mode-saved-btn"
                     >
                       <div class="mj-docs-view-mode-card__top">
-                        <i class="fas fa-bookmark"></i>
+                        <i class="fa-solid fa-bookmark"></i>
                         <strong>Named View</strong>
                         <span class="mj-docs-badge">{{ AvailableEntityViews.length }}</span>
                       </div>
@@ -2178,7 +2521,7 @@ interface DocsInlineToken {
                               (click)="SelectSavedViewOption(viewOpt)"
                               [attr.data-testid]="'saved-view-option-' + viewOpt.ID"
                             >
-                              <i class="fas fa-table-list"></i>
+                              <i class="fa-solid fa-table-list"></i>
                               <div class="mj-docs-saved-view-item__text">
                                 <strong>{{ viewOpt.Name }}</strong>
                                 @if (viewOpt.Description) {
@@ -2186,7 +2529,7 @@ interface DocsInlineToken {
                                 }
                               </div>
                               @if (IsSameUuid(NewBlockViewID, viewOpt.ID) || NewBlockViewName === viewOpt.Name) {
-                                <i class="fas fa-circle-check mj-docs-picker-option__check"></i>
+                                <i class="fa-solid fa-circle-check mj-docs-picker-option__check"></i>
                               }
                             </button>
                           }
@@ -2213,7 +2556,7 @@ interface DocsInlineToken {
                 <div class="mj-docs-field mj-docs-picker-field">
                   <span>Query</span>
                   <div class="mj-docs-picker-combobox">
-                    <i class="fas fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
+                    <i class="fa-solid fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
                     <input
                       type="text"
                       class="mj-docs-picker-combobox__input"
@@ -2232,7 +2575,7 @@ interface DocsInlineToken {
                           [class.mj-docs-saved-view-item--active]="NewBlockQueryName === qOpt.Name"
                           (click)="SelectQueryOption(qOpt)"
                         >
-                          <i class="fas fa-database"></i>
+                          <i class="fa-solid fa-database"></i>
                           <div class="mj-docs-saved-view-item__text">
                             <strong>{{ qOpt.Name }}</strong>
                             <span>{{ qOpt.Category || 'Query' }}{{ qOpt.Description ? ' · ' + qOpt.Description : '' }}</span>
@@ -2254,7 +2597,7 @@ interface DocsInlineToken {
                           [class.mj-docs-saved-view-item--active]="IsSameUuid(NewBlockArtifactID, artOpt.ID)"
                           (click)="SelectArtifactOption(artOpt)"
                         >
-                          <i class="fas fa-cube"></i>
+                          <i class="fa-solid fa-cube"></i>
                           <div class="mj-docs-saved-view-item__text">
                             <strong>{{ artOpt.Name }}</strong>
                             <span>{{ artOpt.Type }}</span>
@@ -2268,7 +2611,8 @@ interface DocsInlineToken {
                   <span>Target Artifact ID</span>
                   <input
                     type="text"
-                    [(ngModel)]="NewBlockArtifactID"
+                    [ngModel]="NewBlockArtifactID"
+                    (ngModelChange)="OnNewBlockArtifactIdChanged($event)"
                     placeholder="Artifact UUID"
                     data-testid="new-block-artifact-id-input"
                   />
@@ -2293,7 +2637,7 @@ interface DocsInlineToken {
                         data-testid="sheet-embed-mode-chart"
                         (click)="SetSheetEmbedMode('chart')"
                       >
-                        <i class="fas fa-chart-column"></i> Chart
+                        <i class="fa-solid fa-chart-column"></i> Chart
                       </button>
                       <button
                         type="button"
@@ -2302,7 +2646,7 @@ interface DocsInlineToken {
                         data-testid="sheet-embed-mode-range"
                         (click)="SetSheetEmbedMode('range')"
                       >
-                        <i class="fas fa-table-cells"></i> Cell Range
+                        <i class="fa-solid fa-table-cells"></i> Cell Range
                       </button>
                       <button
                         type="button"
@@ -2311,7 +2655,7 @@ interface DocsInlineToken {
                         data-testid="sheet-embed-mode-full"
                         (click)="SetSheetEmbedMode('full')"
                       >
-                        <i class="fas fa-file-excel"></i> Full Workbook
+                        <i class="fa-solid fa-file-excel"></i> Full Workbook
                       </button>
                     </div>
                   </div>
@@ -2400,10 +2744,10 @@ interface DocsInlineToken {
                   data-testid="toggle-advanced-block-options-btn"
                 >
                   <span>
-                    <i class="fas fa-sliders"></i>
+                    <i class="fa-solid fa-sliders"></i>
                     Advanced Options (Filter, Pagination, Default Collapse)
                   </span>
-                  <i class="fas" [ngClass]="ShowAdvancedBlockOptions ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  <i class="fa-solid" [ngClass]="ShowAdvancedBlockOptions ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                 </button>
 
                 <div class="mj-docs-advanced-body" [hidden]="!ShowAdvancedBlockOptions">
@@ -2476,7 +2820,7 @@ interface DocsInlineToken {
           <div class="mj-docs-modal mj-docs-modal--picker" role="dialog" aria-labelledby="docs-permissions-modal-title">
             <div class="mj-docs-modal__header mj-docs-modal__header--with-sub">
               <div>
-                <h3 id="docs-permissions-modal-title"><i class="fas fa-user-shield"></i> Share &amp; Document Access</h3>
+                <h3 id="docs-permissions-modal-title"><i class="fa-solid fa-user-shield"></i> Share &amp; Document Access</h3>
                 <p class="mj-docs-modal__subtitle">
                   Manage who can view, comment on, edit, or share this artifact across MJ Docs, Sheets, and Slides.
                 </p>
@@ -2488,7 +2832,7 @@ interface DocsInlineToken {
                 data-testid="close-permissions-modal-btn"
                 (click)="ClosePermissionsModal()"
               >
-                <i class="fas fa-xmark"></i>
+                <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
 
@@ -2537,7 +2881,7 @@ interface DocsInlineToken {
                     data-testid="grant-permission-btn"
                     (click)="GrantArtifactPermission()"
                   >
-                    <i class="fas fa-user-plus"></i> Share
+                    <i class="fa-solid fa-user-plus"></i> Share
                   </button>
                 </div>
               }
@@ -2547,7 +2891,7 @@ interface DocsInlineToken {
                 <div class="mj-docs-saved-view-list">
                   @for (perm of ArtifactPermissionEntries; track perm.ID) {
                     <div class="mj-docs-saved-view-item" [attr.data-testid]="'perm-entry-' + perm.UserID">
-                      <i class="fas" [ngClass]="perm.IsOwner ? 'fa-crown' : 'fa-user-check'"></i>
+                      <i class="fa-solid" [ngClass]="perm.IsOwner ? 'fa-crown' : 'fa-user-check'"></i>
                       <div class="mj-docs-saved-view-item__text">
                         <strong>{{ perm.UserName }}</strong>
                         <span>{{ perm.UserEmail || 'Workspace Member' }}</span>
@@ -2563,7 +2907,7 @@ interface DocsInlineToken {
                           [attr.data-testid]="'revoke-perm-btn-' + perm.UserID"
                           (click)="RevokeArtifactPermission(perm)"
                         >
-                          <i class="fas fa-trash-can"></i>
+                          <i class="fa-solid fa-trash-can"></i>
                         </button>
                       }
                     </div>
@@ -2591,6 +2935,15 @@ interface DocsInlineToken {
         (ItemSelected)="OnDocsContextMenuCommand($event)"
         (Closed)="CloseDocsContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Document Commands"
+        Placeholder="Search outline, blocks, suggest mode, diff, export..."
+        [Commands]="DocsCommandPaletteItems"
+        (Execute)="ExecuteDocsPaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2609,19 +2962,26 @@ interface DocsInlineToken {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 8px 12px;
-        background: var(--mj-bg-surface-card);
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-docs-toolbar::-webkit-scrollbar {
+        display: none;
       }
 
       .mj-docs-toolbar__left,
       .mj-docs-toolbar__right {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
       }
 
       .mj-docs-mode-group,
@@ -2687,6 +3047,35 @@ interface DocsInlineToken {
         background: transparent;
         border-color: transparent;
         color: var(--mj-text-muted);
+      }
+
+      .mj-docs-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+
+      .mj-docs-btn--ai {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+
+      .mj-docs-cmdk-btn {
+        padding: 4px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+
+      .mj-docs-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-presence-pill--compact {
+        padding: 4px 7px;
       }
 
       .mj-docs-btn--saved-quiet:hover:not(:disabled) {
@@ -2957,6 +3346,48 @@ interface DocsInlineToken {
         border-bottom-color: var(--mj-status-warning-border);
       }
 
+      .mj-docs-drift-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 6px 14px;
+        font-size: 12px;
+        background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+        border-bottom: 1px solid var(--mj-border-default);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-drift-banner__main {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .mj-docs-frozen-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        font-size: 11px;
+      }
+
+      .mj-docs-frozen-meta {
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-drift-banner__actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
       .mj-docs-body {
         flex: 1;
         min-height: 0;
@@ -3084,6 +3515,58 @@ interface DocsInlineToken {
         border: 1px solid var(--mj-border-default);
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      .mj-docs-frontmatter-hero {
+        border-left: 4px solid var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        background: var(--mj-bg-surface-card);
+        border-radius: 0 10px 10px 0;
+        border-top: 1px solid var(--mj-border-subtle);
+        border-right: 1px solid var(--mj-border-subtle);
+        border-bottom: 1px solid var(--mj-border-subtle);
+      }
+      .mj-docs-fm-category {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        margin-bottom: 4px;
+      }
+      .mj-docs-fm-title {
+        margin: 0 0 6px;
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--mj-text-primary);
+      }
+      .mj-docs-fm-subtitle {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: var(--mj-text-secondary);
+      }
+      .mj-docs-fm-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-fm-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .mj-docs-fm-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
       }
 
       .mj-docs-suggest-banner {
@@ -4701,13 +5184,73 @@ interface DocsInlineToken {
         border-top: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface-card);
       }
+
+      .mj-docs-reset-conflict__actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mj-docs-drift-panel {
+        margin: 8px 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 6px;
+        background: var(--mj-bg-surface-card);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .mj-docs-drift-panel__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mj-docs-drift-panel__summary,
+      .mj-docs-drift-panel__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .mj-docs-drift-panel__list {
+        margin: 0;
+        padding-left: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .mj-docs-thread-reply {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--mj-border-subtle);
+      }
+
+      .mj-docs-thread-reply__input {
+        flex: 1;
+        min-width: 0;
+        padding: 5px 8px;
+        font-size: 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+      }
     `,
   ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'MarkdownArtifactViewerPlugin')
 export class MarkdownArtifactViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, OnChanges, OnDestroy
+  implements OnInit, DoCheck, OnDestroy
 {
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
@@ -4724,11 +5267,24 @@ export class MarkdownArtifactViewerComponent
 
   public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
 
+  private _collaborationWsUrl: string | null = null;
+
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
    */
-  @Input() public CollaborationWsUrl: string | null = null;
+  @Input()
+  public get CollaborationWsUrl(): string | null {
+    return this._collaborationWsUrl;
+  }
+  public set CollaborationWsUrl(value: string | null) {
+    if (value !== this._collaborationWsUrl) {
+      this._collaborationWsUrl = value;
+      if (this.isInitialized) {
+        this.setupCollaborationSession();
+      }
+    }
+  }
 
   /** @deprecated Use {@link CollaborationWsUrl}. */
   @Input()
@@ -4747,6 +5303,10 @@ export class MarkdownArtifactViewerComponent
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
   private readonly renderer = inject(Renderer2, { optional: true });
   private readonly ngZone = inject(NgZone, { optional: true });
+  private readonly injectedAncestorArtifactIDs = inject(MJ_EMBEDDED_ARTIFACT_ANCESTORS, {
+    optional: true,
+    skipSelf: true,
+  });
 
   public MarkdownContent = '';
   private initialLoadedMarkdown = '';
@@ -4782,7 +5342,8 @@ export class MarkdownArtifactViewerComponent
   public ShowFormattingRibbon = false;
   public ShowMoreToolsMenu = false;
   public FormattingRibbonPinned = false;
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
+  public ShowCommandPalette = false;
   public readonly ToolbarMenuCategories: ReadonlyArray<{
     Key: ResolvedDocsToolbarItem['Category'];
     Title: string;
@@ -4830,6 +5391,11 @@ export class MarkdownArtifactViewerComponent
   public DocumentSegments: DocumentRenderSegment[] = [];
   public OutlineItems: DocumentOutlineItem[] = [];
   public WordStats = { Words: 0, Characters: 0, Lines: 0, LiveBlocks: 0, EmbeddedArtifacts: 0 };
+  public FrontmatterHeader: DocumentFrontmatterHeader | null = null;
+
+  public get EstimatedReadingMinutes(): number {
+    return Math.max(1, Math.ceil((this.WordStats.Words || 0) / 200));
+  }
 
   // Real-time Yjs session state
   private session: DocumentCollaborationSession | null = null;
@@ -5000,9 +5566,23 @@ export class MarkdownArtifactViewerComponent
   private collapsedHeadingIds = new Set<string>();
   private embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
   private latestArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private embeddedArtifactTypes = new Map<string, string>();
   private inFlightEmbeddedVersionKeys = new Set<string>();
   private failedEmbeddedVersionMessages = new Map<string, string>();
   private inlineEditingBlockIds = new Set<string>();
+  private frozenBlockDriftMap = new Map<string, FrozenBlockDriftComparison>();
+  public OpenDriftPanelBlockID: string | null = null;
+  private hasUncommittedDomInput = false;
+  private pendingSocketSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+  public PendingResetConflictDraft: CollaborationResetConflictDraft | null = null;
+  public IsPostingComment = false;
+  private threadReplyDrafts = new Map<string, string>();
+  public ReplyingThreadIds = new Set<string>();
+  private isApplyingRemoteSuggestions = false;
+  private nextLocalIdSeq = 0;
+  private isInitialized = false;
+  private lastCheckedArtifactVersion: MJArtifactVersionEntity | undefined = undefined;
+  private lastCheckedReadonly: boolean | undefined = undefined;
 
   // Freeze Warning Modal (O5)
   public PendingFreezeBlock: DocumentBlockSpec | null = null;
@@ -5199,40 +5779,50 @@ export class MarkdownArtifactViewerComponent
   }
 
   public ngOnInit(): void {
+    this.lastCheckedArtifactVersion = this.artifactVersion;
+    this.lastCheckedReadonly = this.readonly;
+    this.isInitialized = true;
     this.initializeDocument();
     this.attachTouchPointerListenersOutsideZone();
   }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
+  public ngDoCheck(): void {
+    if (!this.isInitialized || this.isComponentDestroyed) {
+      return;
+    }
+    if (this.artifactVersion !== this.lastCheckedArtifactVersion) {
+      this.lastCheckedArtifactVersion = this.artifactVersion;
       this.initializeDocument();
     }
-    const wsChange = changes['CollaborationWsUrl'] ?? changes['collaborationWsUrl'];
-    if (wsChange && !wsChange.firstChange) {
-      this.setupCollaborationSession();
+    if (this.readonly !== this.lastCheckedReadonly) {
+      this.lastCheckedReadonly = this.readonly;
+      this.handleReadonlyInputChanged();
     }
-    if (changes['readonly']) {
-      if (this.readonly && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
-        this.ViewMode = 'preview';
-      }
-      if (!this.artifactVersion?.ArtifactID) {
-        this.HasEditPermission = !this.readonly;
-      }
-      const canEditNow = this.hasPermissionToEdit;
-      this.session?.SetCanEdit(canEditNow);
-      if (!this.readonly && canEditNow && this.ViewMode === 'preview') {
-        this.ViewMode = 'edit';
-      }
-      if (this.session && this.CollaborationStatus !== 'revoked') {
-        this.CollaborationStatus = this.session.Status;
-      }
-      this.cdr.markForCheck();
+  }
+
+  private handleReadonlyInputChanged(): void {
+    if (this.readonly && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+      this.FlushPendingEdits();
+      this.ViewMode = 'preview';
     }
+    if (!this.artifactVersion?.ArtifactID) {
+      this.HasEditPermission = !this.readonly;
+    }
+    const canEditNow = this.hasPermissionToEdit;
+    this.session?.SetCanEdit(canEditNow);
+    if (!this.readonly && canEditNow && this.ViewMode === 'preview') {
+      this.ViewMode = 'edit';
+    }
+    if (this.session && this.CollaborationStatus !== 'revoked') {
+      this.CollaborationStatus = this.session.Status;
+    }
+    this.cdr.markForCheck();
   }
 
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.clearPendingSocketSaveTimeout();
     this.detachTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
@@ -5309,22 +5899,137 @@ export class MarkdownArtifactViewerComponent
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    this.FlushPendingEdits();
     return CreateMarkdownSnapshot(this.MarkdownContent || this.getRawContent(), this.getDisplayTitle());
   }
 
   public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
-    const html = this.PrintableCanvas?.nativeElement?.innerHTML ?? `<pre>${EscapeHtml(this.MarkdownContent)}</pre>`;
+    this.FlushPendingEdits();
+    const html = this.renderDocumentPrintableHtml();
     this.importExportService.ExportPrintablePdf(html, this.getDisplayTitle() || 'Document', orientation);
+  }
+
+  /**
+   * Flushes any uncommitted DOM input from focused `contenteditable` blocks into `MarkdownContent`
+   * (or into pending suggestions in Suggest Mode) before saving, switching modes, exporting, or merging remote Yjs updates (`P0-20`).
+   */
+  public FlushPendingEdits(): boolean {
+    if (!this.CanUserEdit || !this.hasUncommittedDomInput) {
+      this.hasUncommittedDomInput = false;
+      return false;
+    }
+    if (this.ViewMode === 'edit') {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+      const changed = blocks.some((b, i) => b !== this.DocumentSegments[i]?.RawMarkdown);
+      this.hasUncommittedDomInput = false;
+      if (changed) {
+        const nextMd = blocks.filter((b) => b.trim().length > 0).join('\n\n');
+        this.OnMarkdownChanged(nextMd);
+      }
+      return changed;
+    }
+    if (this.ViewMode === 'suggest') {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+      let proposedAny = false;
+      for (let i = 0; i < this.DocumentSegments.length; i++) {
+        const seg = this.DocumentSegments[i];
+        if (blocks[i] !== seg.RawMarkdown && this.CanEditSegment(seg)) {
+          this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, blocks[i], 'Suggested edit');
+          proposedAny = true;
+        }
+      }
+      this.hasUncommittedDomInput = false;
+      return proposedAny;
+    }
+    this.hasUncommittedDomInput = false;
+    return false;
+  }
+
+  public OnEditableBlockDomDirty(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    this.hasUncommittedDomInput = true;
+  }
+
+  /**
+   * Maps host-synchronized {@link ArtifactViewerViewMode} (`NW-6`) onto Docs modes, falling back
+   * gracefully to `'preview'` when `'edit'` / `'suggest'` is requested without edit permission.
+   */
+  protected override onViewerViewModeChanged(mode: ArtifactViewerViewMode): void {
+    switch (mode) {
+      case 'edit':
+        this.SetViewMode(this.CanUserEdit ? 'edit' : 'preview', false);
+        break;
+      case 'suggest':
+        this.SetViewMode(this.CanUserEdit ? 'suggest' : 'preview', false);
+        break;
+      case 'diff':
+        this.SetViewMode('diff', false);
+        break;
+      case 'present':
+        this.SetViewMode('preview', false);
+        break;
+    }
+  }
+
+  /**
+   * Focuses and scrolls to a target block or heading when {@link NavigationAnchor} updates (`NW-6`).
+   */
+  protected override onNavigationAnchorChanged(anchor: ArtifactNavigationAnchor): void {
+    if (anchor.BlockID) {
+      const targetSeg = this.DocumentSegments.find(
+        (s) =>
+          UUIDsEqual(s.Descriptor?.BlockID, anchor.BlockID) ||
+          UUIDsEqual(s.SegmentID, anchor.BlockID),
+      );
+      if (targetSeg) {
+        this.FocusSegmentByAnchorKey(targetSeg.SegmentID);
+        return;
+      }
+      this.FocusSegmentByAnchorKey(anchor.BlockID);
+      return;
+    }
+    if (anchor.Heading) {
+      const normalized = anchor.Heading.trim().toLowerCase();
+      const outlineMatch = this.OutlineItems.find(
+        (item) => item.Title.trim().toLowerCase() === normalized,
+      );
+      if (outlineMatch) {
+        this.SelectOutlineItem(outlineMatch);
+        return;
+      }
+      const segMatch = this.DocumentSegments.find(
+        (s) => (s.HeadingText ?? '').trim().toLowerCase() === normalized,
+      );
+      if (segMatch) {
+        this.FocusSegmentByAnchorKey(segMatch.SegmentID);
+      }
+    }
+  }
+
+  /**
+   * Refreshes view when server-verified snapshot provenance map changes (`NW-1`).
+   */
+  protected override onPreVerifiedFrozenSnapshotsChanged(): void {
+    this.cdr.markForCheck();
   }
 
   /**
    * Switches between `edit`, `suggest`, `preview`, `source`, and `diff` modes.
    */
-  public SetViewMode(mode: DocsViewerMode): void {
+  public SetViewMode(mode: DocsViewerMode, markUserExplicit = true): void {
     if ((mode === 'edit' || mode === 'suggest') && !this.CanUserEdit) {
       return;
     }
-    this.userExplicitlySelectedMode = true;
+    if (mode !== this.ViewMode && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+      this.FlushPendingEdits();
+    }
+    if (markUserExplicit) {
+      this.userExplicitlySelectedMode = true;
+    }
     this.ViewMode = mode;
     if (mode === 'diff') {
       this.RecomputeDiff();
@@ -5375,6 +6080,7 @@ export class MarkdownArtifactViewerComponent
     }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
+    this.session?.SetActiveBlock(seg.SegmentID);
   }
 
   public OnSegmentSurfaceFocus(seg: DocumentRenderSegment): void {
@@ -5383,9 +6089,15 @@ export class MarkdownArtifactViewerComponent
     }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
+    this.session?.SetActiveBlock(seg.SegmentID);
     this.lastFocusedListItemIndex = null;
     this.lastFocusedTableCell = null;
     this.CaptureSelectionSnapshot();
+    this.SelectionChanged.emit({
+      domain: 'document',
+      blockId: seg.Descriptor?.BlockID ?? seg.SegmentID,
+      heading: seg.HeadingText,
+    });
   }
 
   public OnListItemFocus(seg: DocumentRenderSegment, itemIndex: number): void {
@@ -5397,6 +6109,7 @@ export class MarkdownArtifactViewerComponent
     }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
+    this.session?.SetActiveBlock(seg.SegmentID);
     this.lastFocusedListItemIndex = itemIndex;
     this.lastFocusedTableCell = null;
     this.CaptureSelectionSnapshot();
@@ -5410,6 +6123,7 @@ export class MarkdownArtifactViewerComponent
   ): void {
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
+    this.session?.SetActiveBlock(seg.SegmentID);
     this.lastFocusedListItemIndex = null;
     this.lastFocusedTableCell = { rowIndex, colIndex, isHeader };
     this.CaptureSelectionSnapshot();
@@ -5539,18 +6253,25 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const targetIdx = this.resolveActiveSegmentIndex();
+    const targetSeg = targetIdx >= 0 ? this.DocumentSegments[targetIdx] : undefined;
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
     this.syncDirtySegmentsFromDomIntoBlocks(blocks);
     const headingMd = `${'#'.repeat(Math.max(1, Math.min(4, level)))} `;
     if (
       targetIdx >= 0 &&
-      this.DocumentSegments[targetIdx]?.Kind === 'markdown' &&
-      (this.DocumentSegments[targetIdx]?.BlockKind === 'paragraph' ||
-        !this.DocumentSegments[targetIdx]?.BlockKind) &&
+      targetSeg?.Kind === 'markdown' &&
+      (targetSeg?.BlockKind === 'paragraph' ||
+        !targetSeg?.BlockKind) &&
       blocks[targetIdx]?.trim().length === 0
     ) {
+      if (!this.enforceSegmentLock(targetSeg, 'insert section heading')) {
+        return;
+      }
       blocks[targetIdx] = headingMd;
       this.applyBlockFlowTransaction(blocks, { segmentIndex: targetIdx, position: 'end' });
+      return;
+    }
+    if (targetSeg && !this.enforceSegmentLock(targetSeg, 'insert section heading inside locked section')) {
       return;
     }
     const insertIdx = targetIdx >= 0 ? targetIdx + 1 : blocks.length;
@@ -5618,14 +6339,25 @@ export class MarkdownArtifactViewerComponent
   // =========================================================================
 
   /**
-   * Returns `UserInfoEngine.Instance` when available, or `null` if unavailable.
+   * Returns the provider-scoped `UserInfoEngine` when available, or falls back safely to `UserInfoEngine.Instance`.
    */
   private resolveUserInfoEngine(): UserInfoEngine | null {
     try {
+      const provider = this.getSafeProvider();
+      if (provider) {
+        return (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine) ?? null;
+      }
       return UserInfoEngine.Instance ?? null;
     } catch {
       return null;
     }
+  }
+
+  private resolveArtifactMetadataEngine(): ArtifactMetadataEngine {
+    const provider = this.getSafeProvider();
+    return provider
+      ? (ArtifactMetadataEngine.GetProviderInstance<ArtifactMetadataEngine>(provider, ArtifactMetadataEngine) as ArtifactMetadataEngine)
+      : ArtifactMetadataEngine.Instance;
   }
 
   private isValidToolbarItemKey(value: string): value is DocsToolbarItemKey {
@@ -6305,9 +7037,13 @@ export class MarkdownArtifactViewerComponent
    * and opening the `/` Slash Command Palette when `/` is typed at the start of a block or after whitespace.
    */
   public OnEditableBlockInput(seg: DocumentRenderSegment, event: Event): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const text = el?.textContent ?? '';
     const trimmed = text.trim();
+    this.hasUncommittedDomInput = true;
 
     // Instant Markdown prefix auto-turn-into on paragraph blocks in Edit mode
     if (
@@ -6350,9 +7086,15 @@ export class MarkdownArtifactViewerComponent
         proposedMd = `${'#'.repeat(level)} ${trimmed.replace(/\n+/g, ' ')}`;
       }
       if (proposedMd === seg.RawMarkdown.trim()) {
+        const removed = this.Suggestions.filter(
+          (s) => s.BlockID === seg.SegmentID && s.Status === 'Pending',
+        );
         this.Suggestions = this.Suggestions.filter(
           (s) => !(s.BlockID === seg.SegmentID && s.Status === 'Pending'),
         );
+        for (const r of removed) {
+          this.session?.DeleteSharedSuggestion(r.SuggestionID);
+        }
         this.cdr.markForCheck();
       } else {
         this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, proposedMd, 'Suggested edit');
@@ -6464,7 +7206,11 @@ export class MarkdownArtifactViewerComponent
       return;
     }
 
-    if (!this.CanUserEdit || this.ViewMode !== 'edit') {
+    if (!this.CanUserEdit || this.ViewMode !== 'edit' || !this.CanEditSegment(seg)) {
+      if (this.CanUserEdit && !this.CanEditSegment(seg) && (event.key === 'Enter' || event.key === 'Backspace')) {
+        event.preventDefault();
+        this.enforceSegmentLock(seg, 'edit this section');
+      }
       return;
     }
 
@@ -6594,6 +7340,11 @@ export class MarkdownArtifactViewerComponent
 
         if (segIdx > 0) {
           const prevSeg = this.DocumentSegments[segIdx - 1];
+          if (prevSeg && !this.CanEditSegment(prevSeg)) {
+            event.preventDefault();
+            this.enforceSegmentLock(prevSeg, 'merge into a locked section');
+            return;
+          }
           if (
             prevSeg.Kind === 'markdown' &&
             (prevSeg.BlockKind === 'paragraph' || !prevSeg.BlockKind || prevSeg.BlockKind === 'heading')
@@ -6673,7 +7424,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CycleHeadingLevel(seg: DocumentRenderSegment): void {
-    if (!this.CanUserEdit) {
+    if (!this.enforceSegmentLock(seg, 'change heading level')) {
       return;
     }
     const currentLevel = seg.HeadingLevel ?? 1;
@@ -6730,6 +7481,36 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  private splitEscapedPipeRow(line: string): string[] {
+    let trimmed = line.trim();
+    if (trimmed.startsWith('|')) {
+      trimmed = trimmed.slice(1);
+    }
+    if (trimmed.endsWith('|') && !trimmed.endsWith('\\|')) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    const cells: string[] = [];
+    let current = '';
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (ch === '\\' && i + 1 < trimmed.length && (trimmed[i + 1] === '|' || trimmed[i + 1] === '\\')) {
+        current += trimmed[i + 1];
+        i++;
+      } else if (ch === '|') {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  private escapeTableCellMarkdown(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+  }
+
   public GetParsedTable(seg: DocumentRenderSegment): {
     Headers: string[];
     Rows: string[][];
@@ -6739,11 +7520,7 @@ export class MarkdownArtifactViewerComponent
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
-    const parseCells = (line: string): string[] =>
-      line
-        .replace(/^\||\|$/g, '')
-        .split('|')
-        .map((c) => c.trim());
+    const parseCells = (line: string): string[] => this.splitEscapedPipeRow(line);
 
     const headers = lines.length > 0 ? parseCells(lines[0]) : ['Column 1', 'Column 2'];
     const alignments: DocsTableAlignment[] = headers.map(() => 'none');
@@ -6787,7 +7564,7 @@ export class MarkdownArtifactViewerComponent
     rows: string[][],
     alignments: ReadonlyArray<DocsTableAlignment> = [],
   ): string {
-    const headerLine = `| ${headers.join(' | ')} |`;
+    const headerLine = `| ${headers.map((h) => this.escapeTableCellMarkdown(h)).join(' | ')} |`;
     const sepMarkers = headers.map((_, idx) => {
       switch (alignments[idx] ?? 'none') {
         case 'left':
@@ -6801,7 +7578,9 @@ export class MarkdownArtifactViewerComponent
       }
     });
     const sepLine = `| ${sepMarkers.join(' | ')} |`;
-    const bodyLines = rows.map((r) => `| ${headers.map((_, idx) => r[idx] ?? '').join(' | ')} |`);
+    const bodyLines = rows.map(
+      (r) => `| ${headers.map((_, idx) => this.escapeTableCellMarkdown(r[idx] ?? '')).join(' | ')} |`,
+    );
     return [headerLine, sepLine, ...bodyLines].join('\n');
   }
 
@@ -6809,8 +7588,11 @@ export class MarkdownArtifactViewerComponent
     if (this.isApplyingBlockTransaction) {
       return;
     }
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
-    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\r?\n/g, ' ').trim();
     const parsed = this.GetParsedTable(seg);
     if (parsed.Headers[colIndex] === nextVal) {
       return;
@@ -6827,11 +7609,14 @@ export class MarkdownArtifactViewerComponent
     if (this.isApplyingBlockTransaction) {
       return;
     }
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
     if (!Number.isInteger(rowIndex) || rowIndex < 0 || !Number.isInteger(colIndex) || colIndex < 0) {
       return;
     }
     const el = event.target as HTMLElement | null;
-    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\r?\n/g, ' ').trim();
     const parsed = this.GetParsedTable(seg);
     const targetRow = parsed.Rows.at(rowIndex);
     if (!targetRow || colIndex >= targetRow.length || targetRow.at(colIndex) === nextVal) {
@@ -7124,6 +7909,15 @@ export class MarkdownArtifactViewerComponent
 
   public ToggleTaskListItem(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
     const checkbox = event.target as HTMLInputElement | null;
+    if (!this.enforceSegmentLock(seg, 'toggle task item')) {
+      if (checkbox) {
+        const items = this.GetParsedListItems(seg);
+        if (items[itemIndex]) {
+          checkbox.checked = items[itemIndex].Checked;
+        }
+      }
+      return;
+    }
     const items = this.GetParsedListItems(seg);
     if (!items[itemIndex]) {
       return;
@@ -7137,7 +7931,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateListItemText(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
-    if (this.isApplyingBlockTransaction) {
+    if (this.isApplyingBlockTransaction || !this.CanEditSegment(seg)) {
       return;
     }
     const el = event.target as HTMLElement | null;
@@ -7169,7 +7963,7 @@ export class MarkdownArtifactViewerComponent
 
     // Inline formatting keyboard shortcuts inside list items (Cmd/Ctrl+B -> Bold, Cmd/Ctrl+I -> Italic)
     if (
-      this.CanUserEdit &&
+      this.CanEditSegment(seg) &&
       this.ViewMode === 'edit' &&
       segIdx >= 0 &&
       (event.metaKey || event.ctrlKey) &&
@@ -7193,7 +7987,7 @@ export class MarkdownArtifactViewerComponent
 
     if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
-      if (!this.CanUserEdit || segIdx < 0) {
+      if (!this.enforceSegmentLock(seg, 'edit this list') || segIdx < 0) {
         return;
       }
       this.syncPeerListItemsFromDom(seg, items, itemIndex);
@@ -7276,7 +8070,7 @@ export class MarkdownArtifactViewerComponent
       !event.ctrlKey &&
       caret.collapsed &&
       caret.start === 0 &&
-      this.CanUserEdit &&
+      this.CanEditSegment(seg) &&
       this.ViewMode === 'edit' &&
       segIdx >= 0
     ) {
@@ -7345,6 +8139,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public AddListItem(seg: DocumentRenderSegment): void {
+    if (!this.enforceSegmentLock(seg, 'add a list item')) {
+      return;
+    }
     const items = this.GetParsedListItems(seg);
     const first = items[0];
     const newIndex = items.length;
@@ -7446,13 +8243,17 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateCodeBlockLanguage(seg: DocumentRenderSegment, nextLang: string): void {
+    if (!this.enforceSegmentLock(seg, 'change code block language')) {
+      return;
+    }
+    const safeLang = (nextLang || '').replace(/[`\r\n]/g, '').trim();
     const parsed = this.GetParsedCodeBlock(seg);
-    const nextMd = ['```' + (nextLang || '').trim(), parsed.Code, '```'].join('\n');
-    this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed code block language to ${nextLang}`);
+    const nextMd = ['```' + safeLang, parsed.Code, '```'].join('\n');
+    this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed code block language to ${safeLang || 'plain'}`);
   }
 
   public CommitEditableCodeBlock(seg: DocumentRenderSegment, event: Event): void {
-    if (this.isApplyingBlockTransaction) {
+    if (this.isApplyingBlockTransaction || !this.CanEditSegment(seg)) {
       return;
     }
     const el = event.target as HTMLElement | null;
@@ -7648,7 +8449,7 @@ export class MarkdownArtifactViewerComponent
             `[data-testid="table-header-${seg.SegmentID}-${cIdx}"]`,
           );
           if (el && this.isDomNode(el)) {
-            const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+            const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\r?\n/g, ' ').trim();
             if (domText !== hdr) {
               parsed.Headers[cIdx] = domText;
               changed = true;
@@ -7661,7 +8462,7 @@ export class MarkdownArtifactViewerComponent
               `[data-testid="table-cell-${seg.SegmentID}-${rIdx}-${cIdx}"]`,
             );
             if (el && this.isDomNode(el)) {
-              const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+              const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\r?\n/g, ' ').trim();
               if (domText !== cell) {
                 row[cIdx] = domText;
                 changed = true;
@@ -8351,7 +9152,8 @@ export class MarkdownArtifactViewerComponent
    * Toggles whether an embedded OLE `Artifact` block pins a specific `VersionID` or tracks the latest version (§ 3.4.1).
    */
   public TogglePinArtifactVersion(block: DocumentBlockSpec): void {
-    if (!this.CanUserEdit) {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'pin or unpin embedded artifact version')) {
       return;
     }
     const currentVer = this.GetEmbeddedArtifactVersion(block);
@@ -8372,6 +9174,20 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = updatedDescriptor.VersionID
       ? `Pinned ${block.Title || 'embedded artifact'} to v${currentVer?.VersionNumber || 1}.`
       : `Unpinned ${block.Title || 'embedded artifact'} (now tracking latest version).`;
+  }
+
+  public OnSourceMarkdownChanged(nextValue: string): void {
+    if (!this.CanUserEdit) {
+      this.cdr.markForCheck();
+      return;
+    }
+    const incoming = nextValue ?? '';
+    const lockCheck = this.validateDocumentEditLocks(incoming);
+    if (!lockCheck.Allowed) {
+      this.cdr.markForCheck();
+      return;
+    }
+    this.OnMarkdownChanged(incoming);
   }
 
   /**
@@ -8397,11 +9213,12 @@ export class MarkdownArtifactViewerComponent
    * Synchronizes Markdown edits with the parsed block segments, TOC outline, and Yjs session.
    */
   public OnMarkdownChanged(nextMarkdown: string, fromYjs = false): void {
+    this.hasUncommittedDomInput = false;
     this.MarkdownContent = nextMarkdown ?? '';
-    this.refreshParsedStructure();
     if (!fromYjs && this.session) {
       this.session.SetContent(this.MarkdownContent);
     }
+    this.refreshParsedStructure();
     this.cdr.markForCheck();
   }
 
@@ -8524,12 +9341,19 @@ export class MarkdownArtifactViewerComponent
         (elm.style?.fontStyle ?? '').toLowerCase() === 'italic';
 
       const splitWhitespace = (raw: string): { lead: string; core: string; trail: string } => {
-        const leadMatch = /^(\s*)/.exec(raw);
-        const lead = leadMatch ? leadMatch[1] : '';
-        const trailMatch = /(\s*)$/.exec(raw.slice(lead.length));
-        const trail = trailMatch ? trailMatch[1] : '';
-        const core = raw.slice(lead.length, raw.length - trail.length);
-        return { lead, core, trail };
+        let leadEnd = 0;
+        while (leadEnd < raw.length && /\s/.test(raw[leadEnd])) {
+          leadEnd++;
+        }
+        let trailStart = raw.length;
+        while (trailStart > leadEnd && /\s/.test(raw[trailStart - 1])) {
+          trailStart--;
+        }
+        return {
+          lead: raw.slice(0, leadEnd),
+          core: raw.slice(leadEnd, trailStart),
+          trail: raw.slice(trailStart),
+        };
       };
 
       if (tag === 'CODE') {
@@ -9327,6 +10151,14 @@ export class MarkdownArtifactViewerComponent
     const idx = this.resolveActiveSegmentIndex();
     this.ActiveSlashTargetSegmentID = null;
 
+    const trimTrailingNewlines = (raw: string): string => {
+      let end = raw.length;
+      while (end > 0 && raw[end - 1] === '\n') {
+        end--;
+      }
+      return raw.slice(0, end);
+    };
+
     if (idx >= 0 && idx < this.DocumentSegments.length) {
       const targetSeg = this.DocumentSegments[idx];
       if (targetSeg && !this.CanEditSegment(targetSeg)) {
@@ -9335,7 +10167,7 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       if (this.ViewMode === 'suggest' && targetSeg) {
-        const trimmedSnippet = snippet.replace(/\n+$/, '');
+        const trimmedSnippet = trimTrailingNewlines(snippet);
         if (trimmedSnippet.trim().length > 0) {
           this.ApplyInPlaceSegmentChange(
             targetSeg,
@@ -9346,8 +10178,9 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      this.syncDirtySegmentsFromDomIntoBlocks(blocks);
       const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
-      const trimmedSnippet = snippet.replace(/\n+$/, '');
+      const trimmedSnippet = trimTrailingNewlines(snippet);
       if (trimmedSnippet.trim().length === 0) {
         const nextIdx = cleanedTarget.length === 0 ? idx : idx + 1;
         if (cleanedTarget.length > 0) {
@@ -9375,7 +10208,7 @@ export class MarkdownArtifactViewerComponent
     }
 
     const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/[A-Za-z0-9_-]*$/, '');
-    const trimmedSnippet = snippet.replace(/\n+$/, '');
+    const trimmedSnippet = trimTrailingNewlines(snippet);
     if (trimmedSnippet.trim().length === 0) {
       this.AppendOrFocusTrailingParagraph();
       return;
@@ -9385,6 +10218,21 @@ export class MarkdownArtifactViewerComponent
     if (this.DocumentSegments.length > 0) {
       const lastSeg = this.DocumentSegments[this.DocumentSegments.length - 1];
       this.FocusEditableSegment(lastSeg.SegmentID, 'end');
+    }
+  }
+
+  /**
+   * Opens the interactive block-insert dialog preselected to a known slash command
+   * (used by direct formatting-ribbon actions such as Sheet Chart and Sheet Range).
+   */
+  public OpenSlashBlockInsert(commandName: '/sheet-chart' | '/sheet-range'): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.ActiveSlashTargetSegmentID = null;
+    const cmd = this.collabService.GetSlashCommands().find((c) => c.Command === commandName);
+    if (cmd) {
+      this.ExecuteSlashCommand(cmd);
     }
   }
 
@@ -9493,7 +10341,8 @@ export class MarkdownArtifactViewerComponent
    * so the user can change the View, Query, Filter, Page Size, or Default Collapse at any time.
    */
   public OpenConfigureBlockModal(block: DocumentBlockSpec): void {
-    if (!this.CanUserEdit) {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'configure this block')) {
       return;
     }
     this.EditingBlockID = block.BlockID;
@@ -9710,9 +10559,23 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public OnNewBlockArtifactIdChanged(value: string): void {
+    this.NewBlockArtifactID = value;
+    const trimmed = value.trim();
+    if (IsValidUUID(trimmed) && this.IsSpreadsheetArtifactPickerSelected) {
+      void this.loadSelectedWorkbookSheets(trimmed);
+    } else if (!trimmed) {
+      this.SelectedWorkbookSheets = [];
+      this.SelectedArtifactLatestVersionID = '';
+    }
+  }
+
   public SelectArtifactOption(artOpt: DocsArtifactPickerOption): void {
     this.NewBlockArtifactID = artOpt.ID;
     this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
+    if (artOpt.ID && artOpt.Type) {
+      this.embeddedArtifactTypes.set(artOpt.ID.trim().toLowerCase(), artOpt.Type);
+    }
     this.NewBlockLabel = artOpt.Name;
     if (this.IsSpreadsheetArtifactPickerSelected) {
       if (this.NewBlockSheetMode === 'full' && !this.EditingBlockID) {
@@ -9901,7 +10764,8 @@ export class MarkdownArtifactViewerComponent
     if (!md) {
       return [];
     }
-    const queries: QueryInfo[] = md.Queries ?? [];
+    // The QueryEngine bound to this viewer's provider; it loads at client startup.
+    const queries = (QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine).Queries ?? [];
     if (queries.length === 0) {
       return [];
     }
@@ -9978,11 +10842,18 @@ export class MarkdownArtifactViewerComponent
         this.getSafeCurrentUser(),
       );
       if (res.Success && Array.isArray(res.Results)) {
-        this.AvailableArtifactsForPicker = res.Results.map((r) => ({
-          ID: r.ID,
-          Name: r.Name,
-          Type: r.Type || 'Artifact',
-        }));
+        const ancestors = this.EffectiveAncestorArtifactIDs;
+        this.AvailableArtifactsForPicker = res.Results
+          .filter((r) => Boolean(r.ID) && !ancestors.has(r.ID.trim().toLowerCase()))
+          .map((r) => {
+            const typeName = r.Type || 'Artifact';
+            this.embeddedArtifactTypes.set(r.ID.trim().toLowerCase(), typeName);
+            return {
+              ID: r.ID,
+              Name: r.Name,
+              Type: typeName,
+            };
+          });
         if (this.AvailableArtifactsForPicker.length > 0 && !this.NewBlockArtifactID) {
           this.SelectArtifactOption(this.AvailableArtifactsForPicker[0]);
         }
@@ -10002,6 +10873,18 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const isEditingExisting = Boolean(this.EditingBlockID);
+    if (isEditingExisting) {
+      const existingSeg = this.findSegmentForBlockId(this.EditingBlockID);
+      if (!this.enforceSegmentLock(existingSeg, 'update this block configuration')) {
+        return;
+      }
+    } else {
+      const targetIdx = this.resolveActiveSegmentIndex();
+      const targetSeg = targetIdx >= 0 ? this.DocumentSegments[targetIdx] : undefined;
+      if (targetSeg && !this.enforceSegmentLock(targetSeg, 'insert a block into this locked section')) {
+        return;
+      }
+    }
     const blockId = this.EditingBlockID || `blk-${Date.now()}`;
     const descriptor: DocumentBlockSpec = {
       BlockID: blockId,
@@ -10045,6 +10928,10 @@ export class MarkdownArtifactViewerComponent
       descriptor.HeightPx = 440;
 
       if (!isEditingExisting && this.PendingBlockIsWhiteboard) {
+        if (this.EffectiveAncestorArtifactIDs.size >= MJ_MAX_EMBED_DEPTH) {
+          this.notifyError(`Maximum embedded artifact nesting depth (${MJ_MAX_EMBED_DEPTH}) reached.`);
+          return;
+        }
         const created = await this.createDelegatedChildArtifact(
           descriptor.Title || 'Interactive Architecture Whiteboard',
           descriptor.ArtifactType,
@@ -10061,16 +10948,36 @@ export class MarkdownArtifactViewerComponent
           this.notifyError('Please select a target artifact before embedding.');
           return;
         }
+        const ancestors = this.EffectiveAncestorArtifactIDs;
+        if (ancestors.has(artifactId.toLowerCase())) {
+          this.notifyError('Cannot embed an artifact inside itself or one of its ancestors (circular embed detected).');
+          return;
+        }
+        if (ancestors.size >= MJ_MAX_EMBED_DEPTH) {
+          this.notifyError(`Maximum embedded artifact nesting depth (${MJ_MAX_EMBED_DEPTH}) reached.`);
+          return;
+        }
+        this.embeddedArtifactTypes.set(artifactId.toLowerCase(), descriptor.ArtifactType);
         descriptor.ArtifactID = artifactId;
         if (this.IsSpreadsheetArtifactPickerSelected) {
           if (this.NewBlockSheetMode !== 'full' && this.NewBlockSheetName.trim()) {
             descriptor.SheetID = this.NewBlockSheetName.trim();
           }
-          if (this.NewBlockSheetMode === 'chart' && this.NewBlockSheetChartID.trim()) {
-            descriptor.SheetChartID = this.NewBlockSheetChartID.trim();
+          if (this.NewBlockSheetMode === 'chart') {
+            const chartId = this.NewBlockSheetChartID.trim();
+            if (!chartId) {
+              this.notifyError('Select a Spreadsheet Chart (or switch embed mode to Cell Range / Entire Workbook).');
+              return;
+            }
+            descriptor.SheetChartID = chartId;
             descriptor.SheetRange = undefined;
-          } else if (this.NewBlockSheetMode === 'range' && this.NewBlockSheetRange.trim()) {
-            descriptor.SheetRange = this.NewBlockSheetRange.trim();
+          } else if (this.NewBlockSheetMode === 'range') {
+            const sheetRange = this.NewBlockSheetRange.trim();
+            if (!sheetRange) {
+              this.notifyError('Enter a Spreadsheet cell range (for example, A1:D8) to embed.');
+              return;
+            }
+            descriptor.SheetRange = sheetRange;
             descriptor.SheetChartID = undefined;
           } else {
             descriptor.SheetChartID = undefined;
@@ -10092,13 +10999,22 @@ export class MarkdownArtifactViewerComponent
     if (isEditingExisting) {
       this.blockResults.delete(blockId);
       this.blockPageNumbers.set(blockId, 1);
+      if (descriptor.Kind === 'Artifact' && descriptor.ArtifactID) {
+        const cacheKey = this.getEmbeddedVersionCacheKey(descriptor.ArtifactID, descriptor.VersionID);
+        this.failedEmbeddedVersionMessages.delete(cacheKey);
+        this.embeddedArtifactVersions.delete(cacheKey);
+      }
       const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
         this.MarkdownContent,
         blockId,
         descriptor,
       );
       this.OnMarkdownChanged(updatedRes.Markdown);
-      void this.RefreshLiveBlock(descriptor);
+      if (descriptor.Kind === 'Artifact') {
+        void this.GetEmbeddedArtifactVersion(descriptor);
+      } else {
+        void this.RefreshLiveBlock(descriptor);
+      }
       this.StatusBannerMessage = `Updated "${descriptor.Title}" configuration.`;
       return;
     }
@@ -10245,14 +11161,7 @@ export class MarkdownArtifactViewerComponent
     if (intersecting.length === 0) {
       return true;
     }
-    const actorId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerEntry = this.ArtifactPermissionEntries.find((entry) => entry.IsOwner);
-    const ownerId =
-      ownerEntry?.UserID ??
-      this.artifactOwnerUserId ??
-      (this.artifactVersion?.ArtifactID
-        ? (this.isCurrentUserArtifactOwner ? actorId : null)
-        : (this.CanUserShareArtifact || this.HasEditPermission ? actorId : null));
+    const { actorId, ownerId } = this.getLockActorAndOwnerIds();
     for (const lock of intersecting) {
       if (
         !DocumentLiveBlockEngine.Instance.CanActorEditLockedRange(
@@ -10266,6 +11175,224 @@ export class MarkdownArtifactViewerComponent
       }
     }
     return true;
+  }
+
+  private getLockActorAndOwnerIds(): { actorId: string | null; ownerId: string | null } {
+    const actorId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerEntry = this.ArtifactPermissionEntries.find((entry) => entry.IsOwner);
+    const ownerId =
+      ownerEntry?.UserID ??
+      this.artifactOwnerUserId ??
+      (this.artifactVersion?.ArtifactID
+        ? (this.isCurrentUserArtifactOwner ? actorId : null)
+        : (this.CanUserShareArtifact || this.HasEditPermission ? actorId : null));
+    return { actorId, ownerId };
+  }
+
+  public get HasUneditableLockedSegments(): boolean {
+    return this.DocumentSegments.some((seg) => this.IsSegmentLocked(seg) && !this.CanEditSegment(seg));
+  }
+
+  private findSegmentForBlockId(blockId: string | null | undefined): DocumentRenderSegment | undefined {
+    if (!blockId) {
+      return undefined;
+    }
+    return this.DocumentSegments.find(
+      (s) => s.SegmentID === blockId || s.Descriptor?.BlockID === blockId,
+    );
+  }
+
+  private enforceSegmentLock(seg: DocumentRenderSegment | undefined, actionLabel: string): boolean {
+    if (!this.CanUserEdit) {
+      return false;
+    }
+    if (seg && !this.CanEditSegment(seg)) {
+      this.StatusBannerMessage = `This section is protected by a lock and you cannot ${actionLabel}.`;
+      this.cdr.markForCheck();
+      return false;
+    }
+    return true;
+  }
+
+  private validateDocumentEditLocks(
+    nextMarkdown: string,
+  ): { Allowed: boolean; ViolationReason?: string; ViolatedLock?: DocumentLockedRange } {
+    const { actorId, ownerId } = this.getLockActorAndOwnerIds();
+    const res = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+      this.MarkdownContent,
+      nextMarkdown,
+      actorId,
+      ownerId,
+      this.HasEditPermission,
+    );
+    if (!res.Allowed) {
+      this.StatusBannerMessage =
+        res.ViolationReason || 'This document contains locked sections that cannot be modified.';
+      this.cdr.markForCheck();
+    }
+    return res;
+  }
+
+  public CanEditSuggestionTarget(sug: DocumentSuggestionItem): boolean {
+    if (!this.CanUserEdit) {
+      return false;
+    }
+    const resolvedBlockId = sug.BlockID || this.resolveDocumentSuggestionBlockId(sug, this.DocumentSegments);
+    const targetSeg = resolvedBlockId ? this.findSegmentForBlockId(resolvedBlockId) : undefined;
+    if (targetSeg) {
+      return this.CanEditSegment(targetSeg);
+    }
+    return !this.HasUneditableLockedSegments;
+  }
+
+  private resolveDocumentSuggestionBlockId(
+    sug: DocumentSuggestionItem,
+    segments: DocumentRenderSegment[],
+  ): string {
+    if (sug.BlockID) {
+      return sug.BlockID;
+    }
+    const needle = (sug.OriginalMarkdown || sug.Quote || '').trim();
+    if (sug.Heading) {
+      const targetHeading = sug.Heading.trim().toLowerCase();
+      const headingIdx = segments.findIndex(
+        (s) =>
+          s.HeadingText &&
+          s.HeadingText.trim().toLowerCase() === targetHeading,
+      );
+      if (headingIdx >= 0) {
+        const headingLevel = segments[headingIdx].HeadingLevel ?? 6;
+        if (needle) {
+          for (let i = headingIdx; i < segments.length; i++) {
+            const seg = segments[i];
+            if (i > headingIdx && seg.HeadingLevel && seg.HeadingLevel <= headingLevel) {
+              break;
+            }
+            if (seg.RawMarkdown.includes(needle)) {
+              return seg.SegmentID;
+            }
+          }
+        }
+        return segments[headingIdx].SegmentID;
+      }
+    }
+    if (needle) {
+      const matchingSeg = segments.find((s) => s.RawMarkdown.includes(needle));
+      if (matchingSeg) {
+        return matchingSeg.SegmentID;
+      }
+    }
+    return '';
+  }
+
+  public get EffectiveAncestorArtifactIDs(): ReadonlySet<string> {
+    const ids = new Set<string>();
+    if (this.injectedAncestorArtifactIDs) {
+      for (const id of this.injectedAncestorArtifactIDs) {
+        if (id && id.trim()) {
+          ids.add(id.trim().toLowerCase());
+        }
+      }
+    }
+    const hostId = this.artifactVersion?.ArtifactID?.trim().toLowerCase();
+    if (hostId) {
+      ids.add(hostId);
+    }
+    return ids;
+  }
+
+  public GetEmbeddedArtifactTypeName(block: DocumentBlockSpec | null | undefined): string {
+    if (!block) {
+      return 'Whiteboard';
+    }
+    const direct = block.ArtifactType?.trim();
+    if (direct) {
+      return direct;
+    }
+    const idKey = block.ArtifactID?.trim().toLowerCase();
+    if (idKey) {
+      const cached = this.embeddedArtifactTypes.get(idKey);
+      if (cached) {
+        return cached;
+      }
+    }
+    return 'Whiteboard';
+  }
+
+  private renderDocumentPrintableHtml(): string {
+    const parts: string[] = [];
+    for (const seg of this.DocumentSegments) {
+      if (seg.Kind === 'markdown') {
+        const raw = seg.RawMarkdown.trim();
+        if (!raw) {
+          continue;
+        }
+        if (seg.BlockKind === 'heading') {
+          const level = Math.min(6, Math.max(1, seg.HeadingLevel ?? 1));
+          const text = seg.HeadingText ?? this.GetEditableHeadingText(seg);
+          parts.push(`<h${level}>${EscapeHtml(text)}</h${level}>`);
+        } else if (seg.BlockKind === 'code') {
+          const parsed = this.GetParsedCodeBlock(seg);
+          parts.push(`<pre><code>${EscapeHtml(parsed.Code)}</code></pre>`);
+        } else if (seg.BlockKind === 'table') {
+          const parsed = this.GetParsedTable(seg);
+          const th = parsed.Headers.map((h) => `<th>${EscapeHtml(h)}</th>`).join('');
+          const trs = parsed.Rows.map(
+            (r) => `<tr>${r.map((c) => `<td>${EscapeHtml(c)}</td>`).join('')}</tr>`,
+          ).join('');
+          parts.push(`<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`);
+        } else if (seg.BlockKind === 'list') {
+          const items = this.GetParsedListItems(seg);
+          const isOrdered = Boolean(items[0]?.OrderedPrefix);
+          const tag = isOrdered ? 'ol' : 'ul';
+          const lis = items
+            .map((it) =>
+              it.IsTask
+                ? `<li>[${it.Checked ? 'x' : ' '}] ${EscapeHtml(it.Text)}</li>`
+                : `<li>${EscapeHtml(it.Text)}</li>`,
+            )
+            .join('');
+          parts.push(`<${tag}>${lis}</${tag}>`);
+        } else if (seg.BlockKind === 'callout') {
+          const parsed = this.GetParsedCallout(seg);
+          parts.push(
+            `<blockquote><strong>${EscapeHtml(parsed.CalloutType)}:</strong> ${EscapeHtml(parsed.BodyText)}</blockquote>`,
+          );
+        } else {
+          parts.push(`<p>${EscapeHtml(raw).replace(/\n/g, '<br>')}</p>`);
+        }
+      } else if (seg.Kind === 'mj-block' && seg.Descriptor) {
+        const desc = seg.Descriptor;
+        const title = EscapeHtml(desc.Title || desc.EntityName || desc.QueryName || desc.Kind);
+        if (desc.Kind === 'Artifact') {
+          parts.push(
+            `<div class="mj-print-block"><h3>${title}</h3><p>Embedded ${EscapeHtml(this.GetEmbeddedArtifactTypeName(desc))} Artifact</p></div>`,
+          );
+        } else {
+          const res = this.GetBlockExecutionResult(desc);
+          const verified = desc.Mode === 'Frozen' ? this.IsSnapshotVerified(desc) : true;
+          const badge =
+            desc.Mode === 'Frozen'
+              ? verified
+                ? `<p><em>Frozen snapshot (${EscapeHtml(desc.FrozenSnapshot?.FrozenAt || '')}${desc.FrozenSnapshot?.FrozenByUserName ? ` by ${EscapeHtml(desc.FrozenSnapshot.FrozenByUserName)}` : ''})</em></p>`
+                : `<p><em>WARNING: Unverified frozen snapshot — integrity signature missing or invalid.</em></p>`
+              : `<p><em>Live MJ Block (${EscapeHtml(desc.Kind)})</em></p>`;
+          if (res.Columns.length > 0) {
+            const th = res.Columns.map((c) => `<th>${EscapeHtml(c.DisplayName || c.Name)}</th>`).join('');
+            const trs = res.Rows.map(
+              (r) =>
+                `<tr>${res.Columns.map((c) => `<td>${EscapeHtml(String(r[c.Name] ?? ''))}</td>`).join('')}</tr>`,
+            ).join('');
+            parts.push(
+              `<div class="mj-print-block"><h3>${title}</h3>${badge}<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table></div>`,
+            );
+          } else {
+            parts.push(`<div class="mj-print-block"><h3>${title}</h3>${badge}</div>`);
+          }
+        }
+      }
+    }
+    return parts.join('\n');
   }
 
   /**
@@ -10372,7 +11499,7 @@ export class MarkdownArtifactViewerComponent
     this.collapsedHeadingIds.clear();
     this.loadToolbarPreferencesFromUserSettings();
 
-    const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
+    const raw = this.resolveUserInfoEngine()?.GetSetting(this.getCollapsedBlocksUserSettingKey());
     if (!raw) {
       return;
     }
@@ -10404,7 +11531,7 @@ export class MarkdownArtifactViewerComponent
       blocks: blocksObj,
       headings: Array.from(this.collapsedHeadingIds),
     });
-    UserInfoEngine.Instance.SetSettingDebounced(this.getCollapsedBlocksUserSettingKey(), payload);
+    this.resolveUserInfoEngine()?.SetSettingDebounced(this.getCollapsedBlocksUserSettingKey(), payload);
   }
 
   // =========================================================================
@@ -10830,9 +11957,10 @@ export class MarkdownArtifactViewerComponent
     typeName: string,
     user: ReturnType<MarkdownArtifactViewerComponent['getSafeCurrentUser']>,
   ): Promise<string | undefined> {
+    const metadataEngine = this.resolveArtifactMetadataEngine();
     const cachedType =
-      ArtifactMetadataEngine.Instance.FindArtifactType(typeName) ??
-      ArtifactMetadataEngine.Instance.ArtifactTypes?.find(
+      metadataEngine.FindArtifactType(typeName) ??
+      metadataEngine.ArtifactTypes?.find(
         (t) => t.Name.trim().toLowerCase() === typeName.trim().toLowerCase(),
       );
     if (cachedType?.ID) {
@@ -10946,6 +12074,10 @@ export class MarkdownArtifactViewerComponent
    * Opens the `O5` Security Warning Modal before freezing a live MJ block.
    */
   public PromptFreezeBlock(block: DocumentBlockSpec): void {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'freeze this block')) {
+      return;
+    }
     this.PendingFreezeBlock = block;
     this.FreezeWarningAcknowledged = false;
     this.cdr.markForCheck();
@@ -10978,6 +12110,10 @@ export class MarkdownArtifactViewerComponent
   }
 
   public async FreezeLiveBlock(block: DocumentBlockSpec): Promise<void> {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'freeze this block')) {
+      return;
+    }
     const currentUser = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
     if (!currentUser || !provider) {
@@ -11007,6 +12143,7 @@ export class MarkdownArtifactViewerComponent
         frozenBlock,
       );
       this.blockResults.delete(frozenBlock.BlockID);
+      this.frozenBlockDriftMap.delete(frozenBlock.BlockID);
       this.OnMarkdownChanged(updatedRes.Markdown);
       this.StatusBannerMessage = `Block "${frozenBlock.Title || frozenBlock.BlockID}" frozen into document snapshot.`;
     } catch (err) {
@@ -11016,19 +12153,144 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Returns true when a frozen block's `FrozenSnapshot` has a valid verified signature/hash (`Blocker 3`).
+   * All Frozen `:::mj-block` descriptors currently present in the document (`NW-1`).
+   */
+  public get FrozenBlocksInDocument(): DocumentBlockSpec[] {
+    const segBlocks = this.DocumentSegments
+      .map((s) => s.Descriptor)
+      .filter((d): d is DocumentBlockSpec => Boolean(d && d.Mode === 'Frozen'));
+    if (segBlocks.length > 0) {
+      return segBlocks;
+    }
+    return DocumentLiveBlockEngine.Instance
+      .ParseMarkdownDirectives(this.MarkdownContent)
+      .map((seg) => seg.BlockSpec)
+      .filter((d): d is DocumentBlockSpec => Boolean(d && d.Mode === 'Frozen'));
+  }
+
+  /**
+   * Resolves server pre-verified frozen snapshot provenance for a block when provided by host containers (`NW-1`).
+   */
+  public GetBlockPreVerifiedSnapshot(
+    block: DocumentBlockSpec | null | undefined,
+  ): PreVerifiedFrozenSnapshotEntry | null {
+    if (!block) {
+      return null;
+    }
+    return ResolvePreVerifiedFrozenSnapshotState(this.PreVerifiedFrozenSnapshots, [
+      block.BlockID,
+      block.ArtifactID,
+    ]);
+  }
+
+  /**
+   * Returns true when a frozen block's `FrozenSnapshot` has a valid verified signature/hash (`Blocker 3`)
+   * or was explicitly pre-verified by the server (`NW-1` Guest Share).
    */
   public IsSnapshotVerified(block: DocumentBlockSpec | null | undefined): boolean {
     if (!block) {
       return false;
     }
-    return this.collabService.IsFrozenSnapshotVerified(block, this.blockResults.get(block.BlockID));
+    const preVerified = ResolvePreVerifiedFrozenSnapshotState(this.PreVerifiedFrozenSnapshots, [
+      block.BlockID,
+      block.ArtifactID,
+    ]);
+    if (preVerified !== null) {
+      return preVerified.Verified;
+    }
+    return this.collabService.IsFrozenSnapshotVerified(
+      block,
+      this.blockResults.get(block.BlockID),
+      this.artifactVersion?.ArtifactID,
+    );
+  }
+
+  /**
+   * Compares every frozen block in the document against live query/view output (`NW-1`).
+   */
+  public async CompareAllFrozenBlocksWithLive(): Promise<void> {
+    for (const block of this.FrozenBlocksInDocument) {
+      await this.CompareFrozenBlockWithLive(block);
+    }
+  }
+
+  /**
+   * Re-freezes all unlocked frozen blocks in the document with fresh live data + signatures (`NW-1`).
+   */
+  public async RefreezeAllFrozenBlocks(): Promise<void> {
+    let updatedCount = 0;
+    let skippedLocked = 0;
+    for (const block of this.FrozenBlocksInDocument) {
+      const seg = this.findSegmentForBlockId(block.BlockID);
+      if (seg && !this.CanEditSegment(seg)) {
+        skippedLocked++;
+        continue;
+      }
+      await this.FreezeLiveBlock(block);
+      if (this.OpenDriftPanelBlockID === block.BlockID) {
+        this.OpenDriftPanelBlockID = null;
+      }
+      updatedCount++;
+    }
+    if (skippedLocked > 0 && updatedCount === 0) {
+      this.StatusBannerMessage = 'Cannot re-freeze: all frozen blocks are in locked sections.';
+    } else if (skippedLocked > 0) {
+      this.StatusBannerMessage = `Re-froze ${updatedCount} block(s); ${skippedLocked} locked block(s) skipped.`;
+    } else if (updatedCount > 0) {
+      this.StatusBannerMessage = `Re-froze ${updatedCount} frozen block(s) from live data.`;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Switches all unlocked frozen blocks back to Live mode (`NW-1`).
+   */
+  public SwitchAllFrozenBlocksToLive(): void {
+    let nextMarkdown = this.MarkdownContent;
+    let switchedCount = 0;
+    let skippedLocked = 0;
+    for (const block of this.FrozenBlocksInDocument) {
+      const seg = this.findSegmentForBlockId(block.BlockID);
+      if (seg && !this.CanEditSegment(seg)) {
+        skippedLocked++;
+        continue;
+      }
+      const liveBlock = DocumentLiveBlockEngine.Instance.UnfreezeBlock(block);
+      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+        nextMarkdown,
+        liveBlock.BlockID,
+        liveBlock,
+      );
+      nextMarkdown = updatedRes.Markdown;
+      this.blockResults.delete(liveBlock.BlockID);
+      this.frozenBlockDriftMap.delete(liveBlock.BlockID);
+      if (this.OpenDriftPanelBlockID === liveBlock.BlockID) {
+        this.OpenDriftPanelBlockID = null;
+      }
+      switchedCount++;
+      void this.RefreshLiveBlock(liveBlock);
+    }
+    if (switchedCount > 0) {
+      this.OnMarkdownChanged(nextMarkdown);
+    }
+    if (skippedLocked > 0 && switchedCount === 0) {
+      this.StatusBannerMessage = 'Cannot switch to Live: all frozen blocks are in locked sections.';
+    } else if (skippedLocked > 0) {
+      this.StatusBannerMessage = `Switched ${switchedCount} block(s) to Live mode; ${skippedLocked} locked block(s) skipped.`;
+    } else if (switchedCount > 0) {
+      this.StatusBannerMessage = `Switched ${switchedCount} block(s) back to Live mode.`;
+    }
+    this.cdr.markForCheck();
   }
 
   /**
    * Unfreezes a frozen block back to live viewer-scoped execution mode.
    */
   public UnfreezeLiveBlock(block: DocumentBlockSpec): void {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'switch this block to Live mode')) {
+      return;
+    }
     const liveBlock = DocumentLiveBlockEngine.Instance.UnfreezeBlock(block);
     const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
       this.MarkdownContent,
@@ -11036,15 +12298,248 @@ export class MarkdownArtifactViewerComponent
       liveBlock,
     );
     this.blockResults.delete(liveBlock.BlockID);
+    this.frozenBlockDriftMap.delete(liveBlock.BlockID);
+    if (this.OpenDriftPanelBlockID === liveBlock.BlockID) {
+      this.OpenDriftPanelBlockID = null;
+    }
     this.OnMarkdownChanged(updatedRes.Markdown);
     void this.RefreshLiveBlock(liveBlock);
     this.StatusBannerMessage = `Block "${liveBlock.Title || liveBlock.BlockID}" switched back to Live mode.`;
   }
 
   /**
+   * Returns cached Live-vs-Frozen drift comparison metrics (`NW-1`).
+   */
+  public GetFrozenDriftComparison(blockId: string): FrozenBlockDriftComparison | undefined {
+    return this.frozenBlockDriftMap.get(blockId);
+  }
+
+  /**
+   * Executes the frozen block's underlying query/view live under current viewer permissions
+   * and compares row-by-row with the stored `FrozenSnapshot` (`NW-1`).
+   */
+  public async CompareFrozenBlockWithLive(block: DocumentBlockSpec): Promise<void> {
+    if (!block?.BlockID) {
+      return;
+    }
+    if (this.OpenDriftPanelBlockID === block.BlockID) {
+      this.OpenDriftPanelBlockID = null;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.OpenDriftPanelBlockID = block.BlockID;
+    const frozenSnapshot = block.FrozenSnapshot;
+    if (!frozenSnapshot) {
+      this.frozenBlockDriftMap.set(block.BlockID, {
+        BlockID: block.BlockID,
+        Loading: false,
+        ErrorMessage: 'This block has no frozen snapshot to compare.',
+        AddedRows: 0,
+        RemovedRows: 0,
+        ModifiedCells: 0,
+        UnchangedRows: 0,
+        SampleDiffs: [],
+        LiveRowCount: 0,
+        FrozenRowCount: 0,
+      });
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const currentUser = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
+    if (!currentUser || !provider) {
+      this.frozenBlockDriftMap.set(block.BlockID, {
+        BlockID: block.BlockID,
+        Loading: false,
+        ErrorMessage: 'Metadata provider or user context unavailable for live drift check.',
+        AddedRows: 0,
+        RemovedRows: 0,
+        ModifiedCells: 0,
+        UnchangedRows: 0,
+        SampleDiffs: [],
+        LiveRowCount: 0,
+        FrozenRowCount: frozenSnapshot.Rows.length,
+      });
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.frozenBlockDriftMap.set(block.BlockID, {
+      BlockID: block.BlockID,
+      Loading: true,
+      AddedRows: 0,
+      RemovedRows: 0,
+      ModifiedCells: 0,
+      UnchangedRows: 0,
+      SampleDiffs: [],
+      LiveRowCount: 0,
+      FrozenRowCount: frozenSnapshot.Rows.length,
+    });
+    this.cdr.markForCheck();
+
+    try {
+      const liveSpec: DocumentBlockSpec = {
+        ...block,
+        Mode: 'Live',
+      };
+      const liveRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(liveSpec, currentUser, provider);
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      if (!liveRes.Success) {
+        this.frozenBlockDriftMap.set(block.BlockID, {
+          BlockID: block.BlockID,
+          Loading: false,
+          ErrorMessage: liveRes.ErrorMessage || 'Live execution failed during drift comparison.',
+          AddedRows: 0,
+          RemovedRows: 0,
+          ModifiedCells: 0,
+          UnchangedRows: 0,
+          SampleDiffs: [],
+          LiveRowCount: 0,
+          FrozenRowCount: frozenSnapshot.Rows.length,
+        });
+      } else {
+        const drift = this.computeFrozenBlockDrift(
+          block.BlockID,
+          frozenSnapshot.Columns,
+          frozenSnapshot.Rows,
+          liveRes.Rows,
+        );
+        this.frozenBlockDriftMap.set(block.BlockID, drift);
+      }
+    } catch (err) {
+      LogError(err);
+      this.frozenBlockDriftMap.set(block.BlockID, {
+        BlockID: block.BlockID,
+        Loading: false,
+        ErrorMessage: err instanceof Error ? err.message : 'Failed to compute live-vs-frozen drift.',
+        AddedRows: 0,
+        RemovedRows: 0,
+        ModifiedCells: 0,
+        UnchangedRows: 0,
+        SampleDiffs: [],
+        LiveRowCount: 0,
+        FrozenRowCount: frozenSnapshot.Rows.length,
+      });
+    }
+    this.cdr.markForCheck();
+  }
+
+  public async RefreezeFrozenBlock(block: DocumentBlockSpec): Promise<void> {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 're-freeze this snapshot')) {
+      return;
+    }
+    await this.FreezeLiveBlock(block);
+    if (this.OpenDriftPanelBlockID === block.BlockID) {
+      this.OpenDriftPanelBlockID = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private computeFrozenBlockDrift(
+    blockId: string,
+    columns: DocumentBlockColumn[],
+    frozenRows: BlockRecord[],
+    liveRows: BlockRecord[],
+  ): FrozenBlockDriftComparison {
+    const keyField =
+      columns.find((c) => c.IsPrimaryKey)?.Name ??
+      columns[0]?.Name ??
+      '';
+    const colNames = columns.map((c) => c.Name);
+    const makeRowKey = (row: BlockRecord, idx: number): string => {
+      if (keyField && row[keyField] != null && String(row[keyField]).trim().length > 0) {
+        return String(row[keyField]);
+      }
+      return `row-${idx}`;
+    };
+
+    const frozenMap = new Map<string, BlockRecord>();
+    frozenRows.forEach((r, i) => frozenMap.set(makeRowKey(r, i), r));
+
+    const liveMap = new Map<string, BlockRecord>();
+    liveRows.forEach((r, i) => liveMap.set(makeRowKey(r, i), r));
+
+    let addedRows = 0;
+    let removedRows = 0;
+    let modifiedCells = 0;
+    let unchangedRows = 0;
+    const sampleDiffs: FrozenBlockDriftComparison['SampleDiffs'] = [];
+
+    for (const [k, liveRow] of liveMap.entries()) {
+      const frozenRow = frozenMap.get(k);
+      if (!frozenRow) {
+        addedRows++;
+        if (sampleDiffs.length < 6) {
+          sampleDiffs.push({
+            Kind: 'added',
+            RowLabel: k,
+            Summary: 'Added in live data since snapshot was frozen.',
+          });
+        }
+        continue;
+      }
+      const changedCols: string[] = [];
+      const keysToCheck = colNames.length > 0 ? colNames : Object.keys({ ...frozenRow, ...liveRow });
+      for (const col of keysToCheck) {
+        const prevVal = frozenRow[col] ?? null;
+        const nextVal = liveRow[col] ?? null;
+        if (String(prevVal ?? '') !== String(nextVal ?? '')) {
+          modifiedCells++;
+          changedCols.push(`${col}: "${prevVal ?? ''}" -> "${nextVal ?? ''}"`);
+        }
+      }
+      if (changedCols.length > 0) {
+        if (sampleDiffs.length < 6) {
+          sampleDiffs.push({
+            Kind: 'modified',
+            RowLabel: k,
+            Summary: changedCols.slice(0, 3).join('; '),
+          });
+        }
+      } else {
+        unchangedRows++;
+      }
+    }
+
+    for (const k of frozenMap.keys()) {
+      if (!liveMap.has(k)) {
+        removedRows++;
+        if (sampleDiffs.length < 6) {
+          sampleDiffs.push({
+            Kind: 'removed',
+            RowLabel: k,
+            Summary: 'No longer present in live query results.',
+          });
+        }
+      }
+    }
+
+    return {
+      BlockID: blockId,
+      Loading: false,
+      CheckedAt: new Date().toLocaleTimeString(),
+      AddedRows: addedRows,
+      RemovedRows: removedRows,
+      ModifiedCells: modifiedCells,
+      UnchangedRows: unchangedRows,
+      SampleDiffs: sampleDiffs,
+      LiveRowCount: liveRows.length,
+      FrozenRowCount: frozenRows.length,
+    };
+  }
+
+  /**
    * Executes a live MJ block under the viewer's permissions and caches the exact execution result.
    */
   public async RefreshLiveBlock(block: DocumentBlockSpec): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
     const currentUser = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
     if (!currentUser || !provider) {
@@ -11087,6 +12582,12 @@ export class MarkdownArtifactViewerComponent
   public GetBlockExecutionResult(block: DocumentBlockSpec): DocumentBlockExecutionResult {
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
       const verified = this.IsSnapshotVerified(block);
+      const preVerified = this.GetBlockPreVerifiedSnapshot(block);
+      const frozenAt = block.FrozenSnapshot.FrozenAt || preVerified?.FrozenAt || '';
+      const frozenByUserId = verified ? block.FrozenSnapshot.FrozenByUserID : '';
+      const frozenByUserName = verified
+        ? block.FrozenSnapshot.FrozenByUserName || preVerified?.FrozenByUserName || ''
+        : '';
       return {
         BlockID: block.BlockID,
         Kind: block.Kind,
@@ -11096,16 +12597,16 @@ export class MarkdownArtifactViewerComponent
         Rows: block.FrozenSnapshot.Rows,
         TotalRowCount: block.FrozenSnapshot.TotalRowCount,
         FrozenMetadata: {
-          FrozenAt: block.FrozenSnapshot.FrozenAt,
-          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
-          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          FrozenAt: frozenAt,
+          FrozenByUserID: frozenByUserId,
+          FrozenByUserName: frozenByUserName,
           SnapshotVerified: verified,
         },
         FrozenSnapshot: {
           SnapshotVerified: verified,
-          FrozenAt: block.FrozenSnapshot.FrozenAt,
-          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
-          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          FrozenAt: frozenAt,
+          FrozenByUserID: frozenByUserId,
+          FrozenByUserName: frozenByUserName,
           SnapshotContentHash: block.FrozenSnapshot.SnapshotContentHash,
         },
       };
@@ -11131,7 +12632,8 @@ export class MarkdownArtifactViewerComponent
    * Toggles inline OLE editing (`[readonly]="false"`) on an embedded `Artifact` block (§ 3.4.1 / D12).
    */
   public ToggleInlineArtifactEdit(block: DocumentBlockSpec): void {
-    if (!this.CanUserEdit) {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'toggle inline editing on this embedded artifact')) {
       return;
     }
     if (this.inlineEditingBlockIds.has(block.BlockID)) {
@@ -11184,7 +12686,7 @@ export class MarkdownArtifactViewerComponent
    * while asynchronously fetching from `MJ: Artifact Versions` via `RunView` (or when unavailable).
    */
   public GetNewerEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
-    const artifactId = block.ArtifactID?.trim();
+    const artifactId = block.ArtifactID?.trim().toLowerCase();
     const pinnedVersionId = block.VersionID?.trim();
     if (!artifactId || !pinnedVersionId) {
       return null;
@@ -11201,7 +12703,8 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateEmbeddedArtifactToLatestVersion(block: DocumentBlockSpec): void {
-    if (!this.CanUserEdit) {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'update embedded artifact version')) {
       return;
     }
     const newer = this.GetNewerEmbeddedArtifactVersion(block);
@@ -11223,6 +12726,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public GetEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
+    if (this.isGuestSnapshotMode) {
+      return null;
+    }
     const artifactId = block.ArtifactID?.trim();
     if (!artifactId) {
       return null;
@@ -11253,6 +12759,25 @@ export class MarkdownArtifactViewerComponent
       return;
     }
 
+    const normalizedArtifactId = artifactId.trim().toLowerCase();
+    const ancestors = this.EffectiveAncestorArtifactIDs;
+    if (ancestors.has(normalizedArtifactId)) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        'Circular artifact embedding blocked: an artifact cannot embed itself or an ancestor.',
+      );
+      this.cdr.markForCheck();
+      return;
+    }
+    if (ancestors.size >= MJ_MAX_EMBED_DEPTH) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        `Embedded artifact nesting depth exceeds maximum (${MJ_MAX_EMBED_DEPTH}).`,
+      );
+      this.cdr.markForCheck();
+      return;
+    }
+
     const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
     if (!provider || !user) {
@@ -11267,23 +12792,42 @@ export class MarkdownArtifactViewerComponent
       const filter = versionId
         ? `ID='${EscapeSQLString(versionId)}' AND ArtifactID='${EscapeSQLString(artifactId)}'`
         : `ArtifactID='${EscapeSQLString(artifactId)}'`;
-      const res = await rv.RunView<MJArtifactVersionEntity>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: filter,
-          OrderBy: 'VersionNumber DESC',
-          MaxRows: 1,
-          ResultType: 'entity_object',
-        },
-        user,
-      );
+      const [res, metaRes] = await Promise.all([
+        rv.RunView<MJArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: filter,
+            OrderBy: 'VersionNumber DESC',
+            MaxRows: 1,
+            ResultType: 'entity_object',
+          },
+          user,
+        ),
+        this.embeddedArtifactTypes.has(normalizedArtifactId)
+          ? Promise.resolve(null)
+          : rv.RunView<{ ID: string; Type: string }>(
+              {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+                Fields: ['ID', 'Type'],
+                MaxRows: 1,
+                ResultType: 'simple',
+              },
+              user,
+            ),
+      ]);
+      const resolvedType = metaRes?.Success ? metaRes.Results?.[0]?.Type : undefined;
+      if (resolvedType && resolvedType.trim().length > 0) {
+        this.embeddedArtifactTypes.set(normalizedArtifactId, resolvedType.trim());
+      }
+
       const entity = res.Success ? res.Results?.[0] : undefined;
       if (entity) {
         this.embeddedArtifactVersions.set(key, entity);
         if (!versionId && entity.ID) {
           this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
-          this.latestArtifactVersions.set(artifactId, entity);
-        } else if (versionId && !this.latestArtifactVersions.has(artifactId)) {
+          this.latestArtifactVersions.set(normalizedArtifactId, entity);
+        } else if (versionId && !this.latestArtifactVersions.has(normalizedArtifactId)) {
           const latestRes = await rv.RunView<MJArtifactVersionEntity>(
             {
               EntityName: 'MJ: Artifact Versions',
@@ -11296,7 +12840,7 @@ export class MarkdownArtifactViewerComponent
           );
           const latestEntity = latestRes.Success ? latestRes.Results?.[0] : undefined;
           if (latestEntity) {
-            this.latestArtifactVersions.set(artifactId, latestEntity);
+            this.latestArtifactVersions.set(normalizedArtifactId, latestEntity);
           }
         }
         this.failedEmbeddedVersionMessages.delete(key);
@@ -11327,6 +12871,10 @@ export class MarkdownArtifactViewerComponent
     block: DocumentBlockSpec,
     serializedContent: string,
   ): Promise<void> {
+    const seg = this.findSegmentForBlockId(block.BlockID);
+    if (!this.enforceSegmentLock(seg, 'commit embedded artifact edits')) {
+      return;
+    }
     const childArtifactId = block.ArtifactID?.trim();
     const user = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
@@ -11401,6 +12949,90 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  private nextUniqueId(prefix: string): string {
+    this.nextLocalIdSeq++;
+    return `${prefix}-${Date.now()}-${this.nextLocalIdSeq}`;
+  }
+
+  private syncSuggestionToSession(sug: DocumentSuggestionItem): void {
+    const canonical = BuildCanonicalDocumentSuggestionRecord(sug, this.artifactVersion?.ArtifactID);
+    const serialized = JSON.stringify(canonical);
+    UpsertArtifactSuggestionInVersionConfiguration(this.artifactVersion, canonical);
+    if (this.isApplyingRemoteSuggestions || !this.session) {
+      return;
+    }
+    this.session.SetSharedSuggestionRaw(sug.SuggestionID, serialized);
+  }
+
+  private syncSuggestionsFromSession(): void {
+    const rawMap = this.session ? this.session.GetSharedSuggestionsRaw() : new Map<string, string>();
+    const configSuggestions = ParseSuggestionsFromConfiguration(
+      ReadArtifactVersionConfigurationSafe(this.artifactVersion),
+      'document',
+    );
+    const shouldSeedSession = Boolean(this.session) && rawMap.size === 0 && configSuggestions.length > 0;
+    if (rawMap.size === 0 && configSuggestions.length === 0) {
+      return;
+    }
+    this.isApplyingRemoteSuggestions = true;
+    try {
+      const byId = new Map<string, DocumentSuggestionItem>(
+        this.Suggestions.map((s) => [s.SuggestionID, s]),
+      );
+      let changed = false;
+      for (const [id, jsonStr] of rawMap.entries()) {
+        const parsed = NormalizeDocumentSuggestion(jsonStr, id);
+        if (!parsed) {
+          continue;
+        }
+        if (!parsed.BlockID) {
+          parsed.BlockID = this.resolveDocumentSuggestionBlockId(parsed, this.DocumentSegments);
+        }
+        const existing = byId.get(id);
+        if (!existing) {
+          byId.set(id, parsed);
+          changed = true;
+        } else if (
+          existing.Status !== parsed.Status ||
+          existing.ProposedMarkdown !== parsed.ProposedMarkdown ||
+          existing.OriginalMarkdown !== parsed.OriginalMarkdown ||
+          existing.BlockID !== parsed.BlockID
+        ) {
+          byId.set(id, parsed);
+          changed = true;
+        }
+      }
+      for (const cfgItem of configSuggestions) {
+        if (rawMap.has(cfgItem.SuggestionID)) {
+          continue;
+        }
+        const parsed = NormalizeDocumentSuggestion(cfgItem, cfgItem.SuggestionID);
+        if (!parsed) {
+          continue;
+        }
+        if (!parsed.BlockID) {
+          parsed.BlockID = this.resolveDocumentSuggestionBlockId(parsed, this.DocumentSegments);
+        }
+        if (shouldSeedSession && this.session) {
+          this.session.SetSharedSuggestionRaw(cfgItem.SuggestionID, JSON.stringify(cfgItem));
+        }
+        const existing = byId.get(parsed.SuggestionID);
+        if (!existing || existing.Status !== parsed.Status) {
+          byId.set(parsed.SuggestionID, parsed);
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.Suggestions = Array.from(byId.values()).sort((a, b) =>
+          (b.CreatedAt || '').localeCompare(a.CreatedAt || ''),
+        );
+        this.cdr.markForCheck();
+      }
+    } finally {
+      this.isApplyingRemoteSuggestions = false;
+    }
+  }
+
   /**
    * Creates or updates a tracked Suggestion Card for a document block.
    * When a pending suggestion already exists for the same block, updates its proposed Markdown in-place.
@@ -11417,12 +13049,13 @@ export class MarkdownArtifactViewerComponent
       existing.ProposedMarkdown = proposedMarkdown;
       existing.Rationale = rationale;
       existing.CreatedAt = new Date().toISOString();
+      this.syncSuggestionToSession(existing);
       this.cdr.markForCheck();
       return existing;
     }
 
     const item: DocumentSuggestionItem = {
-      SuggestionID: `sug-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      SuggestionID: this.nextUniqueId('sug'),
       BlockID: blockId,
       AuthorName: authorName,
       CreatedAt: new Date().toISOString(),
@@ -11432,6 +13065,7 @@ export class MarkdownArtifactViewerComponent
       Status: 'Pending',
     };
     this.Suggestions = [item, ...this.Suggestions];
+    this.syncSuggestionToSession(item);
     this.cdr.markForCheck();
     return item;
   }
@@ -11480,17 +13114,28 @@ export class MarkdownArtifactViewerComponent
     let workingSegments = this.DocumentSegments;
     let acceptedCount = 0;
     let conflictCount = 0;
+    let lockBlockedCount = 0;
 
     for (const sug of pending) {
+      if (!this.CanEditSuggestionTarget(sug)) {
+        lockBlockedCount++;
+        continue;
+      }
       const applied = this.applySuggestionReplacement(
-        sug.BlockID,
+        sug.BlockID || this.resolveDocumentSuggestionBlockId(sug, workingSegments),
         sug.OriginalMarkdown,
         sug.ProposedMarkdown,
         workingSegments,
         nextMd,
       );
       if (applied.matched) {
+        const lockCheck = this.validateDocumentEditLocks(applied.markdown);
+        if (!lockCheck.Allowed) {
+          lockBlockedCount++;
+          continue;
+        }
         sug.Status = 'Accepted';
+        this.syncSuggestionToSession(sug);
         nextMd = applied.markdown;
         workingSegments = this.collabService.ParseDocumentSegments(nextMd);
         acceptedCount++;
@@ -11502,7 +13147,11 @@ export class MarkdownArtifactViewerComponent
     if (acceptedCount > 0) {
       this.OnMarkdownChanged(nextMd);
     }
-    if (conflictCount > 0) {
+    if (lockBlockedCount > 0) {
+      this.notifyError(
+        `${lockBlockedCount} suggestion${lockBlockedCount === 1 ? '' : 's'} target${lockBlockedCount === 1 ? 's' : ''} a locked section and cannot be committed.`,
+      );
+    } else if (conflictCount > 0) {
       this.notifyError(
         `Conflict: ${conflictCount} suggestion${conflictCount === 1 ? ' could' : 's could'} not be applied because the target block changed.`,
       );
@@ -11513,7 +13162,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OpenSuggestionModalForSegment(seg: DocumentRenderSegment): void {
-    if (!this.CanUserEdit) {
+    if (!this.enforceSegmentLock(seg, 'propose a suggestion')) {
       return;
     }
     this.SetViewMode('suggest');
@@ -11550,8 +13199,13 @@ export class MarkdownArtifactViewerComponent
    * in the same paragraph open for review.
    */
   public AcceptSuggestionHunk(sug: DocumentSuggestionItem, hunk: DocumentWordChangeHunk): void {
+    if (!this.CanEditSuggestionTarget(sug)) {
+      this.StatusBannerMessage = 'This section is protected by a lock and this suggestion hunk cannot be accepted.';
+      this.cdr.markForCheck();
+      return;
+    }
     const applied = this.applySuggestionReplacement(
-      sug.BlockID,
+      sug.BlockID || this.resolveDocumentSuggestionBlockId(sug, this.DocumentSegments),
       sug.OriginalMarkdown,
       hunk.AcceptedMarkdown,
       this.DocumentSegments,
@@ -11561,12 +13215,16 @@ export class MarkdownArtifactViewerComponent
       this.notifyError('Conflict: the target block changed and no longer matches this suggestion hunk.');
       return;
     }
+    if (!this.validateDocumentEditLocks(applied.markdown).Allowed) {
+      return;
+    }
 
     this.OnMarkdownChanged(applied.markdown);
     sug.OriginalMarkdown = hunk.AcceptedMarkdown;
     if (sug.OriginalMarkdown.trim() === sug.ProposedMarkdown.trim()) {
       sug.Status = 'Accepted';
     }
+    this.syncSuggestionToSession(sug);
     this.StatusBannerMessage = `Accepted word edit (${hunk.Kind}).`;
     this.cdr.markForCheck();
   }
@@ -11576,10 +13234,16 @@ export class MarkdownArtifactViewerComponent
    * in the same paragraph.
    */
   public RejectSuggestionHunk(sug: DocumentSuggestionItem, hunk: DocumentWordChangeHunk): void {
+    if (!this.CanEditSuggestionTarget(sug)) {
+      this.StatusBannerMessage = 'This section is protected by a lock and this suggestion hunk cannot be rejected.';
+      this.cdr.markForCheck();
+      return;
+    }
     sug.ProposedMarkdown = hunk.RejectedProposedMarkdown;
     if (sug.OriginalMarkdown.trim() === sug.ProposedMarkdown.trim()) {
       sug.Status = 'Rejected';
     }
+    this.syncSuggestionToSession(sug);
     this.StatusBannerMessage = `Rejected word edit (${hunk.Kind}).`;
     this.cdr.markForCheck();
   }
@@ -11588,8 +13252,13 @@ export class MarkdownArtifactViewerComponent
    * Accepts a pending Suggestion Card and applies its proposed Markdown to the matching target block.
    */
   public AcceptSuggestion(sug: DocumentSuggestionItem): void {
+    if (!this.CanEditSuggestionTarget(sug)) {
+      this.StatusBannerMessage = 'This section is protected by a lock and this suggestion cannot be accepted.';
+      this.cdr.markForCheck();
+      return;
+    }
     const applied = this.applySuggestionReplacement(
-      sug.BlockID,
+      sug.BlockID || this.resolveDocumentSuggestionBlockId(sug, this.DocumentSegments),
       sug.OriginalMarkdown,
       sug.ProposedMarkdown,
       this.DocumentSegments,
@@ -11599,7 +13268,11 @@ export class MarkdownArtifactViewerComponent
       this.notifyError('Conflict: the target block changed and no longer matches the original text.');
       return;
     }
+    if (!this.validateDocumentEditLocks(applied.markdown).Allowed) {
+      return;
+    }
     sug.Status = 'Accepted';
+    this.syncSuggestionToSession(sug);
     this.OnMarkdownChanged(applied.markdown);
     this.StatusBannerMessage = `Accepted suggestion from ${sug.AuthorName}.`;
   }
@@ -11608,7 +13281,13 @@ export class MarkdownArtifactViewerComponent
    * Rejects a pending Suggestion Card without altering the document.
    */
   public RejectSuggestion(sug: DocumentSuggestionItem): void {
+    if (!this.CanEditSuggestionTarget(sug)) {
+      this.StatusBannerMessage = 'This section is protected by a lock and this suggestion cannot be rejected.';
+      this.cdr.markForCheck();
+      return;
+    }
     sug.Status = 'Rejected';
+    this.syncSuggestionToSession(sug);
     this.StatusBannerMessage = `Rejected suggestion from ${sug.AuthorName}.`;
     this.cdr.markForCheck();
   }
@@ -11668,7 +13347,7 @@ export class MarkdownArtifactViewerComponent
 
     if (mode === 'comment' || !trimmedProposed) {
       thread.Messages.push({
-        DetailID: `msg-${Date.now()}-agent`,
+        DetailID: this.nextUniqueId('msg-agent'),
         UserName: normalizedAuthor,
         Role: 'Agent',
         Message: trimmedReply,
@@ -11708,6 +13387,19 @@ export class MarkdownArtifactViewerComponent
           }
         }
       } else if (targetSeg) {
+        if (!this.CanEditSegment(targetSeg)) {
+          thread.Messages.push({
+            DetailID: this.nextUniqueId('msg-agent'),
+            UserName: normalizedAuthor,
+            Role: 'Agent',
+            Message: trimmedReply || 'Target section is locked; edit could not be applied directly.',
+            CreatedAt: nowIso,
+            Mentions: [],
+          });
+          this.StatusBannerMessage = 'Target section is locked and cannot be edited directly.';
+          this.cdr.detectChanges();
+          return;
+        }
         const nextSegmentMarkdown = this.spliceQuoteReplacementInSegment(
           targetSeg.RawMarkdown,
           effectiveAnchorQuote,
@@ -11717,7 +13409,7 @@ export class MarkdownArtifactViewerComponent
       }
       if (trimmedReply) {
         thread.Messages.push({
-          DetailID: `msg-${Date.now()}-agent`,
+          DetailID: this.nextUniqueId('msg-agent'),
           UserName: normalizedAuthor,
           Role: 'Agent',
           Message: trimmedReply,
@@ -11746,7 +13438,7 @@ export class MarkdownArtifactViewerComponent
     }
     if (trimmedReply) {
       thread.Messages.push({
-        DetailID: `msg-${Date.now()}-agent`,
+        DetailID: this.nextUniqueId('msg-agent'),
         UserName: normalizedAuthor,
         Role: 'Agent',
         Message: trimmedReply,
@@ -12013,107 +13705,203 @@ export class MarkdownArtifactViewerComponent
    */
   public async PostAnchoredComment(): Promise<void> {
     const message = this.NewCommentText.trim();
+    if (!message || this.IsPostingComment) {
+      return;
+    }
+
+    this.IsPostingComment = true;
+    this.cdr.markForCheck();
+    try {
+      const user = this.getSafeCurrentUser();
+      const mentions = ExtractAnchoredCommentMentions(message);
+      const selectedQuote = this.SelectedAnchorQuote.trim();
+      const nowIso = new Date().toISOString();
+      const newThread: DocumentAnchoredThread = {
+        ConversationID: this.nextUniqueId('conv'),
+        AnchorKey: this.SelectedAnchorKey,
+        AnchorLabel: this.SelectedAnchorLabel,
+        QuotedText: selectedQuote,
+        Status: 'Open',
+        AgentMode: this.NewCommentAgentMode,
+        CreatedAt: nowIso,
+        Messages: [
+          {
+            DetailID: this.nextUniqueId('msg'),
+            UserName: user?.Name || 'Current User',
+            Role: 'User',
+            Message: message,
+            CreatedAt: nowIso,
+            Mentions: mentions,
+          },
+        ],
+      };
+
+      const artifactId = this.artifactVersion?.ArtifactID;
+      if (artifactId) {
+        const persisted = await this.persistAnchoredThreadToServer(newThread);
+        if (!persisted) {
+          return;
+        }
+      }
+
+      this.AnchoredThreads = [newThread, ...this.AnchoredThreads];
+      this.NewCommentText = '';
+      this.SelectedAnchorQuote = '';
+      this.StatusBannerMessage = 'Posted anchored comment.';
+      this.cdr.markForCheck();
+
+      if (artifactId && mentions.length > 0) {
+        await this.dispatchThreadMention(newThread, mentions[0], message, selectedQuote || undefined);
+      }
+    } finally {
+      this.IsPostingComment = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public GetThreadReplyDraft(conversationId: string): string {
+    return this.threadReplyDrafts.get(conversationId) ?? '';
+  }
+
+  public SetThreadReplyDraft(conversationId: string, value: string): void {
+    this.threadReplyDrafts.set(conversationId, value ?? '');
+  }
+
+  public async ReplyToAnchoredThread(
+    thread: DocumentAnchoredThread,
+    explicitText?: string,
+  ): Promise<void> {
+    const convId = thread.ConversationID;
+    if (!convId || this.ReplyingThreadIds.has(convId)) {
+      return;
+    }
+    const rawDraft = explicitText !== undefined ? explicitText : this.GetThreadReplyDraft(convId);
+    const message = rawDraft.trim();
     if (!message) {
       return;
     }
 
     const user = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
     const mentions = ExtractAnchoredCommentMentions(message);
-    const selectedQuote = this.SelectedAnchorQuote.trim();
     const nowIso = new Date().toISOString();
-    const newThread: DocumentAnchoredThread = {
-      ConversationID: `conv-${Date.now()}`,
-      AnchorKey: this.SelectedAnchorKey,
-      AnchorLabel: this.SelectedAnchorLabel,
-      QuotedText: selectedQuote,
-      Status: 'Open',
-      AgentMode: this.NewCommentAgentMode,
-      CreatedAt: nowIso,
-      Messages: [
-        {
-          DetailID: `msg-${Date.now()}-1`,
-          UserName: user?.Name || 'Current User',
-          Role: 'User',
-          Message: message,
-          CreatedAt: nowIso,
-          Mentions: mentions,
-        },
-      ],
-    };
+    let detailId = this.nextUniqueId('msg');
 
-    const artifactId = this.artifactVersion?.ArtifactID;
-    if (artifactId) {
-      const persisted = await this.persistAnchoredThreadToServer(newThread);
-      if (!persisted) {
-        return;
-      }
-    }
-
-    this.AnchoredThreads = [newThread, ...this.AnchoredThreads];
-    this.NewCommentText = '';
-    this.SelectedAnchorQuote = '';
-    this.StatusBannerMessage = 'Posted anchored comment.';
+    this.ReplyingThreadIds.add(convId);
+    this.threadReplyDrafts.set(convId, '');
     this.cdr.markForCheck();
 
-    if (artifactId && mentions.length > 0) {
-      const provider = this.getSafeProvider();
-      const firstHandle = mentions[0];
-      const markdownBeforeMention = this.MarkdownContent;
-      const serverMention = await this.collabService.DispatchAnchoredCommentAgentMention(
-        artifactId,
-        firstHandle,
-        newThread.AgentMode,
-        message,
-        selectedQuote || undefined,
-        provider,
-        newThread.ConversationID || undefined,
-      );
-      if (this.isComponentDestroyed) {
-        return;
+    try {
+      const artifactId = this.artifactVersion?.ArtifactID;
+      if (artifactId && provider && user && !convId.startsWith('conv-')) {
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+        detail.NewRecord();
+        detail.ConversationID = convId;
+        detail.UserID = user.ID;
+        detail.Role = 'User';
+        detail.Message = message;
+        const ok = await detail.Save();
+        if (!ok) {
+          this.threadReplyDrafts.set(convId, rawDraft);
+          const msg = detail.LatestResult?.Message || 'Failed to save thread reply.';
+          LogError(msg);
+          this.notifyError(msg);
+          return;
+        }
+        if (detail.ID) {
+          detailId = detail.ID;
+        }
       }
-      const replyMessage = (serverMention.ReplyMessage ?? serverMention.ReplyBody ?? '').trim();
-      const updatedContent =
-        serverMention.Success &&
-        typeof serverMention.UpdatedContent === 'string' &&
-        serverMention.UpdatedContent.trim().length > 0
-          ? serverMention.UpdatedContent
-          : undefined;
-      if (!serverMention.Success || (!replyMessage && !updatedContent)) {
-        const errStatus =
-          serverMention.ErrorMessage ||
-          (!serverMention.HandledByServer
-            ? `Cannot dispatch @${firstHandle}: live server agent runtime is unavailable.`
-            : !serverMention.Success
-              ? `Failed to run @${firstHandle} in ${newThread.AgentMode} mode.`
-              : `@${firstHandle} did not return a reply.`);
-        this.notifyError(errStatus);
-        this.StatusBannerMessage = errStatus;
-        this.cdr.detectChanges();
-        return;
-      }
-      // In 'edit' mode, NEVER mutate document markdown locally unless UpdatedContent was returned with Success === true from server
-      if (newThread.AgentMode === 'edit' && !updatedContent) {
-        newThread.Messages.push({
-          DetailID: `msg-${Date.now()}-agent`,
-          UserName: `@${firstHandle}`,
-          Role: 'Agent',
-          Message: replyMessage,
-          CreatedAt: new Date().toISOString(),
-          Mentions: [],
-        });
-        this.StatusBannerMessage = `@${firstHandle} replied in comment thread.`;
-        this.cdr.detectChanges();
-        return;
-      }
-      this.DispatchAgentCommentMention(newThread, firstHandle, {
-        replyMessage,
-        proposedMarkdown: updatedContent,
-        appliedOnServer: newThread.AgentMode === 'edit' && Boolean(updatedContent),
-        anchorQuote: selectedQuote || undefined,
-        markdownBeforeMention,
-        versionNumber: serverMention.VersionNumber,
+
+      thread.Messages.push({
+        DetailID: detailId,
+        UserName: user?.Name || 'Current User',
+        Role: 'User',
+        Message: message,
+        CreatedAt: nowIso,
+        Mentions: mentions,
       });
+      this.StatusBannerMessage = 'Replied to comment thread.';
+      this.cdr.markForCheck();
+
+      if (artifactId && mentions.length > 0) {
+        await this.dispatchThreadMention(thread, mentions[0], message, thread.QuotedText || undefined);
+      }
+    } catch (err) {
+      this.threadReplyDrafts.set(convId, rawDraft);
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to post thread reply.');
+    } finally {
+      this.ReplyingThreadIds.delete(convId);
+      this.cdr.markForCheck();
     }
+  }
+
+  private async dispatchThreadMention(
+    thread: DocumentAnchoredThread,
+    firstHandle: string,
+    message: string,
+    quotedText?: string,
+  ): Promise<void> {
+    const artifactId = this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
+      return;
+    }
+    const provider = this.getSafeProvider();
+    const markdownBeforeMention = this.MarkdownContent;
+    const serverMention = await this.collabService.DispatchAnchoredCommentAgentMention(
+      artifactId,
+      firstHandle,
+      thread.AgentMode,
+      message,
+      quotedText,
+      provider,
+      thread.ConversationID || undefined,
+    );
+    if (this.isComponentDestroyed) {
+      return;
+    }
+    const replyMessage = (serverMention.ReplyMessage ?? serverMention.ReplyBody ?? '').trim();
+    const updatedContent =
+      serverMention.Success &&
+      typeof serverMention.UpdatedContent === 'string' &&
+      serverMention.UpdatedContent.trim().length > 0
+        ? serverMention.UpdatedContent
+        : undefined;
+    if (!serverMention.Success || (!replyMessage && !updatedContent)) {
+      const errStatus =
+        serverMention.ErrorMessage ||
+        (!serverMention.HandledByServer
+          ? `Cannot dispatch @${firstHandle}: live server agent runtime is unavailable.`
+          : !serverMention.Success
+            ? `Failed to run @${firstHandle} in ${thread.AgentMode} mode.`
+            : `@${firstHandle} did not return a reply.`);
+      this.notifyError(errStatus);
+      this.StatusBannerMessage = errStatus;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (thread.AgentMode === 'edit' && !updatedContent) {
+      thread.Messages.push({
+        DetailID: this.nextUniqueId('msg-agent'),
+        UserName: `@${firstHandle}`,
+        Role: 'Agent',
+        Message: replyMessage,
+        CreatedAt: new Date().toISOString(),
+        Mentions: [],
+      });
+      this.StatusBannerMessage = `@${firstHandle} replied in comment thread.`;
+      this.cdr.detectChanges();
+      return;
+    }
+    this.DispatchAgentCommentMention(thread, firstHandle, {
+      replyMessage,
+      proposedMarkdown: updatedContent,
+      appliedOnServer: thread.AgentMode === 'edit' && Boolean(updatedContent),
+      anchorQuote: quotedText,
+      markdownBeforeMention,
+      versionNumber: serverMention.VersionNumber,
+    });
   }
 
   public ToggleResolveThread(thread: DocumentAnchoredThread): void {
@@ -12151,11 +13939,13 @@ export class MarkdownArtifactViewerComponent
         const msg = conv.LatestResult?.Message || 'Failed to update comment resolution status.';
         LogError(msg);
         this.notifyError(msg);
+        this.cdr.markForCheck();
       }
     } catch (err) {
       thread.Status = previousStatus;
       LogError(err);
       this.notifyError(err instanceof Error ? err.message : 'Failed to update comment resolution status.');
+      this.cdr.markForCheck();
     }
   }
 
@@ -12164,8 +13954,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public FocusAnchorBlock(anchorKey: string): void {
-    this.SelectedAnchorKey = anchorKey;
-    this.cdr.markForCheck();
+    this.FocusSegmentByAnchorKey(anchorKey);
   }
 
   public SelectOutlineItem(item: DocumentOutlineItem): void {
@@ -12178,6 +13967,11 @@ export class MarkdownArtifactViewerComponent
     if (seg) {
       this.scrollToSegmentElement(seg);
     }
+    this.SelectionChanged.emit({
+      domain: 'document',
+      heading: item.Kind === 'heading' ? item.Title : seg?.HeadingText,
+      blockId: seg?.Descriptor?.BlockID ?? item.ID,
+    });
     this.cdr.markForCheck();
   }
 
@@ -12205,6 +13999,9 @@ export class MarkdownArtifactViewerComponent
    * Restores the selected comparison base version as the active working document.
    */
   public RestoreComparisonBase(): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
     let baseText = this.initialLoadedMarkdown;
     if (this.DiffBaseLabel.startsWith('v')) {
       const verNum = Number(this.DiffBaseLabel.slice(1));
@@ -12213,12 +14010,19 @@ export class MarkdownArtifactViewerComponent
         baseText = snap.Content;
       }
     }
+    const lockCheck = this.validateDocumentEditLocks(baseText);
+    if (!lockCheck.Allowed) {
+      return;
+    }
     this.OnMarkdownChanged(baseText);
     this.RecomputeDiff();
     this.StatusBannerMessage = 'Restored selected version content into working document.';
   }
 
   public get HasUnsavedChanges(): boolean {
+    if (this.hasUncommittedDomInput) {
+      return true;
+    }
     const latestSaved =
       this.SavedVersionSnapshots.length > 0
         ? this.SavedVersionSnapshots[this.SavedVersionSnapshots.length - 1].Content
@@ -12233,11 +14037,13 @@ export class MarkdownArtifactViewerComponent
    * `sentViaSocket === true` to prevent duplicate version creation in `ArtifactViewerPanelComponent`.
    */
   public async OnSaveDocumentVersion(): Promise<void> {
+    this.FlushPendingEdits();
     if (!this.CanUserEdit || this.IsSavingVersion || !this.HasUnsavedChanges) {
       return;
     }
     this.IsSavingVersion = true;
     this.cdr.markForCheck();
+    let awaitingSocketSaveAck = false;
     try {
       const hadPendingBefore = this.PendingSuggestionsCount;
       const committedSuggestionsCount = this.CommitPendingSuggestions();
@@ -12248,10 +14054,22 @@ export class MarkdownArtifactViewerComponent
       const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
         'MarkdownArtifactViewerPlugin',
         this.resolveCaptureRootElement(),
+        null,
+        this.getSafeProvider(),
       );
 
       const sentViaSocket = this.session?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaSocket) {
+        awaitingSocketSaveAck = true;
+        this.clearPendingSocketSaveTimeout();
+        this.pendingSocketSaveTimeout = setTimeout(() => {
+          this.pendingSocketSaveTimeout = null;
+          if (!this.isComponentDestroyed && this.IsSavingVersion) {
+            this.IsSavingVersion = false;
+            this.notifyError('Timed out waiting for collaborative save confirmation.');
+            this.cdr.markForCheck();
+          }
+        }, 15_000);
         this.StatusBannerMessage = 'Saving collaborative document version…';
         return;
       }
@@ -12290,8 +14108,17 @@ export class MarkdownArtifactViewerComponent
           ? `Committed ${committedSuggestionsCount} suggestion${committedSuggestionsCount === 1 ? '' : 's'} and saved document version v${savedVersionNumber}.`
           : `Saved document version v${savedVersionNumber}.`;
     } finally {
-      this.IsSavingVersion = false;
+      if (!awaitingSocketSaveAck) {
+        this.IsSavingVersion = false;
+      }
       this.cdr.markForCheck();
+    }
+  }
+
+  private clearPendingSocketSaveTimeout(): void {
+    if (this.pendingSocketSaveTimeout !== null) {
+      clearTimeout(this.pendingSocketSaveTimeout);
+      this.pendingSocketSaveTimeout = null;
     }
   }
 
@@ -12309,7 +14136,7 @@ export class MarkdownArtifactViewerComponent
     artifactId: string,
     content: string,
     capturedThumbnailDataUrl?: string | null,
-    policy?: import('@memberjunction/core-entities').ArtifactTypeThumbnailPolicy,
+    policy?: ArtifactTypeThumbnailPolicy,
   ): Promise<{ ok: boolean; versionNumber: number; errorMessage?: string }> {
     const user = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
@@ -12377,7 +14204,7 @@ export class MarkdownArtifactViewerComponent
       ver.UserID = user.ID;
       ver.Content = content;
       const docConfig = BuildArtifactVersionConfigurationWithPreview(
-        this.artifactVersion?.Configuration,
+        ReadArtifactVersionConfigurationSafe(this.artifactVersion),
         content,
         'MarkdownArtifactViewerPlugin',
         ver.Name,
@@ -12416,6 +14243,12 @@ export class MarkdownArtifactViewerComponent
     if (!file) {
       return;
     }
+    if (!this.CanUserEdit) {
+      if (input) {
+        input.value = '';
+      }
+      return;
+    }
     try {
       const lowerName = file.name.toLowerCase();
       let importedMd: string;
@@ -12423,6 +14256,10 @@ export class MarkdownArtifactViewerComponent
         importedMd = await this.importExportService.ImportDocxFile(file);
       } else {
         importedMd = await this.importExportService.ImportMarkdown(file);
+      }
+      const lockCheck = this.validateDocumentEditLocks(importedMd);
+      if (!lockCheck.Allowed) {
+        return;
       }
       this.OnMarkdownChanged(importedMd);
       this.StatusBannerMessage = `Imported "${file.name}" into document.`;
@@ -12437,19 +14274,30 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnExportMarkdown(): void {
+    this.FlushPendingEdits();
     const baseTitle = (this.getDisplayTitle() || 'document').replace(/[^a-zA-Z0-9_-]+/g, '-');
     this.importExportService.DownloadMarkdownFile(this.MarkdownContent, `${baseTitle}.md`);
     this.StatusBannerMessage = `Exported ${baseTitle}.md`;
   }
 
   public async OnExportDocx(): Promise<void> {
+    this.FlushPendingEdits();
     const title = this.getDisplayTitle() || 'Document';
     const baseTitle = title.replace(/[^a-zA-Z0-9_-]+/g, '-');
-    await this.importExportService.DownloadDocxFile(this.MarkdownContent, `${baseTitle}.docx`, title);
+    await this.importExportService.DownloadDocxFile(
+      this.MarkdownContent,
+      `${baseTitle}.docx`,
+      title,
+      {
+        LiveBlockResults: this.blockResults,
+        VerifyFrozenSnapshot: (block) => this.IsSnapshotVerified(block),
+      },
+    );
     this.StatusBannerMessage = `Exported ${baseTitle}.docx`;
   }
 
   public OnCopy(): void {
+    this.FlushPendingEdits();
     if (this.MarkdownContent && typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard
         .writeText(this.MarkdownContent)
@@ -12601,7 +14449,9 @@ export class MarkdownArtifactViewerComponent
     }
 
     this.loadCollapsedStateFromUserSettings();
-    if (!this.userExplicitlySelectedMode || !this.CanUserEdit) {
+    if (!this.userExplicitlySelectedMode && this.SyncViewMode === undefined) {
+      this.ViewMode = 'preview';
+    } else if (!this.CanUserEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
       this.ViewMode = 'preview';
     }
     this.SavedVersionSnapshots = [
@@ -12615,15 +14465,30 @@ export class MarkdownArtifactViewerComponent
     this.refreshParsedStructure();
     this.setupCollaborationSession();
     this.promoteToDefaultEditModeIfEligible();
-    void this.evaluatePermissionsAndLoadThreads(gen);
+    if (!this.userExplicitlySelectedMode && this.SyncViewMode !== undefined) {
+      this.onViewerViewModeChanged(this.SyncViewMode);
+    }
+    if (this.NavigationAnchor) {
+      this.onNavigationAnchorChanged(this.NavigationAnchor);
+    }
+    if (!this.isGuestSnapshotMode) {
+      void this.evaluatePermissionsAndLoadThreads(gen);
+    }
   }
 
   private refreshParsedStructure(): void {
-    this.DocumentSegments = this.collabService.ParseDocumentSegments(this.MarkdownContent);
+    const previousSegments = this.DocumentSegments;
+    const nextSegments = this.collabService.ParseDocumentSegments(this.MarkdownContent);
+    this.DocumentSegments = nextSegments;
+    this.reconcileSuggestionsAndAnchorsAcrossSegments(previousSegments, nextSegments);
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
+    this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
     for (const seg of this.DocumentSegments) {
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
+        if (this.isGuestSnapshotMode) {
+          continue;
+        }
         if (seg.Descriptor.Kind === 'Artifact') {
           this.GetEmbeddedArtifactVersion(seg.Descriptor);
         } else if (seg.Descriptor.Mode === 'Frozen') {
@@ -12638,12 +14503,93 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  private isPositionalSegmentId(id: string): boolean {
+    return /^(heading|paragraph|callout|code|table|list|seg)-\d+/.test(id);
+  }
+
+  /**
+   * Keeps positional Suggestion Card targets and anchored comment keys aligned when blocks are
+   * inserted or deleted above them (`NW-3`).
+   */
+  private reconcileSuggestionsAndAnchorsAcrossSegments(
+    previousSegments: DocumentRenderSegment[],
+    nextSegments: DocumentRenderSegment[],
+  ): void {
+    if (previousSegments.length === 0 || nextSegments.length === 0) {
+      return;
+    }
+
+    const nextById = new Map(nextSegments.map((s) => [s.SegmentID, s]));
+    const prevById = new Map(previousSegments.map((s) => [s.SegmentID, s]));
+
+    for (const sug of this.Suggestions) {
+      if (sug.Status !== 'Pending' || !this.isPositionalSegmentId(sug.BlockID)) {
+        continue;
+      }
+      const currentAtOldId = nextById.get(sug.BlockID);
+      const origTrimmed = sug.OriginalMarkdown.trim();
+      if (currentAtOldId && currentAtOldId.RawMarkdown.trim() === origTrimmed) {
+        continue;
+      }
+      const matchingTargets = nextSegments.filter((s) => s.RawMarkdown.trim() === origTrimmed);
+      if (matchingTargets.length === 1 && matchingTargets[0].SegmentID !== sug.BlockID) {
+        sug.BlockID = matchingTargets[0].SegmentID;
+        this.syncSuggestionToSession(sug);
+      } else if (matchingTargets.length > 1) {
+        const oldIdx = previousSegments.findIndex((s) => s.SegmentID === sug.BlockID);
+        let best = matchingTargets[0];
+        let bestDist = Infinity;
+        for (const candidate of matchingTargets) {
+          const nextIdx = nextSegments.findIndex((s) => s.SegmentID === candidate.SegmentID);
+          const dist = oldIdx >= 0 ? Math.abs(nextIdx - oldIdx) : nextIdx;
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = candidate;
+          }
+        }
+        if (best.SegmentID !== sug.BlockID) {
+          sug.BlockID = best.SegmentID;
+          this.syncSuggestionToSession(sug);
+        }
+      }
+    }
+
+    for (const thread of this.AnchoredThreads) {
+      if (!this.isPositionalSegmentId(thread.AnchorKey)) {
+        continue;
+      }
+      const prevSeg = prevById.get(thread.AnchorKey);
+      if (!prevSeg) {
+        continue;
+      }
+      const prevTrimmed = prevSeg.RawMarkdown.trim();
+      const currentAtOldKey = nextById.get(thread.AnchorKey);
+      if (currentAtOldKey && currentAtOldKey.RawMarkdown.trim() === prevTrimmed) {
+        continue;
+      }
+      const matches = nextSegments.filter((s) => s.RawMarkdown.trim() === prevTrimmed);
+      if (matches.length === 1 && matches[0].SegmentID !== thread.AnchorKey) {
+        thread.AnchorKey = matches[0].SegmentID;
+        if (matches[0].HeadingText) {
+          thread.AnchorLabel = matches[0].HeadingText;
+        }
+      }
+    }
+  }
+
   private async verifyFrozenBlockOnServer(block: DocumentBlockSpec): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
     const provider = this.getSafeProvider();
     if (!provider || !this.collabService.HasCollaborationBackend(provider)) {
       return;
     }
-    await this.collabService.VerifyFrozenSnapshotOnServer(block, provider);
+    await this.collabService.VerifyFrozenSnapshotOnServer(
+      block,
+      this.artifactVersion?.ArtifactID ?? '',
+      provider,
+    );
     if (!this.isComponentDestroyed) {
       this.cdr.markForCheck();
     }
@@ -12654,7 +14600,9 @@ export class MarkdownArtifactViewerComponent
     const artifactId = this.artifactVersion?.ArtifactID || this.artifactVersion?.ID || 'local-doc';
     const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
-    const hasRemoteBackend = this.collabService.HasCollaborationBackend(provider, this.CollaborationWsUrl);
+    const hasRemoteBackend =
+      !this.isGuestSnapshotMode &&
+      this.collabService.HasCollaborationBackend(provider, this.CollaborationWsUrl);
 
     this.session = this.collabService.CreateSession(
       artifactId,
@@ -12686,20 +14634,33 @@ export class MarkdownArtifactViewerComponent
         }
       }),
       this.session.ContentChanged$.subscribe((remoteContent) => {
-        if (remoteContent !== this.MarkdownContent) {
-          this.OnMarkdownChanged(remoteContent, true);
+        if (this.hasUncommittedDomInput) {
+          this.FlushPendingEdits();
+        }
+        const effectiveContent = this.session?.GetContent() ?? remoteContent;
+        if (effectiveContent !== this.MarkdownContent) {
+          this.OnMarkdownChanged(effectiveContent, true);
         }
       }),
       this.session.StatusChanged$.subscribe((status) => {
         this.CollaborationStatus = status;
         if (status === 'revoked') {
           this.HasEditPermission = false;
+          this.IsSavingVersion = false;
+          this.clearPendingSocketSaveTimeout();
           if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
             this.ViewMode = 'preview';
           }
         } else if (status === 'readonly' && !this.session?.CanEdit) {
+          this.IsSavingVersion = false;
+          this.clearPendingSocketSaveTimeout();
           if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
             this.ViewMode = 'preview';
+          }
+        } else if (status === 'error' || status === 'disconnected') {
+          if (this.IsSavingVersion && this.pendingSocketSaveTimeout !== null) {
+            this.IsSavingVersion = false;
+            this.clearPendingSocketSaveTimeout();
           }
         } else {
           this.promoteToDefaultEditModeIfEligible();
@@ -12715,6 +14676,8 @@ export class MarkdownArtifactViewerComponent
         }
       }),
       this.session.VersionSaved$.subscribe((savedEvt) => {
+        this.clearPendingSocketSaveTimeout();
+        this.IsSavingVersion = false;
         const exists = this.SavedVersionSnapshots.some((s) => s.VersionNumber === savedEvt.versionNumber);
         if (!exists) {
           this.SavedVersionSnapshots.push({
@@ -12736,6 +14699,18 @@ export class MarkdownArtifactViewerComponent
         }
         this.handleCollaborationMergeConflict(conflictEvt);
       }),
+      this.session.SuggestionsChanged$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.syncSuggestionsFromSession();
+        }
+      }),
+      this.session.RoomResetConflict$.subscribe((draft) => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        this.PendingResetConflictDraft = draft;
+        this.cdr.markForCheck();
+      }),
       this.session.CanUndo$.subscribe(() => {
         if (!this.isComponentDestroyed) {
           this.cdr.markForCheck();
@@ -12748,6 +14723,9 @@ export class MarkdownArtifactViewerComponent
       }),
     );
 
+    this.PendingResetConflictDraft = this.session.PendingResetConflictDraft;
+    this.syncSuggestionsFromSession();
+
     if (hasRemoteBackend) {
       void this.session.Connect(this.CollaborationWsUrl, provider);
     }
@@ -12755,7 +14733,37 @@ export class MarkdownArtifactViewerComponent
     this.Collaborators = this.session.GetCollaborators();
   }
 
+  public ApplyResetConflictDraft(): void {
+    const draft = this.PendingResetConflictDraft;
+    if (!draft || !this.CanUserEdit) {
+      return;
+    }
+    const lockCheck = this.validateDocumentEditLocks(draft.LocalDraft);
+    if (!lockCheck.Allowed) {
+      return;
+    }
+    if (this.session?.ApplyResetConflictDraft()) {
+      const next = this.session.GetContent();
+      this.OnMarkdownChanged(next, true);
+    } else {
+      this.OnMarkdownChanged(draft.LocalDraft);
+    }
+    this.PendingResetConflictDraft = null;
+    this.StatusBannerMessage = 'Re-applied recovered local edits onto the reset room.';
+    this.cdr.markForCheck();
+  }
+
+  public DismissResetConflictDraft(): void {
+    this.session?.DismissResetConflictDraft();
+    this.PendingResetConflictDraft = null;
+    this.StatusBannerMessage = 'Dismissed conflict draft and kept the latest server version.';
+    this.cdr.markForCheck();
+  }
+
   private destroyCollaborationSession(): void {
+    this.clearPendingSocketSaveTimeout();
+    this.IsSavingVersion = false;
+    this.PendingResetConflictDraft = null;
     for (const sub of this.sessionSubs) {
       sub.unsubscribe();
     }
@@ -12776,6 +14784,16 @@ export class MarkdownArtifactViewerComponent
   }
 
   private async evaluatePermissionsAndLoadThreads(gen = this.sessionInitGeneration): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = false;
+      this.HasEditPermission = false;
+      this.CanUserShareArtifact = false;
+      this.CurrentUserEffectiveRoleLabel = 'Viewer';
+      this.session?.SetCanEdit(false);
+      this.cdr.markForCheck();
+      return;
+    }
     const artifactId = this.artifactVersion?.ArtifactID;
     if (!artifactId) {
       return;
@@ -12857,6 +14875,9 @@ export class MarkdownArtifactViewerComponent
           this.ViewMode = 'preview';
         } else {
           this.promoteToDefaultEditModeIfEligible();
+          if (!this.userExplicitlySelectedMode && this.SyncViewMode !== undefined) {
+            this.onViewerViewModeChanged(this.SyncViewMode);
+          }
         }
       }
       if (!this.isComponentDestroyed) {
@@ -12949,6 +14970,9 @@ export class MarkdownArtifactViewerComponent
                 this.CollaborationStatus = this.session.Status;
               }
               this.promoteToDefaultEditModeIfEligible();
+              if (!this.userExplicitlySelectedMode && this.SyncViewMode !== undefined) {
+                this.onViewerViewModeChanged(this.SyncViewMode);
+              }
             }
           }
           if (!this.isComponentDestroyed) {
@@ -13192,6 +15216,7 @@ export class MarkdownArtifactViewerComponent
           const errMsg = detail.LatestResult?.Message || 'Failed to save anchored comment detail.';
           LogError(errMsg);
           this.notifyError(errMsg);
+          await conv.Delete().catch(() => false);
           return false;
         }
         if (detail.ID) {
@@ -13524,7 +15549,83 @@ export class MarkdownArtifactViewerComponent
     );
   }
 
+  public OpenCommandPalette(): void {
+    this.CloseMoreToolsMenu();
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get DocsCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'mode:preview',
+        Label: 'Switch to Read Mode',
+        Category: 'Mode',
+        Icon: 'fa-eye',
+        Active: this.ViewMode === 'preview',
+      },
+      {
+        Id: 'mode:edit',
+        Label: 'Switch to Write Mode',
+        Category: 'Mode',
+        Icon: 'fa-pen-to-square',
+        Active: this.ViewMode === 'edit',
+        Disabled: !this.CanUserEdit,
+      },
+    ];
+    for (const item of this.ResolvedToolbarItems) {
+      if (item.Visible) {
+        items.push({
+          Id: `tb:${item.Key}`,
+          Label: item.MenuLabel,
+          Category: item.Category,
+          Icon: item.Icon,
+          Description: item.Description,
+          Active: item.Active,
+        });
+      }
+    }
+    if (this.CanUserEdit) {
+      items.push({
+        Id: 'import',
+        Label: 'Import .docx or .md...',
+        Category: 'File',
+        Icon: 'fa-file-import',
+      });
+    }
+    return items;
+  }
+
+  public ExecuteDocsPaletteCommand(commandId: string): void {
+    if (commandId === 'mode:preview') {
+      this.SetViewMode('preview');
+      return;
+    }
+    if (commandId === 'mode:edit') {
+      this.SetViewMode('edit');
+      return;
+    }
+    if (commandId === 'import') {
+      this.TriggerFileImport();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as DocsToolbarItemKey;
+      const found = this.ResolvedToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+    }
+  }
+
   public OnDocsWorkspaceKeydown(event: KeyboardEvent): void {
+    const isMod = event.metaKey || event.ctrlKey;
+    if (isMod && !event.altKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.OpenCommandPalette();
+      return;
+    }
     if (!IsKeyboardContextMenuShortcut(event) || IsNativeContextMenuTarget(event.target)) {
       return;
     }
@@ -14241,24 +16342,32 @@ export class MarkdownArtifactViewerComponent
           text: parsed.Headers[colIdx] ?? '',
           isCodeBlock: false,
           applySubMarkdown: (nextSubMd) => {
-            const nextHeaders = [...parsed.Headers];
-            nextHeaders[colIdx] = nextSubMd.replace(/\|/g, '/');
+            const sanitizedCell = nextSubMd.replace(/\|/g, '/');
+            const nextHeaders = parsed.Headers.map((h, hIdx) => (hIdx === colIdx ? sanitizedCell : h));
             return this.serializeParsedTable(nextHeaders, parsed.Rows, parsed.Alignments);
           },
         };
       }
       if (
-        snapshot.tableRowIndex !== undefined &&
-        snapshot.tableRowIndex !== null &&
-        parsed.Rows[snapshot.tableRowIndex]
+        typeof snapshot.tableRowIndex === 'number' &&
+        Number.isInteger(snapshot.tableRowIndex) &&
+        snapshot.tableRowIndex >= 0 &&
+        snapshot.tableRowIndex < parsed.Rows.length &&
+        Number.isInteger(colIdx) &&
+        colIdx >= 0 &&
+        colIdx < (parsed.Rows[snapshot.tableRowIndex]?.length ?? 0)
       ) {
         const rowIdx = snapshot.tableRowIndex;
         return {
           text: parsed.Rows[rowIdx][colIdx] ?? '',
           isCodeBlock: false,
           applySubMarkdown: (nextSubMd) => {
-            const nextRows = parsed.Rows.map((r) => [...r]);
-            nextRows[rowIdx][colIdx] = nextSubMd.replace(/\|/g, '/');
+            const sanitizedCell = nextSubMd.replace(/\|/g, '/');
+            const nextRows = parsed.Rows.map((row, rIdx) =>
+              rIdx === rowIdx
+                ? row.map((cell, cIdx) => (cIdx === colIdx ? sanitizedCell : cell))
+                : [...row],
+            );
             return this.serializeParsedTable(parsed.Headers, nextRows, parsed.Alignments);
           },
         };
@@ -14532,4 +16641,80 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = successMessage;
     this.cdr.markForCheck();
   }
+}
+
+/**
+ * Optional metadata extracted from YAML frontmatter (`--- ... ---`) at the top of a Markdown document.
+ */
+export interface DocumentFrontmatterHeader {
+  Title?: string;
+  Subtitle?: string;
+  Author?: string;
+  Date?: string;
+  Category?: string;
+  Tags: string[];
+  Accent?: string;
+}
+
+/**
+ * Parses leading YAML frontmatter metadata into a cover header strip, returning `null` if no valid
+ * frontmatter metadata keys are present.
+ */
+export function ParseMarkdownFrontmatterHeader(markdown: string): DocumentFrontmatterHeader | null {
+  const normalized = (markdown ?? '').replace(/\r\n/g, '\n');
+  const match = /^---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const block = match[1];
+  const header: DocumentFrontmatterHeader = { Tags: [] };
+  let hasField = false;
+  for (const rawLine of block.split('\n')) {
+    const kv = /^([a-zA-Z_-]+)\s*:\s*(.+)$/.exec(rawLine.trim());
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    const rawVal = kv[2].trim().replace(/^['"]|['"]$/g, '');
+    if (!rawVal) continue;
+    switch (key) {
+      case 'title':
+        header.Title = rawVal;
+        hasField = true;
+        break;
+      case 'subtitle':
+      case 'description':
+        header.Subtitle = rawVal;
+        hasField = true;
+        break;
+      case 'author':
+        header.Author = rawVal;
+        hasField = true;
+        break;
+      case 'date':
+        header.Date = rawVal;
+        hasField = true;
+        break;
+      case 'category':
+      case 'section':
+        header.Category = rawVal;
+        hasField = true;
+        break;
+      case 'tags': {
+        const cleaned = rawVal.replace(/^\[|\]$/g, '');
+        header.Tags = cleaned
+          .split(',')
+          .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean);
+        if (header.Tags.length > 0) hasField = true;
+        break;
+      }
+      case 'accent': {
+        if (/^#[0-9a-f]{3,8}$/i.test(rawVal)) {
+          header.Accent = rawVal;
+          hasField = true;
+        }
+        break;
+      }
+    }
+  }
+  return hasField ? header : null;
 }

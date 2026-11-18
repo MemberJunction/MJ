@@ -52,8 +52,13 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
         const config = this.parseConfiguration<ActionJobConfiguration>(context.Schedule);
 
+        // Execute under the schedule owner's security context when OwnerUserID is specified
+        // rather than the background scheduler daemon user (prevents SystemUser privilege escalation
+        // and honors per-user artifact/data permissions).
+        const executionUser = await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+
         // Load the action
-        await ActionEngineServer.Instance.Config(false, context.ContextUser);
+        await ActionEngineServer.Instance.Config(false, executionUser);
         const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, config.ActionID));
 
         if (!action) {
@@ -65,7 +70,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         // Process parameters (static values or SQL queries). Heartbeat per param
         // so a config with several slow `SQL Statement` params keeps its lease
         // renewed during prep (GH #2749).
-        const params = await this.processParams(config.Params || [], context.ContextUser, context.heartbeat);
+        const params = await this.processParams(config.Params || [], executionUser, context.heartbeat);
 
         // Beat once more right before the action runs. NOTE (documented caveat):
         // a single long-running action cannot beat mid-call — that is precisely
@@ -81,7 +86,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         };
         const actionResult = await ActionEngineServer.Instance.RunAction({
             Action: action,
-            ContextUser: context.ContextUser,
+            ContextUser: executionUser,
             Filters: [],
             Params: params,
             Context: actionContext

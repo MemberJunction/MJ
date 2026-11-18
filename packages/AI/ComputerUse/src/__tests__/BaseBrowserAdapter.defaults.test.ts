@@ -81,6 +81,10 @@ describe('BaseBrowserAdapter — additive perception/screencast defaults', () =>
         await expect(new MinimalAdapter().StopAudioCapture()).resolves.toBeUndefined();
     });
 
+    it('SetViewportSize defaults to a no-op resolve', async () => {
+        await expect(new MinimalAdapter().SetViewportSize(640, 480)).resolves.toBeUndefined();
+    });
+
     it('AudioCaptureChunk has sensible webm-opus defaults', () => {
         const chunk = new AudioCaptureChunk();
         expect(chunk.Codec).toBe('webm-opus');

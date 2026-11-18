@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- 5563937: Every Gemini request now opens with a fixed user turn ("Proceed with the task described in the system instructions.") and a short model turn, unless the conversation already opens with that turn. Gemini's implicit cache reuses a previous request only when the new request repeats it past the system instruction into the first `contents` turn; a match on the system instruction alone is not reused. An agent loop's first and second calls began with different turns (the first call's only turn is per-turn state that the second replaces), so the second call never hit the cache. Measured on Gemini 3.8 Flash with a ~20k-token system instruction: 0 of 8 second calls hit without the fixed turn, 7 of 8 with it, each caching all but the last ~2,050 tokens of the previous request. In Skip, second calls went from 0% to 76–84% cached. A user turn of only empty text is dropped (as an empty model turn already was), so a request whose only user message is empty never ends on the anchor's model turn, which Gemini rejects. Vertex AI shares this code.
+- c51c6f3: Add `GeminiDecision`, a `BaseDecision` driver for Google's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`), and the `Gemini Decision 1` model (type Decision, `PowerRank` 61, $0.10 per million input tokens, no output charge; up to 1,000 questions, 255 Choice options and 255 Score levels per call, 262,144 input tokens) with two Inference Provider routes: Google direct (`GeminiDecision`, `gemini-decision-1`, preferred) and OpenRouter (`OpenRouterDecision`, pinned `google/gemini-decision-1-20261111`). Gemini's questions and answers use the System One shape, so `GeminiDecision` extends `BaseHostedSystemOneDecision` and adapts the `x-goog-api-key` header, `input` in place of `state`, `total_input_tokens`/`total_output_tokens` usage, and `prompt_feedback.block_reason` input-filter blocks (which fail with the block reason as a failover-eligible `ModelError`). Google's `400` (`INVALID_ARGUMENT` and `invalid_request`) and `403 PERMISSION_DENIED` responses are pinned to failover-eligible `ModelError`, keeping `Default Decision`'s failover loop running while leaving `401` a fatal `Authentication` error. MJ sends text only. `Gemini Decision 1` is not bound to `Default Decision` (which selects `Jev` or `LLM Decision` first), but as an active `Decision` model it joins `Default Decision`'s power-matched fallback list on hosts with a `Google` or `OpenRouter` vendor credential (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`); set `Status = 'Inactive'` on the corresponding model-vendor row to keep `Default Decision` off it.
+- 6f1109b: Consecutive user text messages are no longer combined into one Gemini turn: they are kept apart by a short model turn (`GEMINI_USER_TURN_SEPARATOR_TEXT`, "OK"). Gemini's implicit cache reuses a previous request only when the new request repeats it, and a user turn that grows from one request to the next is never reused. An agent on the envelope path keeps action results, retries and runtime state as user messages, so every request was the system prompt plus one changing turn and nothing after the system prompt was cached. Measured on Gemini 3.8 Flash, the separated form caches everything up to about 2,050 tokens before the end of the previous request. Function-response turns are unchanged: they still follow the model turn that made the calls. Vertex AI shares this code.
+
+### Patch Changes
+
+- a1c367b: `ChatResult` `finish_reason` now means the same on every driver (#4335): new `NormalizeFinishReason` maps Anthropic `end_turn`/`stop_sequence`, Gemini `STOP` and similar to `'stop'`, `max_tokens`/`MAX_TOKENS` to `'length'`, refusals and safety blocks to `'content_filter'` and `tool_use` to `'tool_calls'`; unknown values pass through. Anthropic (which reported `"completed"`), Gemini, Mistral, Bedrock, Ollama and LM Studio use it in streaming and non-streaming results. LM Studio streaming now reads the finished prediction's stats: a prediction LM Studio stopped or whose model it unloaded is a retriable failure instead of a truncated answer, and token counts come from the stats; non-streaming also fails on `modelUnloaded` (#5651). The tool-calling conformance kit drops its `OrdinaryFinishReason` knob and expects `'stop'`.
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

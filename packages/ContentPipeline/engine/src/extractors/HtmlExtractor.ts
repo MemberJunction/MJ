@@ -1,10 +1,15 @@
 /**
- * @fileoverview {@link HtmlExtractor} — HTML to text, through MJ's own extractor.
+ * @fileoverview {@link HtmlExtractor} — an HTML page, stored as it was served.
  *
- * The extraction is `TextExtractor` from `@memberjunction/ai-vectors-core`, not a second
- * implementation: it already strips scripts, styles and markup, decodes entities and normalises
- * whitespace, and it is what the rest of MJ uses to turn HTML into something embeddable. A extractor
- * that re-derived any of that would drift from it the first time either side was improved.
+ * Extract stores what it read; the Segment stage cleans it. Cleaning HTML well needs the markup:
+ * the selectors that keep the article (`.article-body`) and drop the navigation, footer and cookie
+ * banner work on elements, and once the page is plain text there are none. So the item's text is the
+ * page's markup, and Segment's cleaner (the `Html` cleaner by default, with the source's
+ * `CleaningOptions`) turns it into text before splitting. A wrong selector is then fixed by running
+ * Segment again, without fetching the page again.
+ *
+ * `TextExtractor` from `@memberjunction/ai-vectors` is still used to decide whether the page holds any
+ * text at all, and to read the title.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -23,8 +28,7 @@ export class HtmlExtractor extends BaseContentExtractor {
 
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
         const html = new TextDecoder('utf-8', { fatal: false }).decode(request.Content);
-        const text = TextExtractor.ExtractFromHTML(html);
-        if (text.trim().length === 0) {
+        if (TextExtractor.ExtractFromHTML(html).trim().length === 0) {
             // An HTML document that yields no text is a real outcome — a page that is all script, or
             // a redirect stub. Reporting no blocks is honest; a block of empty string would read as
             // a successful extraction downstream.
@@ -34,7 +38,7 @@ export class HtmlExtractor extends BaseContentExtractor {
         return {
             Blocks: [
                 {
-                    Text: text,
+                    Text: html,
                     ...(title ? { Title: title } : {}),
                 },
             ],

@@ -6,7 +6,7 @@
  */
 
 import type { WorkerAnswer } from './WorkerProtocol.js';
-import { ApplyEmbeddingSettings, ClearEmbeddingPipelines, EmbedTextsWithModel, PreloadEmbeddingModel } from '../models/embeddingRuntime.js';
+import { ApplyEmbeddingSettings, ClearEmbeddingPipelines, EmbedTextsWithModel, PreloadEmbeddingModel, type EmbeddedTexts } from '../models/embeddingRuntime.js';
 import type { EmbeddingWorkerCall } from './EmbeddingWorkerProtocol.js';
 
 /** The model operations a call can use; swapped for fakes in tests. */
@@ -24,6 +24,11 @@ const DEFAULT_OPERATIONS: EmbeddingRuntimeOperations = {
   Clear: ClearEmbeddingPipelines,
 };
 
+/** The answer to calls that embed nothing (`preload`, `clear`); fresh per call so an in-process caller cannot mutate a shared one. */
+function noVectors(): EmbeddedTexts {
+  return { Vectors: [], Tokens: 0 };
+}
+
 /**
  * Runs one call. The vectors' buffers are transferred back rather than copied. Throws when the
  * model fails to load or inference fails; the worker turns that into a failed response.
@@ -31,20 +36,20 @@ const DEFAULT_OPERATIONS: EmbeddingRuntimeOperations = {
 export async function HandleEmbeddingRequest(
   call: EmbeddingWorkerCall,
   operations: EmbeddingRuntimeOperations = DEFAULT_OPERATIONS,
-): Promise<WorkerAnswer<Float32Array[]>> {
+): Promise<WorkerAnswer<EmbeddedTexts>> {
   switch (call.Kind) {
     case 'embed': {
       operations.ApplySettings(call.Settings);
-      const vectors = await operations.Embed(call.Model, call.Texts);
-      return { Result: vectors, Transfer: transferablesOf(vectors) };
+      const embedded = await operations.Embed(call.Model, call.Texts, call.MaxInputTokens);
+      return { Result: embedded, Transfer: transferablesOf(embedded.Vectors) };
     }
     case 'preload':
       operations.ApplySettings(call.Settings);
       await operations.Preload(call.Model);
-      return { Result: [] };
+      return { Result: noVectors() };
     case 'clear':
-      operations.Clear();
-      return { Result: [] };
+      await operations.Clear();
+      return { Result: noVectors() };
     default:
       throw new Error(`Unknown embedding worker call: ${(call as { Kind: string }).Kind}`);
   }

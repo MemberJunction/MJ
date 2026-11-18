@@ -1397,23 +1397,27 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         }
       }
       void this.navigateToDriverClassOrFallback(
-        ['ChatCollectionsResource', 'LibraryResource'],
-        'Collections',
+        ['LibraryResource', 'ChatCollectionsResource'],
+        'Library',
         queryParams,
+        'Collections',
       );
       return;
     }
 
     // Build configuration params to pass to the Conversations resource
-    const params: Record<string, unknown> = { conversationId: event.id };
+    const params: Record<string, string | number> = { conversationId: event.id };
+    const queryParams: Record<string, string> = { conversationId: event.id };
     if (event.artifactId) {
       params['artifactId'] = event.artifactId;
+      queryParams['artifactId'] = event.artifactId;
       if (event.versionNumber) {
         params['versionNumber'] = event.versionNumber;
+        queryParams['version'] = String(event.versionNumber);
       }
     }
 
-    this.navigationService.OpenNavItemByName('Conversations', params);
+    void this.navigationService.OpenNavItemByName('Conversations', params, undefined, { queryParams });
   }
 
   /** @deprecated Use {@link OnArtifactLinkClicked}. */
@@ -1476,17 +1480,18 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         break;
       case 'message':
         this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
-          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+          .catch((error: Error | string) => console.error('Failed to open the message from search:', error));
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
       case 'nav-item':
-        if (route.NavItemName === 'Collections') {
+        if (route.NavItemName === 'Library' || route.NavItemName === 'Collections') {
           void this.navigateToDriverClassOrFallback(
-            ['ChatCollectionsResource', 'LibraryResource'],
-            'Collections',
+            ['LibraryResource', 'ChatCollectionsResource'],
+            'Library',
             route.Configuration,
+            'Collections',
           );
         } else if (route.NavItemName === 'Agent Activity') {
           void this.navigateToDriverClassOrFallback(
@@ -1538,10 +1543,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private async resolveNavTargetByDriverClass(
     driverClasses: readonly string[],
   ): Promise<{ AppId: string; NavLabel: string } | null> {
-    const navInternal = this.navigationService as unknown as {
-      appManager?: ApplicationManager;
-    } | null;
-    const manager = navInternal?.appManager;
+    const manager = this.navigationService?.AppManager;
 
     if (manager) {
       const activeApps: BaseApplication[] =
@@ -1704,7 +1706,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
   }
 
-  private toQueryParamsRecord(params?: Record<string, unknown>): Record<string, string> | undefined {
+  private toQueryParamsRecord(params?: OpenResourceCommand['parameters']): Record<string, string> | undefined {
     if (!params || Object.keys(params).length === 0) {
       return undefined;
     }

@@ -281,3 +281,69 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         expect(data.warnings.length).toBeGreaterThan(0);
     });
 });
+
+describe('DocumentToolLibrary auto-outline recovery on missing/unknown blockId', () => {
+    const docLib = new DocumentToolLibrary();
+    const sampleDoc = [
+        '# Executive Summary',
+        '',
+        'First paragraph summarizing revenue.',
+        '',
+        '## Key Risks',
+        '',
+        'Supply chain latency risk.',
+    ].join('\n');
+
+    it('returns outline and blocks automatically when replace_block, delete_block, move_block, insert_block_after, or get_section fails on missing blockId', async () => {
+        const replaceMiss = await docLib.InvokeTool(
+            'replace_block',
+            { blockId: 'non-existent-id', markdown: 'Updated text' },
+            sampleDoc
+        );
+        expect(replaceMiss.success).toBe(false);
+        expect(replaceMiss.errorMessage).toContain('data.outline');
+        const replaceData = replaceMiss.data as {
+            missingBlockId?: string;
+            outline: Array<{ blockId: string; title: string }>;
+            blocks: Array<{ blockId: string; kind: string }>;
+        };
+        expect(replaceData.missingBlockId).toBe('non-existent-id');
+        expect(replaceData.outline.map((n) => n.title)).toEqual(['Executive Summary', 'Key Risks']);
+        expect(replaceData.blocks.length).toBeGreaterThanOrEqual(4);
+
+        const deleteMiss = await docLib.InvokeTool(
+            'delete_block',
+            { blockId: 'blk-unknown' },
+            sampleDoc
+        );
+        expect(deleteMiss.success).toBe(false);
+        expect((deleteMiss.data as { outline: unknown[] }).outline).toHaveLength(2);
+
+        const moveMiss = await docLib.InvokeTool(
+            'move_block',
+            { blockId: 'blk-unknown', afterBlockId: 'START' },
+            sampleDoc
+        );
+        expect(moveMiss.success).toBe(false);
+        expect((moveMiss.data as { blocks: unknown[] }).blocks.length).toBeGreaterThanOrEqual(4);
+
+        const insertMiss = await docLib.InvokeTool(
+            'insert_block_after',
+            { afterBlockId: 'blk-unknown', markdown: 'Extra line' },
+            sampleDoc
+        );
+        expect(insertMiss.success).toBe(false);
+        expect((insertMiss.data as { outline: unknown[] }).outline).toHaveLength(2);
+
+        const sectionMiss = await docLib.InvokeTool(
+            'get_section',
+            { heading: 'Missing Section' },
+            sampleDoc
+        );
+        expect(sectionMiss.success).toBe(false);
+        expect((sectionMiss.data as { outline: Array<{ title: string }> }).outline.map((n) => n.title)).toEqual([
+            'Executive Summary',
+            'Key Risks',
+        ]);
+    });
+});

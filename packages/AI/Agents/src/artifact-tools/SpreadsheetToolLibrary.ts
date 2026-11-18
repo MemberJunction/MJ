@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -27,15 +28,28 @@ import {
     SpreadsheetCellValue,
     SpreadsheetChartSpec,
     SpreadsheetChartType,
+    SpreadsheetConditionalFormatRuleSpec,
     SpreadsheetEmbeddedArtifactSpec,
     SpreadsheetEngine,
     SpreadsheetFilterSpec,
     SpreadsheetLiveTableSpec,
+    SpreadsheetNamedRangeSpec,
     SpreadsheetProtectedRangeSpec,
+    SpreadsheetValidationRuleSpec,
     WorkbookSpec,
     WorksheetSpec
 } from '@memberjunction/core-entities';
 import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
+import { ComputeNumericExtremum } from './artifact-tool-helpers';
+import {
+    ExecuteArtifactCommentTool,
+    ExecuteListSuggestionsTool,
+    ExecuteProposeSuggestionTool,
+    ExecuteReviewSuggestionTool,
+    GetSharedCommentAndSuggestionToolDefinitions,
+    ParseSuggestionAnchor,
+    ValidateEmbeddedArtifactAccess
+} from './artifact-comment-suggestion-helper';
 
 const MAX_SHEET_ROW_COUNT = 10_000;
 const MAX_SHEET_COLUMN_COUNT = 256;
@@ -295,7 +309,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         cells: {
                             type: 'array',
                             description:
-                                'Array of cell updates: [{ address: "B4", value?: 100, formula?: "=SUM(B2:B3)", formatType?: "currency" | "percent" | "number" | "integer" | "date" | "datetime" | "text" | "general", numberFormatPattern?: "$#,##0.00", bold?: true, italic?: false, horizontalAlign?: "left" | "center" | "right", textColor?: "#111827", backgroundColor?: "#EEF2FF", note?: "..." }].'
+                                'Array of cell updates: [{ address: "B4", value?: 100, formula?: "=SUM(B2:B3)", formatType?: "currency" | "percent" | "number" | "integer" | "date" | "datetime" | "text" | "general", numberFormatPattern?: "$#,##0.00", bold?: true, italic?: false, horizontalAlign?: "left" | "center" | "right", textColor?: "#111827", backgroundColor?: "#EEF2FF", note?: "..." }]. Also accepts address aliases (cell, ref, coord) or 0-based { r, c, v?, f? }.'
                         },
                         expectedRevisionHash: {
                             type: 'string',
@@ -807,11 +821,173 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     },
                     required: ['sheet']
                 }
-            }
+            },
+            {
+                name: 'merge_cells',
+                description: 'Merges a rectangular A1 range (>= 2 cells) on a worksheet.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        range: { type: 'string', description: 'Canonical rectangular A1 range (e.g. "A1:C1").' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['range']
+                }
+            },
+            {
+                name: 'unmerge_cells',
+                description: 'Unmerges any merged ranges matching or overlapping the supplied A1 range.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        range: { type: 'string', description: 'A1 cell or range to unmerge.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['range']
+                }
+            },
+            {
+                name: 'upsert_conditional_format',
+                description: 'Creates or updates a conditional formatting rule on a worksheet range.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        ruleId: { type: 'string', description: 'Optional rule ID to update in place.' },
+                        range: { type: 'string', description: 'Target A1 range (e.g. "D2:D50").' },
+                        operator: {
+                            type: 'string',
+                            enum: ['gt', 'lt', 'eq', 'between', 'contains'],
+                            description: 'Comparison operator.'
+                        },
+                        value1: { type: 'string', description: 'Primary threshold value (string or number).' },
+                        value2: { type: 'number', description: 'Upper bound numeric threshold when operator is "between".' },
+                        highlightTone: {
+                            type: 'string',
+                            enum: ['success', 'warning', 'danger', 'info'],
+                            description: 'Semantic highlight tone.'
+                        },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['range', 'operator', 'value1', 'highlightTone']
+                }
+            },
+            {
+                name: 'delete_conditional_format',
+                description: 'Removes a conditional formatting rule by ruleId.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        ruleId: { type: 'string', description: 'Conditional formatting RuleID to remove.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['ruleId']
+                }
+            },
+            {
+                name: 'upsert_validation_rule',
+                description: 'Creates or updates a data validation rule on a worksheet range.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        ruleId: { type: 'string', description: 'Optional rule ID to update in place.' },
+                        range: { type: 'string', description: 'Target A1 range (e.g. "C2:C50").' },
+                        ruleType: {
+                            type: 'string',
+                            enum: ['list', 'numberRange', 'notEmpty'],
+                            description: 'Validation rule type.'
+                        },
+                        allowedValues: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Allowed string values when ruleType is "list".'
+                        },
+                        minValue: { type: 'number', description: 'Minimum number when ruleType is "numberRange".' },
+                        maxValue: { type: 'number', description: 'Maximum number when ruleType is "numberRange".' },
+                        errorMessage: { type: 'string', description: 'Optional validation failure message.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['range', 'ruleType']
+                }
+            },
+            {
+                name: 'delete_validation_rule',
+                description: 'Removes a data validation rule by ruleId.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        ruleId: { type: 'string', description: 'Validation RuleID to remove.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['ruleId']
+                }
+            },
+            {
+                name: 'upsert_named_range',
+                description: 'Creates or updates a workbook-level named range and recalculates dependent formulas.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string', description: 'Formula identifier (e.g. "TaxRate").' },
+                        sheet: { type: 'string', description: 'Sheet name or SheetID owning the range.' },
+                        range: { type: 'string', description: 'A1 cell or rectangular range (e.g. "B2:B10").' },
+                        description: { type: 'string', description: 'Optional description.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['name', 'range']
+                }
+            },
+            {
+                name: 'delete_named_range',
+                description: 'Removes a workbook-level named range by name.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string', description: 'Named range identifier to remove.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['name']
+                }
+            },
+            {
+                name: 'set_lock',
+                description: 'Adds or updates a protected range lock on a worksheet.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        range: { type: 'string', description: 'A1 cell or range to lock.' },
+                        rangeId: { type: 'string', description: 'Optional stable RangeID.' },
+                        description: { type: 'string', description: 'Optional lock rationale/description.' },
+                        allowEditors: { type: 'boolean', description: 'Whether artifact editors may modify cells inside the protected range (default false = owner only).' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    },
+                    required: ['range']
+                }
+            },
+            {
+                name: 'release_lock',
+                description: 'Removes an existing protected range lock on a worksheet if the actor is authorized.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID.' },
+                        rangeId: { type: 'string', description: 'Protected range RuleID / RangeID to unlock.' },
+                        range: { type: 'string', description: 'Optional A1 range to match if rangeId is omitted.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional revision hash for concurrency control.' }
+                    }
+                }
+            },
+            ...GetSharedCommentAndSuggestionToolDefinitions('spreadsheet')
         ];
     }
 
-    private activeOriginalXlsxBytes: Uint8Array | null = null;
+    private readonly activeOriginalXlsxStorage = new AsyncLocalStorage<Uint8Array | null>();
 
     protected override async invokeSubclassTool(
         toolName: string,
@@ -819,101 +995,147 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         artifactContent: string | Buffer,
         context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
-        const engine = SpreadsheetEngine.Instance;
-        let workbook: WorkbookSpec;
-        this.activeOriginalXlsxBytes =
+        const originalXlsxBytes =
             Buffer.isBuffer(artifactContent) &&
             artifactContent.length > 4 &&
             artifactContent[0] === 0x50 &&
             artifactContent[1] === 0x4b
                 ? new Uint8Array(artifactContent)
                 : null;
-        try {
-            workbook = this.loadWorkbookFromContent(artifactContent);
-        } catch (err) {
-            this.activeOriginalXlsxBytes = null;
-            return this.errorResult(`Failed to parse spreadsheet content: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        let cachedCurrentHash: string | null = null;
-        const getCurrentHash = (): string => {
-            if (cachedCurrentHash === null) {
-                cachedCurrentHash = engine.ComputeRevisionHash(workbook);
+        return this.activeOriginalXlsxStorage.run(originalXlsxBytes, async () => {
+            if (
+                toolName === 'list_comments' ||
+                toolName === 'add_comment' ||
+                toolName === 'reply_comment' ||
+                toolName === 'resolve_comment'
+            ) {
+                return ExecuteArtifactCommentTool({
+                    toolName,
+                    input,
+                    context,
+                    domain: 'spreadsheet'
+                });
             }
-            return cachedCurrentHash;
-        };
 
-        const expectedHash =
-            typeof input.expectedRevisionHash === 'string' ? input.expectedRevisionHash.trim() : '';
-        if (expectedHash && expectedHash !== getCurrentHash()) {
-            return this.errorResult(
-                `Revision conflict: expectedRevisionHash '${expectedHash}' does not match current workbook revision '${getCurrentHash()}'. Re-read the workbook before retrying.`
-            );
-        }
+            const engine = SpreadsheetEngine.Instance;
+            let workbook: WorkbookSpec;
+            try {
+                workbook = await this.loadWorkbookFromContentIsolated(artifactContent);
+            } catch (err) {
+                return this.errorResult(`Failed to parse spreadsheet content: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            let cachedCurrentHash: string | null = null;
+            const getCurrentHash = (): string => {
+                if (cachedCurrentHash === null) {
+                    cachedCurrentHash = engine.ComputeRevisionHash(workbook);
+                }
+                return cachedCurrentHash;
+            };
 
-        switch (toolName) {
-            case 'get_workbook_outline':
-            case 'read_workbook':
-                return this.handleGetWorkbookOutline(workbook, getCurrentHash());
-            case 'get_sheets':
-                return this.handleGetSheets(workbook);
-            case 'get_sheet_data':
-                return this.handleGetSheetData(workbook, input);
-            case 'search_cells':
-                return this.handleSearchCells(workbook, input);
-            case 'aggregate_column':
-                return this.handleAggregateColumn(workbook, input);
-            case 'get_formulas':
-                return this.handleGetFormulas(workbook, input);
-            case 'read_range':
-                return this.handleReadRange(workbook, input, getCurrentHash());
-            case 'write_cells':
-                return this.handleWriteCells(workbook, input, context);
-            case 'format_range':
-                return this.handleFormatRange(workbook, input, context);
-            case 'clear_range':
-                return this.handleClearRange(workbook, input, context);
-            case 'insert_rows':
-                return this.handleInsertRows(workbook, input);
-            case 'delete_rows':
-                return this.handleDeleteRows(workbook, input, context);
-            case 'insert_columns':
-                return this.handleInsertColumns(workbook, input);
-            case 'delete_columns':
-                return this.handleDeleteColumns(workbook, input, context);
-            case 'add_sheet':
-                return this.handleAddSheet(workbook, input);
-            case 'rename_sheet':
-                return this.handleRenameSheet(workbook, input);
-            case 'duplicate_sheet':
-                return this.handleDuplicateSheet(workbook, input);
-            case 'reorder_sheets':
-                return this.handleReorderSheets(workbook, input);
-            case 'delete_sheet':
-                return this.handleDeleteSheet(workbook, input, context);
-            case 'set_sheet_layout':
-                return this.handleSetSheetLayout(workbook, input);
-            case 'upsert_live_table':
-                return this.handleUpsertLiveTable(workbook, input, context);
-            case 'refresh_live_tables':
-                return this.handleRefreshLiveTables(workbook, input, context);
-            case 'delete_live_table':
-                return this.handleDeleteLiveTable(workbook, input, context);
-            case 'upsert_chart':
-                return this.handleUpsertChart(workbook, input);
-            case 'delete_chart':
-                return this.handleDeleteChart(workbook, input);
-            case 'embed_artifact':
-                return this.handleEmbedArtifact(workbook, input, context);
-            case 'delete_embedded_artifact':
-                return this.handleDeleteEmbeddedArtifact(workbook, input);
-            case 'sort_and_filter':
-                return this.handleSortAndFilter(workbook, input, context);
-            default:
-                return this.errorResult(`Unknown SpreadsheetToolLibrary tool '${toolName}'.`);
-        }
+            const expectedHash =
+                typeof input.expectedRevisionHash === 'string' ? input.expectedRevisionHash.trim() : '';
+            if (expectedHash && expectedHash !== getCurrentHash()) {
+                return this.errorResult(
+                    `Revision conflict: expectedRevisionHash '${expectedHash}' does not match current workbook revision '${getCurrentHash()}'. Re-read the workbook before retrying.`
+                );
+            }
+
+            switch (toolName) {
+                case 'get_workbook_outline':
+                case 'read_workbook':
+                    return this.handleGetWorkbookOutline(workbook, getCurrentHash());
+                case 'get_sheets':
+                    return this.handleGetSheets(workbook);
+                case 'get_sheet_data':
+                    return this.handleGetSheetData(workbook, input);
+                case 'search_cells':
+                    return this.handleSearchCells(workbook, input);
+                case 'aggregate_column':
+                    return this.handleAggregateColumn(workbook, input);
+                case 'get_formulas':
+                    return this.handleGetFormulas(workbook, input);
+                case 'read_range':
+                    return this.handleReadRange(workbook, input, getCurrentHash());
+                case 'write_cells':
+                    return this.handleWriteCells(workbook, input, context);
+                case 'format_range':
+                    return this.handleFormatRange(workbook, input, context);
+                case 'clear_range':
+                    return this.handleClearRange(workbook, input, context);
+                case 'insert_rows':
+                    return this.handleInsertRows(workbook, input, context);
+                case 'delete_rows':
+                    return this.handleDeleteRows(workbook, input, context);
+                case 'insert_columns':
+                    return this.handleInsertColumns(workbook, input, context);
+                case 'delete_columns':
+                    return this.handleDeleteColumns(workbook, input, context);
+                case 'add_sheet':
+                    return this.handleAddSheet(workbook, input);
+                case 'rename_sheet':
+                    return this.handleRenameSheet(workbook, input);
+                case 'duplicate_sheet':
+                    return this.handleDuplicateSheet(workbook, input);
+                case 'reorder_sheets':
+                    return this.handleReorderSheets(workbook, input);
+                case 'delete_sheet':
+                    return this.handleDeleteSheet(workbook, input, context);
+                case 'set_sheet_layout':
+                    return this.handleSetSheetLayout(workbook, input, context);
+                case 'upsert_live_table':
+                    return this.handleUpsertLiveTable(workbook, input, context);
+                case 'refresh_live_tables':
+                    return this.handleRefreshLiveTables(workbook, input, context);
+                case 'delete_live_table':
+                    return this.handleDeleteLiveTable(workbook, input, context);
+                case 'upsert_chart':
+                    return this.handleUpsertChart(workbook, input);
+                case 'delete_chart':
+                    return this.handleDeleteChart(workbook, input);
+                case 'embed_artifact':
+                    return this.handleEmbedArtifact(workbook, input, context);
+                case 'delete_embedded_artifact':
+                    return this.handleDeleteEmbeddedArtifact(workbook, input);
+                case 'sort_and_filter':
+                    return this.handleSortAndFilter(workbook, input, context);
+                case 'merge_cells':
+                    return this.handleMergeCells(workbook, input, context);
+                case 'unmerge_cells':
+                    return this.handleUnmergeCells(workbook, input, context);
+                case 'upsert_conditional_format':
+                    return this.handleUpsertConditionalFormat(workbook, input, context);
+                case 'delete_conditional_format':
+                    return this.handleDeleteConditionalFormat(workbook, input, context);
+                case 'upsert_validation_rule':
+                    return this.handleUpsertValidationRule(workbook, input, context);
+                case 'delete_validation_rule':
+                    return this.handleDeleteValidationRule(workbook, input, context);
+                case 'upsert_named_range':
+                    return this.handleUpsertNamedRange(workbook, input, context);
+                case 'delete_named_range':
+                    return this.handleDeleteNamedRange(workbook, input, context);
+                case 'set_lock':
+                    return this.handleSetLock(workbook, input, context);
+                case 'release_lock':
+                    return this.handleReleaseLock(workbook, input, context);
+                case 'list_suggestions':
+                    return ExecuteListSuggestionsTool({
+                        domain: 'spreadsheet',
+                        artifactContent,
+                        input,
+                        context
+                    });
+                case 'propose_suggestion':
+                    return this.handleProposeSuggestion(workbook, artifactContent, input, context);
+                case 'review_suggestion':
+                    return this.handleReviewSuggestion(workbook, artifactContent, input, context);
+                default:
+                    return this.errorResult(`Unknown SpreadsheetToolLibrary tool '${toolName}'.`);
+            }
+        });
     }
 
-    private loadWorkbookFromContent(artifactContent: string | Buffer): WorkbookSpec {
+    private async loadWorkbookFromContentIsolated(artifactContent: string | Buffer): Promise<WorkbookSpec> {
         const engine = SpreadsheetEngine.Instance;
         if (Buffer.isBuffer(artifactContent)) {
             if (
@@ -921,20 +1143,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 artifactContent[0] === 0x50 &&
                 artifactContent[1] === 0x4b
             ) {
-                return engine.ImportFromXlsxBytes(new Uint8Array(artifactContent));
+                return await engine.ImportFromXlsxBytesIsolated(new Uint8Array(artifactContent));
             }
-            return engine.ParseWorkbook(artifactContent.toString('utf-8'));
+            return await engine.ParseWorkbookIsolated(artifactContent.toString('utf-8'));
         }
-        return engine.ParseWorkbook(artifactContent);
+        return await engine.ParseWorkbookIsolated(artifactContent);
     }
 
     /**
      * Evaluates a workbook and computes its revision hash (`R9-9`).
      */
     public ComputeRevisionHash(content: string | Buffer): string {
-        const workbook = this.loadWorkbookFromContent(content);
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
-        return SpreadsheetEngine.Instance.ComputeRevisionHash(workbook);
+        const engine = SpreadsheetEngine.Instance;
+        const workbook = Buffer.isBuffer(content)
+            ? content.length > 4 && content[0] === 0x50 && content[1] === 0x4b
+                ? engine.ImportFromXlsxBytes(new Uint8Array(content), undefined, { SkipEvaluate: true })
+                : engine.ParseWorkbook(content.toString('utf-8'), undefined, { SkipEvaluate: true })
+            : engine.ParseWorkbook(content, undefined, { SkipEvaluate: true });
+        return engine.ComputeRevisionHash(workbook);
     }
 
     private resolveSheet(workbook: WorkbookSpec, sheetArg: ArtifactJsonValue | undefined): WorksheetSpec | null {
@@ -949,16 +1175,20 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         );
     }
 
-    private buildMutationSuccess(
+    private async buildMutationSuccess(
         workbook: WorkbookSpec,
-        extra: object
-    ): ArtifactToolResult {
+        extra: object,
+        options?: { skipEvaluate?: boolean }
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
-        engine.EvaluateWorkbook(workbook);
+        if (!options?.skipEvaluate) {
+            await engine.EvaluateWorkbookIsolated(workbook);
+        }
         const serializedJson = engine.SerializeWorkbook(workbook);
-        const xlsxBytes = this.activeOriginalXlsxBytes
-            ? engine.PatchXlsxBytes(this.activeOriginalXlsxBytes, workbook)
-            : engine.ExportToXlsxBytes(workbook);
+        const originalXlsxBytes = this.activeOriginalXlsxStorage.getStore() ?? null;
+        const xlsxBytes = originalXlsxBytes
+            ? await engine.PatchXlsxBytesIsolated(originalXlsxBytes, workbook)
+            : engine.ExportToXlsxBytes(workbook, true, { SkipEvaluate: true });
         const xlsxBase64 = Buffer.from(xlsxBytes).toString('base64');
         const revisionHash = engine.ComputeRevisionHash(workbook);
         return this.successResult({
@@ -973,7 +1203,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         revisionHash: string
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         return this.successResult({
             workbookId: workbook.WorkbookID,
             title: workbook.Title,
@@ -1007,7 +1236,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         revisionHash: string
     ): ArtifactToolResult {
         const engine = SpreadsheetEngine.Instance;
-        engine.EvaluateWorkbook(workbook);
         const sheet = this.resolveSheet(workbook, input.sheet ?? input.sheetName);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? input.sheetName ?? '')}' not found.`);
@@ -1063,6 +1291,81 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
+    private resolveWriteCellEntry(
+        rec: ArtifactToolArgs,
+        index: number
+    ):
+        | { ok: true; canonicalAddr: string; row: number; col: number }
+        | { ok: false; errorMessage: string } {
+        const rawAddr =
+            typeof rec.address === 'string'
+                ? rec.address.trim()
+                : typeof rec.cell === 'string'
+                  ? rec.cell.trim()
+                  : typeof rec.ref === 'string'
+                    ? rec.ref.trim()
+                    : typeof rec.coord === 'string'
+                      ? rec.coord.trim()
+                      : '';
+
+        if (rawAddr) {
+            const parsedAddr = ParseCellAddress(rawAddr);
+            if (!parsedAddr) {
+                return {
+                    ok: false,
+                    errorMessage: `Invalid cell address '${rawAddr}' at cells[${index}]. Expected A1 notation or 0-based coordinates, e.g. { "address": "A1", "value": "Region" } or { "r": 0, "c": 0, "v": "Region" }.`
+                };
+            }
+            if (parsedAddr.row > MAX_SHEET_ROW_COUNT || parsedAddr.col > MAX_SHEET_COLUMN_COUNT) {
+                return {
+                    ok: false,
+                    errorMessage: `Cell address '${rawAddr}' exceeds maximum worksheet bounds (${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
+                };
+            }
+            return {
+                ok: true,
+                canonicalAddr: FormatCellAddress(parsedAddr.row, parsedAddr.col),
+                row: parsedAddr.row,
+                col: parsedAddr.col
+            };
+        }
+
+        if (rec.r !== undefined || rec.c !== undefined) {
+            if (
+                typeof rec.r !== 'number' ||
+                typeof rec.c !== 'number' ||
+                !Number.isInteger(rec.r) ||
+                !Number.isInteger(rec.c) ||
+                rec.r < 0 ||
+                rec.c < 0
+            ) {
+                return {
+                    ok: false,
+                    errorMessage: `Invalid cell coordinates at cells[${index}] (r=${String(rec.r)}, c=${String(rec.c)}): 0-based numeric indices r and c must be non-negative integers, e.g. { "r": 0, "c": 0, "v": "Region" } or { "address": "A1", "value": "Region" }.`
+                };
+            }
+            const row = rec.r + 1;
+            const col = rec.c + 1;
+            if (row > MAX_SHEET_ROW_COUNT || col > MAX_SHEET_COLUMN_COUNT) {
+                return {
+                    ok: false,
+                    errorMessage: `Cell coordinates (r=${rec.r}, c=${rec.c}) exceed maximum worksheet bounds (${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
+                };
+            }
+            return {
+                ok: true,
+                canonicalAddr: FormatCellAddress(row, col),
+                row,
+                col
+            };
+        }
+
+        return {
+            ok: false,
+            errorMessage: `Invalid cell address '' at cells[${index}]. Provide A1 notation or 0-based coordinates, e.g. { "address": "A1", "value": "Region" } or { "r": 0, "c": 0, "v": "Region" }.`
+        };
+    }
+
     private async handleWriteCells(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
@@ -1077,55 +1380,52 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (rawCells.length === 0) {
             return this.errorResult('Parameter "cells" must be a non-empty array of cell updates.');
         }
-
-        const editCtx = this.extractCellEditContext(context);
-        const updatedAddresses: string[] = [];
-        const mjFormulaCells: string[] = [];
-        // Pre-validate protected ranges atomically before mutating any cell in the batch
-        for (const item of rawCells) {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-            const rec = item as ArtifactToolArgs;
-            const addr = typeof rec.address === 'string' ? rec.address.trim() : '';
-            const parsedAddr = addr ? ParseCellAddress(addr) : null;
-            if (!addr || !parsedAddr) {
-                return this.errorResult(`Invalid cell address '${addr}'.`);
-            }
-            if (parsedAddr.row > MAX_SHEET_ROW_COUNT || parsedAddr.col > MAX_SHEET_COLUMN_COUNT) {
-                return this.errorResult(
-                    `Cell address '${addr}' exceeds maximum worksheet bounds (${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
-                );
-            }
-            const perm = engine.CheckCellWritePermission(sheet, FormatCellAddress(parsedAddr.row, parsedAddr.col), editCtx);
-            if (!perm.Allowed) {
-                return this.errorResult(perm.Reason || `Cell '${addr}' is inside a protected range.`);
-            }
+        if (rawCells.length > 10_000) {
+            return this.errorResult(
+                `Parameter "cells" exceeds maximum per-call batch limit of 10000 updates (got ${rawCells.length}).`
+            );
         }
 
-        for (const item of rawCells) {
+        const editCtx = this.extractCellEditContext(context);
+        const normalizedCells: Array<{ rec: ArtifactToolArgs; canonicalAddr: string }> = [];
+        // Pre-validate cell addresses and protected ranges atomically before mutating any cell in the batch
+        for (let idx = 0; idx < rawCells.length; idx++) {
+            const item = rawCells[idx];
             if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
             const rec = item as ArtifactToolArgs;
-            const addr = typeof rec.address === 'string' ? rec.address.trim() : '';
-            const parsedAddr = addr ? ParseCellAddress(addr) : null;
-            if (!addr || !parsedAddr) {
-                return this.errorResult(`Invalid cell address '${addr}'.`);
+            const resolved = this.resolveWriteCellEntry(rec, idx);
+            if (resolved.ok === false) {
+                return this.errorResult(resolved.errorMessage);
             }
-            const canonicalAddr = FormatCellAddress(parsedAddr.row, parsedAddr.col);
+            const perm = engine.CheckCellWritePermission(sheet, resolved.canonicalAddr, editCtx);
+            if (!perm.Allowed) {
+                return this.errorResult(perm.Reason || `Cell '${resolved.canonicalAddr}' is inside a protected range.`);
+            }
+            normalizedCells.push({ rec, canonicalAddr: resolved.canonicalAddr });
+        }
+
+        const updatedAddresses: string[] = [];
+        const mjFormulaCells: string[] = [];
+        for (const { rec, canonicalAddr } of normalizedCells) {
             const existingCell = sheet.Cells[canonicalAddr];
+            const rawValue =
+                rec.value !== undefined ? rec.value : rec.v !== undefined ? rec.v : rec.val;
             const val =
-                rec.value === null ||
-                typeof rec.value === 'string' ||
-                typeof rec.value === 'number' ||
-                typeof rec.value === 'boolean'
-                    ? (rec.value as SpreadsheetCellValue)
+                rawValue === null ||
+                typeof rawValue === 'string' ||
+                typeof rawValue === 'number' ||
+                typeof rawValue === 'boolean'
+                    ? (rawValue as SpreadsheetCellValue)
                     : undefined;
-            const formula = typeof rec.formula === 'string' ? rec.formula : undefined;
+            const rawFormula = rec.formula !== undefined ? rec.formula : rec.f;
+            const formula = typeof rawFormula === 'string' ? rawFormula : undefined;
             const stylePatch = buildStylePatch(rec, existingCell?.Style);
             const note = typeof rec.note === 'string' ? rec.note : undefined;
 
             engine.SetCell(
                 workbook,
                 sheet.SheetID,
-                addr,
+                canonicalAddr,
                 {
                     Value: val,
                     Formula: formula,
@@ -1141,6 +1441,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
 
+        const preEvalSnapshot =
+            mjFormulaCells.length > 0
+                ? {
+                      cells: { ...sheet.Cells },
+                      rows: [...sheet.Rows],
+                      columns: [...sheet.Columns]
+                  }
+                : null;
+
         const spilledRanges: Array<{
             formulaCell: string;
             boundingRange: string;
@@ -1155,38 +1464,58 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             for (const formulaCell of mjFormulaCells) {
                 const summary = this.summarizeSpilledFormulaFootprint(sheet, formulaCell);
                 if (summary) {
+                    const spillBounds = ParseRangeAddress(summary.boundingRange);
+                    if (spillBounds) {
+                        const spillProtErr = checkBoundsProtection(
+                            sheet,
+                            spillBounds,
+                            editCtx,
+                            `spill formula '${formulaCell}' across '${summary.boundingRange}'`
+                        );
+                        if (spillProtErr && preEvalSnapshot) {
+                            sheet.Cells = preEvalSnapshot.cells;
+                            sheet.Rows = preEvalSnapshot.rows;
+                            sheet.Columns = preEvalSnapshot.columns;
+                            return this.errorResult(spillProtErr);
+                        }
+                    }
                     spilledRanges.push(summary);
                 }
             }
         }
 
-        engine.EvaluateWorkbook(workbook);
+        await engine.EvaluateWorkbookIsolated(workbook);
+        const refreshedSheet = engine.GetWorksheet(workbook, sheet.SheetID) ?? sheet;
         const updatedCells: SpreadsheetCellSpec[] = updatedAddresses
-            .map((a) => sheet.Cells[a])
+            .map((a) => refreshedSheet.Cells[a])
             .filter((c): c is SpreadsheetCellSpec => Boolean(c));
 
-        return this.buildMutationSuccess(workbook, {
-            sheetId: sheet.SheetID,
-            sheetName: sheet.Name,
-            updatedCells: updatedCells.map((c) => ({
-                address: c.Address,
-                rowId: c.RowID,
-                columnId: c.ColumnID,
-                rawValue: c.RawValue,
-                formula: c.Formula ?? null,
-                formulaStable: c.FormulaStable ?? null,
-                computedValue: c.ComputedValue ?? null,
-                displayValue: c.DisplayValue ?? ''
-            })),
-            ...(spilledRanges.length > 0 ? { spilledRanges } : {})
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                sheetId: refreshedSheet.SheetID,
+                sheetName: refreshedSheet.Name,
+                updatedCells: updatedCells.map((c) => ({
+                    address: c.Address,
+                    rowId: c.RowID,
+                    columnId: c.ColumnID,
+                    rawValue: c.RawValue,
+                    formula: c.Formula ?? null,
+                    formulaStable: c.FormulaStable ?? null,
+                    computedValue: c.ComputedValue ?? null,
+                    displayValue: c.DisplayValue ?? ''
+                })),
+                ...(spilledRanges.length > 0 ? { spilledRanges } : {})
+            },
+            { skipEvaluate: true }
+        );
     }
 
-    private handleFormatRange(
+    private async handleFormatRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -1240,11 +1569,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleClearRange(
+    private async handleClearRange(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -1267,7 +1596,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (modeRaw === 'all') {
             let clearedAddresses: string[];
             try {
-                clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, true, editCtx);
+                clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, false, editCtx);
             } catch (err) {
                 return this.errorResult(err instanceof Error ? err.message : String(err));
             }
@@ -1337,10 +1666,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleInsertRows(
+    private async handleInsertRows(
         workbook: WorkbookSpec,
-        input: ArtifactToolArgs
-    ): ArtifactToolResult {
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1353,7 +1683,17 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (sheet.Rows.length + rawCount > MAX_SHEET_ROW_COUNT) {
             return this.errorResult(`Cannot exceed maximum worksheet row count (${MAX_SHEET_ROW_COUNT}).`);
         }
-        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, rawCount);
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(
+            sheet,
+            { startRow: atRow, endRow: MAX_SHEET_ROW_COUNT, startCol: 1, endCol: MAX_SHEET_COLUMN_COUNT },
+            editCtx,
+            `insert ${rawCount} row(s) at row ${atRow}`
+        );
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedRowIds: inserted.map((r) => r.RowID),
@@ -1361,11 +1701,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteRows(
+    private async handleDeleteRows(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1393,7 +1733,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        SpreadsheetEngine.Instance.DeleteRows(workbook, sheet.SheetID, atRow, rawCount);
+        SpreadsheetEngine.Instance.DeleteRows(workbook, sheet.SheetID, atRow, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             deletedAtRow: atRow,
@@ -1402,10 +1742,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleInsertColumns(
+    private async handleInsertColumns(
         workbook: WorkbookSpec,
-        input: ArtifactToolArgs
-    ): ArtifactToolResult {
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1418,7 +1759,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (sheet.Columns.length + rawCount > MAX_SHEET_COLUMN_COUNT) {
             return this.errorResult(`Cannot exceed maximum worksheet column count (${MAX_SHEET_COLUMN_COUNT}).`);
         }
-        const inserted = SpreadsheetEngine.Instance.InsertColumns(workbook, sheet.SheetID, atCol, rawCount);
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(
+            sheet,
+            { startRow: 1, endRow: MAX_SHEET_ROW_COUNT, startCol: atCol, endCol: MAX_SHEET_COLUMN_COUNT },
+            editCtx,
+            `insert ${rawCount} column(s) at column ${atCol}`
+        );
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        const inserted = SpreadsheetEngine.Instance.InsertColumns(
+            workbook,
+            sheet.SheetID,
+            atCol,
+            rawCount,
+            undefined,
+            false
+        );
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedColumnIds: inserted.map((c) => c.ColumnID),
@@ -1426,11 +1784,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteColumns(
+    private async handleDeleteColumns(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1458,7 +1816,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        SpreadsheetEngine.Instance.DeleteColumns(workbook, sheet.SheetID, atCol, rawCount);
+        SpreadsheetEngine.Instance.DeleteColumns(workbook, sheet.SheetID, atCol, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             deletedAtColumn: atCol,
@@ -1467,10 +1825,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleAddSheet(
+    private async handleAddSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const name = typeof input.name === 'string' ? input.name.trim() : '';
         if (!name) {
             return this.errorResult('Parameter "name" is required.');
@@ -1490,10 +1848,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleRenameSheet(
+    private async handleRenameSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -1514,10 +1872,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDuplicateSheet(
+    private async handleDuplicateSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sourceSheet = this.resolveSheet(workbook, input.sheet);
         if (!sourceSheet) {
@@ -1665,10 +2023,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleReorderSheets(
+    private async handleReorderSheets(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const rawIds = Array.isArray(input.sheetIds) ? input.sheetIds : [];
         const requestedIds = rawIds.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim());
         if (requestedIds.length === 0) {
@@ -1699,11 +2057,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteSheet(
+    private async handleDeleteSheet(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         if (workbook.Worksheets.length <= 1) {
             return this.errorResult('Cannot delete the only worksheet in the workbook.');
         }
@@ -1730,13 +2088,58 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleSetSheetLayout(
+    private async handleSetSheetLayout(
         workbook: WorkbookSpec,
-        input: ArtifactToolArgs
-    ): ArtifactToolResult {
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+
+        if (Array.isArray(input.rowHeights)) {
+            for (const entry of input.rowHeights) {
+                if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+                const rec = entry as ArtifactToolArgs;
+                const rowNumber = typeof rec.rowNumber === 'number' ? Math.trunc(rec.rowNumber) : NaN;
+                if (!Number.isFinite(rowNumber) || rowNumber < 1 || rowNumber > MAX_SHEET_ROW_COUNT) {
+                    return this.errorResult(`Invalid rowNumber '${String(rec.rowNumber ?? '')}' in rowHeights.`);
+                }
+                if (rec.hidden === true || (typeof rec.height === 'number' && rec.height === 0)) {
+                    const protErr = checkBoundsProtection(
+                        sheet,
+                        { startRow: rowNumber, endRow: rowNumber, startCol: 1, endCol: MAX_SHEET_COLUMN_COUNT },
+                        editCtx,
+                        `hide row ${rowNumber}`
+                    );
+                    if (protErr) {
+                        return this.errorResult(protErr);
+                    }
+                }
+            }
+        }
+        if (Array.isArray(input.columnWidths)) {
+            for (const entry of input.columnWidths) {
+                if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+                const rec = entry as ArtifactToolArgs;
+                const colNum = resolveColumnNumber(rec.column);
+                if (!colNum) {
+                    return this.errorResult(`Invalid column '${String(rec.column ?? '')}' in columnWidths.`);
+                }
+                if (rec.hidden === true || (typeof rec.width === 'number' && rec.width === 0)) {
+                    const protErr = checkBoundsProtection(
+                        sheet,
+                        { startRow: 1, endRow: MAX_SHEET_ROW_COUNT, startCol: colNum, endCol: colNum },
+                        editCtx,
+                        `hide column ${colNum}`
+                    );
+                    if (protErr) {
+                        return this.errorResult(protErr);
+                    }
+                }
+            }
         }
 
         if (typeof input.frozenRows === 'number' && Number.isFinite(input.frozenRows)) {
@@ -1847,12 +2250,29 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         : undefined
             }));
 
-        const rawParams =
+        const rawParamsObj =
             input.parameters && typeof input.parameters === 'object' && !Array.isArray(input.parameters)
                 ? (input.parameters as ArtifactToolArgs)
                 : input.queryParameters && typeof input.queryParameters === 'object' && !Array.isArray(input.queryParameters)
                   ? (input.queryParameters as ArtifactToolArgs)
                   : undefined;
+        let queryParameters: Record<string, string | number | boolean | null> | undefined;
+        if (rawParamsObj) {
+            queryParameters = {};
+            for (const [k, v] of Object.entries(rawParamsObj)) {
+                if (v === null) {
+                    queryParameters[k] = null;
+                } else if (typeof v === 'string') {
+                    queryParameters[k] = v;
+                } else if (typeof v === 'number') {
+                    queryParameters[k] = v;
+                } else if (typeof v === 'boolean') {
+                    queryParameters[k] = v;
+                } else if (v !== undefined) {
+                    queryParameters[k] = JSON.stringify(v);
+                }
+            }
+        }
 
         const anchorCell =
             typeof input.anchorCell === 'string' && input.anchorCell.trim() ? input.anchorCell.trim().toUpperCase() : 'A1';
@@ -1872,7 +2292,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             Fields: Array.isArray(input.fields) ? input.fields.map(String) : undefined,
             QueryID: typeof input.queryId === 'string' ? input.queryId : undefined,
             QueryName: typeof input.queryName === 'string' ? input.queryName : undefined,
-            QueryParameters: rawParams,
+            QueryParameters: queryParameters,
             MaxRows: typeof input.maxRows === 'number' && input.maxRows > 0 ? Math.trunc(input.maxRows) : undefined,
             AnchorCell: anchorCell,
             IncludeHeaders: true,
@@ -1924,9 +2344,19 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             const refreshResults = await engine.RefreshLiveTables(workbook, context.contextUser, context.provider, {
                 TableID: spec.TableID
             });
+            const tblRes = refreshResults[spec.TableID];
+            if (tblRes && (tblRes.AccessDenied || !tblRes.Success)) {
+                sheet.LiveTables = prevLiveTables;
+                sheet.Cells = prevCells;
+                sheet.Rows = prevRows;
+                sheet.Columns = prevColumns;
+                return this.errorResult(
+                    tblRes.ErrorMessage || `Access denied or failed to materialize live table '${spec.TableID}'.`
+                );
+            }
             const materializedBounds =
                 this.getLiveTableCellBounds(sheet, spec.TableID) ??
-                this.computeLiveTableResultBounds(spec, refreshResults[spec.TableID]);
+                this.computeLiveTableResultBounds(spec, tblRes);
             if (materializedBounds) {
                 const matProtErr = checkBoundsProtection(
                     sheet,
@@ -1946,8 +2376,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 HostArtifactID: context.artifactId,
                 BypassCache: true
             });
-            engine.EvaluateWorkbook(workbook);
-            materializedSummary = this.summarizeMaterializedLiveTable(sheet, spec, refreshResults[spec.TableID]);
+            await engine.EvaluateWorkbookIsolated(workbook);
+            const refreshedSheet = engine.GetWorksheet(workbook, sheet.SheetID) ?? sheet;
+            materializedSummary = this.summarizeMaterializedLiveTable(refreshedSheet, spec, refreshResults[spec.TableID]);
         }
 
         return this.buildMutationSuccess(workbook, {
@@ -2018,6 +2449,18 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         for (const ws of workbook.Worksheets) {
             for (const tbl of ws.LiveTables) {
                 if (targetTableId && tbl.TableID !== targetTableId) continue;
+                const tblRes = refreshResults[tbl.TableID];
+                if (tblRes && (tblRes.AccessDenied || !tblRes.Success)) {
+                    for (const snap of sheetSnapshots) {
+                        snap.ws.Cells = snap.cells;
+                        snap.ws.Rows = snap.rows;
+                        snap.ws.Columns = snap.columns;
+                        snap.ws.LiveTables = snap.liveTables;
+                    }
+                    return this.errorResult(
+                        tblRes.ErrorMessage || `Access denied or failed to refresh live table '${tbl.TableID}'.`
+                    );
+                }
                 const cellBounds = this.getLiveTableCellBounds(ws, tbl.TableID);
                 const resultBounds = this.computeLiveTableResultBounds(tbl, refreshResults[tbl.TableID]);
                 const boundsToCheck = cellBounds ?? resultBounds;
@@ -2045,7 +2488,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             HostArtifactID: context.artifactId,
             BypassCache: true
         });
-        engine.EvaluateWorkbook(workbook);
+        await engine.EvaluateWorkbookIsolated(workbook);
 
         const tables: Array<ArtifactToolArgs> = [];
         for (const ws of workbook.Worksheets) {
@@ -2061,17 +2504,21 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
 
-        return this.buildMutationSuccess(workbook, {
-            refreshedCount: tables.length,
-            tables
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                refreshedCount: tables.length,
+                tables
+            },
+            { skipEvaluate: true }
+        );
     }
 
-    private handleDeleteLiveTable(
+    private async handleDeleteLiveTable(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2235,15 +2682,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpsertChart(
+    private async handleUpsertChart(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const sourceRange = typeof input.sourceRange === 'string' ? input.sourceRange.trim() : '';
+        const rawSourceRange = input.sourceRange ?? input.dataRange ?? input.range;
+        const sourceRange = typeof rawSourceRange === 'string' ? rawSourceRange.trim() : '';
         if (!sourceRange) {
             return this.errorResult('Parameter "sourceRange" is required.');
         }
@@ -2305,23 +2753,30 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             sheet.Charts.push(chartSpec);
         }
 
+        await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(workbook);
         const dataset = SpreadsheetEngine.Instance.ExtractChartDataset(
             workbook,
             sheet.SheetID,
-            chartId
+            chartId,
+            undefined,
+            { SkipEvaluate: true }
         );
 
-        return this.buildMutationSuccess(workbook, {
-            sheetId: sheet.SheetID,
-            chart: chartSpec,
-            dataset
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                sheetId: sheet.SheetID,
+                chart: chartSpec,
+                dataset
+            },
+            { skipEvaluate: true }
+        );
     }
 
-    private handleDeleteChart(
+    private async handleDeleteChart(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2342,11 +2797,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleEmbedArtifact(
+    private async handleEmbedArtifact(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2370,13 +2825,23 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         } else if (input.versionId === null) {
             resolvedVersionId = null;
         }
+        const access = await ValidateEmbeddedArtifactAccess({
+            targetArtifactId: artifactId,
+            targetVersionId: resolvedVersionId,
+            context
+        });
+        if (!access.Ok) {
+            return this.errorResult(access.ErrorMessage || `Cannot embed artifact '${artifactId}'.`);
+        }
         const embedId =
             typeof input.embedId === 'string' && input.embedId.trim()
                 ? input.embedId.trim()
                 : `embed-${sheet.EmbeddedArtifacts.length + 1}`;
         const existing = sheet.EmbeddedArtifacts.find((e) => e.EmbedID === embedId);
         const typeName =
-            typeof input.artifactTypeName === 'string' ? input.artifactTypeName : existing?.ArtifactTypeName ?? 'Whiteboard';
+            typeof input.artifactTypeName === 'string'
+                ? input.artifactTypeName
+                : existing?.ArtifactTypeName ?? access.ArtifactTypeName ?? 'Whiteboard';
         const spec: SpreadsheetEmbeddedArtifactSpec = {
             EmbedID: embedId,
             Title: typeof input.title === 'string' ? input.title : existing?.Title ?? `${typeName} Canvas`,
@@ -2387,7 +2852,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     : existing?.ArtifactVersionID ?? null,
             ArtifactTypeName: typeName,
             DriverClass:
-                typeName === 'Whiteboard' ? 'WhiteboardArtifactViewerPlugin' : existing?.DriverClass,
+                access.DriverClass ??
+                (typeName === 'Whiteboard' ? 'WhiteboardArtifactViewerPlugin' : existing?.DriverClass),
             AnchorCell: typeof input.anchorCell === 'string' ? input.anchorCell : existing?.AnchorCell ?? 'F2',
             WidthPx:
                 typeof input.widthPx === 'number' && Number.isFinite(input.widthPx) && input.widthPx > 0
@@ -2414,10 +2880,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleDeleteEmbeddedArtifact(
+    private async handleDeleteEmbeddedArtifact(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
@@ -2488,11 +2954,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleSortAndFilter(
+    private async handleSortAndFilter(
         workbook: WorkbookSpec,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -2518,11 +2984,17 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
         if (hasSort) {
-            engine.SortWorksheet(workbook, sheet.SheetID, {
-                ColumnLetter: String(input.sortColumn).trim().toUpperCase(),
-                Direction: input.sortDirection === 'desc' ? 'desc' : 'asc',
-                HeaderRows: 1
-            });
+            engine.SortWorksheet(
+                workbook,
+                sheet.SheetID,
+                {
+                    ColumnLetter: String(input.sortColumn).trim().toUpperCase(),
+                    Direction: input.sortDirection === 'desc' ? 'desc' : 'asc',
+                    HeaderRows: 1
+                },
+                undefined,
+                false
+            );
         }
         if (hasFilters) {
             sheet.FilterSpecs = (input.filters as ArtifactJsonValue[])
@@ -2547,7 +3019,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private handleGetSheets(workbook: WorkbookSpec): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheets = workbook.Worksheets.map((ws) => {
             const bounds = this.getPopulatedBounds(ws);
             return {
@@ -2564,7 +3035,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const ws = this.resolveSheet(workbook, sheetArg);
         if (!ws) {
@@ -2869,7 +3339,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const columnName = typeof input.column === 'string' ? input.column.trim() : '';
         const operation = typeof input.operation === 'string' ? input.operation.trim().toLowerCase() : '';
@@ -2927,10 +3396,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 value = numericValues.reduce((acc, v) => acc + v, 0) / numericValues.length;
                 break;
             case 'min':
-                value = Math.min(...numericValues);
+                value = ComputeNumericExtremum(numericValues, 'min') ?? 0;
                 break;
             case 'max':
-                value = Math.max(...numericValues);
+                value = ComputeNumericExtremum(numericValues, 'max') ?? 0;
                 break;
             default:
                 value = numericValues.length;
@@ -2942,7 +3411,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: ArtifactToolArgs
     ): ArtifactToolResult {
-        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
         const sheetArg = input.sheet ?? input.sheetName;
         const ws = this.resolveSheet(workbook, sheetArg);
         if (!ws) {
@@ -2993,6 +3461,506 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
         return { maxRow, maxCol };
+    }
+
+    private async handleMergeCells(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        const parsed = range ? ParseRangeAddress(range) : null;
+        if (!parsed) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}'. Expected A1 notation (e.g. "A1:C1").`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(sheet, parsed, editCtx, `merge cells '${range}'`);
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        try {
+            const mergedRange = SpreadsheetEngine.Instance.MergeCells(workbook, sheet.SheetID, range, editCtx);
+            return this.buildMutationSuccess(workbook, {
+                sheetId: sheet.SheetID,
+                mergedRange,
+                mergeRanges: sheet.MergeRanges ?? []
+            });
+        } catch (err) {
+            return this.errorResult(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    private async handleUnmergeCells(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        const parsed = range ? ParseRangeAddress(range) : null;
+        if (!parsed) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}'.`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(sheet, parsed, editCtx, `unmerge cells '${range}'`);
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        try {
+            const unmergedCount = SpreadsheetEngine.Instance.UnmergeCells(workbook, sheet.SheetID, range, editCtx);
+            return this.buildMutationSuccess(workbook, {
+                sheetId: sheet.SheetID,
+                unmergedCount,
+                mergeRanges: sheet.MergeRanges ?? []
+            });
+        } catch (err) {
+            return this.errorResult(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    private async handleUpsertConditionalFormat(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        const parsed = range ? ParseRangeAddress(range) : null;
+        if (!parsed) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}'.`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(sheet, parsed, editCtx, `upsert conditional format on '${range}'`);
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        const operator = String(input.operator ?? '');
+        if (
+            operator !== 'gt' &&
+            operator !== 'lt' &&
+            operator !== 'eq' &&
+            operator !== 'between' &&
+            operator !== 'contains'
+        ) {
+            return this.errorResult(`Invalid operator '${operator}'.`);
+        }
+        const highlightTone = String(input.highlightTone ?? '');
+        if (
+            highlightTone !== 'success' &&
+            highlightTone !== 'warning' &&
+            highlightTone !== 'danger' &&
+            highlightTone !== 'info'
+        ) {
+            return this.errorResult(`Invalid highlightTone '${highlightTone}'.`);
+        }
+        const rawVal1 = input.value1;
+        if (typeof rawVal1 !== 'string' && typeof rawVal1 !== 'number') {
+            return this.errorResult('Parameter "value1" must be a string or number.');
+        }
+        const rule: SpreadsheetConditionalFormatRuleSpec = {
+            RuleID:
+                typeof input.ruleId === 'string' && input.ruleId.trim()
+                    ? input.ruleId.trim()
+                    : `cf-${randomUUID().slice(0, 8)}`,
+            Range: range,
+            Operator: operator,
+            Value1: rawVal1,
+            Value2: typeof input.value2 === 'number' && Number.isFinite(input.value2) ? input.value2 : undefined,
+            HighlightTone: highlightTone
+        };
+        const saved = SpreadsheetEngine.Instance.AddConditionalFormat(workbook, sheet.SheetID, rule);
+        return this.buildMutationSuccess(workbook, {
+            sheetId: sheet.SheetID,
+            rule: saved,
+            conditionalFormatCount: sheet.ConditionalFormats.length
+        });
+    }
+
+    private async handleDeleteConditionalFormat(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const ruleId = typeof input.ruleId === 'string' ? input.ruleId.trim() : '';
+        if (!ruleId) {
+            return this.errorResult('Parameter "ruleId" is required.');
+        }
+        const existing = sheet.ConditionalFormats.find((r) => r.RuleID === ruleId);
+        if (!existing) {
+            return this.errorResult(`Conditional format rule '${ruleId}' was not found on sheet '${sheet.Name}'.`);
+        }
+        const parsed = ParseRangeAddress(existing.Range);
+        if (parsed) {
+            const protErr = checkBoundsProtection(
+                sheet,
+                parsed,
+                this.extractCellEditContext(context),
+                `delete conditional format '${ruleId}'`
+            );
+            if (protErr) {
+                return this.errorResult(protErr);
+            }
+        }
+        SpreadsheetEngine.Instance.RemoveConditionalFormat(workbook, sheet.SheetID, ruleId);
+        return this.buildMutationSuccess(workbook, {
+            sheetId: sheet.SheetID,
+            deletedRuleId: ruleId,
+            conditionalFormatCount: sheet.ConditionalFormats.length
+        });
+    }
+
+    private async handleUpsertValidationRule(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        const parsed = range ? ParseRangeAddress(range) : null;
+        if (!parsed) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}'.`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+        const protErr = checkBoundsProtection(sheet, parsed, editCtx, `upsert validation rule on '${range}'`);
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        const ruleType = String(input.ruleType ?? '');
+        if (ruleType !== 'list' && ruleType !== 'numberRange' && ruleType !== 'notEmpty') {
+            return this.errorResult(`Invalid ruleType '${ruleType}'.`);
+        }
+        const rule: SpreadsheetValidationRuleSpec = {
+            RuleID:
+                typeof input.ruleId === 'string' && input.ruleId.trim()
+                    ? input.ruleId.trim()
+                    : `val-${randomUUID().slice(0, 8)}`,
+            Range: range,
+            RuleType: ruleType,
+            AllowedValues: Array.isArray(input.allowedValues)
+                ? input.allowedValues.filter((v): v is string => typeof v === 'string')
+                : undefined,
+            MinValue: typeof input.minValue === 'number' && Number.isFinite(input.minValue) ? input.minValue : undefined,
+            MaxValue: typeof input.maxValue === 'number' && Number.isFinite(input.maxValue) ? input.maxValue : undefined,
+            ErrorMessage: typeof input.errorMessage === 'string' ? input.errorMessage : undefined
+        };
+        const saved = SpreadsheetEngine.Instance.AddValidationRule(workbook, sheet.SheetID, rule);
+        return this.buildMutationSuccess(workbook, {
+            sheetId: sheet.SheetID,
+            rule: saved,
+            validationRuleCount: sheet.ValidationRules.length
+        });
+    }
+
+    private async handleDeleteValidationRule(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const ruleId = typeof input.ruleId === 'string' ? input.ruleId.trim() : '';
+        if (!ruleId) {
+            return this.errorResult('Parameter "ruleId" is required.');
+        }
+        const existing = sheet.ValidationRules.find((r) => r.RuleID === ruleId);
+        if (!existing) {
+            return this.errorResult(`Validation rule '${ruleId}' was not found on sheet '${sheet.Name}'.`);
+        }
+        const parsed = ParseRangeAddress(existing.Range);
+        if (parsed) {
+            const protErr = checkBoundsProtection(
+                sheet,
+                parsed,
+                this.extractCellEditContext(context),
+                `delete validation rule '${ruleId}'`
+            );
+            if (protErr) {
+                return this.errorResult(protErr);
+            }
+        }
+        SpreadsheetEngine.Instance.RemoveValidationRule(workbook, sheet.SheetID, ruleId);
+        return this.buildMutationSuccess(workbook, {
+            sheetId: sheet.SheetID,
+            deletedRuleId: ruleId,
+            validationRuleCount: sheet.ValidationRules.length
+        });
+    }
+
+    private async handleUpsertNamedRange(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const name = typeof input.name === 'string' ? input.name.trim() : '';
+        if (!name || !/^[A-Za-z_][A-Za-z0-9_.]*$/.test(name)) {
+            return this.errorResult(`Invalid named range identifier '${name}'.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        const parsed = range ? ParseRangeAddress(range) : null;
+        if (!parsed) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}'.`);
+        }
+        const protErr = checkBoundsProtection(
+            sheet,
+            parsed,
+            this.extractCellEditContext(context),
+            `upsert named range '${name}' at '${range}'`
+        );
+        if (protErr) {
+            return this.errorResult(protErr);
+        }
+        const spec: SpreadsheetNamedRangeSpec = {
+            Name: name,
+            SheetID: sheet.SheetID,
+            Range: range,
+            Description: typeof input.description === 'string' ? input.description : undefined
+        };
+        const saved = SpreadsheetEngine.Instance.SetNamedRange(workbook, spec, false);
+        return this.buildMutationSuccess(workbook, {
+            namedRange: saved,
+            namedRangeCount: workbook.NamedRanges.length
+        });
+    }
+
+    private async handleDeleteNamedRange(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const name = typeof input.name === 'string' ? input.name.trim() : '';
+        if (!name) {
+            return this.errorResult('Parameter "name" is required.');
+        }
+        const existing = workbook.NamedRanges.find((n) => n.Name.toLowerCase() === name.toLowerCase());
+        if (!existing) {
+            return this.errorResult(`Named range '${name}' was not found.`);
+        }
+        const targetSheet = workbook.Worksheets.find((w) => w.SheetID === existing.SheetID);
+        const parsed = ParseRangeAddress(existing.Range);
+        if (targetSheet && parsed) {
+            const protErr = checkBoundsProtection(
+                targetSheet,
+                parsed,
+                this.extractCellEditContext(context),
+                `delete named range '${name}'`
+            );
+            if (protErr) {
+                return this.errorResult(protErr);
+            }
+        }
+        SpreadsheetEngine.Instance.RemoveNamedRange(workbook, existing.Name, false);
+        return this.buildMutationSuccess(workbook, {
+            deletedName: existing.Name,
+            namedRangeCount: workbook.NamedRanges.length
+        });
+    }
+
+    private async handleSetLock(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const range = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        if (!range || !ParseRangeAddress(range)) {
+            return this.errorResult(`Invalid range '${String(input.range ?? '')}' for set_lock.`);
+        }
+        const editCtx = this.extractCellEditContext(context);
+        const actorUserId = editCtx.UserID ?? editCtx.OwnerUserID ?? 'system';
+        const rangeId =
+            typeof input.rangeId === 'string' && input.rangeId.trim()
+                ? input.rangeId.trim()
+                : `prot-${randomUUID().slice(0, 8)}`;
+        try {
+            const protectedRange = SpreadsheetEngine.Instance.AddProtectedRange(
+                workbook,
+                sheet.SheetID,
+                {
+                    RangeID: rangeId,
+                    Range: range,
+                    LockedByUserID: actorUserId,
+                    Description: typeof input.description === 'string' ? input.description : undefined,
+                    AllowEditors: input.allowEditors === true
+                },
+                editCtx
+            );
+            return this.buildMutationSuccess(workbook, {
+                sheetId: sheet.SheetID,
+                protectedRange,
+                protectedRangeCount: sheet.ProtectedRanges?.length ?? 0
+            });
+        } catch (err) {
+            return this.errorResult(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    private async handleReleaseLock(
+        workbook: WorkbookSpec,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const sheet = this.resolveSheet(workbook, input.sheet);
+        if (!sheet) {
+            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+        }
+        const explicitId = typeof input.rangeId === 'string' ? input.rangeId.trim() : '';
+        const rangeMatch = typeof input.range === 'string' ? input.range.trim().toUpperCase() : '';
+        let targetRule = explicitId
+            ? (sheet.ProtectedRanges ?? []).find((r) => r.RangeID === explicitId)
+            : undefined;
+        if (!targetRule && rangeMatch) {
+            targetRule = (sheet.ProtectedRanges ?? []).find((r) => r.Range.toUpperCase() === rangeMatch);
+        }
+        if (!targetRule) {
+            return this.errorResult(
+                `Protected range lock '${explicitId || rangeMatch}' was not found on sheet '${sheet.Name}'.`
+            );
+        }
+        const editCtx = this.extractCellEditContext(context);
+        try {
+            const removed = SpreadsheetEngine.Instance.RemoveProtectedRange(
+                workbook,
+                sheet.SheetID,
+                targetRule.RangeID,
+                editCtx
+            );
+            if (!removed) {
+                return this.errorResult(`Protected range lock '${targetRule.RangeID}' was not removed.`);
+            }
+            return this.buildMutationSuccess(workbook, {
+                sheetId: sheet.SheetID,
+                unlockedRangeId: targetRule.RangeID,
+                protectedRangeCount: sheet.ProtectedRanges?.length ?? 0
+            });
+        } catch (err) {
+            return this.errorResult(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    private async handleProposeSuggestion(
+        workbook: WorkbookSpec,
+        artifactContent: string | Buffer,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        return ExecuteProposeSuggestionTool({
+            domain: 'spreadsheet',
+            artifactContent,
+            input,
+            context,
+            validateTarget: (anchor) => {
+                const sheet = this.resolveSheet(workbook, anchor.SheetId ?? anchor.Sheet);
+                if (!sheet) {
+                    return { ok: false, errorMessage: `Target sheet '${String(anchor.Sheet ?? anchor.SheetId ?? '')}' not found.` };
+                }
+                const targetRange = (anchor.Range ?? anchor.CellAddress ?? '').trim().toUpperCase();
+                if (!targetRange || !ParseRangeAddress(targetRange)) {
+                    return {
+                        ok: false,
+                        errorMessage: 'propose_suggestion for spreadsheets requires anchor.range (or anchor.cellAddress) in A1 notation.'
+                    };
+                }
+                return { ok: true };
+            }
+        });
+    }
+
+    private async handleReviewSuggestion(
+        workbook: WorkbookSpec,
+        artifactContent: string | Buffer,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        return ExecuteReviewSuggestionTool({
+            domain: 'spreadsheet',
+            artifactContent,
+            input,
+            context,
+            applyAcceptedSuggestion: async (suggestion) => {
+                const engine = SpreadsheetEngine.Instance;
+                const targetAnchor = ParseSuggestionAnchor(suggestion.Anchor, 'spreadsheet');
+                const sheet = this.resolveSheet(workbook, targetAnchor.SheetId ?? targetAnchor.Sheet);
+                if (!sheet) {
+                    return { ok: false, errorMessage: 'Suggestion target sheet was not found.' };
+                }
+                const targetRange = (targetAnchor.Range ?? targetAnchor.CellAddress ?? '').trim().toUpperCase();
+                const bounds = targetRange ? ParseRangeAddress(targetRange) : null;
+                if (!bounds) {
+                    return { ok: false, errorMessage: `Invalid suggestion anchor range '${targetRange}'.` };
+                }
+                const editCtx = this.extractCellEditContext(context);
+                const protErr = checkBoundsProtection(sheet, bounds, editCtx, `accept suggestion at '${targetRange}'`);
+                if (protErr) {
+                    return { ok: false, errorMessage: protErr };
+                }
+                const anchorAddr = FormatCellAddress(bounds.startRow, bounds.startCol);
+                const trimmedReplacement = suggestion.ProposedReplacement.trim();
+                const isFormula = trimmedReplacement.startsWith('=');
+                let scalarValue: SpreadsheetCellValue = suggestion.ProposedReplacement;
+                if (!isFormula) {
+                    if (trimmedReplacement === 'true') {
+                        scalarValue = true;
+                    } else if (trimmedReplacement === 'false') {
+                        scalarValue = false;
+                    } else if (trimmedReplacement !== '' && Number.isFinite(Number(trimmedReplacement))) {
+                        scalarValue = Number(trimmedReplacement);
+                    }
+                }
+                engine.SetCell(
+                    workbook,
+                    sheet.SheetID,
+                    anchorAddr,
+                    isFormula ? { Formula: trimmedReplacement } : { Value: scalarValue },
+                    false,
+                    editCtx
+                );
+                const mutation = await this.buildMutationSuccess(workbook, {
+                    sheetId: sheet.SheetID,
+                    appliedCell: anchorAddr
+                });
+                const payload = mutation.data as {
+                    updatedContent?: string;
+                    revisionHash?: string;
+                    xlsxBase64?: string;
+                };
+                return {
+                    ok: true,
+                    updatedContent: payload.updatedContent ?? '',
+                    revisionHash: payload.revisionHash ?? '',
+                    xlsxBase64: payload.xlsxBase64,
+                    extra: {
+                        sheetId: sheet.SheetID,
+                        appliedRange: targetRange
+                    }
+                };
+            }
+        });
     }
 
     private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { IMetadataProvider, IRunViewProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     ArtifactPreviewSnapshot,
     GetConnectedDriveLinkFromConfig,
@@ -126,32 +126,41 @@ describe('Next Horizons Core Engines (H2 §4.2, H3 §5.2b, H4 §6.1–6.3)', () 
             );
             sheetEngine.SetCell(targetWb, 'Summary', 'E3', { Formula: '=D4*2' }, false);
 
-            const fakeProvider: IMetadataProvider & IRunViewProvider = {
-                RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
-                    if (params.EntityName === 'MJ: Artifacts') {
-                        return {
-                            Success: true,
-                            Results: [{ ID: sourceArtId, Name: 'Source Financials' } as unknown as T],
-                            RowCount: 1,
-                            TotalRowCount: 1,
-                            ErrorMessage: '',
-                            ExecutionTime: 1,
-                        };
-                    }
-                    if (params.EntityName === 'MJ: Artifact Versions') {
-                        return {
-                            Success: true,
-                            Results: [{ ID: 'ver-src-1', VersionNumber: 1, Content: sourceJson, Configuration: null } as unknown as T],
-                            RowCount: 1,
-                            TotalRowCount: 1,
-                            ErrorMessage: '',
-                            ExecutionTime: 1,
-                        };
-                    }
-                    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: '', ExecutionTime: 1 };
-                },
-                RunViews: async () => [],
-            } as unknown as IMetadataProvider & IRunViewProvider;
+            const mockRv = new RunView();
+            vi.spyOn(mockRv, 'RunView').mockImplementation(async (params) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: sourceArtId, Name: 'Source Financials' }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        UserView: null,
+                        ErrorMessage: '',
+                        ExecutionTime: 1,
+                    };
+                }
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'ver-src-1', VersionNumber: 1, Content: sourceJson, Configuration: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        UserView: null,
+                        ErrorMessage: '',
+                        ExecutionTime: 1,
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    UserView: null,
+                    ErrorMessage: '',
+                    ExecutionTime: 1,
+                };
+            });
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(mockRv);
 
             const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions');
             permSpy.mockResolvedValueOnce({
@@ -164,7 +173,7 @@ describe('Next Horizons Core Engines (H2 §4.2, H3 §5.2b, H4 §6.1–6.3)', () 
                 Reason: 'No access',
             });
 
-            const deniedRes = await sheetEngine.EvaluateMjCustomFunctions(targetWb, ownerUser, fakeProvider, {
+            const deniedRes = await sheetEngine.EvaluateMjCustomFunctions(targetWb, ownerUser, Metadata.Provider, {
                 BypassCache: true,
             });
             expect(deniedRes.AccessDeniedCount).toBe(1);
@@ -180,7 +189,7 @@ describe('Next Horizons Core Engines (H2 §4.2, H3 §5.2b, H4 §6.1–6.3)', () 
                 Reason: 'Artifact owner',
             });
 
-            const allowedRes = await sheetEngine.EvaluateMjCustomFunctions(targetWb, ownerUser, fakeProvider, {
+            const allowedRes = await sheetEngine.EvaluateMjCustomFunctions(targetWb, ownerUser, Metadata.Provider, {
                 BypassCache: true,
             });
             expect(allowedRes.AccessDeniedCount).toBe(0);

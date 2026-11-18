@@ -27,6 +27,28 @@ import { MJAuthShellComponent } from './components/auth-shell.component';
 import { MJInitializationService } from './services/initialization.service';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from './bootstrap.types';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
+import { MJMSALProvider } from '@memberjunction/ng-auth-services/msal';
+import { MJAuth0Provider } from '@memberjunction/ng-auth-services/auth0';
+import { MJOktaProvider } from '@memberjunction/ng-auth-services/okta';
+import { MJCognitoProvider } from '@memberjunction/ng-auth-services/cognito';
+import { MJWorkOSProvider } from '@memberjunction/ng-auth-services/workos';
+import { MJMagicLinkProvider } from '@memberjunction/ng-auth-services/magic-link';
+import { MJLocalDevProvider } from '@memberjunction/ng-auth-services/local-dev';
+
+/**
+ * Retains all built-in auth provider classes in non-code-split applications
+ * that consume the full `@memberjunction/ng-bootstrap` bundle without calling
+ * `PreloadActiveAuthProvider()`.
+ */
+export const EAGER_AUTH_PROVIDERS = [
+  MJMSALProvider,
+  MJAuth0Provider,
+  MJOktaProvider,
+  MJCognitoProvider,
+  MJWorkOSProvider,
+  MJMagicLinkProvider,
+  MJLocalDevProvider,
+] as const;
 
 /**
  * Initialize auth provider before Angular routing starts

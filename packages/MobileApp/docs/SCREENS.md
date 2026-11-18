@@ -190,8 +190,7 @@ Data reaches screens through the hook → service → MJ object model chain
 
 ### `app/explorer/queries.tsx` — Query picker — `/explorer/queries`
 - **Purpose:** saved-query picker.
-- **Data:** `useQueries()` → `loadQueries()` reads `Metadata.Queries` filtered to
-  `Status === 'Approved'`.
+- **Data:** `useQueries()` → `loadQueries()` reads `QueryEngine.ApprovedQueries`.
 - **Interactions:** client-side filter; tap row → `/explorer/query/[id]`.
 - **Mockup:** `query-run.html`.
 

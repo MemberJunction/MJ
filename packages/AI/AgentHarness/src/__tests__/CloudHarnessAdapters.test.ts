@@ -651,7 +651,7 @@ describe('AntigravityCloudAdapter — bounded-poll, adaptive-wake handoff & resu
         expect(postReq.Headers['x-goog-api-key']).toBe('goog-key-123');
         const postBody = ParseCloudJsonObject(postReq.Body ?? '')!;
         expect(postBody.background).toBe(true);
-        expect(postBody.model).toBe('gemini-3.1-pro-preview');
+        expect(postBody.model).toBe('gemini-4-hydrogen-high');
         expect(postBody.system_instruction).toBe('Emit MJ Loop JSON.');
         expect(postBody.workspace).toEqual({
             repository_url: 'https://github.com/MemberJunction/MJ',

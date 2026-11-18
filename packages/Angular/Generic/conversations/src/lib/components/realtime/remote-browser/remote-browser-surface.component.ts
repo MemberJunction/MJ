@@ -1,9 +1,34 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy,
-  OnInit, Output, ViewChild, inject
+  AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone,
+  OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { IsAllowedExternalMediaUrl } from '../media/media-channel-state';
+
+/** One visited page / browser action entry persisted or reconstructed for session review. */
+export interface RemoteBrowserHistoryEntry {
+  Url: string;
+  VisitedAt?: string;
+  ActionLabel?: string;
+  Detail?: string;
+}
+
+/** Versioned state-of-record persisted by {@link RemoteBrowserChannel} for session resume & review. */
+export interface SerializedRemoteBrowserState {
+  V: 1;
+  CurrentUrl: string | null;
+  History: RemoteBrowserHistoryEntry[];
+  ScreenshotDataUrl?: string | null;
+}
+
+const RASTER_DATA_URL_RE = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/** Validates that a persisted screenshot string is an inline raster PNG/JPEG/WebP data URL (never SVG/script). */
+export function IsSafeRasterImageDataUrl(value: string | null | undefined): boolean {
+  return typeof value === 'string' && RASTER_DATA_URL_RE.test(value);
+}
 
 /** How often the surface polls the server for a fresh page screenshot while bound (~1.4 fps). */
 const SNAPSHOT_POLL_MS = 700;
@@ -14,8 +39,19 @@ const POINTER_MOVE_THROTTLE_MS = 50;
 /** Min interval between forwarded scroll samples during takeover; the deltas coalesce between sends (~25/sec). */
 const SCROLL_THROTTLE_MS = 40;
 
+/** Debounce delay (ms) before forwarding a ResizeObserver viewport change to the server. */
+const VIEWPORT_RESIZE_DEBOUNCE_MS = 120;
+
 /** Radius (px) of the synthetic cursor ring drawn on the overlay so the user can see their pointer. */
 const SYNTHETIC_CURSOR_RADIUS = 6;
+
+/** Usable drawer viewport dimensions (CSS pixels) reported by {@link RemoteBrowserSurfaceComponent.ViewportResize}. */
+export interface RemoteBrowserViewportSize {
+  /** Usable viewport width in CSS pixels. */
+  Width: number;
+  /** Usable viewport height in CSS pixels. */
+  Height: number;
+}
 
 /** A keyboard modifier held during a relayed human input (Shift-click selection, Ctrl/Cmd+key chords). */
 export type RemoteBrowserModifier = 'Shift' | 'Control' | 'Alt' | 'Meta';
@@ -97,6 +133,43 @@ export function MapToViewportCoords(
 }
 
 /**
+ * Computes the largest CSS display box (in integer pixels) that fits within `viewportWidth × viewportHeight`
+ * while preserving the frame's exact aspect ratio (`frameWidth / frameHeight`).
+ *
+ * Pure + framework-free so it's unit-testable without a DOM.
+ *
+ * @param viewportWidth Usable container width in CSS pixels.
+ * @param viewportHeight Usable container height in CSS pixels.
+ * @param frameWidth Frame bitmap width in pixels.
+ * @param frameHeight Frame bitmap height in pixels.
+ * @returns Fitted CSS display box `{ Width, Height }`, or `null` when any dimension is non-positive.
+ */
+export function ComputeFittedFrameSize(
+  viewportWidth: number,
+  viewportHeight: number,
+  frameWidth: number,
+  frameHeight: number,
+): RemoteBrowserViewportSize | null {
+  if (
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight) ||
+    !Number.isFinite(frameWidth) ||
+    !Number.isFinite(frameHeight) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    frameWidth <= 0 ||
+    frameHeight <= 0
+  ) {
+    return null;
+  }
+  const scale = Math.min(viewportWidth / frameWidth, viewportHeight / frameHeight);
+  return {
+    Width: Math.max(1, Math.round(frameWidth * scale)),
+    Height: Math.max(1, Math.round(frameHeight * scale)),
+  };
+}
+
+/**
  * One snapshot of the server-hosted browser — the shape the surface's {@link RemoteBrowserSurfaceComponent.Fetch}
  * callback resolves to. Mirrors the server's `RemoteBrowserSnapshot` query payload.
  */
@@ -151,15 +224,31 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
   template: `
     <div class="rb-surface">
       <div class="rb-bar">
-        <span class="rb-live" [class.rb-live--on]="HasSnapshot" aria-hidden="true"></span>
-        <span class="rb-live-label">{{ HasSnapshot ? 'Live' : 'Connecting…' }}</span>
-        <span class="rb-url" [title]="CurrentUrl || ''">{{ CurrentUrl || 'No page loaded yet' }}</span>
-        @if (CanTakeOver) {
+        <span class="rb-live" [class.rb-live--on]="!ReadOnly && HasSnapshot" aria-hidden="true"></span>
+        <span class="rb-live-label">{{ ReadOnly ? 'Session snapshot' : (HasSnapshot ? 'Live' : 'Connecting…') }}</span>
+        @if (ReadOnly && SafeExternalUrl(CurrentUrl); as safeHref) {
+          <a class="rb-url rb-url--link"
+             [href]="safeHref"
+             target="_blank"
+             rel="noopener noreferrer"
+             [title]="CurrentUrl || ''">{{ CurrentUrl }}</a>
+          <a class="rb-open-btn"
+             [href]="safeHref"
+             target="_blank"
+             rel="noopener noreferrer"
+             aria-label="Open page in a new tab"
+             title="Open in new tab">
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          </a>
+        } @else {
+          <span class="rb-url" [title]="CurrentUrl || ''">{{ CurrentUrl || 'No page loaded yet' }}</span>
+        }
+        @if (CanTakeOver && !ReadOnly) {
           <span class="rb-driving" title="Click and type to control the live page">
             <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> You're driving
           </span>
         }
-        @if (AudioAvailable) {
+        @if (AudioAvailable && !ReadOnly) {
           <button
             type="button"
             class="rb-speaker"
@@ -173,8 +262,52 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
           </button>
         }
       </div>
-      <div class="rb-viewport">
-        @if (Streaming) {
+      <div #viewportEl class="rb-viewport" [class.rb-viewport--review]="ReadOnly">
+        @if (ReadOnly) {
+          @if (SafeScreenshotUrl; as reviewImg) {
+            <div class="rb-review-stage">
+              <img class="rb-screenshot" [src]="reviewImg" alt="Saved view of the shared browser" />
+            </div>
+          } @else if (SafeIframeUrl; as frameSrc) {
+            <div class="rb-review-stage">
+              <iframe
+                class="rb-iframe"
+                [src]="frameSrc"
+                [title]="CurrentUrl || 'Last visited browser page'"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            </div>
+          }
+          @if (ReviewHistory.length > 0) {
+            <details class="rb-history" [open]="!SafeScreenshotUrl && !SafeIframeUrl">
+              <summary class="rb-history__heading">Visited pages ({{ ReviewHistory.length }})</summary>
+              <ul class="rb-history__list">
+                @for (entry of ReviewHistory; track $index) {
+                  <li class="rb-history__item">
+                    @if (entry.ActionLabel) {
+                      <span class="rb-history__action">{{ entry.ActionLabel }}</span>
+                    }
+                    @if (SafeExternalUrl(entry.Url); as link) {
+                      <a class="rb-history__url" [href]="link" target="_blank" rel="noopener noreferrer" [title]="entry.Url">
+                        {{ entry.Url }}
+                      </a>
+                    } @else {
+                      <span class="rb-history__url">{{ entry.Url }}</span>
+                    }
+                    @if (entry.Detail) {
+                      <span class="rb-history__detail">{{ entry.Detail }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </details>
+          } @else if (!SafeScreenshotUrl && !SafeIframeUrl) {
+            <div class="rb-placeholder">
+              <span class="rb-empty-note">Browser session ended without a saved snapshot.</span>
+            </div>
+          }
+        } @else if (Streaming) {
           <div class="rb-canvas-stack" [class.rb-hidden]="!HasFrame">
             <canvas #frameCanvas class="rb-screenshot" [class.rb-screenshot--interactive]="CanTakeOver"></canvas>
             @if (CanTakeOver) {
@@ -244,20 +377,24 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
     .rb-viewport {
       flex: 1 1 auto;
       min-height: 0;
+      min-width: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: auto;
-      padding: 12px;
+      overflow: hidden;
+      padding: 0;
     }
     .rb-screenshot {
       max-width: 100%;
       max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md, 6px);
-      box-shadow: var(--mj-shadow-sm, 0 1px 3px color-mix(in srgb, var(--mj-text-primary) 12%, transparent));
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
       background: var(--mj-bg-surface);
+      display: block;
     }
     .rb-screenshot--interactive {
       /* Hide the OS cursor — we render a synthetic cursor on the overlay so there's exactly one pointer
@@ -266,8 +403,7 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
       outline: none;
     }
     .rb-screenshot--interactive:focus-visible {
-      border-color: var(--mj-border-focus);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+      box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
     /* Frame canvas + synthetic-cursor overlay share one box; the stack shrinks to the frame canvas so the
        absolutely-positioned overlay (inset:0, same object-fit) lines up pixel-for-pixel with it. */
@@ -337,9 +473,117 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
     .rb-speaker--muted {
       color: var(--mj-text-muted);
     }
+    .rb-url--link {
+      color: var(--mj-brand-primary);
+      text-decoration: none;
+    }
+    .rb-url--link:hover {
+      text-decoration: underline;
+    }
+    .rb-viewport--review {
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: stretch;
+      gap: 8px;
+      padding: 8px;
+      overflow: hidden;
+    }
+    .rb-review-stage {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    .rb-iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md, 6px);
+      background: #ffffff;
+    }
+    .rb-open-btn {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md, 6px);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      text-decoration: none;
+      font-size: 0.75rem;
+    }
+    .rb-open-btn:hover {
+      color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface-hover);
+    }
+    .rb-history {
+      flex: 0 0 auto;
+      border: 1px solid var(--mj-border-subtle);
+      border-radius: var(--mj-radius-md, 6px);
+      background: var(--mj-bg-surface);
+      padding: 8px 12px;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .rb-history__heading {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--mj-text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .rb-history[open] .rb-history__heading {
+      margin-bottom: 8px;
+    }
+    .rb-history__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .rb-history__item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--mj-bg-surface-sunken);
+      font-size: 0.8125rem;
+    }
+    .rb-history__action {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-text-secondary);
+    }
+    .rb-history__url {
+      color: var(--mj-brand-primary);
+      font-family: var(--mj-font-mono, monospace);
+      word-break: break-all;
+      text-decoration: none;
+    }
+    .rb-history__url:hover {
+      text-decoration: underline;
+    }
+    .rb-history__detail {
+      color: var(--mj-text-secondary);
+      font-size: 0.75rem;
+    }
+    .rb-empty-note {
+      color: var(--mj-text-muted);
+      font-size: 0.875rem;
+    }
   `]
 })
-export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
+export class RemoteBrowserSurfaceComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Snapshot fetcher supplied by the channel plugin (closes over the session id + provider). */
   @Input() Fetch: RemoteBrowserSnapshotFetcher | null = null;
 
@@ -426,6 +670,12 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   @Output() HumanInput = new EventEmitter<RemoteBrowserHumanInputEvent>();
 
   /**
+   * Emits the usable drawer viewport size (`{ Width, Height }` below the toolbar) when the first frame
+   * arrives and whenever the user resizes or maximizes/restores the pane (debounced, keeping the latest size).
+   */
+  @Output() ViewportResize = new EventEmitter<RemoteBrowserViewportSize>();
+
+  /**
    * Whether the live tab-audio stream is available — the channel sets this `true` when the server confirms
    * it is pushing audio. Drives whether the speaker toggle renders in the live-view bar.
    */
@@ -461,12 +711,49 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     return this.surfaceFocused && this.CanTakeOver;
   }
 
+  /** Read-only session review mode: disables live polling/takeover and renders saved snapshot/history. */
+  @Input() public ReadOnly = false;
+  /** Visited page history shown in read-only review mode. */
+  @Input() public ReviewHistory: readonly RemoteBrowserHistoryEntry[] = [];
   /** The current screenshot as a `data:` URL, or `null` before the first snapshot arrives. */
-  public ScreenshotDataUrl: string | null = null;
+  @Input() public ScreenshotDataUrl: string | null = null;
   /** The current page URL reported by the server, or `null` when none. */
-  public CurrentUrl: string | null = null;
+  @Input() public CurrentUrl: string | null = null;
   /** Whether at least one pushed screencast frame has been painted (drives the canvas placeholder). */
   public HasFrame = false;
+
+  private readonly sanitizer = inject(DomSanitizer);
+  private cachedIframeKey: string | null = null;
+  private cachedIframeValue: SafeResourceUrl | null = null;
+
+  /** Returns `ScreenshotDataUrl` only when it is a safe inline raster image data URL. */
+  public get SafeScreenshotUrl(): string | null {
+    return IsSafeRasterImageDataUrl(this.ScreenshotDataUrl) ? this.ScreenshotDataUrl : null;
+  }
+
+  /**
+   * Returns a sanitized `SafeResourceUrl` for the last visited `http(s)` page when no saved
+   * screenshot is available in review mode, so past sessions still display the last page.
+   */
+  public get SafeIframeUrl(): SafeResourceUrl | null {
+    const safe = this.SafeExternalUrl(this.CurrentUrl);
+    if (!safe) {
+      return null;
+    }
+    if (this.cachedIframeKey !== safe) {
+      this.cachedIframeKey = safe;
+      this.cachedIframeValue = this.sanitizer.bypassSecurityTrustResourceUrl(safe);
+    }
+    return this.cachedIframeValue;
+  }
+
+  /** Returns `url` only when it uses an explicit http/https origin. */
+  public SafeExternalUrl(url: string | null | undefined): string | null {
+    return IsAllowedExternalMediaUrl(url) ? url!.trim() : null;
+  }
+
+  /** The usable area below the toolbar whose dimensions drive remote viewport resizing. */
+  @ViewChild('viewportEl') private viewportEl?: ElementRef<HTMLElement>;
 
   /** The canvas the pushed screencast frames are painted onto (present only while {@link Streaming}). */
   @ViewChild('frameCanvas') private frameCanvas?: ElementRef<HTMLCanvasElement>;
@@ -495,6 +782,15 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private pendingFrameDataUrl: string | null = null;
   /** True while a paint is scheduled, so rapid frames coalesce to one `requestAnimationFrame`. */
   private framePaintScheduled = false;
+
+  /** Active ResizeObserver watching {@link viewportEl}; `null` when not attached. */
+  private resizeObserver: ResizeObserver | null = null;
+  /** Pending debounce timer for {@link ViewportResize} emissions during a divider drag / pane resize. */
+  private resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Most recent measured usable viewport size (`{ Width, Height }`). */
+  private latestViewportSize: RemoteBrowserViewportSize | null = null;
+  /** Last viewport size emitted through {@link ViewportResize}, used to deduplicate unchanged measurements. */
+  private lastEmittedViewportSize: RemoteBrowserViewportSize | null = null;
 
   /** The canvas element takeover listeners are currently bound to, or `null` when detached. */
   private takeoverCanvas: HTMLCanvasElement | null = null;
@@ -554,9 +850,14 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.resumePolling();
   }
 
+  ngAfterViewInit(): void {
+    this.attachViewportResizeObserver();
+  }
+
   ngOnDestroy(): void {
     this.destroyed = true;
     this.stopPolling();
+    this.detachViewportResizeObserver();
     this.detachTakeoverListeners();
   }
 
@@ -565,7 +866,7 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
    * traffic) or the surface is out of sight.
    */
   private resumePolling(): void {
-    if (this.Streaming || !this._visible || this.destroyed) {
+    if (this.ReadOnly || this.Streaming || !this._visible || this.destroyed) {
       return;
     }
     void this.pollOnce();
@@ -616,6 +917,7 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     if (this.destroyed) {
       return;
     }
+    const hadSnapshot = this.HasSnapshot;
     const base64 = snapshot?.ScreenshotBase64 ?? null;
     const nextUrl = snapshot?.CurrentUrl ?? null;
     const nextDataUrl = base64 ? `data:image/png;base64,${base64}` : this.ScreenshotDataUrl;
@@ -626,6 +928,9 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.CurrentUrl = nextUrl;
     // Re-enter the zone for the OnPush update (the poll runs outside Angular).
     this.zone.run(() => this.cdr.markForCheck());
+    if (!hadSnapshot && this.HasSnapshot) {
+      this.notifyInitialViewportSize();
+    }
   }
 
   /**
@@ -689,17 +994,183 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
       canvas.width = w;
       canvas.height = h;
+      this.updateCanvasDisplaySize();
+      if (this.cursorViewportPoint) {
+        this.scheduleCursorPaint();
+      } else {
+        const overlay = this.cursorCanvas?.nativeElement;
+        if (overlay && (overlay.width !== w || overlay.height !== h)) {
+          overlay.width = w;
+          overlay.height = h;
+        }
+      }
     }
     ctx.drawImage(this.frameImage, 0, 0);
     if (!this.HasFrame) {
       // First frame arrived — re-enter the zone to clear the placeholder + flip the "Live" indicator,
-      // and attach takeover listeners now that the canvas element exists in the DOM.
+      // attach takeover listeners now that the canvas element exists in the DOM, and report the usable
+      // drawer viewport size so the server resizes the remote page in place.
       this.zone.run(() => {
         this.HasFrame = true;
         this.cdr.markForCheck();
       });
       this.syncTakeoverListeners();
+      this.updateCanvasDisplaySize();
+      this.notifyInitialViewportSize();
     }
+  }
+
+  // ----- viewport measurement & resize observation ------------------------------------------
+
+  /**
+   * Attaches a `ResizeObserver` to `.rb-viewport` (the usable space below the toolbar) outside Angular's
+   * zone. Sends the usable width and height when the first frame arrives and whenever the user drags the
+   * divider or maximizes/restores the pane (debounced, keeping the latest size).
+   */
+  private attachViewportResizeObserver(): void {
+    const el = this.viewportEl?.nativeElement;
+    if (this.ReadOnly || !el || this.destroyed) {
+      return;
+    }
+    const initial = this.measureViewport();
+    if (initial) {
+      this.latestViewportSize = initial;
+      this.updateCanvasDisplaySize();
+      if (this.HasSnapshot) {
+        this.emitViewportResizeImmediate(initial);
+      }
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.zone.runOutsideAngular(() => {
+      this.resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
+        if (this.destroyed) {
+          return;
+        }
+        const latestEntry = entries.length > 0 ? entries[entries.length - 1] : undefined;
+        const measured = this.measureViewport(latestEntry);
+        if (!measured) {
+          return;
+        }
+        this.latestViewportSize = measured;
+        this.updateCanvasDisplaySize();
+        if (this.HasSnapshot) {
+          this.scheduleViewportResizeEmit();
+        }
+      });
+      this.resizeObserver.observe(el);
+    });
+  }
+
+  /** Disconnects the `ResizeObserver` and cancels any pending debounce timer. */
+  private detachViewportResizeObserver(): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+      this.resizeDebounceTimer = null;
+    }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+  }
+
+  /**
+   * Measures the usable viewport container (`.rb-viewport`) in integer CSS pixels, preferring a
+   * `ResizeObserverEntry`'s `contentRect` and falling back to `clientWidth`/`clientHeight` or
+   * `getBoundingClientRect()`. Returns `null` when the element has zero or non-finite dimensions.
+   */
+  private measureViewport(entry?: ResizeObserverEntry): RemoteBrowserViewportSize | null {
+    const contentWidth = entry?.contentRect?.width ?? 0;
+    const contentHeight = entry?.contentRect?.height ?? 0;
+    const el = this.viewportEl?.nativeElement;
+    const rect = el?.getBoundingClientRect?.();
+    const rawWidth = contentWidth > 0 ? contentWidth : (el && el.clientWidth > 0 ? el.clientWidth : (rect?.width ?? 0));
+    const rawHeight = contentHeight > 0 ? contentHeight : (el && el.clientHeight > 0 ? el.clientHeight : (rect?.height ?? 0));
+    const width = Math.floor(rawWidth);
+    const height = Math.floor(rawHeight);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return null;
+    }
+    return { Width: width, Height: height };
+  }
+
+  /** Sends the current usable viewport size immediately when the first frame/snapshot arrives. */
+  private notifyInitialViewportSize(): void {
+    if (this.ReadOnly) {
+      return;
+    }
+    const size = this.measureViewport() ?? this.latestViewportSize;
+    if (!size) {
+      return;
+    }
+    this.latestViewportSize = size;
+    this.emitViewportResizeImmediate(size);
+  }
+
+  /** Debounces rapid `ResizeObserver` notifications, keeping {@link latestViewportSize}. */
+  private scheduleViewportResizeEmit(): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+    }
+    this.zone.runOutsideAngular(() => {
+      this.resizeDebounceTimer = setTimeout(() => {
+        this.resizeDebounceTimer = null;
+        if (this.destroyed || !this.latestViewportSize) {
+          return;
+        }
+        this.emitViewportResizeIfChanged(this.latestViewportSize);
+      }, VIEWPORT_RESIZE_DEBOUNCE_MS);
+    });
+  }
+
+  /** Clears any pending debounce timer and emits `size` immediately if it changed. */
+  private emitViewportResizeImmediate(size: RemoteBrowserViewportSize): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+      this.resizeDebounceTimer = null;
+    }
+    this.emitViewportResizeIfChanged(size);
+  }
+
+  /** Emits `size` through {@link ViewportResize} when it differs from {@link lastEmittedViewportSize}. */
+  private emitViewportResizeIfChanged(size: RemoteBrowserViewportSize): void {
+    if (
+      this.lastEmittedViewportSize &&
+      this.lastEmittedViewportSize.Width === size.Width &&
+      this.lastEmittedViewportSize.Height === size.Height
+    ) {
+      return;
+    }
+    this.lastEmittedViewportSize = { Width: size.Width, Height: size.Height };
+    this.zone.run(() => this.ViewportResize.emit({ Width: size.Width, Height: size.Height }));
+  }
+
+  /**
+   * Sizes the frame canvas's CSS box (and thus `.rb-canvas-stack` + `.rb-cursor-overlay`) to fit the
+   * usable `.rb-viewport` area while preserving the frame's exact aspect ratio (`canvas.width / canvas.height`),
+   * so the frame fills the pane edge-to-edge (including when maximized above `1280 × 800`) and clicks
+   * always map accurately via {@link MapToViewportCoords}.
+   */
+  private updateCanvasDisplaySize(): void {
+    const canvas = this.frameCanvas?.nativeElement;
+    if (!canvas) {
+      return;
+    }
+    const viewport = this.latestViewportSize ?? this.measureViewport();
+    if (!viewport || canvas.width <= 0 || canvas.height <= 0) {
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    const fitted = ComputeFittedFrameSize(viewport.Width, viewport.Height, canvas.width, canvas.height);
+    if (!fitted) {
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    canvas.style.width = `${fitted.Width}px`;
+    canvas.style.height = `${fitted.Height}px`;
   }
 
   // ----- human takeover (Collaborative control) --------------------------------------------

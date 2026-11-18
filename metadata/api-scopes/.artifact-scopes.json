@@ -3,60 +3,90 @@
     "fields": {
       "Name": "artifact",
       "FullPath": "artifact",
+      "Description": "Top-level scope covering governed MemberJunction Artifacts (Documents, Presentations, Spreadsheets, Whiteboards)",
       "ParentID": null,
       "Category": "Artifacts",
-      "Description": "Parent scope for artifact operations",
-      "ResourceType": null,
-      "IsActive": true,
-      "UIConfig": {
-        "icon": "fa-solid fa-file-lines",
-        "color": "#6366f1"
-      }
+      "ResourceType": "Entity",
+      "IsActive": true
     },
     "primaryKey": {
       "ID": "783D9F4A-8E51-4F26-9B83-2A63C9B4E101"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:24.806Z",
+      "checksum": "fecf7c8ec0edb9872432bf8f66e28c1f4f165bb8fc84ba887b6f8ffd7503878f"
     }
   },
   {
     "fields": {
       "Name": "read",
       "FullPath": "artifact:read",
+      "Description": "Read governed artifacts, versions, previews, guest links, and compliance logs",
       "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
       "Category": "Artifacts",
-      "Description": "Read artifact metadata, versions, live blocks, and collaboration state",
       "ResourceType": "Entity",
       "IsActive": true
     },
     "primaryKey": {
       "ID": "894E0A5B-9F62-4A37-8C94-3B74D0C5F202"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:24.846Z",
+      "checksum": "a9082fadf6d99139aeb7aa50091a4ae8248d69934aadba34ed9c481ddf7aa206"
     }
   },
   {
     "fields": {
       "Name": "edit",
       "FullPath": "artifact:edit",
+      "Description": "Create, synthesize, and mutate governed artifacts and evaluate spreadsheet AI formulas",
       "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
       "Category": "Artifacts",
-      "Description": "Create, edit, freeze, or compact artifact content and collaborative working state",
       "ResourceType": "Entity",
       "IsActive": true
     },
     "primaryKey": {
       "ID": "9A5F1B6C-A073-4B48-9DA5-4C85E1D6A303"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:24.879Z",
+      "checksum": "c5456d4186ca712518d50efb1bf2b906d7c4883db1e987cbc7aaf4b32e22bd0c"
     }
   },
   {
     "fields": {
       "Name": "comment",
       "FullPath": "artifact:comment",
+      "Description": "Create, edit, and reply to comments on collaborative artifacts (Docs, Slides, Sheets, Whiteboards)",
       "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
       "Category": "Artifacts",
-      "Description": "Add, reply to, or resolve anchored comments and inline suggestions on artifacts",
       "ResourceType": "Entity",
       "IsActive": true
     },
     "primaryKey": {
       "ID": "440AD75F-0EA9-4D8B-92FB-480767F4DFA8"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:24.912Z",
+      "checksum": "80f20b89318517ed7b4033f90240bc634597acba374d20e5a4cea4b32cb8f9fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "share",
+      "FullPath": "artifact:share",
+      "Description": "Create and revoke external guest share links for governed artifacts",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
+      "Category": "Artifacts",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "BADEDA54-A481-44B9-B54A-2377B7D18A61"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:24.944Z",
+      "checksum": "c8b83833328c1880cb2c7d74f9d1a35f4edc05c74628aa9f451e4faa8b2c15d9"
     }
   }
 ]
