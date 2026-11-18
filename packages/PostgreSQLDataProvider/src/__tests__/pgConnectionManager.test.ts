@@ -16,6 +16,7 @@ vi.mock('pg', () => {
         connect = vi.fn().mockResolvedValue(mockClient);
         query = vi.fn().mockResolvedValue({ rows: [] });
         end = vi.fn().mockResolvedValue(undefined);
+        on = vi.fn();
     }
 
     return {
@@ -61,6 +62,18 @@ describe('PGConnectionManager', () => {
 
             expect(manager.IsConnected).toBe(true);
             expect(manager.Config).not.toBeNull();
+        });
+
+        it('listens for errors on the pool so a dropped idle connection does not exit the process', async () => {
+            await manager.Initialize({ Host: 'localhost', Database: 'testdb', User: 'user', Password: 'pass' });
+
+            const on = manager.Pool.on as unknown as ReturnType<typeof vi.fn>;
+            expect(on).toHaveBeenCalledWith('error', expect.any(Function));
+            const listener = on.mock.calls.find(([event]) => event === 'error')?.[1] as (err: Error) => void;
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            expect(() => listener(new Error('Connection terminated unexpectedly'))).not.toThrow();
+            expect(logged).toHaveBeenCalled();
+            logged.mockRestore();
         });
 
         it('passes the statement and idle-in-transaction timeouts to every backend at startup', async () => {
