@@ -37,12 +37,28 @@ function findMigration(): string {
     return join(dir, name);
 }
 
-const MIGRATION = readFileSync(findMigration(), 'utf8');
+/**
+ * The hand-written half of the waiting-steps migration, which adds the procedures the waiting
+ * lifecycle calls. Cut at the CodeGen banner: the generated section below it is CodeGen's own
+ * plumbing (views, CRUD procedures), held to CodeGen's rules rather than to this contract.
+ */
+function findWaitingStepsMigration(): string {
+    const dir = join(__dirname, '../../../../migrations/v6');
+    const name = readdirSync(dir).find((f) => f.endsWith('__TaskGraph_Waiting_Steps.sql'));
+    if (!name) throw new Error(`No TaskGraph waiting-steps migration found in ${dir}`);
+    const text = readFileSync(join(dir, name), 'utf8');
+    const banner = text.indexOf('EVERYTHING BELOW THIS BLOCK WAS GENERATED');
+    return banner > -1 ? text.slice(0, text.lastIndexOf('/*', banner)) : text;
+}
 
-/** One procedure's body, from CREATE to its terminating END. */
+/** Every migration that creates spTaskGraph* procedures, hand-written parts only. */
+const MIGRATION = `${readFileSync(findMigration(), 'utf8')}\n${findWaitingStepsMigration()}`;
+
+/** One procedure's body, from CREATE (or CREATE OR ALTER) to its terminating END. */
 function proc(name: string): string {
-    const marker = `CREATE PROCEDURE [\${flyway:defaultSchema}].[${name}]`;
-    const start = MIGRATION.indexOf(marker);
+    const plain = `CREATE PROCEDURE [\${flyway:defaultSchema}].[${name}]`;
+    const orAlter = `CREATE OR ALTER PROCEDURE [\${flyway:defaultSchema}].[${name}]`;
+    const start = MIGRATION.indexOf(plain) > -1 ? MIGRATION.indexOf(plain) : MIGRATION.indexOf(orAlter);
     expect(start, `procedure ${name} is missing from the migration`).toBeGreaterThan(-1);
     const end = MIGRATION.indexOf('\nEND;', start);
     expect(end, `procedure ${name} has no END`).toBeGreaterThan(start);

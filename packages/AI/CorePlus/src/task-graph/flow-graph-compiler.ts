@@ -454,6 +454,38 @@ function emitNode(
                     typeof config['expiresInHours'] === 'number' && config['expiresInHours'] > 0
                         ? config['expiresInHours']
                         : undefined,
+                // Which human-task provider raises the step. Absent = the built-in inbox.
+                ...(typeof config['provider'] === 'string' && config['provider'].trim()
+                    ? { provider: config['provider'].trim() }
+                    : {}),
+                ...(isPlainObject(config['providerConfiguration'])
+                    ? { providerConfiguration: config['providerConfiguration'] }
+                    : {}),
+            });
+        }
+        case 'External': {
+            // Completed by a signal from outside the graph. The step's description is what it waits
+            // for; `domain` defaults to "external" so a step drawn without one still compiles.
+            const config = parseJSONObject(step.Configuration);
+            return TaskNode.External(base, {
+                domain: typeof config['domain'] === 'string' && config['domain'].trim() ? config['domain'].trim() : 'external',
+                ...(typeof config['ref'] === 'string' ? { ref: config['ref'] } : {}),
+                ...(typeof config['correlationKey'] === 'string' && config['correlationKey'].trim()
+                    ? { correlationKey: config['correlationKey'].trim() }
+                    : {}),
+                ...(typeof config['expiresInHours'] === 'number' && config['expiresInHours'] > 0
+                    ? { expiresInHours: config['expiresInHours'] }
+                    : {}),
+            });
+        }
+        case 'Wait': {
+            // Waits for a moment in time. Whatever the configuration holds is passed through, and the
+            // validator refuses it at submit — with the step's name — when it is not exactly one of
+            // `until` / `durationSeconds`, rather than this compiler guessing.
+            const config = parseJSONObject(step.Configuration);
+            return TaskNode.Wait(base, {
+                ...(typeof config['until'] === 'string' ? { until: config['until'] } : {}),
+                ...(typeof config['durationSeconds'] === 'number' ? { durationSeconds: config['durationSeconds'] } : {}),
             });
         }
         case 'ForEach':
@@ -673,4 +705,8 @@ function buildWhile(step: FlowCompilerStep, options: FlowCompilerOptions, errors
         delayBetweenIterationsMs: config.delayBetweenIterationsMs,
         ...buildLoopBody(step, options, errors),
     };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
 }

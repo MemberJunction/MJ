@@ -92,6 +92,8 @@ import {
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
+import { WaitingStepRunner } from './WaitingStepRunner';
+import { IsProviderHumanTask, WAITING_STEP_MARKER, WaitingStepKindOf } from './waiting-steps';
 import {
     IsSettlementExpired,
     IsSubmittingRunReady,
@@ -551,6 +553,8 @@ export type ClaimedTaskCandidate = {
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+    /** Reaches and settles External, Wait and provider-Human steps — the steps no runner executes. */
+    private readonly waitingSteps: WaitingStepRunner;
 
     /**
      * Edges already reported as unevaluable, so the report is once per transition and not once per
@@ -715,6 +719,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
+        this.waitingSteps = new WaitingStepRunner(this.claims, () => this.contextUser);
         this.conditionEvaluator = new DispatcherConditionEvaluator();
     }
 
@@ -1510,8 +1515,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Human steps are only swept when the loaded graph actually contains at least one
         // non-terminal Human task. When a graph has 0 pending human tasks (99% of graphs), this
         // check short-circuits in memory with 0 DB queries instead of running 3 RunViews per graph.
+        // A Human step handed to a plugged-in provider is a WAITING step, not an inbox step: it has no
+        // request for these sweeps to settle, expire or re-raise.
         const pendingHumanTasks = [...graph.entityById.values()].filter(
-            (t) => t.Status === 'Pending' && IsHumanTask(t),
+            (t) => t.Status === 'Pending' && IsHumanTask(t) && !IsProviderHumanTask(t),
         );
         if (pendingHumanTasks.length > 0) {
             await this.expireOverdueRequests(provider, parentID, pendingHumanTasks);
@@ -1520,6 +1527,20 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (settledHumanCount > 0) {
                 // Re-evaluate conditional edges and skip/block cascades now that a human step's
                 // answer and status have landed, reusing the already-loaded parent task.
+                graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
+                if (graph.nodes.length === 0) return undefined;
+            }
+        }
+
+        // Waiting steps (External, Wait, provider-Human) the graph has already reached: complete the
+        // waits whose moment has come, apply held signals, fail what is past its deadline. Same
+        // in-memory short-circuit as the human sweep — a graph with none costs no query.
+        const reachedWaitingSteps = [...graph.entityById.values()].filter(
+            (t) => t.Status === 'Pending' && t.ClaimedBy === WAITING_STEP_MARKER && WaitingStepKindOf(t) !== null,
+        );
+        if (reachedWaitingSteps.length > 0) {
+            const settledWaiting = await this.waitingSteps.Sweep(provider, parentID, reachedWaitingSteps);
+            if (settledWaiting > 0) {
                 graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
                 if (graph.nodes.length === 0) return undefined;
             }
@@ -2868,7 +2889,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // they cleared. Without a notification here a workflow simply stops, waiting on
                 // someone who was never told. That silent stall is the failure mode this exists to
                 // prevent, so it happens on the eligibility check rather than at submission.
-                if (entity.StepType === 'Decision') {
+                if (WaitingStepKindOf(entity)) {
+                    // External, Wait and provider-Human steps are never claimed — nothing runs them.
+                    // Reaching one marks it waiting (once) and, for a provider-Human step, raises it.
+                    // Tested before the key columns, which none of them carry.
+                    await this.reachWaitingStep(entity, graph, provider);
+                    continue;
+                } else if (entity.StepType === 'Decision') {
                     // Tested before the key columns: a Decision carries its decision prompt in
                     // PromptID, but it runs on the decision runner, which every dispatcher has — so
                     // a host with no PROMPT runner must not leave it Pending.
@@ -2960,6 +2987,23 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Hands a waiting step the dispatcher has found eligible to the waiting-step runner, with the
+     * payload it is reached with — computed exactly as a runner's starting payload is, so a
+     * `payload.<path>` in a Wait's `until` or an External's correlation key reads the same values a
+     * branch condition would.
+     */
+    private async reachWaitingStep(entity: MJTaskEntity, graph: GraphState, provider: IMetadataProvider): Promise<void> {
+        if (entity.ClaimedBy === WAITING_STEP_MARKER) return;
+        const parsed = ParseTaskInputPayload(entity.ID, entity.InputPayload);
+        const authored = 'Payload' in parsed && parsed.Payload && typeof parsed.Payload === 'object' && !Array.isArray(parsed.Payload)
+            ? (parsed.Payload as Record<string, unknown>)
+            : null;
+        const payload = this.mergedPayload(authored, this.extractDependencyOutputsFromGraph(entity.ID, graph));
+        const owner = graph.parentMetadata.submittedByUserID ?? null;
+        await this.waitingSteps.Reach({ Task: entity, Payload: payload, OwnerUserID: owner }, provider);
+    }
+
+    /**
      * Whether THIS host can act on a task right now — the runner-availability question, asked
      * without acting on it.
      *
@@ -2969,6 +3013,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private canActOn(entity: MJTaskEntity): boolean {
         if (this.inFlight.has(entity.ID)) return false;
+        // Reaching a waiting step is an act: it marks the step and may raise it with a provider.
+        if (WaitingStepKindOf(entity)) return true;
         // Before the PromptID test, for the reason given in `findClaimableTasks`.
         if (entity.StepType === 'Decision') return true;
         if (entity.ActionID) return !!this.actionRunner;

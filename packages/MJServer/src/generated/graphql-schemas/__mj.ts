@@ -98571,6 +98571,10 @@ export class MJTask_ {
     @MaxLength(36)
     CompensatesTaskID?: string;
         
+    @Field({nullable: true, description: "For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step."}) 
+    @MaxLength(400)
+    CorrelationKey?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -98722,6 +98726,9 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     CompensatesTaskID: string | null;
 
+    @Field({ nullable: true })
+    CorrelationKey: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -98812,6 +98819,9 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     CompensatesTaskID?: string | null;
+
+    @Field({ nullable: true })
+    CorrelationKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
