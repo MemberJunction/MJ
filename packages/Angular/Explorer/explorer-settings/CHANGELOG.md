@@ -1,5 +1,89 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- b0b89c9: User Management: the Edit User dialog now shows the user's current roles as soon as they load, instead of leaving every role unchecked until a role is clicked. A role load that finishes after the dialog has moved to another user is ignored.
+- 6ea73e6: Wave 5 UI bundle splitting, lazy loading, and ESBuild script minification safety:
+  - `@memberjunction/global`, `@memberjunction/core`: `BaseSingleton` detects a name-mangled build (its own class name no longer reads `BaseSingleton`) and then keys unstamped singletons by constructor, so unrelated classes the minifier gave the same name — even with byte-identical source — never share an instance. With real class names (Node, dev builds) it keys by name exactly as before, so duplicate copies of a class still share one instance even when their package versions differ. Stamped names and explicit `getInstance(className)` keys work in both modes. `BaseEngineRegistry` resolves names via `GetClassName` and registers a different engine class whose name is already taken under `Name#2`, `Name#3`… instead of overwriting the first engine's registration.
+  - `@memberjunction/ng-auth-services`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`: Move the seven built-in auth providers out of the main barrel into dedicated subpath exports (`./msal`, `./auth0`, `./okta`, `./cognito`, `./workos`, `./magic-link`, `./local-dev`), declare provider files in `sideEffects`, extract `HasMagicLinkSessionToken` to a zero-dependency helper, and add `LoadAuthProvider`/`PreloadActiveAuthProvider` so Explorer loads only the active IdP SDK before bootstrapping `AppModule` while `@memberjunction/ng-bootstrap` retains eager registration via `EAGER_AUTH_PROVIDERS`.
+  - `@memberjunction/ng-explorer-settings`, `@memberjunction/ng-dashboards`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-explorer-modules`: Extract lightweight `UserSettingsModule` (`./user-settings.module`) and `DashboardEditorModule` (`./dashboard-editor.module`), sever unused `AITestHarnessModule` plus eager `CoreDashboardsModule` / `ExplorerSettingsModule` imports from `ExplorerCoreModule`, `ShellModule`, `ProfileDialogComponent`, and `MJExplorerModulesBundle`, and split `LiveKitRoomResource`, `HumanHandoffConsoleResource`, and `MeetingsResource` into a lazy `LiveKitResourcesModule` registered via `LIVEKIT_LAZY_FEATURE_CONFIG`.
+  - `MJExplorer`: Enable `optimization.scripts = true` in `production` and `staging`, switch `main.ts` from `platformBrowserDynamic` to AOT `platformBrowser` with `PreloadActiveAuthProvider`, move `@angular/compiler` to `devDependencies` (removing `@angular/platform-browser-dynamic`), and remove unused MSAL imports from `AppModule`.
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [484447a]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [dfa6a4a]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ng-shared@6.3.0-edge.1
+  - @memberjunction/ng-base-forms@6.3.0-edge.1
+  - @memberjunction/ng-base-application@6.3.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.1
+  - @memberjunction/ng-code-editor@6.3.0-edge.1
+  - @memberjunction/ng-shared-generic@6.3.0-edge.1
+  - @memberjunction/ng-entity-form-dialog@6.3.0-edge.1
+  - @memberjunction/ng-entity-permissions@6.3.0-edge.1
+  - @memberjunction/ng-simple-record-list@6.3.0-edge.1
+  - @memberjunction/ng-base-types@6.3.0-edge.1
+  - @memberjunction/ng-join-grid@6.3.0-edge.1
+  - @memberjunction/ng-notifications@6.3.0-edge.1
+  - @memberjunction/ng-user-avatar@6.3.0-edge.1
+  - @memberjunction/ng-tabstrip@6.3.0-edge.1
+  - @memberjunction/ng-ui-components@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

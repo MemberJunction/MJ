@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { RouteScrubber, ScrubMjRoute } from '../../telemetry/RouteScrubber';
 
+/**
+ * Wall-clock ceiling for the pathological-input check (3,000-slash path). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 500;
+
 describe('RouteScrubber.Scrub', () => {
   it('tokenizes a record ID in an app-scoped record route', () => {
     const result = RouteScrubber.Scrub('/app/crm/record/Contacts/4F2B1E3A-0000-0000-0000-000000000001');
@@ -109,7 +116,7 @@ describe('RouteScrubber.Scrub', () => {
     const result = RouteScrubber.Scrub(pathological);
     const durationMs = performance.now() - start;
 
-    expect(durationMs).toBeLessThan(10);
+    expect(durationMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     expect(result.RouteTemplate).toBe('unknown');
     expect(result.ScrubbedPath).toBe('/unknown');
   });
