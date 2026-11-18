@@ -636,6 +636,9 @@ async function checkSg5ContentPipelineGraphStage(ctx: IntegrationCheckContext): 
                 EnableGraphOverlay: true,
                 GraphID: 'GRAPH-CANON-IT162',
                 TargetGraphType: 'Canon',
+                // The fixture graph has no MJ: Graphs row, so its type cannot be read; IsCanon is the
+                // setting for that case. A type name alone no longer decides Canon behaviour.
+                IsCanon: true,
                 AuthorityTier: 'Bylaws',
                 GroundingMode: 'full-canon',
             },
