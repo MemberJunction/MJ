@@ -1,5 +1,73 @@
 # @memberjunction/open-app-engine
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 74950be: Open Apps can be installed from a folder in the consumer repository. `mj app install ./openapps/analytics` stores the app as a `file:` locator relative to the repository root (`file:openapps/analytics`), and `mj app upgrade`, `mj app remove` and `mj app check-updates` read the app from that folder. The folder, its `mj-app.json` and its SQL directories must be inside the repository with links resolved, so a link to a folder or file outside it is refused. The folder's version is the `version` in its `mj-app.json`. Its migrations, `-pg` migrations and teardown scripts are copied with the same rules as a GitHub download. Its npm packages are written as `workspace:*`, and the install stops before any change when a package of the app, or of any local dependency it installs, is not a project in the pnpm or yarn workspace. Remove reads the installed version's migrations and teardown scripts from the folder, so it stops before any change when the folder is at another version or was deleted; the `mj app remove` help says to restore the folder from git first.
+
+  A dependency can name another local app with a `file:` locator, but only from an app that is itself installed from a local folder. `mj app upgrade --reapply` runs the upgrade again at the installed version, so changes in a local folder apply without a version bump.
+
+  The engine reads every manifest, version and SQL file through an `OpenAppSource` (`GitHubAppSource` or `LocalAppSource`), selected by `ResolveAppSource`. GitHub installs call the GitHub client with the same arguments as before.
+
+  The deterministic integration tier has a new bundle, `open-app-local-source` (IT178), that installs, upgrades and removes apps from a throwaway pnpm workspace against the live database. `@memberjunction/testing-integration` exports its fixture type, `OpenAppLocalSourceFixture`.
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/record-cloning@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

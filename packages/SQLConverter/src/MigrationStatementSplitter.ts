@@ -65,16 +65,27 @@ const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|t
  */
 const HAND_WRITTEN_OBJECT_ALLOWLIST = new Set(['vwentitieswithexternalchangetracking']);
 
+/** Options for {@link SplitByStatement}. */
+export interface SplitByStatementOptions {
+  /**
+   * Treat every `CREATE [OR ALTER] VIEW` as hand-written (`schema-ddl`), whatever its name.
+   * Set for a non-baseline file with no CodeGen banner: CodeGen always writes its banner, so a
+   * `vw…` view there is the app's own (a layered wrapper view, issue #5551), and nothing
+   * regenerates it if it is dropped.
+   */
+  HandWrittenViews?: boolean;
+}
+
 /**
  * Split SQL into GO batches and classify each by its leading statement.
  * Pure function — no I/O.
  */
-export function SplitByStatement(sql: string): StatementBatch[] {
+export function SplitByStatement(sql: string, options: SplitByStatementOptions = {}): StatementBatch[] {
   return sql
     .split(GO_SPLIT)
     .map((b) => b.trim())
     .filter((b) => b.length > 0)
-    .map(classifyBatch);
+    .map((b) => classifyBatch(b, options));
 }
 
 /** @deprecated Use {@link SplitByStatement}. */
@@ -83,7 +94,7 @@ export function splitByStatement(sql: string): StatementBatch[] {
 }
 
 /** Classify one GO batch by its first meaningful statement. */
-function classifyBatch(batch: string): StatementBatch {
+function classifyBatch(batch: string, options: SplitByStatementOptions): StatementBatch {
   const code = stripLeadingNoise(batch);
   const head = code.slice(0, 200);
 
@@ -112,6 +123,9 @@ function classifyBatch(batch: string): StatementBatch {
     if (name && HAND_WRITTEN_OBJECT_ALLOWLIST.has(name.toLowerCase())) {
       // Hand-written despite the codegen-style name — keep + transpile.
       return mk('schema-ddl', batch, `${routine[1]} ${name} (hand-written allowlist)`);
+    }
+    if (options.HandWrittenViews && routine[1].toUpperCase() === 'VIEW') {
+      return mk('schema-ddl', batch, `VIEW ${name ?? '?'} (hand-written: no CodeGen banner)`);
     }
     const isGenerated = !!name && CODEGEN_NAME.test(name);
     return isGenerated

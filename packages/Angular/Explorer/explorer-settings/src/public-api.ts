@@ -2,8 +2,9 @@
  * Public API Surface
  */
 
-// Module
+// Modules
 export * from './lib/module';
+export * from './lib/user-settings.module';
 
 // Main dashboard components
 export * from './lib/settings/settings.component';

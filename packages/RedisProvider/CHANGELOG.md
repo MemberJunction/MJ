@@ -1,5 +1,56 @@
 # @memberjunction/redis-provider
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 7747b73: Wave 4.4 two-tier L1 frozen CoW + L2 Redis HASH cache, Redis Stream cluster invalidation sequence, cross-replica GraphQL PubSub fan-out, multi-tab browser invalidation multiplexer, and coalesced metadata storage persistence:
+  - `@memberjunction/core`: cache per-slot PK array indices via `WeakMap` in `LocalCacheManager.ApplyRowChanges` for $O(\Delta)$ Copy-on-Write row updates, compute `maxUpdatedAt` incrementally on non-displacing updates, delegate in-place row deltas via `ILocalStorageProvider.ApplyRunViewRowDelta`, and add trailing-edge coalesced/serialized `ScheduleSaveLocalMetadataToStorage` on `ProviderBase`.
+  - `@memberjunction/redis-provider`: add `TwoTierCacheStorageProvider` (byte-bounded L1 deep-frozen LRU cache with $O(\Delta)$ peer `row_delta` patching in front of L2 Redis), per-row Redis `HASH` storage (`useHashForRunViewSlots`) with Lua `APPLY_RUNVIEW_ROW_DELTA_SCRIPT` (`HSET`/`HDEL`), and atomic cluster epoch + Redis Stream `INCR`/`XADD`/`XRANGE` helpers.
+  - `@memberjunction/server` & `@memberjunction/server-bootstrap`: wrap shared Redis cache in `TwoTierCacheStorageProvider` (`WrapSharedCacheWithL1`), register `RedisStreamBroadcastProvider` (`'RedisStream'`) for cluster-wide monotonic `X-MJ-Server-ID` / `X-MJ-Cache-Seq` watermarks and `XRANGE` catch-up, and bridge all non-bespoke TypeGraphQL `@Subscription` topics across pods via `AttachRedisClusterPubSub`.
+  - `@memberjunction/graphql-dataprovider`: add `ClientTabInvalidationMultiplexer` electing a single leader browser tab via Web Locks to hold the `CacheInvalidation` WebSocket and relay invalidations + deduplicated catch-up watermarks to follower tabs over `BroadcastChannel` / `SharedWorker`.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [2d938cf]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

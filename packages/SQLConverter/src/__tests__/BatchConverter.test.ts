@@ -742,3 +742,54 @@ describe('Open App migrations (issue #5364)', () => {
     expect(result.Stats.Gaps).toBe(1);
   });
 });
+
+/** One mj-sync create-or-update save, in the logger's 6.2 shape. */
+function upsertSave(suffix: string, id: string, name: string): string {
+  return [
+    `-- Save MJ: AI Vendors (core SP call only)`,
+    `DECLARE @ID_${suffix} UNIQUEIDENTIFIER,`,
+    `@Name_${suffix} NVARCHAR(50)`,
+    'SET',
+    `  @ID_${suffix} = '${id}'`,
+    'SET',
+    `  @Name_${suffix} = N'${name}' IF NOT EXISTS (`,
+    `    SELECT 1 FROM [\${flyway:defaultSchema}].[AIVendor] WHERE [ID] = @ID_${suffix}`,
+    '  )',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spCreateAIVendor @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END ELSE',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spUpdateAIVendor @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END;',
+    '',
+  ].join('\n');
+}
+
+// Issue #6097: converting a Metadata_Sync log gave one DO block for hundreds of saves. The last
+// save's trailer broke its upsert parse, and a post-processing regex then deleted every save
+// between the converter's own PL/pgSQL and that leftover T-SQL.
+describe('convertFile — Metadata_Sync log with the logger trailer (issue #6097)', () => {
+  const log = [
+    '-- SQL Logging Session',
+    '-- Description: MetadataSync push operation',
+    '',
+    upsertSave('a1', '11111111-1111-1111-1111-111111111111', 'Vendor One'),
+    upsertSave('b2', '22222222-2222-2222-2222-222222222222', 'Vendor Two'),
+    upsertSave('c3', '33333333-3333-3333-3333-333333333333', 'Vendor Three'),
+    '',
+    '-- End of SQL Logging Session',
+    '-- Total Statements: 3',
+  ].join('\n');
+
+  it('converts every save to its own DO block', () => {
+    const result = ConvertFile(makeConfig(log));
+    expect(result.OutputSQL.match(/^DO \$mj\$/gm)).toHaveLength(3);
+    for (const name of ['Vendor One', 'Vendor Two', 'Vendor Three']) {
+      expect(result.OutputSQL).toContain(`'${name}'`);
+    }
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+    expect(result.Stats.Gaps).toBe(0);
+  });
+});
