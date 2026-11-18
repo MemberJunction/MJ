@@ -6355,7 +6355,7 @@ string; readonly Column: string | null; readonly From: unknown; readonly To: unk
 because the column is config-named, as `HumanValueQuestion.CurrentValue` is) — the preview of this instance's last dry
 run, valid because the service is constructed per call (§5.2)
 
-- [ ] Step 1: Write the failing tests (the Engine's `__tests__/fakes`, a stub sidecar that returns per-batch predictions,
+- [x] Step 1: Write the failing tests (the Engine's `__tests__/fakes`, a stub sidecar that returns per-batch predictions,
   and an in-memory `FeatureValueCacheService` double that records `RecordModelValues` calls):
   ```ts
   it('refuses a withdrawn binding with a refused run row and writes nothing', async () => {
@@ -6455,9 +6455,9 @@ run, valid because the service is constructed per call (§5.2)
     }
   });
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/scoring-service.test.ts src/scoring/__tests__/binding-human-value-guard.test.ts`
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/scoring-service.test.ts src/scoring/__tests__/binding-human-value-guard.test.ts`
   → fails to import.
-- [ ] Step 3: Implement with the signatures of **Interfaces** and §5.2: `export class ScoringService { constructor(ctx:
+- [x] Step 3: Implement with the signatures of **Interfaces** and §5.2: `export class ScoringService { constructor(ctx:
   ScoringContext); public Score(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, asOf: Date, dryRun:
   boolean): Promise<ScoringResult>; public Predict(request: ScoringRequest): Promise<ScoringPrediction> }`; `export
   class BindingHumanValueGuard implements HumanValueGuard { constructor(binding: MJMLModelScoringBindingEntity, record:
@@ -6478,9 +6478,9 @@ run, valid because the service is constructed per call (§5.2)
   sets `Status = 'refused'`, `Refusal`, `Written = 0`; a batch in which any record fails writes nothing and stops the
   run (`failed`, `FirstErrors` ≤ 20); IDs compared with `UUIDsEqual`; no SQL text (reads through `RunView`/`RunViews`
   on `ctx.Provider`).
-- [ ] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed (1246 on
+- [x] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed (1246 on
   `599c288dee`'s tree plus M2–M5's cases; total measured at M5).
-- [ ] Step 5: `git grep -n -i "materializ" -- packages/AI/PredictiveStudio/Engine/src/scoring` → 0 hits (no refresh
+- [x] Step 5: `git grep -n -i "materializ" -- packages/AI/PredictiveStudio/Engine/src/scoring` → 0 hits (no refresh
   step and no materialization, D-078).
 
 #### Task M5.6: Every scoring caller on `ScoringService` — Score Record Set, per-model Actions, the Record Process, the enricher, the harness
@@ -10188,6 +10188,21 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   A request copy used because the envelope stores none is shape-checked first
   (`preprocessing.validate_fitted_preprocessing`): an op lacking a key it reads, or an unknown op, is a 400 naming the
   op and the key, never a 500 (review RF2, closed by the controller after the fix-round cap; pytest 516).
+- **D4-156 · M5.5 as built** (M5.5 report and review). `ScoringRefusal['model-flagged']` gains optional `dominance: {
+  topFeature, topShare, threshold }`: D4-61's dominance re-run over a serving pre-change model's stored
+  `FeatureImportance` is not one of the trainer's `LeakageFlag` kinds, so its refusal carries `flags: []` and names the
+  dominant feature, its share and the threshold (`DetectSingleFeatureDominance`'s result) — a deviation from the frozen
+  contract, which is not edited (D-028). `ScoringBindings.Withdraw` takes `RegistryContext`, not `ScoringContext` (no
+  `ScoringPath` fits a withdrawal), and refuses a caller without the binding's view authorization
+  (`CallerHoldsBinding`, `BindingNotAuthorizedError`). Every model without a Prediction Unit scores only the run date
+  (`as-of-unsupported`). The live challenger runs checks 1–6, its 4–6 against the champion's assembled columns. Every
+  admission except the shadow challenger records `ArtifactStatus` on a failed artifact check through
+  `ArtifactRegistry.RecordArtifactStatus`. The column copy's guard reads one snapshot per batch (two queries) and the
+  copy rounds to the target column's scale. Until M6 adds a challenger field, the live mirror reads the challenger
+  from the binding's Record Process `ChallengerConfiguration`. `Predict` on an unknown model throws the plan's typed
+  `ModelNeedsTrainingError` (a run row needs a real model), and a binding run over a never-trained model ends `failed`
+  with "needs training" (no refusal names an absent file truthfully). A create on a `Withdrawn` binding's model and
+  feature is refused.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not

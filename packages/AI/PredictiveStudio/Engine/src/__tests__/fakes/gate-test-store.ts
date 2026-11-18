@@ -112,10 +112,11 @@ export class GateTestStore {
     'MJ: Scheduled Jobs': '6A1D2E3F-0000-4000-8000-0000000000E6',
   };
   /**
-   * The base view of each entity a filter may name in a `Field IN (SELECT ID FROM [__mj].[<view>] WHERE Col='v')`
-   * subquery (auto-train's refusal read of a pipeline's runs); {@link EntityInfoOf} reports it with schema `__mj`.
+   * The base view of each table a filter may name in a `Field IN (SELECT <col> FROM [__mj].[<view>] WHERE Col='v')`
+   * subquery (auto-train's refusal read of a pipeline's runs; a binding's view-authorization check over the
+   * `vwUserHeldAuthorizations` rows); {@link EntityInfoOf} reports an entity of it with schema `__mj`.
    */
-  public static readonly BaseViews: Readonly<Record<string, string>> = { 'MJ: ML Training Runs': 'vwMLTrainingRuns' };
+  public static readonly BaseViews: Readonly<Record<string, string>> = { 'MJ: ML Training Runs': 'vwMLTrainingRuns', vwUserHeldAuthorizations: 'vwUserHeldAuthorizations' };
   /** The role {@link GateWorld.User} holds; every entity of {@link PermissionedEntities} grants it every permission (the gate's write lists included). */
   public static readonly FullRoleID = '6A1D2E3F-0000-4000-8000-0000000000E2';
   /** The entity permission rows the provider's entities answer `GetUserPermisions` from, by entity name and role. */
@@ -601,8 +602,8 @@ export class GateTestStore {
       const any = clause.split(' OR ').map((c) => this.clause(c.trim()));
       return (row) => any.some((p) => p(row));
     }
-    const sub = /^(\w+) IN \(SELECT ID FROM \[__mj\]\.\[(\w+)\] WHERE (\w+)='((?:[^']|'')*)'\)$/.exec(clause);
-    if (sub) return this.subqueryClause(sub[1], sub[2], sub[3], sub[4].replace(/''/g, "'"));
+    const sub = /^(\w+) IN \(SELECT (\w+) FROM \[__mj\]\.\[(\w+)\] WHERE (\w+)='((?:[^']|'')*)'\)$/.exec(clause);
+    if (sub) return this.subqueryClause(sub[1], sub[2], sub[3], sub[4], sub[5].replace(/''/g, "'"));
     const isNull = /^(\w+) IS (NOT )?NULL$/.exec(clause);
     if (isNull) return (row) => (row[isNull[1]] === null || row[isNull[1]] === undefined) === (isNull[2] === undefined);
     const inList = /^(\w+) IN \((.*)\)$/.exec(clause);
@@ -618,13 +619,14 @@ export class GateTestStore {
   }
 
   /**
-   * `column IN (SELECT ID FROM [__mj].[view] WHERE where='value')`: the IDs of the rows of the entity whose base view is
-   * `view` ({@link BaseViews}) with `where` equal to `value` (case-insensitively), read when the filter is evaluated.
+   * `column IN (SELECT selected FROM [__mj].[view] WHERE where='value')`: the `selected` values of the rows of the table
+   * whose base view is `view` ({@link BaseViews}) with `where` equal to `value` (case-insensitively), read when the
+   * filter is evaluated.
    */
-  private subqueryClause(column: string, view: string, where: string, value: string): (row: Row) => boolean {
+  private subqueryClause(column: string, selected: string, view: string, where: string, value: string): (row: Row) => boolean {
     const entityName = Object.keys(GateTestStore.BaseViews).find((n) => GateTestStore.BaseViews[n] === view);
     if (entityName === undefined) throw new Error(`GateTestStore cannot evaluate a subquery over the view "${view}"`);
-    const ids = new Set((this.Tables[entityName] || []).filter((r) => String(r[where]).toLowerCase() === value.toLowerCase()).map((r) => String(r['ID']).toLowerCase()));
+    const ids = new Set((this.Tables[entityName] || []).filter((r) => String(r[where]).toLowerCase() === value.toLowerCase()).map((r) => String(r[selected]).toLowerCase()));
     return (row) => row[column] !== null && row[column] !== undefined && ids.has(String(row[column]).toLowerCase());
   }
 

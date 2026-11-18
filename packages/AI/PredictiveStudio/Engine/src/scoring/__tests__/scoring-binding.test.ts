@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { EntityInfo, UserInfo, type AuthorizationInfo, type BaseEntity, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 
-import { ScoringBindings, ViewAuthorizationNotLoadedError, type ScoringBindingInput, type ScoringBindingMode } from '../scoring-binding';
+import { BindingNotAuthorizedError, BindingWithdrawnError, ScoringBindings, ViewAuthorizationNotLoadedError, type ScoringBindingInput, type ScoringBindingMode } from '../scoring-binding';
 import type { IEntityFactory } from '../../training';
 import type { RegistryContext } from '../../registry/registry-context';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
@@ -30,7 +30,7 @@ class FakeBinding {
   public TargetColumnSource: string | null = null;
   public RetentionDays: number | null = null;
   public Mode: ScoringBindingMode = 'OnDemand';
-  public Status: MJMLModelScoringBindingEntity['Status'] = 'Withdrawn';
+  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
   public LatestResult: FakeSaveResult | null = null;
   public SaveCallCount = 0;
   public LoadedId: string | null = null;
@@ -102,7 +102,15 @@ describe('ScoringBindings.Upsert — create', () => {
 describe('ScoringBindings.Upsert — update', () => {
   it('loads the existing binding by id and keeps its status', async () => {
     const binding = (await ScoringBindings.Upsert(input({ bindingId: 'existing-7', recordProcessId: 'rp-2' }), new FakeEntityFactory(), USER)) as unknown as FakeBinding;
-    expect(binding).toMatchObject({ LoadedId: 'existing-7', RecordProcessID: 'rp-2', Status: 'Withdrawn', NewRecordCalled: false });
+    expect(binding).toMatchObject({ LoadedId: 'existing-7', RecordProcessID: 'rp-2', Status: 'Active', NewRecordCalled: false });
+  });
+
+  it('refuses to update a Withdrawn binding with a structured error, never reactivating it', async () => {
+    const factory = new FakeEntityFactory(() => Object.assign(new FakeBinding(), { Status: 'Withdrawn' as const, FeatureName: 'Renewal risk' }));
+    const update = ScoringBindings.Upsert(input({ bindingId: 'existing-7' }), factory, USER);
+    await expect(update).rejects.toBeInstanceOf(BindingWithdrawnError);
+    await expect(update).rejects.toMatchObject({ BindingID: 'existing-7', FeatureName: 'Renewal risk' });
+    expect(factory.Bindings[0]).toMatchObject({ Status: 'Withdrawn', SaveCallCount: 0 });
   });
 
   it('throws when the binding to update does not exist', async () => {
@@ -129,9 +137,12 @@ const membershipsInfo = new EntityInfo({
   ID: MEMBERSHIPS_ID, Name: 'Memberships', SchemaName: 'dbo', BaseTable: 'Membership', BaseView: 'vwMemberships',
   EntityFields: [
     { ID: 'F0000000-0000-4000-8000-0000000000D1', EntityID: MEMBERSHIPS_ID, Name: 'ID', Type: 'nvarchar', IsPrimaryKey: true, Sequence: 1 },
-    { ID: 'F0000000-0000-4000-8000-0000000000D2', EntityID: MEMBERSHIPS_ID, Name: 'RenewalProbability', Type: 'decimal', Sequence: 2 },
+    { ID: 'F0000000-0000-4000-8000-0000000000D2', EntityID: MEMBERSHIPS_ID, Name: 'RenewalProbability', Type: 'decimal', Precision: 5, Scale: 4, Sequence: 2 },
   ],
 });
+
+const VIEW_AUTH_ID = 'A0000000-0000-4000-8000-0000000000A9';
+const authorizationsInfo = new EntityInfo({ ID: 'E0000000-0000-4000-8000-0000000000A8', Name: 'MJ: Authorizations', SchemaName: '__mj', BaseTable: 'Authorization', BaseView: 'vwAuthorizations' });
 
 /** One Memberships record: its column values and the saves of the cleared ones. */
 class FakeMember {
@@ -173,6 +184,7 @@ class WithdrawProvider extends GateTestProvider {
     this.RunView = vi.fn().mockImplementation(async (params: RunViewParams, user?: UserInfo) => (params.EntityName === 'Memberships' ? target.View(params) : store.RunViewRows(params, user)));
   }
   public override EntityByName(entityName: string): EntityInfo | undefined {
+    if (entityName === 'MJ: Authorizations') return authorizationsInfo;
     return entityName === 'Memberships' ? membershipsInfo : super.EntityByName(entityName);
   }
 }
@@ -191,8 +203,10 @@ function withdrawWorld(): { readonly store: GateTestStore; readonly target: Fake
   const store = new GateTestStore();
   store.Insert('MJ: ML Model Scoring Bindings', {
     ID: BINDING_ID, MLTrainingPipelineID: 'pipe-1', FeatureName: 'Renewal risk', TargetEntityID: MEMBERSHIPS_ID, TargetEntity: 'Memberships',
-    TargetColumn: 'RenewalProbability', TargetColumnSource: '$.AdverseProbability', Status: 'Active', Mode: 'OnDemand',
+    TargetColumn: 'RenewalProbability', TargetColumnSource: '$.AdverseProbability', Status: 'Active', Mode: 'OnDemand', ViewAuthorizationID: VIEW_AUTH_ID,
   });
+  store.Insert('MJ: Authorizations', { ID: VIEW_AUTH_ID });
+  store.Insert('vwUserHeldAuthorizations', { UserID: USER.ID, AuthorizationID: VIEW_AUTH_ID });
   for (const row of [modelRow('r1', 0.31, '2026-10-01'), modelRow('r1', 0.7, '2026-11-01'), modelRow('r2', 0.55, '2026-11-01'), modelRow('r3', 0.61, '2026-11-01')]) {
     store.Insert('MJ: Feature Values', row);
   }
@@ -228,6 +242,26 @@ describe('ScoringBindings.Withdraw', () => {
     expect(await ScoringBindings.Withdraw(BINDING_ID, ctx)).toEqual({ Cleared: 0, KeptHuman: 0 });
     await expect(ScoringBindings.Withdraw('B0000000-0000-4000-8000-0000000000FF', ctx)).rejects.toThrow(/not found/);
     expect(store.Transactions).toEqual(['begin', 'commit', 'begin', 'rollback']);
+  });
+
+  it('refuses a caller who does not hold the binding\'s view authorization, before any Feature Value read, changing nothing', async () => {
+    const { store, target, ctx } = withdrawWorld();
+    const stranger = new UserInfo(null, { ID: 'A0000000-0000-4000-8000-0000000000D9', Email: 'stranger@example.com', Type: 'User', UserRoles: [] });
+    await expect(ScoringBindings.Withdraw(BINDING_ID, { ...ctx, ContextUser: stranger })).rejects.toBeInstanceOf(BindingNotAuthorizedError);
+    expect(store.Row('MJ: ML Model Scoring Bindings', BINDING_ID)?.['Status']).toBe('Active');
+    expect(target.Values()).toEqual({ r1: 0.7, r2: 0.55, r3: 0.42 });
+    expect(store.Reads.filter((r) => r.startsWith('view MJ: Feature Values'))).toEqual([]);
+    expect(store.Transactions).toEqual(['begin', 'rollback']);
+  });
+
+  it('a column copy rounds to the column\'s scale, so a copy into a decimal(3,2) column is recognised', () => {
+    const decimal32 = { Type: 'decimal', Scale: 2 };
+    expect(ScoringBindings.ColumnValue(0.7123, decimal32)).toBe(0.71);
+    expect(ScoringBindings.IsCopiedValue(0.71, ScoringBindings.ColumnValue(0.7123, decimal32))).toBe(true);
+    expect(ScoringBindings.IsCopiedValue(0.71, 0.7123)).toBe(false);
+    expect(ScoringBindings.ColumnValue(0.7123, { Type: 'float', Scale: 0 })).toBe(0.7123);
+    expect(ScoringBindings.ColumnValue(2.6, { Type: 'int', Scale: 0 })).toBe(3);
+    expect(ScoringBindings.ColumnValue('lapsed', decimal32)).toBe('lapsed');
   });
 
   it('reads a model row as the scored result its copy source resolves against', () => {

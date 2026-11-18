@@ -5,8 +5,10 @@
  * with PR 4's deltas (§5.2): `ScoringRefusal` gains the D-058 prediction-store refusals (`no-published-model`,
  * `binding-withdrawn`, `binding-not-authorized`, `as-of-unsupported`, `leakage-unknown`) and D4-45's
  * `artifact-unverified`, 14 kinds in all; `model-not-published` names the persisted status (D4-02, which adds
- * `KeepBaseline` and `Unevaluated`); a refused run's `ModelID` is null when the binding's pipeline has no Published
- * model (§5.1). A written `ScoredRow` is persisted as one `MJ: Feature Values` row (D-058, §5.8.1).
+ * `KeepBaseline` and `Unevaluated`); `model-flagged` may name the dominance re-run's feature (D4-61); a refused run's
+ * `ModelID` is null when the call is refused before a model is resolved (a caller without the binding's authorization, a
+ * withdrawn binding, a pipeline with no Published model; §5.1). A written `ScoredRow` is persisted as one
+ * `MJ: Feature Values` row (D-058, §5.8.1).
  *
  * Casing (D-054): the scope, the refusal and the scored-row shapes are stored in `MJ: ML Scoring Runs` / Feature Value
  * columns and keep the contract's camelCase; the request and the result never leave the process and are PascalCase.
@@ -50,8 +52,19 @@ export interface ScoringRequest {
 export type ScoringRefusal =
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'model-not-published'; readonly status: PersistedModelStatus }
-  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
-  | { readonly kind: 'model-flagged'; readonly flags: readonly LeakageFlag['kind'][] }
+  /**
+   * The model carries leakage flags, or (a pre-change model kept serving, D4-61) the dominance re-run over its stored
+   * feature importance flagged one feature: `dominance` then names it, its share and the threshold applied.
+   */
+  | {
+      readonly kind: 'model-flagged';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly flags: readonly LeakageFlag['kind'][];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly dominance?: {  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topFeature: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topShare: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly threshold: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      };
+    }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'artifact-missing'; readonly fileId: string }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
@@ -140,7 +153,7 @@ export type ScoringResult =
   | {
       readonly Status: 'refused';
       readonly ScoringRunID: string;
-      /** Null only when a binding's pipeline has no Published model (`no-published-model`). */
+      /** Null when the call was refused before a model was resolved: `binding-not-authorized`, `binding-withdrawn`, `no-published-model`. */
       readonly ModelID: string | null;
       readonly Reason: ScoringRefusal;
     }

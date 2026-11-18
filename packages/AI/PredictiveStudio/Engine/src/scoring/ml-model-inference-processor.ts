@@ -329,7 +329,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * Batch-score many records in one sidecar round-trip. The warm model is loaded
    * once; features for all rows are assembled together (transform-only), then a
    * single `/predict` carries every row. Returns one {@link RecordResult} per
-   * input record, positionally aligned. Useful for bulk / materialization paths;
+   * input record, positionally aligned. Useful for bulk scoring paths;
    * the per-record `WriteBackProcessor` wrapper still owns write-back when the
    * engine drives records individually.
    *
@@ -470,30 +470,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const artifactFileId = this.assertStatusCanScore(model);
     const load = await ArtifactRegistry.ForContext(context, this.deps.artifactLoader).Load(model, context);
     if (load.Status !== 'verified') {
-      await this.recordArtifactStatus(model, load);
+      await ArtifactRegistry.RecordArtifactStatus(model, load, 'MLModelInferenceProcessor');
       throw ArtifactUnavailableError.For(load, 'MLModelInferenceProcessor', model.ID, artifactFileId);
     }
     return this.buildLoadedModel(model, load.Bytes, context);
-  }
-
-  /**
-   * Records what an unserved load found on the model row (`ArtifactStatus`, `ArtifactCheckedAt`), so the registry shows
-   * why the model does not score. The save changes no lifecycle `Status`. A failed save is logged with its
-   * `CompleteMessage` and never masks the refusal the caller throws next.
-   */
-  private async recordArtifactStatus(model: MJMLModelEntity, load: ArtifactLoad): Promise<void> {
-    const status = ArtifactRegistry.ArtifactStatusOf(load);
-    model.ArtifactStatus = status;
-    model.ArtifactCheckedAt = new Date();
-    let failure: string | null;
-    try {
-      failure = (await model.Save()) ? null : model.LatestResult?.CompleteMessage || 'unknown error';
-    } catch (e) {
-      failure = e instanceof Error ? e.message : String(e);
-    }
-    if (failure !== null) {
-      LogError(`MLModelInferenceProcessor: recording ArtifactStatus '${status}' on ML Model '${model.ID}' failed: ${failure}`);
-    }
   }
 
   /**
@@ -527,6 +507,40 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
     return fileId;
+  }
+
+  /**
+   * Warm-loads a model the caller has already checked and whose artifact it has already verified: builds the frozen
+   * inference contract from the row and the verified bytes and keeps it as this run's model, so the assembly methods
+   * ({@link AssembleForScoring}, {@link AssembleTransformOnly}) read neither the row nor the artifact again. The scoring
+   * service calls it after its own status and artifact checks (which admit a model kept serving while Unevaluated).
+   *
+   * @param model the model row the caller checked; must be the model this processor was constructed for
+   * @param bytes the artifact bytes the caller verified against the model's registered SHA-256
+   * @param context the run's user and provider
+   * @throws Error when `model` is not this processor's model
+   */
+  public async PrimeVerifiedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    if (!UUIDsEqual(model.ID, this.modelId)) throw new Error(`MLModelInferenceProcessor: model '${model.ID}' is not this processor's model '${this.modelId}'`);
+    this.resetModelCache();
+    this.loadPromise = this.buildLoadedModel(model, bytes, context);
+    this.loadedModel = await this.loadPromise;
+    return this.loadedModel;
+  }
+
+  /**
+   * The transform-only (`'on-demand'`) assembly of a model trained without a Prediction Unit, over the model's frozen
+   * source bindings and feature steps: the route {@link ProcessBatch} takes for such a model. It reads no date (it
+   * assembles as of the lineage's `AsOfStrategy`), so it serves only the run date.
+   *
+   * @param rows the rows to score; each carries the target entity's primary key
+   * @param context the run's user and provider
+   * @throws Error when the model was trained on a Prediction Unit (assemble it with {@link AssembleForScoring})
+   */
+  public async AssembleTransformOnly(rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
+    const model = await this.ensureModel(context);
+    if (model.unit !== null) throw new Error(`MLModelInferenceProcessor: model '${model.modelId}' was trained on a Prediction Unit; assemble it as of a date`);
+    return this.assembleFeatures(model, rows, context);
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */

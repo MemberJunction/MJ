@@ -10,6 +10,7 @@
  * loader reads its bytes and the same hash check decides.
  */
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { ArtifactLoad, StoredFile } from '@memberjunction/predictive-studio-core';
 
@@ -83,6 +84,25 @@ export class ArtifactRegistry implements IArtifactRegistry {
    */
   public static ArtifactStatusOf(load: ArtifactLoad): MJMLModelEntity['ArtifactStatus'] {
     return load.Status;
+  }
+
+  /**
+   * Records what an unserved load found on the model row (`ArtifactStatus`, `ArtifactCheckedAt`), so the registry shows
+   * why the model does not score. The save changes no lifecycle `Status`. A failed save is logged with its
+   * `CompleteMessage` (prefixed by `caller`) and never masks the refusal the caller returns or throws next. Every
+   * scoring loader calls it for a non-verified load; the shadow challenger's load does not.
+   */
+  public static async RecordArtifactStatus(model: MJMLModelEntity, load: ArtifactLoad, caller: string): Promise<void> {
+    const status = ArtifactRegistry.ArtifactStatusOf(load);
+    model.ArtifactStatus = status;
+    model.ArtifactCheckedAt = new Date();
+    let failure: string | null;
+    try {
+      failure = (await model.Save()) ? null : model.LatestResult?.CompleteMessage || 'unknown error';
+    } catch (e) {
+      failure = e instanceof Error ? e.message : String(e);
+    }
+    if (failure !== null) LogError(`${caller}: recording ArtifactStatus '${status}' on ML Model '${model.ID}' failed: ${failure}`);
   }
 
   /**

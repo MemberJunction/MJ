@@ -11,6 +11,7 @@ import { JsonParse } from '@memberjunction/predictive-studio-core';
 import { ResourceTypeEngine, type MJMLModelEntity, type MJMLTrainingRunEntity, type MJResourceTypeEntity } from '@memberjunction/core-entities';
 
 import { PipelineAutoTrainer, type AutoTrainedRun } from '../auto-train';
+import { BindingWithdrawnError } from '../scoring-binding';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import { ArtifactRegistry } from '../../registry/artifact-registry';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
@@ -241,6 +242,14 @@ describe('PipelineAutoTrainer.EnsureTrainedModel through the automated publisher
       TargetColumn: 'RenewalScore', TargetColumnSource: '$.AdverseProbability', Status: 'Active',
     });
     expect(bindings[0]['MLModelID']).toBeUndefined();
+  });
+  it('a declared binding that was withdrawn is refused with a structured error, never reactivated', async () => {
+    const declared = { featureName: 'Renewal risk', viewAuthorizationId: 'auth-1' };
+    await trainer.EnsureTrainedModel({ ...request, binding: declared }, user, provider);
+    const [row] = store.Tables['MJ: ML Model Scoring Bindings'] || [];
+    row['Status'] = 'Withdrawn';
+    await expect(trainer.EnsureTrainedModel({ ...request, binding: declared }, user, provider)).rejects.toBeInstanceOf(BindingWithdrawnError);
+    expect((store.Tables['MJ: ML Model Scoring Bindings'] || []).map((b) => b['Status'])).toEqual(['Withdrawn']);
   });
   it('a demoted configured model is repointed to the pipeline\'s current published model without training', async () => {
     const current = store.AddModel(p.ID, { Status: 'Published', ArtifactStatus: 'verified' });

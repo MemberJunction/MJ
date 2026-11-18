@@ -11,7 +11,7 @@
  * database); {@link ScoringBindings.Withdraw} withdraws one and clears the column copies it made, in one transaction.
  */
 
-import { LogError, RunView, type BaseEntity, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, type BaseEntity, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, ResolveMappingRef } from '@memberjunction/global';
 import { JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
@@ -84,6 +84,35 @@ export class ViewAuthorizationNotLoadedError extends Error {
   }
 }
 
+/**
+ * Thrown when a binding creator would update a `Withdrawn` binding (a create of the same pipeline and feature on the
+ * same entity): a withdrawn binding no longer scores, so the creator must name a new feature. Typed so callers branch
+ * on `instanceof`, never on message text.
+ */
+export class BindingWithdrawnError extends Error {
+  constructor(public readonly BindingID: string, public readonly FeatureName: string) {
+    super(`the scoring binding "${FeatureName}" ('${BindingID}') is Withdrawn and no longer scores; create the binding under a new feature name`);
+    this.name = 'BindingWithdrawnError';
+  }
+}
+
+/**
+ * Thrown when the caller does not hold a binding's view authorization (`binding-not-authorized`, D4-60): a write or a
+ * withdrawal on its behalf would act on predictions it cannot see. Typed for `instanceof` branching.
+ */
+export class BindingNotAuthorizedError extends Error {
+  constructor(public readonly BindingID: string, public readonly UserID: string) {
+    super(`the caller '${UserID}' does not hold the view authorization of scoring binding '${BindingID}'`);
+    this.name = 'BindingNotAuthorizedError';
+  }
+}
+
+/** SQL Server numeric types whose stored scale is fixed: the copy rounds to it. */
+const SCALED_TYPES: ReadonlyMap<string, (f: Pick<EntityFieldInfo, 'Scale'>) => number> = new Map([
+  ['decimal', (f) => f.Scale], ['numeric', (f) => f.Scale], ['money', () => 4], ['smallmoney', () => 4],
+  ['int', () => 0], ['bigint', () => 0], ['smallint', () => 0], ['tinyint', () => 0],
+]);
+
 /** The largest number of IDs one `IN (…)` filter carries. */
 const IN_LIST_CHUNK = 500;
 /** The relative tolerance under which a column's number equals the copied one (a decimal column rounds it). */
@@ -97,12 +126,14 @@ export class ScoringBindings {
    * @param input the binding fields (create when `bindingId` is omitted, else update)
    * @param factory the entity-creation seam (production: `MetadataEntityFactory`)
    * @param contextUser request user — required server-side for isolation/audit
+   * @throws BindingWithdrawnError when the binding to update is `Withdrawn` (it is never reactivated silently)
    * @throws when the binding to update does not exist, or the `Save()` fails (its `CompleteMessage`)
    */
   public static async Upsert(input: ScoringBindingInput, factory: IEntityFactory, contextUser: UserInfo): Promise<MJMLModelScoringBindingEntity> {
     const binding = await factory.getEntityObject<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', contextUser);
     if (input.bindingId) {
       if (!(await binding.Load(input.bindingId))) throw new Error(`ScoringBindings.Upsert: scoring binding '${input.bindingId}' not found`);
+      if (binding.Status === 'Withdrawn') throw new BindingWithdrawnError(binding.ID, binding.FeatureName);
     } else {
       binding.NewRecord();
       binding.Status = 'Active';
@@ -136,12 +167,15 @@ export class ScoringBindings {
    * `TargetColumn` holds the value the binding's newest `Champion` `Model` row resolves to (through
    * `TargetColumnSource`) is saved with the column null (Record Changes keeps the history). A record with a `Human`
    * row of the binding's feature, or whose column holds another value, is kept. The binding's Feature Values stay.
+   * A caller who does not hold the binding's view authorization is refused before any Feature Value is read (D4-60).
    *
+   * @throws BindingNotAuthorizedError when the caller does not hold the binding's view authorization (nothing changes)
    * @throws when the binding does not exist, or a save fails (the transaction is rolled back)
    */
   public static async Withdraw(bindingId: string, ctx: RegistryContext): Promise<WithdrawOutcome> {
     return ProviderTransactions.Run(ctx, 'scoring binding withdrawal', async () => {
       const binding = await ScoringBindings.loadBinding(bindingId, ctx);
+      if (!(await ScoringBindings.CallerHoldsBinding(binding, ctx))) throw new BindingNotAuthorizedError(binding.ID, ctx.ContextUser.ID);
       binding.Status = 'Withdrawn';
       if (!(await binding.Save())) throw new Error(`ScoringBindings.Withdraw: saving binding '${bindingId}' as Withdrawn failed: ${binding.LatestResult?.CompleteMessage || 'unknown error'}`);
       return ScoringBindings.clearCopies(binding, ctx);
@@ -183,6 +217,42 @@ export class ScoringBindings {
     return String(current) === String(copied);
   }
 
+  /**
+   * True when the context user holds the binding's `ViewAuthorizationID`, by the view gate's own rule: one read of
+   * `MJ: Authorizations` filtered through `vwUserHeldAuthorizations` (MJ's authorization rule in SQL). A binding with no
+   * authorization is held by no one (fail closed), with no read.
+   *
+   * @throws when the provider does not describe `MJ: Authorizations`, or the read fails
+   */
+  public static async CallerHoldsBinding(binding: Pick<MJMLModelScoringBindingEntity, 'ID' | 'ViewAuthorizationID'>, ctx: RegistryContext): Promise<boolean> {
+    if (!binding.ViewAuthorizationID) return false;
+    const authorizations = ctx.Provider.EntityByName('MJ: Authorizations');
+    if (!authorizations) throw new Error('ScoringBindings: the provider does not describe MJ: Authorizations, so a binding\'s view authorization cannot be checked');
+    const held = `SELECT AuthorizationID FROM [${authorizations.SchemaName}].[vwUserHeldAuthorizations] WHERE UserID='${EscapeSQLString(ctx.ContextUser.ID)}'`;
+    const read = await StoredRowReads.Run<{ ID: string }>({
+      EntityName: 'MJ: Authorizations',
+      ExtraFilter: `ID='${EscapeSQLString(binding.ViewAuthorizationID)}' AND ID IN (${held})`, // pk-filter-ok: MJ: Authorizations is an MJ core entity keyed by ID
+      Fields: ['ID'],
+      ResultType: 'simple',
+      MaxRows: 1,
+    }, ctx);
+    if (!read.Success) throw new Error(`ScoringBindings: checking the view authorization of binding '${binding.ID}' failed: ${read.ErrorMessage}`);
+    return read.Results.length > 0;
+  }
+
+  /**
+   * The value a column copy stores for `value` in `field`: a number rounded to the column's fixed scale (`decimal` and
+   * `numeric` to their `Scale`, `money` to 4 places, the integer types to 0), as SQL Server stores it; any other value
+   * unchanged. So a copy and withdrawal's comparison see the value the column holds. Pure.
+   */
+  public static ColumnValue(value: unknown, field: Pick<EntityFieldInfo, 'Type' | 'Scale'> | undefined): unknown {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !field) return value;
+    const scale = SCALED_TYPES.get(field.Type.trim().toLowerCase());
+    if (scale === undefined) return value;
+    const factor = 10 ** scale(field);
+    return Math.round(value * factor) / factor;
+  }
+
   /** Copies the input's fields onto the binding (optional fields only when given). */
   private static applyInput(binding: MJMLModelScoringBindingEntity, input: ScoringBindingInput): void {
     binding.MLTrainingPipelineID = input.mlTrainingPipelineId;
@@ -211,6 +281,7 @@ export class ScoringBindings {
     const copied = await ScoringBindings.copiedValues(binding, source, ctx);
     if (copied.size === 0) return { Cleared: 0, KeptHuman: 0 };
     const entity = ScoringBindings.targetEntity(binding, ctx);
+    const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === column.trim().toLowerCase());
     const ids = [...copied.keys()];
     const human = await ScoringBindings.humanRecordIds(binding, ids, ctx);
     let cleared = 0;
@@ -219,7 +290,7 @@ export class ScoringBindings {
       const recordId = String(record.Get(entity.FirstPrimaryKey.Name)).toLowerCase(); // first-pk-ok: Feature Value RecordIDs are the bare single-column key
       const current = record.Get(column); // the column is named by the binding, so no generated property exists for it
       if (current === null || current === undefined) continue;
-      if (human.has(recordId) || !ScoringBindings.IsCopiedValue(current, copied.get(recordId))) {
+      if (human.has(recordId) || !ScoringBindings.IsCopiedValue(current, ScoringBindings.ColumnValue(copied.get(recordId), field))) {
         kept++;
         continue;
       }
@@ -243,19 +314,26 @@ export class ScoringBindings {
     for (const row of read.Results) {
       const key = row.RecordID.toLowerCase();
       const held = newest.get(key);
-      if (!held || ScoringBindings.isNewer(row, held)) newest.set(key, row);
+      if (!held || ScoringBindings.IsNewer(row, held)) newest.set(key, row);
     }
     return new Map([...newest].map(([key, row]) => [key, ScoringBindings.ResolveCopySource(source, ScoringBindings.ScoredValue(row))]));
   }
 
-  /** True when `a` is the newer row: a later `EffectiveAsOf`, then a later `ComputedAt`. */
-  private static isNewer(a: ModelRowColumns, b: ModelRowColumns): boolean {
-    const asOf = ScoringBindings.time(a.EffectiveAsOf) - ScoringBindings.time(b.EffectiveAsOf);
-    return asOf !== 0 ? asOf > 0 : ScoringBindings.time(a.ComputedAt) > ScoringBindings.time(b.ComputedAt);
+  /** The newest of `rows` by {@link IsNewer}; null for none. Pure. */
+  public static Newest<T extends Pick<MJFeatureValueEntity, 'EffectiveAsOf' | 'ComputedAt'>>(rows: readonly T[]): T | null {
+    let newest: T | null = null;
+    for (const row of rows) if (newest === null || ScoringBindings.IsNewer(row, newest)) newest = row;
+    return newest;
   }
 
-  /** Milliseconds of a stored instant (a simple read may hand back text); 0 for none. */
-  private static time(value: Date | string | null): number {
+  /** True when `a` is the newer row: a later `EffectiveAsOf`, then a later `ComputedAt`. Pure. */
+  public static IsNewer(a: Pick<MJFeatureValueEntity, 'EffectiveAsOf' | 'ComputedAt'>, b: Pick<MJFeatureValueEntity, 'EffectiveAsOf' | 'ComputedAt'>): boolean {
+    const asOf = ScoringBindings.Time(a.EffectiveAsOf) - ScoringBindings.Time(b.EffectiveAsOf);
+    return asOf !== 0 ? asOf > 0 : ScoringBindings.Time(a.ComputedAt) > ScoringBindings.Time(b.ComputedAt);
+  }
+
+  /** Milliseconds of a stored instant (a simple read may hand back text); 0 for none. Pure. */
+  public static Time(value: Date | string | null): number {
     return value === null ? 0 : new Date(value).getTime();
   }
 

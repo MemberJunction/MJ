@@ -90,7 +90,7 @@ class FakeScoringBinding {
   public TargetEntityID: string | null = null;
   public TargetColumn: string | null = null;
   public TargetColumnSource: string | null = null;
-  public Status: MJMLModelScoringBindingEntity['Status'] = 'Withdrawn';
+  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
   public Mode: ScoringBindingMode = 'OnDemand';
   public LoadedId: string | null = null;
   public SaveCalled = false;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 
-import type { ScoringBindingMode } from '../scoring-binding';
+import { BindingWithdrawnError, type ScoringBindingMode } from '../scoring-binding';
 import {
   CreateScoringProcess,
   type CreateScoringProcessOptions,
@@ -92,7 +92,7 @@ class FakeScoringBinding {
   public TargetEntityID: string | null = null;
   public TargetColumn: string | null = null;
   public TargetColumnSource: string | null = null;
-  public Status: MJMLModelScoringBindingEntity['Status'] = 'Withdrawn';
+  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
   public Mode: ScoringBindingMode = 'Scheduled';
   public LoadedId: string | null = null;
   public SaveCalled = false;
@@ -293,6 +293,15 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
     const { opts, binding } = setup({}, true, undefined, true, undefined, [{ ID: 'existing-binding', MLTrainingPipelineID: 'PIPE-1' }]);
     await CreateScoringProcess(opts);
     expect(binding.LoadedId).toBe('existing-binding');
+  });
+
+  it('refuses an existing Withdrawn binding of the feature with a structured error instead of reporting success on it', async () => {
+    const errors = ConsoleCapture.Errors();
+    const { opts, binding } = setup({}, true, undefined, true, undefined, [{ ID: 'existing-binding', MLTrainingPipelineID: 'PIPE-1' }]);
+    binding.Status = 'Withdrawn';
+    await expect(CreateScoringProcess(opts)).rejects.toBeInstanceOf(BindingWithdrawnError);
+    expect([binding.Status, binding.SaveCalled]).toEqual(['Withdrawn', false]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("createScoringProcess: Record Process 'rp-1' saved but its scoring binding failed for model 'model-1'")]);
   });
 
   it('refuses when no view authorization is given and none is seeded', async () => {
