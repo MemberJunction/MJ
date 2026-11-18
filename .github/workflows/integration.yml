@@ -2,7 +2,8 @@ name: Integration Tier
 
 # Deterministic integration tier — the check bundles in the private
 # @memberjunction/integration-test-suite package, dispatched by `mj test suite`
-# ("Integration Tests — Deterministic") against a fresh SQL Server, on every PR that
+# ("Integration Tests — Deterministic") against a fresh SQL Server — and, in parallel, a fresh
+# PostgreSQL (`integration-postgres`, a known-failures ratchet) — on every PR that
 # touches server code or the integration metadata. Single entry path: the per-bundle tsx
 # dispatchers and run-all.ts were removed in the July-2026 restructure.
 #
@@ -854,6 +855,185 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # ── Deterministic tier on PostgreSQL ────────────────────────────────────────────────
+  # The same suite, the same 4-shard layout, against a PostgreSQL database built only from
+  # migrations-pg and the two metadata pushes. SQL Server stays the hard gate; this lane catches
+  # what SQL Server cannot see: T-SQL in a check, a PG twin that lost metadata, a provider that
+  # behaves differently (a COMMIT PostgreSQL silently turned into ROLLBACK was found this way).
+  #
+  # RATCHET, not a zero-failure gate. PostgreSQL starts with a backlog, recorded with a reason
+  # per check in .github/integration-known-failures/postgresql.json. The job fails on a check
+  # that fails and is NOT on that list (a regression), and on a listed check that now passes, so
+  # the list is shortened in the pull request that fixed it. When the list is empty, delete it
+  # and gate on zero failures like the SQL Server job.
+  #
+  # No snapshot cache: migrate + both pushes take ~2 minutes on PostgreSQL.
+  integration-postgres:
+    name: Integration (PostgreSQL, deterministic)
+    needs: [preflight]
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_PLATFORM: postgresql
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_DATABASE: test
+      DB_USERNAME: postgres
+      DB_PASSWORD: testpass
+      PG_HOST: localhost
+      PG_PORT: '5432'
+      PG_DATABASE: test
+      PG_USERNAME: postgres
+      PG_PASSWORD: testpass
+      CODEGEN_DB_USERNAME: postgres
+      CODEGEN_DB_PASSWORD: testpass
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: testpass
+      # Same reason as the SQL Server job: the smallest local embedding model, read by MJAPI and `mj`.
+      MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build integration graph + CLI + MJAPI
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+
+      # The group roles migration GRANTs reference, and the extensions the installer creates.
+      - name: Provision roles and extensions
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          SQL
+
+      - name: Migrate — apply migrations-pg
+        run: node packages/MJCLI/bin/run.js migrate
+
+      - name: Sync push — reconcile committed metadata
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      - name: Sync push — seed the optional integration metadata + RLS fixtures
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      - name: Verify RLS integration fixtures were seeded
+        run: |
+          COUNT=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"User\" WHERE \"Email\" LIKE '%@integration.test'")
+          echo "Seeded @integration.test fixture users: ${COUNT}/3"
+          if [ "${COUNT:-0}" -lt 3 ]; then
+            echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users)." >&2
+            exit 1
+          fi
+
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
+
+      # PostgreSQL copies a database from a template, so the worker databases cost seconds.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          for n in 1 2 3; do
+            psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE test_s${n} TEMPLATE test"
+          done
+
+      - name: Boot MJAPI (client-transport members)
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+          MJ_REST_API_ENABLED: 'true'
+          MJ_ARTIFACT_GUEST_SHARING_ENABLED: 'true'
+        run: |
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/pg-mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/pg-mjapi.log 36 5 "$!"
+
+      # Same shards as the SQL Server job. A shard's exit code is not the verdict here: the
+      # known-failures check below is. A shard that crashes leaves no JSON, which fails that check.
+      - name: Run integration tier (mj test)
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
+          RUN_AGENT_TESTS: '0'
+        run: |
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          run_shard() {
+            local name="$1" db="$2"
+            shift 2
+            local rc=0 start_ts=$(date +%s)
+            DB_DATABASE="${db}" PG_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "/tmp/pg-shard-${name}.json" "$@" > "/tmp/pg-shard-${name}.log" 2>&1 || rc=$?
+            echo "[shard:${name}] exit=${rc} in $(( $(date +%s) - start_ts ))s"
+          }
+          # The client shard waits for MJAPI's first-run scheduled jobs, as on SQL Server (#6361).
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"ScheduledJob\" j WHERE j.\"Status\" = 'Active' AND j.\"RunImmediatelyIfNeverRun\" = TRUE AND NOT EXISTS (SELECT 1 FROM __mj.\"ScheduledJobRun\" r WHERE r.\"ScheduledJobID\" = j.\"ID\" AND r.\"CompletedAt\" IS NOT NULL)" | tr -d '[:space:]') || true
+              if [ "${pending}" = "0" ]; then echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."; return 0; fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+          run_shard server-1 test_s1 --transport=server --shard=1/3 & P1=$!
+          run_shard server-2 test_s2 --transport=server --shard=2/3 & P2=$!
+          run_shard server-3 test_s3 --transport=server --shard=3/3 & P3=$!
+          { wait_for_first_run_jobs; run_shard client test --transport=client; } & P4=$!
+          wait "$P1" "$P2" "$P3" "$P4"
+          for SHARD in server-1 server-2 server-3 client; do
+            echo "::group::Shard ${SHARD}"
+            cat "/tmp/pg-shard-${SHARD}.log" || true
+            echo "::endgroup::"
+          done
+
+      - name: Compare with the known PostgreSQL failures
+        run: node .github/scripts/check-integration-known-failures.mjs .github/integration-known-failures/postgresql.json /tmp/pg-shard-server-1.json /tmp/pg-shard-server-2.json /tmp/pg-shard-server-3.json /tmp/pg-shard-client.json
+
+      - name: MJAPI log on failure
+        if: failure()
+        run: tail -300 /tmp/pg-mjapi.log || true
+
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
   # agents, carry-forward, payload guards, skills, plan mode, compaction e2e, memory guards,
@@ -1670,7 +1850,7 @@ jobs:
   # .github/scripts/backstop-alarm.mjs.
   backstop-alarm:
     name: Backstop alarm
-    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
+    needs: [changes, preflight, integration-sqlserver, integration-postgres, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
     if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 5
