@@ -174,6 +174,18 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   public override GetDescriptor(): RealtimeChannelDescriptor {
     const verbs: RealtimeChannelVerb[] = [
       {
+        Name: 'get_state',
+        Description:
+          'Read-only peek at currently open workspace artifacts, active tab, current view mode, and active slide/selection state.',
+        ParametersSchema: {
+          type: 'object',
+          properties: {
+            artifactId: { type: 'string', description: 'Optional specific Artifact ID to inspect.' },
+          },
+        },
+        InvokableBy: 'agent',
+      },
+      {
         Name: 'focus',
         Description: 'Brings an already-open workspace artifact tab into the foreground.',
         ParametersSchema: {
@@ -759,6 +771,30 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     instanceId?: string,
   ): Promise<RealtimeChannelVerbResult> {
     const normalized = verb.trim().toLowerCase();
+    if (normalized === 'get_state' || normalized === 'peek') {
+      const requestedArtifactId =
+        typeof args['artifactId'] === 'string' ? args['artifactId'].trim() : '';
+      const state = this.GetState();
+      if (requestedArtifactId) {
+        const artifacts = (state['artifacts'] ?? {}) as JSONObject;
+        const match =
+          Object.entries(artifacts).find(
+            ([, entry]) =>
+              entry &&
+              typeof entry === 'object' &&
+              !Array.isArray(entry) &&
+              (entry as JSONObject)['artifactId'] === requestedArtifactId,
+          ) ?? null;
+        return {
+          Success: true,
+          Result: {
+            ...state,
+            requestedArtifact: match ? { instanceId: match[0], ...(match[1] as JSONObject) } : null,
+          },
+        };
+      }
+      return { Success: true, Result: state };
+    }
     const record = this.resolveTargetRecord(args, instanceId);
     if (!record) {
       return failure('unknown_instance', 'No matching workspace artifact tab is open.');
