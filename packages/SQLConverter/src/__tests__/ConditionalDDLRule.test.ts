@@ -587,3 +587,16 @@ END`;
     });
   });
 });
+
+// Issue #3166: `IF EXISTS (… sys.indexes …) DROP INDEX` was skipped without a trace.
+describe('ConditionalDDLRule — guarded DROP INDEX (issue #3166)', () => {
+  it('converts the guarded drop to DROP INDEX IF EXISTS', () => {
+    const sql = "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Foo' AND object_id = OBJECT_ID('[__mj].[Foo]'))\nBEGIN\n  DROP INDEX [IX_Foo] ON [__mj].[Foo];\nEND";
+    expect(convert(sql).trim()).toBe('DROP INDEX IF EXISTS __mj."IX_Foo";');
+  });
+
+  it('converts every drop in a multi-statement body', () => {
+    const sql = "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_A')\nBEGIN\n  DROP INDEX [IX_A] ON [__mj].[Foo];\n  DROP INDEX [IX_B] ON [__mj].[Foo];\nEND";
+    expect(convert(sql).trim()).toBe('DROP INDEX IF EXISTS __mj."IX_A";\nDROP INDEX IF EXISTS __mj."IX_B";');
+  });
+});
