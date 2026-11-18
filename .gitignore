@@ -105,6 +105,8 @@ Thumbs.db
 # workspace and creates .env FROM this .env.example. Without the negation the file exists only on
 # the machine that authored it — every clean checkout (and CI) scaffolds a workspace with no .env.
 !packages/MJCLI/src/init-templates/citizen-builder/.env.example
+# Template for the gitignored docker/regression/.env.test (QUICKSTART step 2 copies it).
+!docker/regression/.env.test.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
