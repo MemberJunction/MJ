@@ -1,0 +1,288 @@
+/**
+ * Gemini Live blocking tool-call batches (#6753). A BLOCKING Gemini answers only once it has every result
+ * of a `toolCall` frame, while the first result marks the client busy for the reply. These tests pin
+ * the wire order, using one ordered log across tool responses, client content and realtime text:
+ * - every result of a batch goes out, in order;
+ * - context notes and narrations still wait for the reply (typed text barges in, as before);
+ * - an open client turn is committed once, after the batch's LAST result;
+ * - the tool-batch barrier's timeout releases queued results and a held commit;
+ * - a no-output backstop releases the turn when the model never answers.
+ *
+ * Controls that must NOT move: a single call, NON_BLOCKING tooling, and the `interactionStatus` idle profile.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Blob as GeminiBlob, Content, FunctionResponse, LiveServerMessage } from '@google/genai';
+import { JSONObject } from '@memberjunction/ai';
+import { FakeGeminiSession, FakeMediaStream, FakeTrack, GeminiTestClient, makeGeminiConfig } from './helpers/realtime-fakes';
+import { GeminiRealtimeClient } from '../drivers/geminiRealtimeClient';
+
+/** A fake session that also keeps ONE ordered log of everything sent, so tests can assert interleaving. */
+class OrderedGeminiSession extends FakeGeminiSession {
+    public Wire: string[] = [];
+
+    public override sendRealtimeInput(params: { audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }): void {
+        if (params.text !== undefined) {
+            this.Wire.push(`text:${params.text}`);
+        }
+        super.sendRealtimeInput(params);
+    }
+    public override sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
+        const text = params.turns?.[0]?.parts?.[0]?.text;
+        this.Wire.push(text !== undefined ? `note:${text}` : 'commit');
+        super.sendClientContent(params);
+    }
+    public override sendToolResponse(params: { functionResponses: FunctionResponse[] }): void {
+        for (const response of params.functionResponses) {
+            this.Wire.push(`tool:${response.id}`);
+        }
+        super.sendToolResponse(params);
+    }
+}
+
+const BLOCKING: JSONObject = { model: 'gemini-3.8-live', config: {}, idleSignal: 'turnComplete', supportsScheduling: true, supportsBlocking: true };
+const NON_BLOCKING: JSONObject = { model: 'gemini-3.8-live', config: {}, idleSignal: 'turnComplete', supportsScheduling: true, supportsBlocking: false };
+const BLOCKING_INTERACTION_STATUS: JSONObject = { model: 'gemini-3.8-live', config: {}, idleSignal: 'interactionStatus', supportsScheduling: true, supportsBlocking: true };
+
+const BARRIER_MS = 15000;
+const BACKSTOP_MS = GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS;
+
+async function connect(sessionConfig: JSONObject): Promise<{ client: GeminiTestClient; session: OrderedGeminiSession }> {
+    const client = new GeminiTestClient();
+    const session = new OrderedGeminiSession();
+    client.Fake = session;
+    await client.Connect(makeGeminiConfig(sessionConfig), new FakeMediaStream([new FakeTrack()]));
+    return { client, session };
+}
+
+function toolCall(client: GeminiTestClient, ...ids: string[]): void {
+    client.Emit({ toolCall: { functionCalls: ids.map((id) => ({ id, name: `tool_${id}`, args: {} })) } } as LiveServerMessage);
+}
+
+function modelSpeaks(client: GeminiTestClient, text = 'Here is the answer.'): void {
+    client.Emit({ serverContent: { outputTranscription: { text } } } as LiveServerMessage);
+}
+
+function turnComplete(client: GeminiTestClient): void {
+    client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+}
+
+describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    describe('blocking, turnComplete idle signal', () => {
+        it('sends every result of a 3-call batch, in order, without waiting for a turnComplete', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b', 'c');
+
+            client.SendToolResult('a', '{"ok":1}');
+            client.SendToolResult('b', '{"ok":2}');
+            client.SendToolResult('c', '{"ok":3}');
+
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
+            // The reply is next: the client stays busy for it.
+            expect(client.IsBusy).toBe(true);
+        });
+
+        it('keeps the host order when results come back out of call order', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b', 'c');
+
+            client.SendToolResult('c', '{}');
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:c', 'tool:a', 'tool:b']);
+        });
+
+        it('a context note sent mid-batch waits until after the reply', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b', 'c');
+
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('board settled');
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('c', '{}');
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
+
+            modelSpeaks(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c', 'note:board settled']);
+        });
+
+        it('a narration requested mid-batch waits until after the reply', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+
+            client.SendToolResult('a', '{}');
+            client.RequestSpokenUpdate('say you are still working');
+            client.SendToolResult('b', '{}');
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+
+            modelSpeaks(client);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'text:say you are still working']);
+        });
+
+        it('typed text mid-batch barges in as before, and the batch still gets its last result', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+
+            client.SendToolResult('a', '{}');
+            client.SendText('and another thing');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:a', 'text:and another thing', 'tool:b']);
+        });
+
+        it('commits an open client turn ONCE, after the last result of the batch', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('learner opened lesson 2');
+            toolCall(client, 'a', 'b', 'c');
+
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            expect(session.Wire).toEqual(['note:learner opened lesson 2', 'tool:a', 'tool:b']);
+
+            client.SendToolResult('c', '{}');
+            expect(session.Wire).toEqual(['note:learner opened lesson 2', 'tool:a', 'tool:b', 'tool:c', 'commit']);
+        });
+
+        it('a second toolCall frame while results are owed joins the batch', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a');
+            toolCall(client, 'b');
+
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+        });
+
+        it('results queued behind a typed turn go out, in order, when the barrier times out', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            // A user turn takes the floor before any result: the results wait for it, as before.
+            client.SendText('wait, one more thing');
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            expect(session.Wire).toEqual(['text:wait, one more thing']);
+
+            vi.advanceTimersByTime(BARRIER_MS);
+
+            expect(session.Wire).toEqual(['text:wait, one more thing', 'tool:a', 'tool:b']);
+        });
+
+        it('a result that arrives after the barrier expired the batch still goes out at once', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+
+            vi.advanceTimersByTime(BARRIER_MS);
+            client.SendToolResult('b', '{"slow":true}');
+
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+        });
+
+        it('sends a held commit when the barrier gives up on a call that is never answered', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('context');
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+            expect(session.Wire).toEqual(['note:context', 'tool:a']);
+
+            vi.advanceTimersByTime(BARRIER_MS);
+
+            expect(session.Wire).toEqual(['note:context', 'tool:a', 'commit']);
+        });
+
+        it('the backstop releases the turn and drains when the model never answers', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a');
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('queued behind the reply');
+            expect(client.IsBusy).toBe(true);
+
+            vi.advanceTimersByTime(BACKSTOP_MS - 1);
+            expect(session.Wire).toEqual(['tool:a']);
+
+            vi.advanceTimersByTime(1);
+            expect(client.IsBusy).toBe(false);
+            expect(session.Wire).toEqual(['tool:a', 'note:queued behind the reply']);
+        });
+
+        it('the backstop does not fire once the model answers', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            client.SendContextNote('after the reply');
+
+            modelSpeaks(client);
+            vi.advanceTimersByTime(BACKSTOP_MS * 3);
+
+            expect(client.IsBusy).toBe(true);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'note:after the reply']);
+        });
+
+        it('a single call is unchanged: result, then the reply, then queued sends', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('before');
+            toolCall(client, 'a');
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('after');
+            expect(session.Wire).toEqual(['note:before', 'tool:a', 'commit']);
+
+            modelSpeaks(client);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['note:before', 'tool:a', 'commit', 'note:after']);
+        });
+
+        it('Disconnect clears the backstop', async () => {
+            const { client } = await connect(BLOCKING);
+            toolCall(client, 'a');
+            client.SendToolResult('a', '{}');
+            expect(vi.getTimerCount()).toBeGreaterThan(0);
+            await client.Disconnect();
+
+            expect(vi.getTimerCount()).toBe(0);
+        });
+    });
+
+    describe('controls that must not move', () => {
+        it('NON_BLOCKING: results go out while the model talks, notes wait, and no backstop is armed', async () => {
+            const { client, session } = await connect(NON_BLOCKING);
+            const timersAtStart = vi.getTimerCount();
+            modelSpeaks(client, 'thinking out loud');
+            toolCall(client, 'a', 'b');
+
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('note');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+            expect(vi.getTimerCount()).toBe(timersAtStart);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'note:note']);
+        });
+
+        it('interactionStatus idle profile: the second result still waits for the turn', async () => {
+            const { client, session } = await connect(BLOCKING_INTERACTION_STATUS);
+            toolCall(client, 'a', 'b');
+
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+
+            expect(session.Wire).toEqual(['tool:a']);
+            client.Emit({ interactionStatus: 'IDLE' } as unknown as LiveServerMessage);
+            expect(session.Wire).toEqual(['tool:a', 'tool:b']);
+        });
+    });
+});
