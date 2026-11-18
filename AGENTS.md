@@ -175,9 +175,9 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 
 ### Skills — discovered via `.agents/skills.json` + `.agents/skills/`
 
-Harnesses without `skills.json` support (such as Codex) should read `.claude/skills/<name>/SKILL.md` directly when invoked.
+Harnesses without `skills.json` support (such as Codex) should read `.claude/skills/<name>/SKILL.md` directly when a task matches one.
 
-`debug-build-failures` (build/Turbo/deps), `playwright-cli` (browser automation), `scaffold-mj-dashboard` (Explorer dashboard), `bootstrap-clean-db` (private DB), `mj-field-security` (FLS checklist), `analyze-diagnostic-bundle` (`.mjdiag` analysis), `author-regression-test` (UI change → new test), `regression-replay-pr` (suite run → replay PR), `source-command-design-ux` (6-phase UX workflow).
+`debug-build-failures` (package fails to build / Turbo / circular deps), `playwright-cli` (browser automation + MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (build an isolated DB from scratch on a private name), `mj-field-security` (field-level security audit/checklist), `analyze-diagnostic-bundle` (`.mjdiag` root-cause analysis), `author-regression-test` (UI change → new browser regression test), `regression-replay-pr` (run Docker regression suite → replay PR), `source-command-design-ux` (6-phase design-driven UX workflow).
 
 ### Project-wide standards
 
