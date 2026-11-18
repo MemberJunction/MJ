@@ -1,6 +1,6 @@
 # MJ Docs ↔ Semantic Graph & Canon
 
-**Status:** Plan, not started. Branch `claude/serene-ramanujan-7d0chq`.
+**Status:** Built on branch `claude/serene-ramanujan-7d0chq` (A and B in `8ab6baf74`, C in `82c704ae4`, D in `7c66ed6f9`). §10 records what was built and where it departs from this plan; §9's decisions were taken as recommended.
 **Inspired by:** Tolaria (`refactoringhq/tolaria`, AGPL-3.0: we borrow ideas only, never code).
 **Companion guides:** [`guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md`](../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md),
 [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md),
@@ -184,3 +184,49 @@ B must land before C turns on, so no derived node is ever unprotected.
    private. Recommended: yes, since approval is publication.
 3. Link syntax `[[Name]]` resolves by name within the viewer's Library, with an ID form
    (`[[mj:<Entity>/<ID>|label]]`) written by the editor once autocomplete exists.
+
+## 10. As built
+
+What landed, and every place it differs from §3–§6. The guides
+([Canon & Semantic Graphs §7](../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md#7-mj-docs-in-the-graph),
+[Docs, Slides, Sheets §13](../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md#13-docs-in-the-semantic-graph))
+describe the result for readers who never saw this plan.
+
+**Workstream C**
+
+| Plan item | Built | Difference |
+|---|---|---|
+| C1 text ingest | `ContentUploadIngestor.IngestText` / `RemoveText`, one item per record at `record://<entity>/<id>` | Changed text removes the old item and creates a new one instead of updating chunks in place, so the Delete stage retracts stale graph evidence. Unchanged text (same sha256) is a no-op. |
+| C2 seeds | Content source "MJ Docs", content type "MJ Docs", graph "Library Knowledge" (Knowledge, OnDemand), entity document "Artifacts Content", edge types `LinksTo` and `SharesConceptWith` | As planned. Tagging still uses the ManagedPrompt classifier and is skipped without an AI key; concept synthesis is the deterministic synthesizer, so the graph path needs no key. |
+| C3 trigger | `ArtifactGraphIndexer` listens to `BaseEntity` save/delete events for artifacts and versions, debounced per artifact, indexing the latest version as the system user | Listens to events instead of overriding `MJArtifactVersionEntityServer.Save()`, so nothing runs inside the save. Which artifact types are indexed is `Configuration.Artifacts.ArtifactTypes` on any push-only content source, not code. |
+| C4 declared links | `[[Name]]` becomes a `LinksTo` row in `MJ: Record Links`, reconciled on every save; the graph's `RecordLinkEdgeProvider` projects it | Stored as Record Links, not as `Origin = 'Declared'` graph edges, so the link exists without a graph and follows the Record Link permission model. Links resolve to artifacts only, by name in the same environment, preferring the author's own artifact on a tie. Entity-record and concept links, the ID form and typed frontmatter relations are **not built**. |
+| C5 shared concepts | `SharedConceptEdgeProvider`, derived on read as the viewer, weight `min(1, 0.45 + 0.15 × shared)` | As planned. |
+| C6 authority from frontmatter | **Not built.** | Docs take the content source's tier (or none). |
+| C7 `Graph.PromoteConceptToCanon` | **Not built.** | Stewards can still copy concepts through the existing graph explorer. |
+| (new) retraction | Deleting a content item or chunk retracts the `Inferred` edges the Graph stage wrote for it, inside a pipeline retraction scope that `MJGraphEdgeEntityServer` honours for `Inferred` edges only, and deletes a synthesized concept left with no source unless it is `Approved` in a Canon graph, has children or carries a `Declared` edge | Not in the plan; needed so a deleted or edited doc leaves nothing behind. |
+| (new) `GraphConcept.Origin` | `Declared` / `Inferred`, backfilled `Inferred` where a `SourcedFrom` edge exists | Lets provenance tell an authored concept from a synthesized one. |
+
+**Workstream B, provenance policy:** stricter than §4. A synthesized concept is fully visible only when
+the viewer can read **all** of its sources, redacted when they can read some, and hidden when they can
+read none or when every source has been retracted. An `Approved` concept in a Canon graph stays visible
+regardless (decision §9.2). The separate `Contradicts` edge policy was dropped: the default rule
+"both endpoints visible" already hides a contradiction whose chunks the viewer cannot read.
+
+**Workstream D**
+
+| Plan item | Built | Difference |
+|---|---|---|
+| Related panel + backlinks | Artifact viewer "Related" tab (`<mj-artifact-related-panel>`): Links to, Linked from, Related by concepts. Data from `LoadRecordRelations` in core-entities, which any surface or agent tool can call | Shown only when an active graph has a Record Link or Shared Concept provider. Loads on first open of the tab. |
+| Inline Canon checks | **Not built.** | The seeded source has `DetectContradictions: false`. |
+| Library inbox and graph view | **Not built.** | |
+| Agent tool | **Not built as a new tool.** | The existing "Get Graph Context" action already serves `Subgraph` + `DescribeForPrompt` under the same policies. |
+
+**Verification:** IT179 (`docs-semantic-graph`, checks DSG1–DSG6) passes against a private database
+built from migrations: indexing, chunk and concept creation, link reconciliation, artifact-ACL
+agreement for items and chunks, retraction and teardown leaving no rows behind.
+
+**Known loose ends**
+- `RecordLinkEdgeProvider` defaults its link type to `'Related To'` while the seeded edge type is
+  `RelatedTo`; the seeded "Document Links" provider sets `LinkTypes` explicitly, so it is unaffected.
+- `IsCanonGraph` still falls back to the graph type's name when `IsCanon` is not loaded.
+

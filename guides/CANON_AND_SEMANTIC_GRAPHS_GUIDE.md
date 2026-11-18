@@ -237,3 +237,69 @@ for (const report of healthReports) {
   - [`packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts`](../packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts) — `Dormant`, `UsageDecay` vs. seasonal domain slowdown (`DomainAdjustedVelocityRatio`), `ExceptionSpike` + `HotspotNodes`, `OutcomeDrift`, and `ShadowBypassed` correlation.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
   - [`packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts) (`IT162`, checks `SG1`–`SG7`) — Verifies live metadata coherence, polymorphic `EntityIDFieldName` links, physical SQL catalog constraints, `RunView` execution across all 8 Semantic Graph views (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`), live DB CRUD + CHECK constraint rejection (`RequiresMutation: true`), end-to-end `GraphStage` execution with live `Provider.Entities`, and deterministic DAG similarity & workflow health telemetry.
+
+---
+
+## 7. MJ Docs in the Graph
+
+MJ Docs (`Markdown Document` artifacts) join a graph as they are saved. Nothing in code names the
+artifact type or the graph; both come from metadata, and the plan with its design record is
+[`plans/docs-semantic-graph.md`](../plans/docs-semantic-graph.md).
+
+### The path
+
+1. **Indexing.** `ArtifactGraphIndexer` (`@memberjunction/content-pipeline`, started by
+   `ContentPipelineStartup`) listens to artifact and artifact-version saves and deletes. For every
+   push-only Content Source whose `Configuration.Artifacts.ArtifactTypes` names the artifact's type, it
+   pushes the latest version's text with `ContentUploadIngestor.IngestText`: one Content Item per
+   artifact at `record://MJ: Artifacts/<id>`, debounced per artifact (`DebounceMs`). Unchanged text is a
+   no-op; changed text replaces the item; a deleted or emptied artifact is removed.
+2. **Pipeline.** The item runs Segment, Tag, Embed and Graph like any other item. The Graph stage
+   writes concepts with `Origin = 'Inferred'` and `SourcedFrom` / `Mentions` edges.
+3. **Links.** `[[Name]]` in a doc becomes a `LinksTo` row in `MJ: Record Links` to the artifact of that
+   name (same environment; the author's own artifact wins a tie), reconciled on every save. A graph's
+   `RecordLinkEdgeProvider` with `LinkTypes: ["LinksTo"]` projects it.
+4. **Relatedness.** `SharedConceptEdgeProvider` relates two records that were sources of the same
+   concept (`SharesConceptWith`). It is derived on read as the viewer and stores nothing; the edge's
+   `Attributes.SharedConceptIDs` explain it.
+5. **Retraction.** Deleting an item or chunk deletes the `Inferred` edges the Graph stage wrote for it,
+   inside the pipeline retraction scope that `MJGraphEdgeEntityServer` accepts for `Inferred` edges
+   only. A synthesized concept left with no source is deleted unless it is `Approved` in a Canon graph,
+   has children, or carries a `Declared` edge.
+
+### Seeded
+
+| Record | Name |
+|---|---|
+| Content Source | "MJ Docs" (Upload, MD, `MJ: Artifacts`, `Artifacts.ArtifactTypes: ["Markdown Document"]`, deterministic synthesizer, `DetectContradictions: false`) |
+| Content Type | "MJ Docs" |
+| Entity Document | "Artifacts Content" (`templates/mj-artifacts-content.njk`) |
+| Graph | "Library Knowledge" (Knowledge, OnDemand), providers "Document Links" and "Shared Concepts" |
+| Edge Types | `LinksTo`, `SharesConceptWith` (not stored) |
+
+To index another artifact type, add it to `ArtifactTypes`, or seed a second push-only source with its
+own graph. To turn indexing off without deleting the source, set `Artifacts.Enabled: false`.
+
+### Who sees what
+
+Every node and edge goes through the graph's per-viewer checks. The provenance policy covers the
+derived nodes: a content item or chunk is visible exactly when the viewer can read the artifact behind
+it (the artifact read hooks decide, so there is no second copy of the sharing rules). A synthesized
+concept is visible when the viewer can read all of its sources, redacted when only some, hidden when
+none or when every source was retracted. An `Approved` concept in a Canon graph is visible to anyone who
+can read the concept: approval is publication.
+
+### Reading relations
+
+`LoadRecordRelations(engine, record, user, options)` in `@memberjunction/core-entities` returns
+`{ Links, Backlinks, Related }` for one record as one viewer, from every active graph with a Record Link
+or Shared Concept provider (`RelationGraphNames`). The artifact viewer's Related tab renders it; any
+other surface or agent tool can call it the same way.
+
+### Tests
+
+- IT179 `docs-semantic-graph` (DSG1–DSG6): indexing, links, artifact-ACL agreement, retraction and
+  clean teardown against a live database.
+- Unit: `ArtifactGraphIndexer.test.ts`, `GraphEvidenceRetractor.test.ts`, `ContentUploadIngestor.test.ts`
+  (content-pipeline engine), `SharedConceptEdgeProvider.test.ts`, `RecordRelations.test.ts`,
+  `GraphAccessPolicy.test.ts` (core-entities), `artifact-related-panel.test.ts` (ng-artifacts).
