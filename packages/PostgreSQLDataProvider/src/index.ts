@@ -4,3 +4,11 @@ export { MJPostgresTypes, ParseInt8, parseInt8, ParseNumeric, parseNumeric, PG_I
 export { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 export { PostgreSQLProviderConfigData, PostgreSQLProviderConfigOptions } from './types.js';
 export { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
+export {
+    PgSslMode, PgSslSettings, PgSslConfig, PG_SSL_MODES, IsLocalPgHost, DefaultPgSslMode, ParsePgSslMode,
+    ResolvePgSslMode, BuildPgSslConfig, PgSslVerifiesServer, DescribePgSsl
+} from './pgSsl.js';
+export {
+    PgAuthMode, PgCredentialRequest, BasePgCredentialProvider, CachingPgCredentialProvider, StaticPasswordProvider,
+    PgCredentialProviders, ResolvePgAuthMode, BuildPgPasswordSource
+} from './pgCredentials.js';

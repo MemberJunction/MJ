@@ -23,7 +23,7 @@
  * created a fresh pool on every `setupDataSource()` call.
  */
 import pg from 'pg';
-import { PGConnectionManager, type PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
+import { BuildPgPasswordSource, BuildPgSslConfig, PGConnectionManager, ResolvePgAuthMode, type PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
 import { configInfo } from './config.js';
 
 /**
@@ -45,11 +45,18 @@ import { configInfo } from './config.js';
 function buildPgConfig(): PGConnectionConfig {
   const pool = configInfo.codegenPool;
 
-  // SSL: default to false (preserves the pre-refactor inline `pg.Pool` behavior
-  // where no `ssl` key was set → pg default OFF). Without this explicit `false`,
-  // `PGConnectionManager.Initialize()` would default SSL ON in `NODE_ENV=production`,
-  // breaking codegen against non-SSL/locally-bridged Postgres in production shells.
-  const ssl = pool?.ssl ?? false;
+  // SSL: an explicit `codegenPool.ssl` wins. Otherwise the shared PG_SSL_* rules apply, as for every
+  // other MJ PostgreSQL client: plain TCP for a local or bare service-name host, verify-full for a
+  // remote one. (The old default was always-off, which sent CodeGen's credentials in clear to a remote
+  // server.) Set PG_SSL_MODE=disable to connect to a remote server without TLS.
+  const ssl = pool?.ssl ?? BuildPgSslConfig(configInfo.dbHost);
+  // Token logins (PG_AUTH_MODE=azure-entra / aws-rds-iam) fetch a fresh token per connection.
+  const passwordSource = BuildPgPasswordSource(ResolvePgAuthMode(), {
+    Host: configInfo.dbHost,
+    Port: configInfo.dbPort,
+    User: configInfo.codeGenLogin,
+    Database: configInfo.dbDatabase,
+  });
 
   // statement_timeout via libpq startup option — applied server-side from
   // connection #1, including the verify-SELECT-1 connection.
@@ -62,6 +69,7 @@ function buildPgConfig(): PGConnectionConfig {
     Database: configInfo.dbDatabase,
     User: configInfo.codeGenLogin,
     Password: configInfo.codeGenPassword,
+    ...(passwordSource ? { PasswordSource: passwordSource } : {}),
     MJCoreSchemaName: configInfo.mjCoreSchema,
     MaxConnections: pool?.max,
     MinConnections: pool?.min,

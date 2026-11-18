@@ -3568,6 +3568,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.0
         version: link:../../../../MJGlobal
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.3.0-edge.0
+        version: link:../../../../PostgreSQLDataProvider
       dotenv:
         specifier: ^17.2.4
         version: 17.2.4
@@ -12920,6 +12923,9 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.3.0-edge.0
         version: link:../OpenApp/Engine
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.3.0-edge.0
+        version: link:../PostgreSQLDataProvider
       '@memberjunction/query-gen':
         specifier: 6.3.0-edge.0
         version: link:../QueryGen

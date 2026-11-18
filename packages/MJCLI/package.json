@@ -62,6 +62,7 @@
     "@memberjunction/core": "6.3.0-edge.0",
     "@memberjunction/diagnostics": "6.3.0-edge.0",
     "@memberjunction/generic-database-provider": "6.3.0-edge.0",
+    "@memberjunction/postgresql-dataprovider": "6.3.0-edge.0",
     "@memberjunction/installer": "6.3.0-edge.0",
     "@memberjunction/dynamic-packages": "6.3.0-edge.0",
     "@memberjunction/db-auto-doc": "6.3.0-edge.0",

@@ -1,3 +1,4 @@
+import { BuildPgSslConfig } from '@memberjunction/postgresql-dataprovider';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRequestParams,
@@ -94,7 +95,10 @@ export class PgVectorDatabase extends VectorDBBase {
                 database: this._config.Database,
                 user: this._config.User,
                 password: this._config.Password,
-                ssl: this._config.SSL ? { rejectUnauthorized: false } : undefined,
+                // The shared PG_SSL_* rules. PG_VECTOR_SSL=true used to mean "TLS without checking the
+                // certificate"; it now asks for a verified connection (PG_SSL_MODE=require restores the old
+                // behavior). Unset, the host decides: plain TCP locally, verify-full for a remote host.
+                ssl: BuildPgSslConfig(this._config.Host, this._config.SSL ? { Mode: 'verify-full' } : undefined),
             });
         }
         return this._pool;
