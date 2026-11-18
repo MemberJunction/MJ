@@ -212,13 +212,16 @@ describe('RealtimeSessionRuntime — offering delegated artifacts to channels', 
         await runtime.EndRealtimeSession();
     });
 
-    it('hands artifacts to a channel that is already open without remounting it', async () => {
+    it('hands artifacts to a channel that is already open without remounting it, and still reveals its tab', async () => {
         const runtime = await startWith(policy({ autoOpen: true }, 'open-on-start'), toolResult([ARTIFACT]));
         expect(ArtifactHostChannel.Instance?.Initialized).toBe(true);
+        const activity: string[] = [];
+        runtime.ChannelActivity$.subscribe((c) => activity.push(c.ChannelName));
         const before = runtime.ActiveChannels.length;
         await delegate();
         expect(runtime.ActiveChannels).toHaveLength(before);
         expect(ArtifactHostChannel.Instance?.Received).toHaveLength(1);
+        expect(activity).toContain('ArtifactHost');
         await runtime.EndRealtimeSession();
     });
 

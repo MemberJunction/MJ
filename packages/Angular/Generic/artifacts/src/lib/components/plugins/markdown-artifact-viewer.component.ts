@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -22,6 +22,7 @@ import {
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
+  QueryEngine,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
@@ -84,6 +85,7 @@ import {
   type DocsLiveRecordLinkContext,
   type DocsTableAlignment,
 } from './context-menus/docs-context-menu.helper';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 export type DocsEditingStyle = 'simple' | 'blocks';
@@ -113,9 +115,7 @@ export type DocsToolbarItemKey =
   | 'ask-ai';
 
 export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
-  'outline',
   'format',
-  'insert-block',
   'comments',
 ];
 
@@ -387,19 +387,19 @@ interface DocsInlineToken {
           @if (IsAiAssistantEnabled && CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
             <button
               type="button"
-              class="mj-docs-btn mj-docs-btn--accent"
+              class="mj-docs-btn mj-docs-btn--ai"
               title="Open slide-in AI Assistant for this document (/ai)"
               data-testid="docs-ask-ai-quick-btn"
               (mousedown)="OnToolbarActionMousedown($event)"
               (click)="OpenAskAiAssistant()"
             >
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>Ask AI</span>
+              <span>AI</span>
             </button>
           }
-          <!-- Compact Collaboration Presence Pill -->
+          <!-- Compact Collaboration Presence Indicator (full status on hover) -->
           <div
-            class="mj-docs-presence-pill"
+            class="mj-docs-presence-pill mj-docs-presence-pill--compact"
             [class.mj-docs-presence-pill--connected]="CollaborationStatus === 'connected'"
             [class.mj-docs-presence-pill--readonly]="
               CollaborationStatus === 'readonly' || CollaborationStatus === 'revoked'
@@ -410,7 +410,6 @@ interface DocsInlineToken {
             data-testid="collaboration-presence-pill"
           >
             <span class="mj-docs-presence-dot"></span>
-            <span>{{ GetCompactCollaborationStatusLabel() }}</span>
             @if (CollaborationStatus === 'error') {
               <button
                 type="button"
@@ -461,8 +460,10 @@ interface DocsInlineToken {
               (click)="ExecuteToolbarItem(item, false, $event)"
             >
               <i class="fa-solid" [ngClass]="item.Icon"></i>
-              <span>{{ item.Label }}</span>
-              @if (item.Badge != null) {
+              @if (item.Key !== 'comments') {
+                <span>{{ item.Label }}</span>
+              }
+              @if (item.Badge != null && (typeof item.Badge !== 'number' || item.Badge > 0)) {
                 <span class="mj-docs-badge" [class.mj-docs-badge--brand]="item.Active">{{ item.Badge }}</span>
               }
             </button>
@@ -475,14 +476,29 @@ interface DocsInlineToken {
               [class.mj-docs-btn--primary]="HasUnsavedChanges"
               [class.mj-docs-btn--saved-quiet]="!HasUnsavedChanges"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Save Document Version' : 'All changes saved'"
+              [title]="HasUnsavedChanges ? 'Save Document Version' : 'All changes synced — no unsaved changes'"
               data-testid="save-doc-version-btn"
               (click)="OnSaveDocumentVersion()"
             >
-              <i class="fa-solid" [ngClass]="HasUnsavedChanges ? 'fa-cloud-arrow-up' : 'fa-check'"></i>
+              @if (HasUnsavedChanges) {
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              } @else {
+                <span class="mj-docs-saved-dot" aria-hidden="true"></span>
+              }
               <span>{{ IsSavingVersion ? 'Saving…' : HasUnsavedChanges ? 'Save Version' : 'Saved' }}</span>
             </button>
           }
+
+          <button
+            type="button"
+            class="mj-docs-btn mj-docs-cmdk-btn"
+            title="Search all document commands, blocks, suggest mode, diff & export (Cmd/Ctrl+K)"
+            data-testid="docs-cmdk-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenCommandPalette()"
+          >
+            <span class="mj-docs-kbd-tag">⌘K</span>
+          </button>
 
           <!-- Progressive Disclosure Tools & View Menu (...) with per-action Thumbtack Pinning -->
           <div class="mj-docs-more-menu-wrap" #moreMenuWrap>
@@ -633,9 +649,30 @@ interface DocsInlineToken {
           >
             <i class="fa-solid fa-circle-info"></i> Callout
           </button>
+          <span class="mj-docs-ribbon-sep"></span>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Chart (/sheet-chart)"
+            data-testid="fmt-sheet-chart-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-chart')"
+          >
+            <i class="fa-solid fa-chart-column"></i> Sheet Chart
+          </button>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Range (/sheet-range)"
+            data-testid="fmt-sheet-range-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-range')"
+          >
+            <i class="fa-solid fa-table-cells"></i> Sheet Range
+          </button>
           <span class="mj-docs-ribbon-hint">
-            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>, or
-            <strong>Whiteboard</strong>
+            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>,
+            <strong>Sheet Chart/Range</strong>, or <strong>Whiteboard</strong>
           </span>
           <button
             type="button"
@@ -848,7 +885,9 @@ interface DocsInlineToken {
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
-              <span class="mj-docs-outline-stats">{{ WordStats.Words }} words · {{ WordStats.Lines }} lines</span>
+              <span class="mj-docs-outline-stats" data-testid="docs-outline-stats">
+                {{ WordStats.Words }} words · {{ EstimatedReadingMinutes }} min read · {{ WordStats.Lines }} lines
+              </span>
             </div>
 
             @if (OutlineItems.length === 0) {
@@ -969,6 +1008,42 @@ interface DocsInlineToken {
               [class.mj-docs-page--simple]="IsSimpleNoteMode"
               [class.mj-docs-page--blocks]="!IsSimpleNoteMode"
             >
+              @if (FrontmatterHeader; as fm) {
+                <header
+                  class="mj-docs-frontmatter-hero"
+                  [style.--mj-docs-fm-accent]="fm.Accent || null"
+                  data-testid="docs-frontmatter-hero"
+                >
+                  @if (fm.Category) {
+                    <span class="mj-docs-fm-category">{{ fm.Category }}</span>
+                  }
+                  @if (fm.Title) {
+                    <h1 class="mj-docs-fm-title">{{ fm.Title }}</h1>
+                  }
+                  @if (fm.Subtitle) {
+                    <p class="mj-docs-fm-subtitle">{{ fm.Subtitle }}</p>
+                  }
+                  <div class="mj-docs-fm-meta">
+                    @if (fm.Author) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-user"></i> {{ fm.Author }}
+                      </span>
+                    }
+                    @if (fm.Date) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-calendar"></i> {{ fm.Date }}
+                      </span>
+                    }
+                    <span class="mj-docs-fm-meta-item">
+                      <i class="fa-regular fa-clock"></i> {{ EstimatedReadingMinutes }} min read
+                    </span>
+                    @for (tag of fm.Tags; track tag) {
+                      <span class="mj-docs-fm-tag">#{{ tag }}</span>
+                    }
+                  </div>
+                </header>
+              }
+
               @if (ViewMode === 'suggest' && CanUserEdit) {
                 <div class="mj-docs-suggest-banner" data-testid="docs-suggest-mode-banner">
                   <i class="fa-solid fa-code-pull-request"></i>
@@ -2536,7 +2611,8 @@ interface DocsInlineToken {
                   <span>Target Artifact ID</span>
                   <input
                     type="text"
-                    [(ngModel)]="NewBlockArtifactID"
+                    [ngModel]="NewBlockArtifactID"
+                    (ngModelChange)="OnNewBlockArtifactIdChanged($event)"
                     placeholder="Artifact UUID"
                     data-testid="new-block-artifact-id-input"
                   />
@@ -2859,6 +2935,15 @@ interface DocsInlineToken {
         (ItemSelected)="OnDocsContextMenuCommand($event)"
         (Closed)="CloseDocsContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Document Commands"
+        Placeholder="Search outline, blocks, suggest mode, diff, export..."
+        [Commands]="DocsCommandPaletteItems"
+        (Execute)="ExecuteDocsPaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2877,19 +2962,26 @@ interface DocsInlineToken {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 8px 12px;
-        background: var(--mj-bg-surface-card);
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-docs-toolbar::-webkit-scrollbar {
+        display: none;
       }
 
       .mj-docs-toolbar__left,
       .mj-docs-toolbar__right {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
       }
 
       .mj-docs-mode-group,
@@ -2955,6 +3047,35 @@ interface DocsInlineToken {
         background: transparent;
         border-color: transparent;
         color: var(--mj-text-muted);
+      }
+
+      .mj-docs-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+
+      .mj-docs-btn--ai {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+
+      .mj-docs-cmdk-btn {
+        padding: 4px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+
+      .mj-docs-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-presence-pill--compact {
+        padding: 4px 7px;
       }
 
       .mj-docs-btn--saved-quiet:hover:not(:disabled) {
@@ -3394,6 +3515,58 @@ interface DocsInlineToken {
         border: 1px solid var(--mj-border-default);
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      .mj-docs-frontmatter-hero {
+        border-left: 4px solid var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        background: var(--mj-bg-surface-card);
+        border-radius: 0 10px 10px 0;
+        border-top: 1px solid var(--mj-border-subtle);
+        border-right: 1px solid var(--mj-border-subtle);
+        border-bottom: 1px solid var(--mj-border-subtle);
+      }
+      .mj-docs-fm-category {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        margin-bottom: 4px;
+      }
+      .mj-docs-fm-title {
+        margin: 0 0 6px;
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--mj-text-primary);
+      }
+      .mj-docs-fm-subtitle {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: var(--mj-text-secondary);
+      }
+      .mj-docs-fm-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-fm-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .mj-docs-fm-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
       }
 
       .mj-docs-suggest-banner {
@@ -5169,7 +5342,8 @@ export class MarkdownArtifactViewerComponent
   public ShowFormattingRibbon = false;
   public ShowMoreToolsMenu = false;
   public FormattingRibbonPinned = false;
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
+  public ShowCommandPalette = false;
   public readonly ToolbarMenuCategories: ReadonlyArray<{
     Key: ResolvedDocsToolbarItem['Category'];
     Title: string;
@@ -5217,6 +5391,11 @@ export class MarkdownArtifactViewerComponent
   public DocumentSegments: DocumentRenderSegment[] = [];
   public OutlineItems: DocumentOutlineItem[] = [];
   public WordStats = { Words: 0, Characters: 0, Lines: 0, LiveBlocks: 0, EmbeddedArtifacts: 0 };
+  public FrontmatterHeader: DocumentFrontmatterHeader | null = null;
+
+  public get EstimatedReadingMinutes(): number {
+    return Math.max(1, Math.ceil((this.WordStats.Words || 0) / 200));
+  }
 
   // Real-time Yjs session state
   private session: DocumentCollaborationSession | null = null;
@@ -9999,6 +10178,7 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      this.syncDirtySegmentsFromDomIntoBlocks(blocks);
       const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
       const trimmedSnippet = trimTrailingNewlines(snippet);
       if (trimmedSnippet.trim().length === 0) {
@@ -10038,6 +10218,21 @@ export class MarkdownArtifactViewerComponent
     if (this.DocumentSegments.length > 0) {
       const lastSeg = this.DocumentSegments[this.DocumentSegments.length - 1];
       this.FocusEditableSegment(lastSeg.SegmentID, 'end');
+    }
+  }
+
+  /**
+   * Opens the interactive block-insert dialog preselected to a known slash command
+   * (used by direct formatting-ribbon actions such as Sheet Chart and Sheet Range).
+   */
+  public OpenSlashBlockInsert(commandName: '/sheet-chart' | '/sheet-range'): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.ActiveSlashTargetSegmentID = null;
+    const cmd = this.collabService.GetSlashCommands().find((c) => c.Command === commandName);
+    if (cmd) {
+      this.ExecuteSlashCommand(cmd);
     }
   }
 
@@ -10364,6 +10559,17 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public OnNewBlockArtifactIdChanged(value: string): void {
+    this.NewBlockArtifactID = value;
+    const trimmed = value.trim();
+    if (IsValidUUID(trimmed) && this.IsSpreadsheetArtifactPickerSelected) {
+      void this.loadSelectedWorkbookSheets(trimmed);
+    } else if (!trimmed) {
+      this.SelectedWorkbookSheets = [];
+      this.SelectedArtifactLatestVersionID = '';
+    }
+  }
+
   public SelectArtifactOption(artOpt: DocsArtifactPickerOption): void {
     this.NewBlockArtifactID = artOpt.ID;
     this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
@@ -10558,7 +10764,8 @@ export class MarkdownArtifactViewerComponent
     if (!md) {
       return [];
     }
-    const queries: QueryInfo[] = md.Queries ?? [];
+    // The QueryEngine bound to this viewer's provider; it loads at client startup.
+    const queries = (QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine).Queries ?? [];
     if (queries.length === 0) {
       return [];
     }
@@ -10756,11 +10963,21 @@ export class MarkdownArtifactViewerComponent
           if (this.NewBlockSheetMode !== 'full' && this.NewBlockSheetName.trim()) {
             descriptor.SheetID = this.NewBlockSheetName.trim();
           }
-          if (this.NewBlockSheetMode === 'chart' && this.NewBlockSheetChartID.trim()) {
-            descriptor.SheetChartID = this.NewBlockSheetChartID.trim();
+          if (this.NewBlockSheetMode === 'chart') {
+            const chartId = this.NewBlockSheetChartID.trim();
+            if (!chartId) {
+              this.notifyError('Select a Spreadsheet Chart (or switch embed mode to Cell Range / Entire Workbook).');
+              return;
+            }
+            descriptor.SheetChartID = chartId;
             descriptor.SheetRange = undefined;
-          } else if (this.NewBlockSheetMode === 'range' && this.NewBlockSheetRange.trim()) {
-            descriptor.SheetRange = this.NewBlockSheetRange.trim();
+          } else if (this.NewBlockSheetMode === 'range') {
+            const sheetRange = this.NewBlockSheetRange.trim();
+            if (!sheetRange) {
+              this.notifyError('Enter a Spreadsheet cell range (for example, A1:D8) to embed.');
+              return;
+            }
+            descriptor.SheetRange = sheetRange;
             descriptor.SheetChartID = undefined;
           } else {
             descriptor.SheetChartID = undefined;
@@ -14266,6 +14483,7 @@ export class MarkdownArtifactViewerComponent
     this.reconcileSuggestionsAndAnchorsAcrossSegments(previousSegments, nextSegments);
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
+    this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
     for (const seg of this.DocumentSegments) {
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
         if (this.isGuestSnapshotMode) {
@@ -15331,7 +15549,83 @@ export class MarkdownArtifactViewerComponent
     );
   }
 
+  public OpenCommandPalette(): void {
+    this.CloseMoreToolsMenu();
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get DocsCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'mode:preview',
+        Label: 'Switch to Read Mode',
+        Category: 'Mode',
+        Icon: 'fa-eye',
+        Active: this.ViewMode === 'preview',
+      },
+      {
+        Id: 'mode:edit',
+        Label: 'Switch to Write Mode',
+        Category: 'Mode',
+        Icon: 'fa-pen-to-square',
+        Active: this.ViewMode === 'edit',
+        Disabled: !this.CanUserEdit,
+      },
+    ];
+    for (const item of this.ResolvedToolbarItems) {
+      if (item.Visible) {
+        items.push({
+          Id: `tb:${item.Key}`,
+          Label: item.MenuLabel,
+          Category: item.Category,
+          Icon: item.Icon,
+          Description: item.Description,
+          Active: item.Active,
+        });
+      }
+    }
+    if (this.CanUserEdit) {
+      items.push({
+        Id: 'import',
+        Label: 'Import .docx or .md...',
+        Category: 'File',
+        Icon: 'fa-file-import',
+      });
+    }
+    return items;
+  }
+
+  public ExecuteDocsPaletteCommand(commandId: string): void {
+    if (commandId === 'mode:preview') {
+      this.SetViewMode('preview');
+      return;
+    }
+    if (commandId === 'mode:edit') {
+      this.SetViewMode('edit');
+      return;
+    }
+    if (commandId === 'import') {
+      this.TriggerFileImport();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as DocsToolbarItemKey;
+      const found = this.ResolvedToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+    }
+  }
+
   public OnDocsWorkspaceKeydown(event: KeyboardEvent): void {
+    const isMod = event.metaKey || event.ctrlKey;
+    if (isMod && !event.altKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.OpenCommandPalette();
+      return;
+    }
     if (!IsKeyboardContextMenuShortcut(event) || IsNativeContextMenuTarget(event.target)) {
       return;
     }
@@ -16347,4 +16641,80 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = successMessage;
     this.cdr.markForCheck();
   }
+}
+
+/**
+ * Optional metadata extracted from YAML frontmatter (`--- ... ---`) at the top of a Markdown document.
+ */
+export interface DocumentFrontmatterHeader {
+  Title?: string;
+  Subtitle?: string;
+  Author?: string;
+  Date?: string;
+  Category?: string;
+  Tags: string[];
+  Accent?: string;
+}
+
+/**
+ * Parses leading YAML frontmatter metadata into a cover header strip, returning `null` if no valid
+ * frontmatter metadata keys are present.
+ */
+export function ParseMarkdownFrontmatterHeader(markdown: string): DocumentFrontmatterHeader | null {
+  const normalized = (markdown ?? '').replace(/\r\n/g, '\n');
+  const match = /^---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const block = match[1];
+  const header: DocumentFrontmatterHeader = { Tags: [] };
+  let hasField = false;
+  for (const rawLine of block.split('\n')) {
+    const kv = /^([a-zA-Z_-]+)\s*:\s*(.+)$/.exec(rawLine.trim());
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    const rawVal = kv[2].trim().replace(/^['"]|['"]$/g, '');
+    if (!rawVal) continue;
+    switch (key) {
+      case 'title':
+        header.Title = rawVal;
+        hasField = true;
+        break;
+      case 'subtitle':
+      case 'description':
+        header.Subtitle = rawVal;
+        hasField = true;
+        break;
+      case 'author':
+        header.Author = rawVal;
+        hasField = true;
+        break;
+      case 'date':
+        header.Date = rawVal;
+        hasField = true;
+        break;
+      case 'category':
+      case 'section':
+        header.Category = rawVal;
+        hasField = true;
+        break;
+      case 'tags': {
+        const cleaned = rawVal.replace(/^\[|\]$/g, '');
+        header.Tags = cleaned
+          .split(',')
+          .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean);
+        if (header.Tags.length > 0) hasField = true;
+        break;
+      }
+      case 'accent': {
+        if (/^#[0-9a-f]{3,8}$/i.test(rawVal)) {
+          header.Accent = rawVal;
+          hasField = true;
+        }
+        break;
+      }
+    }
+  }
+  return hasField ? header : null;
 }

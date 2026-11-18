@@ -50,6 +50,12 @@ export interface DeduplicationResult {
    * runtime) from real same-file or real-sequence collisions.
    */
   collisions: Array<{ first: SequenceEntry; duplicate: SequenceEntry }>;
+  /**
+   * Collisions left unchanged because neither side is in `writableFiles`: both files are
+   * committed history, which this run must not edit (issue #3166). Empty when no
+   * `writableFiles` set is given.
+   */
+  committedCollisions: Array<{ first: SequenceEntry; duplicate: SequenceEntry }>;
 }
 
 export interface SequenceEntry {
@@ -71,10 +77,16 @@ export interface SequenceEntry {
  *
  * @param migrationsDir - Directory containing .pg.sql files (e.g., migrations-pg/v5)
  * @param dryRun - If true, detect collisions but don't modify files
+ * @param writableFiles - File names (no directory) this caller may edit, normally the files a
+ *   convert run just wrote. A collision is fixed in its later file when that one is writable,
+ *   else in its earlier file when that one is; a collision between two files outside the set
+ *   is left alone and listed in `committedCollisions`, because a committed migration may
+ *   already be applied and must never change (issue #3166). Omitted: every file is writable.
  */
 export function DeduplicateEntityFieldSequences(
   migrationsDir: string,
-  dryRun: boolean = false
+  dryRun: boolean = false,
+  writableFiles?: ReadonlySet<string>
 ): DeduplicationResult {
   const files = readdirSync(migrationsDir)
     .filter(f => f.endsWith('.pg.sql') || f.endsWith('.pg-only.sql'))
@@ -111,6 +123,7 @@ export function DeduplicateEntityFieldSequences(
       totalCollisions: 0,
       fixes: [],
       collisions: [],
+      committedCollisions: [],
     };
   }
 
@@ -126,25 +139,44 @@ export function DeduplicateEntityFieldSequences(
   // Group fixes by file so we can apply them in a single pass per file
   const fixesByFile = new Map<string, Array<{ entry: SequenceEntry; newSequence: number }>>();
 
-  for (const { duplicate } of collisions) {
-    const eid = duplicate.entityId.toLowerCase();
-    const current = maxSeqPerEntity.get(eid) ?? duplicate.sequence;
+  const committedCollisions: Array<{ first: SequenceEntry; duplicate: SequenceEntry }> = [];
+  const isWritable = (file: string): boolean => !writableFiles || writableFiles.has(file);
+
+  // An earlier entry can collide with several later ones. Once it is renumbered it must not be
+  // rewritten again, and the later entries now collide with each other instead: the first of
+  // them takes over the value (`successor`), and the rest are collisions with it.
+  const successor = new Map<SequenceEntry, SequenceEntry>();
+
+  for (const collision of collisions) {
+    const target = pickFixTarget(collision, isWritable);
+    if (!target) {
+      committedCollisions.push(collision);
+      continue;
+    }
+    const heir = successor.get(target);
+    if (heir) {
+      committedCollisions.push({ first: heir, duplicate: collision.duplicate });
+      continue;
+    }
+    if (target === collision.first) successor.set(target, collision.duplicate);
+    const eid = target.entityId.toLowerCase();
+    const current = maxSeqPerEntity.get(eid) ?? target.sequence;
     const newSeq = current + 1;
     maxSeqPerEntity.set(eid, newSeq);
 
     // Also register the new sequence in `seen` to avoid cascading collisions
-    seen.set(`${eid}|${newSeq}`, { ...duplicate, sequence: newSeq });
+    seen.set(`${eid}|${newSeq}`, { ...target, sequence: newSeq });
 
     fixes.push({
-      file: duplicate.file,
-      entityId: duplicate.entityId,
-      originalSequence: duplicate.sequence,
+      file: target.file,
+      entityId: target.entityId,
+      originalSequence: target.sequence,
       newSequence: newSeq,
-      line: duplicate.line,
+      line: target.line,
     });
 
-    if (!fixesByFile.has(duplicate.file)) fixesByFile.set(duplicate.file, []);
-    fixesByFile.get(duplicate.file)!.push({ entry: duplicate, newSequence: newSeq });
+    if (!fixesByFile.has(target.file)) fixesByFile.set(target.file, []);
+    fixesByFile.get(target.file)!.push({ entry: target, newSequence: newSeq });
   }
 
   // Phase 4: Apply fixes — rewrite files
@@ -177,15 +209,30 @@ export function DeduplicateEntityFieldSequences(
     totalCollisions: collisions.length,
     fixes,
     collisions,
+    committedCollisions,
   };
+}
+
+/**
+ * The side of a collision to renumber: the later entry, unless only the earlier one may be
+ * edited. Null when neither may.
+ */
+function pickFixTarget(
+  collision: { first: SequenceEntry; duplicate: SequenceEntry },
+  isWritable: (file: string) => boolean
+): SequenceEntry | null {
+  if (isWritable(collision.duplicate.file)) return collision.duplicate;
+  if (isWritable(collision.first.file)) return collision.first;
+  return null;
 }
 
 /** @deprecated Use {@link DeduplicateEntityFieldSequences}. */
 export function deduplicateEntityFieldSequences(
   migrationsDir: string,
-  dryRun: boolean = false
+  dryRun: boolean = false,
+  writableFiles?: ReadonlySet<string>
 ): DeduplicationResult {
-  return DeduplicateEntityFieldSequences(migrationsDir, dryRun);
+  return DeduplicateEntityFieldSequences(migrationsDir, dryRun, writableFiles);
 }
 
 /**

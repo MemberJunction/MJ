@@ -50,4 +50,16 @@ describe('decision calibrations seeded on the AI models', () => {
         const decision = records.find(r => r.fields.Name === 'Jev')?.fields.ModelConfiguration?.Decision;
         expect(decision).toMatchObject({ MaxChoiceOptions: 255, MaxScoreLevels: 10, MaxStateTokens: 32000 });
     });
+
+    it('Edge cross-encoder ms-marco-MiniLM-L-6-v2 (Local) carries the Wave 6C edge-agent-discovery fit', () => {
+        expect(calibrationsOf('.edge-discovery-models.json', 'ms-marco-MiniLM-L-6-v2 (Local)')).toEqual([
+            {
+                Use: 'edge-agent-discovery',
+                Question: 'matches',
+                ResolvedModel: 'Xenova/ms-marco-MiniLM-L-6-v2@q8',
+                A: 1.0,
+                B: 3.8,
+            },
+        ]);
+    });
 });

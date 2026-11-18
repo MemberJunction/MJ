@@ -11,7 +11,8 @@ import type {
     SlideDeckThemeSpec,
     SlideLayoutKind,
     SlideRegionSpec,
-    SlideSpec
+    SlideSpec,
+    SlideTransitionKind
 } from './SlideDeckEngine.js';
 import { SpreadsheetEngine } from './SpreadsheetEngine.js';
 
@@ -34,7 +35,7 @@ export interface SlideDeckPptxExportOptions {
 interface CustomPptxMetaSlide {
     SlideID: string;
     Layout: SlideLayoutKind;
-    Transition?: 'none' | 'fade' | 'slide';
+    Transition?: SlideTransitionKind;
     Hidden?: boolean;
 }
 
@@ -709,25 +710,17 @@ export function ExportDeckToPptxBytesInternal(
         const regions = slide.Regions ?? [];
         const regionCount = Math.max(1, regions.length);
         const availH = Math.max(1828800, slideH - cursorY - 640080);
-        const isTwoCol =
-            regionCount === 2 &&
-            (slide.Layout === 'TwoColumn' ||
-                slide.Layout === 'Comparison' ||
-                slide.Layout === 'LiveDataSlide' ||
-                slide.Layout === 'ChartAndText');
 
         regions.forEach((region, rIdx) => {
-            const gap = 274320;
-            const rx = isTwoCol
-                ? rIdx === 0
-                    ? marginX
-                    : marginX + Math.floor((contentW - gap) / 2) + gap
-                : marginX;
-            const ry = isTwoCol ? cursorY : cursorY + Math.floor((availH / regionCount) * rIdx);
-            const rcx = isTwoCol ? Math.floor((contentW - gap) / 2) : contentW;
-            const rcy = isTwoCol
-                ? availH
-                : Math.max(640080, Math.floor(availH / regionCount) - 91440);
+            const { x: rx, y: ry, cx: rcx, cy: rcy } = computePptxRegionBounds(
+                slide.Layout,
+                rIdx,
+                regionCount,
+                marginX,
+                cursorY,
+                contentW,
+                availH
+            );
 
             const parsedDirectiveBlock = !region.BlockSpec && region.MarkdownContent
                 ? DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(region.MarkdownContent).find(
@@ -1009,11 +1002,16 @@ export function ExportDeckToPptxBytesInternal(
         }
 
         const showAttr = slide.Hidden ? ' show="0"' : '';
+        const secondaryBgHex = toDrawingHexColor(deck.Theme?.SecondaryGradientColor, bgHex);
+        const bgFillXml =
+            deck.Theme?.BackgroundStyle === 'gradient' || deck.Theme?.BackgroundStyle === 'mesh'
+                ? `<p:bg><p:bgPr><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:srgbClr val="${bgHex}"/></a:gs><a:gs pos="100000"><a:srgbClr val="${secondaryBgHex}"/></a:gs></a:gsLst><a:lin ang="2700000" scaled="1"/></a:gradFill><a:effectLst/></p:bgPr></p:bg>`
+                : `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="${bgHex}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>`;
         const slideXml = [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"${showAttr}>`,
             '<p:cSld>',
-            `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="${bgHex}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>`,
+            bgFillXml,
             '<p:spTree>',
             '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>',
             '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>',
@@ -1514,5 +1512,107 @@ export function ImportDeckFromPptxBytesInternal(
         Master: master,
         Slides: slides.length > 0 ? slides : [{ SlideID: 'slide-1', SlideNumber: 1, Layout: 'TitleAndBody', Title: title, Regions: [{ RegionID: 'main', Label: 'Content', Kind: 'rich-text', MarkdownContent: '' }], SpeakerNotes: '' }],
         UpdatedAt: new Date().toISOString()
+    };
+}
+
+/**
+ * Computes EMU coordinates (`x`, `y`, `cx`, `cy`) for each slide region based on the
+ * slide's canonical layout so exported `.pptx` slides preserve grid/card geometry.
+ */
+function computePptxRegionBounds(
+    layout: SlideLayoutKind,
+    rIdx: number,
+    regionCount: number,
+    marginX: number,
+    cursorY: number,
+    contentW: number,
+    availH: number
+): { x: number; y: number; cx: number; cy: number } {
+    const gap = 228600; // 0.25 in
+
+    if (
+        regionCount === 2 &&
+        (layout === 'TwoColumn' ||
+            layout === 'Comparison' ||
+            layout === 'LiveDataSlide' ||
+            layout === 'ChartAndText')
+    ) {
+        const colW = Math.floor((contentW - gap) / 2);
+        return {
+            x: rIdx === 0 ? marginX : marginX + colW + gap,
+            y: cursorY,
+            cx: colW,
+            cy: availH
+        };
+    }
+
+    if ((layout === 'KpiStrip' || layout === 'Timeline') && regionCount >= 2) {
+        const cols = Math.min(4, regionCount);
+        const colW = Math.floor((contentW - gap * (cols - 1)) / cols);
+        const col = rIdx % cols;
+        const rows = Math.ceil(regionCount / cols);
+        const row = Math.floor(rIdx / cols);
+        const rowH = Math.max(640080, Math.floor((availH - gap * (rows - 1)) / rows));
+        return {
+            x: marginX + col * (colW + gap),
+            y: cursorY + row * (rowH + gap),
+            cx: colW,
+            cy: rowH
+        };
+    }
+
+    if (layout === 'Quadrant' && regionCount >= 3) {
+        const colW = Math.floor((contentW - gap) / 2);
+        const rowH = Math.max(640080, Math.floor((availH - gap) / 2));
+        const col = rIdx % 2;
+        const row = Math.floor(rIdx / 2);
+        return {
+            x: marginX + col * (colW + gap),
+            y: cursorY + row * (rowH + gap),
+            cx: colW,
+            cy: rowH
+        };
+    }
+
+    if (layout === 'BentoGrid' && regionCount >= 3) {
+        const rowH = Math.max(640080, Math.floor((availH - gap) / 2));
+        if (rIdx === 0) {
+            return { x: marginX, y: cursorY, cx: contentW, cy: rowH };
+        }
+        const bottomCols = Math.max(1, regionCount - 1);
+        const colW = Math.floor((contentW - gap * (bottomCols - 1)) / bottomCols);
+        return {
+            x: marginX + (rIdx - 1) * (colW + gap),
+            y: cursorY + rowH + gap,
+            cx: colW,
+            cy: rowH
+        };
+    }
+
+    if (layout === 'MetricComparison' && regionCount >= 2) {
+        const topH = Math.floor(availH * 0.54);
+        const bottomH = Math.max(640080, availH - topH - gap);
+        if (rIdx < 2) {
+            const colW = Math.floor((contentW - gap) / 2);
+            return {
+                x: marginX + rIdx * (colW + gap),
+                y: cursorY,
+                cx: colW,
+                cy: topH
+            };
+        }
+        return {
+            x: marginX,
+            y: cursorY + topH + gap,
+            cx: contentW,
+            cy: bottomH
+        };
+    }
+
+    return {
+        x: marginX,
+        y: cursorY + Math.floor((availH / regionCount) * rIdx),
+        cx: contentW,
+        cy: Math.max(640080, Math.floor(availH / regionCount) - 91440)
     };
 }

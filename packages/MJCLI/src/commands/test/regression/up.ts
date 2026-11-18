@@ -20,6 +20,7 @@ export default class TestRegressionUp extends Command {
   static examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --detach',
+    '<%= config.bin %> <%= command.id %> --test="T001 - Login Smoke" --test="T002 - Data Explorer Open Record"',
     '<%= config.bin %> <%= command.id %> --bacpac=./db.bacpac --suite="My Suite" --metadata=./my-suite-metadata',
     '<%= config.bin %> <%= command.id %> --bacpac=./db.bacpac --bacpac-no-upgrade',
   ];
@@ -32,6 +33,10 @@ export default class TestRegressionUp extends Command {
       default: false,
     }),
     suite: Flags.string({ description: 'Test suite to run (TEST_SUITE_NAME). Use with --bacpac + --metadata.' }),
+    test: Flags.string({
+      description: 'Run only this suite test, by exact name (TEST_NAMES). Repeat the flag to run more than one. Monorepo stack only.',
+      multiple: true,
+    }),
     metadata: Flags.string({ description: 'Directory of your test + test-suite metadata (pushed before the run). Requires --bacpac.' }),
     image: Flags.string({ description: '(external) Published agentic-test-runner image. Default: ' + AGENTIC_TEST_RUNNER_IMAGE + '.' }),
     'explorer-image': Flags.string({ description: '(external bacpac) Published Explorer image (prerequisite). Default: memberjunction/explorer:latest.' }),
@@ -42,6 +47,10 @@ export default class TestRegressionUp extends Command {
     const { flags } = await this.parse(TestRegressionUp);
     if ((flags['bacpac-no-upgrade'] || flags.metadata) && !flags.bacpac) {
       this.error('--bacpac-no-upgrade and --metadata require --bacpac.');
+    }
+    const withComma = (flags.test ?? []).filter((name) => name.includes(','));
+    if (withComma.length > 0) {
+      this.error(`--test names cannot contain a comma, because TEST_NAMES is comma-separated: ${withComma.join('; ')}`);
     }
     if (IsInsideMonorepo()) {
       await this.runInMonorepo(flags);
@@ -72,6 +81,11 @@ export default class TestRegressionUp extends Command {
       }
     }
     if (flags.suite) { childEnv.TEST_SUITE_NAME = flags.suite as string; this.log(`  Suite: ${flags.suite}`); }
+    const testNames = (flags.test as string[] | undefined) ?? [];
+    if (testNames.length > 0) {
+      childEnv.TEST_NAMES = testNames.join(',');
+      this.log(`  Tests: ${testNames.join(', ')}`);
+    }
 
     const composeArgs = DockerComposeArgs('full', ['up'], overlays);
     if (flags.detach) composeArgs.push('-d');
@@ -81,6 +95,9 @@ export default class TestRegressionUp extends Command {
 
   /** Outside the monorepo: only --bacpac is supported (published-image full stack). */
   private async runExternal(flags: Record<string, unknown>): Promise<void> {
+    if (flags.test) {
+      this.error('--test works only with the monorepo stack.');
+    }
     if (!flags.bacpac) {
       this.error(
         'Plain `up` boots the full self-contained MJ stack built from source — monorepo-only.\n' +

@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -49,6 +49,7 @@ import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from 
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
@@ -107,6 +108,7 @@ import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
+  SetTypedQueryDriftMode,
 } from '@memberjunction/core-entities';
 import {
   ServerExtensionLoader,
@@ -694,6 +696,7 @@ const setupComplete$ = new ReplaySubject(1);
     pgConfigData.LocalStorageProvider = effectiveStorageProvider;
     pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -865,8 +868,8 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
 
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const pgEntityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const pgEntityCount = AssertEntityMetadataLoaded(Metadata.Provider, `PostgreSQL ${pgHost}:${pgPort}/${pgDatabase}`); // global-provider-ok: bootstrap
     startupLog.LogIf('verbose', `Data Source has been initialized. ${pgEntityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('PostgreSQL', `${pgHost}:${pgPort}/${pgDatabase}`, pgEntityCount);
   } else {
@@ -912,6 +915,7 @@ const setupComplete$ = new ReplaySubject(1);
     config.LocalStorageProvider = effectiveStorageProvider;
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
@@ -922,9 +926,9 @@ const setupComplete$ = new ReplaySubject(1);
     validateAuthProvidersRegistered();
     validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const entityCount = AssertEntityMetadataLoaded(Metadata.Provider, `SQL Server ${dbHost}:${dbPort}/${dbDatabase}`); // global-provider-ok: bootstrap
     startupLog.BeginPhase('Initializing data provider');
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const entityCount = md?.Entities ? md.Entities.length : 0;
     startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('SQL Server', `${dbHost}:${dbPort}/${dbDatabase}`, entityCount);
 

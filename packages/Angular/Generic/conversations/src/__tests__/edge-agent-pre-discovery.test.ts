@@ -5,6 +5,7 @@
  * Uses a deterministic in-memory EdgeWorkerPort fake (zero HuggingFace network calls).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EdgeAIWorkerHost } from '../lib/services/edge-ai/edge-ai-worker-host';
 import {
     EdgeAgentPreDiscoveryService,
@@ -20,6 +21,13 @@ import {
     EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID,
     EDGE_PRE_DISCOVERY_LOGIT_THRESHOLD,
 } from '@memberjunction/ai-core-plus';
+
+/**
+ * Ceiling for the "returns without waiting" checks. It stays below the fake port's 50 ms
+ * embed delay, so a path that waits on the worker still fails, but it is off the 5/15 ms floor
+ * that a loaded CI runner can miss on scheduling jitter alone.
+ */
+const NO_WAIT_CEILING_MS = 45;
 
 // 15 realistic MJ agents matching metadata/agents/*.json domains
 const MJ_AGENTS: EdgeDiscoveryAgentDescriptor[] = [
@@ -408,7 +416,7 @@ describe('EdgeAgentPreDiscoveryService & EdgeAIWorkerHost (Stage 6C.1)', () => {
         const elapsed = performance.now() - t0;
 
         expect(hint).toBeNull();
-        expect(elapsed).toBeLessThan(15);
+        expect(elapsed).toBeLessThan(NO_WAIT_CEILING_MS);
         expect(port.EmbedCalls).toBe(0);
     });
 
@@ -437,7 +445,7 @@ describe('EdgeAgentPreDiscoveryService & EdgeAIWorkerHost (Stage 6C.1)', () => {
         expect(await EdgeAIWorkerHost.Instance.EnsureWarm()).toBe(false);
         expect(EdgeAIWorkerHost.Instance.IsCircuitOpen).toBe(true);
 
-        // Once circuit is open, PreDiscover short-circuits in < 2ms with zero worker calls
+        // Once circuit is open, PreDiscover short-circuits with zero worker calls
         const t0 = performance.now();
         const fallback = await EdgeAgentPreDiscoveryService.Instance.PreDiscover(
             'Build an invoice query',
@@ -445,6 +453,24 @@ describe('EdgeAgentPreDiscoveryService & EdgeAIWorkerHost (Stage 6C.1)', () => {
             { WaitForColdLoad: true }
         );
         expect(fallback).toBeNull();
-        expect(performance.now() - t0).toBeLessThan(5);
+        expect(performance.now() - t0).toBeLessThan(NO_WAIT_CEILING_MS);
+    });
+
+    it('reads metadata Platt calibration via AIEngineBase.FindDecisionCalibration when available', async () => {
+        const port = new FakeEdgePort();
+        EdgeAIWorkerHost.Instance.SetPortFactoryForTesting(() => port);
+        const calSpy = vi.spyOn(AIEngineBase.Instance, 'FindDecisionCalibration').mockReturnValue({ A: 1.0, B: 5.0 });
+        try {
+            const hint = await EdgeAgentPreDiscoveryService.Instance.PreDiscover(
+                'Write a SQL query for customer revenue',
+                MJ_AGENTS,
+                { UserId: 'cal-user', WaitForColdLoad: true, TimeoutMs: 500 }
+            );
+            expect(calSpy).toHaveBeenCalled();
+            expect(hint?.SuggestedAgentId).toBe('ag-10');
+            expect(hint?.Confidence).toBeGreaterThan(0.95);
+        } finally {
+            calSpy.mockRestore();
+        }
     });
 });

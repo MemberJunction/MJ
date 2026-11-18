@@ -39,6 +39,31 @@ import { WrapAdapterWithContext } from './context-injection';
 const PAGE_TEXT_MAX_CHARS = 20000;
 
 /**
+ * Caps a requested viewport size proportionally to fit within `maxWidth × maxHeight` (defaulting to
+ * the CDP screencast stream's `1280 × 800` ceiling). Preserving the aspect ratio ensures a maximized
+ * pane that exceeds the stream limit still fills the drawer edge-to-edge without letterboxing or distortion.
+ *
+ * Returns `null` when either dimension is non-positive or non-finite.
+ */
+export function ClampViewportToScreencastBounds(
+  width: number,
+  height: number,
+  maxWidth: number = 1280,
+  maxHeight: number = 800,
+): { Width: number; Height: number } | null {
+  const rawWidth = Math.floor(width);
+  const rawHeight = Math.floor(height);
+  if (!Number.isFinite(rawWidth) || !Number.isFinite(rawHeight) || rawWidth <= 0 || rawHeight <= 0) {
+    return null;
+  }
+  const scale = Math.min(1, maxWidth / rawWidth, maxHeight / rawHeight);
+  return {
+    Width: Math.max(1, Math.round(rawWidth * scale)),
+    Height: Math.max(1, Math.round(rawHeight * scale)),
+  };
+}
+
+/**
  * The shared, CDP-backed live remote-browser session. Constructed by
  * {@link import('./base-cdp-remote-browser-provider').BaseCdpRemoteBrowserProvider.Connect} with an
  * already-launched (CDP-attached) {@link PlaywrightBrowserAdapter}, the CDP endpoint string, the
@@ -310,6 +335,24 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     this.requireFeature('ScreenStreaming');
     this.stopKeyframeTimer();
     await this.adapter.StopScreencast();
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * Caps the requested viewport proportionally to {@link SCREENCAST_OPTIONS} (`1280 × 800`), resizes the
+   * open Playwright page in place without navigating or reloading, and pushes an immediate screencast frame
+   * so the reflowed page appears right away.
+   */
+  public async ResizeViewport(width: number, height: number): Promise<void> {
+    const maxWidth = CdpRemoteBrowserSession.SCREENCAST_OPTIONS.MaxWidth ?? 1280;
+    const maxHeight = CdpRemoteBrowserSession.SCREENCAST_OPTIONS.MaxHeight ?? 800;
+    const clamped = ClampViewportToScreencastBounds(width, height, maxWidth, maxHeight);
+    if (!clamped) {
+      return;
+    }
+    await this.adapter.SetViewportSize?.(clamped.Width, clamped.Height);
+    await this.pushImmediateFrame();
   }
 
   /**

@@ -21,11 +21,10 @@ describe('IsWhiteboardChannel', () => {
 });
 
 describe('ShouldRegisterChannelTabUpFront', () => {
-  it('always registers the whiteboard up front, even when unused', () => {
-    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false)).toBe(true);
-    expect(ShouldRegisterChannelTabUpFront('whiteboard', false)).toBe(true);
-  });
-  it('registers a non-whiteboard channel only once used', () => {
+  it('registers every channel — including Whiteboard — only once used', () => {
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false)).toBe(false);
+    expect(ShouldRegisterChannelTabUpFront('whiteboard', false)).toBe(false);
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', true)).toBe(true);
     expect(ShouldRegisterChannelTabUpFront('Notes', false)).toBe(false);
     expect(ShouldRegisterChannelTabUpFront('Notes', true)).toBe(true);
   });
