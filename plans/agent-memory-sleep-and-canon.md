@@ -1,6 +1,6 @@
 # Agent Memory, SLEEP, Canon & Harness² — Architecture-Layer Consolidation, REM Dreaming, Precedence & Recursive Improvement
 
-**Version**: 1.2 — Unified v6.3 Design Spec (consolidates PR #5869 *Harness²* into this plan, aligns with merged PR #6279, and adds Self-Improvement Memory + relational run context items)  
+**Version**: 1.2 — Unified v6.3 Design Spec (consolidates PR #5869 *Harness²* into this plan, aligns with merged PR #6279, and adds Self-Improvement Memory + relational context items)  
 **Date**: November 18, 2026 (v1.1 November 2, 2026; originally October 30, 2026)  
 **Status**: Proposed — single authoritative v6.3 spec for **Arie Glazier (@arie-glazier-bcc)** after Predictive Studio wraps  
 **Owner / Assignee**: Arie Glazier (@arie-glazier-bcc) — extends his earlier work on Memory Consolidation ([`specs/001-memory-consolidation`](../specs/001-memory-consolidation/spec.md)), In-Flight Memory Writes ([`plans/agent-inflight-memory-writes.md`](agent-inflight-memory-writes.md)), and consolidates Recursive Improvement & Canon (formerly PR #5869) into a single roadmap  
@@ -14,9 +14,9 @@
 
 > **What changed in v1.2 (Nov 18, 2026)**
 > 1. **§2.4 — re-verified audit.** Two of §2.2's five bugs have moved: #2 is half fixed, and #2's cache half now costs a full reload on every note save. Five defects not listed in v1.1 join Phase 0, the worst being that **the daily maintenance pass almost never runs** (§2.4 item 1).
-> 2. **§3.6 — `MJ: AI Agent Run Context Items`.** Exposure and usage telemetry (Evidence Ladder Rungs 0–1) is recorded as real FK rows linking runs and run steps to the notes, examples and other items they were given, with a JSONType `Details` column for signals that will grow. It replaces the JSON `memoryAttribution` copy written into every prompt step's `OutputData` today.
+> 2. **§3.6 — `MJ: AI Agent Context Items`.** Exposure and usage telemetry (Evidence Ladder Rungs 0–1) is recorded in a real child table: FK rows linking each agent execution to the notes, examples and other items it was given, with a JSONType `Details` column for signals that will grow. It anchors to both execution shapes: loop runs (and their steps) and realtime sessions (and their conversation-detail turns), since realtime creates sessions, not per-turn runs (§3.6.1). It replaces the JSON `memoryAttribution` copy written into every prompt step's `OutputData` today.
 > 3. **§3.3 + §5.5 + §9 — Self-Improvement Memory.** The Learning Cycle Proposal table becomes the harness optimizer's memory: edits grouped by the problem they target, with rationale, predicted vs observed outcome, and evaluation context (model, prompt version, cohort). Both the proposer and the selector read it, and a model change triggers re-verification instead of silently keeping tuned edits.
-> 4. **§7 — thinner first slice.** Phase 0 now ships the run-context-items table. Phase 2 splits so the Harness Refiner with Self-Improvement Memory lands before REM dreaming, which waits until Phase 0 data shows which items help.
+> 4. **§7 — thinner first slice.** Phase 0 now ships the context-items table. Phase 2 splits so the Harness Refiner with Self-Improvement Memory lands before REM dreaming, which waits until Phase 0 data shows which items help.
 
 ---
 
@@ -193,7 +193,8 @@ Re-reading the memory stack on Nov 17–18, 2026 changed two §2.2 items and fou
    - Every prompt step's `OutputData` gets a `memoryAttribution` object: injected note and example IDs, plus a 100-character preview of each note.
    - Nothing reads it, it repeats on every step of the run, it cannot be indexed, and the previews copy note text into step rows without the field-level security projection that `FormatNotesForInjection` applies.
    - `AccessCount`/`LastAccessedAt` are never updated on injection (the only writers are dedupe and consolidation: `MemoryWriteManager.ts` L429–430, `memory-manager-agent.ts` L3214, L3926–3927), so decay effectively measures time since creation.
-   - §3.6 replaces this with relational exposure rows.
+   - Realtime sessions keep no record at all: `assembleMemoryContext` discards the notes and examples the builder returns and keeps only the text (§3.6.1).
+   - §3.6 replaces both with relational exposure rows.
 
 Also tracked separately: [#2833](https://github.com/MemberJunction/MJ/issues/2833) (an agent with `AllowMemoryWrite = 0` claims it saved a memory). Nothing in this plan fixes it; it stays a separate issue.
 
@@ -219,12 +220,14 @@ erDiagram
     ConversationDetail ||--o{ AIAgentLearningCycleProposalSource : "SourceConversationDetailID"
     AIAgentNote ||--o{ AIAgentLearningCycleProposal : "AppliedNoteID"
     AISkill ||--o{ AIAgentLearningCycleProposal : "AppliedSkillID"
-    AIAgentRun ||--o{ AIAgentRunContextItem : "AgentRunID"
-    AIAgentRunStep ||--o{ AIAgentRunContextItem : "AgentRunStepID (optional)"
-    AIAgentNote ||--o{ AIAgentRunContextItem : "AgentNoteID"
-    AIAgentExample ||--o{ AIAgentRunContextItem : "AgentExampleID"
-    AISkill ||--o{ AIAgentRunContextItem : "SkillID"
-    GraphConcept ||--o{ AIAgentRunContextItem : "GraphConceptID"
+    AIAgentRun ||--o{ AIAgentContextItem : "AgentRunID"
+    AIAgentRunStep ||--o{ AIAgentContextItem : "AgentRunStepID (optional)"
+    AIAgentSession ||--o{ AIAgentContextItem : "AgentSessionID (realtime)"
+    ConversationDetail ||--o{ AIAgentContextItem : "ConversationDetailID (realtime turn)"
+    AIAgentNote ||--o{ AIAgentContextItem : "AgentNoteID"
+    AIAgentExample ||--o{ AIAgentContextItem : "AgentExampleID"
+    AISkill ||--o{ AIAgentContextItem : "SkillID"
+    GraphConcept ||--o{ AIAgentContextItem : "GraphConceptID"
 ```
 
 ### 3.1 Fixing Note Provenance: `MJ: AI Agent Note Sources` (`__mj.AIAgentNoteSource`)
@@ -347,9 +350,33 @@ To distinguish **ratified organizational Canon** from ordinary `Active` notes or
 
 When a note is promoted to Canon (`IsCanonical = 1`), its `ProtectionTier` is automatically locked to `'Immutable'` (or `'Protected'`) so NREM consolidation and Ebbinghaus decay never silently merge or archive ratified policy.
 
-### 3.6 Run Context Items: `MJ: AI Agent Run Context Items` (`__mj.AIAgentRunContextItem`) — v1.2
+### 3.6 Context Items: `MJ: AI Agent Context Items` (`__mj.AIAgentContextItem`) — v1.2
 
-Every later phase depends on knowing **which items a run was given and which it used**: the Evidence Ladder (§8.1 Rungs 0, 1, 2 and 4), the REM samplers, counterfactual replay corpus selection, the EMA graph-edge weights (§6.1 #5), decay and `ImportanceScore`, Self-Improvement Memory's observed effects (§9), and poisoning blast-radius queries. Today that record is the unread `memoryAttribution` JSON copied into each prompt step's `OutputData` (§2.4 #5). This table replaces it.
+Every later phase depends on knowing **which items an agent execution was given and which it used**: the Evidence Ladder (§8.1 Rungs 0, 1, 2 and 4), the REM samplers, counterfactual replay corpus selection, the EMA graph-edge weights (§6.1 #5), decay and `ImportanceScore`, Self-Improvement Memory's observed effects (§9), and poisoning blast-radius queries. Today that record is the unread `memoryAttribution` JSON copied into each prompt step's `OutputData` (§2.4 #5), and realtime sessions keep no record at all. This table replaces it.
+
+An agent execution is one of two shapes, and the table anchors to both:
+- **Loop runs** (`MJ: AI Agent Runs`): one run per request, with run steps.
+- **Realtime sessions** (`MJ: AI Agent Sessions`): one long-lived session per call, with turns persisted as `MJ: Conversation Details` rows, not as runs (§3.6.1).
+
+#### Shape: a real child table (many-to-many with a payload)
+
+`AIAgentContextItem` is a junction between an execution and the items it was given: **one row per (execution, item, event)**, with real foreign keys on both sides and a JSONType `Details` column for signals.
+
+```mermaid
+erDiagram
+    AIAgentRun ||--o{ AIAgentContextItem : "AgentRunID - loop run or session co-agent run"
+    AIAgentRunStep ||--o{ AIAgentContextItem : "AgentRunStepID - step that cited or searched"
+    AIAgentSession ||--o{ AIAgentContextItem : "AgentSessionID - realtime session"
+    ConversationDetail ||--o{ AIAgentContextItem : "ConversationDetailID - realtime turn"
+    AIAgentNote ||--o{ AIAgentContextItem : "AgentNoteID"
+    AIAgentExample ||--o{ AIAgentContextItem : "AgentExampleID"
+    AISkill ||--o{ AIAgentContextItem : "SkillID"
+    GraphConcept ||--o{ AIAgentContextItem : "GraphConceptID"
+    ScopedPromptPart ||--o{ AIAgentContextItem : "ScopedPromptPartID"
+    Entity ||--o{ AIAgentContextItem : "ItemEntityID + ItemRecordID - anything else"
+```
+
+Example: a loop run that injects three notes and one example, then cites one note in step 4, writes five rows: four `Injected` rows anchored to the run, and one `Cited` row anchored to the run and to step 4. A realtime call that injects the same items at mint writes four `Injected` rows anchored to the session (and to its co-agent run, when one exists).
 
 #### Design it twice: JSON bag vs. child table
 
@@ -361,19 +388,23 @@ Every later phase depends on knowing **which items a run was given and which it 
 | Explorer | Opaque JSON on the run | Related tabs both ways: a note shows the runs that used it, a run shows what it was given |
 | Agents, evals, `RunView` | Parse JSON per row | Filter and join like any entity |
 | Extending with new signals | Edit the interface | Same: evolving signals live in the `Details` JSONType column (below) |
-| Write cost | One column update per run | 5–16 small inserts per run, batched |
+| Realtime sessions | No run per turn to hang the bag on; would need a second bag on `AIAgentSession` | Same table, anchored on `AgentSessionID` (§3.6.1) |
+| Write cost | One column update per run | 5–16 small inserts per run or session leg, batched |
 
-**Decision: B, with a JSONType column for what will change.** The identity of the link (which run, which step, which item, what happened) and the few columns analytics filter on are real columns with real FKs. Signals that will keep growing (reranker score, retrieval lane, status snapshot, holdout bucket) go in `Details`, so adding one is an interface change plus `mj sync push`, not a migration. This is the same reasoning §3.1 uses to retire `DerivedFromNoteIDs`.
+**Decision: B, a real child table, with a JSONType column for what will change.** The identity of the link (which execution, which step or turn, which item, what happened) and the few columns analytics filter on are real columns with real FKs. Signals that will keep growing (reranker score, retrieval lane, status snapshot, holdout bucket) go in `Details`, so adding one is an interface change plus `mj sync push`, not a migration. This is the same reasoning §3.1 uses to retire `DerivedFromNoteIDs`.
 
 **Not both.** Writing a bag on the run *and* rows here gives two records that drift. The table is the only record; once it ships, remove `memoryAttribution` from step `OutputData` (or reduce it to counts). `AIAgentRunStep.Skills` stays as it is for skill activation provenance; skills get rows here only if the Evidence Ladder needs skill *exposure*, decided in Phase 2, and never as a second copy of the same fact.
 
 #### DDL (readable values per the §3 authoring note)
 
 ```sql
-CREATE TABLE [${flyway:defaultSchema}].[AIAgentRunContextItem] (
-    [ID]                 UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_AIAgentRunContextItem_ID] DEFAULT (newsequentialid()),
-    [AgentRunID]         UNIQUEIDENTIFIER NOT NULL, -- FK -> AIAgentRun(ID)
-    [AgentRunStepID]     UNIQUEIDENTIFIER NULL,     -- FK -> AIAgentRunStep(ID); NULL for run-start injection
+CREATE TABLE [${flyway:defaultSchema}].[AIAgentContextItem] (
+    [ID]                 UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_AIAgentContextItem_ID] DEFAULT (newsequentialid()),
+    -- Anchor: a loop run, a realtime session, or a session plus its co-agent run (CK_..._HasAnchor)
+    [AgentRunID]           UNIQUEIDENTIFIER NULL,   -- FK -> AIAgentRun(ID)
+    [AgentRunStepID]       UNIQUEIDENTIFIER NULL,   -- FK -> AIAgentRunStep(ID); the step that cited or searched
+    [AgentSessionID]       UNIQUEIDENTIFIER NULL,   -- FK -> AIAgentSession(ID); realtime session
+    [ConversationDetailID] UNIQUEIDENTIFIER NULL,   -- FK -> ConversationDetail(ID); realtime turn the event belongs to
     [EventType]          NVARCHAR(20)     NOT NULL,
     [ItemType]           NVARCHAR(30)     NOT NULL,
 
@@ -389,15 +420,20 @@ CREATE TABLE [${flyway:defaultSchema}].[AIAgentRunContextItem] (
     [ShortID]            NVARCHAR(10)     NULL,     -- the tag rendered in the prompt ('N1', 'E2') so Cited rows resolve memoryUsed
     [Rank]               INT              NULL,     -- position in the injected block
     [Similarity]         DECIMAL(5,4)     NULL,     -- retrieval cosine score, when there was one
-    [Details]            NVARCHAR(MAX)    NULL,     -- JSONType IAgentRunContextItemDetails
+    [Details]            NVARCHAR(MAX)    NULL,     -- JSONType IAgentContextItemDetails
 
-    CONSTRAINT [PK_AIAgentRunContextItem] PRIMARY KEY CLUSTERED ([ID]),
-    CONSTRAINT [FK_AIAgentRunContextItem_AgentRun] FOREIGN KEY ([AgentRunID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRun]([ID]),
-    CONSTRAINT [FK_AIAgentRunContextItem_AgentRunStep] FOREIGN KEY ([AgentRunStepID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRunStep]([ID]),
+    CONSTRAINT [PK_AIAgentContextItem] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AIAgentContextItem_AgentRun] FOREIGN KEY ([AgentRunID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRun]([ID]),
+    CONSTRAINT [FK_AIAgentContextItem_AgentRunStep] FOREIGN KEY ([AgentRunStepID]) REFERENCES [${flyway:defaultSchema}].[AIAgentRunStep]([ID]),
+    CONSTRAINT [FK_AIAgentContextItem_AgentSession] FOREIGN KEY ([AgentSessionID]) REFERENCES [${flyway:defaultSchema}].[AIAgentSession]([ID]),
+    CONSTRAINT [FK_AIAgentContextItem_ConversationDetail] FOREIGN KEY ([ConversationDetailID]) REFERENCES [${flyway:defaultSchema}].[ConversationDetail]([ID]),
     -- ...one FK constraint per target column...
-    CONSTRAINT [CK_AIAgentRunContextItem_EventType] CHECK ([EventType] IN (N'Retrieved', N'Injected', N'Withheld', N'Cited', N'Other')),
-    CONSTRAINT [CK_AIAgentRunContextItem_ItemType] CHECK ([ItemType] IN (N'Note', N'Example', N'Skill', N'Graph Concept', N'Scoped Prompt Part', N'Other')),
-    CONSTRAINT [CK_AIAgentRunContextItem_ExactlyOneTarget] CHECK (
+    CONSTRAINT [CK_AIAgentContextItem_HasAnchor] CHECK ([AgentRunID] IS NOT NULL OR [AgentSessionID] IS NOT NULL),
+    CONSTRAINT [CK_AIAgentContextItem_StepNeedsRun] CHECK ([AgentRunStepID] IS NULL OR [AgentRunID] IS NOT NULL),
+    CONSTRAINT [CK_AIAgentContextItem_TurnNeedsSession] CHECK ([ConversationDetailID] IS NULL OR [AgentSessionID] IS NOT NULL),
+    CONSTRAINT [CK_AIAgentContextItem_EventType] CHECK ([EventType] IN (N'Retrieved', N'Injected', N'Withheld', N'Cited', N'Other')),
+    CONSTRAINT [CK_AIAgentContextItem_ItemType] CHECK ([ItemType] IN (N'Note', N'Example', N'Skill', N'Graph Concept', N'Scoped Prompt Part', N'Other')),
+    CONSTRAINT [CK_AIAgentContextItem_ExactlyOneTarget] CHECK (
         (CASE WHEN [AgentNoteID]        IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN [AgentExampleID]     IS NOT NULL THEN 1 ELSE 0 END) +
         (CASE WHEN [SkillID]            IS NOT NULL THEN 1 ELSE 0 END) +
@@ -413,17 +449,46 @@ Every column gets an `MS_Description`; CodeGen adds the timestamp columns and FK
 **Event types:**
 - `Injected` — the item was in the prompt (Rung 0).
 - `Withheld` — eligible, deliberately left out for the holdout arm (Rung 4). Never for `IsCanonical = 1` Constraints or `Immutable`/`Protected` notes.
-- `Cited` — the model said it acted on the item (`memoryUsed`, Rung 1), with `AgentRunStepID` set to the step whose response cited it.
+- `Cited` — the item was acted on (Rung 1). For a loop run, the model's `memoryUsed`, with `AgentRunStepID` set to the step whose response cited it. For a realtime session, `ConversationDetailID` set to the turn (§3.6.1 explains why realtime citation comes later).
 - `Retrieved` — scored but cut by top-K or the reranker. Off by default (`memoryConfig.recordRetrievedCandidates`); useful for retrieval-quality analysis and for explaining the §4.2 starvation cases.
 
-**Why `AgentRunStepID` is nullable:** injection happens once in `Execute` phase 2 (`base-agent.ts` ≈ L3122–3134, stored at L5184), before any step exists, so run-start rows carry only `AgentRunID`. `Cited` rows and in-flight retrieval (§6.3 `memoryToolCalls`) do have a step and record it.
+**Anchor rules (enforced by the three CHECKs):**
 
-#### JSONType `Details` (`metadata/entities/JSONType-interfaces/IAgentRunContextItemDetails.ts`)
+| Execution | `AgentRunID` | `AgentRunStepID` | `AgentSessionID` | `ConversationDetailID` |
+| --- | --- | --- | --- | --- |
+| Loop run, injection at start | the run | NULL: injection happens in `Execute` phase 2 (`base-agent.ts` ≈ L3122–3134, stored at L5184), before any step exists | NULL | NULL |
+| Loop run, `Cited` or in-flight search (§6.3) | the run | the step | NULL | NULL |
+| Realtime session, injection at mint | the session's co-agent run, when one was created; else NULL | NULL | the session | NULL |
+| Realtime session, an event tied to one turn | co-agent run or NULL | NULL | the session | the turn |
+| Loop run delegated from a realtime session (`invoke-target-agent`) | the delegated run | as for any loop run | NULL: the run's own `AgentSessionID` already links it | NULL |
 
-Follow the `AgentSkillInvocation` precedent: an interface file plus a `.entity-field-jsontype-agent-run-context-item-details.json` record binding it to the field, pushed before CodeGen. Starting shape:
+Each fact is stored once. A delegated run's session is read through `AIAgentRun.AgentSessionID`, not copied onto its context-item rows, so "everything a call saw" is the session's own rows plus the rows of runs whose `AgentSessionID` is that session.
+
+#### 3.6.1 Realtime sessions: the session is the anchor, not a run
+
+Realtime was designed around **`MJ: AI Agent Sessions`, not per-turn runs**, because a fast voice or video turn cannot afford a run, its steps and their saves. Verified on `origin/next` @ `883e71eb0`:
+
+- **The session exists before memory is assembled.** The resolver creates the durable `AIAgentSession` through `SessionManager.CreateSession`, then calls `RealtimeClientSessionService.PrepareClientSession` ([`REALTIME_CO_AGENTS_GUIDE.md`](../guides/REALTIME_CO_AGENTS_GUIDE.md) §3, "Client-direct flow", step 1). The LiveKit bridge uses the same prep through `PrepareRealtimeSessionParams`; there is one producer of realtime session prep.
+- **Memory is injected once per session leg, at mint, into the system prompt.** `assembleMemoryContext` (`realtime-client-session-service.ts` ≈ L4170–4205) calls the same `AgentMemoryContextBuilder.InjectContextMemory` loop agents use, then keeps only the text. The `{ notes, examples }` the builder returns are discarded, so today there is no record of what a call was given. A resumed call (`LastSessionID` chain) mints a new session and injects again.
+- **Turns are conversation details, not runs.** Each user and agent turn is a `MJ: Conversation Details` row stamped with `AgentSessionID` (`base-agent.ts` ≈ L4550–4562; `realtime/bridge-session-transcript-sink.ts` L69).
+- **There is at most one run per session, and it is best-effort.** `createCoAgentObservabilityRun` (`realtime-client-session-service.ts` ≈ L1316–1323) creates one co-agent `AIAgentRun` (with one prompt step) *after* the mint, for the timeline. It is skipped or missing when the save fails or no session ID was threaded, so it cannot be the required anchor.
+- **Delegations are ordinary loop runs.** `invoke-target-agent` starts a full loop run with `ParentRunID` = the co-agent run and `AgentSessionID` = the session. It injects its own memory through the loop path, so it writes loop-run rows.
+
+**What this means for the design:**
+
+1. **Mint rows anchor to the session.** `AgentSessionID` is set; `AgentRunID` is the co-agent run when one exists. `assembleMemoryContext` returns the builder's notes and examples along with the text, and the rows are written after `createCoAgentObservabilityRun` so both IDs are known.
+2. **Never on the mint's critical path.** Realtime start-up is latency-sensitive: the write is fire-and-forget after the mint returns, and a failure logs with the session ID and changes nothing about the call.
+3. **Per session leg, not per turn.** At most `MaxNotesToInject` + `MaxExamplesToInject` rows per leg, whatever the call's length.
+4. **`ConversationDetailID` is for events that belong to one turn:** a future mid-session memory refresh (sent as a context note), an in-session memory search tool, or a later citation.
+5. **Citation (Rung 1) for realtime comes later.** A realtime model speaks; it does not return a structured `LoopAgentResponse`, so there is no `memoryUsed` field. Delegated loop runs inside the call do cite normally. For the session itself, the low-cost option is an offline judge that reads the persisted transcript after the call and writes `Cited` rows with `ConversationDetailID` set (`Details.CitationSource = 'Post-Session Judge'`). A citation tool in the live session would cost latency on every turn, so it is not proposed.
+6. **Holdout arms are per session.** `Withheld` is decided by bucketing the session ID, so a whole call is one arm and a resumed leg keeps its predecessor's arm (bucket on the first session of the `LastSessionID` chain).
+
+#### JSONType `Details` (`metadata/entities/JSONType-interfaces/IAgentContextItemDetails.ts`)
+
+Follow the `AgentSkillInvocation` precedent: an interface file plus a `.entity-field-jsontype-agent-context-item-details.json` record binding it to the field, pushed before CodeGen. Starting shape:
 
 ```typescript
-export interface IAgentRunContextItemDetails {
+export interface IAgentContextItemDetails {
     /** Bump when the shape changes incompatibly; readers branch on it. */
     Version: 1;
     /** How the item was selected. */
@@ -440,21 +505,24 @@ export interface IAgentRunContextItemDetails {
     ScopeLevel?: string;
     /** SampleBucket value, so holdout arms can be re-derived. */
     HoldoutBucket?: number;
+    /** For Cited rows: where the citation came from. */
+    CitationSource?: 'Agent Response' | 'Post-Session Judge' | 'Other';
 }
 ```
 
-Item **text** is not copied: readers join to the item under their own permissions (field-level security applies), and Record Changes on `MJ: AI Agent Notes` recovers the text as of the run's time if it was edited later.
+Item **text** is not copied: readers join to the item under their own permissions (field-level security applies), and Record Changes on `MJ: AI Agent Notes` recovers the text as of the run or session if it was edited later.
 
 #### Write path, volume, settings
 
-- **Volume:** at most `MaxNotesToInject` (5) + `MaxExamplesToInject` (3) `Injected` rows plus up to as many `Cited` rows: typically 5–16 per run, more only with `Retrieved` on.
-- **Writes:** one batch after `InjectContextMemory` returns, not awaited by the turn; `Cited` rows when the step's response is processed. A failed write logs (`LogError` with run ID) and never fails the run.
+- **Volume:** at most `MaxNotesToInject` (5) + `MaxExamplesToInject` (3) `Injected` rows plus up to as many `Cited` rows: typically 5–16 per loop run and at most 8 per realtime session leg, more only with `Retrieved` on.
+- **Writes:**
+  - Loop runs: one batch after `InjectContextMemory` returns, not awaited by the turn; `Cited` rows when the step's response is processed.
+  - Realtime sessions: one batch after the mint returns (§3.6.1).
+  - A failed write logs (`LogError` with the run or session ID) and never fails the run or the call.
 - **Entity settings (metadata, not migration):** `TrackRecordChanges = 0` (append-only telemetry; record changes would double the write volume) and `AllowCaching = 0`.
-- **Scope and security:** the row carries no scope columns; user, company and primary scope come from the run, so row-level security on runs governs who can read these rows.
-- **`AccessCount` / `LastAccessedAt`:** updated from `Injected` rows (one debounced update per note per run), so decay and `ImportanceScore`'s `accessFrequency` finally get a real signal. The table is the truth; the two columns are a cache of it.
-- **Deletes:** a hard-deleted note or run should take its context-item rows with it (privacy erasure). Check what `CascadeDeletes` already does for `MJ: AI Agent Runs` and `MJ: AI Agent Notes` before relying on it.
-
-**Open question:** the realtime path builds memory context through `AgentMemoryContextBuilder` / `AgentContextAssembler`. Confirm it always has an `AIAgentRun`; if a realtime turn can inject memory with no run, `AgentRunID` needs a nullable `AgentSessionID` alternative and the exactly-one rule extends to cover it.
+- **Scope and security:** the row carries no scope columns; user, company and primary scope come from its run or session (both carry `UserID`), so row-level security on those governs who can read these rows.
+- **`AccessCount` / `LastAccessedAt`:** updated from `Injected` rows (one debounced update per note per run or session leg), so decay and `ImportanceScore`'s `accessFrequency` finally get a real signal. The table is the truth; the two columns are a cache of it.
+- **Deletes:** a hard-deleted note, run or session should take its context-item rows with it (privacy erasure). Check what `CascadeDeletes` already does for `MJ: AI Agent Runs`, `MJ: AI Agent Sessions` and `MJ: AI Agent Notes` before relying on it.
 
 ---
 
@@ -580,7 +648,7 @@ We build directly on the generalized Semantic Graph architecture (**schema, `Gra
    with $\tau(\text{Approved}) = 1.0$, $\tau(\text{Proposed}) = 0.4$.
 5. **Hybrid Symbolic-Prior + EMA Outcome-Learned Edge Weights**:
    - Initialize `Weight` from `GraphEdgeType.DefaultWeight` $\times$ origin prior (`Declared = 0.90`, `Inferred/Approved = 0.75`, `Inferred/Proposed = 0.45`) to avoid cold-start sparsity.
-   - Using Phase 0's `MJ: AI Agent Run Context Items` rows (§3.6), update `Weight` via bounded exponential moving average ($w \leftarrow \text{clamp}(w + \eta \cdot r,\; 0.10,\; 1.00)$, $\eta = 0.05$) on counterfactual replay wins ($+1.0$), rated successes ($+0.5$), and user corrections / thumbs-down ($-1.0$).
+   - Using Phase 0's `MJ: AI Agent Context Items` rows (§3.6), update `Weight` via bounded exponential moving average ($w \leftarrow \text{clamp}(w + \eta \cdot r,\; 0.10,\; 1.00)$, $\eta = 0.05$) on counterfactual replay wins ($+1.0$), rated successes ($+0.5$), and user corrections / thumbs-down ($-1.0$).
 
 ### 6.2 Procedural Memory: Auto-Drafted `MJ: AI Skills` (`Active` vs. `Canonical`)
 
@@ -614,10 +682,10 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 
 | PR / Phase | Deliverables | Key Files & Packages |
 | --- | --- | --- |
-| **PR 1 (Phase 0): Memory & Action Approval Bug Fixes, Run Context Items, `[N1]` Citation Telemetry & Counterfactual Replay Harness** | Fix `AIEngine.composeNoteFilters` & `fallbackGetNotesFromCache` null-scope leak; filter `BaseAIEngine._agentNotes` preload to injectable statuses and stop the full reload on every note save (§2.4); fix the maintenance-pass time window (§2.4 #1); route or expire `Pending` notes (§2.4 #2); keep contradiction and consolidation within one user and company (§2.4 #3); apply the in-flight guards to Memory Manager extraction (§2.4 #4); reconcile `ConversationDetail.UserRating`; create `MJ: AI Agent Run Context Items` + `IAgentRunContextItemDetails` (§3.6) and retire step `memoryAttribution`; add `[N1]`/`[E1]` short-ID tagging + `memoryUsed?: string[]` on `LoopAgentResponse` written as `Cited` rows + debounced `AccessCount`/`LastAccessedAt` from `Injected` rows; fix `MJActionEntityServer` (`CodeApprovedByUserID`, `Runtime` edit approval reset), `Find Candidate Actions` approval filter, and `RuntimeActionExecutor` memory cap; ship single-turn counterfactual replay evaluator (`AIPromptRun.Messages` + position-randomized `temp=0` judge). | `migrations/v6/...`, `metadata/entities/`, `packages/AI/Engine/src/AIEngine.ts`, `packages/AI/BaseAIEngine/src/BaseAIEngine.ts`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/AI/Agents/src/base-agent.ts`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/MJCoreEntitiesServer/src/custom/MJActionEntityServer.server.ts`, `packages/Actions/CoreActions/`, `packages/Actions/CodeExecution/` |
+| **PR 1 (Phase 0): Memory & Action Approval Bug Fixes, Context Items, `[N1]` Citation Telemetry & Counterfactual Replay Harness** | Fix `AIEngine.composeNoteFilters` & `fallbackGetNotesFromCache` null-scope leak; filter `BaseAIEngine._agentNotes` preload to injectable statuses and stop the full reload on every note save (§2.4); fix the maintenance-pass time window (§2.4 #1); route or expire `Pending` notes (§2.4 #2); keep contradiction and consolidation within one user and company (§2.4 #3); apply the in-flight guards to Memory Manager extraction (§2.4 #4); reconcile `ConversationDetail.UserRating`; create `MJ: AI Agent Context Items` + `IAgentContextItemDetails` (§3.6) for loop runs and realtime sessions (§3.6.1) and retire step `memoryAttribution`; add `[N1]`/`[E1]` short-ID tagging + `memoryUsed?: string[]` on `LoopAgentResponse` written as `Cited` rows + debounced `AccessCount`/`LastAccessedAt` from `Injected` rows; fix `MJActionEntityServer` (`CodeApprovedByUserID`, `Runtime` edit approval reset), `Find Candidate Actions` approval filter, and `RuntimeActionExecutor` memory cap; ship single-turn counterfactual replay evaluator (`AIPromptRun.Messages` + position-randomized `temp=0` judge). | `migrations/v6/...`, `metadata/entities/`, `packages/AI/Engine/src/AIEngine.ts`, `packages/AI/BaseAIEngine/src/BaseAIEngine.ts`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/AI/Agents/src/base-agent.ts`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/AI/Agents/src/realtime/realtime-client-session-service.ts`, `packages/MJCoreEntitiesServer/src/custom/MJActionEntityServer.server.ts`, `packages/Actions/CoreActions/`, `packages/Actions/CodeExecution/` |
 | **PR 2 (Phase 1): `AIAgentNoteSource` Sub-Table + 5-Tier Canon Precedence** | Migration creating `__mj.AIAgentNoteSource` + `OPENJSON` backfill from `DerivedFromNoteIDs` + deprecating `DerivedFromNoteIDs` in metadata; add `IsCanonical` columns to `AIAgentNote` & `AISkill`; refactor `MemoryManagerAgent` lineage to `AIAgentNoteSource`; implement Two-Lane Canon selection + 5-tier `<memory_policy>`. | `migrations/v6/...`, `metadata/entities/`, `packages/AI/Agents/src/agent-context-injector.ts`, `packages/AI/Agents/src/memory-manager-agent.ts` |
 | **PR 3a (Phase 2a): Learning Cycle Schema + Harness Refiner with Self-Improvement Memory** | Additive columns on `AIAgentLearningCycle`; create `AIAgentLearningCycleProposal` (including the §3.3 Self-Improvement Memory columns + `IProposalEvaluationContext`) & `AIAgentLearningCycleProposalSource` (including `SourceGraphConceptID`/`SourceGraphEdgeID` FKs + `.polymorphic-fk-entity-fields.json` + `.clone-configurations.json`); record maintenance cycles as `CycleType = 'Consolidation'` rows (§2.4 #1); port *Harness²* Offline Harness Refiner (`Propose → Probe → Compose` *invariant*/*domain* prompts over `AgentEvalDriver` + `MJ: Experiments`) with history fed to proposer and selector and model-change re-verification (§5.5 #4); persist PR #6279 `DiscoverWorkflowPromotionCandidates`, `EvaluateWorkflowCanonHealth`, and `GraphStage` `Contradicts` proposals. | `migrations/v6/...`, `metadata/entities/JSONType-interfaces/`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/TestingFramework/Engine/src/drivers/AgentEvalDriver.ts` |
-| **PR 3b (Phase 2b): REM Dreaming MVP** — starts once PR 1's run context items have collected enough exposure data to tell whether injected items help | Daily REM dreaming phase (`ParallelExecutionCoordinator` multi-model lenses + Cold Falsifier + `Jev` gate + anti-redreaming negative cache + `MaxDreamCycleCostUSD` circuit breaker), writing into the PR 3a tables. | `packages/AI/Agents/src/memory-manager-agent.ts`, `metadata/prompts/templates/memory-manager/` |
+| **PR 3b (Phase 2b): REM Dreaming MVP** — starts once PR 1's context items have collected enough exposure data to tell whether injected items help | Daily REM dreaming phase (`ParallelExecutionCoordinator` multi-model lenses + Cold Falsifier + `Jev` gate + anti-redreaming negative cache + `MaxDreamCycleCostUSD` circuit breaker), writing into the PR 3a tables. | `packages/AI/Agents/src/memory-manager-agent.ts`, `metadata/prompts/templates/memory-manager/` |
 | **PR 4 (Phase 3): RL Verification Router, Procedural Skills & Safe `AIAgentRequest` Inbox** | Wire counterfactual replay + read-only `RunQuery` falsification into `Verifying` proposals; implement `LearningCycleProposalMaterializer` (`Provisional` auto-apply vs. `AIAgentRequest` human approval with non-resuming settlement handler in `MJAIAgentRequestEntityServer`); add `DraftSkill` (`RequestedOnly` → `Auto` + `IsCanonical`) and monotonic `SourceTrustCeiling` poisoning enforcement + rollback on post-apply regression. | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts`, `packages/AI/Agents/src/memory-manager-agent.ts`, `packages/Angular/Explorer/core-entity-forms/` |
 | **PR 5 (Phase 4, Native Search & Middleware Hooks): Canon Semantic Graph Wiring, `memoryToolCalls` & Agent Hooks** | Persist `MemoryManagerAgent` EAV `entityTriples` into `MJ: Graph Edges` (`Proposed`); register `NoteLineageEdgeProvider` & `ProposalLineageEdgeProvider`; add 1–2 hop Canon-preferring graph expansion + bounded EMA edge weight updates; add opt-in native `memoryToolCalls` (`MemoryToolManager`); wire `BaseActionFilter` and `BeforeAction`/`AfterAction`/`AfterTurn`/`BeforeFinish` middleware hooks in `BaseAgent`. | `packages/AI/Agents/src/`, `@memberjunction/core-entities` (`GraphEngine`) |
 
@@ -627,7 +695,7 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 3. **Signal-to-Noise Funnel**: Share of raw REM drafts surviving Cold Falsifier + `Jev` (~15–25%), share passing replay/SQL verification, and **human approval rate $\ge 70\%$** on Canon/Skill requests routed to `MJ: AI Agent Requests` (keeping reviewer volume low and high-trust).
 4. **Contradiction Resolution Rate**: Reduction in unresolved `[Contradiction flagged...]` high-importance note pairs via verified conditional disambiguation proposals.
 5. **Refiner Calibration (v1.2)**: per editor and per model, the gap between `PredictedEffect` and `ObservedEffect` narrows over successive cycles, and the share of applied harness edits that survive re-verification after a model change is reported rather than assumed.
-6. **Exposure Coverage (v1.2)**: every run that injects memory has matching `Injected` rows, checked by an integration test that runs an agent with notes and asserts the rows (and the `Cited` rows when the response sets `memoryUsed`). Maintenance passes actually run daily: one completed `CycleType = 'Consolidation'` row per day.
+6. **Exposure Coverage (v1.2)**: every loop run and every realtime session leg that injects memory has matching `Injected` rows, checked by an integration test that runs an agent with notes and asserts the rows (and the `Cited` rows when the response sets `memoryUsed`). Maintenance passes actually run daily: one completed `CycleType = 'Consolidation'` row per day.
 
 ---
 
@@ -639,11 +707,11 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 
 | Rung | Question | Mechanism | Cost | Strength |
 | --- | --- | --- | --- | --- |
-| **0. Exposure** | Was it present? | `Injected` / `Withheld` rows in `MJ: AI Agent Run Context Items` (§3.6) across notes, examples, skills, scoped prompt parts, and `GraphConcept`s: rank, score, and **arm** | Low | Prerequisite for all downstream attribution |
+| **0. Exposure** | Was it present? | `Injected` / `Withheld` rows in `MJ: AI Agent Context Items` (§3.6) across notes, examples, skills, scoped prompt parts, and `GraphConcept`s: rank, score, and **arm** | Low | Prerequisite for all downstream attribution |
 | **1. Usage** | Did the model act on it? | Render notes/examples with compact short IDs (`[N1]`, `[E1]`); add `memoryUsed?: string[]` to `LoopAgentResponse` (§2.2 #3), recorded as `Cited` rows keyed on the citing step (§3.6) | Low | Separates "ignored" from "acted on" across co-injected notes |
 | **2. Correlation** | Do runs with it do better? | Join exposure to rubric `ProductionSampling` scores, regenerate (`ConversationDetail.ReplacedAt`), edit-and-resend (`OriginalMessageChanged`), validation retries, tool-error steps, run success, and user ratings | Low | Screens candidates for Rung 3 replay |
 | **3. Counterfactual Replay** | Does adding/removing it change the decision, and is the result better? | Clone `AIPromptRun.Messages`, splice or withhold the candidate note/skill/prompt-part block, and **rerun that single decision** under the same model/config (`temp = 0` randomized A/B judge, §5.2) | Medium | Strong causal signal per turn with **zero side effects** |
-| **4. Randomized Holdout** | Does it help on average in production? | For eligible non-constraint notes, withhold with small probability ($\approx 10\%$) using deterministic run-ID bucketing (`SampleBucket` in `packages/Rubrics/Base/src/sampling.ts`). **Never withhold** `IsCanonical = 1` `Constraint` notes or `Immutable`/`Protected` tiers | Low per run | Gold-standard production causal metric |
+| **4. Randomized Holdout** | Does it help on average in production? | For eligible non-constraint notes, withhold with small probability ($\approx 10\%$) using deterministic run-ID bucketing (session-ID for realtime, §3.6.1) (`SampleBucket` in `packages/Rubrics/Base/src/sampling.ts`). **Never withhold** `IsCanonical = 1` `Constraint` notes or `Immutable`/`Protected` tiers | Low per run | Gold-standard production causal metric |
 
 ### 8.2 Thin Canon Contract Across MJ Registries
 
@@ -688,7 +756,7 @@ Conversation-scoped `MJ: Artifacts` act as the staging area for procedural outpu
 | Evaluation context | `EvaluationContext` JSONType: model, vendor, prompt version, configuration, cohort |
 | Proposer **and** selector read it | §5.5 #4 |
 | Continuation after a model or benchmark change | Model-change re-verification with `SupersedesProposalID` lineage (§5.5 #4) |
-| Observed outcomes need measurement | Run context items (§3.6) and the Evidence Ladder (§8.1) |
+| Observed outcomes need measurement | Context items (§3.6) and the Evidence Ladder (§8.1) |
 
 **Three lessons that changed this plan:**
 1. **The optimizer needs outcomes, and we record none today.** Nothing ties a note, example or harness edit to whether a run went better (§2.4 #5). That is why §3.6 moves into Phase 0 and REM dreaming (PR 3b) waits for its data.
