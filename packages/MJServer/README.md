@@ -481,6 +481,8 @@ sequenceDiagram
 
 `/healthcheck` keeps meaning "serve traffic", so load balancers, the Explorer reconnect poll and the MJAPI image's `HEALTHCHECK` work unchanged. Platforms that restart a container which is not live within a time limit can point their liveness probe at `/healthcheck/live`. A port already in use now fails at the start of boot rather than the end. A boot that throws logs the phase it failed in; the error text is not served.
 
+A boot that loads no entity metadata fails too, in the `Checking entity metadata` phase. Metadata loading logs a failed read and carries on, so without this check such a server reported ready and then failed every request that needs metadata. The log line names the cause (the last metadata load error, or that the `MJ_Metadata` dataset held no entities).
+
 ### Per-Request Provider Isolation
 
 Each GraphQL request receives its own `SQLServerDataProvider` instance, ensuring complete transaction isolation between concurrent requests. Metadata is cached and reused across providers for efficiency.
