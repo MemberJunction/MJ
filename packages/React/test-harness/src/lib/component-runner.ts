@@ -613,6 +613,21 @@ interface ComponentLoadFailure {
  */
 export const SANDBOX_UTILITY_UNAVAILABLE_RULE = 'sandbox-utility-unavailable';
 
+/**
+ * Rule of the warning raised when the component made a request the harness's network allowlist
+ * refused. The page may reach only the runtime and component-library CDNs; data comes through the
+ * harness's exposed functions, so a component has no legitimate reason to call any other host.
+ */
+export const NETWORK_REQUEST_BLOCKED_RULE = 'network-request-blocked';
+
+/** Every script and stylesheet URL the registered component libraries load from. */
+export function LibraryNetworkUrls(libraries: readonly Pick<MJComponentLibraryEntity, 'CDNUrl' | 'CDNCssUrl'>[]): string[] {
+  return libraries.flatMap(lib => [
+    ...(lib.CDNUrl ? [lib.CDNUrl] : []),
+    ...(lib.CDNCssUrl ? lib.CDNCssUrl.split(',').map(url => url.trim()).filter(url => url.length > 0) : []),
+  ]);
+}
+
 export interface ComponentExecutionResult {
   success: boolean;
   html: string;
@@ -657,6 +672,12 @@ export interface ComponentExecutionResult {
    * a component whose calls all returned zero rows.
    */
   dataAccess?: DataAccessRecord[];
+
+  /**
+   * Requests the page made that the network allowlist refused, as origin + path (the query
+   * string is dropped). Empty when nothing was blocked or the filter is off.
+   */
+  blockedNetworkRequests?: string[];
 }
 
 /**
@@ -784,6 +805,19 @@ export class ComponentRunner {
    * warnings rather than errors so they never fail the run or reach a fixer as a defect:
    * the call was not tested, and the component may well be correct.
    */
+  private static buildBlockedRequestWarnings(blocked: string[]): Violation[] {
+    return [...new Set(blocked)].map(url => ({
+      message:
+        `The component requested ${url}, which the test harness blocked. Components get data ` +
+        `through the provided utilities and may not call other hosts.`,
+      severity: 'medium' as const,
+      rule: NETWORK_REQUEST_BLOCKED_RULE,
+      line: 0,
+      column: 0,
+      source: 'test-harness' as const
+    }));
+  }
+
   private static buildUnavailableUtilityWarnings(unavailableUtilities: Set<string>): Violation[] {
     return [...unavailableUtilities].map(name => ({
       message:
@@ -892,6 +926,7 @@ export class ComponentRunner {
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
     const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as MJComponentLibraryEntity[];
+    this.browserManager.AllowNetworkUrls(LibraryNetworkUrls(allLibraries));
 
     try {
       
@@ -2003,6 +2038,7 @@ export class ComponentRunner {
           })),
           ...capWarnings,
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+          ...ComponentRunner.buildBlockedRequestWarnings(this.browserManager.GetBlockedRequests(page)),
         ],
         console: consoleLogs,
         screenshot,
@@ -2010,6 +2046,7 @@ export class ComponentRunner {
         renderCount,
         codeExecutionSuccess,
         dataAccess,
+        blockedNetworkRequests: this.browserManager.GetBlockedRequests(page),
         sourceMaps: (this as any)._lastSourceMaps,
       };
 
@@ -2089,6 +2126,7 @@ export class ComponentRunner {
             column: 0
           })),
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+          ...ComponentRunner.buildBlockedRequestWarnings(this.browserManager.GetBlockedRequests(page)),
         ],
         console: consoleLogs,
         executionTime: Date.now() - startTime,
@@ -2097,6 +2135,7 @@ export class ComponentRunner {
         codeExecutionSuccess,
         // Data calls made before the failure still describe what the component reached for.
         dataAccess,
+        blockedNetworkRequests: this.browserManager.GetBlockedRequests(page),
       };
 
       if (debug) {
@@ -2140,6 +2179,7 @@ export class ComponentRunner {
     // environment with window/document, but we're in Node.js with Playwright
     const { getCoreRuntimeLibraries } = await import('@memberjunction/react-runtime');
     const coreLibraries = getCoreRuntimeLibraries(debug);
+    this.browserManager.AllowNetworkUrls(coreLibraries.map(lib => lib.cdnUrl).filter((url): url is string => !!url));
     
     // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {

@@ -13,10 +13,41 @@ vi.mock('playwright', () => ({
   chromium: { launch, connect, connectOverCDP },
 }));
 
+import type { Page } from 'playwright';
 import { BrowserManager, ClassifyConnectEndpoint } from '../../lib/browser-context';
 
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
 const REUSE_CONTEXT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_REUSE_CONTEXT';
+
+type Spy = ReturnType<typeof vi.fn>;
+type FakePage = { close: Spy; route: Spy; routeWebSocket: Spy };
+type FakeContext = { newPage: Spy; close: Spy; route: Spy; routeWebSocket: Spy };
+type FakeBrowser = { newContext: Spy; contexts: Spy; close: Spy };
+
+/** A fake browser whose contexts all open the same page; launch and both connects return it. */
+function installFakeBrowser(): { page: FakePage; context: FakeContext; existingContext: FakeContext; browser: FakeBrowser } {
+  const page: FakePage = {
+    close: vi.fn().mockResolvedValue(undefined),
+    route: vi.fn().mockResolvedValue(undefined),
+    routeWebSocket: vi.fn().mockResolvedValue(undefined),
+  };
+  const fakeContext = (): FakeContext => ({
+    newPage: vi.fn().mockResolvedValue(page),
+    close: vi.fn().mockResolvedValue(undefined),
+    route: vi.fn().mockResolvedValue(undefined),
+    routeWebSocket: vi.fn().mockResolvedValue(undefined),
+  });
+  const context = fakeContext();
+  const browser: FakeBrowser = {
+    newContext: vi.fn().mockResolvedValue(context),
+    contexts: vi.fn().mockReturnValue([]),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+  launch.mockResolvedValue(browser);
+  connect.mockResolvedValue(browser);
+  connectOverCDP.mockResolvedValue(browser);
+  return { page, context, existingContext: fakeContext(), browser };
+}
 
 describe('ClassifyConnectEndpoint', () => {
   it('classifies http(s):// endpoints as CDP', () => {
@@ -42,14 +73,10 @@ describe('ClassifyConnectEndpoint', () => {
 });
 
 describe('BrowserManager attach behavior', () => {
-  let page: { close: ReturnType<typeof vi.fn> };
-  let context: { newPage: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
-  let existingContext: { newPage: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
-  let browser: {
-    newContext: ReturnType<typeof vi.fn>;
-    contexts: ReturnType<typeof vi.fn>;
-    close: ReturnType<typeof vi.fn>;
-  };
+  let page: FakePage;
+  let context: FakeContext;
+  let existingContext: FakeContext;
+  let browser: FakeBrowser;
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -59,23 +86,7 @@ describe('BrowserManager attach behavior', () => {
     delete process.env[CONNECT_ENV_VAR];
     delete process.env[REUSE_CONTEXT_ENV_VAR];
 
-    page = { close: vi.fn().mockResolvedValue(undefined) };
-    context = {
-      newPage: vi.fn().mockResolvedValue(page),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    existingContext = {
-      newPage: vi.fn().mockResolvedValue(page),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    browser = {
-      newContext: vi.fn().mockResolvedValue(context),
-      contexts: vi.fn().mockReturnValue([]),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    launch.mockResolvedValue(browser);
-    connect.mockResolvedValue(browser);
-    connectOverCDP.mockResolvedValue(browser);
+    ({ page, context, existingContext, browser } = installFakeBrowser());
   });
 
   afterEach(() => {
@@ -160,37 +171,17 @@ describe('BrowserManager attach behavior', () => {
 });
 
 describe('BrowserManager.close ownership', () => {
-  let page: { close: ReturnType<typeof vi.fn> };
-  let context: { newPage: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
-  let existingContext: { newPage: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
-  let browser: {
-    newContext: ReturnType<typeof vi.fn>;
-    contexts: ReturnType<typeof vi.fn>;
-    close: ReturnType<typeof vi.fn>;
-  };
+  let page: FakePage;
+  let context: FakeContext;
+  let existingContext: FakeContext;
+  let browser: FakeBrowser;
 
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env[CONNECT_ENV_VAR];
     delete process.env[REUSE_CONTEXT_ENV_VAR];
 
-    page = { close: vi.fn().mockResolvedValue(undefined) };
-    context = {
-      newPage: vi.fn().mockResolvedValue(page),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    existingContext = {
-      newPage: vi.fn().mockResolvedValue(page),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    browser = {
-      newContext: vi.fn().mockResolvedValue(context),
-      contexts: vi.fn().mockReturnValue([]),
-      close: vi.fn().mockResolvedValue(undefined),
-    };
-    launch.mockResolvedValue(browser);
-    connect.mockResolvedValue(browser);
-    connectOverCDP.mockResolvedValue(browser);
+    ({ page, context, existingContext, browser } = installFakeBrowser());
   });
 
   it('closes the browser we launched', async () => {
@@ -222,5 +213,86 @@ describe('BrowserManager.close ownership', () => {
     expect(page.close).toHaveBeenCalledTimes(1); // our page is closed
     expect(existingContext.close).not.toHaveBeenCalled(); // shared context is left intact
     expect(browser.close).not.toHaveBeenCalled(); // external browser stays alive
+  });
+});
+
+describe('BrowserManager network allowlist', () => {
+  let page: FakePage;
+  let context: FakeContext;
+  let existingContext: FakeContext;
+  let browser: FakeBrowser;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env[CONNECT_ENV_VAR];
+    delete process.env[REUSE_CONTEXT_ENV_VAR];
+    ({ page, context, existingContext, browser } = installFakeBrowser());
+  });
+
+  /** A fake Playwright route for `url`. */
+  const fakeRoute = (url: string) => ({
+    request: () => ({ url: () => url }),
+    abort: vi.fn().mockResolvedValue(undefined),
+    fallback: vi.fn().mockResolvedValue(undefined),
+  });
+
+  it('guards the context it creates: service workers blocked, requests and WebSockets routed', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+
+    expect(browser.newContext).toHaveBeenCalledWith(expect.objectContaining({ serviceWorkers: 'block' }));
+    expect(context.route).toHaveBeenCalledWith('**/*', expect.any(Function));
+    expect(context.routeWebSocket).toHaveBeenCalledTimes(1);
+    expect(page.route).toHaveBeenCalledWith('**/*', expect.any(Function));
+    expect(page.routeWebSocket).toHaveBeenCalledTimes(1);
+  });
+
+  it("guards only its own pages in a reused context, never the user's other tabs", async () => {
+    browser.contexts.mockReturnValue([existingContext]);
+    const mgr = new BrowserManager({ connect: 'http://localhost:9222', reuseExistingContext: true });
+    await mgr.Initialize();
+    await mgr.GetPage();
+
+    expect(existingContext.route).not.toHaveBeenCalled();
+    expect(existingContext.routeWebSocket).not.toHaveBeenCalled();
+    expect(page.route).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes nothing in 'unrestricted' mode", async () => {
+    const mgr = new BrowserManager({ networkAccess: 'unrestricted' });
+    await mgr.Initialize();
+    await mgr.GetPage();
+
+    expect(browser.newContext).toHaveBeenCalledWith(expect.objectContaining({ serviceWorkers: 'allow' }));
+    expect(context.route).not.toHaveBeenCalled();
+    expect(page.route).not.toHaveBeenCalled();
+  });
+
+  it('aborts a request to a host that was not allowed and records it for that page', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    mgr.AllowNetworkUrls(['https://unpkg.com/react.js']);
+    const handler = page.route.mock.calls[0][1] as (route: ReturnType<typeof fakeRoute>) => Promise<void>;
+
+    const allowed = fakeRoute('https://unpkg.com/antd.js');
+    const outside = fakeRoute('https://attacker.example/c?rows=secret');
+    await handler(allowed);
+    await handler(outside);
+
+    expect(allowed.fallback).toHaveBeenCalled();
+    expect(allowed.abort).not.toHaveBeenCalled();
+    expect(outside.abort).toHaveBeenCalledWith('blockedbyclient');
+    // The page the manager opened: the fake context's newPage resolves to the shared fake page.
+    const opened: Page = await context.newPage.mock.results[0].value;
+    expect(mgr.GetBlockedRequests(opened)).toEqual(['https://attacker.example/c']);
+  });
+
+  it('allows the hosts given in the options from the start', async () => {
+    const mgr = new BrowserManager({ allowedNetworkHosts: ['cdn.example.com'] });
+    await mgr.Initialize();
+    const handler = page.route.mock.calls[0][1] as (route: ReturnType<typeof fakeRoute>) => Promise<void>;
+    const allowed = fakeRoute('https://cdn.example.com/lib.js');
+    await handler(allowed);
+    expect(allowed.fallback).toHaveBeenCalled();
   });
 });
