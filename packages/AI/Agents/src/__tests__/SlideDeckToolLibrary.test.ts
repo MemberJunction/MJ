@@ -427,4 +427,54 @@ describe('SlideDeckToolLibrary', () => {
         );
         expect(afterStep.Slides.find((s) => s.SlideID === slide2Id)?.Regions[0].RevealStep).toBe(4);
     });
+
+    it('exposes list_design_options and rejects invalid layout, transition, and themeId values upfront', async () => {
+        const lib = new SlideDeckToolLibrary();
+        const ownerId = 'user-owner-design';
+        const owner = new UserInfo();
+        owner.ID = ownerId;
+
+        const baseDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Validation Deck', 'deck-val');
+        const contentStr = SlideDeckEngine.Instance.SerializeDeckSpec(baseDeck);
+
+        const optionsRes = await lib.InvokeTool('list_design_options', {}, contentStr);
+        expect(optionsRes.success).toBe(true);
+        const optionsData = optionsRes.data as {
+            layouts: Array<{ Kind: string }>;
+            themes: Array<{ ThemeID: string }>;
+            transitions: string[];
+        };
+        expect(optionsData.layouts.map((l) => l.Kind)).toEqual(
+            expect.arrayContaining(['KpiStrip', 'Timeline', 'BentoGrid', 'Quadrant', 'MetricComparison'])
+        );
+        expect(optionsData.themes.length).toBeGreaterThanOrEqual(8);
+        expect(optionsData.transitions).toEqual(['none', 'fade', 'slide', 'zoom']);
+
+        const badLayout = await lib.InvokeTool(
+            'add_slide',
+            { title: 'Invalid', layout: 'FakeLayout' },
+            contentStr,
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(badLayout.success).toBe(false);
+        expect(badLayout.errorMessage).toContain('Invalid slide layout');
+
+        const badTheme = await lib.InvokeTool(
+            'apply_design_preset',
+            { themeId: 'non-existent-theme' },
+            contentStr,
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(badTheme.success).toBe(false);
+        expect(badTheme.errorMessage).toContain('Unknown themeId');
+
+        const badTransition = await lib.InvokeTool(
+            'update_slide',
+            { slideId: baseDeck.Slides[0].SlideID, transition: 'checkerboard' },
+            contentStr,
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(badTransition.success).toBe(false);
+        expect(badTransition.errorMessage).toContain('Invalid slide transition');
+    });
 });

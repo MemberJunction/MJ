@@ -20,7 +20,9 @@ import {
     SlideCardElevation,
     SlideDeckEngine,
     SlideDeckSpec,
+    SLIDE_DECK_THEME_PRESETS,
     SlideLayoutKind,
+    SLIDE_LAYOUT_CATALOG,
     SlideRegionKind,
     SlideRegionSpec,
     SlideSpec,
@@ -35,6 +37,12 @@ import {
     ParseSuggestionAnchor,
     ValidateEmbeddedArtifactAccess
 } from './artifact-comment-suggestion-helper';
+
+const VALID_SLIDE_LAYOUTS: string[] = SLIDE_LAYOUT_CATALOG.map((m) => m.Kind);
+const VALID_SLIDE_TRANSITIONS: string[] = ['none', 'fade', 'slide', 'zoom'];
+const VALID_THEME_PRESET_IDS: string[] = SLIDE_DECK_THEME_PRESETS.map((t) => t.ThemeID);
+const VALID_REGION_KINDS: string[] = ['rich-text', 'mj-block', 'callout', 'table', 'image', 'big-number', 'quote'];
+const VALID_CALLOUT_TONES: string[] = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'];
 
 /**
  * Server-side and agent tool library for `Presentation` (`Slide Deck`) artifacts (`MJ Slides`, § 3.6 & § 5).
@@ -89,6 +97,15 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 }
             },
             {
+                name: 'list_design_options',
+                description:
+                    'Returns the catalog of all supported slide layouts (all 16 layouts with region slots and recommended usage), all 8 designer theme presets (colors, cardElevation, backgroundStyle), valid transitions, and region kinds.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
                 name: 'add_slide',
                 description:
                     'Adds a new slide to the presentation with a canonical layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).',
@@ -98,6 +115,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         slideId: { type: 'string', description: 'Optional explicit SlideID.' },
                         layout: {
                             type: 'string',
+                            enum: VALID_SLIDE_LAYOUTS,
                             description:
                                 'Canonical slide layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).'
                         },
@@ -130,13 +148,21 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         slideId: { type: 'string', description: 'Target SlideID to update.' },
                         title: { type: 'string', description: 'New slide title.' },
                         subtitle: { type: 'string', description: 'New slide subtitle.' },
-                        layout: { type: 'string', description: 'New canonical layout.' },
+                        layout: {
+                            type: 'string',
+                            enum: VALID_SLIDE_LAYOUTS,
+                            description: 'New canonical layout.'
+                        },
                         markdownContent: {
                             type: 'string',
                             description: 'Optional updated Markdown content for the primary region of this slide.'
                         },
                         speakerNotes: { type: 'string', description: 'Updated speaker notes.' },
-                        transition: { type: 'string', description: 'Slide transition (none, fade, slide, zoom).' },
+                        transition: {
+                            type: 'string',
+                            enum: VALID_SLIDE_TRANSITIONS,
+                            description: 'Slide transition (none, fade, slide, zoom).'
+                        },
                         hidden: { type: 'boolean', description: 'Whether the slide is hidden during presentation.' },
                         expectedRevisionHash: {
                             type: 'string',
@@ -212,6 +238,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         label: { type: 'string', description: 'Optional region label.' },
                         kind: {
                             type: 'string',
+                            enum: VALID_REGION_KINDS,
                             description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).'
                         },
                         markdownContent: { type: 'string', description: 'Markdown content for this region.' },
@@ -251,7 +278,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         slideId: { type: 'string', description: 'Target SlideID.' },
                         regionId: { type: 'string', description: 'Target RegionID.' },
                         label: { type: 'string', description: 'Optional region label.' },
-                        kind: { type: 'string', description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).' },
+                        kind: {
+                            type: 'string',
+                            enum: VALID_REGION_KINDS,
+                            description: 'Region kind (rich-text, mj-block, callout, table, image, big-number, quote).'
+                        },
                         markdownContent: { type: 'string', description: 'Replacement Markdown content.' },
                         imageUrl: { type: 'string', description: 'Image URL or data URI when kind is image.' },
                         imageAlt: { type: 'string', description: 'Accessible alt text / caption when kind is image.' },
@@ -259,7 +290,15 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         bigNumberLabel: { type: 'string', description: 'Metric label when kind is big-number.' },
                         bigNumberDelta: { type: 'string', description: 'Metric delta when kind is big-number.' },
                         quoteAttribution: { type: 'string', description: 'Attribution when kind is quote.' },
-                        calloutTone: { type: 'string', description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).' },
+                        calloutTone: {
+                            type: 'string',
+                            enum: VALID_CALLOUT_TONES,
+                            description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).'
+                        },
+                        revealStep: {
+                            type: 'number',
+                            description: 'Optional 1-based progressive reveal step during Present Mode (0 or omit for immediate).'
+                        },
                         mjBlock: { type: 'object', description: 'Optional MJ block descriptor.' },
                         expectedRevisionHash: {
                             type: 'string',
@@ -336,6 +375,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     properties: {
                         themeId: {
                             type: 'string',
+                            enum: VALID_THEME_PRESET_IDS,
                             description:
                                 'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
                         },
@@ -361,6 +401,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     properties: {
                         themeId: {
                             type: 'string',
+                            enum: VALID_THEME_PRESET_IDS,
                             description:
                                 'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
                         },
@@ -412,7 +453,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     properties: {
                         markdown: { type: 'string', description: 'Source Markdown document text.' },
                         deckTitle: { type: 'string', description: 'Optional title for the generated presentation.' },
-                        themeId: { type: 'string', description: 'Optional theme preset ID.' },
+                        themeId: {
+                            type: 'string',
+                            enum: VALID_THEME_PRESET_IDS,
+                            description: 'Optional theme preset ID.'
+                        },
                         expectedRevisionHash: {
                             type: 'string',
                             description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
@@ -474,7 +519,19 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     properties: {
                         operations: {
                             type: 'array',
-                            items: { type: 'object' },
+                            minItems: 1,
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    slideId: { type: 'string', minLength: 1 },
+                                    title: { type: 'string' },
+                                    subtitle: { type: 'string' },
+                                    layout: { type: 'string', enum: VALID_SLIDE_LAYOUTS },
+                                    speakerNotes: { type: 'string' },
+                                    hidden: { type: 'boolean' }
+                                },
+                                required: ['slideId']
+                            },
                             description: 'Array of { slideId, title?, subtitle?, layout?, speakerNotes?, hidden? } updates.'
                         },
                         expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash for optimistic concurrency protection.' }
@@ -522,6 +579,8 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
 
         switch (toolName) {
+            case 'list_design_options':
+                return this.handleListDesignOptions();
             case 'read_deck':
             case 'get_deck_outline':
                 return this.handleReadDeck(contentStr, input);
@@ -692,6 +751,50 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         return createHash('sha256').update(content ?? '', 'utf8').digest('hex');
     }
 
+    private handleListDesignOptions(): ArtifactToolResult {
+        return {
+            success: true,
+            data: {
+                layouts: SLIDE_LAYOUT_CATALOG,
+                themes: SLIDE_DECK_THEME_PRESETS,
+                transitions: VALID_SLIDE_TRANSITIONS,
+                cardElevations: ['flat', 'soft', 'glass'],
+                backgroundStyles: ['solid', 'gradient', 'mesh', 'accent-strip'],
+                regionKinds: VALID_REGION_KINDS
+            }
+        };
+    }
+
+    private validateLayoutInput(rawLayout: ArtifactJsonValue | undefined): string | null {
+        if (rawLayout === undefined) {
+            return null;
+        }
+        if (typeof rawLayout !== 'string' || !VALID_SLIDE_LAYOUTS.includes(rawLayout)) {
+            return `Invalid slide layout '${String(rawLayout)}'. Must be one of: ${VALID_SLIDE_LAYOUTS.join(', ')}.`;
+        }
+        return null;
+    }
+
+    private validateTransitionInput(rawTransition: ArtifactJsonValue | undefined): string | null {
+        if (rawTransition === undefined) {
+            return null;
+        }
+        if (typeof rawTransition !== 'string' || !VALID_SLIDE_TRANSITIONS.includes(rawTransition)) {
+            return `Invalid slide transition '${String(rawTransition)}'. Must be one of: ${VALID_SLIDE_TRANSITIONS.join(', ')}.`;
+        }
+        return null;
+    }
+
+    private validateThemePresetInput(rawThemeId: ArtifactJsonValue | undefined): string | null {
+        if (rawThemeId === undefined) {
+            return null;
+        }
+        if (typeof rawThemeId !== 'string' || !VALID_THEME_PRESET_IDS.includes(rawThemeId.trim())) {
+            return `Unknown themeId '${String(rawThemeId)}'. Valid presets: ${VALID_THEME_PRESET_IDS.join(', ')}. Call list_design_options for preset swatches.`;
+        }
+        return null;
+    }
+
     private handleReadDeck(contentStr: string, input: ArtifactToolArgs): ArtifactToolResult {
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
         const outline = SlideDeckEngine.Instance.BuildDeckOutline(deck);
@@ -744,6 +847,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: revError };
         }
 
+        const layoutError = this.validateLayoutInput(input.layout);
+        if (layoutError) {
+            return { success: false, data: null, errorMessage: layoutError };
+        }
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
         const title = typeof input.title === 'string' && input.title.trim() ? input.title.trim() : 'New Slide';
         const subtitle = typeof input.subtitle === 'string' ? input.subtitle : undefined;
@@ -822,6 +929,14 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
         if (!slideId) {
             return { success: false, data: null, errorMessage: 'update_slide requires a non-empty slideId.' };
+        }
+        const layoutError = this.validateLayoutInput(input.layout);
+        if (layoutError) {
+            return { success: false, data: null, errorMessage: layoutError };
+        }
+        const transitionError = this.validateTransitionInput(input.transition);
+        if (transitionError) {
+            return { success: false, data: null, errorMessage: transitionError };
         }
 
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
@@ -1487,7 +1602,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 TextColor: typeof input.textColor === 'string' ? input.textColor : undefined
             });
         } else {
-            const themeId = typeof input.themeId === 'string' ? input.themeId : 'mj-default';
+            const themeErr = this.validateThemePresetInput(input.themeId);
+            if (themeErr) {
+                return { success: false, data: null, errorMessage: themeErr };
+            }
+            const themeId = typeof input.themeId === 'string' ? input.themeId.trim() : 'mj-default';
             updatedDeck = SlideDeckEngine.Instance.ApplyTheme(deck, themeId);
         }
 
@@ -1519,6 +1638,14 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: lockErr };
         }
 
+        const themeErr = this.validateThemePresetInput(input.themeId);
+        if (themeErr) {
+            return { success: false, data: null, errorMessage: themeErr };
+        }
+        const transitionErr = this.validateTransitionInput(input.transition);
+        if (transitionErr) {
+            return { success: false, data: null, errorMessage: transitionErr };
+        }
         const themeId = typeof input.themeId === 'string' && input.themeId.trim() ? input.themeId.trim() : 'mj-default';
         const transition =
             typeof input.transition === 'string' && ['none', 'fade', 'slide', 'zoom'].includes(input.transition)
@@ -1860,6 +1987,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             const slideId = typeof op.slideId === 'string' ? op.slideId.trim() : '';
             if (!slideId) {
                 return { success: false, data: null, errorMessage: 'Each operation in batch_mutate_slides requires slideId.' };
+            }
+            const layoutErr = this.validateLayoutInput(op.layout);
+            if (layoutErr) {
+                return { success: false, data: null, errorMessage: layoutErr };
             }
             const slide = deck.Slides.find((s) => s.SlideID === slideId);
             if (!slide) {

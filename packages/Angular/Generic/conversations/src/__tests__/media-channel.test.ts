@@ -1,7 +1,7 @@
 // The Media channel imports its standalone Angular surface component (partial-compiled Angular libs
 // require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
@@ -276,5 +276,105 @@ describe('Realtime media URL scheme screening (PR #6034)', () => {
     expect(IsEmbeddableSurfaceUrl('javascript:alert(1)', origin)).toBe(false);
     expect(IsEmbeddableSurfaceUrl('data:text/html,hi', origin)).toBe(false);
     expect(IsEmbeddableSurfaceUrl('blob:https://app.example.com/id', origin)).toBe(false);
+  });
+
+  it('checks external URL health before adding broken media and refuses bad URLs synchronously or asynchronously', async () => {
+    const channel = new RealtimeMediaChannel();
+    const notes: string[] = [];
+    const requests: string[] = [];
+    channel.Initialize({
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => notes.push(text),
+      RequestSave: (json: string) => requests.push(json),
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'sess-health',
+      ExecuteServerAction: async () => null,
+    });
+
+    try {
+      // Sync rejection: broken image never enters State
+      RealtimeMediaChannel.UrlHealthChecker = (url: string) =>
+        url.includes('404') ? { Ok: false, Reason: '404 Not Found' } : { Ok: true };
+      const syncFail = JSON.parse(
+        channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/404.png', displayName: 'Broken' }),
+        ) as string,
+      );
+      expect(syncFail.success).toBe(false);
+      expect(syncFail.error).toContain('404 Not Found');
+      expect(channel.State.Items).toHaveLength(0);
+
+      // Async healthy vs broken probe
+      RealtimeMediaChannel.UrlHealthChecker = async (url: string) =>
+        url.includes('broken') ? { Ok: false, Reason: 'Network unreachable' } : { Ok: true };
+      const asyncFail = JSON.parse(
+        await channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/broken.png', displayName: 'Broken2' }),
+        ),
+      );
+      expect(asyncFail.success).toBe(false);
+      expect(asyncFail.error).toContain('Network unreachable');
+      expect(channel.State.Items).toHaveLength(0);
+
+      const asyncPass = JSON.parse(
+        await channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/ok.png', displayName: 'Healthy' }),
+        ),
+      );
+      expect(asyncPass.success).toBe(true);
+      expect(channel.State.Items).toHaveLength(1);
+    } finally {
+      RealtimeMediaChannel.UrlHealthChecker = null;
+      channel.Dispose();
+    }
+  });
+
+  it('exposes GetState() and emits passive perception delta notes on user tab switches and closes', async () => {
+    vi.useFakeTimers();
+    const channel = new RealtimeMediaChannel();
+    const notes: string[] = [];
+    try {
+      channel.Initialize({
+        AgentName: 'Sage',
+        Provider: null,
+        SendContextNote: (text: string) => notes.push(text),
+        RequestSave: () => undefined,
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        AgentSessionID: 'sess-passive',
+        ExecuteServerAction: async () => null,
+      });
+
+      channel.ApplyAgentTool(
+        MEDIA_TOOL_NAMES.ShowMedia,
+        JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/one.png', displayName: 'One' }),
+      );
+      const second = JSON.parse(
+        channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'image', url: 'https://cdn.example.com/two.png', displayName: 'Two' }),
+        ) as string,
+      );
+
+      expect(channel.GetState()).toMatchObject({
+        activeItemId: second.id,
+        itemCount: 2,
+      });
+
+      notes.length = 0;
+      const firstId = channel.State.Items[0].Id;
+      channel.State.SetActive(firstId);
+      vi.advanceTimersByTime(1000);
+
+      expect(notes.some((n) => n.includes('[channel:Media#') && n.includes(firstId))).toBe(true);
+    } finally {
+      channel.Dispose();
+      vi.useRealTimers();
+    }
   });
 });
