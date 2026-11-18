@@ -302,7 +302,7 @@ export const CORE_SCHEMA_SENTINEL = '__mj_core_schema_placeholder__';
 /** Replace Flyway placeholders with target schema, and protect `${mjSchema}` used as a schema qualifier. */
 function preprocess(sql: string, schema: string): string {
   return sql
-    .replace(/\$\{flyway:defaultSchema\}/g, schema)
+    .replace(/\$\{flyway:defaultSchema\}/g, () => schema)
     // `[${mjSchema}].x` and `${mjSchema}.x` only: a name BUILT from the placeholder
     // (`[${mjSchema}_BizAppsCommon]`) is not the core schema and keeps its own handling.
     .replace(/\[\$\{mjSchema\}\](?=\s*\.)/g, () => `[${CORE_SCHEMA_SENTINEL}]`)
