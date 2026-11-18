@@ -131,6 +131,7 @@ function pipelineCtx(sql: string): QuerySyncContext {
         queryName: 'Templated Query',
         sql,
         isSaved: true,
+        platform: 'sqlserver',
         contextUser: { ID: 'user-1' } as UserInfo,
         metadataProvider: { Entities: [] } as Pick<IMetadataProvider, 'Entities'> as IMetadataProvider,
         runViewProvider: {} as IRunViewProvider,
@@ -174,8 +175,8 @@ describe('MJQueryEntityServer Save — UsesTemplate after an extraction failure 
         const query = createQuery();
         query.SQL = MISSING_REF_SQL;
         query.UsesTemplate = true;
-        query.IsSaved = true;
-        query.SQLDirty = false;
+        // IsSaved and SQLDirty are the stub base's plain fields (an already-saved row whose SQL did not change).
+        Object.assign(query, { IsSaved: true, SQLDirty: false });
         query.ExtractionOverride = 'Force';
         expect(await query.Save()).toBe(true);
         expect(writes.at(-1)?.UsesTemplate).toBe(true);

@@ -10207,7 +10207,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Twenty-nine flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b); OF4-30 is closed, so twenty-eight remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Thirty-two flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start); OF4-30 is closed, so thirty-one remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -10358,6 +10358,19 @@ default implemented:
   exit, finding F2). `predictive-shadow-drift.checks.ts`'s teardown ignores `Delete()`'s `false`: no role may delete
   `MJ: User Notifications` (the permission gap D4-146 met in the harness). A TestingFramework change is outside PR 4's
   allowlist (D-062). **Default, implemented:** the rows are removed by ID on PR 4's databases at each exit.
+- **OF4-34 · next's `V202611161958` ships `MJ: Artifact Guest Share Links` without four CodeGen tail statements**
+  (recorded at M5's start). Every fresh install's CodeGen emits the `UQ_ArtifactGuestShareLink_MagicLinkInviteID`
+  `EntityUniqueKey` insert and three `spUpdateEntityFieldRelatedEntityNameFieldMap` EXECs. The `EntityUniqueKey` ID is
+  fresh on each run, so the check compares content, not bytes. The migration is next's (D-062). **Default,
+  implemented:** PR 4's tail and its D4-89 check exclude exactly those four statements; the fix belongs to next.
+- **OF4-35 · next's MSQ7 (IT140) fails on a fresh install** (recorded at M5's start). next changed three queries' SQL
+  after its last cold nightly. On a fresh install the first `mj sync push` stamps each query's fingerprint before it
+  writes the new SQL row, so a second push changes it. Run alone afterwards, IT140 passes 10/10. next's PR CI starts
+  from a warm snapshot and misses it. **Default:** recorded; not PR 4's check.
+- **OF4-36 · next's PB7 (and PB18 after it) fails once Sage runs decision discovery** (recorded at M5's start). Sage
+  now has `decisionDiscovery: true`. Discovery's `LLMDecision` chat call is answered by the harness `TestLLM` and uses
+  up PB7's first scripted reply, so Sage runs 3 prompts. PB18 fails because of PB7's pointer counts. **Default:**
+  recorded; not PR 4's check.
 
 ## 10. PR description draft
 
