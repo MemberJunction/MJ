@@ -44,6 +44,7 @@ import {
     ExecuteSQLBatchOptions,
     NamedQueryParameter,
     RecordChangeSnapshotColumnKindOf,
+    DoomedTransactionError,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -1088,9 +1089,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
         const client = this._transaction;
         // On COMMIT failure leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
-        await client.query('COMMIT');
+        const result = await client.query('COMMIT');
         this._transaction = null;
         client.release();
+        // COMMIT on a transaction an earlier statement aborted does not fail: PostgreSQL rolls it back
+        // and answers ROLLBACK. Reporting that as a commit would tell the caller its writes persisted.
+        if (result?.command === 'ROLLBACK') {
+            throw new DoomedTransactionError(
+                'PostgreSQL rolled the transaction back instead of committing it: an earlier statement in it failed, so none of its writes persisted',
+            );
+        }
     }
 
     protected override async RollbackPhysicalTransaction(): Promise<void> {
