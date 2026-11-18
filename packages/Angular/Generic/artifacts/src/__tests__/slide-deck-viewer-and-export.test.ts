@@ -1535,4 +1535,101 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     expect(printableHtml).not.toContain('evil.example');
     expect(printableHtml).not.toContain('<script>alert(1)</script>');
   });
+
+  it('supports #1 Full-Screen Present Mode (fullscreenchange, B/W blackout/whiteout, L laser, RevealStep, numeric jump, BroadcastChannel sync) and #2 OnPolishActiveSlide', () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { detectChanges: () => {}, markForCheck: () => {} } },
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
+        { provide: SlideDeckExportService, useValue: exportService },
+        { provide: DocumentCollaborationService, useValue: collabService },
+      ],
+    });
+    const comp = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+
+    // Mock BroadcastChannel cleanly for Presenter <-> Audience sync verification
+    const postedPayloads: Array<Record<string, unknown>> = [];
+    class MockBroadcastChannel {
+      public name: string;
+      public onmessage: ((ev: MessageEvent) => void) | null = null;
+      constructor(name: string) {
+        this.name = name;
+      }
+      public postMessage(data: Record<string, unknown>): void {
+        postedPayloads.push(data);
+      }
+      public close(): void {}
+    }
+    const origBC = (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel;
+    (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = MockBroadcastChannel;
+
+    try {
+      let deck = SlideDeckEngine.Instance.CreateDefaultDeck('Present Mode Sync Deck', 'deck-present-test');
+      // Configure Slide 1 with RevealSteps 1 and 2 on Slide 2
+      deck = SlideDeckEngine.Instance.UpsertSlideRegion(deck, deck.Slides[1].SlideID, {
+        RegionID: deck.Slides[1].Regions[0].RegionID,
+        RevealStep: 1,
+      }).Deck;
+      deck = SlideDeckEngine.Instance.UpsertSlideRegion(deck, deck.Slides[1].SlideID, {
+        RegionID: deck.Slides[1].Regions[1].RegionID,
+        RevealStep: 2,
+      }).Deck;
+
+      comp.Deck = deck;
+      comp.ActiveSlideID = deck.Slides[0].SlideID;
+
+      // Beautify Slide 1 via OnPolishActiveSlide
+      comp.readonly = false;
+      comp.OnPolishActiveSlide();
+      comp.OnChangeActiveSlideTransition('zoom');
+      expect(comp.ActiveSlide.Transition).toBe('zoom');
+
+      // Enter Full-Screen Present Mode on Slide 2 (progressive reveals)
+      comp.EnterPresentationMode('present', deck.Slides[1].SlideID);
+      expect(comp.WorkspaceMode).toBe('present');
+      expect(comp.CurrentRevealStep).toBe(0);
+      expect(comp.MaxRevealStepOnDisplayedSlide).toBe(2);
+      expect(comp.IsRegionRevealed(deck.Slides[1].Regions[0])).toBe(false);
+      expect(postedPayloads.some((p) => p.type === 'state' && p.presenting === true)).toBe(true);
+
+      // Step through progressive reveal steps before advancing slide
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: ' ' }));
+      expect(comp.CurrentRevealStep).toBe(1);
+      expect(comp.IsRegionRevealed(deck.Slides[1].Regions[0])).toBe(true);
+      expect(comp.IsRegionRevealed(deck.Slides[1].Regions[1])).toBe(false);
+
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(comp.CurrentRevealStep).toBe(2);
+      expect(comp.IsRegionRevealed(deck.Slides[1].Regions[1])).toBe(true);
+
+      // Advancing past maxRevealStep moves to Slide 3 and resets RevealStep to 0
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'PageDown' }));
+      expect(comp.ActiveSlideID).toBe(deck.Slides[2].SlideID);
+      expect(comp.CurrentRevealStep).toBe(0);
+
+      // Keyboard B -> blackout, W -> whiteout, L -> laser pointer, Esc clears overlay first
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'b' }));
+      expect(comp.PresentationOverlayMode).toBe('blackout');
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'w' }));
+      expect(comp.PresentationOverlayMode).toBe('whiteout');
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'l' }));
+      expect(comp.LaserPointerActive).toBe(true);
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(comp.PresentationOverlayMode).toBe('none');
+      expect(comp.WorkspaceMode).toBe('present');
+
+      // Numeric jump: pressing '1' + Enter jumps back to Slide 1
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: '1' }));
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+      expect(comp.ActiveSlideID).toBe(deck.Slides[0].SlideID);
+
+      // Final Escape exits Presentation Mode cleanly
+      comp.OnGlobalKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(comp.WorkspaceMode).toBe('edit');
+      expect(comp.LaserPointerActive).toBe(false);
+    } finally {
+      (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = origBC;
+      comp.ngOnDestroy();
+    }
+  });
 });

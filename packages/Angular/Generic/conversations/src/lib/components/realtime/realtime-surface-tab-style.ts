@@ -124,3 +124,24 @@ export function ParseActivitySplitPercent(raw: string | null | undefined): numbe
 export function SerializeActivitySplitPercent(percent: number): string {
   return JSON.stringify({ percent: ClampActivitySplitPercent(percent) });
 }
+
+const CANONICAL_CHANNEL_ORDER: Readonly<Record<string, number>> = {
+  artifactworkspace: 0,
+  whiteboard: 1,
+  'remote browser': 2,
+  media: 3,
+  recording: 90,
+};
+
+/**
+ * Deterministic display rank for left-cluster surface channel tabs so the strip keeps a
+ * consistent order (`Workspace`, `Whiteboard`, `Browser`, `Media`, then custom/other channels,
+ * then `Recording`) across live calls, session review, and multi-leg resume — regardless of
+ * which channel restores or mounts first.
+ */
+export function ChannelTabSortOrder(channelKey: string | null | undefined): number {
+  const normalized = (channelKey ?? '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(CANONICAL_CHANNEL_ORDER, normalized)
+    ? CANONICAL_CHANNEL_ORDER[normalized]
+    : 50;
+}

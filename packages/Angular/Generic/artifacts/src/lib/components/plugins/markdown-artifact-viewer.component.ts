@@ -870,7 +870,9 @@ interface DocsInlineToken {
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
-              <span class="mj-docs-outline-stats">{{ WordStats.Words }} words · {{ WordStats.Lines }} lines</span>
+              <span class="mj-docs-outline-stats" data-testid="docs-outline-stats">
+                {{ WordStats.Words }} words · {{ EstimatedReadingMinutes }} min read · {{ WordStats.Lines }} lines
+              </span>
             </div>
 
             @if (OutlineItems.length === 0) {
@@ -991,6 +993,42 @@ interface DocsInlineToken {
               [class.mj-docs-page--simple]="IsSimpleNoteMode"
               [class.mj-docs-page--blocks]="!IsSimpleNoteMode"
             >
+              @if (FrontmatterHeader; as fm) {
+                <header
+                  class="mj-docs-frontmatter-hero"
+                  [style.--mj-docs-fm-accent]="fm.Accent || null"
+                  data-testid="docs-frontmatter-hero"
+                >
+                  @if (fm.Category) {
+                    <span class="mj-docs-fm-category">{{ fm.Category }}</span>
+                  }
+                  @if (fm.Title) {
+                    <h1 class="mj-docs-fm-title">{{ fm.Title }}</h1>
+                  }
+                  @if (fm.Subtitle) {
+                    <p class="mj-docs-fm-subtitle">{{ fm.Subtitle }}</p>
+                  }
+                  <div class="mj-docs-fm-meta">
+                    @if (fm.Author) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-user"></i> {{ fm.Author }}
+                      </span>
+                    }
+                    @if (fm.Date) {
+                      <span class="mj-docs-fm-meta-item">
+                        <i class="fa-regular fa-calendar"></i> {{ fm.Date }}
+                      </span>
+                    }
+                    <span class="mj-docs-fm-meta-item">
+                      <i class="fa-regular fa-clock"></i> {{ EstimatedReadingMinutes }} min read
+                    </span>
+                    @for (tag of fm.Tags; track tag) {
+                      <span class="mj-docs-fm-tag">#{{ tag }}</span>
+                    }
+                  </div>
+                </header>
+              }
+
               @if (ViewMode === 'suggest' && CanUserEdit) {
                 <div class="mj-docs-suggest-banner" data-testid="docs-suggest-mode-banner">
                   <i class="fa-solid fa-code-pull-request"></i>
@@ -3419,6 +3457,58 @@ interface DocsInlineToken {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
       }
 
+      .mj-docs-frontmatter-hero {
+        border-left: 4px solid var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        background: var(--mj-bg-surface-card);
+        border-radius: 0 10px 10px 0;
+        border-top: 1px solid var(--mj-border-subtle);
+        border-right: 1px solid var(--mj-border-subtle);
+        border-bottom: 1px solid var(--mj-border-subtle);
+      }
+      .mj-docs-fm-category {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--mj-docs-fm-accent, var(--mj-brand-primary));
+        margin-bottom: 4px;
+      }
+      .mj-docs-fm-title {
+        margin: 0 0 6px;
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--mj-text-primary);
+      }
+      .mj-docs-fm-subtitle {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: var(--mj-text-secondary);
+      }
+      .mj-docs-fm-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-fm-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .mj-docs-fm-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
       .mj-docs-suggest-banner {
         display: flex;
         align-items: center;
@@ -5240,6 +5330,11 @@ export class MarkdownArtifactViewerComponent
   public DocumentSegments: DocumentRenderSegment[] = [];
   public OutlineItems: DocumentOutlineItem[] = [];
   public WordStats = { Words: 0, Characters: 0, Lines: 0, LiveBlocks: 0, EmbeddedArtifacts: 0 };
+  public FrontmatterHeader: DocumentFrontmatterHeader | null = null;
+
+  public get EstimatedReadingMinutes(): number {
+    return Math.max(1, Math.ceil((this.WordStats.Words || 0) / 200));
+  }
 
   // Real-time Yjs session state
   private session: DocumentCollaborationSession | null = null;
@@ -14327,6 +14422,7 @@ export class MarkdownArtifactViewerComponent
     this.reconcileSuggestionsAndAnchorsAcrossSegments(previousSegments, nextSegments);
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
+    this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
     for (const seg of this.DocumentSegments) {
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
         if (this.isGuestSnapshotMode) {
@@ -16408,4 +16504,80 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = successMessage;
     this.cdr.markForCheck();
   }
+}
+
+/**
+ * Optional metadata extracted from YAML frontmatter (`--- ... ---`) at the top of a Markdown document.
+ */
+export interface DocumentFrontmatterHeader {
+  Title?: string;
+  Subtitle?: string;
+  Author?: string;
+  Date?: string;
+  Category?: string;
+  Tags: string[];
+  Accent?: string;
+}
+
+/**
+ * Parses leading YAML frontmatter metadata into a cover header strip, returning `null` if no valid
+ * frontmatter metadata keys are present.
+ */
+export function ParseMarkdownFrontmatterHeader(markdown: string): DocumentFrontmatterHeader | null {
+  const normalized = (markdown ?? '').replace(/\r\n/g, '\n');
+  const match = /^---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const block = match[1];
+  const header: DocumentFrontmatterHeader = { Tags: [] };
+  let hasField = false;
+  for (const rawLine of block.split('\n')) {
+    const kv = /^([a-zA-Z_-]+)\s*:\s*(.+)$/.exec(rawLine.trim());
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    const rawVal = kv[2].trim().replace(/^['"]|['"]$/g, '');
+    if (!rawVal) continue;
+    switch (key) {
+      case 'title':
+        header.Title = rawVal;
+        hasField = true;
+        break;
+      case 'subtitle':
+      case 'description':
+        header.Subtitle = rawVal;
+        hasField = true;
+        break;
+      case 'author':
+        header.Author = rawVal;
+        hasField = true;
+        break;
+      case 'date':
+        header.Date = rawVal;
+        hasField = true;
+        break;
+      case 'category':
+      case 'section':
+        header.Category = rawVal;
+        hasField = true;
+        break;
+      case 'tags': {
+        const cleaned = rawVal.replace(/^\[|\]$/g, '');
+        header.Tags = cleaned
+          .split(',')
+          .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean);
+        if (header.Tags.length > 0) hasField = true;
+        break;
+      }
+      case 'accent': {
+        if (/^#[0-9a-f]{3,8}$/i.test(rawVal)) {
+          header.Accent = rawVal;
+          hasField = true;
+        }
+        break;
+      }
+    }
+  }
+  return hasField ? header : null;
 }

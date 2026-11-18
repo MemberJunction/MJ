@@ -16,12 +16,15 @@ import {
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    SlideBackgroundStyle,
+    SlideCardElevation,
     SlideDeckEngine,
     SlideDeckSpec,
     SlideLayoutKind,
     SlideRegionKind,
     SlideRegionSpec,
-    SlideSpec
+    SlideSpec,
+    SlideTransitionKind
 } from '@memberjunction/core-entities';
 import {
     ExecuteArtifactCommentTool,
@@ -88,7 +91,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'add_slide',
                 description:
-                    'Adds a new slide to the presentation with a canonical layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank).',
+                    'Adds a new slide to the presentation with a canonical layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -96,7 +99,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         layout: {
                             type: 'string',
                             description:
-                                'Canonical slide layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank).'
+                                'Canonical slide layout (Title, SectionHeader, TitleAndBody, TwoColumn, Comparison, LiveDataSlide, ChartAndText, BigNumber, Quote, FullBleedImage, Blank, KpiStrip, Timeline, BentoGrid, Quadrant, MetricComparison).'
                         },
                         title: { type: 'string', description: 'Slide title.' },
                         subtitle: { type: 'string', description: 'Optional slide subtitle.' },
@@ -133,7 +136,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                             description: 'Optional updated Markdown content for the primary region of this slide.'
                         },
                         speakerNotes: { type: 'string', description: 'Updated speaker notes.' },
-                        transition: { type: 'string', description: 'Slide transition (none, fade, slide).' },
+                        transition: { type: 'string', description: 'Slide transition (none, fade, slide, zoom).' },
                         hidden: { type: 'boolean', description: 'Whether the slide is hidden during presentation.' },
                         expectedRevisionHash: {
                             type: 'string',
@@ -221,6 +224,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                         calloutTone: {
                             type: 'string',
                             description: 'Callout tone (NOTE, TIP, IMPORTANT, WARNING, CAUTION).'
+                        },
+                        revealStep: {
+                            type: 'number',
+                            description: 'Optional 1-based progressive reveal step for Present mode.'
                         },
                         mjBlock: {
                             type: 'object',
@@ -323,13 +330,14 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'apply_theme',
                 description:
-                    'Applies a preset theme (mj-default, executive-slate, emerald-growth, crimson-bold) or derives a new theme from organization brand color seeds (Accept #4).',
+                    'Applies a preset theme (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint) or derives a new theme from organization brand color seeds (Accept #4).',
                 inputSchema: {
                     type: 'object',
                     properties: {
                         themeId: {
                             type: 'string',
-                            description: 'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold).'
+                            description:
+                                'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
                         },
                         organizationName: { type: 'string', description: 'Optional organization name for brand seeds.' },
                         primaryColor: { type: 'string', description: 'Organization brand primary hex color.' },
@@ -342,6 +350,57 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                             description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
                         }
                     }
+                }
+            },
+            {
+                name: 'apply_design_preset',
+                description:
+                    'Applies a designer visual preset (themeId + optional cardElevation, backgroundStyle, and deck-wide transition across unlocked slides) in one atomic step.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        themeId: {
+                            type: 'string',
+                            description:
+                                'Preset ThemeID (mj-default, executive-slate, emerald-growth, crimson-bold, cobalt-editorial, ivory-luxury, carbon-mono, nordic-mint).'
+                        },
+                        transition: {
+                            type: 'string',
+                            enum: ['none', 'fade', 'slide', 'zoom'],
+                            description: 'Optional transition applied across unlocked slides.'
+                        },
+                        cardElevation: {
+                            type: 'string',
+                            enum: ['flat', 'soft', 'glass'],
+                            description: 'Optional card surface elevation.'
+                        },
+                        backgroundStyle: {
+                            type: 'string',
+                            enum: ['solid', 'gradient', 'mesh', 'accent-strip'],
+                            description: 'Optional slide backdrop style.'
+                        },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
+                        }
+                    },
+                    required: ['themeId']
+                }
+            },
+            {
+                name: 'beautify_slide',
+                description:
+                    'Polishes a target slide deterministically: improves scannable bullet hierarchy, assigns progressive reveal steps, sets smooth transitions, and upgrades bullet KPI metrics into a KpiStrip layout when appropriate without losing any data or blocks.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        slideId: { type: 'string', description: 'Target SlideID to polish.' },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash for optimistic concurrency protection.'
+                        }
+                    },
+                    required: ['slideId']
                 }
             },
             {
@@ -497,6 +556,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 return this.handleUpdateDeckMetadata(contentStr, input, context);
             case 'apply_theme':
                 return this.handleApplyTheme(contentStr, input, context);
+            case 'apply_design_preset':
+                return this.handleApplyDesignPreset(contentStr, input, context);
+            case 'beautify_slide':
+                return this.handleBeautifySlide(contentStr, input, context);
             case 'generate_deck_from_markdown':
                 return this.handleGenerateDeckFromMarkdown(contentStr, input, context);
             case 'set_lock':
@@ -776,7 +839,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     SpeakerNotes: typeof input.speakerNotes === 'string' ? input.speakerNotes : undefined,
                     Transition:
                         typeof input.transition === 'string'
-                            ? (input.transition as 'none' | 'fade' | 'slide')
+                            ? (input.transition as SlideTransitionKind)
                             : undefined,
                     Hidden: typeof input.hidden === 'boolean' ? input.hidden : undefined
                 },
@@ -1154,6 +1217,10 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                     CalloutTone:
                         typeof input.calloutTone === 'string'
                             ? (input.calloutTone as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION')
+                            : undefined,
+                    RevealStep:
+                        typeof input.revealStep === 'number' && Number.isFinite(input.revealStep)
+                            ? Math.max(0, Math.floor(input.revealStep))
                             : undefined
                 },
                 lockContext
@@ -1433,6 +1500,96 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 updatedContent
             }
         };
+    }
+
+    private handleApplyDesignPreset(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const lockContext = this.extractLockContext(context);
+        const lockErr = this.assertDeckUnlockedForGlobalEdit(deck, lockContext);
+        if (lockErr) {
+            return { success: false, data: null, errorMessage: lockErr };
+        }
+
+        const themeId = typeof input.themeId === 'string' && input.themeId.trim() ? input.themeId.trim() : 'mj-default';
+        const transition =
+            typeof input.transition === 'string' && ['none', 'fade', 'slide', 'zoom'].includes(input.transition)
+                ? (input.transition as SlideTransitionKind)
+                : undefined;
+        const cardElevation =
+            typeof input.cardElevation === 'string' && ['flat', 'soft', 'glass'].includes(input.cardElevation)
+                ? (input.cardElevation as SlideCardElevation)
+                : undefined;
+        const backgroundStyle =
+            typeof input.backgroundStyle === 'string' &&
+            ['solid', 'gradient', 'mesh', 'accent-strip'].includes(input.backgroundStyle)
+                ? (input.backgroundStyle as SlideBackgroundStyle)
+                : undefined;
+
+        const updatedDeck = SlideDeckEngine.Instance.ApplyDesignPreset(deck, themeId, {
+            Transition: transition,
+            CardElevation: cardElevation,
+            BackgroundStyle: backgroundStyle
+        });
+        const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(updatedDeck);
+        return {
+            success: true,
+            data: {
+                theme: updatedDeck.Theme,
+                transitionApplied: transition,
+                revisionHash: this.ComputeRevisionHash(updatedContent),
+                updatedContent
+            }
+        };
+    }
+
+    private handleBeautifySlide(
+        contentStr: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const revError = this.checkRevision(contentStr, input.expectedRevisionHash);
+        if (revError) {
+            return { success: false, data: null, errorMessage: revError };
+        }
+
+        const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
+        if (!slideId) {
+            return { success: false, data: null, errorMessage: 'beautify_slide requires slideId.' };
+        }
+
+        const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
+        const lockContext = this.extractLockContext(context);
+        try {
+            const res = SlideDeckEngine.Instance.BeautifySlide(deck, slideId, lockContext);
+            if (!res.UpdatedSlide) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Slide "${slideId}" was not found in the presentation.`
+                };
+            }
+            const updatedContent = SlideDeckEngine.Instance.SerializeDeckSpec(res.Deck);
+            return {
+                success: true,
+                data: {
+                    updatedSlide: res.UpdatedSlide,
+                    improvements: res.Improvements,
+                    revisionHash: this.ComputeRevisionHash(updatedContent),
+                    updatedContent
+                }
+            };
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
     }
 
     private async handleGenerateDeckFromMarkdown(

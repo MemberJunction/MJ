@@ -44,6 +44,9 @@ import {
   type SlideRegionKind,
   type SlideDeckThemeSpec,
   type SlideLayoutMetadata,
+  type SlideTransitionKind,
+  type SlideBackgroundStyle,
+  type SlideCardElevation,
   type DocumentBlockSpec,
   type DocumentBlockColumn,
   type DocumentBlockExecutionResult,
@@ -103,7 +106,6 @@ import {
   type SlidesContextMenuCommand,
   type SlidesContextMenuSnapshot,
   type SlidesContextMenuZone,
-  type SlideTransitionKind,
 } from './context-menus/slides-context-menu.helper';
 
 /**
@@ -195,6 +197,7 @@ export type SlidesToolbarItemKey =
   | 'add-slide'
   | 'duplicate-slide'
   | 'delete-slide'
+  | 'polish-slide'
   | 'theme'
   | 'md-to-deck'
   | 'export-pptx'
@@ -233,6 +236,9 @@ export interface ResolvedSlidesToolbarItem {
     <div
       class="mj-slides-shell"
       [class.mj-slides-fullscreen]="WorkspaceMode === 'present' || WorkspaceMode === 'presenter'"
+      [class.mj-slides-stage-blackout]="IsPresentationActive && PresentationOverlayMode === 'blackout'"
+      [class.mj-slides-stage-whiteout]="IsPresentationActive && PresentationOverlayMode === 'whiteout'"
+      (mousemove)="OnPresentShellPointerMove($event)"
       data-testid="mj-slides-shell"
     >
       <!-- Top Presentation Toolbar -->
@@ -356,6 +362,34 @@ export interface ResolvedSlidesToolbarItem {
                 }
               </select>
             </label>
+
+            <label class="mj-slides-inline-select-label" title="Slide transition in Present mode">
+              <span>Motion:</span>
+              <select
+                class="mj-slides-select"
+                [ngModel]="ActiveSlide.Transition || 'fade'"
+                (ngModelChange)="OnChangeActiveSlideTransition($event)"
+                [disabled]="!CanEditSlideElements"
+                data-testid="slide-transition-select"
+              >
+                <option value="none">None</option>
+                <option value="fade">Fade</option>
+                <option value="slide">Slide</option>
+                <option value="zoom">Zoom</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              class="mj-slides-tool-btn mj-slides-polish-btn"
+              (click)="OnPolishActiveSlide()"
+              [disabled]="!CanEditSlideElements"
+              title="Auto-polish typography, KPI cards, and progressive reveal steps on this slide"
+              data-testid="polish-slide-btn"
+            >
+              <i class="fa-solid fa-sparkles"></i>
+              <span>Polish</span>
+            </button>
           </div>
         }
 
@@ -764,6 +798,45 @@ export interface ResolvedSlidesToolbarItem {
             <button
               type="button"
               class="mj-slides-tool-btn"
+              [class.active]="LaserPointerActive"
+              (click)="ToggleLaserPointer()"
+              title="Toggle Laser Pointer (L)"
+              data-testid="present-laser-btn"
+            >
+              <i class="fa-solid fa-crosshairs"></i> Laser
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="PresentationOverlayMode === 'blackout'"
+              (click)="TogglePresentationOverlay('blackout')"
+              title="Blackout screen (B)"
+              data-testid="present-blackout-btn"
+            >
+              <i class="fa-solid fa-moon"></i>
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              (click)="OpenAudienceStageWindow()"
+              title="Pop out dual-window Audience Stage (BroadcastChannel synced)"
+              data-testid="present-popout-audience-btn"
+            >
+              <i class="fa-solid fa-up-right-from-square"></i> Audience Window
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="IsBrowserFullscreen"
+              (click)="ToggleBrowserFullscreen()"
+              title="Toggle Browser Fullscreen (F)"
+              data-testid="present-fullscreen-toggle-btn"
+            >
+              <i class="fa-solid" [ngClass]="IsBrowserFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
               (click)="ExitPresentationMode()"
               data-testid="exit-presentation-btn"
             >
@@ -965,7 +1038,11 @@ export interface ResolvedSlidesToolbarItem {
                   [attr.data-aspect-ratio]="ActiveDeckForDisplay.AspectRatio"
                   [style.aspect-ratio]="ActiveDeckForDisplay.AspectRatio === '4:3' ? '4 / 3' : '16 / 9'"
                   [attr.data-theme-id]="ActiveDeckForDisplay.Theme.ThemeID"
+                  [attr.data-bg-style]="SafeTheme.BackgroundStyle"
+                  [attr.data-card-elevation]="SafeTheme.CardElevation"
+                  [attr.data-transition]="DisplayedSlide.Transition || 'fade'"
                   [style.--deck-bg]="SafeTheme.BackgroundColor"
+                  [style.--deck-secondary-bg]="SafeTheme.SecondaryGradientColor"
                   [style.--deck-surface]="SafeTheme.SurfaceColor"
                   [style.--deck-primary]="SafeTheme.PrimaryColor"
                   [style.--deck-accent]="SafeTheme.AccentColor"
@@ -973,6 +1050,7 @@ export interface ResolvedSlidesToolbarItem {
                   [style.--deck-muted]="SafeTheme.MutedTextColor"
                   [style.--deck-heading-font]="SafeTheme.HeadingFont"
                   [style.--deck-body-font]="SafeTheme.BodyFont"
+                  [style.--deck-card-radius.px]="SafeTheme.CardRadiusPx"
                   (contextmenu)="OnSlideStageContextMenu($event)"
                   data-testid="slide-canvas-stage"
                 >
@@ -1030,9 +1108,12 @@ export interface ResolvedSlidesToolbarItem {
                         class="mj-slide-region-card"
                         [class.active-region]="FocusedRegionID === region.RegionID"
                         [class.mj-slide-region--agent-active]="IsRegionEditedByAgent(region.RegionID)"
+                        [class.mj-slide-region--unrevealed]="IsPresentationActive && !IsRegionRevealed(region)"
                         (click)="FocusedRegionID = region.RegionID"
                         (contextmenu)="OnSlideRegionContextMenu($event, region)"
+                        [attr.data-region-id]="region.RegionID"
                         [attr.data-region-kind]="region.Kind"
+                        [attr.data-reveal-step]="region.RevealStep ?? null"
                         [attr.data-testid]="'slide-region-' + region.RegionID"
                       >
                         <!-- Region Authoring Bar (only in Edit mode) -->
@@ -2040,6 +2121,116 @@ export interface ResolvedSlidesToolbarItem {
         </div>
       }
 
+      <!-- Full-Screen Presentation Overlays: Blackout / Whiteout / Laser / Floating Auto-Hide HUD -->
+      @if (IsPresentationActive && PresentationOverlayMode !== 'none') {
+        <div
+          class="mj-slides-stage-overlay"
+          [class.blackout]="PresentationOverlayMode === 'blackout'"
+          [class.whiteout]="PresentationOverlayMode === 'whiteout'"
+          (click)="TogglePresentationOverlay('none')"
+          data-testid="present-screen-overlay"
+        >
+          <span>
+            {{ PresentationOverlayMode === 'blackout' ? 'Screen Blacked Out — Press B or Esc to resume' : 'White Screen — Press W or Esc to resume' }}
+          </span>
+        </div>
+      }
+
+      @if (IsPresentationActive && LaserPointerActive) {
+        <div
+          class="mj-slides-laser-dot"
+          [style.left.%]="LaserPointerX"
+          [style.top.%]="LaserPointerY"
+          data-testid="present-laser-dot"
+        ></div>
+      }
+
+      @if (IsPresentationActive) {
+        <div
+          class="mj-slides-floating-hud"
+          [class.visible]="PresentHudVisible"
+          (mouseenter)="KeepPresentHudVisible()"
+          data-testid="present-floating-hud"
+        >
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [disabled]="!CanNavigatePrevSlide"
+            (click)="PrevSlide()"
+            title="Previous (Left Arrow / PageUp)"
+            data-testid="hud-prev-btn"
+          >
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <span class="mj-slides-hud-counter" data-testid="hud-slide-counter">
+            {{ ActiveSlideIndex + 1 }} / {{ ActiveDeckForDisplay.Slides.length }}
+            @if (MaxRevealStepOnDisplayedSlide > 0) {
+              <small>· Step {{ CurrentRevealStep }}/{{ MaxRevealStepOnDisplayedSlide }}</small>
+            }
+          </span>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [disabled]="!CanNavigateNextSlide"
+            (click)="NextSlide()"
+            title="Next (Right Arrow / Space / PageDown)"
+            data-testid="hud-next-btn"
+          >
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          <span class="mj-slides-hud-divider"></span>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="LaserPointerActive"
+            (click)="ToggleLaserPointer()"
+            title="Laser Pointer (L)"
+            data-testid="hud-laser-btn"
+          >
+            <i class="fa-solid fa-crosshairs"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="PresentationOverlayMode === 'blackout'"
+            (click)="TogglePresentationOverlay('blackout')"
+            title="Blackout (B)"
+            data-testid="hud-blackout-btn"
+          >
+            <i class="fa-solid fa-moon"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="PresentationOverlayMode === 'whiteout'"
+            (click)="TogglePresentationOverlay('whiteout')"
+            title="Whiteout (W)"
+            data-testid="hud-whiteout-btn"
+          >
+            <i class="fa-regular fa-square"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="IsBrowserFullscreen"
+            (click)="ToggleBrowserFullscreen()"
+            title="Fullscreen (F)"
+            data-testid="hud-fullscreen-btn"
+          >
+            <i class="fa-solid" [ngClass]="IsBrowserFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            (click)="ExitPresentationMode()"
+            title="Exit Presentation (Esc)"
+            data-testid="hud-exit-btn"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      }
+
       <mj-context-menu
         [IsOpen]="ContextMenuOpen"
         [AnchorX]="ContextMenuX"
@@ -2073,7 +2264,109 @@ export interface ResolvedSlidesToolbarItem {
         position: fixed;
         inset: 0;
         z-index: 9999;
-        background: var(--mj-bg-page);
+        background: #090d16;
+      }
+      .mj-slides-fullscreen .mj-slides-center-stage {
+        background: radial-gradient(circle at top center, #111827 0%, #05070c 85%);
+        justify-content: center;
+        align-items: center;
+        padding: 20px 32px;
+      }
+      .mj-slides-fullscreen .mj-slide-canvas-stage {
+        max-width: min(1440px, 94vw);
+        max-height: calc(100vh - 110px);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+      }
+      .mj-slides-stage-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10020;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .mj-slides-stage-overlay.blackout {
+        background: #000000;
+        color: rgba(255, 255, 255, 0.35);
+      }
+      .mj-slides-stage-overlay.whiteout {
+        background: #ffffff;
+        color: rgba(15, 23, 42, 0.35);
+      }
+      .mj-slides-laser-dot {
+        position: fixed;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.32), 0 0 18px 4px rgba(239, 68, 68, 0.75);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 10030;
+      }
+      .mj-slides-floating-hud {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        z-index: 10025;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.82);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #f8fafc;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .mj-slides-floating-hud.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+      .mj-slides-hud-btn {
+        border: none;
+        background: transparent;
+        color: #e2e8f0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .mj-slides-hud-btn:hover:not(:disabled),
+      .mj-slides-hud-btn.active {
+        background: rgba(255, 255, 255, 0.16);
+        color: #ffffff;
+      }
+      .mj-slides-hud-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      .mj-slides-hud-counter {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 0 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .mj-slides-hud-divider {
+        width: 1px;
+        height: 16px;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .mj-slides-polish-btn {
+        background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 14%, transparent), color-mix(in srgb, var(--mj-brand-accent, var(--mj-brand-primary)) 12%, transparent));
+        border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+        color: var(--mj-brand-primary);
       }
       .mj-slides-toolbar {
         display: flex;
@@ -2578,11 +2871,51 @@ export interface ResolvedSlidesToolbarItem {
         border: 2px solid var(--deck-primary, var(--mj-brand-primary));
         border-radius: 14px;
         box-shadow: var(--mj-shadow-md);
-        padding: 22px 30px;
+        padding: 24px 32px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         overflow: hidden;
+        position: relative;
+      }
+      .mj-slide-canvas-stage[data-bg-style='gradient'] {
+        background: linear-gradient(135deg, var(--deck-bg, #ffffff) 0%, var(--deck-secondary-bg, var(--deck-surface, #f8fafc)) 100%);
+      }
+      .mj-slide-canvas-stage[data-bg-style='mesh'] {
+        background:
+          radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--deck-primary, #4f46e5) 18%, transparent), transparent 46%),
+          radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--deck-accent, #0ea5e9) 16%, transparent), transparent 48%),
+          linear-gradient(160deg, var(--deck-bg, #0f172a) 0%, var(--deck-secondary-bg, var(--deck-bg, #0f172a)) 100%);
+      }
+      .mj-slide-canvas-stage[data-bg-style='accent-strip']::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(90deg, var(--deck-primary, #4f46e5), var(--deck-accent, #0ea5e9));
+      }
+      .mj-slide-canvas-stage[data-transition='fade'] {
+        animation: mjSlideFadeIn 0.28s ease-out;
+      }
+      .mj-slide-canvas-stage[data-transition='slide'] {
+        animation: mjSlidePushIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .mj-slide-canvas-stage[data-transition='zoom'] {
+        animation: mjSlideZoomIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      @keyframes mjSlideFadeIn {
+        from { opacity: 0.35; }
+        to { opacity: 1; }
+      }
+      @keyframes mjSlidePushIn {
+        from { opacity: 0.4; transform: translateX(24px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes mjSlideZoomIn {
+        from { opacity: 0.45; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
       }
       .mj-slide-master-header,
       .mj-slide-master-footer {
@@ -2650,16 +2983,54 @@ export interface ResolvedSlidesToolbarItem {
       .mj-slide-regions-grid[data-layout='BigNumber'] {
         grid-template-columns: 1fr 1fr;
       }
+      .mj-slide-regions-grid[data-layout='KpiStrip'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .mj-slide-regions-grid[data-layout='Timeline'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        position: relative;
+      }
+      .mj-slide-regions-grid[data-layout='BentoGrid'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .mj-slide-regions-grid[data-layout='BentoGrid'] .mj-slide-region-card:first-child {
+        grid-column: 1 / -1;
+      }
+      .mj-slide-regions-grid[data-layout='Quadrant'] {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+      .mj-slide-regions-grid[data-layout='MetricComparison'] {
+        grid-template-columns: 1fr 1fr;
+      }
+      .mj-slide-regions-grid[data-layout='MetricComparison'] .mj-slide-region-card:nth-child(3) {
+        grid-column: 1 / -1;
+      }
       .mj-slide-region-card {
         background: var(--deck-surface, var(--mj-bg-surface));
         border: 1px solid var(--mj-border-default);
-        border-radius: 10px;
-        padding: 10px 14px;
+        border-radius: var(--deck-card-radius, 12px);
+        padding: 12px 16px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         min-height: 120px;
         overflow: auto;
+        transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.2s ease;
+      }
+      .mj-slide-canvas-stage[data-card-elevation='soft'] .mj-slide-region-card {
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+      }
+      .mj-slide-canvas-stage[data-card-elevation='glass'] .mj-slide-region-card {
+        background: color-mix(in srgb, var(--deck-surface, #1e293b) 82%, transparent);
+        border-color: color-mix(in srgb, var(--deck-primary, #38bdf8) 28%, rgba(255, 255, 255, 0.14));
+        backdrop-filter: blur(10px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+      }
+      .mj-slide-region-card.mj-slide-region--unrevealed {
+        opacity: 0.06;
+        transform: translateY(8px);
+        pointer-events: none;
       }
       .mj-slide-region-card.active-region {
         border-color: var(--deck-primary, var(--mj-brand-primary));
@@ -3562,9 +3933,23 @@ export class SlideDeckArtifactViewerComponent
     ':::',
   ].join('\n');
 
-  // Presenter View Elapsed Timer
+  // Presenter View Elapsed Timer & Full-Screen Presentation Controls (#1)
   public PresenterElapsedSeconds = 0;
   private presenterTimerHandle: ReturnType<typeof setInterval> | null = null;
+  public IsBrowserFullscreen = false;
+  public PresentationOverlayMode: 'none' | 'blackout' | 'whiteout' = 'none';
+  public LaserPointerActive = false;
+  public LaserPointerX = 50;
+  public LaserPointerY = 50;
+  public PresentHudVisible = true;
+  public CurrentRevealStep = 0;
+  public HasPopoutAudienceWindow = false;
+  private jumpDigitBuffer = '';
+  private jumpDigitTimer: ReturnType<typeof setTimeout> | null = null;
+  private presentHudHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private fullscreenChangeHandler: (() => void) | null = null;
+  private audienceChannel: BroadcastChannel | null = null;
+  private popoutAudienceWindow: Window | null = null;
 
   // Last Exported .pptx Package Audit Summary (for deterministic E2E & unit verification)
   public LastExportedPptxPackage: PptxExportPackage | null = null;
@@ -3666,6 +4051,7 @@ export class SlideDeckArtifactViewerComponent
 
   public get SafeTheme(): {
     BackgroundColor: string;
+    SecondaryGradientColor: string;
     SurfaceColor: string;
     PrimaryColor: string;
     AccentColor: string;
@@ -3673,19 +4059,48 @@ export class SlideDeckArtifactViewerComponent
     MutedTextColor: string;
     HeadingFont: string;
     BodyFont: string;
+    BackgroundStyle: SlideBackgroundStyle;
+    CardRadiusPx: number;
+    CardElevation: SlideCardElevation;
   } {
     const raw = this.ActiveDeckForDisplay.Theme;
     const engine = SlideDeckEngine.Instance;
+    const surface = engine.SanitizeCssValue(raw?.SurfaceColor, '#f8fafc');
     return {
       BackgroundColor: engine.SanitizeCssValue(raw?.BackgroundColor, '#ffffff'),
-      SurfaceColor: engine.SanitizeCssValue(raw?.SurfaceColor, '#f8fafc'),
+      SecondaryGradientColor: engine.SanitizeCssValue(raw?.SecondaryGradientColor, surface),
+      SurfaceColor: surface,
       PrimaryColor: engine.SanitizeCssValue(raw?.PrimaryColor, '#4f46e5'),
       AccentColor: engine.SanitizeCssValue(raw?.AccentColor, '#0ea5e9'),
       TextColor: engine.SanitizeCssValue(raw?.TextColor, '#0f172a'),
       MutedTextColor: engine.SanitizeCssValue(raw?.MutedTextColor, '#475569'),
       HeadingFont: engine.SanitizeCssValue(raw?.HeadingFont, 'Inter, system-ui, sans-serif'),
       BodyFont: engine.SanitizeCssValue(raw?.BodyFont, 'Inter, system-ui, sans-serif'),
+      BackgroundStyle: raw?.BackgroundStyle ?? 'accent-strip',
+      CardRadiusPx: typeof raw?.CardRadiusPx === 'number' ? Math.max(0, Math.min(32, raw.CardRadiusPx)) : 14,
+      CardElevation: raw?.CardElevation ?? 'soft',
     };
+  }
+
+  public get MaxRevealStepOnDisplayedSlide(): number {
+    let maxStep = 0;
+    for (const r of this.DisplayedSlide?.Regions ?? []) {
+      if (typeof r.RevealStep === 'number' && r.RevealStep > maxStep) {
+        maxStep = r.RevealStep;
+      }
+    }
+    return maxStep;
+  }
+
+  public IsRegionRevealed(region: SlideRegionSpec): boolean {
+    if (!this.IsPresentationActive) {
+      return true;
+    }
+    const step = region.RevealStep ?? 0;
+    if (step <= 0 || this.MaxRevealStepOnDisplayedSlide === 0) {
+      return true;
+    }
+    return this.CurrentRevealStep >= step;
   }
 
   public get ActiveSlideIndex(): number {
@@ -3710,10 +4125,16 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public get CanNavigatePrevSlide(): boolean {
+    if (this.IsPresentationActive && this.CurrentRevealStep > 0) {
+      return true;
+    }
     return this.findPrevNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
   }
 
   public get CanNavigateNextSlide(): boolean {
+    if (this.IsPresentationActive && this.CurrentRevealStep < this.MaxRevealStepOnDisplayedSlide) {
+      return true;
+    }
     return this.findNextNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
   }
 
@@ -3782,6 +4203,7 @@ export class SlideDeckArtifactViewerComponent
       clearTimeout(this.pendingVersionSaveTimer);
       this.pendingVersionSaveTimer = null;
     }
+    this.cleanupPresentationRuntime();
     this.unbindTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
@@ -3835,15 +4257,58 @@ export class SlideDeckArtifactViewerComponent
     }
 
     if (this.WorkspaceMode === 'present' || this.WorkspaceMode === 'presenter') {
-      if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const inEditable = Boolean(
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable),
+      );
+      if (inEditable) {
+        return;
+      }
+
+      this.KeepPresentHudVisible();
+      const key = event.key;
+      const lower = key.toLowerCase();
+
+      if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
+        if (key === ' ' && target && target.tagName === 'BUTTON') {
+          return;
+        }
         event.preventDefault();
         this.NextSlide();
-      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+      } else if (key === 'ArrowLeft' || key === 'PageUp' || key === 'Backspace') {
         event.preventDefault();
         this.PrevSlide();
-      } else if (event.key === 'Escape') {
+      } else if (key === 'Home') {
         event.preventDefault();
-        this.ExitPresentationMode();
+        this.jumpToNavigableEdge('first');
+      } else if (key === 'End') {
+        event.preventDefault();
+        this.jumpToNavigableEdge('last');
+      } else if (lower === 'b') {
+        event.preventDefault();
+        this.TogglePresentationOverlay('blackout');
+      } else if (lower === 'w') {
+        event.preventDefault();
+        this.TogglePresentationOverlay('whiteout');
+      } else if (lower === 'l') {
+        event.preventDefault();
+        this.ToggleLaserPointer();
+      } else if (lower === 'f') {
+        event.preventDefault();
+        this.ToggleBrowserFullscreen();
+      } else if (/^[0-9]$/.test(key)) {
+        event.preventDefault();
+        this.bufferSlideJumpDigit(key);
+      } else if (key === 'Enter' && this.jumpDigitBuffer.length > 0) {
+        event.preventDefault();
+        this.commitSlideJumpBuffer();
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        if (this.PresentationOverlayMode !== 'none') {
+          this.TogglePresentationOverlay('none');
+        } else {
+          this.ExitPresentationMode();
+        }
       }
       return;
     }
@@ -3974,6 +4439,9 @@ export class SlideDeckArtifactViewerComponent
       );
       this.PresentationRefreshCount = 0;
       this.PresentationFrozenAt = new Date();
+      this.CurrentRevealStep = 0;
+      this.PresentationOverlayMode = 'none';
+      this.LaserPointerActive = false;
     }
     this.WorkspaceMode = mode;
     if (mode === 'presenter') {
@@ -3981,6 +4449,13 @@ export class SlideDeckArtifactViewerComponent
     } else {
       this.stopPresenterTimer();
     }
+    this.ensureFullscreenListener();
+    this.ensureBroadcastChannel();
+    if (mode === 'present' && !alreadyPresenting) {
+      this.requestShellFullscreen();
+    }
+    this.KeepPresentHudVisible();
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
@@ -3998,13 +4473,99 @@ export class SlideDeckArtifactViewerComponent
     const prevTime = this.PresentationFrozenAt?.getTime() ?? 0;
     const nowTime = Date.now();
     this.PresentationFrozenAt = new Date(nowTime > prevTime ? nowTime : prevTime + 1);
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
   public ExitPresentationMode(): void {
     this.stopPresenterTimer();
     this.PresentationFrozenDeck = null;
+    this.PresentationOverlayMode = 'none';
+    this.LaserPointerActive = false;
+    this.CurrentRevealStep = 0;
+    this.clearPresentTimers();
+    this.exitShellFullscreen();
     this.WorkspaceMode = 'edit';
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleBrowserFullscreen(): void {
+    if (this.IsBrowserFullscreen) {
+      this.exitShellFullscreen();
+    } else {
+      this.ensureFullscreenListener();
+      this.requestShellFullscreen();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public TogglePresentationOverlay(mode: 'none' | 'blackout' | 'whiteout'): void {
+    this.PresentationOverlayMode = this.PresentationOverlayMode === mode ? 'none' : mode;
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleLaserPointer(): void {
+    this.LaserPointerActive = !this.LaserPointerActive;
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public KeepPresentHudVisible(): void {
+    if (!this.IsPresentationActive) {
+      return;
+    }
+    this.PresentHudVisible = true;
+    if (this.presentHudHideTimer) {
+      clearTimeout(this.presentHudHideTimer);
+      this.presentHudHideTimer = null;
+    }
+    if (this.WorkspaceMode === 'present') {
+      this.presentHudHideTimer = setTimeout(() => {
+        this.PresentHudVisible = false;
+        this.cdr.markForCheck();
+      }, 2800);
+    }
+  }
+
+  public OnPresentShellPointerMove(event: MouseEvent): void {
+    if (!this.IsPresentationActive) {
+      return;
+    }
+    this.KeepPresentHudVisible();
+    if (this.LaserPointerActive && typeof window !== 'undefined' && window.innerWidth > 0 && window.innerHeight > 0) {
+      this.LaserPointerX = Math.max(0, Math.min(100, (event.clientX / window.innerWidth) * 100));
+      this.LaserPointerY = Math.max(0, Math.min(100, (event.clientY / window.innerHeight) * 100));
+      this.broadcastPresentationState();
+    }
+  }
+
+  /**
+   * Opens a clean second-screen Audience window synchronized in real time via `BroadcastChannel`
+   * (zero `localStorage` used, per AGENTS.md § 9).
+   */
+  public OpenAudienceStageWindow(): void {
+    if (typeof window === 'undefined' || typeof window.open !== 'function') {
+      return;
+    }
+    this.ensureBroadcastChannel();
+    const channelName = this.getSyncChannelName();
+    const win = window.open('', `mj-slides-audience-${channelName}`, 'width=1280,height=720');
+    if (!win) {
+      return;
+    }
+    this.popoutAudienceWindow = win;
+    this.HasPopoutAudienceWindow = true;
+    try {
+      const doc = win.document;
+      doc.open();
+      doc.write(buildAudienceWindowShellHtml(channelName));
+      doc.close();
+    } catch {
+      // Cross-origin or sandboxed window open guard
+    }
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
@@ -4013,6 +4574,7 @@ export class SlideDeckArtifactViewerComponent
       this.flushPendingEdits();
     }
     this.ActiveSlideID = slideId;
+    this.CurrentRevealStep = 0;
     const slide = this.ActiveSlide;
     this.FocusedRegionID = slide.Regions[0]?.RegionID ?? 'main';
     this.PendingAnchorKey = `${slide.SlideID}:${this.FocusedRegionID}`;
@@ -4026,6 +4588,9 @@ export class SlideDeckArtifactViewerComponent
       slideNumber: slide.SlideNumber,
       elementId: this.FocusedRegionID || undefined,
     });
+    if (this.IsPresentationActive) {
+      this.broadcastPresentationState();
+    }
     this.cdr.markForCheck();
   }
 
@@ -4099,19 +4664,77 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public PrevSlide(): void {
+    if (this.IsPresentationActive && this.CurrentRevealStep > 0) {
+      this.CurrentRevealStep--;
+      this.broadcastPresentationState();
+      this.cdr.markForCheck();
+      return;
+    }
     const targetIdx = this.findPrevNavigableSlideIndex(this.ActiveSlideIndex);
+    if (targetIdx >= 0) {
+      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
+      this.SelectSlide(target.SlideID);
+      if (this.IsPresentationActive) {
+        this.CurrentRevealStep = this.MaxRevealStepOnDisplayedSlide;
+        this.broadcastPresentationState();
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  public NextSlide(): void {
+    const maxStep = this.MaxRevealStepOnDisplayedSlide;
+    if (this.IsPresentationActive && maxStep > 0 && this.CurrentRevealStep < maxStep) {
+      this.CurrentRevealStep++;
+      this.broadcastPresentationState();
+      this.cdr.markForCheck();
+      return;
+    }
+    const targetIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
     if (targetIdx >= 0) {
       const target = this.ActiveDeckForDisplay.Slides[targetIdx];
       this.SelectSlide(target.SlideID);
     }
   }
 
-  public NextSlide(): void {
-    const targetIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
-    if (targetIdx >= 0) {
-      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
-      this.SelectSlide(target.SlideID);
+  /**
+   * Auto-polishes the active slide deterministically (`BeautifySlide`), syncing via Yjs (`Accept #1`).
+   */
+  public OnPolishActiveSlide(): void {
+    if (!this.IsEditable || !this.CanEditSlideElements) {
+      return;
     }
+    this.flushPendingEdits();
+    const lockCtx = this.buildLockContext();
+    try {
+      const res = SlideDeckEngine.Instance.BeautifySlide(this.Deck, this.ActiveSlide.SlideID, lockCtx);
+      if (!res.UpdatedSlide) {
+        return;
+      }
+      this.Deck = res.Deck;
+      this.session?.UpdateSlideInDeck(res.UpdatedSlide, this.Deck);
+      this.session?.UpdateDeckMeta(this.Deck);
+      this.syncRawDeckJson();
+      this.FocusedRegionID = res.UpdatedSlide.Regions[0]?.RegionID ?? this.FocusedRegionID;
+      if (res.Improvements.length > 0) {
+        this.notificationService?.CreateSimpleNotification(
+          `Slide polished: ${res.Improvements[0]}`,
+          'success',
+          2600,
+        );
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.StatusBannerMessage = err instanceof Error ? err.message : String(err);
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnChangeActiveSlideTransition(transition: SlideTransitionKind): void {
+    if (!this.CanEditSlideElements) {
+      return;
+    }
+    this.applySingleSlideMetadataPatch(this.ActiveSlide.SlideID, { Transition: transition });
   }
 
   private findPrevNavigableSlideIndex(fromIdx: number): number {
@@ -5572,6 +6195,19 @@ export class SlideDeckArtifactViewerComponent
         Visible: canSlideEdit,
       },
       {
+        Key: 'polish-slide',
+        Label: 'Polish Slide',
+        ShortLabel: 'Polish',
+        Description: 'Auto-beautify typography, KPI layout & progressive reveal steps',
+        Icon: 'fa-sparkles',
+        Category: 'Design & AI',
+        Placement: 'left',
+        TestId: 'polish-slide-btn',
+        Active: false,
+        Disabled: !this.CanEditSlideElements,
+        Visible: canSlideEdit,
+      },
+      {
         Key: 'theme',
         Label: `Theme (${this.Deck.Theme.Name})`,
         ShortLabel: `Theme (${this.Deck.Theme.Name})`,
@@ -5738,6 +6374,9 @@ export class SlideDeckArtifactViewerComponent
         break;
       case 'delete-slide':
         this.OnDeleteActiveSlide();
+        break;
+      case 'polish-slide':
+        this.OnPolishActiveSlide();
         break;
       case 'theme':
         this.ToggleRightDrawer('theme');
@@ -9609,6 +10248,238 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
   }
+
+  private getSyncChannelName(): string {
+    const key = this.artifactVersion?.ArtifactID || this.Deck.DeckID || 'default';
+    return `mj-slides-sync-${key}`;
+  }
+
+  private ensureFullscreenListener(): void {
+    if (this.fullscreenChangeHandler || typeof document === 'undefined') {
+      return;
+    }
+    this.fullscreenChangeHandler = () => {
+      const activeFullscreen = Boolean(document.fullscreenElement);
+      const wasFullscreen = this.IsBrowserFullscreen;
+      this.IsBrowserFullscreen = activeFullscreen;
+      if (wasFullscreen && !activeFullscreen && this.WorkspaceMode === 'present') {
+        this.ExitPresentationMode();
+        return;
+      }
+      this.cdr.markForCheck();
+    };
+    document.addEventListener('fullscreenchange', this.fullscreenChangeHandler);
+  }
+
+  private requestShellFullscreen(): void {
+    const hostEl = this.hostElRef?.nativeElement ?? null;
+    const shell = hostEl?.querySelector<HTMLElement>('.mj-slides-shell') ?? hostEl;
+    if (shell && typeof shell.requestFullscreen === 'function') {
+      try {
+        const res = shell.requestFullscreen();
+        if (res && typeof (res as Promise<void>).then === 'function') {
+          void (res as Promise<void>).then(
+            () => {
+              this.IsBrowserFullscreen = true;
+              this.cdr.markForCheck();
+            },
+            () => undefined,
+          );
+        }
+      } catch {
+        // Non-user-gesture or headless browser environment without Fullscreen support
+      }
+    }
+  }
+
+  private exitShellFullscreen(): void {
+    if (typeof document !== 'undefined' && document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+      try {
+        void document.exitFullscreen().catch(() => undefined);
+      } catch {
+        // Ignore exit failures in headless environments
+      }
+    }
+    this.IsBrowserFullscreen = false;
+  }
+
+  private ensureBroadcastChannel(): void {
+    if (this.audienceChannel || typeof BroadcastChannel === 'undefined') {
+      return;
+    }
+    try {
+      this.audienceChannel = new BroadcastChannel(this.getSyncChannelName());
+      this.audienceChannel.onmessage = (event: MessageEvent<{ type?: string; slideId?: string }>) => {
+        const msg = event?.data;
+        if (!msg) return;
+        if (msg.type === 'audience-ready') {
+          this.broadcastPresentationState();
+        } else if (msg.type === 'select-slide' && typeof msg.slideId === 'string') {
+          this.SelectSlide(msg.slideId);
+        }
+      };
+    } catch {
+      this.audienceChannel = null;
+    }
+  }
+
+  private broadcastPresentationState(): void {
+    if (!this.audienceChannel) {
+      return;
+    }
+    const slide = this.DisplayedSlide;
+    if (!slide) {
+      return;
+    }
+    const theme = this.SafeTheme;
+    const payload = {
+      type: 'state',
+      presenting: this.IsPresentationActive,
+      slideNumber: this.ActiveSlideIndex + 1,
+      slideCount: this.ActiveDeckForDisplay.Slides.length,
+      layout: slide.Layout,
+      title: slide.Title,
+      subtitle: slide.Subtitle || '',
+      overlayMode: this.PresentationOverlayMode,
+      revealStep: this.CurrentRevealStep,
+      maxRevealStep: this.MaxRevealStepOnDisplayedSlide,
+      laserActive: this.LaserPointerActive,
+      laserX: this.LaserPointerX,
+      laserY: this.LaserPointerY,
+      footerText: this.ActiveDeckForDisplay.Master.FooterText || '',
+      theme,
+      regions: (slide.Regions ?? []).map((r) => ({
+        RegionID: r.RegionID,
+        Label: r.Label,
+        Kind: r.Kind,
+        MarkdownContent: r.MarkdownContent,
+        BigNumberValue: r.BigNumberValue || '',
+        BigNumberLabel: r.BigNumberLabel || '',
+        BigNumberDelta: r.BigNumberDelta || '',
+        QuoteAttribution: r.QuoteAttribution || '',
+        RevealStep: r.RevealStep ?? 0,
+      })),
+    };
+    try {
+      this.audienceChannel.postMessage(payload);
+    } catch {
+      // Channel may have closed externally
+    }
+  }
+
+  private jumpToNavigableEdge(edge: 'first' | 'last'): void {
+    const slides = this.ActiveDeckForDisplay.Slides;
+    if (slides.length === 0) return;
+    const target =
+      edge === 'first'
+        ? slides.find((s) => !s.Hidden) ?? slides[0]
+        : [...slides].reverse().find((s) => !s.Hidden) ?? slides[slides.length - 1];
+    this.SelectSlide(target.SlideID);
+  }
+
+  private bufferSlideJumpDigit(digit: string): void {
+    this.jumpDigitBuffer = `${this.jumpDigitBuffer}${digit}`.slice(-3);
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+    }
+    this.jumpDigitTimer = setTimeout(() => {
+      this.commitSlideJumpBuffer();
+    }, 1100);
+  }
+
+  private commitSlideJumpBuffer(): void {
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+      this.jumpDigitTimer = null;
+    }
+    const num = Number.parseInt(this.jumpDigitBuffer, 10);
+    this.jumpDigitBuffer = '';
+    if (!Number.isFinite(num) || num < 1) {
+      return;
+    }
+    const target = this.ActiveDeckForDisplay.Slides[num - 1];
+    if (target) {
+      this.SelectSlide(target.SlideID);
+    }
+  }
+
+  private clearPresentTimers(): void {
+    if (this.presentHudHideTimer) {
+      clearTimeout(this.presentHudHideTimer);
+      this.presentHudHideTimer = null;
+    }
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+      this.jumpDigitTimer = null;
+    }
+    this.jumpDigitBuffer = '';
+  }
+
+  private cleanupPresentationRuntime(): void {
+    this.clearPresentTimers();
+    if (this.fullscreenChangeHandler && typeof document !== 'undefined') {
+      document.removeEventListener('fullscreenchange', this.fullscreenChangeHandler);
+      this.fullscreenChangeHandler = null;
+    }
+    this.exitShellFullscreen();
+    if (this.audienceChannel) {
+      try {
+        this.audienceChannel.close();
+      } catch {
+        // Ignore close failure
+      }
+      this.audienceChannel = null;
+    }
+    if (this.popoutAudienceWindow && !this.popoutAudienceWindow.closed) {
+      try {
+        this.popoutAudienceWindow.close();
+      } catch {
+        // Ignore cross-window close restriction
+      }
+    }
+    this.popoutAudienceWindow = null;
+    this.HasPopoutAudienceWindow = false;
+  }
+}
+
+function buildAudienceWindowShellHtml(channelName: string): string {
+  const safeChannelJson = JSON.stringify(channelName);
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="en"><head><meta charset="utf-8"/><title>MJ Slides — Audience Stage</title>',
+    '<style>',
+    '*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#05070c;color:#f8fafc;font-family:Inter,system-ui,sans-serif;overflow:hidden}',
+    'body{display:flex;align-items:center;justify-content:center;padding:24px}',
+    '#stage{width:100%;max-width:1440px;aspect-ratio:16/9;background:var(--bg,#fff);color:var(--text,#0f172a);border-radius:16px;padding:36px 48px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 28px 80px rgba(0,0,0,.6);position:relative;overflow:hidden}',
+    '#title{margin:0;font-size:38px;font-weight:800;color:var(--primary,#4f46e5)}',
+    '#subtitle{margin:8px 0 0;font-size:18px;color:var(--muted,#475569)}',
+    '#regions{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:20px 0;align-content:stretch}',
+    '.card{background:var(--surface,#f8fafc);border-radius:14px;padding:18px 22px;border:1px solid rgba(148,163,184,.28);display:flex;flex-direction:column;gap:8px;transition:opacity .25s ease}',
+    '.card.hidden-step{opacity:.06}',
+    '.kpi-val{font-size:48px;font-weight:800;color:var(--accent,#0ea5e9);line-height:1.1}',
+    '.kpi-lbl{font-size:16px;font-weight:600}',
+    '.kpi-delta{font-size:13px;color:var(--primary,#4f46e5);font-weight:600}',
+    '#footer{display:flex;justify-content:space-between;font-size:13px;color:var(--muted,#475569);border-top:1px solid rgba(148,163,184,.25);padding-top:10px}',
+    '#overlay{position:fixed;inset:0;display:none;z-index:20}',
+    '#laser{position:fixed;width:16px;height:16px;border-radius:50%;background:#ef4444;box-shadow:0 0 18px 4px rgba(239,68,68,.75);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:30}',
+    '</style></head><body>',
+    '<div id="stage"><div><h1 id="title">Waiting for presenter…</h1><p id="subtitle"></p></div><div id="regions"></div><div id="footer"><span id="f-left"></span><span id="f-right"></span></div></div>',
+    '<div id="overlay"></div><div id="laser"></div>',
+    '<script>',
+    `const ch = new BroadcastChannel(${safeChannelJson});`,
+    'const stage=document.getElementById("stage"),titleEl=document.getElementById("title"),subEl=document.getElementById("subtitle"),regEl=document.getElementById("regions"),fLeft=document.getElementById("f-left"),fRight=document.getElementById("f-right"),ov=document.getElementById("overlay"),laser=document.getElementById("laser");',
+    'ch.onmessage=(ev)=>{const d=ev.data;if(!d||d.type!=="state")return;',
+    'const t=d.theme||{};stage.style.setProperty("--bg",t.BackgroundColor||"#fff");stage.style.setProperty("--surface",t.SurfaceColor||"#f8fafc");stage.style.setProperty("--primary",t.PrimaryColor||"#4f46e5");stage.style.setProperty("--accent",t.AccentColor||"#0ea5e9");stage.style.setProperty("--text",t.TextColor||"#0f172a");stage.style.setProperty("--muted",t.MutedTextColor||"#475569");',
+    'titleEl.textContent=d.title||"";subEl.textContent=d.subtitle||"";fLeft.textContent=d.footerText||"";fRight.textContent=d.slideNumber+" / "+d.slideCount;',
+    'ov.style.display=d.overlayMode&&d.overlayMode!=="none"?"block":"none";ov.style.background=d.overlayMode==="whiteout"?"#fff":"#000";',
+    'laser.style.display=d.laserActive?"block":"none";laser.style.left=(d.laserX||50)+"%";laser.style.top=(d.laserY||50)+"%";',
+    'regEl.replaceChildren();const maxStep=d.maxRevealStep||0;const curStep=d.revealStep||0;',
+    'for(const r of (d.regions||[])){const c=document.createElement("div");const revealed=!maxStep||!r.RevealStep||curStep>=r.RevealStep;c.className="card"+(revealed?"":" hidden-step");',
+    'if(r.Kind==="big-number"){const v=document.createElement("div");v.className="kpi-val";v.textContent=r.BigNumberValue||"—";const l=document.createElement("div");l.className="kpi-lbl";l.textContent=r.BigNumberLabel||r.Label||"";const dl=document.createElement("div");dl.className="kpi-delta";dl.textContent=r.BigNumberDelta||"";c.append(v,l,dl);}else{const p=document.createElement("div");p.style.whiteSpace="pre-wrap";p.textContent=r.MarkdownContent||r.Label||"";c.append(p);}',
+    'regEl.appendChild(c);}};',
+    'ch.postMessage({type:"audience-ready"});',
+    '</script></body></html>',
+  ].join('');
 }
 
 function generateSlideBlockUuid(): string {

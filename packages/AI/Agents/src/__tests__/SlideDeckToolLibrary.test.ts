@@ -371,4 +371,60 @@ describe('SlideDeckToolLibrary', () => {
         expect(savedAnchor.regionId).toBe(firstRegion.RegionID);
         expect(savedAnchor.elementId).toBe(firstRegion.RegionID);
     });
+
+    it('supports apply_design_preset, beautify_slide, and revealStep in upsert_slide_element', async () => {
+        const lib = new SlideDeckToolLibrary();
+        const owner = makeUser(ownerId, 'Owner');
+        const deck = SlideDeckEngine.Instance.CreateDefaultDeck('Studio Polish Deck', 'deck-studio-polish');
+        const raw = SlideDeckEngine.Instance.SerializeDeckSpec(deck);
+
+        const presetRes = await lib.InvokeTool(
+            'apply_design_preset',
+            {
+                themeId: 'ivory-luxury',
+                transition: 'zoom',
+                cardElevation: 'glass',
+            },
+            raw,
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(presetRes.success).toBe(true);
+        const afterPresetStr = (presetRes.data as { updatedContent: string }).updatedContent;
+        const afterPreset = SlideDeckEngine.Instance.ParseDeckSpec(afterPresetStr);
+        expect(afterPreset.Theme.ThemeID).toBe('ivory-luxury');
+        expect(afterPreset.Theme.CardElevation).toBe('glass');
+        expect(afterPreset.Slides[0].Transition).toBe('zoom');
+
+        // Add a KPI bullet slide and beautify it via beautify_slide tool
+        const slide2Id = afterPreset.Slides[1].SlideID;
+        const beautifyRes = await lib.InvokeTool(
+            'beautify_slide',
+            { slideId: slide2Id },
+            afterPresetStr,
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(beautifyRes.success).toBe(true);
+        const beautifiedDeck = SlideDeckEngine.Instance.ParseDeckSpec(
+            (beautifyRes.data as { updatedContent: string }).updatedContent
+        );
+        const s2 = beautifiedDeck.Slides.find((s) => s.SlideID === slide2Id);
+        expect(s2?.Regions.every((r) => typeof r.RevealStep === 'number' && r.RevealStep >= 1)).toBe(true);
+
+        // Explicit revealStep update via upsert_slide_element
+        const stepRes = await lib.InvokeTool(
+            'upsert_slide_element',
+            {
+                slideId: slide2Id,
+                regionId: s2!.Regions[0].RegionID,
+                revealStep: 4,
+            },
+            SlideDeckEngine.Instance.SerializeDeckSpec(beautifiedDeck),
+            { contextUser: owner, ownerUserId: ownerId, actorUserId: ownerId }
+        );
+        expect(stepRes.success).toBe(true);
+        const afterStep = SlideDeckEngine.Instance.ParseDeckSpec(
+            (stepRes.data as { updatedContent: string }).updatedContent
+        );
+        expect(afterStep.Slides.find((s) => s.SlideID === slide2Id)?.Regions[0].RevealStep).toBe(4);
+    });
 });

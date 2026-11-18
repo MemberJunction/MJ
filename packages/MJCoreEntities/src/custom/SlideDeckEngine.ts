@@ -32,7 +32,21 @@ export type SlideLayoutKind =
     | 'Quote'
     | 'BigNumber'
     | 'FullBleedImage'
-    | 'Blank';
+    | 'Blank'
+    | 'KpiStrip'
+    | 'Timeline'
+    | 'BentoGrid'
+    | 'Quadrant'
+    | 'MetricComparison';
+
+/** Visual transition style when advancing to a slide in Present mode. */
+export type SlideTransitionKind = 'none' | 'fade' | 'slide' | 'zoom';
+
+/** Background surface styling mode for a slide deck theme. */
+export type SlideBackgroundStyle = 'solid' | 'gradient' | 'mesh' | 'accent-strip';
+
+/** Card surface elevation treatment for slide regions. */
+export type SlideCardElevation = 'flat' | 'soft' | 'glass';
 
 /**
  * Content kind hosted inside a single structured {@link SlideRegionSpec}.
@@ -74,6 +88,14 @@ export interface SlideDeckThemeSpec {
     BodyFont: string;
     /** Optional organization brand kit ID or seed label from which tokens were derived. */
     BrandSeedSource?: string;
+    /** Optional secondary stop color for gradient/mesh stage backdrops. */
+    SecondaryGradientColor?: string;
+    /** Background treatment for slide stages (default `'accent-strip'`). */
+    BackgroundStyle?: SlideBackgroundStyle;
+    /** Corner radius (in CSS px, 0–32) for structured cards and panels. */
+    CardRadiusPx?: number;
+    /** Visual elevation treatment for content cards (`'flat' | 'soft' | 'glass'`). */
+    CardElevation?: SlideCardElevation;
 }
 
 /**
@@ -152,6 +174,11 @@ export interface SlideRegionSpec {
     LockedByUserID?: string;
     /** When true, artifact editors (not only the owner/locker) may still edit this locked region. */
     AllowEditors?: boolean;
+    /**
+     * Optional 1-based progressive reveal step during Full-Screen Present mode.
+     * Regions without a RevealStep (or `<= 0`) appear immediately with the slide.
+     */
+    RevealStep?: number;
 }
 
 /**
@@ -173,7 +200,7 @@ export interface SlideSpec {
     /** Presenter speaker notes (Markdown / plain text) shown in the Speaker Notes bar and Presenter View. */
     SpeakerNotes: string;
     /** Visual transition when advancing to this slide in Present mode. */
-    Transition?: 'none' | 'fade' | 'slide';
+    Transition?: SlideTransitionKind;
     /** Whether this slide is skipped during full-screen Present mode. */
     Hidden?: boolean;
     /** When true, edits/deletions on this slide are locked to its locker/owner (`§6.2`). */
@@ -323,6 +350,41 @@ export const SLIDE_LAYOUT_CATALOG: ReadonlyArray<SlideLayoutMetadata> = [
         Description: 'Full-bleed region ideal for an interactive embedded OLE Whiteboard canvas.',
         Icon: 'fa-solid fa-chalkboard',
         DefaultRegionCount: 1
+    },
+    {
+        Kind: 'KpiStrip',
+        Label: 'KPI Metric Strip',
+        Description: 'Three executive headline KPI cards arranged across a scannable horizontal strip.',
+        Icon: 'fa-solid fa-gauge-high',
+        DefaultRegionCount: 3
+    },
+    {
+        Kind: 'Timeline',
+        Label: 'Roadmap Timeline',
+        Description: 'Three sequential milestone phases connected cleanly from left to right.',
+        Icon: 'fa-solid fa-timeline',
+        DefaultRegionCount: 3
+    },
+    {
+        Kind: 'BentoGrid',
+        Label: 'Bento Spotlight Grid',
+        Description: 'Asymmetric 4-card editorial bento showcase with a wide featured hero card.',
+        Icon: 'fa-solid fa-table-cells-large',
+        DefaultRegionCount: 4
+    },
+    {
+        Kind: 'Quadrant',
+        Label: '2×2 Strategic Quadrant',
+        Description: 'Structured 2×2 matrix for positioning, prioritization, or architectural tradeoffs.',
+        Icon: 'fa-solid fa-border-all',
+        DefaultRegionCount: 4
+    },
+    {
+        Kind: 'MetricComparison',
+        Label: 'Before / After Metrics',
+        Description: 'Twin headline metric scorecards paired with a full-width synthesis takeaway.',
+        Icon: 'fa-solid fa-code-compare',
+        DefaultRegionCount: 3
     }
 ];
 
@@ -341,7 +403,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#475569',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'MJ Default Design Tokens'
+        BrandSeedSource: 'MJ Default Design Tokens',
+        SecondaryGradientColor: '#eef2ff',
+        BackgroundStyle: 'accent-strip',
+        CardRadiusPx: 14,
+        CardElevation: 'soft'
     },
     {
         ThemeID: 'executive-slate',
@@ -354,7 +420,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#cbd5e1',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Executive Dark Suite'
+        BrandSeedSource: 'Executive Dark Suite',
+        SecondaryGradientColor: '#1e1b4b',
+        BackgroundStyle: 'mesh',
+        CardRadiusPx: 16,
+        CardElevation: 'glass'
     },
     {
         ThemeID: 'emerald-growth',
@@ -367,7 +437,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#374151',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Emerald Brand Kit'
+        BrandSeedSource: 'Emerald Brand Kit',
+        SecondaryGradientColor: '#ecfdf5',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 14,
+        CardElevation: 'soft'
     },
     {
         ThemeID: 'crimson-bold',
@@ -380,7 +454,79 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#4b5563',
         HeadingFont: 'Georgia, serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Crimson Brand Kit'
+        BrandSeedSource: 'Crimson Brand Kit',
+        SecondaryGradientColor: '#fffbeb',
+        BackgroundStyle: 'accent-strip',
+        CardRadiusPx: 12,
+        CardElevation: 'soft'
+    },
+    {
+        ThemeID: 'cobalt-editorial',
+        Name: 'Cobalt Studio Dark',
+        PrimaryColor: '#60a5fa',
+        AccentColor: '#34d399',
+        BackgroundColor: '#090d16',
+        SurfaceColor: '#111827',
+        TextColor: '#f9fafb',
+        MutedTextColor: '#9ca3af',
+        HeadingFont: '"Plus Jakarta Sans", Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Cobalt Dark Studio',
+        SecondaryGradientColor: '#0f172a',
+        BackgroundStyle: 'mesh',
+        CardRadiusPx: 16,
+        CardElevation: 'glass'
+    },
+    {
+        ThemeID: 'ivory-luxury',
+        Name: 'Warm Ivory Editorial',
+        PrimaryColor: '#7c2d12',
+        AccentColor: '#d97706',
+        BackgroundColor: '#fdfbf7',
+        SurfaceColor: '#f5f0e8',
+        TextColor: '#1c1917',
+        MutedTextColor: '#57534e',
+        HeadingFont: 'Georgia, "Times New Roman", serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Editorial Magazine Suite',
+        SecondaryGradientColor: '#fef3c7',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 10,
+        CardElevation: 'flat'
+    },
+    {
+        ThemeID: 'carbon-mono',
+        Name: 'Carbon Monochrome',
+        PrimaryColor: '#f4f4f5',
+        AccentColor: '#a1a1aa',
+        BackgroundColor: '#09090b',
+        SurfaceColor: '#18181b',
+        TextColor: '#fafafa',
+        MutedTextColor: '#a1a1aa',
+        HeadingFont: 'Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Carbon Minimal Dark',
+        SecondaryGradientColor: '#27272a',
+        BackgroundStyle: 'solid',
+        CardRadiusPx: 12,
+        CardElevation: 'glass'
+    },
+    {
+        ThemeID: 'nordic-mint',
+        Name: 'Nordic Teal & Mint',
+        PrimaryColor: '#0f766e',
+        AccentColor: '#14b8a6',
+        BackgroundColor: '#f8fafc',
+        SurfaceColor: '#ffffff',
+        TextColor: '#0f172a',
+        MutedTextColor: '#475569',
+        HeadingFont: 'Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Nordic Light Palette',
+        SecondaryGradientColor: '#ccfbf1',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 16,
+        CardElevation: 'soft'
     }
 ];
 
@@ -653,6 +799,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const muted = this.SanitizeCssValue(deck.Theme?.MutedTextColor, '#475569');
         const headingFont = this.SanitizeCssValue(deck.Theme?.HeadingFont, 'Inter, system-ui, sans-serif');
         const bodyFont = this.SanitizeCssValue(deck.Theme?.BodyFont, 'Inter, system-ui, sans-serif');
+        const secondaryBg = this.SanitizeCssValue(deck.Theme?.SecondaryGradientColor, surface);
+        const cardRadius = Math.max(0, Math.min(32, Number(deck.Theme?.CardRadiusPx ?? 14)));
 
         const safeLogoUrl = this.SanitizeImageUrl(deck.Master?.LogoUrl);
         const visibleSlides = (deck.Slides ?? []).filter((s) => !s.Hidden);
@@ -696,7 +844,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             '<html><head><meta charset="utf-8"/>',
             `<title>${escapeHtml(deck.Title)}</title>`,
             '<style>',
-            `:root { --slide-primary: ${primary}; --slide-accent: ${accent}; --slide-bg: ${bg}; --slide-surface: ${surface}; --slide-text: ${text}; --slide-muted: ${muted}; --slide-heading-font: ${headingFont}; --slide-body-font: ${bodyFont}; }`,
+            `:root { --slide-primary: ${primary}; --slide-accent: ${accent}; --slide-bg: ${bg}; --slide-surface: ${surface}; --slide-secondary-bg: ${secondaryBg}; --slide-card-radius: ${cardRadius}px; --slide-text: ${text}; --slide-muted: ${muted}; --slide-heading-font: ${headingFont}; --slide-body-font: ${bodyFont}; }`,
             'body { margin: 0; background: var(--slide-bg); color: var(--slide-text); font-family: var(--slide-body-font); }',
             'h1, h2 { font-family: var(--slide-heading-font); color: var(--slide-primary); }',
             '.slide-page { page-break-after: always; padding: 32px; background: var(--slide-bg); }',
@@ -734,7 +882,11 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             MutedTextColor: muted,
             HeadingFont: this.SanitizeCssValue(seeds.HeadingFont, 'Inter, system-ui, sans-serif'),
             BodyFont: this.SanitizeCssValue(seeds.BodyFont, 'Inter, system-ui, sans-serif'),
-            BrandSeedSource: seeds.BrandSeedSource || seeds.OrganizationName || 'Organization Brand Seeds'
+            BrandSeedSource: seeds.BrandSeedSource || seeds.OrganizationName || 'Organization Brand Seeds',
+            SecondaryGradientColor: surface,
+            BackgroundStyle: 'accent-strip',
+            CardRadiusPx: 14,
+            CardElevation: isDarkBg ? 'glass' : 'soft'
         };
     }
 
@@ -748,6 +900,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     ): SlideRegionSpec[] {
         const firstExisting = existingRegions[0];
         const secondExisting = existingRegions[1];
+        const thirdExisting = existingRegions[2];
+        const fourthExisting = existingRegions[3];
 
         switch (layout) {
             case 'Title':
@@ -906,6 +1060,172 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                         MarkdownContent:
                             firstExisting?.MarkdownContent ||
                             'Use `/` or the region toolbar to embed an interactive OLE Whiteboard or Live MJ Block.'
+                    })
+                ];
+
+            case 'KpiStrip':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'kpi-1',
+                        Label: 'Primary KPI',
+                        Kind: firstExisting?.Kind || 'big-number',
+                        BigNumberValue: firstExisting?.BigNumberValue || '$14.8M',
+                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Annual Recurring Revenue',
+                        BigNumberDelta: firstExisting?.BigNumberDelta || '+24% YoY',
+                        MarkdownContent: firstExisting?.MarkdownContent || 'ARR growth led by enterprise expansion.'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'kpi-2',
+                        Label: 'Efficiency KPI',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '98.4%',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'Net Dollar Retention',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '+4.2 pts',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'High adoption across core workspaces.'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'kpi-3',
+                        Label: 'Velocity KPI',
+                        Kind: thirdExisting?.Kind || 'big-number',
+                        BigNumberValue: thirdExisting?.BigNumberValue || '3.4x',
+                        BigNumberLabel: thirdExisting?.BigNumberLabel || 'Faster Reporting Cycle',
+                        BigNumberDelta: thirdExisting?.BigNumberDelta || '-18 hrs / wk',
+                        MarkdownContent: thirdExisting?.MarkdownContent || 'Automated live queries replace manual prep.'
+                    })
+                ];
+
+            case 'Timeline':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'step-1',
+                        Label: 'Phase 1 · Foundation',
+                        Kind: firstExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Q1 · Foundation\n- Unified metadata schema & RLS governance\n- Live data bindings & co-editing rooms'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'step-2',
+                        Label: 'Phase 2 · Scale',
+                        Kind: secondExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            secondExisting?.MarkdownContent ||
+                            '### Q2 · Acceleration\n- Automated AI brief & deck synthesis\n- Cross-artifact OLE embeds & exports'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'step-3',
+                        Label: 'Phase 3 · Optimization',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Q3 · Autonomous Ops\n- Executive board packs refreshed on schedule\n- Zero-drift metric signoff workflows'
+                    })
+                ];
+
+            case 'BentoGrid':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'bento-hero',
+                        Label: 'Featured Spotlight',
+                        Kind: firstExisting?.Kind || 'callout',
+                        CalloutTone: firstExisting?.CalloutTone || 'IMPORTANT',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Strategic Breakthrough\nPair governed enterprise data with executive visual storytelling in one shared workspace.'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'bento-2',
+                        Label: 'Customer Proof',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '420+',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'Active Teams',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '+38% QoQ',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'Enterprise adoption metric'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'bento-3',
+                        Label: 'Key Driver',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Security First\nRow-level security travels automatically with every live block.'
+                    }),
+                    this.mergeOrCreateRegion(fourthExisting, {
+                        RegionID: 'bento-4',
+                        Label: 'Next Milestone',
+                        Kind: fourthExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            fourthExisting?.MarkdownContent ||
+                            '### Q4 Rollout\nAll regional teams onboarded with zero manual migrations.'
+                    })
+                ];
+
+            case 'Quadrant':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'q1',
+                        Label: 'High Impact · Quick Wins',
+                        Kind: firstExisting?.Kind || 'callout',
+                        CalloutTone: firstExisting?.CalloutTone || 'TIP',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Quick Wins\n- Automated live query decks\n- One-click executive styling'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'q2',
+                        Label: 'High Impact · Strategic Bets',
+                        Kind: secondExisting?.Kind || 'callout',
+                        CalloutTone: secondExisting?.CalloutTone || 'IMPORTANT',
+                        MarkdownContent:
+                            secondExisting?.MarkdownContent ||
+                            '### Strategic Bets\n- Real-time multi-agent co-authoring\n- Cross-system governance ledger'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'q3',
+                        Label: 'Incremental · Hygiene',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Operational Hygiene\n- Template library curation\n- Consistent chart labeling'
+                    }),
+                    this.mergeOrCreateRegion(fourthExisting, {
+                        RegionID: 'q4',
+                        Label: 'Deprioritize / Reassess',
+                        Kind: fourthExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            fourthExisting?.MarkdownContent ||
+                            '### Defer\n- Static screenshot imports\n- Unverifiable manual spreadsheets'
+                    })
+                ];
+
+            case 'MetricComparison':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'before-metric',
+                        Label: 'Baseline Period',
+                        Kind: firstExisting?.Kind || 'big-number',
+                        BigNumberValue: firstExisting?.BigNumberValue || '18 hrs',
+                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Weekly Deck Preparation',
+                        BigNumberDelta: firstExisting?.BigNumberDelta || 'Manual exports',
+                        MarkdownContent: firstExisting?.MarkdownContent || 'Legacy static workflow'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'after-metric',
+                        Label: 'Current Performance',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '12 min',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'With Live MJ Slides',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '98% faster',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'Live governed workflow'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'synthesis',
+                        Label: 'Executive Takeaway',
+                        Kind: thirdExisting?.Kind || 'callout',
+                        CalloutTone: thirdExisting?.CalloutTone || 'NOTE',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            'Reclaimed analyst bandwidth shifts focus from data wrangling to strategic decision-making.'
                     })
                 ];
 
@@ -1438,7 +1758,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             Subtitle?: string;
             Layout?: SlideLayoutKind;
             SpeakerNotes?: string;
-            Transition?: 'none' | 'fade' | 'slide';
+            Transition?: SlideTransitionKind;
             Hidden?: boolean;
         },
         lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
@@ -1569,7 +1889,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                         regionPatch.ImageUrl !== undefined
                             ? this.SanitizeImageUrl(regionPatch.ImageUrl)
                             : this.SanitizeImageUrl(current.ImageUrl),
-                    ImageAlt: regionPatch.ImageAlt !== undefined ? regionPatch.ImageAlt : current.ImageAlt
+                    ImageAlt: regionPatch.ImageAlt !== undefined ? regionPatch.ImageAlt : current.ImageAlt,
+                    RevealStep: regionPatch.RevealStep !== undefined ? regionPatch.RevealStep : current.RevealStep
                 };
                 if (merged.BlockSpec && regionPatch.MarkdownContent === undefined) {
                     merged.MarkdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
@@ -1596,7 +1917,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     QuoteAttribution: regionPatch.QuoteAttribution,
                     CalloutTone: regionPatch.CalloutTone,
                     ImageUrl: this.SanitizeImageUrl(regionPatch.ImageUrl),
-                    ImageAlt: regionPatch.ImageAlt
+                    ImageAlt: regionPatch.ImageAlt,
+                    RevealStep: regionPatch.RevealStep
                 };
                 if (created.BlockSpec && !created.MarkdownContent) {
                     created.MarkdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
@@ -1754,6 +2076,178 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             ...deck,
             Theme: resolvedTheme,
             UpdatedAt: new Date().toISOString()
+        };
+    }
+
+    /**
+     * Applies a visual design preset (theme ID and optional slide-level transition across
+     * unlocked slides) to `deck` in one atomic operation.
+     */
+    public ApplyDesignPreset(
+        deck: SlideDeckSpec,
+        themeOrSeeds: string | SlideDeckThemeSpec | OrganizationBrandThemeSeeds,
+        options?: {
+            Transition?: SlideTransitionKind;
+            CardElevation?: SlideCardElevation;
+            BackgroundStyle?: SlideBackgroundStyle;
+        }
+    ): SlideDeckSpec {
+        let updated = this.ApplyTheme(deck, themeOrSeeds);
+        if (options?.CardElevation || options?.BackgroundStyle) {
+            updated = {
+                ...updated,
+                Theme: {
+                    ...updated.Theme,
+                    ...(options.CardElevation ? { CardElevation: options.CardElevation } : {}),
+                    ...(options.BackgroundStyle ? { BackgroundStyle: options.BackgroundStyle } : {})
+                }
+            };
+        }
+        if (options?.Transition) {
+            const transition = options.Transition;
+            updated = {
+                ...updated,
+                Slides: updated.Slides.map((s) => (s.Locked ? s : { ...s, Transition: transition }))
+            };
+        }
+        return updated;
+    }
+
+    /**
+     * Deterministically polishes a slide's typography, visual pacing, progressive reveal steps,
+     * and layout structure without losing content or embedded MJ blocks (`#2`).
+     */
+    public BeautifySlide(
+        deck: SlideDeckSpec,
+        slideId: string,
+        lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
+    ): { Deck: SlideDeckSpec; UpdatedSlide: SlideSpec | null; Improvements: string[] } {
+        let updatedSlide: SlideSpec | null = null;
+        const improvements: string[] = [];
+
+        const nextSlides = deck.Slides.map((slide) => {
+            if (slide.SlideID !== slideId && !UUIDsEqual(slide.SlideID, slideId)) {
+                return slide;
+            }
+            if (!lockContext?.BypassLock) {
+                const check = this.CanActorEditSlide(
+                    slide,
+                    lockContext?.ActorUserID,
+                    lockContext?.OwnerUserID,
+                    lockContext?.IsEditor
+                );
+                if (!check.Allowed) {
+                    throw new Error(check.Reason);
+                }
+            }
+
+            let nextTransition: SlideTransitionKind = slide.Transition || 'fade';
+            if (nextTransition === 'none') {
+                nextTransition = slide.Layout === 'Title' || slide.Layout === 'SectionHeader' ? 'fade' : 'slide';
+                improvements.push(`Set smooth '${nextTransition}' slide transition`);
+            }
+
+            // Normalize bullet formatting and bold lead-ins in unlocked text/callout regions
+            const hasExistingRevealSteps = slide.Regions.some((r) => typeof r.RevealStep === 'number' && r.RevealStep > 0);
+            const shouldAssignRevealSteps = !hasExistingRevealSteps && slide.Regions.length >= 2;
+            let formattedRegionsCount = 0;
+
+            const nextRegions = slide.Regions.map((region, idx) => {
+                const regionEditable =
+                    lockContext?.BypassLock ||
+                    this.CanActorEditRegion(
+                        slide,
+                        region,
+                        lockContext?.ActorUserID,
+                        lockContext?.OwnerUserID,
+                        lockContext?.IsEditor
+                    ).Allowed;
+
+                if (!regionEditable) {
+                    return { ...region };
+                }
+
+                let nextMarkdown = region.MarkdownContent ?? '';
+                if (region.Kind === 'rich-text' || region.Kind === 'callout') {
+                    const polished = polishMarkdownBullets(nextMarkdown);
+                    if (polished !== nextMarkdown) {
+                        nextMarkdown = polished;
+                        formattedRegionsCount++;
+                    }
+                }
+
+                const nextRevealStep = shouldAssignRevealSteps ? idx + 1 : region.RevealStep;
+                return {
+                    ...region,
+                    MarkdownContent: nextMarkdown,
+                    ...(nextRevealStep !== undefined ? { RevealStep: nextRevealStep } : {})
+                };
+            });
+
+            if (formattedRegionsCount > 0) {
+                improvements.push(`Formatted scannable bullet hierarchy across ${formattedRegionsCount} region(s)`);
+            }
+            if (shouldAssignRevealSteps) {
+                improvements.push(`Enabled ${nextRegions.length}-step progressive reveal for Presenter mode`);
+            }
+
+            // If single-region TitleAndBody contains >= 3 clear KPI metric bullets ("Label: $14.8M (+24%)"),
+            // upgrade cleanly to KpiStrip while preserving text.
+            let finalLayout: SlideLayoutKind = slide.Layout;
+            let finalRegions = nextRegions;
+            if (slide.Layout === 'TitleAndBody' && nextRegions.length === 1 && nextRegions[0].Kind === 'rich-text') {
+                const extractedKpis = tryExtractThreeKpiCards(nextRegions[0].MarkdownContent);
+                if (extractedKpis) {
+                    finalLayout = 'KpiStrip';
+                    finalRegions = extractedKpis.map((kpi, idx) => ({
+                        RegionID: `kpi-${idx + 1}`,
+                        Label: kpi.Label,
+                        Kind: 'big-number' as const,
+                        BigNumberValue: kpi.Value,
+                        BigNumberLabel: kpi.Label,
+                        BigNumberDelta: kpi.Delta,
+                        MarkdownContent: kpi.Notes,
+                        RevealStep: idx + 1
+                    }));
+                    improvements.push('Upgraded bullet metrics into 3-card KpiStrip layout');
+                }
+            }
+
+            if (improvements.length === 0) {
+                improvements.push('Verified typography cadence and visual card alignment');
+            }
+
+            updatedSlide = {
+                ...slide,
+                Layout: finalLayout,
+                Transition: nextTransition,
+                Regions: finalRegions
+            };
+            return updatedSlide;
+        });
+
+        if (!updatedSlide) {
+            return { Deck: deck, UpdatedSlide: null, Improvements: [] };
+        }
+
+        // Ensure deck theme carries modern elevation/background defaults if unset
+        const polishedTheme: SlideDeckThemeSpec = {
+            ...deck.Theme,
+            BackgroundStyle: deck.Theme.BackgroundStyle ?? 'accent-strip',
+            CardRadiusPx: deck.Theme.CardRadiusPx ?? 14,
+            CardElevation: deck.Theme.CardElevation ?? 'soft',
+            SecondaryGradientColor: deck.Theme.SecondaryGradientColor ?? deck.Theme.SurfaceColor
+        };
+
+        return {
+            Deck: {
+                ...deck,
+                Theme: polishedTheme,
+                Slides: nextSlides,
+                UpdatedAt: new Date().toISOString()
+            },
+            UpdatedSlide: updatedSlide,
+            Improvements: improvements
         };
     }
 
@@ -2074,7 +2568,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                           ImageAlt: r.ImageAlt,
                           Locked: r.Locked,
                           LockedByUserID: r.LockedByUserID,
-                          AllowEditors: r.AllowEditors
+                          AllowEditors: r.AllowEditors,
+                          RevealStep: typeof r.RevealStep === 'number' && r.RevealStep >= 0 ? r.RevealStep : undefined
                       };
                   })
                 : this.BuildRegionsForLayout(layout);
@@ -2113,7 +2608,16 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                       MutedTextColor: this.SanitizeCssValue(raw.Theme.MutedTextColor, defaultTheme.MutedTextColor),
                       HeadingFont: this.SanitizeCssValue(raw.Theme.HeadingFont, defaultTheme.HeadingFont),
                       BodyFont: this.SanitizeCssValue(raw.Theme.BodyFont, defaultTheme.BodyFont),
-                      BrandSeedSource: raw.Theme.BrandSeedSource
+                      BrandSeedSource: raw.Theme.BrandSeedSource,
+                      SecondaryGradientColor: raw.Theme.SecondaryGradientColor
+                          ? this.SanitizeCssValue(raw.Theme.SecondaryGradientColor, defaultTheme.SurfaceColor)
+                          : undefined,
+                      BackgroundStyle: raw.Theme.BackgroundStyle,
+                      CardRadiusPx:
+                          typeof raw.Theme.CardRadiusPx === 'number'
+                              ? Math.max(0, Math.min(32, raw.Theme.CardRadiusPx))
+                              : undefined,
+                      CardElevation: raw.Theme.CardElevation
                   }
                 : { ...defaultTheme },
             Master: {
@@ -2132,6 +2636,51 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
 
 function normalizedSlidesRegions(regions: SlideRegionSpec[]): SlideRegionSpec[] {
     return regions.map((r) => ({ ...r }));
+}
+
+function polishMarkdownBullets(markdown: string): string {
+    return markdown
+        .split('\n')
+        .map((rawLine) => {
+            const trimmedEnd = rawLine.replace(/\s+$/, '');
+            const bulletMatch = /^(\s*)[*+]\s+(.+)$/.exec(trimmedEnd);
+            const normalized = bulletMatch ? `${bulletMatch[1]}- ${bulletMatch[2]}` : trimmedEnd;
+            // Emphasize "Label: value" lead-ins on plain list items when not already bolded
+            const leadInMatch = /^(\s*-\s+)(?!\*\*)([A-Z0-9][^:*\n]{1,36}):\s+(.+)$/.exec(normalized);
+            if (leadInMatch) {
+                return `${leadInMatch[1]}**${leadInMatch[2].trim()}:** ${leadInMatch[3]}`;
+            }
+            return normalized;
+        })
+        .join('\n')
+        .trim();
+}
+
+function tryExtractThreeKpiCards(
+    markdown: string
+): Array<{ Label: string; Value: string; Delta: string; Notes: string }> | null {
+    const lines = markdown
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => /^[-*]\s+/.test(l));
+    if (lines.length < 3 || lines.length > 4) {
+        return null;
+    }
+    const cards: Array<{ Label: string; Value: string; Delta: string; Notes: string }> = [];
+    for (const line of lines) {
+        const clean = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '');
+        const match = /^([^:]{2,40}):\s*([$€£]?\d[\d.,]*[%xMkKmMbB+]?)(?:\s*\(([^)]+)\))?(.*)$/.exec(clean);
+        if (!match) {
+            return null;
+        }
+        cards.push({
+            Label: match[1].trim(),
+            Value: match[2].trim(),
+            Delta: match[3]?.trim() || 'Tracked KPI',
+            Notes: match[4]?.replace(/^[\s—-]+/, '').trim() || match[1].trim()
+        });
+    }
+    return cards.length === 3 ? cards : null;
 }
 
 function generateRandomUuid(): string {

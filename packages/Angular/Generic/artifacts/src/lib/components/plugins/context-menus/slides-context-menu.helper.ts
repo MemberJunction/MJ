@@ -6,6 +6,7 @@ import type {
   SlideRegionKind,
   SlideRegionSpec,
   SlideSpec,
+  SlideTransitionKind,
 } from '@memberjunction/core-entities';
 import {
   FormatMenuShortcut,
@@ -27,11 +28,6 @@ export type SlidesContextMenuZone =
   | 'speaker-notes'
   | 'viewer-stage'
   | 'presentation-stage';
-
-/**
- * Slide transition options supported by `SlideSpec.Transition`.
- */
-export type SlideTransitionKind = 'none' | 'fade' | 'slide';
 
 /**
  * Strongly-typed discriminated union of all context menu commands dispatched by MJ Slides.
@@ -159,6 +155,7 @@ const TRANSITION_OPTIONS: ReadonlyArray<{ readonly Value: SlideTransitionKind; r
   { Value: 'none', Label: 'None' },
   { Value: 'fade', Label: 'Fade' },
   { Value: 'slide', Label: 'Slide' },
+  { Value: 'zoom', Label: 'Zoom' },
 ];
 
 const REGION_KIND_OPTIONS: ReadonlyArray<{
