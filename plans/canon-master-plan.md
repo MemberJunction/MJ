@@ -8,6 +8,7 @@ One coordinating plan for all open Canon work across MemberJunction, Skip and th
 - **Created**: 2026-11-16
 - **Deadline**: **2026-12-01**. By that date every pull request listed here is merged, closed, or converted to a `canon` issue. See [What done means](#what-done-means-on-december-1).
 - **Sponsor**: Amith Nagarajan (`AN-BC`)
+- **Development lead**: `rkihm-BC` oversees the implementation from here and rules on open implementation questions. Design input closed on 2026-11-18.
 - **Where to discuss**: comments on this plan's pull request, [MJ 6675](https://github.com/MemberJunction/MJ/pull/6675). Scope changes are agreed there first, then this file is updated.
 - **How it changes**: this file is expected to change as we build. Edit it through its pull request and add a line to the [Change log](#change-log).
 
@@ -69,15 +70,15 @@ These touch something Canon reads or will read. Their owners need do nothing unl
 | [MJ 6517](https://github.com/MemberJunction/MJ/pull/6517) | Model monitoring jobs, the nearest thing to a metric trigger. |
 | [MJ 6643](https://github.com/MemberJunction/MJ/pull/6643), [6240](https://github.com/MemberJunction/MJ/pull/6240), [6455](https://github.com/MemberJunction/MJ/pull/6455), [3370](https://github.com/MemberJunction/MJ/pull/3370) | MCP hosting and security. These come first if Canon is ever exposed to outside assistants. |
 
-## Decisions to close
+## Decisions
 
-Each has a proposed answer. Agree or object in a comment on this plan's pull request by **November 20**. Silence is agreement.
+Closed by the sponsor on 2026-11-18. No decision drew an objection, so each answer below stands. To change one, raise it with the development lead on this plan's pull request.
 
 ### 1. One graph runtime
 
 MJ 6404 adds `packages/MJCoreEntities/src/engines/GraphEngine.ts`. `next` already has `packages/MJCoreEntities/src/graph/GraphEngine.ts`, with `CanonGraphEngine`, the edge providers and `Get Graph Context`, and MJ 6667 builds on those.
 
-**Proposed**: the runtime on `next` is the only one. MJ 6404 is re-cut to what `next` lacks: `RenderCanonDocument`, and the sub-agent result propagation fix as its own small pull request, since it is not Canon work.
+**Decided**: the runtime on `next` is the only one. MJ 6404 is re-cut to what `next` lacks: `RenderCanonDocument`, and the sub-agent result propagation fix as its own small pull request, since it is not Canon work.
 
 ### 2. One place for proposals awaiting approval
 
@@ -87,7 +88,7 @@ Three designs exist:
 - MJ 6213 adds learning-cycle proposal tables as a quarantine for anything a machine proposes.
 - MJ 4155 R4 adds a separate `MJ: AI Agent Improvement Proposals` table.
 
-**Proposed**:
+**Decided**:
 
 - A graph row carries its own review state. Anything proposed for Layer 2 is a `Proposed` concept or edge, and approval is the `Graph: Approve Edges` gate. No second approval path for graph rows.
 - The learning-cycle proposal tables in MJ 6213 are the one upstream ledger for machine-generated proposals of every kind (notes, skills, workflows, graph rows). A graph proposal that originates there is materialized as a `Proposed` graph row and links back to its proposal.
@@ -99,13 +100,13 @@ Today only edges are gated this way; concepts are not. [Workstream 5a](#workstre
 
 Skip client 50 has `promoteNoteToCanon()`, which writes concepts and edges with `Origin = 'Declared'`, and a bridge that synthesizes Canon from `Active` notes automatically. MJ 6213 routes the same promotion through verification and human approval.
 
-**Proposed**: promotion lives in MemberJunction core, once. Skip calls it. Anything a machine promotes is `Origin = 'Inferred'`, `Status = 'Proposed'`. `Declared` is reserved for a person stating something directly. Skip may still *send* un-promoted notes to Skip as notes, clearly labelled as notes and not as Canon.
+**Decided**: promotion lives in MemberJunction core, once. Skip calls it. Anything a machine promotes is `Origin = 'Inferred'`, `Status = 'Proposed'`. `Declared` is reserved for a person stating something directly. Skip may still *send* un-promoted notes to Skip as notes, clearly labelled as notes and not as Canon.
 
 ### 4. A fact has one home
 
 MJ 6213 adds `IsCanonical` to agent notes. The same definition, for example "active member", could then live as a canonical note and as a Graph Concept, retrieved by different paths and ranked by different systems.
 
-**Proposed**:
+**Decided**:
 
 - Anything that defines a term, metric, policy, process, role or domain is a Graph Concept.
 - A canonical note is a rule about agent behaviour that names no business concept, for example "never send external email without approval".
@@ -120,13 +121,13 @@ MJ 6213 adds `IsCanonical` to agent notes. The same definition, for example "act
 - Skip-Brain 677 names concept types `Term, Metric, Rule, Hierarchy`. Shipped: `Policy, Metric, Process, Role, Domain, Term`.
 - MJ 6667 adds result codes `AMBIGUOUS_CONCEPT` and `NO_MATCH` to `Get Graph Context`, both with `Success: true`. The Skip Local agents in Skip client 50 bind that action and must handle both.
 
-**Proposed**: each of these pull requests is corrected to the shipped values. A new status, tier or type is a schema proposal, raised as a `canon` issue.
+**Decided**: each of these pull requests is corrected to the shipped values. A new status, tier or type is a schema proposal, raised as a `canon` issue.
 
 ### 6. Every proposer follows the same two rules
 
 Concepts are now proposed from structure (MJ 6667), from documents (the `Graph` stage) and, in plan, from usage (MJ 6213) and query history (MJ 6586).
 
-**Proposed**, both taken from MJ 6667:
+**Decided**, both taken from MJ 6667:
 
 - A proposer skips any name already in the graph in any status, so a rejected proposal stays rejected.
 - A proposer writes nothing by default. Writing is an explicit option.
@@ -135,7 +136,7 @@ Concepts are now proposed from structure (MJ 6667), from documents (the `Graph` 
 
 MJ 6586 certifies schema descriptions and wants query history as evidence.
 
-**Proposed**: DBAutoDoc keeps describing schema, and its certified descriptions stay on entities and fields. When it finds something that is a business concept, it proposes it through decision 2's route like any other proposer. It does not keep a second store of definitions.
+**Decided**: DBAutoDoc keeps describing schema, and its certified descriptions stay on entities and fields. When it finds something that is a business concept, it proposes it through decision 2's route like any other proposer. It does not keep a second store of definitions.
 
 ## Workstreams
 
@@ -179,13 +180,14 @@ Not started and not to be opened as pull requests. Each becomes a `canon` issue 
 - Wiring workflow promotion discovery and workflow health scoring to a scheduled job.
 - Triggers driven by a Canon metric crossing a threshold.
 - Exposing Canon context to outside assistants over MCP, after the MCP security work lands.
+- Authority per concept ([MJ 6757](https://github.com/MemberJunction/MJ/issues/6757)): an `AuthoritativeFor` edge from a content source or item to a concept, with an optional authority tier on the edge. Depends on 5b to 5d. The review should settle which tier wins when a source's tier and an edge's tier disagree, so decision 4 holds.
 
 ## Timeline
 
 | Date | What |
 |---|---|
 | Nov 16 | Plan opened. Owners notified on their pull requests. |
-| Nov 20 | Decisions 1 to 7 closed in comments here. |
+| Nov 18 | Decisions 1 to 7 closed by the sponsor; development handed to `rkihm-BC`. |
 | Nov 25 | Revised pull requests ready for review. |
 | Dec 1 | Close-out. Every listed pull request is merged, closed or converted to an issue. This plan merges. |
 | Dec 3 | First monthly Canon review. |
@@ -203,7 +205,7 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 
 - **One thread.** Questions that cross pull requests go on this plan's pull request, not on the individual ones.
 - **No new Canon pull requests** until December 1, other than re-cuts of the ones listed and these named exceptions: workstream 5a. A new idea is a `canon` issue.
-- **Alignment check each weekday.** Each listed pull request's new commits and comments are compared with this plan. Where one diverges from a decision, or two start to overlap, a comment is posted on that pull request linking the relevant section here. The check is run by an automated Claude session on the sponsor's behalf, and its comments say so.
+- **Alignment check each day.** Each listed pull request's new commits and comments are compared with this plan, and the repositories are scanned for new Canon and graph pull requests and issues. Where one diverges from a decision, or two start to overlap, a comment is posted on that pull request linking the relevant section here. The check is run by an automated Claude session on the sponsor's behalf, and its comments say so.
 - **Disagreeing is fine.** If the plan is wrong, say so on its pull request and it changes. What we are avoiding is silent divergence.
 
 ## Governance after December 1
@@ -223,3 +225,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-17 | Workstream 4 handed from `MS-BC` to `ct-bc`. |
 | 2026-11-17 | `ct-bc` and `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstreams 4 and 5. |
 | 2026-11-18 | `cmbrock-BC` opened MJ 6731 for workstream 5a and filed issues 6723, 6724 and 6725 for 5b to 5d. Watched MJ 6583 merged. |
+| 2026-11-18 | MJ 6688 (the non-Canon part of 6404) merged. `cmbrock-BC` filed MJ 6757 (authority per concept), added to the backlog. The sponsor closed design input: decisions 1 to 7 stand, and `rkihm-BC` leads development. |
