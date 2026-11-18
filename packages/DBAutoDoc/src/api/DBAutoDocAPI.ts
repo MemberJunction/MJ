@@ -399,6 +399,7 @@ export class DBAutoDocAPI {
       const orchestrator = new AnalysisOrchestrator({
         config: fullConfig,
         incrementalFromState: baseStateFile,
+        incrementalBaselineState: priorState,
         onProgress
       });
 

@@ -560,6 +560,82 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(result.finalStep.message).toContain('[Audio] MissingRenderedAudioTrack:');
     });
 
+    it('sends the soundtrack plan and configured worker count with every render, and records each format\'s measured audio', async () => {
+        const fakeDriver = new FakeRenderDriver();
+        const originalRender = fakeDriver.Render.bind(fakeDriver);
+        const requests: Array<Parameters<FakeRenderDriver['Render']>[0]> = [];
+        vi.spyOn(fakeDriver, 'Render').mockImplementation(async (req, onProgress, signal) => {
+            requests.push(req);
+            const res = await originalRender(req, onProgress, signal);
+            return {
+                ...res,
+                Workers: req.Workers,
+                Audio: {
+                    Mixed: true,
+                    Normalized: true,
+                    Measurements: { IntegratedLufs: -14.1, TruePeakDb: -1.7, LoudnessRangeLu: 5, MinNarrationToMusicDb: 18.2 },
+                    Issues: [],
+                    Synthesized: ['Music: synthesized Calm bed at 80 BPM (procedurally generated, not a licensed track)'],
+                },
+            };
+        });
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+        const baseSettings = VideoRenderEngine.Instance.Settings;
+        vi.spyOn(VideoRenderEngine.Instance, 'Settings', 'get').mockReturnValue({ ...baseSettings, Workers: 3 });
+
+        const { execute } = createRenderAgentHarness();
+        const result = await execute(makeDualFormatSpec());
+
+        expect(result.finalStep.step).toBe('Success');
+        expect(requests).toHaveLength(2);
+        for (const req of requests) {
+            expect(req.Workers).toBe(3);
+            expect(req.AudioMix?.Loudness.IntegratedLufs).toBe(-14);
+            expect(req.AudioMix?.Ducking.DuckDb).toBe(-7.5);
+            expect(req.AudioMix?.DurationSeconds).toBe(req.DurationSeconds);
+        }
+        const payload = result.finalStep.newPayload as unknown as { Output: { RenderMetadata: { AudioByFormat?: Record<string, { IntegratedLufs?: number; Synthesized: string[] }> } } };
+        expect(payload.Output.RenderMetadata.AudioByFormat?.['16:9']?.IntegratedLufs).toBe(-14.1);
+        expect(payload.Output.RenderMetadata.AudioByFormat?.['9:16']?.Synthesized[0]).toContain('synthesized Calm bed');
+    });
+
+    it('fails the run on a deterministic audio check error from the worker, before any critic call, with its timestamp', async () => {
+        const fakeDriver = new FakeRenderDriver();
+        const originalRender = fakeDriver.Render.bind(fakeDriver);
+        vi.spyOn(fakeDriver, 'Render').mockImplementation(async (req, onProgress, signal) => {
+            const res = await originalRender(req, onProgress, signal);
+            return {
+                ...res,
+                Audio: {
+                    Mixed: true,
+                    Normalized: true,
+                    Measurements: { IntegratedLufs: -14 },
+                    Issues: [
+                        {
+                            Code: 'MJ_AUDIO_LINE_PAUSE',
+                            Category: 'Audio',
+                            Severity: 'Error',
+                            Message: 'Narration line "line-1" has a 0.30s pause at 1.20s inside "A.I."',
+                            TimestampSeconds: 1.2,
+                        },
+                        { Code: 'MJ_AUDIO_INFO', Category: 'Audio', Severity: 'Warning', Message: 'advisory only' },
+                    ],
+                    Synthesized: [],
+                },
+            };
+        });
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        const { execute } = createRenderAgentHarness();
+        const result = await execute(makeDualFormatSpec());
+
+        expect(result.finalStep.step).toBe('Failed');
+        expect(result.finalStep.message).toContain('Rendered audio checks failed for format 16:9');
+        expect(result.finalStep.message).toContain('[Audio] MJ_AUDIO_LINE_PAUSE:');
+        expect(result.finalStep.message).toContain('at 1.20s');
+        expect(result.finalStep.message).not.toContain('MJ_AUDIO_INFO');
+    });
+
     it('StoreFile returning undefined falls back to ephemeral inline IDs for poster/contact sheets and InlineBase64 for MP4 under the default 2 MB cap', async () => {
         const fakeDriver = new FakeRenderDriver();
         VideoRenderEngine.Instance.UseDriver(fakeDriver);

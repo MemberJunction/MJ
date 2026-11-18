@@ -113,6 +113,11 @@ export class IncrementalAnalysisTracker {
     }
   }
 
+  /** Re-queue a table whose LLM analysis call failed so the run retries it instead of reporting converged. */
+  public RecordTableFailure(tableKey: string): void {
+    this.nextIterationTables.add(tableKey.toLowerCase());
+  }
+
   /** Record that LLM table analysis added or confirmed a PK candidate on `tableKey`. */
   public RecordLLMPKChange(tableKey: string): void {
     this.dirtyPKPruningTables.add(tableKey);

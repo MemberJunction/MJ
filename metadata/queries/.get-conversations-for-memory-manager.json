@@ -28,6 +28,34 @@
             "checksum": "9adc9cf7dfb5e0e2c609a21c88ea04ff94732fe27536e49bcf3d9da8fe008a2d"
           }
         }
+      ],
+      "MJ: Query Permissions": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer"
+          },
+          "primaryKey": {
+            "ID": "34B1946F-9B88-46B5-9AB0-71920B133A8E"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:49.347Z",
+            "checksum": "62b97643c318b35d52c026e4a969d47a56699737a59578a48ad122d98f1469fc"
+          }
+        },
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          },
+          "primaryKey": {
+            "ID": "3D394518-9197-4505-9EFF-FE105741FAEE"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:49.362Z",
+            "checksum": "894a52a68ad5beb47098c392f12bd9f4c8d8211b0997d6e6adcf83ddc54cdab3"
+          }
+        }
       ]
     },
     "collections": {

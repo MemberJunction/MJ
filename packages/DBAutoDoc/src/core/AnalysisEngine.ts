@@ -528,6 +528,7 @@ export class AnalysisEngine {
     state: DatabaseDocumentation,
     foreignKeys: import('../types/discovery.js').FKCandidate[]
   ): void {
+    const bare = (name: string): string => (name.includes('.') ? (name.split('.').pop() ?? name) : name);
     const rejected = foreignKeys.filter(fk => fk.status === 'rejected');
     for (const fk of rejected) {
       const stillActiveOnColumn = foreignKeys.some(
@@ -542,19 +543,41 @@ export class AnalysisEngine {
         srcTable.dependsOn = srcTable.dependsOn.filter(
           dep =>
             IsCatalogForeignKeyRef(state, fk.schemaName, fk.sourceTable, dep) ||
-            !(dep.column === fk.sourceColumn && dep.schema === fk.targetSchema && dep.table === fk.targetTable && dep.referencedColumn === fk.targetColumn)
+            !(
+              dep.column === fk.sourceColumn &&
+              dep.schema === fk.targetSchema &&
+              bare(dep.table) === fk.targetTable &&
+              (dep.referencedColumn || dep.column) === fk.targetColumn
+            )
         );
+        const stillHasCatalogDep = srcTable.dependsOn.some(dep => dep.column === fk.sourceColumn);
         const col = srcTable.columns.find(c => c.name === fk.sourceColumn);
-        if (col && !col.isCatalogForeignKey && !stillActiveOnColumn) {
+        if (col && !col.isCatalogForeignKey && !stillActiveOnColumn && !stillHasCatalogDep) {
           col.isForeignKey = false;
           col.foreignKeyReferences = undefined;
         }
       }
       const tgtTable = this.stateManager.findTable(state, fk.targetSchema, fk.targetTable);
       if (tgtTable) {
-        tgtTable.dependents = tgtTable.dependents.filter(
-          dep => !(dep.schema === fk.schemaName && dep.table === fk.sourceTable && dep.column === fk.sourceColumn && dep.referencedColumn === fk.targetColumn)
+        const remainingEdgesToTarget = (srcTable?.dependsOn ?? []).filter(
+          dep => dep.schema === fk.targetSchema && bare(dep.table) === fk.targetTable
         );
+        if (remainingEdgesToTarget.length === 0) {
+          tgtTable.dependents = tgtTable.dependents.filter(
+            dep => !(dep.schema === fk.schemaName && bare(dep.table) === fk.sourceTable)
+          );
+        } else {
+          tgtTable.dependents = tgtTable.dependents.filter(dep => {
+            if (dep.schema !== fk.schemaName || bare(dep.table) !== fk.sourceTable) return true;
+            // Discovered/proposed dependents store `{ column: sourceColumn, referencedColumn: targetColumn }`;
+            // introspected catalog dependents store `{ column: targetColumn, referencedColumn: sourceColumn }`.
+            return remainingEdgesToTarget.some(
+              edge =>
+                (dep.column === edge.column && dep.referencedColumn === (edge.referencedColumn || edge.column)) ||
+                (dep.column === (edge.referencedColumn || edge.column) && dep.referencedColumn === edge.column)
+            );
+          });
+        }
       }
     }
   }
@@ -678,6 +701,7 @@ export class AnalysisEngine {
           result.promptInput,
           result.promptOutput
         );
+        this.incrementalTracker?.RecordTableFailure(tableNode.fullName);
 
         return {};
       }
@@ -802,6 +826,7 @@ export class AnalysisEngine {
         result: 'error',
         message: (error as Error).message
       });
+      this.incrementalTracker?.RecordTableFailure(tableNode.fullName);
 
       return {};
     }

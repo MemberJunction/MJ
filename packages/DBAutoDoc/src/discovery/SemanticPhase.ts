@@ -185,6 +185,7 @@ export async function RunSemanticPhase(
         partitioned.DirtyInputs,
         normResult.Normalized,
         normResult.TablesSkippedForBudget,
+        normResult.FailedTables ?? [],
         partitioned.RejectedCountByTable,
     );
 
@@ -475,6 +476,7 @@ function recordDirtyRejectedCounts(
     dirtyInputs: TableNormalizationInput[],
     freshNormalized: NormalizedColumn[],
     skippedForBudgetCount: number,
+    failedTables: string[],
     rejectedByTable: Map<string, number>,
 ): Set<string> {
     const survivingCount = new Map<string, number>();
@@ -482,12 +484,13 @@ function recordDirtyRejectedCounts(
         const key = `${col.schema}.${col.table}`.toLowerCase();
         survivingCount.set(key, (survivingCount.get(key) ?? 0) + 1);
     }
-    const skippedLower = new Set<string>();
+    const failedLower = new Set(failedTables.map((t) => t.toLowerCase()));
+    const skippedLower = new Set<string>(failedLower);
     const cutoff = Math.max(0, dirtyInputs.length - skippedForBudgetCount);
     for (let i = 0; i < dirtyInputs.length; i++) {
         const input = dirtyInputs[i];
         const lower = `${input.schema}.${input.table}`.toLowerCase();
-        if (i >= cutoff) {
+        if (i >= cutoff || failedLower.has(lower)) {
             skippedLower.add(lower);
             continue;
         }

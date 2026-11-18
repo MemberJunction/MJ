@@ -56,6 +56,7 @@ import { VideoArtifactPreviewComponent } from './components/previews/video-artif
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
 import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
+import { RegisterClientArtifactFileBytesLoader } from './services/artifact-file.service';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
@@ -66,6 +67,7 @@ import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
 import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
+import { ArtifactCommandPaletteComponent } from './components/plugins/artifact-command-palette.component';
 import { MjContextMenuComponent } from './components/context-menu/mj-context-menu.component';
 
 // Git-style Version History & Diff components (standalone)
@@ -161,6 +163,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     QueryVersionDiffComponent,
     ArtifactAgentPresenceBarComponent,
     ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -173,6 +176,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     MjContextMenuComponent,
     ArtifactAgentPresenceBarComponent,
     ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
     ArtifactVersionCompareComponent,
     GitDiffLinesViewComponent,
     DocsVersionDiffComponent,
@@ -251,6 +255,9 @@ export class ArtifactsModule {
       AudioArtifactPreviewComponent,
       VideoProductionArtifactPreviewComponent,
     ];
+
+    // Ensure the client-side file-bytes loader is wired before live blocks inspect File-backed embeds
+    RegisterClientArtifactFileBytesLoader();
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
     // componentType / previewComponentType. `componentType` is required by the interface (so this is

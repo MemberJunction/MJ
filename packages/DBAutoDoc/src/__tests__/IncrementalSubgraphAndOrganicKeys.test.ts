@@ -348,6 +348,66 @@ describe('IncrementalAnalysisTracker & AnalysisEngine Subgraph Execution', () =>
     expect(products.dependsOn).toHaveLength(0);
   });
 
+  it('preserves declared catalog FK dependents on the target table when pruning rejects a duplicate soft FK candidate', async () => {
+    const state = buildThreeTableState();
+    const customers = state.schemas[0].tables.find((t) => t.name === 'Customers')!;
+    const orders = state.schemas[0].tables.find((t) => t.name === 'Orders')!;
+    // Declared catalog FK on Orders.CustomerID -> Customers.CustomerID
+    orders.dependsOn = [{ schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'CustomerID', constraintName: 'FK_Orders_Customers' }];
+    orders.columns[1].isCatalogForeignKey = true;
+    orders.columns[1].foreignKeyReferences = { schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'CustomerID', constraintName: 'FK_Orders_Customers' };
+    customers.dependents = [{ schema: 'dbo', table: 'Orders', column: 'CustomerID', referencedColumn: 'CustomerID' }];
+
+    state.phases.keyDetection = {
+      triggered: true,
+      triggerReason: 'insufficient_fks',
+      triggerDetails: { tablesWithoutPK: 0, expectedFKs: 1, actualFKs: 1, fkDeficitPercentage: 0 },
+      startedAt: '2026-01-01',
+      completedAt: '2026-01-01',
+      tokenBudget: { allocated: 10000, used: 0, remaining: 10000 },
+      iterations: [],
+      discovered: {
+        primaryKeys: [],
+        foreignKeys: [
+          {
+            schemaName: 'dbo',
+            sourceTable: 'Orders',
+            sourceColumn: 'CustomerID',
+            targetSchema: 'dbo',
+            targetTable: 'Customers',
+            targetColumn: 'CustomerID',
+            confidence: 70,
+            evidence: { namingMatch: 1, valueOverlap: 1, cardinalityRatio: 1, dataTypeMatch: true, nullPercentage: 0, sampleSize: 100, orphanCount: 0, warnings: [] },
+            discoveredInIteration: 1,
+            validatedByLLM: false,
+            status: 'candidate',
+          },
+        ],
+      },
+      schemaEnhancements: { pkeysAdded: 0, fkeysAdded: 0, overallConfidence: 70 },
+      feedbackFromAnalysis: [],
+      summary: { totalTablesAnalyzed: 3, tablesWithDiscoveredPKs: 0, relationshipsDiscovered: 1, averageConfidence: 70, highConfidenceCount: 0, mediumConfidenceCount: 1, lowConfidenceCount: 0, rejectedCount: 0 },
+    };
+
+    const mockPromptEngine = {
+      setGuardrailCheck: vi.fn(),
+      executePrompt: vi.fn(async () => ({
+        success: true,
+        tokensUsed: 10,
+        result: [{ index: 1, action: 'remove', reasoning: 'Duplicate of declared FK' }],
+      })),
+    } as unknown as PromptEngine;
+
+    const sm = new StateManager('/tmp/prune-cat.json');
+    vi.spyOn(sm, 'save').mockResolvedValue(undefined);
+    const engine = new AnalysisEngine(makeConfig(), mockPromptEngine, sm, new IterationTracker());
+    const run = sm.createAnalysisRun(state, 'gemini-flash', 'gemini', 0.1);
+
+    await engine.PruneForeignKeys(state, run);
+    expect(orders.dependsOn).toHaveLength(1);
+    expect(customers.dependents).toHaveLength(1);
+  });
+
   it('wakes up composite-PK junction tables for GATE-8 PK-as-FK targets and accepts LLM FKs on confirmed composite PK columns', async () => {
     const priorProductVendor: TableDefinition = {
       name: 'ProductVendor',

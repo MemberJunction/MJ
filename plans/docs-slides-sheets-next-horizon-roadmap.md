@@ -1,6 +1,16 @@
 # MJ Docs, Slides, Sheets & Library — Next-Horizon Product & Architecture Plan
 
-**Status:** Active Roadmap Plan  
+**Status:** Implemented Across `NW-1`–`NW-6` & Prior Horizons (Historical Roadmap Below with Current State Addendum)  
+**Implementation Addendum (2026-11-15):**
+- **Shipped (`NW-1`..`NW-6` & Horizons 1–4):**
+  - **Guest External Sharing (`NW-1`):** `MJ: Artifact Guest Share Links`, `/guest/artifact/:token` (`PublicArtifactGuestComponent`), `GET/POST /guest-share/resolve`, `@Public() ResolvePublicArtifactGuestShare`, HMAC Frozen snapshots, Live-vs-Frozen drift banner, and `<mj-artifact-share-modal>` (`artifact:share` scope).
+  - **Hierarchical Collection ACL (`NW-2`):** Cycle-safe `MJ: Collections.ParentID` inheritance + `'Defer'` resolution (`ArtifactPermissionEngine`).
+  - **Comments, Suggest-Mode & Replies (`NW-3`):** Anchored threads (`list_comments`, `add_comment`, `reply_comment`, `resolve_comment`) + Yjs `suggestions` proposals (`propose_suggestion`, `review_suggestion`) across Docs, Slides, and Sheets.
+  - **Sheet Formulas, Dynamic Arrays & Native OOXML (`NW-4`):** 100+ functions, 2D dynamic arrays (`FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `SEQUENCE`, `LET`, `LAMBDA`) + `#SPILL!`, `MergeRanges`, conditional formatting, data validation, named ranges, native `.xlsx` DrawingML `xl/charts/chartN.xml` & `.pptx` `ppt/charts/chartN.xml`, and `=MJ.AI` AST evaluation.
+  - **Distributed Yjs & Lock Security (`NW-5`):** 30s idle room TTL + `HasActiveLocks`, server-enforced locks + `meta` map protection, `CompactionQueue`, `RedisTicketReplayStore`, and `RedisYjsRoomRelay` ZSET peers + single-writer compaction lease.
+  - **Bidirectional `ArtifactWorkspace` & Live Sheets (`NW-6`):** `navigate_to_anchor`, `set_view_mode`, `EmitSelectionDelta` -> `selection_changed`, `version_changed`, atomic `v1` live sheets, Multi-Artifact Synthesis (`Artifact.SynthesizeFromSources`, `create_synthesized_artifact`), and Linked Drive Push/Pull/ETag sync.
+- **Intentionally Disabled:** Inline `/ai` & Ask AI UI triggers remain gated off (`ARTIFACT_AI_ASSISTANT_ENABLED = false` in `artifact-ai-assistant-bridge.ts`). `RANDARRAY` remains unimplemented headlessly (`#NAME?` + `_xlfn.RANDARRAY` `.xlsx` pass-through). See [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md) for canonical shipped behavior.
+
 **Baseline:** Post-PR `#6215`, `#6600`, `#6608` (`v6.3.x`)  
 **Primary Packages:** `@memberjunction/ng-artifacts`, `@memberjunction/ng-conversations`, `@memberjunction/ng-explorer-core`, `@memberjunction/core-entities`, `@memberjunction/ai-agents`, `@memberjunction/server`
 

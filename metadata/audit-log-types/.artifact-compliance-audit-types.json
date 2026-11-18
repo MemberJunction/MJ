@@ -2,56 +2,66 @@
   {
     "fields": {
       "Name": "Artifact Block Frozen",
-      "Description": "A live MJ block in a Document, Presentation, or Spreadsheet artifact was frozen into a static snapshot (recording FrozenByUserID, Timestamp, and SnapshotContentHash).",
-      "ParentID": null,
-      "AuthorizationID": null
+      "Description": "Logged when a live data block inside a Document or Presentation is frozen to a static snapshot."
     },
     "primaryKey": {
       "ID": "B8E4F120-7C1D-4A2B-9D11-300000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.191Z",
+      "checksum": "1996bdf8a203a0def507a9d3e9de379604e8b2abe4be9f633d220e1bf33f555b"
     }
   },
   {
     "fields": {
       "Name": "Artifact Connected Drive Sync",
-      "Description": "An artifact version was pushed to or pulled from a linked external Connected Drive (OneDrive, SharePoint, or Google Drive), recording ExternalFileID, VersionNumber, and ETag.",
-      "ParentID": null,
-      "AuthorizationID": null
+      "Description": "Logged when an artifact version is pushed to or pulled from a linked external Connected Drive (OneDrive, SharePoint, or Google Drive)."
     },
     "primaryKey": {
       "ID": "B8E4F120-7C1D-4A2B-9D11-300000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.226Z",
+      "checksum": "e596e83d9bd552e8d057d0a1ae255a191219d2de2eddf477ca33a33cf8735b6b"
     }
   },
   {
     "fields": {
       "Name": "Artifact Exported",
-      "Description": "An artifact was exported to an external file format (.docx, .pptx, .xlsx, or PDF).",
-      "ParentID": null,
-      "AuthorizationID": null
+      "Description": "Logged when a governed artifact is exported to DOCX, PPTX, XLSX, PDF, Markdown, or HTML."
     },
     "primaryKey": {
       "ID": "B8E4F120-7C1D-4A2B-9D11-300000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.253Z",
+      "checksum": "8a26e3a2962b9e8caeb1b7ddfb476637300420b044fd6c37a76f58c0c13e05af"
     }
   },
   {
     "fields": {
       "Name": "Artifact Permission Changed",
-      "Description": "Sharing permissions on an artifact were granted, updated, or revoked.",
-      "ParentID": null,
-      "AuthorizationID": null
+      "Description": "Logged when Read/Edit/Delete/Share access on a governed artifact or collection is granted or updated."
     },
     "primaryKey": {
       "ID": "B8E4F120-7C1D-4A2B-9D11-300000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.280Z",
+      "checksum": "6484fb83eaa7724e412c500789c594f8a7545f814ee80da395611c72366c6983"
     }
   },
   {
     "fields": {
       "Name": "Artifact Guest Share Link",
-      "Description": "A Frozen-only expiring read-only external guest share link was created, resolved, or revoked for an artifact version.",
-      "ParentID": null,
-      "AuthorizationID": null
+      "Description": "Logged when an external Frozen-only guest share link is created or revoked."
     },
     "primaryKey": {
       "ID": "B8E4F120-7C1D-4A2B-9D11-300000000005"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.307Z",
+      "checksum": "295f6b7d50049fe85d42cd56f4412f3caf9e8b45f87f76921aad0c8d0539381d"
     }
   }
 ]

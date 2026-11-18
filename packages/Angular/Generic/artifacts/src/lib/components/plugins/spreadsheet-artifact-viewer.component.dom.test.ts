@@ -3,15 +3,24 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
 import type { IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, SpreadsheetEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+  MJArtifactVersionEntity,
+  SpreadsheetEngine,
+  UserInfoEngine,
+  type SpreadsheetProtectedRangeSpec,
+} from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import {
   SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY,
   SpreadsheetArtifactViewerComponent,
 } from './spreadsheet-artifact-viewer.component';
-import { DocumentCollaborationSession } from '../../services/document-collaboration.service';
+import {
+  DocumentCollaborationService,
+  DocumentCollaborationSession,
+} from '../../services/document-collaboration.service';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactCommandPaletteComponent } from './artifact-command-palette.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 
 @Component({
@@ -25,6 +34,7 @@ class SheetPluginViewerStubComponent {
   @Input() artifactTypeName = '';
   @Input() ArtifactTypeName = '';
   @Input() readonly = true;
+  @Input() AncestorArtifactIDs: ReadonlySet<string> | null = null;
   @Output() ContentCommitted = new EventEmitter<string>();
 }
 
@@ -78,6 +88,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -98,6 +109,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -121,6 +133,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -173,6 +186,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -271,6 +285,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -284,7 +299,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
       Entities: [],
       RunView: runViewSpy,
     };
-    f.componentInstance.Provider = partialProvider as IMetadataProvider;
+    f.componentInstance.Provider = Object.assign(Object.create(null) as IMetadataProvider, partialProvider);
     f.detectChanges();
     await Promise.resolve();
     expect(runViewSpy).not.toHaveBeenCalled();
@@ -314,6 +329,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -625,7 +641,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         ChartType: 'bar',
         SheetID: sheet.SheetID,
         SourceRange: 'A1:A1',
-        PositionCell: 'C1',
+        PositionCell: 'E2',
       });
       sheet.LiveTables.push({
         TableID: 'tbl-orig',
@@ -641,10 +657,10 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         Title: 'Board',
         ArtifactID: '11111111-1111-4111-8111-111111111111',
         ArtifactTypeName: 'Whiteboard',
-        AnchorCell: 'A3',
+        AnchorCell: 'C2',
         WidthPx: 320,
         HeightPx: 200,
-        AllowInlineEdit: false,
+        AllowInlineEdit: true,
       });
       sheet.ProtectedRanges = [
         {
@@ -703,13 +719,13 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     };
     f.componentInstance.Provider = nonOwnerProvider as IMetadataProvider;
     f.componentInstance.Permissions = {
-      ArtifactID: 'art-protected-range',
+      ArtifactID: '11111111-1111-4111-8111-111111111199',
       CanRead: true,
       CanEdit: true,
-      CanDelete: false,
       CanShare: true,
+      CanDelete: false,
       Source: 'ArtifactPermission',
-      Reason: 'shared with the user (test)',
+      Reason: 'Shared editor',
     };
 
     // Non-owner even with CanShare=true MUST be blocked from clearing protected cell A1
@@ -724,13 +740,13 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     };
     f.componentInstance.Provider = ownerProvider as IMetadataProvider;
     f.componentInstance.Permissions = {
-      ArtifactID: 'art-protected-range',
+      ArtifactID: '11111111-1111-4111-8111-111111111199',
       CanRead: true,
       CanEdit: true,
-      CanDelete: true,
       CanShare: true,
+      CanDelete: true,
       Source: 'Owner',
-      Reason: 'artifact owner (test)',
+      Reason: 'Owner',
     };
     f.componentInstance.OnContextMenuCommand({ Type: 'clear-range', Kind: 'all', RangeA1: 'A1' });
     expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']).toBeUndefined();
@@ -773,10 +789,10 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         Title: 'Broken Embed',
         ArtifactID: 'not-a-valid-uuid',
         ArtifactTypeName: 'Whiteboard',
-        AnchorCell: 'A3',
+        AnchorCell: 'C2',
         WidthPx: 320,
         HeightPx: 200,
-        AllowInlineEdit: false,
+        AllowInlineEdit: true,
       });
     });
     await Promise.resolve();
@@ -837,5 +853,413 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     toggleBtn.click();
     f.detectChanges();
     expect(f.componentInstance.IsEditingEmbeddedArtifact(f.componentInstance.ActiveSheet.EmbeddedArtifacts[0])).toBe(false);
+  });
+
+  it('computes negative chart baseline ZeroY, downward bar rects, NaN-safe line series, and cross-sheet chart dataset', () => {
+    const f = createEditableWorkbookFixture('Chart Domain & Cross-Sheet', (wb) => {
+      const sheet1 = wb.Worksheets[0];
+      const sheet2 = SpreadsheetEngine.Instance.AddWorksheet(wb, 'DataSheet');
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'A1', { Value: 'Period' });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'B1', { Value: 'Variance' });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'A2', { Value: 'Q1' });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'B2', { Value: -25 });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'A3', { Value: 'Q2' });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'B3', { Value: 75 });
+      sheet1.Charts.push({
+        ChartID: 'chart-neg-1',
+        Title: 'Cross Sheet Variance',
+        ChartType: 'bar',
+        SheetID: sheet2.SheetID,
+        SourceRange: 'A1:B3',
+        PositionCell: 'E2',
+      });
+    });
+
+    const chart = f.componentInstance.ActiveSheet.Charts[0];
+    const dataset = f.componentInstance.GetChartDataset(chart);
+    expect(dataset).not.toBeNull();
+    expect(dataset?.Categories).toEqual(['Q1', 'Q2']);
+
+    const domain = f.componentInstance.GetChartDomain([
+      { Index: 0, Name: 'Variance', Values: [-25, Number.NaN, 75], Color: 'var(--mj-brand-primary)' },
+    ]);
+    expect(domain.MinValue).toBe(-25);
+    expect(domain.MaxValue).toBe(75);
+    expect(domain.ZeroY).toBeCloseTo(109.5, 1);
+
+    const bars = f.componentInstance.GetChartBarRects(
+      chart,
+      dataset!,
+      [{ Index: 0, Name: 'Variance', Values: [-25, 75], Color: 'var(--mj-brand-primary)' }],
+      75,
+      domain,
+    );
+    expect(bars[0].Y).toBe(domain.ZeroY);
+    expect(bars[0].Height).toBeGreaterThan(0);
+    expect(bars[1].Y).toBeLessThan(domain.ZeroY);
+
+    const line = f.componentInstance.GetChartLineSeries(
+      {
+        ChartID: chart.ChartID,
+        Title: chart.Title,
+        ChartType: chart.ChartType,
+        SheetID: chart.SheetID,
+        SourceRange: chart.SourceRange,
+        Categories: ['Q1', 'Q2'],
+        Series: [{ Name: 'Variance', Values: [-25, Number.NaN] }],
+        Columns: [],
+        Rows: [],
+        RevisionHash: 'test-rev',
+      },
+      [{ Index: 0, Name: 'Variance', Values: [-25, Number.NaN], Color: 'var(--mj-brand-primary)' }],
+      25,
+      chart,
+      { MinValue: -25, MaxValue: 25, ZeroY: 79 },
+    );
+    expect(line[0].Points[0].Y).toBeGreaterThan(79);
+    expect(Number.isFinite(line[0].Points[1].Y)).toBe(true);
+  });
+
+  it('closes lock bypasses on AddLiveTable, ToggleProtection, Freeze/Unfreeze, Source JSON, and Paste', async () => {
+    const f = createEditableWorkbookFixture('Lock Bypasses Closed', (wb) => {
+      const sheet = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 'Locked Header' });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'B1', { Value: 'Editable Header' });
+      sheet.ProtectedRanges = [
+        {
+          RangeID: 'prot-owner',
+          Range: 'A1:A3',
+          LockedByUserID: 'owner-uuid-1',
+          AllowEditors: false,
+        },
+      ];
+      sheet.LiveTables.push({
+        TableID: 'tbl-lock-1',
+        Title: 'Locked Table',
+        SourceType: 'EntityView',
+        EntityName: 'AI Agents',
+        AnchorCell: 'A1',
+        IncludeHeaders: true,
+        Mode: 'Frozen',
+      });
+    });
+
+    const nonOwnerProvider: Partial<IMetadataProvider> = {
+      Entities: [],
+      CurrentUser: { ID: 'editor-uuid-2', Name: 'Editor', Email: 'ed@example.com' } as IMetadataProvider['CurrentUser'],
+    };
+    f.componentInstance.Provider = nonOwnerProvider as IMetadataProvider;
+    f.componentInstance.Permissions = {
+      ArtifactID: '11111111-1111-4111-8111-111111111199',
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      CanDelete: false,
+      Source: 'ArtifactPermission',
+      Reason: 'Shared editor',
+    };
+
+    // 1. ConfirmAddLiveTable blocked on protected anchor A1
+    f.componentInstance.NewLiveTableAnchorCell = 'A1';
+    f.componentInstance.NewLiveTableTitle = 'Injected Live';
+    await f.componentInstance.ConfirmAddLiveTable();
+    expect(f.componentInstance.ActiveSheet.LiveTables.length).toBe(1);
+
+    // 2. ToggleSelectedRangeProtection & UnfreezeLiveTable blocked without CanManageDocumentLocks
+    f.componentInstance.SelectCell(1, 2);
+    f.componentInstance.ToggleSelectedRangeProtection();
+    expect(f.componentInstance.ActiveSheet.ProtectedRanges?.length).toBe(1);
+    await f.componentInstance.UnfreezeLiveTable(f.componentInstance.ActiveSheet.LiveTables[0]);
+    expect(f.componentInstance.ActiveSheet.LiveTables[0].Mode).toBe('Frozen');
+
+    // 3. Source JSON cannot remove owner ProtectedRanges or return invalid JSON
+    const originalSerialized = SpreadsheetEngine.Instance.SerializeWorkbook(f.componentInstance.Workbook);
+    f.componentInstance.SourceJsonText = '{ invalid json';
+    f.componentInstance.ApplySourceJsonChanges();
+    expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']?.RawValue).toBe('Locked Header');
+
+    const stripped = JSON.parse(originalSerialized) as {
+      Worksheets: Array<{ ProtectedRanges?: SpreadsheetProtectedRangeSpec[] }>;
+    };
+    stripped.Worksheets[0].ProtectedRanges = [];
+    f.componentInstance.SourceJsonText = JSON.stringify(stripped);
+    f.componentInstance.ApplySourceJsonChanges();
+    expect(f.componentInstance.Workbook.Worksheets[0].ProtectedRanges?.length).toBe(1);
+
+    // 4. Atomic paste pre-flight check prevents partial overwrites when destination intersects locked cell
+    f.componentInstance.SheetsClipboardBuffer = {
+      Mode: 'copy',
+      SourceSheetID: f.componentInstance.ActiveSheet.SheetID,
+      SourceRangeA1: 'B1',
+      RowCount: 1,
+      ColCount: 2,
+      Cells: [
+        { RowOffset: 0, ColOffset: 0, Value: 'X' },
+        { RowOffset: 0, ColOffset: 1, Value: 'Y' },
+      ],
+    };
+    f.componentInstance.SelectCell(1, 1);
+    f.componentInstance.OnContextMenuCommand({ Type: 'paste', Kind: 'all' });
+    expect(f.componentInstance.ActiveSheet.Cells['A1']?.RawValue).toBe('Locked Header');
+    expect(f.componentInstance.ActiveSheet.Cells['B1']?.RawValue).toBe('Editable Header');
+  });
+
+  it('enforces P0-20 keydown isolation, hidden row/col skipping, clamped range clears, and embed EmbedID/depth/cycle guards', async () => {
+    const f = createEditableWorkbookFixture('P0-20 Guards', (wb) => {
+      const sheet = wb.Worksheets[0];
+      sheet.Rows[1].Hidden = true; // Row 2 hidden
+      sheet.Columns[1].Hidden = true; // Col B hidden
+      sheet.EmbeddedArtifacts.push(
+        {
+          EmbedID: 'emb-dup-a',
+          Title: 'Inline Fallback Board',
+          ArtifactID: '11111111-1111-4111-8111-111111111111',
+          ArtifactTypeName: 'Whiteboard',
+          AnchorCell: 'C2',
+          WidthPx: 320,
+          HeightPx: 200,
+          AllowInlineEdit: true,
+          InlineContentJSON: '{"pages":[]}',
+        },
+        {
+          EmbedID: 'emb-dup-b',
+          Title: 'Circular Embed',
+          ArtifactID: '22222222-2222-4222-8222-222222222222',
+          ArtifactTypeName: 'Whiteboard',
+          AnchorCell: 'C5',
+          WidthPx: 320,
+          HeightPx: 200,
+          AllowInlineEdit: true,
+        },
+      );
+    });
+
+    // Hidden rows & columns skipped by MoveActiveCell
+    f.componentInstance.SelectCell(1, 1);
+    f.componentInstance.MoveActiveCell(1, 0, false);
+    expect(f.componentInstance.ActiveRowIndex).toBe(3);
+    f.componentInstance.MoveActiveCell(0, 1, false);
+    expect(f.componentInstance.ActiveColumnIndex).toBe(3);
+
+    // Keydown inside OLE host / contenteditable ignored
+    const oleEl = document.createElement('div');
+    oleEl.className = 'mj-sheets-ole-host';
+    document.body.appendChild(oleEl);
+    const oleKeyEvt = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
+    Object.defineProperty(oleKeyEvt, 'target', { value: oleEl });
+    f.componentInstance.OnViewerKeydown(oleKeyEvt);
+    expect(f.componentInstance.ActiveRowIndex).toBe(3);
+    oleEl.remove();
+
+    // Clamped massive selection range does not hang when clearing
+    f.componentInstance.SelectedRange = 'A1:XFD1048576';
+    f.componentInstance.SelectedRanges = ['A1:XFD1048576'];
+    f.componentInstance.ClearSelectedRange();
+    expect(f.componentInstance.StatusBannerMessage).toBeDefined();
+
+    // Embed cycle + offline fallback keyed by EmbedID
+    f.componentInstance.AncestorArtifactIDs = new Set(['22222222-2222-4222-8222-222222222222']);
+    f.componentInstance.OnContextMenuCommand({
+      Type: 'refresh-embedded-artifact',
+      EmbedID: 'emb-dup-a',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(f.componentInstance.EmbeddedArtifactVersions['emb-dup-a']?.Content).toBe('{"pages":[]}');
+    expect(f.componentInstance.EmbeddedArtifactErrors['emb-dup-b']).toContain('Circular');
+  });
+
+  it('supports NW-1 frozen live drift banner, NW-3 cell suggestions & reopen, and NW-4 merge/validation/condfmt/named ranges/fill', () => {
+    const f = createEditableWorkbookFixture('NW Features', (wb) => {
+      const sheet = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A2', { Value: 20 });
+      sheet.LiveTables.push({
+        TableID: 'tbl-nw1',
+        Title: 'Snapshot Deals',
+        SourceType: 'EntityView',
+        EntityName: 'Deals',
+        AnchorCell: 'D1',
+        Mode: 'Frozen',
+        FrozenSnapshot: {
+          FrozenAt: '2026-11-01T00:00:00Z',
+          FrozenByUserID: 'u-1',
+          FrozenByUserName: 'Owner',
+          Columns: [{ Name: 'ID', DisplayName: 'ID', Type: 'string' }],
+          Rows: [{ ID: '1' }],
+          TotalRowCount: 1,
+          SecurityWarningAcknowledged: true,
+        },
+      });
+    });
+
+    // NW-1 FrozenLiveTablesOnActiveSheet
+    expect(f.componentInstance.FrozenLiveTablesOnActiveSheet.length).toBe(1);
+
+    // NW-3 Cell suggestions propose, accept & reject
+    f.componentInstance.OpenProposeSuggestionModal('B1');
+    f.componentInstance.PendingSuggestionValue = 'Approved Forecast';
+    f.componentInstance.PendingSuggestionRationale = 'Q4 adjustment';
+    f.componentInstance.SubmitCellSuggestion();
+    expect(f.componentInstance.CellSuggestions.length).toBe(1);
+    expect(f.componentInstance.PendingSuggestionCount).toBe(1);
+    f.componentInstance.AcceptCellSuggestion(f.componentInstance.CellSuggestions[0]);
+    expect(f.componentInstance.ActiveSheet.Cells['B1']?.RawValue).toBe('Approved Forecast');
+    expect(f.componentInstance.PendingSuggestionCount).toBe(0);
+
+    // NW-4 Merge & Unmerge
+    f.componentInstance.SelectedRange = 'C1:D2';
+    f.componentInstance.SelectedRanges = ['C1:D2'];
+    f.componentInstance.MergeSelectedRange();
+    expect(f.componentInstance.GetMergedCellSpan(1, 3)).toEqual({ colspan: 2, rowspan: 2, isCovered: false });
+    expect(f.componentInstance.GetMergedCellSpan(2, 4)).toEqual({ colspan: 1, rowspan: 1, isCovered: true });
+    f.componentInstance.UnmergeSelectedRange();
+    expect(f.componentInstance.GetMergedCellSpan(1, 3)).toEqual({ colspan: 1, rowspan: 1, isCovered: false });
+
+    // NW-4 Data Validation list dropdown
+    f.componentInstance.OpenValidationDrawer('E1:E3');
+    f.componentInstance.NewValidationRuleType = 'list';
+    f.componentInstance.NewValidationAllowedCsv = 'Open, Won, Lost';
+    f.componentInstance.ConfirmAddValidationRule();
+    expect(f.componentInstance.GetCellListValidationRule('E2')?.AllowedValues).toEqual(['Open', 'Won', 'Lost']);
+    f.componentInstance.OnValidationDropdownChanged(2, 5, 'Won');
+    expect(f.componentInstance.ActiveSheet.Cells['E2']?.RawValue).toBe('Won');
+
+    // NW-4 Conditional Formatting
+    f.componentInstance.OpenConditionalFormatDrawer('A1:A5');
+    f.componentInstance.NewCondFormatOperator = 'gt';
+    f.componentInstance.NewCondFormatValue1 = '15';
+    f.componentInstance.NewCondFormatTone = 'success';
+    f.componentInstance.ConfirmAddConditionalFormatRule();
+    expect(f.componentInstance.GetConditionalTone(f.componentInstance.ActiveSheet.Cells['A2'])).toBe('success');
+
+    // NW-4 Named Range
+    f.componentInstance.OpenNamedRangeModal('A1:A2');
+    f.componentInstance.NewNamedRangeName = 'SeedNumbers';
+    f.componentInstance.ConfirmSaveNamedRange();
+    expect(f.componentInstance.WorkbookNamedRanges.length).toBe(1);
+    f.componentInstance.OnNamedRangeSelected('SeedNumbers');
+    expect(f.componentInstance.SelectedRange).toBe('A1:A2');
+
+    // NW-4 Fill Handle drag linear progression (10, 20 -> 30)
+    f.componentInstance.SelectedRanges = ['A1:A2'];
+    f.componentInstance.SelectedRange = 'A1:A2';
+    f.componentInstance.StartFillHandleDrag(new MouseEvent('mousedown'));
+    f.componentInstance.OnCellMouseEnter(3, 1);
+    f.componentInstance.OnCellMouseUp();
+    expect(f.componentInstance.ActiveSheet.Cells['A3']?.RawValue).toBe(30);
+  });
+
+  it('isolates GuestSnapshotMode in Sheets (P0-P3-4): never connects Yjs, resolves permissions, or renders Access Revoked', async () => {
+    const hasBackendSpy = vi.spyOn(DocumentCollaborationService.prototype, 'HasCollaborationBackend').mockReturnValue(true);
+    const verifyServerSpy = vi.spyOn(DocumentCollaborationService.prototype, 'VerifyFrozenSnapshotOnServer');
+    const resolvePermSpy = vi.spyOn(DocumentCollaborationService.prototype, 'ResolvePermissionsFromServer');
+    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }));
+    const fakeProvider = {
+      RunView: runViewSpy,
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
+      imports: [
+        FormsModule,
+        SheetPluginViewerStubComponent,
+        XlsxPreviewStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
+      ],
+      declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
+      providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
+      inputs: {
+        Provider: fakeProvider,
+        GuestSnapshotMode: true,
+        artifactVersion: makeSheetVersion(),
+        readonly: false,
+      },
+    });
+    await f.whenStable();
+    f.detectChanges();
+
+    expect(f.componentInstance.AccessRevoked).toBe(false);
+    expect(f.componentInstance.CanEdit).toBe(false);
+    expect((f.nativeElement as HTMLElement).textContent ?? '').not.toContain('Access Revoked');
+    expect(hasBackendSpy).not.toHaveBeenCalled();
+    expect(verifyServerSpy).not.toHaveBeenCalled();
+    expect(resolvePermSpy).not.toHaveBeenCalled();
+    expect(runViewSpy).not.toHaveBeenCalled();
+  });
+
+  it('re-applies pre-init ViewMode/NavigationAnchor on workbook init (NW-6) and matches sheet names + errors on missing sheet (NW-3)', () => {
+    const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Multi-Sheet Init');
+    const secondSheet = SpreadsheetEngine.Instance.AddWorksheet(wb, 'Q4Forecast');
+    SpreadsheetEngine.Instance.SetCell(wb, wb.Worksheets[0].SheetID, 'A1', { Value: 100 });
+    SpreadsheetEngine.Instance.SetCell(wb, secondSheet.SheetID, 'B2', { Value: 200 });
+
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: '11111111-1111-4111-8111-111111111198', enumerable: true },
+      ArtifactID: { value: '', enumerable: true },
+      Name: { value: 'Multi-Sheet Init', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      ContentMode: { value: 'Text', enumerable: true },
+      Configuration: { value: null, enumerable: true },
+      Content: { value: SpreadsheetEngine.Instance.SerializeWorkbook(wb), enumerable: true },
+    });
+
+    const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
+      imports: [
+        FormsModule,
+        SheetPluginViewerStubComponent,
+        XlsxPreviewStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
+      ],
+      declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
+      providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
+      inputs: {
+        ViewMode: 'diff',
+        NavigationAnchor: { Sheet: 'Q4Forecast', Range: 'B2:C3' },
+        artifactVersion: ver,
+        readonly: false,
+      },
+    });
+    f.detectChanges();
+
+    expect(f.componentInstance.WorkspaceMode).toBe('diff');
+    expect(f.componentInstance.ActiveSheet.Name).toBe('Q4Forecast');
+    expect(f.componentInstance.SelectedRange).toBe('B2:C3');
+
+    // NW-3: AcceptCellSuggestion matches Sheet by Name (case-insensitive)
+    f.componentInstance.AcceptCellSuggestion({
+      SuggestionID: 'sug-sheet-name-1',
+      SheetID: 'q4forecast',
+      Range: 'B2',
+      ProposedValue: '350',
+      CurrentDisplayValue: '200',
+      Rationale: 'Match sheet by name',
+      AuthorName: 'SheetAgent',
+      AuthorUserID: 'agent-1',
+      IsAgent: true,
+      CreatedAt: '2026-11-15T12:00:00Z',
+      Status: 'pending',
+    });
+    expect(f.componentInstance.Workbook.Worksheets[1].Cells['B2']?.RawValue).toBe(350);
+
+    // NW-3: Non-empty SheetID matching no worksheet must not silently mutate ActiveSheet
+    const beforeSheet1 = f.componentInstance.Workbook.Worksheets[0].Cells['A1']?.RawValue;
+    f.componentInstance.AcceptCellSuggestion({
+      SuggestionID: 'sug-sheet-missing-1',
+      SheetID: 'DoesNotExist',
+      Range: 'A1',
+      ProposedValue: '999',
+      CurrentDisplayValue: '100',
+      Rationale: 'Unknown sheet guard',
+      AuthorName: 'SheetAgent',
+      AuthorUserID: 'agent-1',
+      IsAgent: true,
+      CreatedAt: '2026-11-15T12:00:00Z',
+      Status: 'pending',
+    });
+    expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']?.RawValue).toBe(beforeSheet1);
+    expect(f.componentInstance.Workbook.Worksheets[1].Cells['A1']?.RawValue).toBeUndefined();
   });
 });

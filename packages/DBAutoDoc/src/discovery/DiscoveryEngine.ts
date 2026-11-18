@@ -63,9 +63,11 @@ export class DiscoveryEngine {
 
     // Create stats cache and detectors (seed from already-sampled schema statistics when present)
     this.statsCache = new ColumnStatsCache();
-    const seededCols = this.statsCache.SeedFromSchemas(this.schemas);
-    if (seededCols > 0) {
-      this.onProgress('Seeded discovery statistics cache from schema columns', { columns: seededCols });
+    // The cache starts from what the sampling pass already measured, so discovery queries the
+    // database only for columns sampling did not cover.
+    const seededColumns = this.statsCache.SeedFromSchemas(this.schemas);
+    if (seededColumns > 0) {
+      this.onProgress('Seeded discovery statistics from sampling', { columns: seededColumns });
     }
     this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
     this.fkDetector = new FKDetector(this.driver, this.config, this.statsCache);
@@ -283,61 +285,13 @@ export class DiscoveryEngine {
     phase.discovered.primaryKeys = [...scope.SurvivingPKs];
     phase.discovered.foreignKeys = [...scope.SurvivingFKs];
 
-    const startedAt = new Date().toISOString();
-    const iterResult: RelationshipDiscoveryIteration = {
-      iteration: 1,
-      phase: 'pk_detection',
-      startedAt,
-      completedAt: '',
-      tokensUsed: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      discoveries: { newPKs: [], newFKs: [], validated: [], rejected: [], confidenceChanges: [] },
-      backpropTriggered: false
-    };
-
+    const iterResult = this.createIncrementalIteration();
     const pkRun = await this.detectIncrementalPrimaryKeys(phase, scope);
-    let newPKs = pkRun.NewPKs;
     const allPKs = [...this.collectCatalogPKTargets(), ...phase.discovered.primaryKeys];
 
     iterResult.phase = 'fk_detection';
     const fkRun = await this.detectIncrementalForeignKeys(phase, scope, allPKs);
-    let newFKs = fkRun.NewFKs;
-
-    if (this.sanityChecker && (newPKs.length > 0 || newFKs.length > 0)) {
-      const cleaned = await this.runIncrementalSanityCheck(newPKs, newFKs, iterResult);
-      newPKs = cleaned.NewPKs;
-      newFKs = cleaned.NewFKs;
-    }
-
-    if (this.llmValidator && (newPKs.length > 0 || newFKs.length > 0) && iterResult.tokensUsed < maxTokens) {
-      const validated = await this.performLLMValidation(
-        newPKs, newFKs, allPKs, iterResult, maxTokens - iterResult.tokensUsed
-      );
-      newPKs = validated.updatedPKs;
-      newFKs = validated.updatedFKs;
-      iterResult.tokensUsed += validated.tokensUsed;
-      iterResult.discoveries.validated = validated.validated;
-      iterResult.discoveries.rejected = validated.rejected;
-    }
-
-    phase.discovered.primaryKeys = [...scope.SurvivingPKs, ...newPKs];
-    phase.discovered.foreignKeys = [...scope.SurvivingFKs, ...newFKs];
-
-    if (this.config.backpropagation.enabled && (newPKs.length > 0 || newFKs.length > 0)) {
-      iterResult.phase = 'backprop';
-      iterResult.discoveries.confidenceChanges = await this.performBackpropagation(phase, newPKs, newFKs);
-      iterResult.backpropTriggered = iterResult.discoveries.confidenceChanges.length > 0;
-    }
-
-    iterResult.discoveries.newPKs = newPKs;
-    iterResult.discoveries.newFKs = newFKs;
-    iterResult.completedAt = new Date().toISOString();
-    phase.iterations.push(iterResult);
-    phase.tokenBudget.used = iterResult.tokensUsed;
-    phase.tokenBudget.remaining = Math.max(0, maxTokens - iterResult.tokensUsed);
-    phase.completedAt = iterResult.completedAt;
-    this.calculateSummary(phase);
+    await this.refineAndFinalizeIncrementalDiscovery(phase, scope, pkRun.NewPKs, fkRun.NewFKs, allPKs, iterResult, maxTokens);
 
     return {
       Phase: phase,
@@ -347,6 +301,61 @@ export class DiscoveryEngine {
       FKFullTablesRun: fkRun.FullTablesRun,
       FKTargetedTablesRun: fkRun.TargetedTablesRun
     };
+  }
+
+  private createIncrementalIteration(): RelationshipDiscoveryIteration {
+    return {
+      iteration: 1,
+      phase: 'pk_detection',
+      startedAt: new Date().toISOString(),
+      completedAt: '',
+      tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      discoveries: { newPKs: [], newFKs: [], validated: [], rejected: [], confidenceChanges: [] },
+      backpropTriggered: false
+    };
+  }
+
+  private async refineAndFinalizeIncrementalDiscovery(
+    phase: RelationshipDiscoveryPhase,
+    scope: IncrementalDiscoveryScope,
+    initialPKs: PKCandidate[],
+    initialFKs: FKCandidate[],
+    allPKs: PKCandidate[],
+    iterResult: RelationshipDiscoveryIteration,
+    maxTokens: number
+  ): Promise<void> {
+    let newPKs = initialPKs;
+    let newFKs = initialFKs;
+    if (this.sanityChecker && (newPKs.length > 0 || newFKs.length > 0)) {
+      const cleaned = await this.runIncrementalSanityCheck(newPKs, newFKs, iterResult);
+      newPKs = cleaned.NewPKs;
+      newFKs = cleaned.NewFKs;
+    }
+    if (this.llmValidator && (newPKs.length > 0 || newFKs.length > 0) && iterResult.tokensUsed < maxTokens) {
+      const validated = await this.performLLMValidation(newPKs, newFKs, allPKs, iterResult, maxTokens - iterResult.tokensUsed);
+      newPKs = validated.updatedPKs;
+      newFKs = validated.updatedFKs;
+      iterResult.tokensUsed += validated.tokensUsed;
+      iterResult.discoveries.validated = validated.validated;
+      iterResult.discoveries.rejected = validated.rejected;
+    }
+    phase.discovered.primaryKeys = [...scope.SurvivingPKs, ...newPKs];
+    phase.discovered.foreignKeys = [...scope.SurvivingFKs, ...newFKs];
+    if (this.config.backpropagation.enabled && (newPKs.length > 0 || newFKs.length > 0)) {
+      iterResult.phase = 'backprop';
+      iterResult.discoveries.confidenceChanges = await this.performBackpropagation(phase, newPKs, newFKs);
+      iterResult.backpropTriggered = iterResult.discoveries.confidenceChanges.length > 0;
+    }
+    iterResult.discoveries.newPKs = newPKs;
+    iterResult.discoveries.newFKs = newFKs;
+    iterResult.completedAt = new Date().toISOString();
+    phase.iterations.push(iterResult);
+    phase.tokenBudget.used = iterResult.tokensUsed;
+    phase.tokenBudget.remaining = Math.max(0, maxTokens - iterResult.tokensUsed);
+    phase.completedAt = iterResult.completedAt;
+    this.calculateSummary(phase);
   }
 
   private async detectIncrementalPrimaryKeys(

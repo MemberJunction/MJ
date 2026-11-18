@@ -44,6 +44,8 @@ export interface AnalysisOptions {
   resumeFromState?: string; // Path to existing state file to resume from
   /** Path to a prior completed state.json for incremental schema-change analysis. */
   incrementalFromState?: string;
+  /** Optional pre-loaded baseline state (via `StateManager.Load`), avoiding reading `incrementalFromState` twice. */
+  incrementalBaselineState?: DatabaseDocumentation; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
   onProgress?: (message: string, data?: any) => void;
   /** Only re-analyze tables with confidence below this threshold (used with resume) */
   reanalyzeBelowConfidence?: number;
@@ -65,6 +67,7 @@ export class AnalysisOrchestrator {
   private config: DBAutoDocConfig;
   private resumeFromState?: string;
   private incrementalFromState?: string;
+  private incrementalBaselineState?: DatabaseDocumentation;
   private onProgress: (message: string, data?: any) => void;
   private reanalyzeBelowConfidence?: number;
   private maxIterationsOverride?: number;
@@ -74,6 +77,7 @@ export class AnalysisOrchestrator {
     this.config = options.config;
     this.resumeFromState = options.resumeFromState;
     this.incrementalFromState = options.incrementalFromState;
+    this.incrementalBaselineState = options.incrementalBaselineState;
     this.onProgress = options.onProgress || (() => {});
     this.reanalyzeBelowConfidence = options.reanalyzeBelowConfidence;
     this.maxIterationsOverride = options.maxIterations;
@@ -109,7 +113,7 @@ export class AnalysisOrchestrator {
       // Load state (incremental baseline, checkpoint resume, or fresh)
       if (this.incrementalFromState) {
         this.onProgress('Loading baseline state for incremental analysis', { path: this.incrementalFromState });
-        previousIncrementalState = await this.loadBaselineState(this.incrementalFromState);
+        previousIncrementalState = this.incrementalBaselineState ?? await this.loadBaselineState(this.incrementalFromState);
         state = stateManager.createInitialState(this.config.database.database, this.config.database.server);
         state.incrementalFromFile = this.incrementalFromState;
       } else if (this.resumeFromState) {
@@ -212,10 +216,11 @@ export class AnalysisOrchestrator {
       }
       await runHook('AfterIntrospection');
 
-      if (incrementalReport) {
+      if (incrementalReport && incrementalDiff) {
         incrementalReport.SampledColumnsCount = await this.sampleIncrementalTableData(
           state,
           previousIncrementalState!,
+          incrementalDiff,
           db.getDriver(),
           stateManager
         );
@@ -685,25 +690,27 @@ export class AnalysisOrchestrator {
   }
 
   /**
-   * Load existing state and prepare for resumption
+   * Load existing state and prepare for resumption (running StateManager legacy upgrades).
    */
   protected async loadAndMergeState(
     resumePath: string,
-    stateManager: StateManager
+    _stateManager: StateManager
   ): Promise<DatabaseDocumentation> {
-    const existingStateJson = await fs.readFile(resumePath, 'utf-8');
-    const existingState = JSON.parse(existingStateJson) as DatabaseDocumentation;
-
-    // Mark that this is a resumed analysis
+    const existingState = await new StateManager(resumePath).Load();
+    if (!existingState) {
+      throw new Error(`State file not found: ${resumePath}`);
+    }
     existingState.resumedFromFile = resumePath;
-
     return existingState;
   }
 
-  /** Load a completed state file as the baseline for an incremental schema-evolution run. */
+  /** Load a completed state file as the baseline for an incremental schema-evolution run (with legacy upgrades). */
   protected async loadBaselineState(incrementalPath: string): Promise<DatabaseDocumentation> {
-    const raw = await fs.readFile(incrementalPath, 'utf-8');
-    return JSON.parse(raw) as DatabaseDocumentation;
+    const baseline = await new StateManager(incrementalPath).Load();
+    if (!baseline) {
+      throw new Error(`Baseline state file not found: ${incrementalPath}`);
+    }
+    return baseline;
   }
 
   private async prepareIncrementalState(
@@ -718,14 +725,7 @@ export class AnalysisOrchestrator {
     Report: IncrementalPhaseReport;
   }> {
     const startedAt = new Date().toISOString();
-    this.onProgress('Introspecting live database schema for incremental diff');
-    const introspector = new Introspector(driver);
-    const liveSchemas = await introspector.getSchemas(this.config.schemas, this.config.tables);
-    const indexSchemas = PrepareIndexesForRun(liveSchemas, this.config.analysis.useExistingIndexes);
-    if (indexSchemas.length > 0) {
-      await introspector.LoadIndexes(indexSchemas);
-    }
-
+    const liveSchemas = await this.introspectLiveSchemasForDiff(driver);
     const diff = DiffSchemas(previousState, liveSchemas, this.config.analysis.incremental);
     this.onProgress('Computed incremental schema diff', {
       addedTables: diff.AddedTables.length,
@@ -739,7 +739,28 @@ export class AnalysisOrchestrator {
       PrimaryKeyMinConfidence: this.config.analysis.relationshipDiscovery?.confidence?.primaryKeyMinimum,
       ForeignKeyMinConfidence: this.config.analysis.relationshipDiscovery?.confidence?.foreignKeyMinimum,
     });
-    const state = merged.State;
+    await this.enrichMergedIncrementalState(merged.State, diff, driver, stateManager);
+    const report = this.buildInitialIncrementalReport(baseStateFile, startedAt, diff, merged.DiscoveryScope);
+    return { State: merged.State, Diff: diff, Scope: merged.DiscoveryScope, Report: report };
+  }
+
+  private async introspectLiveSchemasForDiff(driver: BaseAutoDocDriver): Promise<DatabaseDocumentation['schemas']> {
+    this.onProgress('Introspecting live database schema for incremental diff');
+    const introspector = new Introspector(driver);
+    const liveSchemas = await introspector.getSchemas(this.config.schemas, this.config.tables);
+    const indexSchemas = PrepareIndexesForRun(liveSchemas, this.config.analysis.useExistingIndexes);
+    if (indexSchemas.length > 0) {
+      await introspector.LoadIndexes(indexSchemas);
+    }
+    return liveSchemas;
+  }
+
+  private async enrichMergedIncrementalState(
+    state: DatabaseDocumentation,
+    diff: SchemaDiffSummary,
+    driver: BaseAutoDocDriver,
+    stateManager: StateManager
+  ): Promise<void> {
     if (this.config.seedContext) {
       state.seedContext = this.config.seedContext;
     }
@@ -756,8 +777,15 @@ export class AnalysisOrchestrator {
     }
     stateManager.updateSummary(state);
     await stateManager.save(state);
+  }
 
-    const report: IncrementalPhaseReport = {
+  private buildInitialIncrementalReport(
+    baseStateFile: string,
+    startedAt: string,
+    diff: SchemaDiffSummary,
+    scope: IncrementalDiscoveryScope
+  ): IncrementalPhaseReport {
+    return {
       BaseStateFile: baseStateFile,
       StartedAt: startedAt,
       Diff: diff,
@@ -766,13 +794,12 @@ export class AnalysisOrchestrator {
       PKDetectionTablesRun: 0,
       FKDetectionFullTablesRun: 0,
       FKDetectionTargetedTablesRun: 0,
-      StalePKsRemoved: merged.DiscoveryScope.StalePKsRemoved,
-      StaleFKsRemoved: merged.DiscoveryScope.StaleFKsRemoved,
+      StalePKsRemoved: scope.StalePKsRemoved,
+      StaleFKsRemoved: scope.StaleFKsRemoved,
       TablesAnalyzedCount: 0,
       TablesSkippedUnchangedCount: 0,
       PropagatedTablesCount: 0,
     };
-    return { State: state, Diff: diff, Scope: merged.DiscoveryScope, Report: report };
   }
 
   private async loadExistingDescriptionsForTables(
@@ -816,6 +843,7 @@ export class AnalysisOrchestrator {
   private async sampleIncrementalTableData(
     state: DatabaseDocumentation,
     previousState: DatabaseDocumentation,
+    diff: SchemaDiffSummary,
     driver: BaseAutoDocDriver,
     stateManager: StateManager
   ): Promise<number> {
@@ -833,14 +861,7 @@ export class AnalysisOrchestrator {
       return 0;
     }
 
-    const pending = state.schemas
-      .flatMap(schema => schema.tables.map(table => ({
-        schema,
-        table,
-        columnsToSample: table.columns.filter(c => c.statistics === undefined),
-      })))
-      .filter(entry => entry.columnsToSample.length > 0);
-
+    const pending = this.collectIncrementalSamplingTargets(state, diff);
     if (pending.length === 0) {
       state.phases.dataSampling = {
         status: 'completed',
@@ -853,6 +874,54 @@ export class AnalysisOrchestrator {
       return 0;
     }
 
+    return this.executeIncrementalSamplingBatches(state, pending, totalTables, driver, stateManager);
+  }
+
+  /**
+   * Collect only added tables, newly populated tables, and added/resampled columns on modified tables.
+   * Unchanged tables are skipped even if they carry unsamplable columns (`binary`/`xml`) with `statistics === undefined`.
+   */
+  private collectIncrementalSamplingTargets(
+    state: DatabaseDocumentation,
+    diff: SchemaDiffSummary
+  ): Array<{ schema: DatabaseDocumentation['schemas'][number]; table: TableDefinition; columnsToSample: TableDefinition['columns'] }> {
+    const addedLower = new Set(diff.AddedTables.map(t => t.toLowerCase()));
+    const modByLower = new Map(diff.ModifiedTables.map(m => [m.TableKey.toLowerCase(), m]));
+    const pending: Array<{ schema: DatabaseDocumentation['schemas'][number]; table: TableDefinition; columnsToSample: TableDefinition['columns'] }> = [];
+
+    for (const schema of state.schemas) {
+      for (const table of schema.tables) {
+        const lowerKey = `${schema.name}.${table.name}`.toLowerCase();
+        if (addedLower.has(lowerKey)) {
+          const cols = table.columns.filter(c => c.statistics === undefined);
+          if (cols.length > 0) pending.push({ schema, table, columnsToSample: cols });
+          continue;
+        }
+        const mod = modByLower.get(lowerKey);
+        if (!mod) continue;
+        if (mod.PopulatedFromEmpty) {
+          const cols = table.columns.filter(c => c.statistics === undefined);
+          if (cols.length > 0) pending.push({ schema, table, columnsToSample: cols });
+          continue;
+        }
+        const deltaCols = new Set([
+          ...mod.AddedColumns.map(c => c.toLowerCase()),
+          ...mod.ModifiedColumns.filter(m => m.RequiresResampling).map(m => m.ColumnName.toLowerCase()),
+        ]);
+        const cols = table.columns.filter(c => deltaCols.has(c.name.toLowerCase()) && c.statistics === undefined);
+        if (cols.length > 0) pending.push({ schema, table, columnsToSample: cols });
+      }
+    }
+    return pending;
+  }
+
+  private async executeIncrementalSamplingBatches(
+    state: DatabaseDocumentation,
+    pending: Array<{ schema: DatabaseDocumentation['schemas'][number]; table: TableDefinition; columnsToSample: TableDefinition['columns'] }>,
+    totalTables: number,
+    driver: BaseAutoDocDriver,
+    stateManager: StateManager
+  ): Promise<number> {
     this.onProgress('Sampling delta columns for incremental run', { tablesWithNewOrChangedColumns: pending.length });
     const sampler = new DataSampler(driver, this.config.analysis);
     let sampledColumns = 0;
@@ -1259,19 +1328,40 @@ export class AnalysisOrchestrator {
 
     try {
       const result = await generator.generateQueries(targetSchemas);
+      const savedByGenerator = await stateManager.load();
+      if (savedByGenerator?.phases?.queryGeneration) {
+        state.phases.queryGeneration = savedByGenerator.phases.queryGeneration;
+      }
 
       if (result.Success) {
-        if (retainedQueries.length > 0 && state.sampleQueries) {
-          state.sampleQueries.queries = [...retainedQueries, ...state.sampleQueries.queries];
-          state.sampleQueries.summary.totalQueriesGenerated = state.sampleQueries.queries.length;
+        const mergedQueries = [...retainedQueries];
+        const seenIds = new Set(retainedQueries.map(q => q.id));
+        for (const q of result.Queries) {
+          if (!seenIds.has(q.id)) {
+            seenIds.add(q.id);
+            mergedQueries.push(q);
+          }
         }
+        state.sampleQueries = {
+          generatedAt: savedByGenerator?.sampleQueries?.generatedAt ?? new Date().toISOString(),
+          status: savedByGenerator?.sampleQueries?.status ?? 'completed',
+          queries: mergedQueries,
+          summary: {
+            ...result.Summary,
+            totalQueriesGenerated: mergedQueries.length,
+          },
+          modelUsed: model,
+        };
         this.onProgress('Sample queries generated', {
-          total: result.Summary.totalQueriesGenerated + retainedQueries.length,
+          total: mergedQueries.length,
           validated: result.Summary.queriesValidated,
           tokens: result.Summary.tokensUsed,
           cost: result.Summary.estimatedCost
         });
       } else {
+        if (savedByGenerator?.sampleQueries && retainedQueries.length === 0) {
+          state.sampleQueries = savedByGenerator.sampleQueries;
+        }
         // Phase already marked as failed in state by generator
         this.onProgress('Sample query generation failed', {
           error: result.ErrorMessage

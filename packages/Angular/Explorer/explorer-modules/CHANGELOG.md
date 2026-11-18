@@ -1,5 +1,41 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 6ea73e6: Wave 5 UI bundle splitting, lazy loading, and ESBuild script minification safety:
+  - `@memberjunction/global`, `@memberjunction/core`: `BaseSingleton` detects a name-mangled build (its own class name no longer reads `BaseSingleton`) and then keys unstamped singletons by constructor, so unrelated classes the minifier gave the same name — even with byte-identical source — never share an instance. With real class names (Node, dev builds) it keys by name exactly as before, so duplicate copies of a class still share one instance even when their package versions differ. Stamped names and explicit `getInstance(className)` keys work in both modes. `BaseEngineRegistry` resolves names via `GetClassName` and registers a different engine class whose name is already taken under `Name#2`, `Name#3`… instead of overwriting the first engine's registration.
+  - `@memberjunction/ng-auth-services`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`: Move the seven built-in auth providers out of the main barrel into dedicated subpath exports (`./msal`, `./auth0`, `./okta`, `./cognito`, `./workos`, `./magic-link`, `./local-dev`), declare provider files in `sideEffects`, extract `HasMagicLinkSessionToken` to a zero-dependency helper, and add `LoadAuthProvider`/`PreloadActiveAuthProvider` so Explorer loads only the active IdP SDK before bootstrapping `AppModule` while `@memberjunction/ng-bootstrap` retains eager registration via `EAGER_AUTH_PROVIDERS`.
+  - `@memberjunction/ng-explorer-settings`, `@memberjunction/ng-dashboards`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-explorer-modules`: Extract lightweight `UserSettingsModule` (`./user-settings.module`) and `DashboardEditorModule` (`./dashboard-editor.module`), sever unused `AITestHarnessModule` plus eager `CoreDashboardsModule` / `ExplorerSettingsModule` imports from `ExplorerCoreModule`, `ShellModule`, `ProfileDialogComponent`, and `MJExplorerModulesBundle`, and split `LiveKitRoomResource`, `HumanHandoffConsoleResource`, and `MeetingsResource` into a lazy `LiveKitResourcesModule` registered via `LIVEKIT_LAZY_FEATURE_CONFIG`.
+  - `MJExplorer`: Enable `optimization.scripts = true` in `production` and `staging`, switch `main.ts` from `platformBrowserDynamic` to AOT `platformBrowser` with `PreloadActiveAuthProvider`, move `@angular/compiler` to `devDependencies` (removing `@angular/platform-browser-dynamic`), and remove unused MSAL imports from `AppModule`.
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [44b885a]
+- Updated dependencies [eaba2bc]
+- Updated dependencies [acd082e]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [3bd3bad]
+- Updated dependencies [dfa6a4a]
+- Updated dependencies [a9e640a]
+- Updated dependencies [27184ba]
+- Updated dependencies [f53f828]
+- Updated dependencies [b0b89c9]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [e781aec]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/ng-core-entity-forms@6.3.0-edge.1
+  - @memberjunction/ng-explorer-core@6.3.0-edge.1
+  - @memberjunction/ng-shared@6.3.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.3.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.3.0-edge.1
+  - @memberjunction/ng-link-directives@6.3.0-edge.1
+  - @memberjunction/ng-container-directives@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

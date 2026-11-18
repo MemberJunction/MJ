@@ -452,4 +452,205 @@ describe('AnalysisOrchestrator — End-to-End Incremental Schema Evolution', () 
     expect(res.success).toBe(false);
     expect(res.message).toContain('Baseline state file not found');
   });
+
+  it('keeps soft FKs targeting declared PKs with duplicate PKCandidates intact, skips unsamplable columns on unchanged tables, upgrades legacy baselines, and retries failed table analyses', async () => {
+    const legacyBaseline = {
+      version: '1.0.0',
+      database: { name: 'ShopDB', server: 'localhost', analyzedAt: '2026-01-01T00:00:00Z', provider: 'sqlserver' },
+      // Legacy top-level relationshipDiscoveryPhase (no `phases` wrapper!)
+      relationshipDiscoveryPhase: {
+        triggered: true,
+        triggerReason: 'insufficient_fks',
+        triggerDetails: { tablesWithoutPK: 0, expectedFKs: 1, actualFKs: 0, fkDeficitPercentage: 1 },
+        startedAt: '2026-01-01T00:00:00Z',
+        completedAt: '2026-01-01T00:01:00Z',
+        tokenBudget: { allocated: 10000, used: 0, remaining: 10000 },
+        iterations: [],
+        discovered: {
+          primaryKeys: [
+            // Duplicate soft PKCandidate on a table that ALREADY has a declared PK (Product.ProductID)
+            {
+              schemaName: 'dbo',
+              tableName: 'Product',
+              columnNames: ['ProductID'],
+              confidence: 99,
+              evidence: { uniqueness: 1, nullCount: 0, totalRows: 100, dataPattern: 'sequential', namingScore: 1, dataTypeScore: 1, warnings: [] },
+              discoveredInIteration: 1,
+              validatedByLLM: true,
+              status: 'confirmed',
+            },
+          ],
+          foreignKeys: [
+            // Soft FK from OrderLine.ProductID -> Product.ProductID
+            {
+              schemaName: 'dbo',
+              sourceTable: 'OrderLine',
+              sourceColumn: 'ProductID',
+              targetSchema: 'dbo',
+              targetTable: 'Product',
+              targetColumn: 'ProductID',
+              confidence: 95,
+              evidence: { namingMatch: 1, valueOverlap: 1, cardinalityRatio: 2, dataTypeMatch: true, nullPercentage: 0, sampleSize: 100, orphanCount: 0, warnings: [] },
+              discoveredInIteration: 1,
+              validatedByLLM: true,
+              status: 'confirmed',
+            },
+          ],
+        },
+        schemaEnhancements: { pkeysAdded: 0, fkeysAdded: 1, overallConfidence: 95 },
+        feedbackFromAnalysis: [],
+        summary: { totalTablesAnalyzed: 2, tablesWithDiscoveredPKs: 0, relationshipsDiscovered: 1, averageConfidence: 95, highConfidenceCount: 1, mediumConfidenceCount: 0, lowConfidenceCount: 0, rejectedCount: 0 },
+      },
+      schemas: [
+        {
+          name: 'dbo',
+          descriptionIterations: [],
+          tables: [
+            {
+              name: 'Product',
+              rowCount: 100,
+              dependsOn: [],
+              dependents: [{ schema: 'dbo', table: 'OrderLine', column: 'ProductID', referencedColumn: 'ProductID' }],
+              description: 'Unchanged product master',
+              descriptionIterations: [{ description: 'Unchanged product master', reasoning: 'r', generatedAt: '2026-01-01', modelUsed: 'm', confidence: 0.95 }],
+              columns: [
+                {
+                  name: 'ProductID',
+                  dataType: 'int',
+                  isNullable: false,
+                  isPrimaryKey: true,
+                  isCatalogPrimaryKey: true,
+                  isForeignKey: false,
+                  description: 'PK',
+                  descriptionIterations: [],
+                  statistics: { totalRows: 100, distinctCount: 100, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [1, 2] },
+                },
+                {
+                  // Unsamplable binary column on unchanged table has statistics === undefined
+                  name: 'ThumbnailPhoto',
+                  dataType: 'varbinary',
+                  isNullable: true,
+                  isPrimaryKey: false,
+                  isForeignKey: false,
+                  description: 'Binary photo',
+                  descriptionIterations: [],
+                },
+              ],
+            },
+            {
+              name: 'OrderLine',
+              rowCount: 200,
+              dependsOn: [{ schema: 'dbo', table: 'Product', column: 'ProductID', referencedColumn: 'ProductID' }],
+              dependents: [],
+              description: 'Order line items',
+              descriptionIterations: [{ description: 'Order line items', reasoning: 'r', generatedAt: '2026-01-01', modelUsed: 'm', confidence: 0.94 }],
+              columns: [
+                {
+                  name: 'OrderLineID',
+                  dataType: 'int',
+                  isNullable: false,
+                  isPrimaryKey: true,
+                  isCatalogPrimaryKey: true,
+                  isForeignKey: false,
+                  description: 'PK',
+                  descriptionIterations: [],
+                  statistics: { totalRows: 200, distinctCount: 200, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [1, 2] },
+                },
+                {
+                  name: 'ProductID',
+                  dataType: 'int',
+                  isNullable: false,
+                  isPrimaryKey: false,
+                  isForeignKey: true,
+                  foreignKeyReferences: { schema: 'dbo', table: 'Product', column: 'ProductID', referencedColumn: 'ProductID' },
+                  description: 'FK to Product',
+                  descriptionIterations: [],
+                  statistics: { totalRows: 200, distinctCount: 80, uniquenessRatio: 0.4, nullCount: 0, nullPercentage: 0, sampleValues: [1, 2] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const basePath = '/virtual/legacy/state.json';
+    writtenFiles.set(basePath, JSON.stringify(legacyBaseline));
+
+    // At T1: Product and OrderLine are unchanged; NewTable is added!
+    liveIntrospectedSchemas.current = [
+      {
+        name: 'dbo',
+        descriptionIterations: [],
+        tables: [
+          {
+            name: 'Product',
+            rowCount: 100,
+            dependsOn: [],
+            dependents: [],
+            descriptionIterations: [],
+            columns: [
+              { name: 'ProductID', dataType: 'int', isNullable: false, isPrimaryKey: true, isCatalogPrimaryKey: true, isForeignKey: false, descriptionIterations: [] },
+              { name: 'ThumbnailPhoto', dataType: 'varbinary', isNullable: true, isPrimaryKey: false, isForeignKey: false, descriptionIterations: [] },
+            ],
+          },
+          {
+            name: 'OrderLine',
+            rowCount: 200,
+            dependsOn: [],
+            dependents: [],
+            descriptionIterations: [],
+            columns: [
+              { name: 'OrderLineID', dataType: 'int', isNullable: false, isPrimaryKey: true, isCatalogPrimaryKey: true, isForeignKey: false, descriptionIterations: [] },
+              { name: 'ProductID', dataType: 'int', isNullable: false, isPrimaryKey: false, isForeignKey: false, descriptionIterations: [] },
+            ],
+          },
+          {
+            name: 'NewTable',
+            rowCount: 50,
+            dependsOn: [],
+            dependents: [],
+            descriptionIterations: [],
+            columns: [
+              { name: 'NewTableID', dataType: 'int', isNullable: false, isPrimaryKey: true, isCatalogPrimaryKey: true, isForeignKey: false, descriptionIterations: [] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    let newTableAttempts = 0;
+    const analyzed: string[] = [];
+    executePromptMock.mockImplementation(async (promptName: string, ctx: Record<string, unknown>) => {
+      if (promptName === 'table-analysis') {
+        const key = `${ctx['schema']}.${ctx['table']}`;
+        analyzed.push(key);
+        if (key === 'dbo.NewTable' && newTableAttempts++ === 0) {
+          // Transient failure on Iteration 1 -> must retry on Iteration 2 instead of converging early!
+          return { success: false, errorMessage: '429 rate limited', tokensUsed: 0 };
+        }
+        return {
+          success: true,
+          tokensUsed: 50,
+          result: { tableDescription: 'New table desc', reasoning: 'r', confidence: 0.95, columnDescriptions: [], parentTableInsights: [] },
+        };
+      }
+      return { success: true, tokensUsed: 10, result: { tableMateriallyChanged: false, tableChangeReasoning: 'same', columnChanges: [] } };
+    });
+
+    const res = await new AnalysisOrchestrator({
+      config: buildConfig(),
+      incrementalFromState: basePath,
+    }).Execute();
+
+    expect(res.success).toBe(true);
+    // 1. ThumbnailPhoto on unchanged Product was NOT re-sampled; only NewTable.NewTableID (1 column) was sampled!
+    expect(mockDriver.getColumnStatistics).toHaveBeenCalledTimes(1);
+    // 2. Soft FK OrderLine.ProductID -> Product.ProductID survived (`StaleFKsRemoved === 0`), so BOTH Product AND OrderLine were skipped!
+    expect(res.state.phases.incremental?.StaleFKsRemoved).toBe(0);
+    expect(res.state.phases.incremental?.TablesSkippedUnchangedCount).toBe(2);
+    // 3. NewTable failed on iteration 1 and automatically retried & succeeded on iteration 2!
+    expect(analyzed).toEqual(['dbo.NewTable', 'dbo.NewTable']);
+    expect(res.state.schemas[0].tables.find((t) => t.name === 'NewTable')?.description).toBe('New table desc');
+  });
 });

@@ -1,5 +1,11 @@
-import { IndexByUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import { IndexByUUID, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import {
+    ArtifactJsonValue,
+    ArtifactToolArgs,
+    ArtifactToolDefinition,
+    ArtifactToolResult,
+    BaseArtifactToolLibrary,
+} from '@memberjunction/ai-core-plus';
 
 export type ServerWhiteboardItemKind =
     | 'sticky'
@@ -102,6 +108,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
+                        pageId: { type: 'string', description: 'Optional target page ID (defaults to active page).' },
                         nodes: {
                             type: 'array',
                             description: 'List of nodes to create or update.',
@@ -136,6 +143,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
+                        pageId: { type: 'string', description: 'Optional target page ID (defaults to active page).' },
                         connections: {
                             type: 'array',
                             items: {
@@ -158,6 +166,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
+                        pageId: { type: 'string', description: 'Optional target page ID (defaults to active page).' },
                         notes: {
                             type: 'array',
                             items: {
@@ -184,6 +193,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
+                        pageId: { type: 'string', description: 'Optional target page ID (defaults to active page).' },
                         ids: { type: 'array', items: { type: 'string' }, description: 'Item IDs to delete.' },
                         labels: { type: 'array', items: { type: 'string' }, description: 'Item labels/texts to delete.' }
                     }
@@ -196,6 +206,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
+                        pageId: { type: 'string', description: 'Optional target page ID (defaults to active page).' },
                         direction: {
                             type: 'string',
                             enum: ['grid', 'horizontal', 'vertical'],
@@ -213,11 +224,20 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
 
     protected override async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
-        const state = this.ParseState(contentStr);
+        let state: ServerWhiteboardStateJSON;
+        try {
+            state = this.ParseState(contentStr);
+        } catch (err) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
 
         switch (toolName) {
             case 'get_board_summary':
@@ -248,7 +268,8 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
 
     /**
      * Parses either a v2 paged whiteboard JSON string, a v1 flat whiteboard JSON string, or an empty string
-     * into a normalized v2 {@link ServerWhiteboardStateJSON}.
+     * into a normalized v2 {@link ServerWhiteboardStateJSON}. Fails closed by throwing an `Error` on malformed
+     * or non-whiteboard JSON payloads.
      */
     public ParseState(rawJson: string): ServerWhiteboardStateJSON {
         const emptyState = (): ServerWhiteboardStateJSON => ({
@@ -266,55 +287,77 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
             return emptyState();
         }
 
+        let parsed: {
+            version?: number;
+            seq?: number;
+            idCounter?: number;
+            zCounter?: number;
+            pageCounter?: number;
+            activePageId?: string;
+            pages?: ServerWhiteboardPageJSON[];
+            items?: ServerWhiteboardItem[];
+        } | null;
         try {
-            const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-            if (!parsed || typeof parsed !== 'object') {
-                return emptyState();
-            }
-
-            if (parsed.version === 2 && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
-                const pages = (parsed.pages as ServerWhiteboardPageJSON[]).map((p, idx) => ({
-                    id: typeof p.id === 'string' && p.id ? p.id : `page-${idx + 1}`,
-                    name: typeof p.name === 'string' && p.name ? p.name : `Page ${idx + 1}`,
-                    items: Array.isArray(p.items) ? [...p.items] : [],
-                    author: p.author === 'agent' ? ('agent' as const) : ('user' as const)
-                }));
-                const activePageId =
-                    typeof parsed.activePageId === 'string' && pages.some((p) => p.id === parsed.activePageId)
-                        ? parsed.activePageId
-                        : pages[0].id;
-                return {
-                    version: 2,
-                    seq: typeof parsed.seq === 'number' ? parsed.seq : 1,
-                    idCounter: typeof parsed.idCounter === 'number' ? parsed.idCounter : 10,
-                    zCounter: typeof parsed.zCounter === 'number' ? parsed.zCounter : 10,
-                    pageCounter: typeof parsed.pageCounter === 'number' ? parsed.pageCounter : pages.length,
-                    activePageId,
-                    pages
-                };
-            }
-
-            // Legacy v1 flat format ({ version: 1, items: [...] })
-            if (Array.isArray(parsed.items)) {
-                const items = parsed.items as ServerWhiteboardItem[];
-                return {
-                    version: 2,
-                    seq: typeof parsed.seq === 'number' ? parsed.seq : 1,
-                    idCounter: typeof parsed.idCounter === 'number' ? parsed.idCounter : items.length + 1,
-                    zCounter: typeof parsed.zCounter === 'number' ? parsed.zCounter : items.length + 1,
-                    pageCounter: 1,
-                    activePageId: 'page-1',
-                    pages: [{ id: 'page-1', name: 'Page 1', items: [...items], author: 'user' }]
-                };
-            }
-        } catch {
-            // Fall through to empty state
+            parsed = JSON.parse(trimmed) as {
+                version?: number;
+                seq?: number;
+                idCounter?: number;
+                zCounter?: number;
+                pageCounter?: number;
+                activePageId?: string;
+                pages?: ServerWhiteboardPageJSON[];
+                items?: ServerWhiteboardItem[];
+            } | null;
+        } catch (err) {
+            throw new Error(
+                `Invalid Whiteboard JSON: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
 
-        return emptyState();
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Invalid Whiteboard JSON: root payload must be a JSON object.');
+        }
+
+        if (parsed.version === 2 && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+            const pages = parsed.pages.map((p, idx) => ({
+                id: typeof p?.id === 'string' && p.id ? p.id : `page-${idx + 1}`,
+                name: typeof p?.name === 'string' && p.name ? p.name : `Page ${idx + 1}`,
+                items: Array.isArray(p?.items) ? [...p.items] : [],
+                author: p?.author === 'agent' ? ('agent' as const) : ('user' as const)
+            }));
+            const activePageId =
+                typeof parsed.activePageId === 'string' && pages.some((p) => p.id === parsed.activePageId)
+                    ? parsed.activePageId
+                    : pages[0].id;
+            return {
+                version: 2,
+                seq: typeof parsed.seq === 'number' ? parsed.seq : 1,
+                idCounter: typeof parsed.idCounter === 'number' ? parsed.idCounter : 10,
+                zCounter: typeof parsed.zCounter === 'number' ? parsed.zCounter : 10,
+                pageCounter: typeof parsed.pageCounter === 'number' ? parsed.pageCounter : pages.length,
+                activePageId,
+                pages
+            };
+        }
+
+        // Legacy v1 flat format ({ version: 1, items: [...] })
+        if (Array.isArray(parsed.items)) {
+            const items = parsed.items;
+            return {
+                version: 2,
+                seq: typeof parsed.seq === 'number' ? parsed.seq : 1,
+                idCounter: typeof parsed.idCounter === 'number' ? parsed.idCounter : items.length + 1,
+                zCounter: typeof parsed.zCounter === 'number' ? parsed.zCounter : items.length + 1,
+                pageCounter: 1,
+                activePageId: 'page-1',
+                pages: [{ id: 'page-1', name: 'Page 1', items: [...items], author: 'user' }]
+            };
+        }
+
+        throw new Error('Invalid Whiteboard JSON: expected version 2 `pages` array or legacy `items` array.');
     }
 
-    private getTargetPage(state: ServerWhiteboardStateJSON, pageId?: unknown): ServerWhiteboardPageJSON {
+    private getTargetPage(state: ServerWhiteboardStateJSON, pageId?: ArtifactJsonValue): ServerWhiteboardPageJSON {
         if (typeof pageId === 'string' && pageId.trim()) {
             const found = state.pages.find((p) => p.id === pageId.trim());
             if (found) {
@@ -324,7 +367,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         return state.pages.find((p) => p.id === state.activePageId) ?? state.pages[0];
     }
 
-    public GetBoardSummary(state: ServerWhiteboardStateJSON, input: Record<string, unknown> = {}): ArtifactToolResult {
+    public GetBoardSummary(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs = {}): ArtifactToolResult {
         const page = this.getTargetPage(state, input.pageId);
         const byKind: Record<string, number> = {};
         let minX = Number.POSITIVE_INFINITY;
@@ -363,7 +406,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    public ListElements(state: ServerWhiteboardStateJSON, input: Record<string, unknown> = {}): ArtifactToolResult {
+    public ListElements(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs = {}): ArtifactToolResult {
         const page = this.getTargetPage(state, input.pageId);
         const kindFilter = typeof input.kind === 'string' ? input.kind.trim().toLowerCase() : '';
         const elements = kindFilter
@@ -379,8 +422,8 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    public UpsertNodes(state: ServerWhiteboardStateJSON, input: Record<string, unknown>): ArtifactToolResult {
-        const rawNodes = Array.isArray(input.nodes) ? (input.nodes as Array<Record<string, unknown>>) : [];
+    public UpsertNodes(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs): ArtifactToolResult {
+        const rawNodes = Array.isArray(input.nodes) ? (input.nodes as ArtifactToolArgs[]) : [];
         if (rawNodes.length === 0) {
             return { success: false, data: null, errorMessage: 'upsert_nodes requires a non-empty nodes array.' };
         }
@@ -450,9 +493,9 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    public ConnectNodes(state: ServerWhiteboardStateJSON, input: Record<string, unknown>): ArtifactToolResult {
+    public ConnectNodes(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs): ArtifactToolResult {
         const rawConnections = Array.isArray(input.connections)
-            ? (input.connections as Array<Record<string, unknown>>)
+            ? (input.connections as ArtifactToolArgs[])
             : [];
         if (rawConnections.length === 0) {
             return { success: false, data: null, errorMessage: 'connect_nodes requires a non-empty connections array.' };
@@ -461,7 +504,7 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         const page = this.getTargetPage(state, input.pageId);
         const createdIds: string[] = [];
 
-        const findItem = (id?: unknown, label?: unknown): ServerWhiteboardItem | undefined => {
+        const findItem = (id?: ArtifactJsonValue, label?: ArtifactJsonValue): ServerWhiteboardItem | undefined => {
             if (typeof id === 'string' && id.trim()) {
                 return page.items.find((i) => UUIDsEqual(i.ID, id.trim()));
             }
@@ -505,8 +548,8 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    public AddStickyNotes(state: ServerWhiteboardStateJSON, input: Record<string, unknown>): ArtifactToolResult {
-        const rawNotes = Array.isArray(input.notes) ? (input.notes as Array<Record<string, unknown>>) : [];
+    public AddStickyNotes(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs): ArtifactToolResult {
+        const rawNotes = Array.isArray(input.notes) ? (input.notes as ArtifactToolArgs[]) : [];
         if (rawNotes.length === 0) {
             return { success: false, data: null, errorMessage: 'add_sticky_notes requires a non-empty notes array.' };
         }
@@ -549,32 +592,38 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    public DeleteElements(state: ServerWhiteboardStateJSON, input: Record<string, unknown>): ArtifactToolResult {
+    public DeleteElements(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs): ArtifactToolResult {
         const page = this.getTargetPage(state, input.pageId);
-        const idSet = new Set(Array.isArray(input.ids) ? input.ids.map((x) => String(x).trim()) : []);
+        const requestedIds = Array.isArray(input.ids)
+            ? input.ids.map((x) => String(x).trim()).filter(Boolean)
+            : [];
+        const requestedIdSet = new UUIDSet(requestedIds);
         const labelSet = new Set(
             Array.isArray(input.labels) ? input.labels.map((x) => String(x).trim().toLowerCase()) : []
         );
 
-        const removedIds = new Set<string>();
+        const removedIds: string[] = [];
         page.items = page.items.filter((item) => {
-            const matchById = idSet.has(item.ID);
+            const matchById = requestedIdSet.Has(item.ID);
             const itemLabel = (item.Label ?? item.Text ?? '').trim().toLowerCase();
             const matchByLabel = itemLabel.length > 0 && labelSet.has(itemLabel);
             if (matchById || matchByLabel) {
-                removedIds.add(item.ID);
+                removedIds.push(item.ID);
                 return false;
             }
             return true;
         });
 
-        // Also remove any connectors dangling off deleted items
+        // Also remove any connectors dangling off deleted items (case-insensitive ID check)
+        const removedIdSet = new UUIDSet(removedIds);
         page.items = page.items.filter((item) => {
             if (item.Kind !== 'connector') {
                 return true;
             }
-            if ((item.FromItemID && removedIds.has(item.FromItemID)) || (item.ToItemID && removedIds.has(item.ToItemID))) {
-                removedIds.add(item.ID);
+            const fromRemoved = item.FromItemID ? removedIdSet.Has(item.FromItemID) : false;
+            const toRemoved = item.ToItemID ? removedIdSet.Has(item.ToItemID) : false;
+            if (fromRemoved || toRemoved) {
+                removedIds.push(item.ID);
                 return false;
             }
             return true;
@@ -585,14 +634,14 @@ export class WhiteboardToolLibrary extends BaseArtifactToolLibrary {
         return {
             success: true,
             data: {
-                deletedIds: Array.from(removedIds),
+                deletedIds: Array.from(new Set(removedIds)),
                 remainingCount: page.items.length,
                 updatedContent
             }
         };
     }
 
-    public AutoLayout(state: ServerWhiteboardStateJSON, input: Record<string, unknown> = {}): ArtifactToolResult {
+    public AutoLayout(state: ServerWhiteboardStateJSON, input: ArtifactToolArgs = {}): ArtifactToolResult {
         const page = this.getTargetPage(state, input.pageId);
         const direction =
             input.direction === 'horizontal' || input.direction === 'vertical' ? input.direction : 'grid';

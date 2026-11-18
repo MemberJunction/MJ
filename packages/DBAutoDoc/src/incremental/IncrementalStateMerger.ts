@@ -230,9 +230,20 @@ function filterSurvivingPKs(
         tableName: entry!.Table.name,
       });
     } else {
-      removed++;
+      // A soft PK candidate superseded by (or duplicating) a declared catalog PK on the exact same
+      // column(s) does NOT invalidate incoming FKs targeting that declared PK, nor is it a stale removal.
+      const supersededByDeclaredPK =
+        entry?.Table !== undefined &&
+        !tDiff?.PopulatedFromEmpty &&
+        pk.columnNames.every((colName) => FindNamedItem(entry.Table.columns, colName)?.isPrimaryKey === true);
+      if (!supersededByDeclaredPK) {
+        removed++;
+      }
       for (const col of pk.columnNames) {
-        invalidatedCols.add(`${tKey}.${col.toLowerCase()}`);
+        const isDeclaredPKCol = entry?.Table ? FindNamedItem(entry.Table.columns, col)?.isPrimaryKey === true : false;
+        if (!isDeclaredPKCol || tDiff?.PopulatedFromEmpty) {
+          invalidatedCols.add(`${tKey}.${col.toLowerCase()}`);
+        }
       }
     }
   }
@@ -374,8 +385,10 @@ function assembleScopeFromFilteredKeys(
   const dirtyFKPruning = new Set<string>(diff.AddedTables);
   for (const [tKey] of orphanedCols.entries()) dirtyFKPruning.add(tKey);
 
+  const liveTableMap = indexTablesByLowerKey(mergedState.schemas);
   for (const tDiff of diff.ModifiedTables) {
-    populateModifiedTableScope(tDiff, fullScanTables, fullSourceCols, targetTables, dirtyFKPruning);
+    const liveTable = liveTableMap.get(tDiff.TableKey.toLowerCase())?.Table;
+    populateModifiedTableScope(tDiff, liveTable, fullScanTables, fullSourceCols, targetTables, dirtyFKPruning);
   }
 
   return {
@@ -394,6 +407,7 @@ function assembleScopeFromFilteredKeys(
 
 function populateModifiedTableScope(
   tDiff: TableDiff,
+  liveTable: TableDefinition | undefined,
   fullScanTables: Set<string>,
   fullSourceCols: Map<string, Set<string>>,
   targetTables: Set<string>,
@@ -415,11 +429,11 @@ function populateModifiedTableScope(
   if (changedSourceCols.length > 0 || tDiff.RemovedColumns.length > 0 || tDiff.DeclaredFKsChanged) {
     dirtyFKPruning.add(tDiff.TableKey);
   }
+  const hasUnchangedDeclaredPK = (liveTable?.columns.some((c) => c.isPrimaryKey) ?? false) && !tDiff.DeclaredPKChanged;
   if (
-    tDiff.AddedColumns.length > 0 ||
-    tDiff.ModifiedColumns.length > 0 ||
     tDiff.DeclaredPKChanged ||
-    tDiff.IndexesChanged
+    (!hasUnchangedDeclaredPK &&
+      (tDiff.AddedColumns.length > 0 || tDiff.ModifiedColumns.length > 0 || tDiff.IndexesChanged))
   ) {
     targetTables.add(tDiff.TableKey);
   }

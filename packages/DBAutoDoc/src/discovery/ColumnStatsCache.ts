@@ -5,6 +5,8 @@
  */
 
 import { CachedColumnStats, TableStatsCache } from '../types/discovery.js';
+import { SchemaDefinition } from '../types/state.js';
+import { BuildCachedColumnStats } from './ColumnStatsBuilder.js';
 
 export class ColumnStatsCache {
   private tableCache: Map<string, TableStatsCache> = new Map();
@@ -349,10 +351,58 @@ export class ColumnStatsCache {
   }
 
   /**
-   * Merge cached stats into schema column definitions
-   * Replaces separate columnStatistics cache with embedded stats
+   * Seed the cache from the statistics the sampling pass left on each column, so discovery does not
+   * query the database again for numbers it already has. Columns without statistics, columns whose
+   * sampling count query failed (all-zero counts on a non-empty table), and columns already in the
+   * cache are left alone so discovery can still query them. Returns the number of columns seeded.
    */
-  public MergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+  public SeedFromSchemas(schemas: SchemaDefinition[]): number {
+    let seeded = 0;
+    for (const schema of schemas) {
+      for (const table of schema.tables) {
+        const soleDeclaredPK = table.columns.filter(c => c.isPrimaryKey).length === 1;
+        for (const column of table.columns) {
+          const s = column.statistics;
+          if (!s || !Number.isFinite(s.totalRows) || !Number.isFinite(s.distinctCount) || !Number.isFinite(s.nullCount)) {
+            continue;
+          }
+          if (s.totalRows === 0 && (table.rowCount ?? 0) > 0) {
+            continue;
+          }
+          if (this.hasColumnStats(schema.name, table.name, column.name)) {
+            continue;
+          }
+          this.setColumnStats(BuildCachedColumnStats({
+            SchemaName: schema.name,
+            TableName: table.name,
+            ColumnName: column.name,
+            DataType: column.dataType,
+            TotalRows: s.totalRows,
+            NullCount: s.nullCount,
+            DistinctCount: s.distinctCount,
+            SampleValues: s.sampleValues ?? [],
+            MinValue: s.minValue ?? s.min,
+            MaxValue: s.maxValue ?? s.max,
+            AvgLength: s.avgLength,
+            ValueDistribution: s.valueDistribution,
+            QueryTimeMs: s.queryTimeMs ?? 0,
+            IsPrimaryKey: soleDeclaredPK && column.isPrimaryKey
+          }));
+          seeded++;
+        }
+      }
+    }
+    return seeded;
+  }
+
+  /**
+   * Write the cache back onto the schema's columns. A column the sampling pass already measured keeps
+   * every field sampling recorded (its counts, 0–100 percentages, numeric and length statistics) and
+   * gains what only discovery computes, such as the data pattern. When sampling skipped the column or
+   * its count query failed (all-zero counts on a non-empty table), the cache supplies the counts with
+   * the null fraction converted to 0–100.
+   */
+  public MergeIntoSchemas(schemas: SchemaDefinition[]): void {
     for (const schema of schemas) {
       for (const table of schema.tables) {
         const cacheKey = `${schema.name}.${table.name}`;
@@ -364,23 +414,64 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          // Merge cached stats into column.statistics while preserving richer DataSampler fields (min, max, avg, stdDev)
-          const existing = column.statistics;
-          column.statistics = {
-            ...existing,
-            totalRows: existing?.totalRows ?? cachedStats.totalRows,
-            distinctCount: existing?.distinctCount ?? cachedStats.distinctCount,
-            uniquenessRatio: existing?.uniquenessRatio ?? cachedStats.uniqueness,
-            nullCount: existing?.nullCount ?? cachedStats.nullCount,
-            nullPercentage: existing?.nullPercentage ?? cachedStats.nullPercentage * 100,
+          // The cache holds a 0–1 fraction (its detectors use it); column statistics hold 0–100.
+          const fromCache: import('../types/state.js').ColumnStatistics = {
+            totalRows: cachedStats.totalRows,
+            distinctCount: cachedStats.distinctCount,
+            uniquenessRatio: cachedStats.uniqueness,
+            nullCount: cachedStats.nullCount,
+            nullPercentage: cachedStats.totalRows > 0 ? (cachedStats.nullCount / cachedStats.totalRows) * 100 : 0,
             dataPattern: cachedStats.dataPattern,
-            sampleValues: existing?.sampleValues?.length ? existing.sampleValues : cachedStats.sampleValues,
-            valueDistribution: existing?.valueDistribution ?? cachedStats.valueDistribution,
-            minValue: existing?.minValue ?? cachedStats.minValue,
-            maxValue: existing?.maxValue ?? cachedStats.maxValue,
-            avgLength: existing?.avgLength ?? cachedStats.avgLength,
+            sampleValues: cachedStats.sampleValues,
+            valueDistribution: cachedStats.valueDistribution,
+            min: cachedStats.minValue,
+            max: cachedStats.maxValue,
+            minValue: cachedStats.minValue,
+            maxValue: cachedStats.maxValue,
+            avgLength: cachedStats.avgLength,
             computedAt: cachedStats.computedAt,
             queryTimeMs: cachedStats.queryTimeMs
+          };
+
+          const existing = column.statistics;
+          if (!existing) {
+            column.statistics = fromCache;
+            continue;
+          }
+
+          const failedSamplingCounts =
+            existing.totalRows === 0 &&
+            existing.distinctCount === 0 &&
+            ((table.rowCount ?? 0) > 0 || cachedStats.totalRows > 0);
+          if (failedSamplingCounts) {
+            column.statistics = {
+              ...existing,
+              totalRows: fromCache.totalRows,
+              distinctCount: fromCache.distinctCount,
+              uniquenessRatio: fromCache.uniquenessRatio,
+              nullCount: fromCache.nullCount,
+              nullPercentage: fromCache.nullPercentage,
+              dataPattern: existing.dataPattern ?? fromCache.dataPattern,
+              sampleValues: existing.sampleValues?.length ? existing.sampleValues : fromCache.sampleValues,
+              valueDistribution: existing.valueDistribution?.length ? existing.valueDistribution : fromCache.valueDistribution,
+              min: existing.min ?? fromCache.min,
+              max: existing.max ?? fromCache.max,
+              minValue: existing.minValue ?? fromCache.minValue,
+              maxValue: existing.maxValue ?? fromCache.maxValue,
+              avgLength: existing.avgLength ?? fromCache.avgLength,
+              computedAt: fromCache.computedAt,
+              queryTimeMs: fromCache.queryTimeMs
+            };
+            continue;
+          }
+
+          column.statistics = {
+            ...existing,
+            dataPattern: existing.dataPattern ?? cachedStats.dataPattern,
+            minValue: existing.minValue ?? cachedStats.minValue,
+            maxValue: existing.maxValue ?? cachedStats.maxValue,
+            computedAt: existing.computedAt ?? cachedStats.computedAt,
+            queryTimeMs: existing.queryTimeMs ?? cachedStats.queryTimeMs
           };
         }
       }
@@ -391,74 +482,4 @@ export class ColumnStatsCache {
   public mergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
     return this.MergeIntoSchemas(schemas);
   }
-
-  /**
-   * Seed the discovery cache from `ColumnDefinition.statistics` already gathered
-   * during table sampling or carried forward from a prior incremental run.
-   * Returns the number of columns seeded.
-   */
-  public SeedFromSchemas(schemas: import('../types/state.js').SchemaDefinition[]): number {
-    let seeded = 0;
-    for (const schema of schemas) {
-      for (const table of schema.tables) {
-        for (const col of table.columns) {
-          if (!col.statistics) continue;
-          this.SetColumnStats(buildCachedStatsFromColumn(schema.name, table.name, col));
-          seeded++;
-        }
-      }
-    }
-    return seeded;
-  }
-}
-
-function buildCachedStatsFromColumn(
-  schemaName: string,
-  tableName: string,
-  col: import('../types/state.js').ColumnDefinition,
-): CachedColumnStats {
-  const s = col.statistics!;
-  const totalRows = s.totalRows ?? 0;
-  const uniqueness = s.uniquenessRatio ?? (totalRows > 0 ? s.distinctCount / totalRows : 0);
-  const samples: Array<string | number | null> = Array.isArray(s.sampleValues) ? s.sampleValues : [];
-  const hasBlankOrZero = samples.some(
-    (v) => v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === ''),
-  );
-  return {
-    schemaName,
-    tableName,
-    columnName: col.name,
-    dataType: col.dataType,
-    totalRows,
-    nullCount: s.nullCount,
-    nullPercentage: totalRows > 0 ? s.nullCount / totalRows : 0,
-    distinctCount: s.distinctCount,
-    uniqueness,
-    minValue: s.minValue ?? s.min,
-    maxValue: s.maxValue ?? s.max,
-    avgLength: s.avgLength,
-    dataPattern: s.dataPattern ?? inferPatternFromSamples(samples, col.dataType),
-    sampleValues: samples,
-    valueDistribution: s.valueDistribution,
-    pkEligible: s.nullCount === 0 && !hasBlankOrZero && uniqueness === 1.0 && totalRows > 0,
-    fkEligible: true,
-    computedAt: s.computedAt ?? new Date().toISOString(),
-    queryTimeMs: s.queryTimeMs ?? 0,
-  };
-}
-
-function inferPatternFromSamples(
-  samples: Array<string | number | null>,
-  dataType: string,
-): CachedColumnStats['dataPattern'] {
-  const lower = dataType.toLowerCase();
-  if (lower.includes('uniqueidentifier') || lower.includes('uuid')) return 'guid';
-  const nonNull = samples.filter((v): v is string | number => v !== null && v !== undefined);
-  if (nonNull.length > 0 && nonNull.every((v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v))) {
-    return 'guid';
-  }
-  if (lower.includes('int') && nonNull.every((v) => typeof v === 'number')) {
-    return 'sequential';
-  }
-  return 'unknown';
 }

@@ -1,8 +1,8 @@
 import '@angular/compiler';
-import { EventEmitter, SimpleChange } from '@angular/core';
+import { EventEmitter } from '@angular/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpProgress, UserInfo } from '@memberjunction/core';
-import { MJArtifactEntity, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactTypeEntity, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   LibraryCreationService,
   SynthesizeArtifactFromSourcesResult,
@@ -60,7 +60,7 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
     const routeOperation = vi.fn(
       async (
         _operationKey: string,
-        _input: unknown,
+        _input: Record<string, string | number | boolean | object | null | undefined>,
         options?: RemoteOpInvokeOptions,
       ) => {
         options?.onProgress?.({
@@ -92,7 +92,7 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
 
     const providerStub = {
       RouteOperation: routeOperation,
-    } as unknown as IMetadataProvider & IRemoteOperationProvider;
+    } as Partial<IMetadataProvider & IRemoteOperationProvider> as IMetadataProvider & IRemoteOperationProvider;
     const receivedProgress: RemoteOpProgress[] = [];
 
     const result = await service.SynthesizeArtifactFromSources({
@@ -136,7 +136,7 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
         ResultCode: 'ACCESS_DENIED',
         ErrorMessage: 'Permission denied on restricted source',
       })),
-    } as unknown as IMetadataProvider & IRemoteOperationProvider;
+    } as Partial<IMetadataProvider & IRemoteOperationProvider> as IMetadataProvider & IRemoteOperationProvider;
 
     await expect(
       service.SynthesizeArtifactFromSources({
@@ -189,20 +189,14 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
       UsedFallback: false,
     }));
 
-    const internal = dialog as unknown as {
+    Object.assign(dialog as object, {
       creationService: {
-        SynthesizeArtifactFromSources: typeof synthesizeSpy;
-        LoadEnabledArtifactTypes: () => Promise<readonly unknown[]>;
-      };
-      notifications: { CreateSimpleNotification: ReturnType<typeof vi.fn> };
-      cdr: { detectChanges: ReturnType<typeof vi.fn> };
-    };
-    internal.creationService = {
-      SynthesizeArtifactFromSources: synthesizeSpy,
-      LoadEnabledArtifactTypes: vi.fn(async () => [] as readonly unknown[]),
-    };
-    internal.notifications = { CreateSimpleNotification: vi.fn() };
-    internal.cdr = { detectChanges: vi.fn() };
+        SynthesizeArtifactFromSources: synthesizeSpy,
+        LoadEnabledArtifactTypes: vi.fn(async (): Promise<ReadonlyArray<MJArtifactTypeEntity>> => []),
+      },
+      notifications: { CreateSimpleNotification: vi.fn() },
+      cdr: { detectChanges: vi.fn() },
+    });
 
     const items = [
       makeItem('art-1', 'Q1 Strategy Brief', 'Markdown Document', ['col-board']),
@@ -215,10 +209,6 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
     dialog.InitialTab = 'synthesize';
     dialog.CurrentUser = TEST_USER;
     dialog.IsOpen = true;
-
-    dialog.ngOnChanges({
-      IsOpen: new SimpleChange(false, true, true),
-    });
 
     expect(getSettingSpy).toHaveBeenCalledWith('Library/LastSynthesisTargetKind');
     expect(dialog.SynthesisTargetKind).toBe('document');
@@ -261,14 +251,13 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
       makeItem('art-3', 'Other Item', 'Markdown Document', ['col-other']),
     ];
 
-    const wInternal = workspace as unknown as {
-      cdr: { detectChanges: ReturnType<typeof vi.fn> };
-      ReloadWorkspaceData: ReturnType<typeof vi.fn>;
-      OpenArtifactStudio: ReturnType<typeof vi.fn>;
-    };
-    wInternal.cdr = { detectChanges: vi.fn() };
-    wInternal.ReloadWorkspaceData = vi.fn(async () => undefined);
-    wInternal.OpenArtifactStudio = vi.fn();
+    const reloadWorkspaceSpy = vi.fn(async () => undefined);
+    const openStudioSpy = vi.fn();
+    Object.assign(workspace as object, {
+      cdr: { detectChanges: vi.fn() },
+      ReloadWorkspaceData: reloadWorkspaceSpy,
+      OpenArtifactStudio: openStudioSpy,
+    });
 
     Object.defineProperty(workspace, 'UnifiedScope', { get: () => 'collection' });
     Object.defineProperty(workspace, 'SelectedDrive', { get: () => null });
@@ -292,7 +281,7 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
     });
 
     expect(workspace.IsCreateDialogOpen).toBe(false);
-    expect(wInternal.ReloadWorkspaceData).toHaveBeenCalledTimes(1);
-    expect(wInternal.OpenArtifactStudio).toHaveBeenCalledWith('synth-deck-1', { fullCanvas: true });
+    expect(reloadWorkspaceSpy).toHaveBeenCalledTimes(1);
+    expect(openStudioSpy).toHaveBeenCalledWith('synth-deck-1', { fullCanvas: true });
   });
 });

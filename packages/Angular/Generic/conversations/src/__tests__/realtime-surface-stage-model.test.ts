@@ -87,6 +87,17 @@ describe('RealtimeSurfaceStageModel', () => {
       expect(model.PluginFor('Whiteboard')).toBe(after);
       expect(surfaces(model)).toEqual(['Whiteboard:tab']);
     });
+
+    it('creates an agent-video channel surface immediately when placed on a tab so its media/audio stays active before tab selection', () => {
+      const avatar = new TestChannel('Avatar');
+      Object.defineProperty(avatar, 'ShowsAgentVideo', { value: true });
+      const whiteboard = new TestChannel('Whiteboard');
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(whiteboard);
+      model.Register(avatar);
+      model.SetActiveTab('Whiteboard');
+      expect(surfaces(model)).toEqual(['Whiteboard:tab', 'Avatar:tab']);
+    });
   });
 
   describe('moves', () => {

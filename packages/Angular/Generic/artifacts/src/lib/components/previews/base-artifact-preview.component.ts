@@ -61,7 +61,7 @@ export abstract class BaseArtifactPreviewComponent extends BaseAngularComponent 
         }
 
         if (version.ContentMode === 'File') {
-            return this.fileService.getDownloadUrl(version.ID);
+            return this.fileService.GetDownloadUrl(version.ID, false, this.ProviderToUse);
         }
 
         const content = version.Content;

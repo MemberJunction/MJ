@@ -151,6 +151,8 @@ export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implemen
    * resolve inside `mj-storage-media-player` and never enter this map.
    */
   private fileResolveByItem = new Map<string, FileResolveState>();
+  private renderErrorByItem = new Map<string, string>();
+  public OnRenderError: ((item: MediaItem, reason: string) => void) | null = null;
 
   @ViewChild('mediaPane') private mediaPane?: ElementRef<HTMLElement>;
 
@@ -237,13 +239,32 @@ export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implemen
     return !item.Url && !!item.FileID && this.fileResolveByItem.get(item.Id)?.Status === 'loading';
   }
 
-  /** The no-access / load-failure message for a FileID-backed image/pdf/web item, or `null`. */
+  /** The load-failure message for any item (FileID resolution failure or runtime render error), or `null`. */
   public ResolveError(item: MediaItem): string | null {
+    const renderErr = this.renderErrorByItem.get(item.Id);
+    if (renderErr) {
+      return renderErr;
+    }
     if (item.Url || !item.FileID) {
       return null;
     }
     const state = this.fileResolveByItem.get(item.Id);
     return state?.Status === 'error' ? state.Message : null;
+  }
+
+  /**
+   * Called when an external image fails to load at runtime (e.g. expired link or broken source
+   * after restore): hides the broken image icon behind the error card and notifies the channel so
+   * the realtime agent can fix or replace the URL.
+   */
+  public OnMediaElementError(item: MediaItem): void {
+    const reason = 'Failed to load image from URL (broken link or unreachable source).';
+    if (this.renderErrorByItem.get(item.Id) === reason) {
+      return;
+    }
+    this.renderErrorByItem.set(item.Id, reason);
+    this.OnRenderError?.(item, reason);
+    this.cdr.markForCheck();
   }
 
   /** Switches the active tab to `item`. */
