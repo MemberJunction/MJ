@@ -12,6 +12,10 @@
     "./settings.module": {
       "types": "./dist/lib/module.d.ts",
       "default": "./dist/lib/module.js"
+    },
+    "./user-settings.module": {
+      "types": "./dist/lib/user-settings.module.d.ts",
+      "default": "./dist/lib/user-settings.module.js"
     }
   },
   "files": [
