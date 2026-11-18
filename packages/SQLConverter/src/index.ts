@@ -13,7 +13,7 @@ export type {
   BoundaryMethod,
   FileRouting,
 } from './MigrationSplitter.js';
-export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL, RefreshViewWarnings, ViewsAreHandWritten, ExtractCatalogViews } from './MigrationConverter.js';
+export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL, RefreshViewWarnings, ViewsAreHandWritten, ExtractCatalogViews, IsMetadataSyncLog } from './MigrationConverter.js';
 export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities, DiffFieldDefaults, FieldDefaultUpdatesSQL, SplitBakedFile, CaptureOnlyResumeCommand } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
