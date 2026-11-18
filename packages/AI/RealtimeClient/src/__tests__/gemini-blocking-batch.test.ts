@@ -301,6 +301,59 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
         });
 
+        it('expired results queued during a move all go out on resume, then ONE commit (R4-1)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b', 'c');
+            client.SendToolResult('a', '{}'); // the commit is held
+            client['connectionReady'] = false; // the session starts to move
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('c', '{}');
+            vi.advanceTimersByTime(BARRIER_MS); // b and c expire while queued
+
+            client['handleResumed']();
+
+            expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'tool:b', 'tool:c', 'commit']);
+        });
+
+        it('expired results queued during a move all go out on resume without an open turn (R4-1)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b', 'c');
+            client.SendToolResult('a', '{}');
+            client['connectionReady'] = false;
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('c', '{}');
+            vi.advanceTimersByTime(BARRIER_MS);
+
+            client['handleResumed']();
+
+            expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
+        });
+
+        it('a typed turn queued during a move leaves no held commit behind for a later note (R4-2)', async () => {
+            const { client, session } = await connect(BLOCKING);
+            client.SendContextNote('ctx');
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}'); // the commit is held; b is never answered
+            client['connectionReady'] = false;
+            client.SendText('typed during the move'); // queued
+            vi.advanceTimersByTime(BARRIER_MS);
+
+            client['handleResumed']();
+            modelSpeaks(client);
+            turnComplete(client);
+            expect(client['blockingBatchCommitHeld']).toBe(false);
+            const settled = [...session.Wire];
+
+            client.SendContextNote('later note');
+            client['connectionReady'] = false;
+            client['handleResumed']();
+            toolCall(client, 'z'); // never answered
+            vi.advanceTimersByTime(BARRIER_MS);
+
+            expect(session.Wire).toEqual([...settled, 'note:later note']); // no unprompted commit
+        });
+
         it('a backstop that fires during a move keeps the held commit for the new connection (N3)', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
