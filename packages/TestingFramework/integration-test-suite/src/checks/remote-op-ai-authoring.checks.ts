@@ -71,7 +71,7 @@ export const RemoteOpAiAuthoringChecks: NamedCheck[] = [
             const text = readFileSync(join(dir, 'remote_operations.ts'), 'utf8');
             Assert(text.includes(`@RegisterClass(BaseRemotableOperation, "${OP_KEY}")`), 'class is registered under the op key');
             Assert(text.includes('export class TestAIAuthoredCountOperation extends BaseRemotableOperation<AIAuthoredCountInput, AIAuthoredCountOutput>'), 'typed class emitted');
-            Assert(text.includes('protected async InternalExecute(input: AIAuthoredCountInput, provider: IMetadataProvider, user: UserInfo): Promise<AIAuthoredCountOutput>'), 'InternalExecute body emitted');
+            Assert(text.includes('protected async InternalExecute(input: AIAuthoredCountInput, provider: IMetadataProvider, user: UserInfo, context: RemoteOpServerContext): Promise<AIAuthoredCountOutput>'), 'InternalExecute body emitted');
             Assert(text.includes('export interface AIAuthoredCountInput'), 'input type definition emitted');
             console.log('      → emitted a complete @RegisterClass class with the model-authored InternalExecute body');
         }

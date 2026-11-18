@@ -175,6 +175,15 @@ export abstract class BaseBrowserAdapter {
         return [];
     }
 
+    /**
+     * Run a self-contained function (no closure state; it is serialized into the page) against the
+     * live DOM and return its result. Default returns `null` so adapters without a live DOM don't
+     * break; adapters backed by a real page override this. `null` also means the call timed out.
+     */
+    public async EvaluateInPage<R, A>(_fn: (arg: A) => R, _arg: A): Promise<R | null> {
+        return null;
+    }
+
     // ─── Screencast (CDP live viewport feed) ───────────────
 
     /**
@@ -223,6 +232,20 @@ export abstract class BaseBrowserAdapter {
      */
     public async CaptureScreencastFrame(): Promise<void> {
         // No-op default — adapters with an active screencast override this.
+    }
+
+    /**
+     * Resize the browser viewport in place without navigating or reloading the page.
+     *
+     * Default implementation is a no-op resolve so callers can invoke it safely across adapters.
+     * Adapters backed by a live browser page (e.g. {@link PlaywrightBrowserAdapter}) override this
+     * to update their viewport configuration and resize the open page.
+     *
+     * @param _width - Target viewport width in CSS pixels.
+     * @param _height - Target viewport height in CSS pixels.
+     */
+    public async SetViewportSize(_width: number, _height: number): Promise<void> {
+        // No-op default — adapters with a live page override this.
     }
 
     // ─── Audio capture (in-page tab-audio feed) ────────────

@@ -56,18 +56,21 @@ export interface CustomWindowData {
                     <button
                         (click)="Minimize()"
                         title="Minimize"
-                        class="window-action-btn">
+                        aria-label="Minimize"
+                        class="window-action-btn window-action-btn--minimize">
                         <i class="fa-solid fa-window-minimize"></i>
                     </button>
                     <button
                         (click)="ToggleMaximize()"
                         [title]="IsMaximized ? 'Restore' : 'Maximize'"
-                        class="window-action-btn">
+                        [attr.aria-label]="IsMaximized ? 'Restore' : 'Maximize'"
+                        class="window-action-btn window-action-btn--maximize">
                         <i class="fa-solid" [class.fa-window-maximize]="!IsMaximized" [class.fa-window-restore]="IsMaximized"></i>
                     </button>
                     <button
                         (click)="CloseButtonClick()"
                         title="Close"
+                        aria-label="Close"
                         class="window-action-btn">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
@@ -186,6 +189,20 @@ export interface CustomWindowData {
         /* Hide the default close button since we have custom titlebar actions */
         :host ::ng-deep .mj-window-close {
             display: none;
+        }
+
+        /* Phone: mj-window is already full-screen, so Minimize (docking) and Maximize / Restore do
+           nothing useful; Close is the one control left, at 44px. */
+        @media (max-width: 768px) {
+            .window-action-btn--minimize,
+            .window-action-btn--maximize {
+                display: none;
+            }
+
+            .window-action-btn {
+                min-width: 44px;
+                min-height: 44px;
+            }
         }
     `]
 })

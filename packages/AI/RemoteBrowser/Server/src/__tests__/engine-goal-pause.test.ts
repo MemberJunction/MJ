@@ -102,4 +102,23 @@ describe('RemoteBrowserEngine — Collaborative pause on human takeover', () => 
     expect(state.aborted).toBe(true);
     expect(result.Status).toBe('Aborted');
   });
+  it('detaches its abort listener from the caller Signal once the goal settles', async () => {
+    const engine = RemoteBrowserEngine.Instance;
+    const { session } = makeBlockingSession();
+    injectHandle(engine, SESSION_ID, AGENT_SESSION_ID, session);
+
+    const external = new AbortController();
+    const addSpy = vi.spyOn(external.signal, 'addEventListener');
+    const removeSpy = vi.spyOn(external.signal, 'removeEventListener');
+    const goalPromise = engine.AchieveGoal(AGENT_SESSION_ID, 'log in', { Signal: external.signal });
+    await vi.waitFor(() => expect(session.RunComputerUseGoal).toHaveBeenCalled());
+
+    // End the goal via the human-takeover path (not via the caller's signal).
+    (engine as any).activeGoalAborts.get(SESSION_ID.toLowerCase()).abort();
+    await goalPromise;
+
+    const added = addSpy.mock.calls.find((c) => c[0] === 'abort')?.[1];
+    expect(added).toBeDefined();
+    expect(removeSpy).toHaveBeenCalledWith('abort', added);
+  });
 });

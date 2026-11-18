@@ -27,7 +27,8 @@ export interface RecordingUploadOptions {
     /**
      * Send with `keepalive` so the request survives page unload. Only for shards sealed inside a
      * `pagehide`/`visibilitychange` handler: the browser caps in-flight keepalive bodies (64 KiB per
-     * page), and a request over that budget is refused — which resolves false like any failure.
+     * page), and the browser rejects a request over that budget before sending it — which resolves
+     * `Retry` like any network failure (not `Refused`: the server never saw it).
      */
     Keepalive?: boolean;
 }

@@ -1,0 +1,299 @@
+/**
+ * The governor, wired to one run.
+ *
+ * `MemoryGovernor` decides; this applies. It is split that way because the decision is the part
+ * worth testing and the application is the part that needs a live sync, and mixing them means
+ * neither can be exercised without the other.
+ *
+ * WHY PER BATCH AND NOT PER TABLE. The engine already measured pressure between entity maps, which
+ * is the right place for a WARNING and the wrong place for a DECISION: a table that fetches twelve
+ * consecutive 2,000-record pages allocates all of it without ever reaching a boundary. On the
+ * sandbox on 2026-09-14 that was the difference between noticing and dying — the process was
+ * killed at 3,478 MB of 3,830 MB with the between-tables check never getting a turn.
+ *
+ * ONE PER RUN, never shared. The engine is a singleton across concurrent syncs, so calibration and
+ * shed state held on it would have one connection's behaviour throttling another's.
+ */
+import { ReadResourcePressure } from './ResourcePressure.js';
+import {
+    PlanShedding, Calibrate, EstimateEntityMapBytes, BatchSizeLever, ResolveThresholds, PressureBytes,
+    type Contributor, type Lever, type SheddingPlan, type GovernorReading
+} from './MemoryGovernor.js';
+
+export interface RunMemoryControlHooks {
+    /** Stop the in-flight cap from growing. Free: costs nothing already running. */
+    HoldAdmissions(): void;
+    /** Halve the in-flight cap, floored at 1. */
+    ReduceConcurrency(): void;
+    /**
+     * How many maps the layer is currently allowed to run at once.
+     *
+     * Asked rather than passed, because it is the CURRENT cap and the governor itself moves it —
+     * a value captured when the batch started would be stale by the time the next decision uses it.
+     */
+    CurrentInFlight(): number;
+    /** Report what was done, once per pressure episode. */
+    Report(plan: SheddingPlan): void;
+    /** Let the in-flight cap grow again once the host has recovered. Optional: without it the hold stands. */
+    ReleaseAdmissions?(): void;
+    /** The clock decisions are paced by. `Date.now` when absent; a test supplies its own. */
+    Now?(): number;
+}
+
+/** Below this a batch is too small to be worth sampling, and the estimate would be noise. */
+const MIN_SAMPLE_RECORDS = 1;
+
+/**
+ * The smallest page this will ask for.
+ *
+ * Shrinking without a floor converges on one record per round trip, which frees no more memory
+ * than a sane page and turns a sync into a latency test. 25 is small enough to matter and large
+ * enough that the request overhead still amortises.
+ */
+export const MIN_BATCH_SIZE = 25;
+
+/**
+ * The shortest gap between two decisions in one run.
+ *
+ * Every in-flight map calls NoteBatch after every page, so without a gap one pressure reading was acted
+ * on once per map per page: five maps took the in-flight cap to 1 and the page from 200 to 25 within
+ * seconds, before the first cut could free anything. One step, then wait long enough for it to show in
+ * the reading. The same gap paces the release, one step at a time.
+ */
+export const DECISION_INTERVAL_MS = 10_000;
+
+/**
+ * Bytes per record, from one sample.
+ *
+ * Deliberately crude: stringify ONE record and double it, because a JS string is UTF-16 in memory
+ * and a parsed object carries per-property overhead beyond its serialised form. It will be wrong.
+ * That is tolerable only because `Calibrate` measures the error against real RSS movement and
+ * corrects it — without that feedback this number would be superstition. Never stringify the whole
+ * batch: measuring the memory problem must not become one.
+ */
+export function EstimateBytesPerRecord(sample: unknown): number {
+    try {
+        const json = JSON.stringify(sample);
+        return json ? json.length * 2 : 0;
+    } catch {
+        // Circular or unserialisable — no estimate is better than a wrong one.
+        return 0;
+    }
+}
+
+export class RunMemoryControl {
+    private calibration = 1;
+    private pendingProjection = 0;
+    private pressureAtDecision: number | null = null;
+    private reported = false;
+    private lastDecisionAt: number | null = null;
+    /** Whether anything taken is still outstanding — the hold, or a page below the configured size. */
+    private shedding = false;
+    private readonly initialBatchSize: number;
+
+    private batchSize: number;
+    /**
+     * The smallest page shrinking may reach.
+     *
+     * `min` of the default floor and the CONFIGURED size, never `max`. A floor applied to the
+     * initial value would silently RAISE a deliberately small batch size — which is a real setting,
+     * used by connectors with huge rows and by tests that pin the pagination rule — and raising it
+     * would both change fetch behaviour and stop an over-size batch from reading as over-size.
+     */
+    private readonly floor: number;
+
+    constructor(
+        private readonly hooks: RunMemoryControlHooks,
+        initialBatchSize: number
+    ) {
+        this.batchSize = initialBatchSize;
+        this.initialBatchSize = initialBatchSize;
+        this.floor = Math.max(1, Math.min(MIN_BATCH_SIZE, initialBatchSize));
+    }
+
+    /**
+     * The page size this run should ask for, which is NOT the engine's field.
+     *
+     * Per-run because the engine is a singleton: shrinking a shared field would make one
+     * connection's misbehaviour set every other connection's page size for as long as the process
+     * lived.
+     */
+    public get BatchSize(): number {
+        return this.batchSize;
+    }
+
+    /** The live calibration factor, for tests and for the run stream. */
+    public get Calibration(): number {
+        return this.calibration;
+    }
+
+    /**
+     * Whether something this control took is still outstanding — the hold, or a page below the
+     * configured size.
+     *
+     * While it is, this control owns the run's response to memory pressure: it chose its levers
+     * by cost and escalates on its own if the host stays above the line. The engine's per-map
+     * pressure check defers to it, so a second, unranked halving does not override a hold.
+     */
+    public get IsShedding(): boolean {
+        return this.shedding;
+    }
+
+    /**
+     * Called after every fetched batch.
+     *
+     * Never throws and never blocks the sync: a governor that can fail a run is worse than no
+     * governor, because it turns an occasional memory problem into a constant availability one.
+     */
+    public async NoteBatch(opts: {
+        EntityMapID: string;
+        ObservedRecords: number;
+        SampleRecord: unknown;
+        HonoursBatchSize: boolean;
+    }): Promise<SheddingPlan | null> {
+        try {
+            // One decision per window, whichever map asks.
+            const now = this.hooks.Now ? this.hooks.Now() : Date.now();
+            if (this.lastDecisionAt !== null && now - this.lastDecisionAt < DECISION_INTERVAL_MS) return null;
+
+            const reading = await this.read();
+            if (!reading) return null;
+            const pressure = PressureBytes(reading);
+
+            // Close the loop on the PREVIOUS decision before making a new one: how much did the
+            // last shed actually free? Done first so this batch's plan uses a corrected model.
+            if (this.pendingProjection > 0 && this.pressureAtDecision !== null) {
+                this.calibration = Calibrate(
+                    this.calibration,
+                    this.pendingProjection,
+                    this.pressureAtDecision - pressure
+                );
+                this.pendingProjection = 0;
+                this.pressureAtDecision = null;
+            }
+
+            const t = ResolveThresholds();
+            const plan = PlanShedding(reading, this.inventory(opts), this.calibration, t.ShedAbove, t.ShedDownTo);
+            if (plan.Levers.length === 0 && !plan.Exhausted) {
+                if (this.shedding && reading.HostTotalBytes && pressure / reading.HostTotalBytes < t.ShedDownTo) {
+                    this.recover(now);
+                }
+                return plan;
+            }
+
+            this.apply(plan);
+            this.lastDecisionAt = now;
+            this.shedding = true;
+            if (plan.ProjectedFreedBytes > 0) {
+                this.pendingProjection = plan.ProjectedFreedBytes;
+                this.pressureAtDecision = pressure;
+            }
+            if (!this.reported) {
+                this.reported = true;
+                this.hooks.Report(plan);
+            }
+            return plan;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Give back one step of what was taken, once the host is under the release line.
+     *
+     * Every lever is marked Reversible, and nothing used to reverse any of them: the hold stopped the
+     * cap growing for the rest of the run and the page stayed at its floor — 25 records a page for 75
+     * minutes while 711 maps never got a slot. Releasing the hold lets the concurrency controller ramp
+     * again on clean maps; the page doubles back towards what was configured. Fully restored, the next
+     * episode is a new one and is reported again.
+     */
+    private recover(now: number): void {
+        this.hooks.ReleaseAdmissions?.();
+        this.batchSize = Math.min(this.initialBatchSize, this.batchSize * 2);
+        this.lastDecisionAt = now;
+        if (this.batchSize >= this.initialBatchSize) {
+            this.shedding = false;
+            this.reported = false;
+        }
+    }
+
+    private async read(): Promise<GovernorReading | null> {
+        const r = await ReadResourcePressure();
+        if (r.HostMemTotalBytes === null) return null;
+        return {
+            ResidentBytes: r.ResidentBytes,
+            HostTotalBytes: r.HostMemTotalBytes,
+            HostAvailableBytes: r.HostMemAvailableBytes
+        };
+    }
+
+    /**
+     * What is holding memory right now, as best this process can tell.
+     *
+     * The current map's batch is modelled from the records ACTUALLY returned — the gap between
+     * that and what was requested is the whole point. Other in-flight maps are assumed to cost the
+     * same, which is wrong in detail and right in aggregate: they are running the same connector
+     * against the same-shaped source, and calibration absorbs the rest.
+     */
+    private inventory(opts: {
+        EntityMapID: string;
+        ObservedRecords: number;
+        SampleRecord: unknown;
+        HonoursBatchSize: boolean;
+    }): Contributor[] {
+        if (opts.ObservedRecords < MIN_SAMPLE_RECORDS) return [];
+        const perRecord = EstimateBytesPerRecord(opts.SampleRecord);
+        const thisMap = EstimateEntityMapBytes(opts.ObservedRecords, perRecord);
+        if (thisMap <= 0) return [];
+
+        const others = Math.max(0, this.hooks.CurrentInFlight() - 1);
+        const levers: Lever[] = [
+            {
+                Code: 'HOLD_ADMISSIONS',
+                ContributorID: opts.EntityMapID,
+                // Frees nothing resident — it prevents the NEXT allocation. Valued at one map so it
+                // ranks first (cost 0) without over-promising what it recovers.
+                FreesBytes: others > 0 ? thisMap : Math.floor(thisMap / 2),
+                ThroughputCost: 0,
+                LatencyBatches: 0,
+                Reversible: true
+            },
+            BatchSizeLever(opts.EntityMapID, thisMap, opts.HonoursBatchSize)
+        ];
+        if (others > 0) {
+            levers.push({
+                Code: 'REDUCE_CONCURRENCY',
+                ContributorID: 'layer',
+                // Halving the cap releases roughly half of what the OTHER maps hold, as they drain.
+                FreesBytes: Math.floor((others * thisMap) / 2),
+                ThroughputCost: 0.5,
+                LatencyBatches: 1,
+                Reversible: true
+            });
+        }
+        return [
+            { ID: opts.EntityMapID, Kind: 'entity-map', EstimatedBytes: thisMap * (others + 1), Levers: levers }
+        ];
+    }
+
+    private apply(plan: SheddingPlan): void {
+        for (const lever of plan.Levers) {
+            switch (lever.Code) {
+                case 'HOLD_ADMISSIONS':
+                    this.hooks.HoldAdmissions();
+                    break;
+                case 'REDUCE_CONCURRENCY':
+                    this.hooks.ReduceConcurrency();
+                    break;
+                case 'SHRINK_BATCH':
+                    this.batchSize = Math.max(this.floor, Math.floor(this.batchSize / 2));
+                    break;
+                default:
+                    // FLUSH_ACCUMULATOR / DROP_HASH_PREFETCH / PAUSE_OTHER_SYNC are modelled but not
+                    // yet reachable from here. Silently ignoring one would make the plan a lie, so
+                    // the inventory above never offers them.
+                    break;
+            }
+        }
+    }
+}

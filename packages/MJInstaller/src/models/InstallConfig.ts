@@ -121,9 +121,10 @@ export interface InstallConfig {
    * Authentication provider selection.
    * - `'entra'` — Microsoft Entra (MSAL) authentication.
    * - `'auth0'` — Auth0 authentication.
+   * - `'local'` — Local development mock JWT authentication (localhost only, never for production).
    * - `'none'` — skip authentication setup (default for fresh installs).
    */
-  AuthProvider: 'entra' | 'auth0' | 'none';
+  AuthProvider: 'entra' | 'auth0' | 'local' | 'none';
 
   /**
    * Provider-specific configuration values (e.g., TenantID, ClientID, Domain).
@@ -143,6 +144,9 @@ export interface InstallConfig {
 
   /** Mistral API key for AI features. Leave blank to skip. */
   MistralKey?: string;
+
+  /** Google Gemini API key for AI features. Leave blank to skip. */
+  GeminiKey?: string;
 
   /**
    * Base64-encoded 32-byte encryption key used for MJ field-level encryption.
@@ -228,6 +232,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_OPENAI_KEY',        Field: 'OpenAIKey',        Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_ANTHROPIC_KEY',     Field: 'AnthropicKey',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_GEMINI_KEY',        Field: 'GeminiKey',        Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MODE',              Field: 'InstallMode',       Parse: (v) => v as InstallConfig['InstallMode'] },
   { EnvVar: 'MJ_INSTALL_PACKAGE_MANAGER',   Field: 'PackageManager',    Parse: (v) => v as InstallConfig['PackageManager'] },
@@ -338,7 +343,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
   'DatabaseAdminUser', 'DatabaseAdminPassword',
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
-  'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
+  'OpenAIKey', 'AnthropicKey', 'MistralKey', 'GeminiKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
   'PackageManager',
 ]);
 
@@ -363,6 +368,7 @@ const LEGACY_KEY_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   openAIAPIKey: 'OpenAIKey',
   anthropicAPIKey: 'AnthropicKey',
   mistralAPIKey: 'MistralKey',
+  geminiAPIKey: 'GeminiKey',
 });
 
 /**
@@ -517,11 +523,13 @@ function applyLegacyAuthKey(
   authValues: Record<string, string>
 ): void {
   if (key === 'authType' && typeof value === 'string') {
-    const upper = value.toUpperCase();
+    const upper = value.trim().toUpperCase();
     if (upper === 'MSAL' || upper === 'ENTRA') {
       config.AuthProvider = 'entra';
     } else if (upper === 'AUTH0') {
       config.AuthProvider = 'auth0';
+    } else if (upper === 'LOCAL') {
+      config.AuthProvider = 'local';
     } else if (upper === 'NONE' || value === '') {
       config.AuthProvider = 'none';
     }

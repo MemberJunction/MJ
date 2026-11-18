@@ -31,6 +31,9 @@ export const HANDOFF_OFFER_RETENTION_MS = 5 * 60_000;
 /** The most pending offers one person can have at once; a flood of offers is refused rather than queued. */
 export const MAX_PENDING_OFFERS_PER_USER = 10;
 
+/** How often the registry's background sweep expires overdue offers, unless the host changes it ({@link HandoffOfferRegistry.StartPeriodicSweep}). */
+export const HANDOFF_OFFER_SWEEP_INTERVAL_MS = 15_000;
+
 /** What the registry stores for one offer. */
 export interface HandoffOfferRecord {
     OfferID: string;
@@ -119,12 +122,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
 
     protected constructor() {
         super();
-        this.sweepTimer = setInterval(() => {
-            void this.Sweep().catch((e) => {
-                LogError(`[HandoffOfferRegistry] periodic sweep failed: ${e instanceof Error ? e.message : String(e)}`);
-            });
-        }, 15_000);
-        (this.sweepTimer as { unref?: () => void }).unref?.();
+        this.StartPeriodicSweep(HANDOFF_OFFER_SWEEP_INTERVAL_MS);
     }
 
     /** The process-wide registry. */
@@ -137,7 +135,31 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         this.deps = { ...this.deps, ...deps };
     }
 
-    /** Stops the periodic background sweep timer (shutdown, tests). */
+    /**
+     * (Re)starts the periodic background sweep on `intervalMs`, replacing any running one. The sweep
+     * reads `MJ: Interaction Offers` for pending offers past their expiry, so a host that wants an idle
+     * process to send no periodic queries calls {@link StopPeriodicSweep} instead. Offers still read as
+     * expired without it: every read checks `ExpiresAt`.
+     */
+    public StartPeriodicSweep(intervalMs: number): void {
+        if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+            throw new Error(`HandoffOfferRegistry.StartPeriodicSweep: intervalMs must be a finite number greater than 0, got ${String(intervalMs)}`);
+        }
+        this.StopPeriodicSweep();
+        this.sweepTimer = setInterval(() => {
+            void this.Sweep().catch((e) => {
+                LogError(`[HandoffOfferRegistry] periodic sweep failed: ${e instanceof Error ? e.message : String(e)}`);
+            });
+        }, intervalMs);
+        (this.sweepTimer as { unref?: () => void }).unref?.();
+    }
+
+    /** Whether the periodic background sweep is scheduled (diagnostics, tests). */
+    public get IsPeriodicSweepScheduled(): boolean {
+        return this.sweepTimer !== undefined;
+    }
+
+    /** Stops the periodic background sweep timer (shutdown, tests, or a host that turned it off). */
     public StopPeriodicSweep(): void {
         if (this.sweepTimer) {
             clearInterval(this.sweepTimer);

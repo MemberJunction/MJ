@@ -1,18 +1,27 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
-import { GroupByUUID, RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validation';
+import {
+    CreateLiveSheetHelperForProvider,
+    LiveSheetClientToolHelper,
+    type LiveSheetJsonObject,
+    type LiveSheetJsonValue,
+    type LiveSheetToolResult,
+} from '../shared/live-sheet-client-tool.helper';
 import {
     DEFAULT_QUERY_MAX_ROWS,
     QUERY_MAX_ROWS_HARD_CAP,
@@ -230,6 +239,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public IsSavingDrawer = false;
     public DrawerNameError = false;
     public DrawerSaveError: string | null = null;
+    /** Why the drawer's last save was refused, one finding per rule the SQL broke. */
+    public DrawerSaveDiagnostics: QueryDiagnosticLine[] = [];
 
     /** Ordered status options for the drawer dropdown — all valid Query statuses */
     public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
@@ -475,6 +486,46 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 },
                 Handler: async (params: Record<string, unknown>) => this.handlePageQueryResultsTool(params),
             },
+            {
+                Name: 'CreateLiveSheetFromQuery',
+                Description: 'Create a new collaborative Excel Spreadsheet artifact populated with a live-linked SavedQuery table backed by an Approved stored query (by NAME or ID). Returns ArtifactID, VersionID, SheetName, BoundingRange, and RowCount so it can be opened directly in the ArtifactWorkspace.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        title: { type: 'string', description: 'Optional spreadsheet artifact title' },
+                        sheetName: { type: 'string', description: 'Optional worksheet tab name (defaults to Query Data)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                        existingArtifactId: {
+                            type: 'string',
+                            description: 'Optional existing Excel Spreadsheet artifact ID to populate instead of creating a new artifact',
+                        },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params) => this.handleCreateLiveSheetFromQueryTool(params),
+            },
+            {
+                Name: 'AppendQueryToLiveSheet',
+                Description: 'Append a live-linked SavedQuery table backed by an Approved stored query onto an existing collaborative Excel Spreadsheet artifact (creating the target worksheet tab if it does not exist yet). Returns updated VersionID, VersionNumber, SheetName, BoundingRange, and RowCount.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        artifactId: { type: 'string', description: 'Target Excel Spreadsheet artifact ID' },
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        sheetName: { type: 'string', description: 'Target worksheet tab name (created if missing)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                    },
+                    required: ['artifactId', 'query'],
+                },
+                Handler: async (params) => this.handleAppendQueryToLiveSheetTool(params),
+            },
         ]);
     }
 
@@ -709,6 +760,154 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.publishAgentContext();
         }
         return { ...exec, PageNumber: pageNumber, PageSize: pageSize };
+    }
+
+    private toLiveSheetJsonValue(
+        value: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0][string],
+    ): LiveSheetJsonValue {
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+        ) {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => this.toLiveSheetJsonValue(item));
+        }
+        if (typeof value === 'object') {
+            const out: LiveSheetJsonObject = {};
+            for (const [k, v] of Object.entries(value)) {
+                out[k] = this.toLiveSheetJsonValue(v);
+            }
+            return out;
+        }
+        return String(value);
+    }
+
+    private toLiveSheetParameters(
+        raw: ReturnType<typeof NormalizeQueryParameters>,
+    ): LiveSheetJsonObject | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        const out: LiveSheetJsonObject = {};
+        for (const [k, v] of Object.entries(raw)) {
+            out[k] = this.toLiveSheetJsonValue(v);
+        }
+        return out;
+    }
+
+    private prepareApprovedQuerySheetContext(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ):
+        | {
+            ok: true;
+            query: MJQueryEntityExtended;
+            helper: LiveSheetClientToolHelper;
+            title?: string;
+            sheetName?: string;
+            tableTitle?: string;
+            anchorCell?: string;
+            existingArtifactId?: string;
+            maxRows?: number;
+            parameters?: LiveSheetJsonObject;
+          }
+        | { ok: false; result: LiveSheetToolResult } {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        const resolved = this.resolveRunnableQuery(raw);
+        if (!resolved.ok) {
+            return { ok: false, result: { Success: false, ErrorMessage: resolved.result.ErrorMessage } };
+        }
+        if (resolved.query.Status !== 'Approved') {
+            return {
+                ok: false,
+                result: {
+                    Success: false,
+                    ErrorMessage: `Query "${resolved.query.Name}" has Status="${resolved.query.Status}". Only Approved queries can populate a live sheet.`,
+                },
+            };
+        }
+        const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.metadata.CurrentUser);
+        if (!helper) {
+            return {
+                ok: false,
+                result: { Success: false, ErrorMessage: 'GraphQL provider or signed-in user context is unavailable.' },
+            };
+        }
+        const opt = (key: string): string | undefined => {
+            const v = params?.[key];
+            return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+        };
+        return {
+            ok: true,
+            query: resolved.query,
+            helper,
+            title: opt('title'),
+            sheetName: opt('sheetName'),
+            tableTitle: opt('tableTitle'),
+            anchorCell: opt('anchorCell'),
+            existingArtifactId: opt('existingArtifactId'),
+            maxRows: typeof params?.['MaxRows'] === 'number'
+                ? NormalizeMaxRows(params['MaxRows'], DEFAULT_QUERY_MAX_ROWS)
+                : undefined,
+            parameters: this.toLiveSheetParameters(NormalizeQueryParameters(params?.['Parameters'])),
+        };
+    }
+
+    private async handleCreateLiveSheetFromQueryTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.CreateLiveSheetFromQuery({
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            Title: ctx.title,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+            ExistingArtifactID: ctx.existingArtifactId,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
+    }
+
+    private async handleAppendQueryToLiveSheetTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
+        const artifactVal = ValidateStringParam(params?.['artifactId'], 'artifactId');
+        if (!artifactVal.ok) {
+            return { Success: false, ErrorMessage: artifactVal.result.ErrorMessage };
+        }
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.AppendQueryToLiveSheet({
+            ArtifactID: artifactVal.value,
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
     }
 
     /**
@@ -1293,6 +1492,93 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return entity.GetUserPermisions(this.metadata.CurrentUser).CanCreate;
     }
 
+    // ========================================
+    // Refresh metadata (the selected query, a category, or all)
+    // ========================================
+
+    public ShowRefreshDialog = false;
+    public RefreshScope: QueryRefreshScope | null = null;
+    public RefreshScopeLabel = '';
+
+    /** Refreshes the metadata of one query (the selected one). */
+    public OpenRefreshForQuery(query: MJQueryEntityExtended): void {
+        this.openRefresh({ Kind: 'Queries', QueryIDs: [query.ID] }, `Query “${query.Name}”`);
+    }
+
+    /** Refreshes the metadata of every query in a category and the categories below it. */
+    public OpenRefreshForCategory(node: CategoryNode, event?: Event): void {
+        event?.stopPropagation();
+        const path = this.categoryPathOf(node.category);
+        if (!path) return;
+        this.openRefresh({ Kind: 'Category', CategoryPath: path }, `Category “${path}” and its subcategories`);
+    }
+
+    /** Refreshes the metadata of every query the user can read. */
+    public OpenRefreshForAll(): void {
+        this.openRefresh({ Kind: 'All' }, 'All queries');
+    }
+
+    public OnRefreshDialogClosed(): void {
+        this.ShowRefreshDialog = false;
+        this.cdr.markForCheck();
+    }
+
+    /** A refresh was applied: reload the list, keeping the selected query selected. */
+    public async OnRefreshApplied(): Promise<void> {
+        const selectedID = this.SelectedQuery?.ID ?? null;
+        await this.loadData(true);
+        if (selectedID) {
+            const refreshed = this.Queries.find(q => UUIDsEqual(q.ID, selectedID));
+            if (refreshed) this.SelectedQuery = refreshed;
+        }
+        this.cdr.markForCheck();
+    }
+
+    /** A query named in the refresh report: close the dialog and select it. */
+    public OnRefreshOpenQuery(queryID: string): void {
+        const query = this.Queries.find(q => UUIDsEqual(q.ID, queryID));
+        this.ShowRefreshDialog = false;
+        if (query) {
+            this.expandCategoryForQuery(query);
+            this.SelectQuery(query);
+        }
+        this.cdr.markForCheck();
+    }
+
+    private openRefresh(scope: QueryRefreshScope, label: string): void {
+        this.RefreshScope = scope;
+        this.RefreshScopeLabel = label;
+        this.ShowRefreshDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    /** A category's full path (`Parent/Child`), as the refresh operation selects categories. */
+    private categoryPathOf(category: MJQueryCategoryEntity): string {
+        const byID = IndexByUUID(this.Categories);
+        const segments: string[] = [];
+        const seen = new UUIDSet();
+        let current: MJQueryCategoryEntity | undefined = category;
+        while (current && !seen.Has(current.ID)) {
+            seen.Add(current.ID);
+            segments.unshift(current.Name);
+            current = current.ParentID ? byID.Get(current.ParentID) : undefined;
+        }
+        return segments.join('/');
+    }
+
+    /**
+     * Shows why a drawer save failed: the server's findings (rule code, line, column, fix) when the
+     * query's rules refused it, otherwise the server's message.
+     */
+    private showDrawerSaveFailure(message: string | null | undefined): void {
+        const parsed = ParseQuerySaveMessage(message);
+        const isRuleRefusal = parsed.Diagnostics.some(d => d.Code !== null);
+        this.DrawerSaveDiagnostics = isRuleRefusal ? [...parsed.Diagnostics] : [];
+        this.DrawerSaveError = isRuleRefusal
+            ? (parsed.Headline ?? 'The query was not saved:')
+            : (message?.trim() || 'Save failed. Please check your inputs and try again.');
+    }
+
     /** True when the current user has permission to edit queries. */
     public get CanEditQuery(): boolean {
         const entity = this.metadata.EntityByName('MJ: Queries');
@@ -1325,6 +1611,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
@@ -1347,6 +1634,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
@@ -1414,6 +1702,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public async SaveDrawer(): Promise<void> {
         this.DrawerNameError = !this.DrawerName.trim();
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         if (this.DrawerNameError) {
             this.cdr.markForCheck();
             return;
@@ -1452,7 +1741,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                     this.UpdateQueryParams({ queryId: refreshed.ID });
                 }
             } else {
-                this.DrawerSaveError = 'Save failed. Please check your inputs and try again.';
+                this.showDrawerSaveFailure(entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage);
             }
         } catch (e) {
             console.error('Error saving query:', e);

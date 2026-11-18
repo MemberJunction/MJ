@@ -20,4 +20,6 @@ export interface PredictiveStudioRunFeaturePipelineInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored scope. */
     scope?: PredictiveStudioFeaturePipelineScope;
+    /** Overwrite values a person entered on the pipeline's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }

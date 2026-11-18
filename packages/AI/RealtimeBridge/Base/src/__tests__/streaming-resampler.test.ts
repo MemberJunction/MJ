@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { StreamingResampler, ResamplePcm16 } from '../audio/index';
+import { CUTOFF_FRACTION_OF_TARGET_RATE, StreamingResampler, ResamplePcm16 } from '../audio/index';
 
 function Sine(freq: number, rate: number, count: number, amplitude = 10000): Int16Array {
     const out = new Int16Array(count);
@@ -126,5 +126,95 @@ describe('StreamingResampler', () => {
         r.Reset();
         const again = r.Process(Sine(500, 8000, 160));
         expect(Array.from(again)).toEqual(Array.from(first));
+    });
+
+    it('produces bit-identical output to full-convolution lowPass + interpolate across multi-frame streams', () => {
+        const filterTaps = 65;
+        const buildTaps = (cutoffHz: number, sampleRate: number): Float64Array => {
+            const taps = new Float64Array(filterTaps);
+            const fc = cutoffHz / sampleRate;
+            const mid = (filterTaps - 1) / 2;
+            let sum = 0;
+            for (let n = 0; n < filterTaps; n++) {
+                const x = n - mid;
+                const sinc = x === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * x) / (Math.PI * x);
+                const hamming = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (filterTaps - 1));
+                taps[n] = sinc * hamming;
+                sum += taps[n];
+            }
+            for (let n = 0; n < filterTaps; n++) {
+                taps[n] /= sum;
+            }
+            return taps;
+        };
+        const toInt16 = (v: number): number => {
+            const r = Math.round(v);
+            return r > 32767 ? 32767 : r < -32768 ? -32768 : r;
+        };
+        const runReference = (fromRate: number, toRate: number, frames: Int16Array[]): Int16Array => {
+            const step = fromRate / toRate;
+            const taps = toRate < fromRate ? buildTaps(CUTOFF_FRACTION_OF_TARGET_RATE * toRate, fromRate) : null;
+            const history = new Float64Array(filterTaps - 1);
+            let phase = 0;
+            let carry = 0;
+            const outParts: Int16Array[] = [];
+            for (const input of frames) {
+                let samples: ArrayLike<number> = input;
+                if (taps !== null) {
+                    const n = input.length;
+                    const histLen = history.length;
+                    const extended = new Float64Array(histLen + n);
+                    extended.set(history, 0);
+                    for (let i = 0; i < n; i++) extended[histLen + i] = input[i];
+                    const filtered = new Float64Array(n);
+                    for (let i = 0; i < n; i++) {
+                        let acc = 0;
+                        for (let k = 0; k < filterTaps; k++) {
+                            acc += taps[k] * extended[i + histLen - k];
+                        }
+                        filtered[i] = acc;
+                    }
+                    history.set(extended.subarray(n, n + histLen));
+                    samples = filtered;
+                }
+                const n = samples.length;
+                if (n === 0) {
+                    outParts.push(new Int16Array(0));
+                    continue;
+                }
+                const count = phase <= n - 1 ? Math.floor((n - 1 - phase) / step) + 1 : 0;
+                const out = new Int16Array(count);
+                let pos = phase;
+                for (let k = 0; k < count; k++) {
+                    const lowerIdx = Math.floor(pos);
+                    const frac = pos - lowerIdx;
+                    const lower = lowerIdx < 0 ? carry : samples[lowerIdx];
+                    const upperIdx = lowerIdx + 1;
+                    const upper = upperIdx < 0 ? carry : upperIdx < n ? samples[upperIdx] : samples[n - 1];
+                    out[k] = toInt16(lower + (upper - lower) * frac);
+                    pos += step;
+                }
+                phase = pos - n;
+                carry = samples[n - 1];
+                outParts.push(out);
+            }
+            return Concat(outParts);
+        };
+
+        for (const [fromRate, toRate, frameLen] of [
+            [24000, 8000, 480],
+            [16000, 8000, 320],
+            [24000, 16000, 480],
+            [8000, 24000, 160],
+        ] as const) {
+            const signal = new Int16Array(frameLen * 8);
+            for (let i = 0; i < signal.length; i++) {
+                signal[i] = Math.round(12000 * Math.sin((2 * Math.PI * 650 * i) / fromRate) + 4000 * Math.cos((2 * Math.PI * 2100 * i) / fromRate));
+            }
+            const frames = Array.from({ length: 8 }, (_, k) => signal.subarray(k * frameLen, (k + 1) * frameLen));
+            const actual = ProcessInFrames(new StreamingResampler(fromRate, toRate), signal, frameLen);
+            const expected = runReference(fromRate, toRate, frames);
+            expect(Array.from(actual)).toEqual(Array.from(expected));
+        }
     });
 });

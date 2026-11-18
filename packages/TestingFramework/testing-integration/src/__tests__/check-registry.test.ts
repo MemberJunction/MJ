@@ -91,3 +91,28 @@ describe('IntegrationCheckRegistry.RegisterLifecycle', () => {
         expect(reg.GetLifecycle('lcdup')).toBe(first);
     });
 });
+
+describe('IntegrationCheckRegistry skip allowlist', () => {
+    const reg = IntegrationCheckRegistry.Instance;
+
+    it('returns the entry for an allowlisted check and undefined otherwise', () => {
+        reg.AllowSkip({ CheckId: 'allowunit.A', Gate: 'mutation', Reason: 'writes rows' });
+        expect(reg.GetAllowedSkip('allowunit.A')?.Gate).toBe('mutation');
+        expect(reg.GetAllowedSkip('allowunit.missing')).toBeUndefined();
+        expect(reg.GetAllowedSkips().some(e => e.CheckId === 'allowunit.A')).toBe(true);
+    });
+
+    it('accepts the same entry twice but rejects a different entry for the same check', () => {
+        reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key' });
+        expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key' })).not.toThrow();
+        expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'mutation', Reason: 'other' })).toThrow(/allowunit\.B/);
+        expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key', Transport: 'client' })).toThrow(/allowunit\.B/);
+    });
+
+    it('honors Transport scope when resolving an allowlist entry', () => {
+        reg.AllowSkip({ CheckId: 'allowunit.C', Gate: 'not-applicable', Reason: 'server-only transaction leg', Transport: 'client' });
+        expect(reg.GetAllowedSkip('allowunit.C', 'client')?.Gate).toBe('not-applicable');
+        expect(reg.GetAllowedSkip('allowunit.C', 'server')).toBeUndefined();
+        expect(reg.GetAllowedSkip('allowunit.C')?.Transport).toBe('client');
+    });
+});

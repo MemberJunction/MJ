@@ -26,6 +26,8 @@
  * executor.
  */
 
+import type { RunViewParameters } from '@memberjunction/core';
+
 /** One row of a COUNT query, the shape `InternalRunView` already consumes. */
 export interface CountOnlyRow {
     TotalRowCount: number;
@@ -166,8 +168,19 @@ export class CountOnlyBatchCoalescer {
 
 /**
  * True when a RunViews batch qualifies for coalescing: at least two items, and
- * every one of them is `count_only`. Mixed batches keep the per-view path.
+ * every one of them is `count_only` without bound `Parameters` (the coalesced
+ * `UNION ALL` executes as a single parameterless statement). Mixed or parameterized
+ * batches keep the per-view path.
  */
-export function IsCoalescibleCountBatch(params: ReadonlyArray<{ ResultType?: string } | null | undefined>): boolean {
-    return params.length >= 2 && params.every((p) => p?.ResultType === 'count_only');
+export function IsCoalescibleCountBatch(
+    params: ReadonlyArray<{ ResultType?: string; Parameters?: RunViewParameters | null } | null | undefined>,
+): boolean {
+    return (
+        params.length >= 2 &&
+        params.every(
+            (p) =>
+                p?.ResultType === 'count_only' &&
+                !(p.Parameters && Object.keys(p.Parameters).some((k) => p.Parameters![k] !== undefined)),
+        )
+    );
 }

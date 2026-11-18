@@ -16,7 +16,12 @@
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { EscapeSQLString, MJLruCache } from '@memberjunction/global';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    ConversationEngine,
+    MJConversationEntity,
+    MJConversationDetailEntityExtended,
+} from '@memberjunction/core-entities';
 
 /** The conversation `ApplicationScope` values (mirrors the entity union). `'Application'` hides it from the main chat list. */
 export type ConversationApplicationScope = 'Global' | 'Both' | 'Application';
@@ -160,6 +165,7 @@ async function resolveOrCreateConversation(
         Fields: ['ID'],
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
     if (found.Success && found.Results.length > 0) {
@@ -170,7 +176,10 @@ async function resolveOrCreateConversation(
     conversation.NewRecord();
     conversation.UserID = contextUser.ID;
     conversation.Name = `Meeting Room ${roomKey}`;
-    conversation.Type = conversationType;
+    const resolvedTypeId = await resolveConversationTypeIDForSink(conversationType, contextUser);
+    if (resolvedTypeId) {
+        conversation.TypeID = resolvedTypeId;
+    }
     conversation.ExternalID = roomKey;
     conversation.ApplicationScope = scope;
     if (applicationID) {
@@ -184,6 +193,36 @@ async function resolveOrCreateConversation(
     return null;
 }
 
+async function resolveConversationTypeIDForSink(
+    conversationType: string,
+    contextUser: UserInfo,
+): Promise<string | null> {
+    const direct = ConversationEngine.Instance.ResolveConversationTypeID(conversationType);
+    if (direct) {
+        return direct;
+    }
+    const clean = conversationType.trim();
+    if (!clean) {
+        return BUILT_IN_CONVERSATION_TYPE_IDS.MEETING_ROOM;
+    }
+    const rv = new RunView();
+    const res = await rv.RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Conversation Types',
+            ExtraFilter: `Name='${EscapeSQLString(clean)}' OR Code='${EscapeSQLString(clean.toUpperCase())}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        },
+        contextUser,
+    );
+    if (res.Success && res.Results.length > 0) {
+        return res.Results[0].ID;
+    }
+    return BUILT_IN_CONVERSATION_TYPE_IDS.MEETING_ROOM;
+}
+
 /** Writes one `MJ: Conversation Details` row for a transcript line (Role mapped; agent speech attributed). */
 async function writeTranscriptDetail(
     conversationID: string,
@@ -191,8 +230,9 @@ async function writeTranscriptDetail(
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<void> {
-    const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+    const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(CONVERSATION_DETAIL_ENTITY, contextUser);
     detail.NewRecord();
+    detail.MarkServerAuthoredReply(); // the agent's lines are the server's to write
     detail.ConversationID = conversationID;
     // The scribe's own speech is the agent ('AI'); everything it heard (humans + other agents) is 'User'.
     detail.Role = line.IsAgentSpeech ? 'AI' : 'User';
@@ -223,6 +263,7 @@ async function resolveApplicationIdByName(
         ExtraFilter: `Name='${EscapeSQLString(name)}'`,
         Fields: ['ID'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
     if (result.Success && result.Results.length > 0) {

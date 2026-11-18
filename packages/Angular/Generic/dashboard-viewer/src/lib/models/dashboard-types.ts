@@ -9,6 +9,7 @@
  */
 
 import { ResolvedLayoutConfig } from 'golden-layout';
+import type { DashboardProperty, DashboardWire } from './dashboard-properties';
 
 // ========================================
 // Dashboard Configuration
@@ -30,6 +31,13 @@ export interface DashboardConfig {
     layout: ResolvedLayoutConfig | null;
     /** Dashboard-level settings (not per-panel) */
     settings: DashboardSettings;
+    /**
+     * The dashboard's properties: values a host sets once (the viewer's `Properties` input) and each
+     * part maps onto its own inputs (`inputMappings` in the part's config). Absent: none.
+     */
+    Properties?: DashboardProperty[];
+    /** Wires: a part's event sets a dashboard property. Absent: none. */
+    Wires?: DashboardWire[];
 }
 
 /**

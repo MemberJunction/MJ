@@ -58,18 +58,22 @@ import {
 } from './ColumnNormalizer.js';
 import { ColumnClusterer, ClustererInputColumn } from './ColumnClusterer.js';
 import { CreateEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
+import { DefaultEmbeddingProviderFor } from './embedding-provider-default.js';
 
 const AUDIT_COLUMN_PATTERN = /^(modified|created|updated|inserted|changed)(date|at|time|by|on)?$|^rowguid$|^timestamp$|^row_?version$|^__mj_.*$/i;
 const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geometry|hierarchyid|sql_variant)/i;
 
 // ─── Prefilter cardinality cutoffs ───────────────────────────────────────────
 /**
- * A column with fewer than this many distinct values AND a uniqueness ratio below
- * {@link MIN_UNIQUENESS_RATIO} is treated as a low-cardinality categorical (boolean/enum),
- * not an identity-bearing column, and is dropped before clustering.
+ * Minimum distinct values for a column to be identity-bearing. Default 50.
+ *
+ * Raised from 10. At 10, a `payment_method_id` with 33 distinct values over 24,000
+ * rows is an identity-bearing key as far as the prefilter is concerned, and goes on
+ * to become an organic key whose related-record view value-joins a non-unique
+ * category column — an N×N join presented to the user as "related" rows. 50 is the
+ * floor an operator arrived at by post-filtering a real run's output.
  */
-const MIN_DISTINCT_FOR_KEY = 10;
-const MIN_UNIQUENESS_RATIO = 0.001;
+const MIN_DISTINCT_FOR_KEY = 50;
 
 // ─── Embedding-input sample caps ─────────────────────────────────────────────
 /** At most this many sample values are appended to a column's embedding text. */
@@ -114,6 +118,13 @@ export interface SemanticPhaseResult {
         clustersFound: number;
         /** Sub-clusters discarded during the split for falling below minClusterSize / minDistinctTables. */
         clustersDropped: number;
+        /**
+         * Tables never normalized because `tokenBudget` ran out. Non-zero means every count above
+         * is a floor, not a finding: the clusters that would have come from those tables were
+         * never looked for. Reporting a short run as a complete one is how a budget cap becomes a
+         * silent quality regression.
+         */
+        tablesSkippedForBudget: number;
     };
 }
 
@@ -133,15 +144,26 @@ export async function RunSemanticPhase(
         return emptyResult(candidates.length);
     }
 
+    // Resolve the embedding provider BEFORE the paid normalization calls. A vendor with no
+    // embedding driver, or a driver package that is not registered, is a configuration error the
+    // pass cannot get past, so it has to fail here rather than after every table was normalized.
+    const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
+
     // ─── 2. Normalize to business space (LLM per-table) ──────────────────────
     progress('semantic: normalizing column descriptions to business space');
     const tableInputs = groupColumnsByTable(state, candidates);
     const normResult = await new TableNormalizer(aiConfig).normalizeAll(tableInputs, {
         Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
         MaxRetries: config.maxRefinementRetries ?? 2,
+        TokenBudget: config.tokenBudget,
         OnProgress: () => {},
     });
     progress(`semantic: ${normResult.Normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
+    if (normResult.BudgetExhausted) {
+        progress(
+            `semantic: PARTIAL — token budget reached, ${normResult.TablesSkippedForBudget} table(s) not normalized`,
+        );
+    }
 
     if (normResult.Normalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
         return {
@@ -154,12 +176,12 @@ export async function RunSemanticPhase(
                 clustersBeforeSplit: 0,
                 clustersFound: 0,
                 clustersDropped: 0,
+                tablesSkippedForBudget: normResult.TablesSkippedForBudget,
             },
         };
     }
 
     // ─── 3. Embed the normalized descriptions ────────────────────────────────
-    const embedProvider = resolveEmbeddingProvider(config, aiConfig);
     progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
     const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
     const embeddings = await embedProvider.embed(texts);
@@ -214,6 +236,7 @@ export async function RunSemanticPhase(
             clustersBeforeSplit: rawClusters.length,
             clustersFound: clusters.length,
             clustersDropped: dropped,
+            tablesSkippedForBudget: normResult.TablesSkippedForBudget,
         },
     };
 }
@@ -309,9 +332,28 @@ function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConf
                 if (AUDIT_COLUMN_PATTERN.test(col.name)) continue;
                 if (col.statistics) {
                     const distinct = col.statistics.distinctCount ?? 0;
-                    const ratio = col.statistics.uniquenessRatio ?? 0;
-                    // Drop ultra-low-cardinality / near-boolean columns.
-                    if (distinct < MIN_DISTINCT_FOR_KEY && ratio < MIN_UNIQUENESS_RATIO) continue;
+                    // Drop low-cardinality / categorical columns.
+                    //
+                    // This was `distinct < MIN && ratio < MIN` — a conjunction, so a
+                    // column had to fail BOTH tests to be dropped. Clearing either one
+                    // was enough to be treated as identity-bearing, which is why the
+                    // gate never removed anything it was written to remove:
+                    //
+                    //   - a boolean on a 100-row table has distinct=2 (fails) but
+                    //     ratio=0.02 (passes), so the AND is false and it is KEPT;
+                    //   - a `payment_method_id` with 33 distinct over 24,000 rows has
+                    //     ratio=0.0014 (fails at the old floor) but distinct=33
+                    //     (passes at the old floor of 10), so it is KEPT.
+                    //
+                    // Both are categorical, and both have too few distinct values to identify
+                    // anything, so the distinct floor alone drops them.
+                    //
+                    // The uniqueness ratio is not a gate. It is distinct over ALL rows, so it
+                    // reads low for exactly the columns organic keys need as spokes: an
+                    // attendance table with 40,000 members over 2.5M rows has a ratio of 0.016
+                    // on its member_email column, which repeats because each member has many
+                    // rows, not because it is a category.
+                    if (distinct < MIN_DISTINCT_FOR_KEY) continue;
                 }
                 out.push({
                     schema: schema.name,
@@ -482,12 +524,16 @@ interface EmbeddingProviderHandle {
     embed: (texts: string[]) => Promise<Float32Array[]>;
 }
 
-function resolveEmbeddingProvider(
+/** Exported for test: the default this picks is the fix, so it needs to be assertable directly. */
+export function ResolveEmbeddingProvider(
     config: OrganicKeyDetectionConfig,
     aiConfig: AIConfig,
 ): EmbeddingProviderHandle {
     const cfg = config.embedding ?? {};
-    const provider = (cfg.provider ?? 'openai') as EmbeddingProviderName;
+    // No configured provider means "use the vendor whose key we already have". Hardcoding openai
+    // here sent a Gemini key to OpenAIEmbedding under the SHIPPED DEFAULTS — see
+    // DefaultEmbeddingProviderFor.
+    const provider = (cfg.provider ?? DefaultEmbeddingProviderFor(aiConfig.provider)) as EmbeddingProviderName;
     const apiKey = aiConfig.apiKey;
     const impl = CreateEmbeddingProvider({
         provider,
@@ -496,12 +542,20 @@ function resolveEmbeddingProvider(
         Dimensions: cfg.dimensions,
         BatchSize: cfg.batchSize,
         Endpoint: cfg.endpoint,
+        CallTimeoutMs: aiConfig.callTimeoutMs,
     });
     return {
         name: `${provider}:${cfg.model ?? 'default'}`,
         embed: (texts: string[]) => impl.Embed(texts),
     };
 }
+
+/**
+ * Re-export for tests / observability, matching the `TestHooks` convention in Composer.
+ * The selectivity gate is the cheapest and highest-volume filter in the pipeline and is
+ * worth pinning directly rather than through a run that needs an LLM and an embedder.
+ */
+export const TestHooks = { prefilter, MIN_DISTINCT_FOR_KEY };
 
 function emptyResult(columnsInScope: number): SemanticPhaseResult {
     return {
@@ -514,6 +568,7 @@ function emptyResult(columnsInScope: number): SemanticPhaseResult {
             clustersBeforeSplit: 0,
             clustersFound: 0,
             clustersDropped: 0,
+            tablesSkippedForBudget: 0,
         },
     };
 }

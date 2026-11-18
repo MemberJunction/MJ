@@ -26,6 +26,7 @@ export class MJTestRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
         ]);
     }

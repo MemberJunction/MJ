@@ -16,7 +16,7 @@
  *
  * @module @memberjunction/actions-base
  */
-import { UserInfo } from '@memberjunction/core';
+import { type IEntityDataProvider, type IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 
 /** One durable dispatch: which binding, on which record, with what already-redacted inputs. */
@@ -55,6 +55,12 @@ export type DurableEntityActionRequest = {
      */
     RedactedParams: Record<string, unknown>;
     ContextUser: UserInfo;
+    /**
+     * Optional originating provider (typically `entity.ProviderToUse`). When present, a submitter
+     * persists durable task/work-queue rows through this provider so the submission joins the
+     * saving entity's open SQL transaction atomically (committing or rolling back together).
+     */
+    Provider?: IMetadataProvider | IEntityDataProvider;
 };
 
 /** What came of a durable submission. */

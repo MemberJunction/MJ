@@ -212,6 +212,10 @@ describe('virtual entity config wiring (manage-metadata)', () => {
       const keyHandler = (fields: Record<string, Row>) => (sql: string): Row[] => {
          if (sql.includes('FROM [__mj].[Entity]') && sql.includes("BaseTable = 'vwMonthlyRegionSales'")) return [{ ID: VE_ID }];
          if (sql.includes('FROM [__mj].[Entity]') && sql.includes("BaseTable = 'Region'")) return [{ ID: REGION_ID }];
+         // The soft FK's target column, read from the related entity's fields.
+         if (sql.includes('FROM [__mj].[EntityField]') && sql.includes(`'${REGION_ID}'`) && !sql.includes('[Name] =')) {
+            return [{ Name: 'ID', IsPrimaryKey: true, IsUnique: true }];
+         }
          if (sql.includes('FROM [__mj].[EntityField]')) {
             const name = Object.keys(fields).find(n => sql.includes(`'${n}'`));
             return name ? [fields[name]] : [];

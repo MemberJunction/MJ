@@ -10,7 +10,7 @@ import {
     inject,
 } from '@angular/core';
 import { LogError } from '@memberjunction/core';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, AgentModeSettingKey } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -218,7 +218,7 @@ export class ConversationModePickerComponent implements OnInit {
     }
 
     private storageKey(agentID: string): string {
-        return `mj.agentMode.${agentID.toLowerCase()}`;
+        return AgentModeSettingKey(agentID);
     }
 
     @HostListener('document:click', ['$event'])

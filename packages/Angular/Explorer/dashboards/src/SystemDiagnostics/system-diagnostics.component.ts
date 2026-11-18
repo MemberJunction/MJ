@@ -2240,6 +2240,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     private eventToDisplay(e: TelemetryEvent): TelemetryEventDisplay {
+        const unixMs = e.startTime > 1e12 ? e.startTime : TelemetryManager.Instance.TimeOrigin + e.startTime;
         return {
             id: e.id,
             category: e.category,
@@ -2249,7 +2250,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             startTime: e.startTime,
             endTime: e.endTime,
             elapsedMs: e.elapsedMs,
-            timestamp: new Date(e.startTime),
+            timestamp: new Date(unixMs),
             params: e.params
         };
     }
@@ -3097,6 +3098,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     params: string;
                 }) => {
                     const params = e.params ? JSON.parse(e.params) : {};
+                    const unixMs = e.startTime > 1e12 ? e.startTime : TelemetryManager.Instance.TimeOrigin + e.startTime;
                     return {
                         id: e.id,
                         category: e.category as TelemetryCategory,
@@ -3106,7 +3108,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                         startTime: e.startTime,
                         endTime: e.endTime,
                         elapsedMs: e.elapsedMs,
-                        timestamp: new Date(e.startTime),
+                        timestamp: new Date(unixMs),
                         params
                     };
                 });

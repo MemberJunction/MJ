@@ -21,6 +21,7 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'outputValidation', sectionName: 'Output & Validation', isExpanded: true },
             { sectionKey: 'retryFailoverPolicies', sectionName: 'Retry & Failover Policies', isExpanded: true },
             { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AI Agent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentTypesSystemPromptID', sectionName: 'AI Agent Types (System Prompt)', isExpanded: false },
@@ -45,7 +46,8 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentTypesConversationSummaryPromptID', sectionName: 'AI Agent Types (Conversation Summary Prompt ID)', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
-            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false }
+            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false }
         ]);
     }
 }

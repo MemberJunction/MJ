@@ -28,7 +28,7 @@ vi.mock('node:dns', () => {
   };
 });
 
-import { AssertPublicUrl, IsBlockedIPAddress, SSRFError } from '../SSRFGuard.js';
+import { AssertPublicUrl, IsBlockedIPAddress, SafeFetch, SSRFError } from '../SSRFGuard.js';
 
 beforeEach(() => {
   resolutions.clear();
@@ -142,5 +142,55 @@ describe('AssertPublicUrl', () => {
 
   it('fails closed when a hostname does not resolve', async () => {
     await expect(AssertPublicUrl('https://nxdomain.example.com/')).rejects.toBeInstanceOf(SSRFError);
+  });
+});
+
+// =====================================================================
+// SafeFetch — credentials across redirects
+// =====================================================================
+describe('SafeFetch cross-origin redirects', () => {
+  function redirectThenOk(location: string) {
+    const calls: { url: string; headers: unknown }[] = [];
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, headers: init.headers });
+      return calls.length === 1
+        ? new Response(null, { status: 302, headers: { location } })
+        : new Response('ok', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return calls;
+  }
+
+  beforeEach(() => {
+    resolutions.set('source.example.com', ['93.184.216.34']);
+    resolutions.set('elsewhere.example.net', ['93.184.216.35']);
+  });
+
+  it('keeps headers across a redirect by default, as before', async () => {
+    const calls = redirectThenOk('https://elsewhere.example.net/page');
+    await SafeFetch('https://source.example.com/a', { headers: { 'x-api-key': 'secret' } });
+    expect(calls[1].headers).toEqual({ 'x-api-key': 'secret' });
+    vi.unstubAllGlobals();
+  });
+
+  it('drops them when the redirect leaves the origin and the caller asked', async () => {
+    const calls = redirectThenOk('https://elsewhere.example.net/page');
+    await SafeFetch('https://source.example.com/a', {
+      headers: { 'x-api-key': 'secret' },
+      StripHeadersOnCrossOriginRedirect: true,
+    });
+    expect(calls[0].headers).toEqual({ 'x-api-key': 'secret' });
+    expect(calls[1].headers).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps them on a same-origin redirect even when asked to strip', async () => {
+    const calls = redirectThenOk('/b');
+    await SafeFetch('https://source.example.com/a', {
+      headers: { 'x-api-key': 'secret' },
+      StripHeadersOnCrossOriginRedirect: true,
+    });
+    expect(calls[1].headers).toEqual({ 'x-api-key': 'secret' });
+    vi.unstubAllGlobals();
   });
 });

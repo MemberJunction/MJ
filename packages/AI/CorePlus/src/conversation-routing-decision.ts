@@ -11,11 +11,12 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { ApplyPlattCalibration, type ChoiceOption, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
+import { type ChoiceOption, type DecisionAnswer, type DecisionQuestion } from '@memberjunction/ai';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ConversationUtility } from './conversation-utility';
-import { DescribeAnsweringModel, FindDecisionCalibration, type DecisionAnsweringModel, type DecisionModelCalibration } from './decision-calibration';
+import { ApplyPlattCalibration, type PlattCalibration } from '@memberjunction/ai';
+import { DescribeAnsweringModel, type DecisionAnsweringModel, type DecisionCalibrationKey } from './decision-calibration';
 import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 
 /**
@@ -32,7 +33,7 @@ import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
  * network time, and a budget under 300 ms, network included, would give up on more. 350 ms leaves
  * room for the network. The cost is bounded and safe: a call that misses the deadline keeps
  * continuity, as if routing were off; the wait falls only on an unmentioned message in a chat with
- * `EnableDecisionRouting` on, which is off by default; and it is at most this long. LLM Decision, the
+ * `EnableDecisionRouting` on (the default); and it is at most this long. LLM Decision, the
  * failover, answered in about 520 ms at p50, so while Jev is unavailable routing times out and keeps
  * continuity. Revisit the figure, or the plan's budget, once client-side latency is measured.
  */
@@ -42,15 +43,18 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  * The lowest confidence routing acts on. An agent Choice answered below it keeps continuity, and
  * so does an artifact Choice. The thread Likelihood must also be clear of the middle: a message
  * leaves the thread only when its **calibrated** probability of continuing (see
- * {@link ROUTING_CONTINUES_CALIBRATION}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
+ * {@link ROUTING_CONTINUES_CALIBRATION_KEY}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
  *
- * **What the bar means in a chat.** The calibration was fitted on a corpus that is mostly switches
- * (174 switches, 127 continuations), and a chat is mostly continuations. A calibrated 0.30 is a 30%
- * chance that the message continues only at the corpus's mix; at a 90%-continue prior it is about an
- * 84% chance (see {@link ROUTING_CONTINUES_CALIBRATION}). In raw terms, routing leaves the thread when
- * Jev's raw probability is at most about 0.80 (LLM Decision's, about 0.78). Before calibration the
- * bar was a raw 0.30. This value was not chosen for a chat's mix. Routing ships off, and the bar
- * should be set on the prior-weighted figures below before routing is turned on.
+ * **What the bar means in a chat.** The shipped calibration is targeted at a chat's mix: fitted on a
+ * corpus that is mostly switches (174 switches, 127 continuations), then shifted to a 90%-continue
+ * prior (see {@link ROUTING_CONTINUES_CALIBRATION_KEY}). So a calibrated 0.30 is a 30% chance that the
+ * message continues in a chat, and routing leaves the thread only when it is at least 70% likely the
+ * person moved on. In raw terms that is Jev's raw probability at most about 0.50 (LLM Decision's,
+ * about 0.43).
+ *
+ * **Before the shift**, the fits were at the corpus's mix, where the same bar left the thread at a raw
+ * 0.80, which at a chat's mix is an 84% chance the message continues. The figures below were measured
+ * at that old bar, and are why routing shipped off until the shift.
  *
  * **Measured at a calibrated 0.30** in the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), on that
  * corpus. Jev left the thread on 155 points, and 150 of them were real switches. So it caught 86.2%
@@ -77,21 +81,24 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  */
 export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
 
+/** The decision use whose calibrations conversation routing reads. */
+export const DECISION_ROUTING_USE = 'conversation-routing';
+
 /**
- * Platt calibration of the thread Likelihood (`continues`), per decision model, each tied to the
- * exact model it was fitted on (see `FindDecisionCalibration`): the MJ decision model that answered
- * (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). Any other model,
- * including Jev at another version or `LLM Decision` answered by another chat model, is treated as
- * unsure, so routing keeps continuity.
+ * Which calibration the thread Likelihood (`continues`) reads: use `conversation-routing`, question
+ * `continues`, in the answering model's `ModelConfiguration.Decision.Calibrations` (see
+ * `FindDecisionCalibration`). Each fit is tied to the exact model it was fitted on: the MJ decision
+ * model that answered (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). Any
+ * other model, including Jev at another version or `LLM Decision` answered by another chat model, is
+ * treated as unsure, so routing keeps continuity.
  *
- * **Calibrated at the corpus's mix, not a chat's.** Platt's `B` absorbs the base rate of the data it
- * was fitted on: 127 continuations to 174 switches, so 42% of messages continue. A calibrated value
- * is the chance that the message continues when 42% of messages do. Both models' raw answers lean
- * toward "continues": at the corpus's mix, Jev's raw 0.5 is a calibrated 0.03. At a 90%-continue
- * prior, closer to a chat, the calibrated logit gains ln(9 × 174/127) ≈ 2.51. Jev's raw 0.5 is then
- * about 0.30, and the leave bar of a calibrated 0.30 ({@link DECISION_ROUTING_MIN_CONFIDENCE}) is about
- * an 84% chance that the message continues. `B` is kept as fitted; that constant says what the bar
- * does at a chat's mix.
+ * **Calibrated at a chat's mix.** Platt's `B` absorbs the base rate of the data it was fitted on:
+ * 127 continuations to 174 switches, so 42% of messages continue. A chat is mostly continuations, so
+ * the shipped `B` is shifted to a 90%-continue prior: the calibrated logit gains
+ * logit(0.9) − logit(127/301) = ln(9 × 174/127) ≈ 2.5121 (the label-shift correction the
+ * `fit-decision-calibration` rig applies with `--target-prior`). Jev's raw 0.5, a calibrated 0.03 at
+ * the corpus's mix, is a calibrated 0.30 in a chat. The fitted (corpus-mix) values were Jev `B` -3.3506
+ * and LLM Decision `B` -2.9110; `A` is unchanged by the shift.
  *
  * **Where the fits come from.** The Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), cell
  * `production` (the production state layout and question), on the labelled continuity corpus with
@@ -112,40 +119,57 @@ export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
  * - LLM Decision reports its chat model's MJ name, `GPT-OSS-120B`, with no vendor. So its fit also
  *   covers answers served by Groq, which the LLM Decision prompt lists second, though the fit was
  *   measured via Cerebras. This assumes both vendors serve the same model.
- * - After a failover inside the LLM Decision prompt, the resolved model is the one `AIPromptRunner`
- *   first selected, not the one that answered: its `modelInfo` comes from the selected model, and
- *   failover moves only `promptRun.ModelID`. So if both GPT-OSS-120B vendors fail and another chat
- *   model answers, the GPT-OSS-120B fit is applied to that answer. Jev would have to fail first, and
- *   then both vendors, within {@link DECISION_ROUTING_TIMEOUT_MS}, so this is unlikely. The fix
- *   belongs in `AIPromptRunner`: build `modelInfo` from the candidate that answered.
+ * - After a failover inside the LLM Decision prompt, `LLMDecision` reports the chat model that
+ *   answered (the chat run's `ModelID`), not the one `AIPromptRunner` first selected, so a GPT 5.5
+ *   Instant answer is never read with the GPT-OSS-120B fit.
  *
  * Refit, and add the new pair, whenever a model, its version, the question or the state layout
- * changes.
+ * changes. Note: the multi-person path (`AllowNoAgentOption`) adds the `no_agent` option and
+ * speaker-attributed turns; it currently shares the single-user Platt fits until a multi-person eval
+ * corpus is fitted.
+ *
+ * **Where the fits live.** On the `Jev` and `LLM Decision` rows in `metadata/ai-models`, as
+ * `ModelConfiguration.Decision.Calibrations` entries with `Use: 'conversation-routing'` and
+ * `Question: 'continues'`: Jev at `typesafe/jev-1.13-20260917` (`A` 1.7757, `B` -0.8385) and LLM
+ * Decision at `GPT-OSS-120B` (`A` 1.6508, `B` -0.3989), both `B` shifted to a chat's mix.
  */
-export const ROUTING_CONTINUES_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
-    Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 1.7757, B: -3.3506 }) }),
-    Object.freeze({ ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: Object.freeze({ A: 1.6508, B: -2.9110 }) })
-]);
+export const ROUTING_CONTINUES_CALIBRATION_KEY: DecisionCalibrationKey = Object.freeze({
+    Use: DECISION_ROUTING_USE,
+    Question: 'continues',
+});
 
 /**
- * The thread Likelihood's calibrated probability for the model that answered, or null when that
- * exact model has no calibration, whose answer routing then treats as unsure.
+ * The thread Likelihood's calibrated probability, or null when the model that answered has no
+ * calibration, whose answer routing then treats as unsure.
  *
+ * @param calibration The fit for the model that answered: `AIEngineBase.Instance.FindDecisionCalibration(
+ *   ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`, or null when there is none.
  * @param probability The raw `continues` probability.
- * @param answeredBy The decision model that answered and the model behind it.
  */
-export function CalibratedContinuesProbability(probability: number, answeredBy: DecisionAnsweringModel): number | null {
-    const calibration = FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION, answeredBy);
+export function CalibratedContinuesProbability(calibration: PlattCalibration | null | undefined, probability: number): number | null {
     return calibration ? ApplyPlattCalibration(probability, calibration) : null;
+}
+
+/**
+ * The model that answered a routing decision, to look its calibration up with
+ * `AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, answeredBy)`.
+ *
+ * @param result The decision's result.
+ */
+export function RoutingAnsweredBy(result: Pick<RoutingDecisionAnswers, 'ModelName' | 'ResolvedModel'>): DecisionAnsweringModel {
+    return { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
 }
 
 /** Question keys. They are labels for code; the model never reads them. */
 const ROUTE_QUESTION = 'route';
-const CONTINUES_QUESTION = 'continues';
+const CONTINUES_QUESTION = ROUTING_CONTINUES_CALIBRATION_KEY.Question;
 const ARTIFACT_QUESTION = 'artifact';
 
 /** The artifact question's option for "the message modifies no artifact". */
 const NO_ARTIFACT = 'none';
+
+/** The agent Choice's option for "the message is addressed to another person in the conversation, not an agent". */
+const NO_AGENT = 'no_agent';
 
 /** The agent Choice's key in the routing questions and answers. */
 export const ROUTING_ROUTE_QUESTION = ROUTE_QUESTION;
@@ -155,6 +179,8 @@ export const ROUTING_CONTINUES_QUESTION = CONTINUES_QUESTION;
 export const ROUTING_ARTIFACT_QUESTION = ARTIFACT_QUESTION;
 /** The artifact Choice's option value for "the message modifies no artifact". */
 export const ROUTING_NO_ARTIFACT = NO_ARTIFACT;
+/** The agent Choice's option value for "the message is addressed to another person in the conversation, not an agent". */
+export const ROUTING_NO_AGENT = NO_AGENT;
 
 /**
  * The most artifact versions the artifact question offers, besides "none". Each participant can
@@ -173,7 +199,14 @@ const EXCERPT_CHARS = 150;
 const NEW_MESSAGE_CHARS = 1000;
 
 /** A conversation row, as routing reads it. */
-export type RoutingHistoryRow = Pick<MJConversationDetailEntity, 'ID' | 'Role' | 'AgentID' | 'Message'>;
+export type RoutingHistoryRow = Pick<MJConversationDetailEntity, 'ID' | 'Role' | 'AgentID' | 'Message'> & {
+    /** Authoring user ID on multi-user conversations; optional for single-user callers. */
+    UserID?: string | null;
+    /** Authoring user display name on multi-user conversations; optional for single-user callers. */
+    User?: string | null;
+    /** Parent detail ID when replying to an earlier message; optional. */
+    ParentID?: string | null;
+};
 
 /** An agent, as routing describes it to the model. */
 export type RoutingAgent = Pick<MJAIAgentEntityExtended, 'ID' | 'Name' | 'Description'>;
@@ -246,19 +279,28 @@ export interface RoutingDecisionInput {
      * the artifact question reads `ArtifactVersions`. Absent lists none.
      */
     ContinuityArtifacts?: readonly RoutingArtifactSummary[];
+    /**
+     * Whether the agent Choice offers {@link ROUTING_NO_AGENT} ("no agent — the message is for
+     * another person in the conversation"). Set in multi-person / `MentionOnly` chats so a
+     * human-to-human remark is not sent to an agent.
+     */
+    AllowNoAgentOption?: boolean;
 }
 
 /**
  * What a routing decision concluded.
  *
- * - `Routed`: another agent in the conversation takes continuity's place.
+ * - `Routed`: an agent in the conversation takes the turn (replacing continuity, or confirming an
+ *   active agent in a multi-person chat).
  * - `SomeoneElse`: the message leaves the thread. Continuity is cleared, so the message takes the
  *   route it would take with no earlier agent: the pinned agent, the host's default agent, or the
  *   conversation manager.
  * - `KeptContinuity`: today's routing stands. The answer kept the thread, was unsure, contradicted
  *   itself, named an agent the chat doesn't allow, or never came.
+ * - `NoAgent`: in a multi-person chat (`AllowNoAgentOption`), the message is addressed to another
+ *   person in the conversation (or the decision was unsure or failed), so no agent turn starts.
  */
-export type RoutingDecisionVerdict = 'Routed' | 'SomeoneElse' | 'KeptContinuity';
+export type RoutingDecisionVerdict = 'Routed' | 'SomeoneElse' | 'KeptContinuity' | 'NoAgent';
 
 /** The artifact version a confident answer said the message modifies, and the agent that made it. */
 export interface RoutingArtifactTarget {
@@ -293,7 +335,7 @@ type RouteVerdict = Pick<RoutingDecisionOutcome, 'Verdict' | 'RoutedAgentId' | '
  * `@memberjunction/graphql-dataprovider` has this shape.
  *
  * Its `ModelName` and `ResolvedModel` say which model answered. Calibration is per exact model
- * ({@link ROUTING_CONTINUES_CALIBRATION}), so routing acts on the thread Likelihood only when both
+ * ({@link ROUTING_CONTINUES_CALIBRATION_KEY}), so routing acts on the thread Likelihood only when both
  * are reported and name a calibrated model.
  */
 export interface RoutingDecisionAnswers extends DecisionAnsweringModel {
@@ -350,7 +392,7 @@ export function CollectRoutingParticipants(
             continue;
         }
         const agent = isListed(participants, agentId) ? undefined : findAgent(agentId);
-        if (agent && IsRoutableAgent(agent)) {
+        if (agent && IsRoutableAgent(agent, allowedAgentIDs)) {
             participants.push({ Agent: agent, LastReply: excerpt(row.Message, EXCERPT_CHARS) });
         }
     }
@@ -358,27 +400,39 @@ export function CollectRoutingParticipants(
 }
 
 /**
- * True when an agent can take a routed turn: it is active and not restricted. An agent that
- * answered earlier may since have been disabled, and the server refuses to run an agent that isn't
- * active. This is only part of what the '@' list checks (it also needs run permission, and leaves
- * out sub-agents), so the chat looks participants up in that list, and this check is a backstop.
+ * True when an agent can take a routed turn: it is active, and either unrestricted or explicitly
+ * permitted by the host's `allowedAgentIDs` list. An agent that answered earlier may since have
+ * been disabled, and the server refuses to run an agent that isn't active.
  */
-export function IsRoutableAgent(agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'>): boolean {
-    return agent.Status === 'Active' && !agent.IsRestricted;
+export function IsRoutableAgent(
+    agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'> & { ID?: string },
+    allowedAgentIDs?: readonly string[] | null
+): boolean {
+    if (agent.Status !== 'Active') {
+        return false;
+    }
+    if (!agent.IsRestricted) {
+        return true;
+    }
+    return allowedAgentIDs != null && !!agent.ID && IsAgentAllowed(agent.ID, allowedAgentIDs);
 }
 
 /**
  * The last few turns before the new message, oldest first, each as `Speaker: text` on one line
- * and truncated. The person's rows are `User`; an agent's carry its name.
+ * and truncated. In a single-user conversation without `findPersonName`, user rows are `User`;
+ * when multiple people participate or `findPersonName` is supplied, user rows carry each person's
+ * display name; an agent's rows carry its name.
  *
  * @param history The conversation's rows the turn may read, oldest first, without the new message.
  * @param findAgent Looks an agent up in the client's catalog.
+ * @param findPersonName Optional lookup for human speaker names by `UserID`.
  */
 export function BuildRecentTurns(
     history: readonly RoutingHistoryRow[],
-    findAgent: (agentId: string) => RoutingAgent | undefined
+    findAgent: (agentId: string) => RoutingAgent | undefined,
+    findPersonName?: (userId: string) => string | undefined
 ): string[] {
-    return BuildRecentTurnParts(history, findAgent).map(turn => `${turn.Speaker}: ${turn.Message}`);
+    return BuildRecentTurnParts(history, findAgent, findPersonName).map(turn => `${turn.Speaker}: ${turn.Message}`);
 }
 
 /**
@@ -387,15 +441,21 @@ export function BuildRecentTurns(
  *
  * @param history The conversation's rows the turn may read, oldest first, without the new message.
  * @param findAgent Looks an agent up in the client's catalog.
+ * @param findPersonName Optional lookup for human speaker names by `UserID`.
  */
 export function BuildRecentTurnParts(
     history: readonly RoutingHistoryRow[],
-    findAgent: (agentId: string) => RoutingAgent | undefined
+    findAgent: (agentId: string) => RoutingAgent | undefined,
+    findPersonName?: (userId: string) => string | undefined
 ): RoutingTurn[] {
+    const usePersonNames = !!findPersonName || hasMultipleUsers(history);
     return history
         .filter(row => (row.Role === 'User' || row.Role === 'AI') && !!row.Message?.trim())
         .slice(-RECENT_TURN_COUNT)
-        .map(row => ({ Speaker: speakerOf(row, findAgent), Message: excerpt(row.Message, EXCERPT_CHARS) }));
+        .map(row => ({
+            Speaker: speakerOf(row, findAgent, usePersonNames, findPersonName),
+            Message: excerpt(row.Message, EXCERPT_CHARS)
+        }));
 }
 
 /**
@@ -441,12 +501,17 @@ export function CanAskRoutingDecision(input: RoutingDecisionInput): boolean {
  * artifact version the message modifies.
  */
 export function BuildRoutingQuestions(input: RoutingDecisionInput): Record<string, DecisionQuestion> {
+    const someoneElseInstruction = hasManagerOption(input)
+        ? ' Choose someone else when the message moves to a subject none of these agents is handling.'
+        : '';
+    const noAgentInstruction = input.AllowNoAgentOption
+        ? ' Choose no agent when the message is addressed to another person in the conversation.'
+        : '';
     const questions: Record<string, DecisionQuestion> = {
         [ROUTE_QUESTION]: {
             Kind: 'Choice',
             Instructions: 'Which agent should answer the user\'s new message? Choose the agent whose work in '
-                + 'this conversation the message is about. Choose someone else when the message moves to a '
-                + 'subject none of these agents is handling.',
+                + `this conversation the message is about.${someoneElseInstruction}${noAgentInstruction}`,
             Options: buildRouteOptions(input)
         },
         [CONTINUES_QUESTION]: {
@@ -534,15 +599,26 @@ export function BuildRoutingStateStructured(input: RoutingDecisionInput): Routin
  *
  * @param input The input the decision was asked about.
  * @param result The decision's result.
+ * @param calibration The thread Likelihood's fit for the model that answered
+ * (`AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`).
+ * Null means the thread Likelihood is uncalibrated, so routing keeps continuity (or, in a
+ * multi-person chat, starts no agent turn).
  */
-export function InterpretRoutingAnswers(input: RoutingDecisionInput, result: RoutingDecisionAnswers): RoutingDecisionOutcome {
+export function InterpretRoutingAnswers(
+    input: RoutingDecisionInput,
+    result: RoutingDecisionAnswers,
+    calibration: PlattCalibration | null | undefined
+): RoutingDecisionOutcome {
     const promptRunId = result.PromptRunID ?? null;
     if (!result.Success) {
-        const failed = keptContinuity(`the decision failed: ${result.ErrorMessage ?? 'no reason given'}`);
+        const reason = `the decision failed: ${result.ErrorMessage ?? 'no reason given'}`;
+        const failed = input.AllowNoAgentOption ? noAgent(reason) : keptContinuity(reason);
         return { ...failed, PromptRunID: promptRunId };
     }
-    const answeredBy: DecisionAnsweringModel = { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
-    const verdict = readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy);
+    const answeredBy = RoutingAnsweredBy(result);
+    const verdict = input.AllowNoAgentOption
+        ? readMultiPartyRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration)
+        : readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration);
     return {
         Verdict: verdict.Verdict,
         RoutedAgentId: verdict.RoutedAgentId,
@@ -557,12 +633,25 @@ export function KeptContinuityOutcome(reason: string): RoutingDecisionOutcome {
     return keptContinuity(reason);
 }
 
-/** The agent Choice's options: each participant, then the conversation manager as someone else. */
+/** An outcome that starts no agent turn in a multi-person conversation, for the given reason. */
+export function NoAgentOutcome(reason: string): RoutingDecisionOutcome {
+    return noAgent(reason);
+}
+
+/** True when the conversation manager is offered as the "someone else" option. */
+function hasManagerOption(input: RoutingDecisionInput): boolean {
+    const manager = input.ConversationManager;
+    return Boolean(manager && IsAgentAllowed(manager.ID, input.AllowedAgentIDs));
+}
+
+/** The agent Choice's options: each participant, the conversation manager as someone else, and (when enabled) no agent. */
 function buildRouteOptions(input: RoutingDecisionInput): ChoiceOption[] {
     const options = input.Participants.map(p => ({ Value: p.Agent.ID, Description: describeParticipant(p) }));
-    const manager = input.ConversationManager;
-    if (manager && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
-        options.push({ Value: manager.ID, Description: describeSomeoneElse(manager) });
+    if (hasManagerOption(input) && input.ConversationManager) {
+        options.push({ Value: input.ConversationManager.ID, Description: describeSomeoneElse(input.ConversationManager) });
+    }
+    if (input.AllowNoAgentOption) {
+        options.push({ Value: NO_AGENT, Description: describeNoAgent() });
     }
     return options;
 }
@@ -611,6 +700,11 @@ function describeParticipant(participant: RoutingParticipant): string {
 function describeSomeoneElse(manager: RoutingAgent): string {
     return `Someone else. The message moves to a subject none of the agents above is handling, so `
         + `${nameOf(manager)}, the conversation manager, should decide who answers it.`;
+}
+
+/** The "no agent" option in a multi-person chat, as the model reads it. */
+function describeNoAgent(): string {
+    return 'No agent. The message is addressed to another person in the conversation, not to any AI agent.';
 }
 
 /** One artifact version as the model reads it. */
@@ -663,10 +757,36 @@ function nameOf(agent: RoutingAgent): string {
     return agent.Name?.trim() || 'Unnamed agent';
 }
 
-/** Who wrote a row: `User`, or the agent's name. */
-function speakerOf(row: RoutingHistoryRow, findAgent: (agentId: string) => RoutingAgent | undefined): string {
+/** True when more than one distinct human UserID wrote in the history. */
+function hasMultipleUsers(history: readonly RoutingHistoryRow[]): boolean {
+    let firstUserId: string | null = null;
+    for (const row of history) {
+        const userId = row.Role === 'User' ? row.UserID?.trim() : null;
+        if (!userId) {
+            continue;
+        }
+        if (!firstUserId) {
+            firstUserId = userId;
+        } else if (!UUIDsEqual(firstUserId, userId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Who wrote a row: `User` (or the person's name in a multi-person chat), or the agent's name. */
+function speakerOf(
+    row: RoutingHistoryRow,
+    findAgent: (agentId: string) => RoutingAgent | undefined,
+    usePersonNames: boolean = false,
+    findPersonName?: (userId: string) => string | undefined
+): string {
     if (row.Role === 'User') {
-        return 'User';
+        if (!usePersonNames) {
+            return 'User';
+        }
+        const resolved = (row.UserID && findPersonName ? findPersonName(row.UserID) : undefined) ?? row.User;
+        return resolved?.trim() || 'User';
     }
     return (row.AgentID ? findAgent(row.AgentID)?.Name : null) || 'Agent';
 }
@@ -682,7 +802,8 @@ function readRouteVerdict(
     input: RoutingDecisionInput,
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
-    answeredBy: DecisionAnsweringModel
+    answeredBy: DecisionAnsweringModel,
+    calibration: PlattCalibration | null | undefined
 ): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return keptContinuity('the answer is missing the agent choice or the thread likelihood');
@@ -693,7 +814,7 @@ function readRouteVerdict(
     if (UUIDsEqual(route.Value, input.ContinuityAgentId)) {
         return keptContinuity('the message continues the current thread');
     }
-    const continuing = CalibratedContinuesProbability(continues.Probability, answeredBy);
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
     if (continuing === null) {
         return keptContinuity(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
     }
@@ -704,15 +825,52 @@ function readRouteVerdict(
     return verdictForChoice(input, route.Value);
 }
 
-/** The verdict for an agent Choice that confidently left the thread. */
-function verdictForChoice(input: RoutingDecisionInput, value: string): RouteVerdict {
+/** The agent Choice and thread Likelihood in a multi-person chat (`AllowNoAgentOption`), biased toward silence. */
+function readMultiPartyRouteVerdict(
+    input: RoutingDecisionInput,
+    route: DecisionAnswer | undefined,
+    continues: DecisionAnswer | undefined,
+    answeredBy: DecisionAnsweringModel,
+    calibration: PlattCalibration | null | undefined
+): RouteVerdict {
+    if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
+        return noAgent('the answer is missing the agent choice or the thread likelihood');
+    }
+    if (route.Value === NO_AGENT) {
+        return noAgent('the message is addressed to another person in the conversation');
+    }
+    if (route.Confidence < DECISION_ROUTING_MIN_CONFIDENCE) {
+        return noAgent(`the agent choice is unsure (confidence ${route.Confidence})`);
+    }
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
+    if (continuing === null) {
+        return noAgent(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
+    }
+    if (UUIDsEqual(route.Value, input.ContinuityAgentId)) {
+        if (!(continuing > 1 - DECISION_ROUTING_MIN_CONFIDENCE)) {
+            return noAgent(`the thread likelihood does not confirm continuing (calibrated probability ${continuing.toFixed(3)})`);
+        }
+        return verdictForChoice(input, route.Value, noAgent);
+    }
+    if (!(continuing <= 1 - DECISION_ROUTING_MIN_CONFIDENCE)) {
+        return noAgent(`the thread may still continue (calibrated probability ${continuing.toFixed(3)})`);
+    }
+    return verdictForChoice(input, route.Value, noAgent);
+}
+
+/** The verdict for an agent Choice, falling back to `fallback` when the chosen agent is not routable. */
+function verdictForChoice(
+    input: RoutingDecisionInput,
+    value: string,
+    fallback: (reason: string) => RouteVerdict = keptContinuity
+): RouteVerdict {
     const manager = input.ConversationManager;
     if (manager && UUIDsEqual(value, manager.ID) && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
         return { Verdict: 'SomeoneElse', RoutedAgentId: null, Reason: 'the message moves to someone else' };
     }
     const participant = input.Participants.find(p => UUIDsEqual(p.Agent.ID, value));
     if (!participant || !IsAgentAllowed(participant.Agent.ID, input.AllowedAgentIDs)) {
-        return keptContinuity('the chosen agent is not one this chat can route to');
+        return fallback('the chosen agent is not one this chat can route to');
     }
     return { Verdict: 'Routed', RoutedAgentId: participant.Agent.ID, Reason: `routed to ${nameOf(participant.Agent)}` };
 }
@@ -729,4 +887,9 @@ function readArtifactTarget(input: RoutingDecisionInput, answer: DecisionAnswer 
 /** An outcome that keeps today's routing. */
 function keptContinuity(reason: string): RoutingDecisionOutcome {
     return { Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: reason, PromptRunID: null };
+}
+
+/** An outcome that starts no agent turn in a multi-person chat. */
+function noAgent(reason: string): RoutingDecisionOutcome {
+    return { Verdict: 'NoAgent', RoutedAgentId: null, TargetArtifact: null, Reason: reason, PromptRunID: null };
 }

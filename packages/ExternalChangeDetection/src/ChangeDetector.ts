@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { EncryptionEngine } from "@memberjunction/encryption";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
@@ -195,7 +195,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             // Detect deletions (single call — bounded by RecordChange entries, not entity size)
             const deleteResult = await rq.RunQuery({
                 QueryName: 'ExternalChangeDetection_DetectDeletions',
-                Parameters: params.deletion
+                // Every detection parameter is server-set (identifiers and SQL fragments built here), so
+                // it goes in ServerParameters: a value for a server-set parameter in Parameters is refused.
+                ServerParameters: params.deletion
             }, this.ContextUser);
             if (deleteResult?.Success) {
                 for (const row of deleteResult.Results) {
@@ -275,11 +277,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * If a page query fails (timeout, connection error, etc.), logs the error
      * and stops pagination for this entity rather than retrying or crashing.
      * The caller's try/catch in DetectChangesForEntity will report partial results.
+     *
+     * The detection queries declare every parameter server-set, so the values go in
+     * `ServerParameters`.
      */
     private async detectPages(
         rq: RunQuery,
         queryName: string,
-        parameters: Record<string, string>,
+        serverParameters: Record<string, string>,
         handleRow: (row: Record<string, unknown>) => Promise<void>
     ): Promise<void> {
         let startRow = 0;
@@ -287,7 +292,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         for (;;) {
             const result = await rq.RunQuery({
                 QueryName: queryName,
-                Parameters: parameters,
+                ServerParameters: serverParameters,
                 MaxRows: DETECTION_PAGE_SIZE,
                 StartRow: startRow
             }, this.ContextUser);
@@ -513,7 +518,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: "MJ: Record Changes",
-                ExtraFilter: `EntityID = '${change.Entity.ID}' AND RecordID = '${change.PrimaryKey.ToConcatenatedString()}' AND Type IN ('Update', 'Create')`,
+                ExtraFilter: `EntityID = '${EscapeSQLString(change.Entity.ID)}' AND RecordID = '${EscapeSQLString(change.PrimaryKey.ToConcatenatedString())}' AND Type IN ('Update', 'Create')`,
                 OrderBy: "ChangedAt DESC"
             }, this.ContextUser);
 
@@ -983,7 +988,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 // Mitigate race conditions: double-check that no other process started a run at the exact same time
                 const doubleCheck = await rv.RunView({
                     EntityName: "MJ: Record Change Replay Runs",
-                    ExtraFilter: `Status = 'In Progress' AND ID <> '${run.ID}'`
+                    ExtraFilter: `Status = 'In Progress' AND ID <> '${EscapeSQLString(run.ID)}'`
                 }, this.ContextUser);
                 
                 if (doubleCheck && doubleCheck.Success && doubleCheck.Results.length > 0) {

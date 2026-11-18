@@ -10,9 +10,44 @@
  * @since 2.49.0
  */
 
+import { ChatMessage } from '@memberjunction/ai';
 import { AIPromptParams } from './prompt.types';
+import {
+    DatabasePlatform,
+    DEFAULT_DATABASE_PLATFORM,
+    DescribeSQLDialectForPrompt,
+    DescribeSQLDialectName,
+    Metadata,
+    ResolvePlatformKey,
+} from '@memberjunction/core';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+
+/**
+ * Resolves the database platform whose SQL this prompt execution should target.
+ *
+ * Order of preference:
+ *   1. `params.provider` — the per-request metadata provider. On a multi-tenant
+ *      server this is the ONLY correct source: the global provider may belong to
+ *      a different tenant on a different platform.
+ *   2. `Metadata.Provider` — the process-wide provider, for single-tenant hosts
+ *      and CLI/worker contexts that never set a per-request provider.
+ *   3. {@link DEFAULT_DATABASE_PLATFORM} — unchanged historical behaviour when
+ *      nothing is configured (e.g. rendering a prompt in a unit test).
+ *
+ * Never throws: `Metadata.Provider` throws when there is no global object store,
+ * and a prompt render must not fail because of that.
+ */
+function resolvePromptSQLPlatform(params: AIPromptParams): DatabasePlatform {
+    if (params?.provider) {
+        return ResolvePlatformKey(params.provider);
+    }
+    try {
+        return ResolvePlatformKey(Metadata.Provider); // global-provider-ok: deliberate last resort — `params.provider` is preferred immediately above and is the only correct source on a multi-tenant server; this branch serves single-tenant hosts and CLI/worker renders that never set one, and throwing here would fail a prompt render rather than pick a dialect
+    } catch {
+        return DEFAULT_DATABASE_PLATFORM;
+    }
+}
 
 /**
  * Defines a system placeholder that can be used in prompt templates.
@@ -21,14 +56,29 @@ import { formatInTimeZone } from 'date-fns-tz';
  * @property {string} name - The placeholder name (e.g., '_CURRENT_DATE')
  * @property {string} [description] - Optional description of what this placeholder provides
  * @property {string} [category] - Optional category for grouping placeholders in UI
+ * @property {SystemPlaceholderRequirement[]} [requires] - What the value reads from the prompt parameters; `[]` means nothing (clock or environment), absent means it may read anything
  * @property {SystemPlaceholderFunction} getValue - Async function that returns the placeholder value
  */
 export interface SystemPlaceholder {
     name: string;
     description?: string;
     category?: string;
+    // case-violation-ok-legacy-back-compat: same case as this interface's other members, which every placeholder literal already writes
+    requires?: ReadonlyArray<SystemPlaceholderRequirement>;
     getValue: SystemPlaceholderFunction;
 }
+
+/**
+ * What a placeholder's value depends on:
+ * - `prompt` — `params.prompt`
+ * - `contextUser` — `params.contextUser`
+ * - `execution` — the finished parameters of a running prompt (model override, configuration, conversation,
+ *   validation). Only {@link SystemPlaceholderManager.ResolveAllPlaceholders} resolves these.
+ */
+export type SystemPlaceholderRequirement = 'prompt' | 'contextUser' | 'execution';
+
+/** A bare token such as `{{ _CURRENT_DATE }}`, not one inside `{{{ }}}`. A filter, member read or tag is not one. */
+const PLACEHOLDER_TOKEN = /(?<!\{)\{\{\s*([A-Za-z_]\w*)\s*\}\}(?!\})/g;
 
 /**
  * Defines a category for organizing system placeholders in UI.
@@ -82,6 +132,11 @@ export const SYSTEM_PLACEHOLDER_CATEGORIES: SystemPlaceholderCategory[] = [
         name: 'Environment',
         icon: 'fa-server',
         color: '#dc3545'
+    },
+    {
+        name: 'Data Platform',
+        icon: 'fa-database',
+        color: '#20c997'
     }
 ];
 
@@ -95,6 +150,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_DATE',
         description: 'Current date in YYYY-MM-DD format',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             return format(new Date(), 'yyyy-MM-dd');
         }
@@ -103,6 +159,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_TIME',
         description: 'Current time in HH:MM AM/PM format with timezone',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             const now = new Date();
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -113,6 +170,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_DATE_AND_TIME',
         description: 'Full timestamp with date and time',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             const now = new Date();
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -123,6 +181,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_DAY_OF_WEEK',
         description: 'Current day name (e.g., Monday, Tuesday)',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             return format(new Date(), 'EEEE');
         }
@@ -131,6 +190,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_TIMEZONE',
         description: 'Current timezone identifier',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             return Intl.DateTimeFormat().resolvedOptions().timeZone;
         }
@@ -139,6 +199,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CURRENT_TIMESTAMP_UTC',
         description: 'Current UTC timestamp in ISO format',
         category: 'Date & Time',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             return new Date().toISOString();
         }
@@ -149,6 +210,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_OUTPUT_EXAMPLE',
         description: 'The expected output example from the prompt configuration',
         category: 'Prompt Metadata',
+        requires: ['prompt'],
         getValue: async (params: AIPromptParams) => {
             return params.prompt.OutputExample || '';
         }
@@ -157,6 +219,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_PROMPT_NAME',
         description: 'The name of the current prompt',
         category: 'Prompt Metadata',
+        requires: ['prompt'],
         getValue: async (params: AIPromptParams) => {
             return params.prompt.Name || '';
         }
@@ -165,6 +228,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_PROMPT_DESCRIPTION',
         description: 'The description of the current prompt',
         category: 'Prompt Metadata',
+        requires: ['prompt'],
         getValue: async (params: AIPromptParams) => {
             return params.prompt.Description || '';
         }
@@ -173,6 +237,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_EXPECTED_OUTPUT_TYPE',
         description: 'The expected output type (string, object, number, etc.)',
         category: 'Prompt Metadata',
+        requires: ['prompt'],
         getValue: async (params: AIPromptParams) => {
             return params.prompt.OutputType || 'string';
         }
@@ -181,6 +246,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_RESPONSE_FORMAT',
         description: 'The expected response format from the prompt',
         category: 'Prompt Metadata',
+        requires: ['prompt'],
         getValue: async (params: AIPromptParams) => {
             return params.prompt.ResponseFormat || 'Any';
         }
@@ -191,6 +257,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_USER_NAME',
         description: 'Current user\'s full name',
         category: 'User Context',
+        requires: ['contextUser'],
         getValue: async (params: AIPromptParams) => {
             if (params.contextUser?.Name) {
                 return params.contextUser.Name;
@@ -205,6 +272,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_USER_EMAIL',
         description: 'Current user\'s email address',
         category: 'User Context',
+        requires: ['contextUser'],
         getValue: async (params: AIPromptParams) => {
             return params.contextUser?.Email || '';
         }
@@ -213,6 +281,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_USER_ID',
         description: 'Current user\'s unique identifier',
         category: 'User Context',
+        requires: ['contextUser'],
         getValue: async (params: AIPromptParams) => {
             return params.contextUser?.ID || '';
         }
@@ -223,6 +292,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_ENVIRONMENT',
         description: 'Current environment (development, staging, production)',
         category: 'Environment',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             // This could be enhanced to read from process.env or configuration
             return process.env.NODE_ENV || 'development';
@@ -232,6 +302,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_API_VERSION',
         description: 'Current API version',
         category: 'Environment',
+        requires: [],
         getValue: async (params: AIPromptParams) => {
             // This could be enhanced to read from package.json or configuration
             return process.env.API_VERSION || '2.49.0';
@@ -243,6 +314,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_MODEL_ID',
         description: 'The AI model ID being used for this execution',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return params.override?.modelId || '';
         }
@@ -251,6 +323,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_VENDOR_ID',
         description: 'The AI vendor ID being used for this execution',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return params.override?.vendorId || '';
         }
@@ -259,6 +332,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CONFIGURATION_ID',
         description: 'The configuration ID for environment-specific behavior',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return params.configurationId || '';
         }
@@ -267,6 +341,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_HAS_CONVERSATION_CONTEXT',
         description: 'Whether conversation messages are provided',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return (params.conversationMessages && params.conversationMessages.length > 0) ? 'true' : 'false';
         }
@@ -275,6 +350,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_CONVERSATION_LENGTH',
         description: 'Number of messages in the conversation context',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return String(params.conversationMessages?.length || 0);
         }
@@ -283,6 +359,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_TEMPLATE_MESSAGE_ROLE',
         description: 'How the template will be added to conversation (system, user, or none)',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return params.templateMessageRole || 'system';
         }
@@ -291,6 +368,7 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_IS_CHILD_PROMPT',
         description: 'Whether this prompt is being executed as a child of another prompt',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             // We can infer this from whether childPrompts exist in the params
             return params.childPrompts ? 'false' : 'possibly';
@@ -300,8 +378,42 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         name: '_VALIDATION_ENABLED',
         description: 'Whether output validation is enabled',
         category: 'Execution Context',
+        requires: ['execution'],
         getValue: async (params: AIPromptParams) => {
             return params.skipValidation ? 'false' : 'true';
+        }
+    },
+
+    // Data platform placeholders
+    //
+    // These exist so that a template which asks an LLM for SQL can be
+    // parameterised by dialect WITHOUT being registered anywhere. Every prompt
+    // render resolves every system placeholder, so "which templates get the
+    // dialect?" is answered by a predicate — does the template reference the
+    // placeholder? — rather than by a hardcoded list of TemplateIDs that a later
+    // template inevitably fails to join.
+    {
+        name: '_SQL_DIALECT',
+        description: "Platform key of the database this tenant's SQL runs on ('sqlserver', 'postgresql')",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return resolvePromptSQLPlatform(params);
+        }
+    },
+    {
+        name: '_SQL_DIALECT_NAME',
+        description: "Human-readable name of the tenant's database platform, e.g. 'PostgreSQL'",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return DescribeSQLDialectName(resolvePromptSQLPlatform(params));
+        }
+    },
+    {
+        name: '_SQL_DIALECT_RULES',
+        description: "Syntax briefing for the tenant's database platform — quoting, row limits, null-coalescing, date math. Drop into any prompt that asks for SQL.",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return DescribeSQLDialectForPrompt(resolvePromptSQLPlatform(params));
         }
     }
 ];
@@ -425,6 +537,55 @@ export class SystemPlaceholderManager {
             resolved[result.name] = result.value;
         }
         
+        return resolved;
+    }
+
+    /**
+     * Replaces bare `{{ _NAME }}` tokens in messages that never pass through the template engine, such as
+     * scoped prompt parts. This is substitution, not rendering: filters, tags, `{{{ }}}` and every other
+     * character stay as written. A token also stays as written when its placeholder declares no `requires`,
+     * needs something `params` does not carry, needs `execution`, fails, or returns no value, so the model
+     * sees the token rather than an empty value. Only string content is read. Each placeholder resolves
+     * once per call, so every message sees the same clock.
+     *
+     * @param messages - The messages to resolve. Not modified.
+     * @param params - What is known before the prompt runs, typically `contextUser`
+     * @returns The messages with resolved tokens replaced, in the same order
+     */
+    public static async ReplaceAvailablePlaceholders(messages: ChatMessage[], params: Partial<AIPromptParams>): Promise<ChatMessage[]> {
+        const names = new Set<string>();
+        for (const m of messages) {
+            if (typeof m.content !== 'string') continue;
+            for (const [, name] of m.content.matchAll(PLACEHOLDER_TOKEN)) names.add(name);
+        }
+        if (names.size === 0) return messages;
+        const values = await this.resolveAvailable(names, params);
+        if (values.size === 0) return messages;
+        return messages.map(m => typeof m.content === 'string'
+            ? { ...m, content: m.content.replace(PLACEHOLDER_TOKEN, (token, name: string) => values.get(name) ?? token) }
+            : m);
+    }
+
+    /** Values for those of `names` whose `requires` the params meet; failed and empty ones are left out. */
+    private static async resolveAvailable(names: ReadonlySet<string>, params: Partial<AIPromptParams>): Promise<Map<string, string>> {
+        const has: Record<SystemPlaceholderRequirement, boolean> = {
+            prompt: params.prompt != null,
+            contextUser: params.contextUser != null,
+            execution: false,
+        };
+        const available = this.placeholders.filter(p => names.has(p.name) && p.requires?.every(r => has[r]));
+        const values = await Promise.all(available.map(async (placeholder) => {
+            try {
+                return await placeholder.getValue(params as AIPromptParams);
+            } catch (error) {
+                console.error(`Error resolving system placeholder '${placeholder.name}':`, error);
+                return null;
+            }
+        }));
+        const resolved = new Map<string, string>();
+        available.forEach((placeholder, i) => {
+            if (values[i] != null) resolved.set(placeholder.name, String(values[i]));
+        });
         return resolved;
     }
 

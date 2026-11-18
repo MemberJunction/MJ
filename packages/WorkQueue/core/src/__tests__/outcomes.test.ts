@@ -76,6 +76,14 @@ describe('ResolveSettleAction', () => {
             .toEqual({ Kind: 'DeadLetter', Reason: 'MaxAttemptsExceeded', Error: 'stack' });
     });
 
+    it('discards instead of dead-lettering on exhaustion or fatal outcome when ExhaustionBehavior is Discard', () => {
+        const discardPolicy = MakePolicy({ MaxAttempts: 2, ExhaustionBehavior: 'Discard' });
+        expect(ResolveSettleAction({ Outcome: Outcome.Retry('busy'), ErrorText: 'stack' }, 2, discardPolicy))
+            .toEqual({ Kind: 'Discard', Reason: 'MaxAttemptsExceeded', Error: 'stack' });
+        expect(ResolveSettleAction({ Outcome: Outcome.DeadLetter('poison-pill'), ErrorText: 'fatal' }, 1, discardPolicy))
+            .toEqual({ Kind: 'Discard', Reason: 'poison-pill', Error: 'fatal' });
+    });
+
     it('uses the error text, then the reason, then a default as the retry error', () => {
         const retry = (errorText: string | null, reason?: string) =>
             ResolveSettleAction({ Outcome: Outcome.Retry(reason), ErrorText: errorText }, 1, policy, () => 0);

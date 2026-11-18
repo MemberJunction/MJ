@@ -74,6 +74,12 @@ export interface RealtimeSessionStartOptions {
      * shows the check; otherwise the camera waits for a confirmation that never comes.
      */
     CameraCheck?: boolean;
+    /**
+     * The session's deadline, when the host knows it at start (a guest's voice ceiling). The runtime arms it, with the
+     * default options, in the same tick it takes the call slot, so a start refused because another call holds the
+     * runtime never arms it. A host that learns the deadline later, or needs other options, uses `SetSessionDeadline`.
+     */
+    SessionDeadline?: Date | null;
 }
 
 /** A resolved-but-not-yet-initialized channel plugin, with what the scope decision needs to know about it. */

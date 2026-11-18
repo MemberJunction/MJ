@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { AuthProviderFactory } from '../index.js';
 
 /** Every driver key MJ ships, matching the @RegisterClass keys on the concrete providers. */
-const BUILT_IN_DRIVER_KEYS = ['auth0', 'msal', 'okta', 'cognito', 'google', 'workos', 'magic-link'] as const;
+const BUILT_IN_DRIVER_KEYS = ['auth0', 'msal', 'okta', 'cognito', 'google', 'workos', 'magic-link', 'local'] as const;
 
 describe('built-in auth provider registration via the package entry point', () => {
   it.each(BUILT_IN_DRIVER_KEYS)("registers the '%s' driver", (key) => {

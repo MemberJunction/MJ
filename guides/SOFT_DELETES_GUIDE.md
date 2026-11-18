@@ -38,6 +38,10 @@ Two things follow. Don't add a second `__mj_DeletedAt IS NULL` predicate to the 
 
 Note that `AllowDirectSQLDelete` is refused on any soft-delete entity by a CHECK constraint: a direct `DELETE` removes the row rather than setting `__mj_DeletedAt`, defeating the whole mechanism.
 
+### If the entity has Alternate Base Views
+
+An [Alternate Base View](ALTERNATE_BASE_VIEWS_GUIDE.md) (`MJ: Entity Alternate Base Views`) always selects from the entity's canonical `BaseView` (or from a parent Alternate Base View on the same entity) using `SELECT v.*`. Because `BaseView` already filters `WHERE __mj_DeletedAt IS NULL`, every Alternate Base View inherits soft-delete filtering automatically — never repeat `__mj_DeletedAt IS NULL` in an Alternate Base View's `WHERE` clause.
+
 ---
 
 ## What CodeGen actually generates

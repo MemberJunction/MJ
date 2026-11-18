@@ -5,6 +5,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { ImageArtifactPreviewComponent } from '../previews/image-artifact-preview.component';
+import { EscapeHtml, PrintHtmlInSandboxedIframe, SanitizeSvgForSandboxedFrame } from '../../utils/html-sandbox.util';
 
 /**
  * Lookup table for synthesizing a download filename when the artifact version
@@ -108,13 +109,13 @@ export function buildImageDownloadFileName(name: string | null | undefined, mime
             >
                 @if (errorMessage) {
                     <div class="image-viewer__state image-viewer__state--error">
-                        <i class="fas fa-exclamation-triangle"></i>
+                        <i class="fa-solid fa-exclamation-triangle"></i>
                         <span>{{ errorMessage }}</span>
                     </div>
                 } @else {
                     @if (isLoading) {
                         <div class="image-viewer__state">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            <i class="fa-solid fa-spinner fa-spin"></i>
                             <span>Loading image…</span>
                         </div>
                     }
@@ -403,7 +404,7 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
             if (this.artifactVersion.ContentMode === 'File') {
                 // File-backed: fetch a pre-auth URL from MJStorage via the shared service.
                 // ArtifactFileService caches the URL so reopening the same artifact is instant.
-                this.ImageUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+                this.ImageUrl = await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.ProviderToUse);
             } else {
                 // Inline ('Text' mode): Content is a data URI ready to bind directly.
                 const content = this.artifactVersion.Content;
@@ -494,16 +495,80 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     }
 
     /**
-     * Open the image in a new browser tab so the user can use the browser's
-     * native print dialog. We deliberately don't manage a print pipeline
-     * ourselves — same approach as `PdfArtifactViewerComponent.onPrint()`.
+     * Print the image inside an isolated `sandbox="allow-modals"` iframe (`script-src 'none'`).
+     * Inline SVG data URIs are DOMPurify-sanitized before rendering so `<script>` / `on*` payloads
+     * never execute in the host origin; raster and file-backed images render inside a sandboxed `<img>` tag.
      */
     public OnPrint(): void {
         if (!this.ImageUrl) {
             return;
         }
-        const sourceUrl = this.ensureDownloadableUrl();
-        window.open(sourceUrl, '_blank');
+        const title = this.artifactVersion?.FileName || 'Print Image';
+        const mime = (this.artifactVersion?.MimeType || '').toLowerCase();
+        const isInlineSvg =
+            this.artifactVersion?.ContentMode !== 'File' &&
+            (mime.includes('svg') || this.ImageUrl.toLowerCase().startsWith('data:image/svg+xml'));
+
+        if (isInlineSvg) {
+            const rawSvg = this.extractSvgMarkupFromImageUrl(this.ImageUrl);
+            const sanitizedSvg = rawSvg ? SanitizeSvgForSandboxedFrame(rawSvg) : '';
+            if (!sanitizedSvg) {
+                return;
+            }
+            PrintHtmlInSandboxedIframe(sanitizedSvg, {
+                Title: title,
+                TrustedPrintCss:
+                    'body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; } svg { max-width: 100%; max-height: 100vh; height: auto; }',
+            });
+            return;
+        }
+
+        const sourceUrl = this.getPrintableRasterSourceUrl(this.ImageUrl) ?? this.ensureDownloadableUrl();
+        const imgHtml = `<div class="print-image-wrap"><img src="${EscapeHtml(sourceUrl)}" alt="${EscapeHtml(title)}" /></div>`;
+        PrintHtmlInSandboxedIframe(imgHtml, {
+            Title: title,
+            TrustedPrintCss:
+                'body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; } .print-image-wrap img { max-width: 100%; max-height: 100vh; object-fit: contain; }',
+        });
+    }
+
+    private getPrintableRasterSourceUrl(rawUrl: string): string | null {
+        const trimmed = rawUrl.trim();
+        if (/^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
+            return trimmed;
+        }
+        try {
+            const parsed = new URL(trimmed);
+            if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+                return parsed.toString();
+            }
+        } catch {
+            // Fall through to ensureDownloadableUrl
+        }
+        return null;
+    }
+
+    private extractSvgMarkupFromImageUrl(imageUrl: string): string {
+        if (!imageUrl) {
+            return '';
+        }
+        if (imageUrl.trimStart().startsWith('<')) {
+            return imageUrl;
+        }
+        const commaIndex = imageUrl.indexOf(',');
+        if (commaIndex < 0) {
+            return '';
+        }
+        const header = imageUrl.slice(0, commaIndex).toLowerCase();
+        const payload = imageUrl.slice(commaIndex + 1);
+        try {
+            if (header.includes(';base64')) {
+                return atob(payload);
+            }
+            return decodeURIComponent(payload);
+        } catch {
+            return '';
+        }
     }
 
     /** @deprecated Use {@link OnPrint}. */

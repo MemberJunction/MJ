@@ -33,7 +33,7 @@ import { BaseEntity, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJListEntity, MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { MJListEntityServer } from '@memberjunction/core-entities-server';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -383,10 +383,9 @@ export const EntityGraphChecks: NamedCheck[] = [
                     fromCache = action.Params.Items as readonly MJActionParamLike[];
                 } catch {
                     // A lazy collection throws when no engine caches the entity. In a bootstrap that
-                    // never configured ActionEngine that is expected, so skip-as-pass loudly rather
-                    // than fail on an environment difference.
-                    console.log('      → ActionEngine not configured in this process; EG10 skipped');
-                    return;
+                    // never configured ActionEngine that is expected, so skip rather than fail on an
+                    // environment difference.
+                    SkipCheck('ActionEngine is not configured in this process, so the lazy Action Params collection has no cache to read');
                 }
 
                 const truth = await rv.RunView({

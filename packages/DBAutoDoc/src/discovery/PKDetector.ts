@@ -9,6 +9,11 @@ import { TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { BuildCachedColumnStats, HasBlankOrZero } from './ColumnStatsBuilder.js';
+import {
+  ClassifySingleColumnKey, CompositeKeyIndexes,
+  INDEX_KEY_BOOST, UNIQUE_COMPOSITE_CONFIDENCE
+} from './IndexKeyEvidence.js';
 
 export class PKDetector {
   constructor(
@@ -50,7 +55,7 @@ export class PKDetector {
       const column = table.columns[colIdx];
       const candidate = await this.analyzeSingleColumnPK(
         schemaName,
-        table.name,
+        table,
         column,
         iteration,
         colIdx
@@ -75,6 +80,15 @@ export class PKDetector {
         iteration
       );
       candidates.push(...compositeCandidates);
+    }
+
+    // Composite keys backed by a unique index, for tables where no single column qualifies (junction
+    // tables, for example). When a single-column candidate already clears primaryKeyMinimum, a composite
+    // unique index is an alternate key: adding it as a candidate would get its columns flagged as part of
+    // the primary key too, because discovery applies every candidate above the minimum.
+    const hasSingleColumnKey = candidates.some(c => c.columnNames.length === 1);
+    if (this.useIndexes() && !hasSingleColumnKey) {
+      this.mergeCandidates(candidates, this.indexBackedCompositeCandidates(schemaName, table, iteration));
     }
 
     // H11: Progressive discount for later PK-eligible columns
@@ -178,11 +192,13 @@ export class PKDetector {
    */
   private async analyzeSingleColumnPK(
     schemaName: string,
-    tableName: string,
+    table: TableDefinition,
     column: ColumnDefinition,
     iteration: number,
     colOrdinal: number = 0
   ): Promise<PKCandidate | null> {
+    const tableName = table.name;
+    const indexKey = this.useIndexes() ? ClassifySingleColumnKey(table, column) : undefined;
     // Get or compute column statistics
     let cachedStats = this.statsCache.getColumnStats(schemaName, tableName, column.name);
 
@@ -197,57 +213,38 @@ export class PKDetector {
         this.config.sampling.maxRowsPerTable
       );
 
-      // Detect data pattern
-      const dataPattern = this.detectDataPattern(stats.sampleValues, column.dataType);
-
-      const nullPercentage = stats.totalRows > 0 ? stats.nullCount / stats.totalRows : 0;
-      const uniqueness = stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0;
-      const hasBlankOrZero = stats.sampleValues.some(v =>
-        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
-      );
-
-      cachedStats = {
-        schemaName,
-        tableName,
-        columnName: column.name,
-        dataType: column.dataType,
-        totalRows: stats.totalRows,
-        nullCount: stats.nullCount,
-        nullPercentage,
-        distinctCount: stats.distinctCount,
-        uniqueness,
-        minValue: stats.minValue,
-        maxValue: stats.maxValue,
-        avgLength: stats.avgLength,
-        dataPattern,
-        sampleValues: stats.sampleValues,
-        // Deterministic PK eligibility: zero nulls, zero blanks, 100% unique
-        pkEligible: stats.nullCount === 0 && !hasBlankOrZero && uniqueness === 1.0 && stats.totalRows > 0,
-        // FK eligibility computed later by FKDetector (default true, refined by data type/value checks)
-        fkEligible: true,
-        computedAt: new Date().toISOString(),
-        queryTimeMs: Date.now() - startTime
-      };
+      cachedStats = BuildCachedColumnStats({
+        SchemaName: schemaName,
+        TableName: tableName,
+        ColumnName: column.name,
+        DataType: column.dataType,
+        TotalRows: stats.totalRows,
+        NullCount: stats.nullCount,
+        DistinctCount: stats.distinctCount,
+        SampleValues: stats.sampleValues,
+        MinValue: stats.minValue,
+        MaxValue: stats.maxValue,
+        AvgLength: stats.avgLength,
+        QueryTimeMs: Date.now() - startTime
+      });
 
       this.statsCache.setColumnStats(cachedStats);
     }
 
-    // Use cached stats for PK analysis
-    const uniqueness = cachedStats.uniqueness;
+    // A unique index on a NOT NULL column guarantees uniqueness whatever the sample shows (even on an empty table).
+    const indexGuaranteesKey = indexKey?.Kind === 'UniqueNotNull';
+    const uniqueness = indexGuaranteesKey ? 1.0 : cachedStats.uniqueness;
 
     // Deterministic eligibility gate — a column is only PK-eligible if it has
     // zero nulls, zero blanks, and 100% unique values. This is the mathematical
     // definition of a primary key and cannot be overridden by the LLM.
-    if (!cachedStats.pkEligible) {
+    // A unique index on a NOT NULL column is the same guarantee from the database itself.
+    if (!cachedStats.pkEligible && !indexGuaranteesKey) {
       const reasons: string[] = [];
       if (cachedStats.nullCount > 0) reasons.push(`${cachedStats.nullCount} nulls`);
       if (cachedStats.uniqueness < 1.0) reasons.push(`${(cachedStats.uniqueness * 100).toFixed(1)}% unique (must be 100%)`);
       if (cachedStats.totalRows === 0) reasons.push('empty table');
-      // Check for blanks in sample
-      const hasBlankOrZero = cachedStats.sampleValues?.some(v =>
-        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
-      );
-      if (hasBlankOrZero) reasons.push('has blank/zero values');
+      if (HasBlankOrZero(cachedStats.sampleValues)) reasons.push('has blank/zero values');
       console.log(`[PKDetector] REJECT ${column.name} - not PK-eligible: ${reasons.join(', ')}`);
       return null;
     }
@@ -262,6 +259,7 @@ export class PKDetector {
     const dataPattern = cachedStats.dataPattern;
 
     // Calculate overall confidence
+    const indexBoost = indexKey ? INDEX_KEY_BOOST[indexKey.Kind] : 0;
     const confidence = this.calculatePKConfidence({
       uniqueness,
       nullCount: cachedStats.nullCount,
@@ -270,7 +268,7 @@ export class PKDetector {
       namingScore,
       dataTypeScore,
       warnings: []
-    }, tableName, column.name, colOrdinal);
+    }, tableName, column.name, colOrdinal, indexBoost);
 
     // Build evidence
     const evidence: PKEvidence = {
@@ -280,8 +278,12 @@ export class PKDetector {
       dataPattern,
       namingScore,
       dataTypeScore,
-      warnings: []
+      warnings: [],
+      backingIndex: indexKey?.Index.IndexName
     };
+    if (indexKey) {
+      evidence.warnings.push(`Backed by ${indexKey.Kind === 'UniqueNotNull' ? 'a unique index on a NOT NULL column' : 'a unique index on a nullable column'}: ${indexKey.Index.IndexName}`);
+    }
 
     // Add warnings (nulls/blanks are already hard-rejected by eligibility gate)
     if (uniqueness < 1.0) {
@@ -384,56 +386,6 @@ export class PKDetector {
   }
 
   /**
-   * Detect data pattern (sequential, GUID, etc.)
-   */
-  private detectDataPattern(
-    sampleValues: Array<string | number | null>,
-    dataType?: string
-  ): 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown' {
-    // GUID pattern
-    if (dataType && (
-        dataType.toLowerCase().includes('uniqueidentifier') ||
-        dataType.toLowerCase().includes('uuid') ||
-        dataType.toLowerCase().includes('guid'))) {
-      return 'guid';
-    }
-
-    // Check sample values for patterns
-    if (sampleValues && sampleValues.length > 1) {
-      const values = sampleValues.filter(v => v != null) as Array<string | number>;
-
-      // Check for GUID pattern in string values
-      if (values.length > 0 && typeof values[0] === 'string') {
-        const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (values.every(v => typeof v === 'string' && guidPattern.test(v))) {
-          return 'guid';
-        }
-      }
-
-      // Check for sequential numeric pattern
-      if (values.length > 0 && typeof values[0] === 'number') {
-        const numValues = values as number[];
-        const sorted = [...numValues].sort((a, b) => a - b);
-        const isSequential = sorted.every((val, idx) =>
-          idx === 0 || val === sorted[idx - 1] + 1
-        );
-        if (isSequential) {
-          return 'sequential';
-        }
-      }
-    }
-
-    // Natural key (string based on actual data)
-    if (dataType && (
-        dataType.toLowerCase().includes('varchar') ||
-        dataType.toLowerCase().includes('char'))) {
-      return 'natural';
-    }
-
-    return 'unknown';
-  }
-
-  /**
    * Calculate overall PK confidence score (0-100)
    *
    * Scoring System:
@@ -442,7 +394,7 @@ export class PKDetector {
    * - Composite keys: 50-75
    * - Everything else: <50
    */
-  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string, colOrdinal: number = 0): number {
+  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string, colOrdinal: number = 0, indexBoost: number = 0): number {
     let score = 0;
 
     // **CRITICAL FIX**: Reject obvious non-PK columns immediately
@@ -550,6 +502,12 @@ export class PKDetector {
       const boost = 20; // Add 20 points for perfect surrogate key
       score += boost;
       console.log(`[PKDetector] ${columnName}: surrogate key boost +${boost} (final: ${Math.round(Math.min(score, 100))})`);
+    }
+
+    // Existing unique index on the column: strong evidence the database itself enforces (see IndexKeyEvidence)
+    if (indexBoost > 0) {
+      score += indexBoost;
+      console.log(`[PKDetector] ${columnName}: unique index boost +${indexBoost}`);
     }
 
     // H9: Position-based multiplier — PKs are almost always first columns
@@ -764,5 +722,61 @@ export class PKDetector {
     }
 
     return candidates;
+  }
+
+  /** Whether index-backed candidates are switched on (default true). */
+  private useIndexes(): boolean {
+    return this.config.indexBackedCandidates !== false;
+  }
+
+  /**
+   * Composite candidates from multi-column unique (and primary-key) indexes. A unique index allows repeated NULLs,
+   * so every column must be NOT NULL, or nullable with no nulls in a non-empty table.
+   */
+  private indexBackedCompositeCandidates(schemaName: string, table: TableDefinition, iteration: number): PKCandidate[] {
+    const candidates: PKCandidate[] = [];
+    for (const ix of CompositeKeyIndexes(table)) {
+      const columns = ix.Columns.map((name) => table.columns.find((c) => c.name.toLowerCase() === name.toLowerCase()));
+      if (columns.some((c) => !c)) continue;
+      const cols = columns as ColumnDefinition[];
+      const names = cols.map((c) => c.name);
+      const stats = cols.map((c) => this.statsCache.getColumnStats(schemaName, table.name, c.name));
+      const totalRows = stats.find((s) => s)?.totalRows ?? table.rowCount ?? 0;
+      const allNotNull = cols.every((c) => !c.isNullable);
+      const noNullsObserved = totalRows > 0 && cols.every((c, i) => !c.isNullable || (stats[i] !== undefined && stats[i]!.nullCount === 0));
+      if (!allNotNull && !noNullsObserved) {
+        console.log(`[PKDetector] ${table.name}: unique index ${ix.IndexName} skipped - nullable columns without evidence of no nulls`);
+        continue;
+      }
+      const confidence = allNotNull ? UNIQUE_COMPOSITE_CONFIDENCE.NotNull : UNIQUE_COMPOSITE_CONFIDENCE.NoNullsObserved;
+      console.log(`[PKDetector] ${table.name} [${names.join(', ')}]: composite key backed by unique index ${ix.IndexName} (confidence ${confidence})`);
+      candidates.push({
+        schemaName,
+        tableName: table.name,
+        columnNames: names,
+        confidence,
+        evidence: {
+          uniqueness: 1.0, nullCount: 0, totalRows, dataPattern: 'composite', namingScore: 0.8, dataTypeScore: 0.9,
+          warnings: [`Backed by unique index ${ix.IndexName}`], backingIndex: ix.IndexName
+        },
+        discoveredInIteration: iteration,
+        validatedByLLM: false,
+        status: 'candidate'
+      });
+    }
+    return candidates;
+  }
+
+  /** Adds candidates, keeping the higher-confidence one when the same column set is already present. */
+  private mergeCandidates(into: PKCandidate[], extra: PKCandidate[]): void {
+    const key = (c: PKCandidate) => c.columnNames.map((n) => n.toLowerCase()).sort().join('\u0000');
+    for (const candidate of extra) {
+      const existing = into.findIndex((c) => key(c) === key(candidate));
+      if (existing < 0) {
+        into.push(candidate);
+      } else if (candidate.confidence > into[existing].confidence) {
+        into[existing] = candidate;
+      }
+    }
   }
 }

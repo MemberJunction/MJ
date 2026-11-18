@@ -111,8 +111,8 @@ export class InteractiveFormApplyService {
         if (!user) {
             return this.fail('No current user.');
         }
-        const gqlProvider = p as unknown as GraphQLDataProvider;
-        if (!gqlProvider || typeof (gqlProvider as { ExecuteGQL?: unknown }).ExecuteGQL !== 'function') {
+        const gqlProvider = p as GraphQLDataProvider;
+        if (!gqlProvider || typeof gqlProvider.ExecuteGQL !== 'function') {
             return this.fail('Action invocation requires a GraphQL provider.');
         }
 
@@ -141,7 +141,7 @@ export class InteractiveFormApplyService {
         // Step 2: confirm with the user. A form carrying the incumbent's own name is a
         // new version of it; any other form is a different form, and applying it swaps
         // which one the user sees rather than merging the two.
-        const formName = (spec as unknown as { name?: string }).name ?? 'Custom Form';
+        const formName = spec.name ?? 'Custom Form';
         const isNewVersion = hasExistingOverride && !!existingOverride!.ComponentName
             && existingOverride!.ComponentName === formName;
         const proceed = await this.confirm(
@@ -455,7 +455,7 @@ export class InteractiveFormApplyService {
                 width: 1320,
                 minWidth: 720,
             });
-            const dialog = ref.Content?.instance as unknown as MjFormPlacementDialogComponent | undefined;
+            const dialog = ref.Content?.instance as MjFormPlacementDialogComponent | undefined;
             if (!dialog) {
                 ref.Close();
                 resolve(null);
@@ -753,6 +753,7 @@ export class InteractiveFormApplyService {
                 ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             });
             return result.Success ? (result.Results?.[0]?.ID ?? null) : null;
@@ -847,8 +848,8 @@ export class InteractiveFormApplyService {
             ],
         });
         return new Promise<boolean>(resolve => {
-            ref.Result.subscribe((res: unknown) => {
-                resolve((res as { primary?: boolean })?.primary === true);
+            ref.Result.subscribe((res) => {
+                resolve((res as { primary?: boolean } | undefined)?.primary === true);
             });
         });
     }
@@ -875,8 +876,15 @@ export class InteractiveFormApplyService {
             );
             return { Success: false, Kind: 'form', Message: result.Message };
         }
-        let payload: Record<string, unknown> = {};
-        try { payload = JSON.parse(result.Message ?? '{}'); } catch { /* best effort */ }
+        let payload: {
+            Mode?: string;
+            OverrideID?: string;
+            ComponentID?: string;
+            Version?: string | number;
+        } = {};
+        try {
+            payload = JSON.parse(result.Message ?? '{}') as typeof payload;
+        } catch { /* best effort */ }
         const mode: InteractiveFormApplyResult['Mode'] = kind === 'create'
             ? 'create'
             : (payload.Mode === 'in-place' ? 'modify-in-place' : 'modify-new-version');
@@ -894,9 +902,9 @@ export class InteractiveFormApplyService {
             Success: true,
             Kind: 'form',
             Mode: mode,
-            OverrideID: payload.OverrideID as string | undefined,
-            ComponentID: payload.ComponentID as string | undefined,
-            Version: payload.Version as string | undefined,
+            OverrideID: payload.OverrideID,
+            ComponentID: payload.ComponentID,
+            Version: payload.Version != null ? String(payload.Version) : undefined,
             Message: result.Message,
         };
     }

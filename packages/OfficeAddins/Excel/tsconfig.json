@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "src/web/**", "**/*.test.ts", "**/__tests__/**", "vitest.config.ts"]
+}

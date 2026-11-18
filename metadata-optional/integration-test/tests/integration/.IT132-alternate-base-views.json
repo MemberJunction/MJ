@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT132 - Alternate Base Views",
+    "Description": "Proves Alternate Base Views (MJ Canon Layer 1) metadata, physical constraints, RunView routing, fail-closed validation, LocalCacheManager abv:<Name> cache key isolation, and ParentID hierarchy against a live database. Deterministic, read-only, LLM-free. 6 checks ABV1-ABV6.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 6 checks pass: metadata and validators coherent, physical constraints present on EntityAlternateBaseView, RunView routes simple/count_only/Aggregates through registered AlternateBaseView, unknown or Disabled AlternateBaseView fails closed, LocalCacheManager isolates abv:<Name> fingerprints, and EntityAlternateBaseViewInfo hierarchy + EntityInfo lookups resolve accurately."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "alternate-base-views"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "8A3492D1-6E4A-4B8F-9C35-2F1E09A4C132"
+  }
+}

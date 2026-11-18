@@ -4,6 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
+import { GetValueAtPath } from '@memberjunction/global';
 import type { ValueConstraint, ResolvedConstraint, ViolationPolicy } from '../spec/value-constraint.js';
 
 export interface OutputValidationResult {
@@ -21,6 +22,8 @@ export interface ValidationOptions {
 
 /**
  * Validates a single computed output value against its constraint and applies the declared violation policy.
+ * A lookup value must match one of the constraint's loaded rows (`options.resolved.AllowedValues`), case-insensitively,
+ * and is returned in the row's own form; without loaded rows only a non-empty identifier is required.
  */
 export function ValidateOutputValue(
   rawValue: unknown,
@@ -53,11 +56,7 @@ export function ValidateOutputValue(
       return validateFreetext(rawValue, constraint, policy);
 
     case 'lookup':
-      // Lookup validation at runtime verifies non-empty match string
-      if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
-        return applyPolicy(rawValue, policy, `Lookup output must be a non-empty string identifier or name.`);
-      }
-      return { valid: true, value: rawValue.trim() };
+      return validateLookup(rawValue, policy, options);
 
     default:
       return { valid: true, value: rawValue };
@@ -71,6 +70,64 @@ export function validateOutputValue(
   options?: ValidationOptions
 ): OutputValidationResult {
   return ValidateOutputValue(rawValue, constraint, options);
+}
+
+/**
+ * Validates each item of an array output at the constraint's `ItemRef` (one property of the item, e.g.
+ * `$.JobFunctionID`) and writes each item's canonical value back onto it. `fail`: any invalid item fails the output,
+ * naming every invalid value. `null`: an invalid item is dropped. `coerce-to-other`: an item replaced with a value is
+ * kept with it, one that can only be replaced with null is dropped. Without an `ItemRef`, or for a non-array value,
+ * this is {@link ValidateOutputValue}.
+ */
+export function ValidateOutputItems(rawValue: unknown, constraint: ValueConstraint, options?: ValidationOptions): OutputValidationResult {
+  const itemRef = (constraint.Type === 'enum' || constraint.Type === 'lookup') ? constraint.ItemRef : undefined;
+  if (!itemRef || !Array.isArray(rawValue)) {
+    return ValidateOutputValue(rawValue, constraint, options);
+  }
+  const path = itemRef.replace(/^\$\.?/, '');
+  const kept: unknown[] = [];
+  const invalid: string[] = [];
+  let changed = false;
+  for (const item of rawValue) {
+    const v = GetValueAtPath(item, path);
+    const r = ValidateOutputValue(v, constraint, options);
+    if (!r.valid || (r.violationPolicyApplied !== undefined && (r.value === null || r.value === undefined))) {
+      invalid.push(v === null || v === undefined ? '(missing)' : String(v));
+      continue;
+    }
+    changed ||= r.value !== v;
+    kept.push(item !== null && typeof item === 'object' && !Array.isArray(item) ? { ...item, [path]: r.value } : r.value);
+  }
+  if (invalid.length === 0) {
+    return { valid: true, value: kept, coerced: changed };
+  }
+  const message = `Items not allowed at ${itemRef}: ${invalid.join(', ')}.`;
+  const policy = constraint.OnViolation || 'fail';
+  return policy === 'fail'
+    ? { valid: false, value: rawValue, violationMessage: message, violationPolicyApplied: 'fail' }
+    : { valid: true, value: kept, violationMessage: message, violationPolicyApplied: policy, coerced: true };
+}
+
+/** A lookup output: a non-empty string or number that, when the constraint's rows are loaded, matches one of them. */
+function validateLookup(rawValue: unknown, policy: ViolationPolicy, options?: ValidationOptions): OutputValidationResult {
+  if (typeof rawValue !== 'string' && typeof rawValue !== 'number') {
+    return applyPolicy(rawValue, policy, 'Lookup output must be a string or number identifier.');
+  }
+  const str = String(rawValue).trim();
+  if (str.length === 0) {
+    return applyPolicy(rawValue, policy, 'Lookup output must be a non-empty string identifier or name.');
+  }
+  const allowed = options?.resolved?.AllowedValues;
+  if (allowed && allowed.length > 0) {
+    const wanted = str.toLowerCase();
+    const match = allowed.find((v) => v.toLowerCase() === wanted);
+    if (match === undefined) {
+      const what = `${options?.resolved?.RelatedEntityName || 'record'} ${options?.resolved?.LookupMatchField || ''}`.trim();
+      return applyPolicy(rawValue, policy, `Value '${str}' does not match an existing ${what}.`);
+    }
+    return { valid: true, value: match, coerced: match !== rawValue };
+  }
+  return { valid: true, value: str };
 }
 
 function applyPolicy(
@@ -168,6 +225,9 @@ function validateNumeric(
     const parsed = Number(rawValue.trim());
     if (isNaN(parsed)) {
       return applyPolicy(rawValue, policy, `String value '${rawValue}' cannot be parsed as a number.`);
+    }
+    if (!Number.isFinite(parsed)) {
+      return applyPolicy(rawValue, policy, `String value '${rawValue}' cannot be parsed as a finite number.`);
     }
     numVal = parsed;
   } else {

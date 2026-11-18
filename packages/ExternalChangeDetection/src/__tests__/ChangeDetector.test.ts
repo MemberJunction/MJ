@@ -9,6 +9,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
+/** Every `RunQuery` call the detection queries make, with an empty successful result. */
+const { mockRunViewFn, mockRunQuery } = vi.hoisted(() => ({
+  mockRunViewFn: vi.fn(),
+  mockRunQuery: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+}));
+
 vi.mock('@memberjunction/core', () => {
   class FakeCompositeKey {
     KeyValuePairs: { FieldName: string; Value: unknown }[];
@@ -81,7 +87,10 @@ vi.mock('@memberjunction/core', () => {
       static Provider = {};
     },
     RunView: class {
-      RunView = vi.fn();
+      RunView = mockRunViewFn;
+    },
+    RunQuery: class {
+      RunQuery = mockRunQuery;
     },
     UpdateCurrentConsoleLine: vi.fn(),
     UpdateCurrentConsoleProgress: vi.fn(),
@@ -155,6 +164,7 @@ vi.mock('@memberjunction/encryption', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
+import { CompositeKey } from '@memberjunction/core';
 import {
   FieldChange,
   ChangeDetectionItem,
@@ -278,6 +288,43 @@ describe('ExternalChangeDetectorEngine - buildDetectionParams uses correct PK', 
     expect(params.creation.PrimaryKeyJoin).toContain('[Name]');
     expect(params.update.PrimaryKeyOrderBy).toBe('ot.[PersonID], ot.[Name]');
     expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[PersonID] IS NULL AND ot.[Name] IS NULL');
+  });
+});
+
+describe('ExternalChangeDetectorEngine - DetectChangesForEntity passes server-set parameters', () => {
+  beforeEach(() => mockRunQuery.mockClear());
+
+  it('sends every detection value as ServerParameters, never as caller Parameters', async () => {
+    const engine = new ExternalChangeDetectorEngine();
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+    const entityInfo = {
+      ID: 'entity-1',
+      Name: 'Event Tickets',
+      SchemaName: 'ym',
+      BaseView: 'vwEventTickets',
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    const result = await engine.DetectChangesForEntity(entityInfo as never);
+
+    expect(result.Success).toBe(true);
+    const calls = mockRunQuery.mock.calls.map(([params]) => params as Record<string, unknown>);
+    expect(calls.map(c => c.QueryName)).toEqual([
+      'ExternalChangeDetection_DetectCreations',
+      'ExternalChangeDetection_DetectUpdates',
+      'ExternalChangeDetection_DetectDeletions',
+    ]);
+    for (const call of calls) {
+      expect(call.Parameters).toBeUndefined();
+      expect(call.ServerParameters).toMatchObject({ EntityID: 'entity-1', SchemaName: 'ym', BaseView: 'vwEventTickets' });
+    }
+    expect(calls[2].ServerParameters).toMatchObject({ PrimaryKeyIsNull: 'ot.[TicketId] IS NULL' });
   });
 });
 
@@ -541,5 +588,33 @@ describe('ExternalChangeDetectorEngine - buildEntityFromRow', () => {
 
     expect(loadedRow.Mystery).toBe('$ENC$blob:unknown');
     expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+});
+
+describe('GetLatestRecordChangesDataForEntityRecord SQL escaping', () => {
+  beforeEach(() => {
+    mockRunViewFn.mockReset();
+  });
+
+  it('escapes single quotes in concatenated primary keys and entity IDs when building ExtraFilter', async () => {
+    mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'rc-escaped' }] });
+
+    const engine = ExternalChangeDetectorEngine.Instance;
+    const item = new ChangeDetectionItem();
+    item.Entity = { ID: "ent-1'2" } as ChangeDetectionItem['Entity'];
+    item.PrimaryKey = new CompositeKey([{ FieldName: 'Code', Value: "O'Brien' OR '1'='1" }]);
+
+    const method = Reflect.get(engine, 'GetLatestRecordChangesDataForEntityRecord') as (
+      change: ChangeDetectionItem,
+    ) => Promise<Record<string, string> | null>;
+
+    const row = await method.call(engine, item);
+    expect(row).toEqual({ ID: 'rc-escaped' });
+    expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+
+    const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+    expect(params.ExtraFilter).toBe(
+      "EntityID = 'ent-1''2' AND RecordID = 'Code|O''Brien'' OR ''1''=''1' AND Type IN ('Update', 'Create')",
+    );
   });
 });

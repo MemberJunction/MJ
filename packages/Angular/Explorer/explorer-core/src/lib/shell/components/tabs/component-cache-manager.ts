@@ -98,6 +98,13 @@ export class ComponentCacheManager {
    *   shares one key. A reload from `#Accounts` to `#Contacts` would then get a cache hit on the
    *   Accounts component, which never has its `Data` rebound, so the tab keeps showing Accounts
    *   and the tab-container's entity check fires again on every emission.
+   * - **RecordResource / Records (IS-A hierarchies)** — parent and child entities (e.g.
+   *   `MJ_BizApps_Tasks: Tasks` and `MJ_BizApps_Tasks_GitHub: Git Hub Pull Request Tasks`) share
+   *   the exact same primary key (`recordId`). Without the entity discriminator in the key,
+   *   navigating between parent and child entity records hands back the component just detached,
+   *   whose `Data` reports the other entity, causing an infinite synchronous reload loop that freezes
+   *   the browser tab.
+   * - **AlternateBaseView overrides** — views with different `?abv=` values do not collide.
    *
    * Passing the entity name as discriminator keeps them separate. Whatever the tab-container's
    * reload check compares has to be part of this key, or a reload is handed back the component
@@ -105,14 +112,31 @@ export class ComponentCacheManager {
    */
   private getCacheKey(resourceType: string, recordId: string, appId: string, discriminator?: string): string {
     let normalizedRecordId: string;
+    const isRecord = (resourceType ?? '').toLowerCase() === 'recordresource' || (resourceType ?? '').toLowerCase() === 'records';
     if (!recordId) {
       normalizedRecordId = discriminator ? `__new__::${discriminator}` : '__no_record__';
     } else if (discriminator && ComponentCacheManager.IsDynamicViewMarker(recordId)) {
       normalizedRecordId = `dynamic::${discriminator}`;
+    } else if (discriminator && (isRecord || discriminator.includes('abv:'))) {
+      normalizedRecordId = `${recordId}::${discriminator}`;
     } else {
       normalizedRecordId = recordId;
     }
     return `${appId}::${resourceType}::${normalizedRecordId}`;
+  }
+
+  /**
+   * Computes the cache discriminator for a resource configuration, combining `Entity` and any
+   * `AlternateBaseView` override so dynamic or saved views opened with different `?abv=` values
+   * do not collide in the component cache.
+   */
+  public static GetCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    const entity = configuration?.Entity as string | undefined;
+    const abv = (configuration?.AlternateBaseView ?? configuration?.alternateBaseView) as string | undefined;
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || (abv ? `abv:${abv}` : undefined);
   }
 
   /**
@@ -178,9 +202,8 @@ export class ComponentCacheManager {
     const resolvedResourceType = resourceData.Configuration?.resourceTypeDriverClass
       || resourceData.Configuration?.driverClass
       || resourceData.ResourceType;
-    // Entity name discriminates between distinct "new record" tabs (empty recordId).
-    // For non-Records resource types this is undefined, leaving the key unchanged.
-    const discriminator = resourceData.Configuration?.Entity as string | undefined;
+    // Entity name (plus any AlternateBaseView) discriminates between distinct "new record" or dynamic view tabs.
+    const discriminator = ComponentCacheManager.GetCacheDiscriminator(resourceData.Configuration);
     const key = this.getCacheKey(
       resolvedResourceType,
       resourceData.ResourceRecordID || '',
@@ -288,15 +311,16 @@ export class ComponentCacheManager {
       return false;
     }
 
-    // Once a record has a real id, the discriminator no longer matters (the id is unique).
-    // Default the new discriminator to undefined unless explicitly provided.
-    const newKey = this.getCacheKey(resourceType, newRecordId, appId, newDiscriminator);
+    // Default the new discriminator to oldDiscriminator so record entities retain their entity
+    // discriminator (e.g. In IS-A hierarchies) after transitioning from new to saved.
+    const effectiveNewDiscriminator = newDiscriminator ?? oldDiscriminator;
+    const newKey = this.getCacheKey(resourceType, newRecordId, appId, effectiveNewDiscriminator);
     if (oldKey === newKey) {
       return false;
     }
 
     info.resourceRecordId = newRecordId;
-    info.keyDiscriminator = newDiscriminator;
+    info.keyDiscriminator = effectiveNewDiscriminator;
     info.lastUsed = new Date();
     if (info.resourceData) {
       info.resourceData.ResourceRecordID = newRecordId;

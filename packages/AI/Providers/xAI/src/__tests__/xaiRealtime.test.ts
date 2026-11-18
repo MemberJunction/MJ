@@ -13,56 +13,50 @@ vi.mock('@memberjunction/global', () => ({
 // time must exist here alongside BaseModel/BaseRealtimeModel. The realtime type aliases
 // (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        protected _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface: SupportsClientDirect
-    // defaults to false and CreateClientSession throws unless overridden (OpenAIRealtime — which
-    // xAIRealtime now subclasses — overrides both, matching Grok Voice's real client-direct support).
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // Base classes the OpenAI provider's other modules extend during module evaluation.
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
-    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
-    // decorators read these at module evaluation.
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
-    // The OpenAI Decisions driver extends BaseSystemOneDecision and registers against BaseDecision.
     class BaseDecision extends BaseModel {}
     class BaseSystemOneDecision extends BaseDecision {}
-    // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
             return {};
         }
     }
-    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
-    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
-    // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    // Same reasoning for ResolveResponseDoneUsage — PURE and dependency-free, and it encodes the
-    // provider-specific rule for WHERE usage lives on a response.done frame (xAI puts it at the
-    // top level, OpenAI under response.usage). Stubbing it would let this test restate that rule
-    // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
-    // place — so the real implementation is the thing under test.
-    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
+    const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
+    return {
+        BaseModel,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
+        BaseLLM,
+        BaseEmbeddings,
+        BaseAudioGenerator,
+        BaseTextToSpeech,
+        BaseSpeechToText,
+        BaseImageGenerator,
+        BaseDecision,
+        BaseSystemOneDecision,
+        ErrorAnalyzer,
+        RealtimeDiagLog,
+        IsTranscriptContinuation,
+        ResolveResponseDoneUsage,
+        MapRealtimeUsageModalityDetail,
+        NormalizeTurnDetectionSettings,
+        RealtimeDroppedInputReporter,
+    };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -94,6 +88,15 @@ import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'opena
 class FakeConnection implements IxAIRealtimeConnection {
     public Sent: RealtimeClientEvent[] = [];
     public Closed = false;
+    /**
+     * Behave like the real `OpenAIRealtimeWebSocket`: the socket is still CONNECTING when the driver gets it, a
+     * `send` before it opens is dropped and reported as the SDK's 'could not send data' error, and the server's
+     * `session.created` is the first frame after it opens.
+     */
+    public RequireOpen = false;
+    private open = false;
+    /** Fire `session.created` on its own once the session listens, as the real socket does once it opens. */
+    public AutoSessionCreated = true;
     private listeners: Array<(event: RealtimeServerEvent) => void> = [];
     private errorListeners: Array<(error: OpenAIRealtimeError) => void> = [];
     private socketCloseListeners: Array<() => void> = [];
@@ -112,7 +115,17 @@ class FakeConnection implements IxAIRealtimeConnection {
         listener: ((event: RealtimeServerEvent) => void) | ((error: OpenAIRealtimeError) => void)
     ): void {
         if (event === 'event') {
-            this.listeners.push(listener as (event: RealtimeServerEvent) => void);
+            const eventListener = listener as (event: RealtimeServerEvent) => void;
+            this.listeners.push(eventListener);
+            if (this.AutoSessionCreated) {
+                // Each session on this (reused) fake hears its own session.created, as each real socket sends one.
+                queueMicrotask(() => {
+                    if (this.AutoSessionCreated && this.listeners.includes(eventListener)) {
+                        this.open = true;
+                        eventListener({ type: 'session.created', event_id: 'auto-created' } as RealtimeServerEvent);
+                    }
+                });
+            }
         } else {
             this.errorListeners.push(listener as (error: OpenAIRealtimeError) => void);
         }
@@ -130,6 +143,10 @@ class FakeConnection implements IxAIRealtimeConnection {
         }
     }
     public send(event: RealtimeClientEvent): void {
+        if (this.RequireOpen && !this.open) {
+            this.FireError(makeSdkError('could not send data'));
+            return;
+        }
         this.Sent.push(event);
     }
     public close(): void {
@@ -137,7 +154,10 @@ class FakeConnection implements IxAIRealtimeConnection {
     }
     /** Test helper: dispatch a server event to all registered listeners. */
     public Fire(event: RealtimeServerEvent): void {
-        for (const l of this.listeners) {
+        if (event.type === 'session.created') {
+            this.open = true;
+        }
+        for (const l of [...this.listeners]) {
             l(event);
         }
     }
@@ -191,6 +211,25 @@ class ClientDirectTestablexAI extends xAIRealtime {
     }
 }
 
+describe('xAIRealtime start config on a socket that is still connecting', () => {
+    it('sends the start session.update only once the socket is open, so the config reaches xAI', async () => {
+        const driver = new TestablexAIRealtime('xai-key');
+        driver.Fake.RequireOpen = true;
+        driver.Fake.AutoSessionCreated = false;
+        const session = (await driver.StartSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Eagerness: 'high' } },
+        })) as xAIRealtimeSession;
+        const applied = session.WaitForConfigApplied();
+        driver.Fake.Fire({ type: 'session.created', event_id: 'e1' } as RealtimeServerEvent);
+        await expect(applied).resolves.toBeUndefined();
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        expect(update?.type === 'session.update' && update.session.type === 'realtime' ? update.session.audio?.input?.turn_detection : null)
+            .toMatchObject({ type: 'server_vad', silence_duration_ms: 400 });
+    });
+});
+
 describe('xAIRealtime construction', () => {
     beforeEach(() => {
         openAICtor.mockClear();
@@ -230,6 +269,13 @@ describe('xAIRealtime construction', () => {
     it('CreateClientSession omits tools when none are provided', async () => {
         const cfg = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' });
         expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
+    });
+
+    it('CreateClientSession carries the 7200s xAI cap as MaxSessionSeconds (not the OpenAI 3600)', async () => {
+        const cfg = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' });
+        expect(cfg.MaxSessionSeconds).toBe(7200);
+        const host = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi', MaxSessionSeconds: 900 });
+        expect(host.MaxSessionSeconds).toBe(900);
     });
 });
 
@@ -303,7 +349,7 @@ describe('xAIRealtime', () => {
             }
         });
 
-        it('lets the Config bag override the default audio/input-transcription block', async () => {
+        it('merges a Config bag audio override into the default audio block (the bag leaf wins, built turn_detection survives)', async () => {
             await driver.StartSession({
                 Model: 'grok-voice',
                 SystemPrompt: 'sys',
@@ -311,7 +357,30 @@ describe('xAIRealtime', () => {
             });
             const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
             if (update?.type === 'session.update' && update.session.type === 'realtime') {
-                expect(update.session.audio).toEqual({ input: { transcription: { model: 'grok-transcribe' } } });
+                expect(update.session.audio).toEqual({
+                    input: {
+                        transcription: { model: 'grok-transcribe' },
+                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true },
+                    },
+                });
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('a raw audio override merges into the required explicit server_vad block', async () => {
+            await driver.StartSession({
+                Model: 'grok-voice',
+                SystemPrompt: 'sys',
+                Config: { audio: { input: { turn_detection: { idle_timeout_ms: 5000 } } } },
+            });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                expect(update.session.audio).toMatchObject({
+                    input: {
+                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true, idle_timeout_ms: 5000 },
+                    },
+                });
             } else {
                 throw new Error('expected realtime session.update');
             }
@@ -731,13 +800,18 @@ describe('xAIRealtime', () => {
     });
 
     describe('lifecycle', () => {
-        it('Close removes the event + error listeners and closes the connection', async () => {
+        it('Close removes the session\'s event + error listeners, leaves a no-op error guard, and closes the connection', async () => {
             const session = await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+            const onError = vi.fn();
+            session.OnError(onError);
             expect(driver.Fake.ListenerCount).toBe(1);
             expect(driver.Fake.ErrorListenerCount).toBe(1);
             await session.Close();
             expect(driver.Fake.ListenerCount).toBe(0);
-            expect(driver.Fake.ErrorListenerCount).toBe(0);
+            // The guard keeps the SDK from turning a late socket error into an unhandled rejection; it reaches no one.
+            expect(driver.Fake.ErrorListenerCount).toBe(1);
+            driver.Fake.FireError(makeSdkError('closed before the connection was established'));
+            expect(onError).not.toHaveBeenCalled();
             expect(driver.Fake.Closed).toBe(true);
         });
 
@@ -814,6 +888,75 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
             throw new Error('expected realtime session.update');
         }
     });
+
+    describe('Eagerness silence ladder (xAI has no eagerness knob)', () => {
+        async function startTurnDetection(turnDetection: Record<string, unknown>, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+            await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { turnDetection, ...extra } });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const td = (update.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                if (!td) throw new Error('expected turn_detection in session.update');
+                expect(td).not.toHaveProperty('eagerness');
+                return td;
+            }
+            throw new Error('expected realtime session.update');
+        }
+
+        it("Eagerness 'low' alone -> silence_duration_ms 1200", async () => {
+            expect(await startTurnDetection({ Eagerness: 'low' })).toMatchObject({ type: 'server_vad', silence_duration_ms: 1200 });
+        });
+
+        it("Eagerness 'high' -> 400; 'auto' -> 700", async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'high' })).toMatchObject({ silence_duration_ms: 400 });
+            driver.Fake.Sent.length = 0;
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'auto' })).toMatchObject({ silence_duration_ms: 700 });
+        });
+
+        it('explicit SilenceDurationMs 900 beats the ladder', async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'low', SilenceDurationMs: 900 })).toMatchObject({ silence_duration_ms: 900 });
+        });
+
+        it('no Eagerness and no silence -> no silence_duration_ms', async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Threshold: 0.6 })).not.toHaveProperty('silence_duration_ms');
+        });
+
+        it('explicit SilenceDurationMs 900 with Eagerness and no Mode -> 900', async () => {
+            expect(await startTurnDetection({ Eagerness: 'low', SilenceDurationMs: 900 })).toMatchObject({ type: 'server_vad', silence_duration_ms: 900 });
+        });
+
+        it('SilenceDurationMs 900 alone, no Mode -> 900', async () => {
+            expect(await startTurnDetection({ SilenceDurationMs: 900 })).toMatchObject({ type: 'server_vad', silence_duration_ms: 900 });
+        });
+
+        it('a request with no tuning field is unchanged: plain floor block', async () => {
+            const td = await startTurnDetection({});
+            expect(td).toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
+        });
+
+        it("Mode 'semanticVad' + Eagerness -> today's fallback block, no ladder value", async () => {
+            const td = await startTurnDetection({ Mode: 'semanticVad', Eagerness: 'low' });
+            expect(td).toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
+        });
+
+        it("Reconfigure after a start with Eagerness 'high' carries silence_duration_ms 400", async () => {
+            const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { turnDetection: { Eagerness: 'high' } } })) as xAIRealtimeSession;
+            const before = driver.Fake.Sent.length;
+            session.Reconfigure({ DisableAutoResponse: true });
+            const frame = driver.Fake.Sent.slice(before)[0];
+            if (frame.type === 'session.update' && frame.session.type === 'realtime') {
+                const td = (frame.session.audio as { input?: { turn_detection?: Record<string, unknown> } }).input?.turn_detection;
+                expect(td).toMatchObject({ create_response: false, silence_duration_ms: 400 });
+                expect(td).not.toHaveProperty('eagerness');
+            } else {
+                throw new Error('expected realtime session.update from Reconfigure');
+            }
+        });
+
+        it('the ladder keeps the meeting floor', async () => {
+            const td = await startTurnDetection({ Mode: 'serverVad', Eagerness: 'high' }, { disableAutoResponse: true });
+            expect(td).toMatchObject({ create_response: false, interrupt_response: true, silence_duration_ms: 400 });
+        });
+    });
 });
 
 describe('xAIRealtime edge coverage (shared-driver surface)', () => {
@@ -823,10 +966,13 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         driver = new TestablexAIRealtime('test-key');
     });
 
-    it('resolves WaitForConfigApplied immediately (non-deferring profile sends config synchronously)', async () => {
+    it('holds the start config until session.created, then resolves WaitForConfigApplied', async () => {
+        driver.Fake.AutoSessionCreated = false;
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        // Nothing on the socket before the server's first frame: a send there would be dropped on a connecting socket.
+        expect(driver.Fake.Sent.some((e) => e.type === 'session.update')).toBe(false);
+        driver.Fake.Fire({ type: 'session.created', event_id: 'e' } as RealtimeServerEvent);
         await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
-        // Config already on the socket BEFORE any server frame — xAI accepts it right after connect.
         expect(driver.Fake.Sent[0]?.type).toBe('session.update');
     });
 
@@ -898,7 +1044,9 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
-        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        // The session carries xAI's own ceiling, not the OpenAI parent's.
+        expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 7200, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(xAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
         expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;
         session.Reconfigure({ DisableAutoResponse: true });
@@ -910,5 +1058,133 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         } else {
             throw new Error('expected realtime session.update from Reconfigure');
         }
+    });
+
+    it('sends resumption: { enabled: true } in session.update on the socket unless ZeroDataRetention is true, while omitting it from the REST client_secrets mint (#12)', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session['resumption']).toEqual({ enabled: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+
+        const zdrDriver = new TestablexAIRealtime('test-key');
+        await zdrDriver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', ZeroDataRetention: true });
+        const zdrUpdate = zdrDriver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (zdrUpdate?.type === 'session.update' && zdrUpdate.session.type === 'realtime') {
+            const session = zdrUpdate.session as Record<string, unknown>;
+            expect(session['resumption']).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update for ZDR');
+        }
+
+        const cd = new ClientDirectTestablexAI('k');
+        await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const mintSession = cd.LastSecretParams?.session as Record<string, unknown> | undefined;
+        expect(mintSession?.['resumption']).toBeUndefined();
+    });
+});
+
+/** Driver whose every connection is a fresh fake: the first opens on its own, later ones answer only what a test fires. */
+class ReconnectingxAIRealtime extends xAIRealtime {
+    public readonly Connections: FakeConnection[] = [];
+    public readonly ResumptionHandlesUsed: Array<string | undefined> = [];
+    protected override createConnection(_model: string, resumptionHandle?: string): IxAIRealtimeConnection {
+        const conn = new FakeConnection();
+        conn.AutoSessionCreated = this.Connections.length === 0;
+        this.Connections.push(conn);
+        this.ResumptionHandlesUsed.push(resumptionHandle);
+        return conn;
+    }
+}
+
+describe('xAIRealtime reconnect keeps the frames that come with session.created', () => {
+    const conversationCreated = (id: string): RealtimeServerEvent =>
+        ({ type: 'conversation.created', event_id: 'e', conversation: { id, object: 'realtime.conversation' } }) as RealtimeServerEvent;
+
+    it.each([
+        ['an explicit native resumption', true],
+        ['a default lossless reseed', false],
+    ])('records the conversation.created that arrives with the new connection\'s session.created, after %s', async (_move, explicitNative) => {
+        const driver = new ReconnectingxAIRealtime('xai-key');
+        const session = (await driver.StartSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'sys',
+            ...(explicitNative ? { Config: { trustNativeResumption: true } } : {}),
+        })) as xAIRealtimeSession;
+        await session.WaitForConfigApplied();
+        driver.Connections[0].Fire(conversationCreated('conv_1'));
+        expect(session.ResumptionHandle).toBe('conv_1');
+
+        const reconnect = session.TriggerReconnect('connection-lost');
+        const second = driver.Connections[1];
+        // One burst, as xAI sends them: both frames arrive before the reconnect's wait for session.created resumes.
+        second.Fire({ type: 'session.created', event_id: 'e2' } as RealtimeServerEvent);
+        second.Fire(conversationCreated('conv_2'));
+        expect(await reconnect).toBe(true);
+
+        expect(driver.ResumptionHandlesUsed[1]).toBe(explicitNative ? 'conv_1' : undefined);
+        expect(session.ResumptionHandle).toBe('conv_2');
+        await session.Close();
+    });
+
+    it('defaults TrustsNativeResumption to false across server and client-direct xAI sessions and preserves full memory across drop + subsequent reconnects', async () => {
+        const driver = new ReconnectingxAIRealtime('xai-key');
+        expect(driver.TrustsNativeResumption).toBe(false);
+
+        const cd = new ClientDirectTestablexAI('k');
+        const minted = await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        expect(minted.TrustNativeResumption).toBe(false);
+
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        expect(session.TrustsNativeResumption).toBe(false);
+        await session.WaitForConfigApplied();
+
+        // Initial conversation conv_1 receives spoken turns, screen context notes, and ephemeral progress
+        driver.Connections[0].Fire(conversationCreated('conv_1'));
+        driver.Connections[0].Fire({
+            type: 'conversation.item.input_audio_transcription.completed',
+            transcript: 'Remember my launch code is 7788.',
+            content_index: 0,
+            event_id: 'e_u1',
+            item_id: 'item_u1',
+        } as RealtimeServerEvent);
+        driver.Connections[0].Fire({
+            type: 'response.output_audio_transcript.done',
+            transcript: 'Noted — launch code 7788.',
+            content_index: 0,
+            event_id: 'e_a1',
+            item_id: 'item_a1',
+            output_index: 0,
+            response_id: 'r1',
+        } as RealtimeServerEvent);
+        session.SendContextNote('[app-context]\nlocation: Explorer › Old Screen', { StateKey: 'app-context' });
+        session.SendContextNote('[app-context]\nlocation: Explorer › Current Screen', { StateKey: 'app-context' });
+        session.SendContextNote('[delegated-agent progress] running step 1', { Ephemeral: true });
+
+        // Network drop -> recovers onto conv_2 via text seeding (NOT ?conversation_id=conv_1)
+        const r1 = session.TriggerReconnect('connection-lost');
+        driver.Connections[1].Fire({ type: 'session.created', event_id: 's2' } as RealtimeServerEvent);
+        driver.Connections[1].Fire(conversationCreated('conv_2'));
+        expect(await r1).toBe(true);
+
+        // Next planned reconnect -> recovers onto conv_3 via text seeding (NOT ?conversation_id=conv_2)
+        const r2 = session.TriggerReconnect('duration-expiry');
+        driver.Connections[2].Fire({ type: 'session.created', event_id: 's3' } as RealtimeServerEvent);
+        driver.Connections[2].Fire(conversationCreated('conv_3'));
+        expect(await r2).toBe(true);
+
+        expect(driver.ResumptionHandlesUsed).toEqual([undefined, undefined, undefined]);
+        for (const conn of [driver.Connections[1], driver.Connections[2]]) {
+            const seededText = JSON.stringify(conn.Sent.filter((e) => e.type === 'conversation.item.create'));
+            expect(seededText).toContain('Remember my launch code is 7788.');
+            expect(seededText).toContain('Noted — launch code 7788.');
+            expect(seededText).toContain('Current Screen');
+            expect(seededText).not.toContain('Old Screen');
+            expect(seededText).not.toContain('delegated-agent progress');
+        }
+        await session.Close();
     });
 });

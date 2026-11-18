@@ -195,6 +195,7 @@ export class NewUserBase {
                 Fields: ['ID', 'IsTemplate'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser
         );

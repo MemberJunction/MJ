@@ -99,13 +99,15 @@ The Knowledge Hub application provides a suite of dashboards for managing vector
 - **Entity document selection**: Pick which entity document to search against
 - **Result cards**: Display matched records with relevance scores and metadata
 
-#### Duplicate Detection Dashboard
-- **Kanban board**: Organizes potential duplicates by status (Pending, Reviewed, Merged, Rejected)
-- **Comparison slide-in**: Side-by-side field diff showing which fields match, differ, or are empty
-- **Merge confirmation**: Dialog showing dependency counts and affected records before executing a merge
-- **Drag-and-drop**: Move duplicate pairs between kanban columns for triage
-- **Threshold controls**: Adjust potential and absolute match thresholds for the run
-- **Progress tracking**: Real-time progress reporting during detection runs
+#### Duplicate Detection Dashboard (`DuplicateDetectionResource`, Knowledge Hub → Duplicates)
+- **Run detection**: Pick an Active entity document and run detection over the whole entity. Creating the `MJ: Duplicate Runs` record starts detection on the server; progress arrives through the `PipelineProgress` GraphQL subscription, with a 15-second database poll as a fallback, and the page reconnects to a run still in progress.
+- **Threshold and reasoning controls**: Potential/Absolute Match sliders and the LLM Reasoning switch and threshold. All of them **save onto the entity document**; they are not one-run overrides.
+- **Kanban board**: One card per source record with all of its candidate matches, in **Pending Review**, **Approved** and **Rejected** columns. Approve, Reject or drag a card to set every match's `ApprovalStatus`. Filters for entity, score range and date range.
+- **Comparison slide-in**: Side-by-side view of the source record and every candidate, with differences-only mode, dependency counts per record, a survivor choice, per-field value selection, and per-candidate **Skip**. When LLM reasoning ran: the AI verdict and confidence, a "disagrees with the vector score" flag, a **Why?** popover with the model's reasoning, and the model's proposed survivor and field values pre-filled.
+- **Merge confirmation**: Dialog listing the survivor, field overrides, dependencies to transfer and records to delete, then `MergeRecords` through the component's provider. Read-only when the entity has `AllowRecordMerge = false`.
+- **Agent context and tools**: `SelectEntityDocument`, `RunDuplicateDetection`, `FilterDuplicatesByEntity`, `SetDuplicateDisplayMode`, `RefreshDuplicateDetection`. Approving, rejecting and merging are deliberately not exposed to the agent.
+
+See the [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md) for the full workflow, configuration and known limitations.
 
 #### Clustering Dashboard
 - **Scatter plot visualization**: Interactive SVG scatter plot powered by `@memberjunction/ng-clustering`
@@ -140,6 +142,41 @@ Architecture: the former 5,147-line monolith was decomposed into 6 tab component
 
 The Predictive Studio app (`src/PredictiveStudio/`) is a multi-section, lazy-loaded surface for training, comparing, deploying, and monitoring ML models (see the [Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)). Its sections include Home, Algorithm Catalog, Pipeline Builder, Experiments, Model Registry, Compare Runs, and **Models in Production** (`PSProductionResourceComponent` — deployed models, what each writes, schedule, last run, and a generic prediction-distribution mini-viz, all driven by `MJ: ML Model Scoring Bindings` + `MJ: Process Runs`). The panels read live engine data via `PredictiveStudioEngine`; Promote/Validate/Archive and experiment Pause/Resume/Cancel are wired to Remote Operations behind a confirm modal, and Home's "Ask the agent" CTA opens a docked, seeded Model-Dev-Agent chat. See [`src/PredictiveStudio/`](src/PredictiveStudio/) and the guide's [Business-User Experience](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#16-the-business-user-experience) section.
 
+### Chief of Staff
+
+The **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`) is the control surface for a user's personal Chief of Staff agent. Each page is its own nav item and its own `BaseResourceComponent` in `src/ChiefOfStaff/`, all extending `BaseChiefOfStaffPage` ([`chief-of-staff-page-base.ts`](src/ChiefOfStaff/chief-of-staff-page-base.ts)), which holds the shared data load, request and routine actions, briefing reader, live reload and agent context. The pages use core entities only.
+
+| Nav item | Driver class | What it shows |
+|---|---|---|
+| **Overview** (default) | `ChiefOfStaffOverview` (also registered as `ChiefOfStaffDashboard` and `ChiefOfStaffResource`, so tabs saved before the split still open) | KPI cards (active wakes, pending approvals, governance posture), the top pending approvals with inline Approve / Reject, and the next wake routines. Cards and "Manage" buttons open the other pages through their nav items (`OpenPage`). |
+| **Approvals & Wakes** | `ChiefOfStaffApprovals` | The pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (`<mj-agent-request-dialog>`), "Recent Resolved Decisions", and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / Read Briefing / open-record actions. A `<mj-page-search>` filters both lists; `search` round-trips through the query params. |
+| **Governance** | `ChiefOfStaffGovernance` | The user's `MJ: AI Agent User Policies` row for the Chief of Staff agent as an editable draft: coordination mode, status, data-access mode, the four channel modes, inter-agent coordination, the approval guardrails, the auto-approve threshold, and display-name and standing-instructions overrides, with Save / Reset. |
+
+Data (one `RunViews` batch in `LoadChiefOfStaffData`; every filter comes from `BuildChiefOfStaffScopeFilters` and is bound to the signed-in user — with no current user a page loads nothing and shows an error banner):
+- `MJ: AI Agent User Policies` filtered to the Chief of Staff agent (resolved by name, `CHIEF_OF_STAFF_AGENT_NAME`) and the current user
+- `MJ: User Routines` for the current user where `RoutineType = 'AgentWake'` or the target is the Chief of Staff agent
+- `MJ: AI Agent Requests` for the Chief of Staff agent **and** `RequestForUserID = current user`, excluding `Information` requests (max 100); each queue row shows its `RequestType` as a badge
+
+Wake routines are listed in display order (`SortRoutinesForDisplay`: next wake first, unscheduled, then spent one-shots most recent first); a spent one-shot (`IsSpentOneShotRoutine`, Disabled after running with no next time) shows as `Fired` (`RoutineDisplayStatus`) and is hidden behind a "Show fired" toggle. "Wake Now" runs the `Run User Routine Now` action, which executes the routine without touching `NextRunAt`, so a one-shot keeps its scheduled time. An approval request that carries an outbound email (the email action stores To/CC/Subject/Body as JSON in `Comments`) gets a "View draft" toggle on its card: `ParseEmailApprovalPayload` reads the draft, the card shows headers and body inline, and "Copy" puts `FormatEmailDraftForClipboard` output (headers, blank line, body) on the clipboard for a mail client.
+
+Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced in a banner): `QuickRespondToRequest` (sets `Status` to Approved/Rejected, `RespondedAt`, `ResponseSource = 'Dashboard'`, `ResponseByUserID`), `TriggerWakeNow` (runs the `Run User Routine Now` action), `ToggleRoutineStatus` (Active ↔ Paused) and `SaveGovernancePolicy` (creates the policy row if none exists).
+
+Live reload: a save or remote invalidation of any entity in `CHIEF_OF_STAFF_LIVE_ENTITIES` (`IsChiefOfStaffEntityChange`) reloads an attached page once per burst; a detached page reloads when it is shown again.
+
+**Adding pages from another app.** An Open App adds its own pages to the Chief of Staff application with `MJ: Application Settings` rows, not by extending these components. Each row is scoped to the Chief of Staff application (`ApplicationID`), named `NavItem.<unique key>` (for example `NavItem.bizapps-tasks.priorities`), and holds one nav item as JSON in `Value`:
+
+```json
+{ "Label": "Priorities", "Icon": "fa-solid fa-bullseye", "ResourceType": "Custom", "DriverClass": "BizAppsTasksPriorities", "Sequence": 15 }
+```
+
+`BaseApplication.GetNavItems()` (`@memberjunction/ng-base-application`, `MergeNavItemExtensions`) adds these to every application's nav bar, so the mechanism is generic. The core pages sit at 10, 20 and 30, so `Sequence: 15` lands between Overview and Approvals & Wakes; an item without a `Sequence` goes last. An extension never becomes the default item, and one whose `Label` is already present is skipped. The `DriverClass` is a `BaseResourceComponent` registered by the app's client package; the page loads its own data, publishes its own agent context and reloads itself. The app's teardown deletes its rows. An extension cannot add cards to the Overview page.
+
+The application is opt-in (`DefaultForNewUser: false`) and is not registered in the AI application. Its `DriverClass` values must be unique across all applications (integration check `app-wiring.AW4`); the Agent Requests and Routines screens already belong to the AI and Routines applications, and the Approvals & Wakes page links to those records directly.
+
+Not yet implemented from the Phase 2 plan: `QuietHoursStart` / `QuietHoursEnd` and `MaxAutonomousActionsPerRun` do not exist on `MJ: AI Agent User Policies` and are not shown.
+
+Agent context and client tools (open page / search / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
+
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking
 - **Credentials**: Credential management with categories, types, and audit
@@ -164,7 +201,7 @@ npm install @memberjunction/ng-dashboards
 | `@memberjunction/ng-shared`, `@memberjunction/ng-shared-generic` | Shared services, loading indicators |
 | `@memberjunction/ng-dashboard-viewer` | Dashboard rendering |
 | `@memberjunction/ng-query-viewer` | Query execution and display |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 | `d3` | Data visualization |
 | `codemirror` | Code editing |
 

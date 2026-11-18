@@ -5,12 +5,13 @@ An interactive, high-performance network and relationship graph visualization co
 ## ✨ Features
 
 - 🌐 **Force-Directed Physics Simulation**: Smooth Spring-Charge layout with repulsion, link elasticity, and velocity damping.
-- 📐 **Multiple Layout Modes**: Switch between `force` (organic cluster network) and `circular` topology.
-- 🏷️ **Categorized Entity Node Badges**: Native palette support for People, Organizations, Committees, Accounts, and Custom entities.
+- 📐 **Multiple Layout Modes**: Switch between `force` (organic cluster network), `hierarchy` (ranked authority/depth rows), `circular`, and `grid` topologies.
+- 🏛️ **Semantic Graph & Canon Support**: Native support for `Rank`-ordered concept categories (`GraphConceptType`), `Status` (`Active`, `Proposed`, `Superseded`, `Archived`), `AuthorityTier`, animated dashed `Contradicts` edges, directed SVG arrowheads, grounded MJ primitives, and provenance chunks.
+- 🏷️ **Interactive Category Filter Legend**: Click any category pill in the legend to isolate nodes by category or `GraphConceptType`.
 - 🔍 **Interactive Search & Degree Filter**: Node keyword filtering and hop-distance neighborhood expansion.
-- 🎯 **Cancelable Before/After Event System**: Full control over user interactions (`BeforeNodeSelect`, `BeforeEdgeSelect`, `BeforeHopExpand`, `BeforeLayoutChange`).
+- 🎯 **Cancelable Before/After Event System**: Full control over user interactions (`BeforeNodeSelect`, `BeforeEdgeSelect`, `BeforeHopExpand`, `BeforeLayoutChange`, `BeforeNodeAction`).
 - 🎨 **MemberJunction Design Tokens**: Seamless integration with MJ dark/light themes and typography.
-- 🔎 **Selected Node Inspector Pane**: Built-in side drawer. Navigation is an intent event (`NodeNavigated`) so the host opens the record.
+- 🔎 **Selected Node Inspector Pane**: Built-in side drawer displaying authority badges, specifications, authority conflicts, grounded MJ primitives, source provenance chunks, and governance actions (`NodeAction`). Navigation is an intent event (`NodeNavigated`) so the host opens the record.
 
 ---
 
@@ -49,7 +50,9 @@ export class MyFeatureComponent {
 | :--- | :--- | :--- | :--- |
 | `Nodes` | `GraphNode[]` | `[]` | Array of graph node entities to render. |
 | `Edges` | `GraphEdge[]` | `[]` | Array of relationship edges connecting nodes. |
-| `LayoutMode` | `'force' \| 'circular'` | `'force'` | Active layout algorithm. |
+| `Categories` | `GraphCategoryConfig[]` | `DEFAULT_GRAPH_CATEGORIES` | Category color/icon/rank configs (e.g., seeded or DB-loaded `GraphConceptType` rows). |
+| `LayoutMode` | `'force' \| 'circular' \| 'hierarchy' \| 'grid'` | `'force'` | Active layout algorithm. |
+| `ActiveCategoryFilter` | `string \| null` | `null` | Optional active category filter key to isolate nodes in a category. |
 | `MaxHopDistance`| `number` | `2` | Max hop depth for neighborhood traversals. |
 | `SelectedNodeId`| `string` | `undefined` | ID of the node to initially select/highlight. |
 | `ShowToolbar` | `boolean` | `true` | Show floating controls toolbar. |
@@ -74,6 +77,9 @@ export class MyFeatureComponent {
 | `LayoutChanged` | `LayoutChangedEventArgs` | ❌ No | Fired after layout algorithm recalculates. |
 | `BeforeNodeNavigate` | `BeforeNodeNavigateEventArgs` | ✅ Yes | Fired before opening full entity record form. |
 | `NodeNavigated` | `NodeNavigatedEventArgs` | ❌ No | Fired after the user asks to open a record. The host owns navigation. |
+| `BeforeNodeAction` | `BeforeNodeActionEventArgs` | ✅ Yes | Fired before a governance action (e.g. `'approve'`, `'reject'`, `'deprecate'`) executes on a node. |
+| `NodeAction` | `NodeActionEventArgs` | ❌ No | Fired when a user confirms a governance action in the inspector drawer. |
+| `CategoryFilterChanged` | `string \| null` | ❌ No | Fired when the user toggles a category filter pill in the interactive legend. |
 
 ---
 
@@ -84,7 +90,8 @@ Call these directly via `@ViewChild(GraphViewComponent)`:
 - `ZoomIn()` / `ZoomOut()`: Step viewport scale in or out.
 - `FitToView()`: Reset zoom and center the network graph.
 - `Rearrange()`: Re-seed positions and re-run physics relaxation.
-- `SetLayoutMode(mode)`: Change between `'force'` and `'circular'`.
+- `SetLayoutMode(mode)`: Change between `'force'`, `'hierarchy'`, `'circular'`, and `'grid'`.
+- `ToggleCategoryFilter(category)`: Toggle isolating nodes by a specific category or `GraphConceptType`.
 - `SelectNode(id)`: Select a node programmatically.
 - `ClearSelection()`: Deselect currently active node or edge.
 - `ExpandHops(nodeId, depth)`: Request incremental neighbor loading.

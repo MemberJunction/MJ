@@ -3,6 +3,7 @@
 
 export * from './lib/a11y/named-control.base';
 export * from './lib/a11y/unnamed-control-guard';
+export * from './lib/viewport/phone-viewport';
 export * from './lib/button/button.directive';
 export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
@@ -21,6 +22,8 @@ export * from './lib/alert/alert.component';
 export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/bottom-sheet/bottom-sheet.component';
+export * from './lib/section-picker/section-picker.component';
+export * from './lib/accordion/accordion-sections.component';
 export * from './lib/combobox/combobox.component';
 export * from './lib/icon-picker/icon-picker.component';
 export * from './lib/icon-picker/font-awesome-icons';
@@ -51,3 +54,5 @@ export * from './lib/page-header-interior/page-header-interior.component';
 export * from './lib/page-body-interior/page-body-interior.component';
 export * from './lib/empty-state/empty-state.component';
 export * from './lib/card-grid/card-grid.component';
+export * from './lib/burst-cluster-strip/burst-cluster-strip.component';
+

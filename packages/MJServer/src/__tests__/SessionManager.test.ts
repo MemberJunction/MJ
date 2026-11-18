@@ -14,6 +14,7 @@ const finalizeCoAgentRunMock = vi.fn(async () => undefined);
 const keepCoAgentRunAliveMock = vi.fn();
 const hostSessionStartedMock = vi.fn(async () => undefined);
 const hostSessionClosedMock = vi.fn(async () => undefined);
+const mintSnapshotDeleteMock = vi.fn();
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
@@ -24,6 +25,13 @@ vi.mock('@memberjunction/ai-agents', () => ({
             return {
                 OnSessionStarted: hostSessionStartedMock,
                 OnSessionClosed: hostSessionClosedMock,
+            };
+        },
+    },
+    RealtimeMintSnapshotRegistry: {
+        get Instance() {
+            return {
+                Delete: mintSnapshotDeleteMock,
             };
         },
     },
@@ -42,10 +50,12 @@ vi.mock('../realtimeSessions/RecordingAssemblyScheduler.js', () => ({
 // --- Mock RunView.FromMetadataProvider so channel sweeps and run-id lookups are controllable,
 //     while leaving the rest of @memberjunction/core intact. RunViews runs each view through runViewMock. ---
 const runViewMock = vi.fn();
+const logStatusMock = vi.fn();
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
+        LogStatus: (...args: unknown[]) => logStatusMock(...args),
         RunView: {
             FromMetadataProvider: () => ({
                 RunView: runViewMock,
@@ -71,6 +81,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 });
 
 import { SessionManager, SessionAuthorizationError } from '../agentSessions/SessionManager.js';
+import { IsTrustedSessionConfigWriteActive } from '@memberjunction/core-entities-server';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /** Minimal fake BaseEntity-shaped record with the fields/methods SessionManager touches. */
@@ -139,6 +150,7 @@ function mockSessionRunRecords(runIDs: string[], promptRunID?: string): void {
 beforeEach(() => {
     hasPermissionMock.mockReset();
     finalizeCoAgentRunMock.mockClear();
+    mintSnapshotDeleteMock.mockClear();
     hostSessionStartedMock.mockReset();
     hostSessionStartedMock.mockResolvedValue(undefined);
     hostSessionClosedMock.mockReset();
@@ -186,6 +198,64 @@ describe('SessionManager.CreateSession', () => {
         expect(result.HostInstanceID).toBeTypeOf('string');
     });
 
+    describe('anonymous ExternalID stamp: MagicLinkScope.ResourceID when the token carries one, else mj_sid', () => {
+        async function stampFor(anon: Record<string, unknown>): Promise<unknown> {
+            hasPermissionMock.mockResolvedValue(true);
+            const conversation = makeSessionEntity({ ID: 'conv-anon' });
+            const session = makeSessionEntity({ ID: 'session-anon' });
+            const { provider } = makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+            const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, ...anon } as unknown as UserInfo;
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon' }, anonUser, provider);
+            return conversation.ExternalID;
+        }
+
+        it('widget guest (ResourceID == mj_sid): stamps the sessionId', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'sid-w', MagicLinkScope: { ResourceID: 'sid-w' } })).toBe('sid-w');
+        });
+
+        it('anonymous invite WITH a ResourceID: stamps the ResourceID, so scope RLS ({{ScopeResourceID}}) still finds the row', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-1', MagicLinkScope: { ResourceID: 'invite-scope-R' } })).toBe('invite-scope-R');
+        });
+
+        it('anonymous invite WITHOUT a ResourceID: stamps the per-redemption mj_sid', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-2' })).toBe('visitor-sid-2');
+        });
+    });
+
+    it('stamps conversation ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-scoped' });
+        const session = makeSessionEntity({ ID: 'session-scoped' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const scopedUser = {
+            ID: 'user-scoped',
+            Email: 'scoped@example.com',
+            IsMagicLinkAnonymous: false,
+            MagicLinkScope: { ResourceID: 'resource-scoped-1' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-scoped' }, scopedUser, provider);
+
+        expect(conversation.ExternalID).toBe('resource-scoped-1');
+    });
+
+    it('does not set conversation ExternalID for a named principal without scope', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-named' });
+        const session = makeSessionEntity({ ID: 'session-named' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, makeUser(), provider);
+
+        expect(conversation.ExternalID).toBeUndefined();
+    });
+
     it('reuses a supplied conversation without creating a new one', async () => {
         hasPermissionMock.mockResolvedValue(true);
         const session = makeSessionEntity({ ID: 'session-x' });
@@ -201,6 +271,43 @@ describe('SessionManager.CreateSession', () => {
         // Only one entity (the session) should have been requested — no Conversation.
         expect(handedOut.length).toBe(1);
         expect(session.ConversationID).toBe('conv-existing');
+    });
+
+    describe('an anonymous caller binding a session to an existing conversation (#4931)', () => {
+        const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-a', MagicLinkScope: { ResourceID: 'sid-a' } } as unknown as UserInfo;
+
+        function providerWith(conversation: FakeEntity, session: FakeEntity) {
+            return makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+        }
+
+        it('refuses another visitor\'s conversation and writes no session row', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-b', ExternalID: 'sid-b' }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-b' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('refuses a conversation it cannot read', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-hidden', Load: vi.fn(async () => false) }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-hidden' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('binds to its own conversation (ExternalID equals its scope identity)', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-a', ExternalID: 'sid-a' }), session);
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-a' }, anonUser, provider);
+            expect(session.ConversationID).toBe('conv-a');
+            expect(session.Save).toHaveBeenCalled();
+        });
     });
 
     it('throws (with the entity error detail) when the Conversation save fails — no session row attempted', async () => {
@@ -241,6 +348,24 @@ describe('SessionManager.CreateSession', () => {
 });
 
 describe('SessionManager.CloseSession', () => {
+    // The session entity refuses a server-only CloseReason (TimeLimit, Idle, Janitor, Shutdown) from an untrusted save,
+    // so the one server path that stamps it must save inside the trusted session-write scope.
+    it('stamps the close reason inside the trusted session-write scope', async () => {
+        runViewMock.mockResolvedValue({ Success: true, Results: [] });
+        let trustedAtSave: boolean | null = null;
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });
+        session.Save = vi.fn(async () => {
+            trustedAtSave = IsTrustedSessionConfigWriteActive();
+            return true;
+        });
+        const { provider } = makeProvider(() => session);
+
+        expect(await new SessionManager().CloseSession('session-1', makeUser(), provider, 'Janitor')).toBe(true);
+
+        expect(session.CloseReason).toBe('Janitor');
+        expect(trustedAtSave).toBe(true);
+    });
+
     it('sets Closed + ClosedAt, disconnects channels', async () => {
         const channel = makeSessionEntity({ ID: 'chan-1', Status: 'Connected' });
         runViewMock.mockResolvedValue({ Success: true, Results: [channel] });
@@ -417,6 +542,7 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(session.CloseReason).toBe('Explicit');
+        expect(mintSnapshotDeleteMock).toHaveBeenCalledWith('session-default');
     });
 
     it.each(['Janitor', 'Shutdown', 'Error', 'Explicit'] as const)(
@@ -433,6 +559,54 @@ describe('SessionManager.CloseSession', () => {
             expect(session.CloseReason).toBe(reason);
         },
     );
+
+    describe('a TimeLimit close is verified against the stored deadline', () => {
+        beforeEach(() => logStatusMock.mockClear());
+
+        it('is downgraded to Explicit and logged when the stored deadline is far away', async () => {
+            const deadline = new Date(Date.now() + 10 * 60_000).toISOString();
+            const session = makeSessionEntity({ ID: 'session-far', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: deadline }) });
+            const { provider } = makeProvider(() => session);
+
+            const ok = await new SessionManager().CloseSession('session-far', makeUser(), provider, 'TimeLimit');
+
+            expect(ok).toBe(true);
+            expect(session.CloseReason).toBe('Explicit');
+            const logged = logStatusMock.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(logged).toContain('session-far');
+            expect(logged).toContain(deadline);
+        });
+
+        it('is stamped TimeLimit when the stored deadline has passed', async () => {
+            const deadline = new Date(Date.now() - 1_000).toISOString();
+            const session = makeSessionEntity({ ID: 'session-due', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: deadline }) });
+            const { provider } = makeProvider(() => session);
+
+            await new SessionManager().CloseSession('session-due', makeUser(), provider, 'TimeLimit');
+
+            expect(session.CloseReason).toBe('TimeLimit');
+            expect(logStatusMock).not.toHaveBeenCalled();
+        });
+
+        it('tells channel plugins the verified reason: Explicit for a downgraded claim, TimeLimit for a backed one', async () => {
+            const far = makeSessionEntity({ ID: 'session-far2', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() + 10 * 60_000).toISOString() }) });
+            await new SessionManager().CloseSession('session-far2', makeUser(), makeProvider(() => far).provider, 'TimeLimit');
+            expect(hostSessionClosedMock).toHaveBeenLastCalledWith('session-far2', 'Explicit');
+
+            const due = makeSessionEntity({ ID: 'session-due2', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() - 1_000).toISOString() }) });
+            await new SessionManager().CloseSession('session-due2', makeUser(), makeProvider(() => due).provider, 'TimeLimit');
+            expect(hostSessionClosedMock).toHaveBeenLastCalledWith('session-due2', 'TimeLimit');
+        });
+
+        it('is downgraded to Explicit when the session stores no deadline', async () => {
+            const session = makeSessionEntity({ ID: 'session-none', Status: 'Active', Config_: null });
+            const { provider } = makeProvider(() => session);
+
+            await new SessionManager().CloseSession('session-none', makeUser(), provider, 'TimeLimit');
+
+            expect(session.CloseReason).toBe('Explicit');
+        });
+    });
 
     it('does not overwrite the original CloseReason on an idempotent re-close', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Closed', CloseReason: 'Janitor' });
@@ -465,6 +639,71 @@ describe('SessionManager.CloseSession', () => {
 
         const ok = await mgr.CloseSession('missing', makeUser(), provider);
         expect(ok).toBe(false);
+    });
+
+    // #6462 review #37: a page-close beacon can land while the End mutation's close of the same session is still in
+    // flight, through a DIFFERENT SessionManager instance (each resolver owns one). Both loads see `Active`, so before
+    // the fix both ran the full close work and the later save overwrote CloseReason/ClosedAt.
+    describe('overlapping closes of one session share a single close', () => {
+        function makeVoiceSession(): FakeEntity {
+            return makeSessionEntity({
+                ID: 'session-overlap',
+                Status: 'Active',
+                Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+            });
+        }
+
+        it('runs the close work once and keeps the first close reason', async () => {
+            mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
+            // Each load hands out its own entity, as two requests reading the row do.
+            const { provider, handedOut } = makeProvider(() => makeVoiceSession());
+
+            const [first, second] = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), provider, 'Janitor'),
+                new SessionManager().CloseSession('SESSION-OVERLAP', makeUser(), provider, 'Explicit'),
+            ]);
+
+            expect(first).toBe(true);
+            expect(second).toBe(true);
+            const saves = handedOut.filter((e) => (e.Save as ReturnType<typeof vi.fn>).mock.calls.length > 0);
+            expect(saves).toHaveLength(1);
+            expect(saves[0].CloseReason).toBe('Janitor');
+            expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+            expect(hostSessionClosedMock).toHaveBeenCalledTimes(1);
+            expect(hostSessionClosedMock).toHaveBeenCalledWith('session-overlap', 'Janitor');
+        });
+
+        it('shares one close across spellings of the session ID that differ in case or padding', async () => {
+            mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
+            const { provider, handedOut } = makeProvider(() => makeVoiceSession());
+
+            const results = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), provider, 'Janitor'),
+                new SessionManager().CloseSession('  SESSION-OVERLAP ', makeUser(), provider, 'Explicit'),
+            ]);
+
+            expect(results).toEqual([true, true]);
+            expect(handedOut.filter((e) => (e.Save as ReturnType<typeof vi.fn>).mock.calls.length > 0)).toHaveLength(1);
+            expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+        });
+
+        it('a joined caller sees the shared close fail, and a later close runs afresh', async () => {
+            const failing = makeSessionEntity({ ID: 'session-overlap', Status: 'Active', Save: vi.fn(async () => false) });
+            const { provider: failingProvider } = makeProvider(() => failing);
+
+            const results = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), failingProvider),
+                new SessionManager().CloseSession('session-overlap', makeUser(), failingProvider),
+            ]);
+            expect(results).toEqual([false, false]);
+            expect(failing.Save).toHaveBeenCalledTimes(1);
+
+            // The finished close leaves nothing behind: the next close loads and saves again.
+            const retry = makeSessionEntity({ ID: 'session-overlap', Status: 'Active' });
+            const { provider } = makeProvider(() => retry);
+            expect(await new SessionManager().CloseSession('session-overlap', makeUser(), provider)).toBe(true);
+            expect(retry.Save).toHaveBeenCalledTimes(1);
+        });
     });
 });
 

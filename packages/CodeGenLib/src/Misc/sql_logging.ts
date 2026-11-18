@@ -396,9 +396,11 @@ export class SQLLogging {
     * @param description - A description of the query to append to the log file.
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @param requiresOwnBatch - see {@link appendToSQLLogFile}: the unit must be alone in its batch.
+    * @param executedQuery - the text to run when it differs from what is logged (for example the same
+    * statements wrapped in a transaction for this connection only); defaults to `query`.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false): Promise<any> {
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false, executedQuery?: string): Promise<any> {
         if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
             throw new Error(
                 'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
@@ -406,7 +408,7 @@ export class SQLLogging {
             );
         }
         SQLLogging.AppendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
-        const result = await ds.query(query);
+        const result = await ds.query(executedQuery ?? query);
         return result.recordset;
     }
 
@@ -491,18 +493,32 @@ export class SQLLogging {
             { schema: MjCoreSchema(), placeholder: '${flyway:defaultSchema}' }
         ];
 
-        // Apply each schema-to-placeholder mapping in order
-        for (const mapping of schemaPlaceholders) {
-            // Negative lookahead to avoid matching schema_CreatedAt, schema_UpdatedAt, etc.
-            const regex: RegExp = new RegExp(`${this.escapeRegex(mapping.schema)}(?!(_(\\w+)At))`, 'g');
-            const beforeCount = (data.match(regex) || []).length;
-            data = data.replace(regex, mapping.placeholder);
-            logStatus(`   >>> Replaced ${beforeCount} instances of ${mapping.schema} with ${mapping.placeholder}`);
-        }
+        data = this.ApplySchemaPlaceholders(data, schemaPlaceholders);
 
         fs.writeFileSync(`${this.SQLLoggingFilePath}`, data);
         logStatus(`   >>> Flyway Migration File Completed`);
      }
+
+    /**
+     * Replaces each mapping's schema name with its placeholder, in order, wherever the schema name
+     * stands alone as a whole name (`[__mj].`, `__mj.`, `'sys,__mj,dbo'`).
+     *
+     * A schema name that is only part of a longer name is left alone: the `__mj_` system columns
+     * (`__mj_CreatedAt`, `__mj_Latitude_BillToAddressID`), view aliases such as `__mj_rgc`, and
+     * Open App schemas such as `__mj_BizAppsCommon`, whose names are fixed in the app's manifest and
+     * do not follow the core schema. Replacing inside those names makes them resolve correctly only
+     * on a host whose core schema is `__mj`.
+     */
+    public static ApplySchemaPlaceholders(sql: string, mappings: NonNullable<SQLOutputConfig['schemaPlaceholders']>): string {
+        let data = sql;
+        for (const mapping of mappings) {
+            const regex = new RegExp(`(?<!\\w)${this.escapeRegex(mapping.schema)}(?!\\w)`, 'g');
+            const count = (data.match(regex) || []).length;
+            data = data.replace(regex, () => mapping.placeholder);
+            logStatus(`   >>> Replaced ${count} instances of ${mapping.schema} with ${mapping.placeholder}`);
+        }
+        return data;
+    }
 
      /**
       * Escapes special regex characters in a string

@@ -15,12 +15,17 @@ export const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export function BuildCalendarWeeks(viewDate: Date): CalendarDay[][] {
+/**
+ * The weeks (rows of 7 days) covering `viewDate`'s month, padded with days from the
+ * neighbouring months. `weekStartsOn` is the first column's weekday (0 = Sunday, the
+ * datepicker's default; 1 = Monday, ISO 8601).
+ */
+export function BuildCalendarWeeks(viewDate: Date, weekStartsOn: 0 | 1 = 0): CalendarDay[][] {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const startDate = new Date(year, month, 1);
-  startDate.setDate(startDate.getDate() - startDate.getDay());
+  startDate.setDate(startDate.getDate() - ((startDate.getDay() - weekStartsOn + 7) % 7));
   const weeks: CalendarDay[][] = [];
   const current = new Date(startDate);
   for (let w = 0; w < 6; w++) {
@@ -31,7 +36,7 @@ export function BuildCalendarWeeks(viewDate: Date): CalendarDay[][] {
       current.setDate(current.getDate() + 1);
     }
     weeks.push(week);
-    if (current.getMonth() !== month && current.getDay() === 0) break;
+    if (current.getMonth() !== month && current.getDay() === weekStartsOn) break;
   }
   return weeks;
 }

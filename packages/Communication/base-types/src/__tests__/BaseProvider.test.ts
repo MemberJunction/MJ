@@ -250,6 +250,42 @@ describe('BaseCommunicationProvider', () => {
             expect(result.Events).toEqual([]);
         });
 
+        /**
+         * A provider with no calendar must say so per operation, by name, rather than look like an
+         * empty calendar or a write that went nowhere.
+         */
+        describe('calendar operations a provider does not implement', () => {
+            const target = { Identifier: 'someone@example.com' };
+            const start = new Date('2026-10-01T15:00:00Z');
+            const end = new Date('2026-10-01T16:00:00Z');
+            const calls: [string, () => Promise<{ Success: boolean; ErrorMessage?: string }>][] = [
+                ['CreateEvent', () => provider.CreateEvent({ Target: target, Event: { Subject: 'x', Start: start, End: end } })],
+                ['UpdateEvent', () => provider.UpdateEvent({ Target: target, ExternalEventID: 'e1', Changes: { Subject: 'y' } })],
+                ['CancelEvent', () => provider.CancelEvent({ Target: target, ExternalEventID: 'e1' })],
+                ['GetEvent', () => provider.GetEvent({ Target: target, ExternalEventID: 'e1' })],
+                ['SyncEvents', () => provider.SyncEvents({ Target: target })],
+            ];
+
+            it.each(calls)('%s refuses, naming the provider, the operation and the calendar', async (operation, call) => {
+                const result = await call();
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain(`TestProvider does not support ${operation}`);
+                expect(result.ErrorMessage).toContain('someone@example.com');
+            });
+
+            it('SyncEvents refuses with an empty change list rather than a missing one', async () => {
+                const result = await provider.SyncEvents({ Target: target, SyncToken: 'tok' });
+                expect(result.Changes).toEqual([]);
+                expect(result.NextSyncToken).toBeUndefined();
+            });
+
+            it('does not report the calendar operations as supported', () => {
+                for (const op of ['CreateEvent', 'UpdateEvent', 'CancelEvent', 'GetEvent', 'SyncEvents'] as const) {
+                    expect(provider.SupportsOperation(op)).toBe(false);
+                }
+            });
+        });
+
         it('MarkAsRead should return not supported', async () => {
             const result = await provider.MarkAsRead({ MessageIDs: ['msg-1', 'msg-2'], IsRead: true });
             expect(result.Success).toBe(false);

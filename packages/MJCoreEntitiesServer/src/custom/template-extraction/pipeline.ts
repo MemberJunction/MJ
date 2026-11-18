@@ -139,12 +139,8 @@ async function runAIEnrichment(
 
         const result = await promptRunner.ExecutePrompt<EnrichmentResult>(params);
 
-        if (result.success && result.result?.parameters) {
-            for (const enriched of result.result.parameters) {
-                if (enriched.name && enriched.Description) {
-                    descriptions.set(enriched.name.toLowerCase(), enriched.Description);
-                }
-            }
+        if (result.success && result.result) {
+            return CollectEnrichedDescriptions(result.result);
         }
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -152,6 +148,20 @@ async function runAIEnrichment(
         // Non-fatal — deterministic results are still valid
     }
 
+    return descriptions;
+}
+
+/**
+ * Map the AI enrichment output to descriptions keyed by lower-cased parameter name.
+ * Entries without a name or description are skipped.
+ */
+export function CollectEnrichedDescriptions(result: EnrichmentResult): Map<string, string> {
+    const descriptions = new Map<string, string>();
+    for (const enriched of result.parameters ?? []) {
+        if (enriched.name && enriched.description) {
+            descriptions.set(enriched.name.toLowerCase(), enriched.description);
+        }
+    }
     return descriptions;
 }
 

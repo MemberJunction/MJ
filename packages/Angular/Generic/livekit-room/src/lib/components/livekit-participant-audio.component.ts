@@ -45,7 +45,8 @@ export class LiveKitParticipantAudioComponent implements AfterViewInit, OnDestro
   private sync(): void {
     const element = this.audioRef?.nativeElement;
     const participant = this.participant;
-    const track = element && participant && !participant.IsLocal ? participant.Raw.getTrackPublication(Track.Source.Microphone)?.track : undefined;
+    const isHoldBot = participant?.Identity?.startsWith('hold-') ?? false;
+    const track = element && participant && !participant.IsLocal && !isHoldBot ? participant.Raw.getTrackPublication(Track.Source.Microphone)?.track : undefined;
     if (this.attached?.Track === track) {
       return;
     }

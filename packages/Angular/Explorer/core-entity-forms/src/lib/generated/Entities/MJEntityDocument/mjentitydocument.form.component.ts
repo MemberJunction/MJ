@@ -24,6 +24,7 @@ export class MJEntityDocumentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityDocumentRuns', sectionName: 'Entity Document Runs', isExpanded: false },
             { sectionKey: 'mJEntityDocumentSettings', sectionName: 'Entity Document Settings', isExpanded: false },
             { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false },
+            { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false }
         ]);
     }

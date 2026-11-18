@@ -50,4 +50,34 @@ describe('TaskGraphVariablesComponent (DOM)', () => {
         expect(head.getAttribute('aria-expanded')).toBe('false');
         expect(host(f).textContent).not.toContain('ticker');
     });
+
+    it('preserves expanded child paths and collapsed scopes across live poll updates of the same task, and resets when switching tasks', () => {
+        const f = render();
+        f.componentRef.setInput('TaskID', 'task-1');
+        f.componentRef.setInput('InputPayload', JSON.stringify({ config: { model: 'claude', retries: 3 } }));
+        f.detectChanges();
+
+        // Expand nested child 'Input.config'
+        f.componentInstance.Toggle('Input.config');
+        expect(f.componentInstance.IsExpanded('Input.config')).toBe(true);
+
+        // Simulate 3s live poll with identical payload — Expanded must stay intact
+        f.componentRef.setInput('InputPayload', JSON.stringify({ config: { model: 'claude', retries: 3 } }));
+        f.detectChanges();
+        expect(f.componentInstance.IsExpanded('Input.config')).toBe(true);
+
+        // Simulate OutputPayload arriving for the same task — Input.config stays expanded AND Output auto-expands
+        f.componentRef.setInput('OutputPayload', JSON.stringify({ summary: 'done' }));
+        f.detectChanges();
+        expect(f.componentInstance.IsExpanded('Input.config')).toBe(true);
+        expect(f.componentInstance.IsExpanded('Output')).toBe(true);
+
+        // Switch to a different task — Expanded resets to top-level scopes only
+        f.componentRef.setInput('TaskID', 'task-2');
+        f.componentRef.setInput('InputPayload', JSON.stringify({ config: { model: 'gpt' } }));
+        f.componentRef.setInput('OutputPayload', null);
+        f.detectChanges();
+        expect(f.componentInstance.IsExpanded('Input')).toBe(true);
+        expect(f.componentInstance.IsExpanded('Input.config')).toBe(false);
+    });
 });

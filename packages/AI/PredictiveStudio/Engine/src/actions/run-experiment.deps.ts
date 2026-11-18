@@ -1,34 +1,31 @@
 /**
  * @module actions/run-experiment.deps
  *
- * Builds the production {@link ExperimentDeps} bundle for the
- * {@link PredictiveStudioRunExperimentAction}. Kept out of the action so the
- * action stays thin (validate → delegate → map) and so the wiring is
- * independently readable.
- *
- * The orchestrator's per-iteration {@link IExperimentTrainer} bridges to the
- * {@link TrainingEngine}, which trains by **pipeline id**. Mapping a plan's
- * proposed experiment (algorithm × feature set × hyperparameters) to a concrete
- * `MJ: ML Training Pipelines` id is an {@link IPipelineResolver} — a materialization
- * strategy that belongs to the higher layer that owns pipeline definitions. The
- * Engine package therefore supplies a clear-failing default resolver; production
- * callers inject a real one (and a real artifact loader) by constructing the deps
- * themselves and passing them via the action's `buildDeps` override.
+ * The experiment-session dependency entry points and the refusal raised while
+ * {@link ExperimentSessions.Enabled} is off. The session runner cannot yet turn a
+ * proposed experiment into a training pipeline (no production
+ * {@link IPipelineResolver} exists), so {@link BuildProductionExperimentDeps}
+ * refuses with {@link ExperimentSessionsUnavailableError} before the orchestrator
+ * creates any Experiment, Session or Iteration row. The published names are kept
+ * for their callers.
  */
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { ExperimentSessions } from '@memberjunction/predictive-studio-core';
 
-import { TrainingEngine } from '../training/training-engine';
-import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
-import type { TrainingDeps } from '../training/types';
-import {
-  SystemClock,
-  MetadataExperimentEntityFactory,
-  TrainingEngineExperimentTrainer,
-  type IPipelineResolver,
-} from '../experiment/seams';
+import type { IPipelineResolver } from '../experiment/seams';
 import type { ExperimentDeps, TrainExperimentInput } from '../experiment/types';
+
+/** Thrown when an experiment session is requested while sessions are switched off. */
+export class ExperimentSessionsUnavailableError extends Error {
+  /** The refusal message: the same reason the UI shows, from {@link ExperimentSessions.DisabledReason}. */
+  public static readonly Message: string = ExperimentSessions.DisabledReason;
+
+  constructor() {
+    super(ExperimentSessionsUnavailableError.Message);
+    this.name = 'ExperimentSessionsUnavailableError';
+  }
+}
 
 /**
  * A clear-failing default {@link IPipelineResolver}. The strategy for turning a
@@ -48,48 +45,17 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
 }
 
 /**
- * Build the production {@link ExperimentDeps} from the request user/provider. The
- * training-side bundle (entity factory + record loader + sidecar + artifact store)
- * is composed here and handed to the {@link TrainingEngineExperimentTrainer} so
- * each iteration trains through the real {@link TrainingEngine}.
+ * Build the production {@link ExperimentDeps}. Always refuses with {@link ExperimentSessionsUnavailableError}
+ * (no production pipeline resolver exists), before touching the database.
  *
- * The artifact store is built the same way the standalone training path builds it:
- * resolve the active `MJ: File Storage Providers` id (see
- * {@link resolveActiveFileStorageProviderId}) and stamp it on the store, which
- * creates a real `MJ: Files` row and writes the bytes to local disk keyed by that
- * id (dev / on-prem). Async so the provider lookup is part of the wiring.
- *
- * @param contextUser request user — threaded for isolation/audit
- * @param provider optional provider for multi-provider correctness
+ * @param _contextUser request user (unused; kept for the published signature)
+ * @param _provider optional provider (unused; kept for the published signature)
  */
 export async function BuildProductionExperimentDeps(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
+  _contextUser?: UserInfo,
+  _provider?: IMetadataProvider,
 ): Promise<ExperimentDeps> {
-  const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await ResolveActiveFileStorageProviderId(contextUser, provider);
-  const trainingDeps: TrainingDeps = {
-    entityFactory,
-    recordLoader: new RunViewRecordLoader(),
-    sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
-    contextUser,
-    provider,
-  };
-
-  const trainer = new TrainingEngineExperimentTrainer(
-    trainingDeps,
-    new UnresolvedPipelineResolver(),
-    new TrainingEngine(),
-  );
-
-  return {
-    entityFactory: new MetadataExperimentEntityFactory(provider),
-    trainer,
-    clock: new SystemClock(),
-    contextUser,
-    provider,
-  };
+  throw new ExperimentSessionsUnavailableError();
 }
 
 /** @deprecated Use {@link BuildProductionExperimentDeps}. */

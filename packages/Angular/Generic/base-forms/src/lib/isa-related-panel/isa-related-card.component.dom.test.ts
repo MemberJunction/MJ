@@ -4,6 +4,7 @@ import { renderComponentFixture, query, text } from '@memberjunction/ng-test-uti
 import { CompositeKey } from '@memberjunction/core';
 import type { EntityFieldInfo } from '@memberjunction/core';
 import { MjIsaRelatedCardComponent } from './isa-related-card.component';
+import { MjRecordLinkDirective } from '../links/record-link.directive';
 import type { EntityHierarchyNavigationEvent } from '../types/navigation-events';
 
 /**
@@ -19,7 +20,7 @@ import type { EntityHierarchyNavigationEvent } from '../types/navigation-events'
  */
 function render(inputs: Record<string, unknown>, setup?: (c: MjIsaRelatedCardComponent) => void) {
   return renderComponentFixture(MjIsaRelatedCardComponent, {
-    declarations: [MjIsaRelatedCardComponent],
+    declarations: [MjIsaRelatedCardComponent, MjRecordLinkDirective],
     imports: [CommonModule],
     inputs,
     setup,

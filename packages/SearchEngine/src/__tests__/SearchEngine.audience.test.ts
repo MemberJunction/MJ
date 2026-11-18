@@ -39,7 +39,7 @@ vi.mock('@memberjunction/core', async () => {
 import { SearchEngine } from '../generic/SearchEngine';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
 import { EntitySearchProvider } from '../generic/EntitySearchProvider';
-import type { SearchAudience, SearchParams, SearchResultItem, SearchSource, SearchStreamEvent } from '../generic/search.types';
+import type { ScopeConstraints, SearchAudience, SearchParams, SearchResultItem, SearchSource, SearchStreamEvent } from '../generic/search.types';
 import type { UserInfo, EntityInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 
 /** Returns fresh copies of a fixed result list and counts its calls — a cache hit runs no provider. */
@@ -185,6 +185,7 @@ function entity(name: string, canRead: (u: UserInfo) => boolean, rowFilter: stri
         FirstPrimaryKey: { Name: 'ID' },
         PrimaryKeys: [{ Name: 'ID' }],
         GetUserPermisions: (u: UserInfo) => ({ CanRead: canRead(u) }),
+        GetDeniedReadFields: () => new Set<string>(),
         GetEffectiveRowFilterWhereClause: () => rowFilter,
     } as unknown as EntityInfo;
 }
@@ -353,6 +354,35 @@ describe('SearchParams.Audience — results every reader may see', () => {
             const res = await engine.Search(withAudience([rolelessUser(bea.ID)]), asker);
             expect(res.Success).toBe(true);
             expect(res.Results).toEqual([]);
+        });
+    });
+
+    describe('the audience reaches every provider', () => {
+        /** Records the constraints each call received, as a traversing provider (the graph lane) needs them. */
+        class ConstraintRecordingProvider extends FixedProvider {
+            public Received: Array<ScopeConstraints | undefined> = [];
+            public override async Search(...args: Parameters<BaseSearchProvider['Search']>): Promise<SearchResultItem[]> {
+                this.Received.push(args[4]);
+                return super.Search();
+            }
+        }
+
+        it('hands an unscoped search\'s readers to providers as ScopeConstraints.AudienceReaders, the caller left out', async () => {
+            const provider = new ConstraintRecordingProvider('SemanticGraph', docs);
+            engine.InjectProviders(provider);
+            engine.Readable = { [asker.ID]: ['d1'], [bea.ID]: ['d1'] };
+            await engine.Search(withAudience([bea, asker]), asker);
+            expect(provider.Received).toHaveLength(1);
+            expect(provider.Received[0]?.AudienceReaders?.map((r) => r.ID)).toEqual([bea.ID]);
+            expect(provider.Received[0]?.Entities).toBeUndefined();
+        });
+
+        it('passes no constraints at all when there is no audience (unchanged behaviour)', async () => {
+            const provider = new ConstraintRecordingProvider('SemanticGraph', docs);
+            engine.InjectProviders(provider);
+            engine.Readable = { [asker.ID]: ['d1'] };
+            await engine.Search({ Query: 'budget' }, asker);
+            expect(provider.Received).toEqual([undefined]);
         });
     });
 

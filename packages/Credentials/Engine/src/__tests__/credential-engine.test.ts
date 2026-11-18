@@ -226,55 +226,23 @@ describe('CredentialEngine Validation Error Formatting', () => {
     });
 });
 
-describe('CredentialEngine Value Parsing', () => {
-    // Replicate parseCredentialValues logic
-    function parseCredentialValues(valuesField: string): Record<string, string> {
-        if (!valuesField) return {};
-        try {
-            if (typeof valuesField === 'object') {
-                return valuesField as Record<string, string>;
-            }
-            return JSON.parse(valuesField);
-        } catch {
-            return {};
-        }
-    }
+describe('CredentialEngine Per-User Delegated OAuth (3LO) OwnerUserID Isolation', () => {
+    it('builds deterministic user-scoped credential names and enforces CredentialOwnerMismatchError on cross-user access', async () => {
+        const { CredentialEngine } = await import('../CredentialEngine');
+        const { CredentialOwnerMismatchError } = await import('../expiration');
 
-    it('should parse valid JSON string', () => {
-        const result = parseCredentialValues('{"apiKey": "sk-test123"}');
-        expect(result).toEqual({ apiKey: 'sk-test123' });
-    });
+        const engine = CredentialEngine.Instance;
+        const aliceId = '00000000-0000-0000-0000-00000000A11C';
+        const bobId = '00000000-0000-0000-0000-00000000B0B2';
 
-    it('should return empty object for empty string', () => {
-        expect(parseCredentialValues('')).toEqual({});
-    });
+        const credName = engine.BuildUserDelegatedCredentialName('Microsoft Graph', aliceId);
+        expect(credName).toBe(`UserOAuth3LO:Microsoft Graph:${aliceId.toLowerCase()}`);
 
-    it('should return empty object for null-ish input', () => {
-        expect(parseCredentialValues(null as unknown as string)).toEqual({});
-        expect(parseCredentialValues(undefined as unknown as string)).toEqual({});
-    });
-
-    it('should return empty object for invalid JSON', () => {
-        expect(parseCredentialValues('not-json')).toEqual({});
-    });
-
-    it('should handle already-parsed object', () => {
-        const obj = { apiKey: 'test' } as unknown as string;
-        const result = parseCredentialValues(obj);
-        expect(result).toEqual({ apiKey: 'test' });
-    });
-
-    it('should parse complex credential values', () => {
-        const json = JSON.stringify({
-            clientId: 'id-123',
-            clientSecret: 'secret-456',
-            tokenUrl: 'https://api.example.com/token',
-            scope: 'read write'
-        });
-        const result = parseCredentialValues(json);
-        expect(result.clientId).toBe('id-123');
-        expect(result.clientSecret).toBe('secret-456');
-        expect(result.tokenUrl).toBe('https://api.example.com/token');
-        expect(result.scope).toBe('read write');
+        const err = new CredentialOwnerMismatchError(credName, aliceId, bobId);
+        expect(err.name).toBe('CredentialOwnerMismatchError');
+        expect(err.CredentialName).toBe(credName);
+        expect(err.OwnerUserID).toBe(aliceId);
+        expect(err.RequestingUserID).toBe(bobId);
+        expect(err.message).toContain('Cross-user access to delegated OAuth credentials is forbidden');
     });
 });

@@ -17,13 +17,14 @@
  * and the LocalEmbeddings catalog shape the `EmbedTextLocal` chain requires (AE5).
  *
  * ANTI-VACUITY / DEGRADATION: embeddings are optional per deployment. Every data-dependent check
- * counts its subjects and SKIPS-AS-PASS LOUDLY when none exist ("skip loudly" per the catalog),
+ * counts its subjects and records a SKIP when none exist ("skip loudly" per the catalog),
  * while shape legs that can always run (catalog probes) assert unconditionally. Zero mutation.
  */
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { AIEngine } from '@memberjunction/aiengine';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -57,11 +58,6 @@ interface StoredVector {
     /** Parsed vector; null when the payload is not a valid non-empty finite number[]. */
     Vector: number[] | null;
     ParseProblem?: string;
-}
-
-/** Loud, uniform skip-as-pass note. */
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ ai-embeddings.${checkId} SKIPPED — ${reason}`);
 }
 
 /** Parse a persisted vector payload; returns null + reason when it is not a finite number[]. */
@@ -142,8 +138,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const vectors = await loadStoredVectors(ctx);
             if (vectors.length === 0) {
-                skipNote('AE1', `no persisted embeddings across ${EMBEDDING_SOURCES.length} surface(s) — the persisted-embedding pattern is unexercised in this deployment`);
-                return;
+                SkipCheck(`no persisted embeddings across ${EMBEDDING_SOURCES.length} surface(s) — the persisted-embedding pattern is unexercised in this deployment`);
             }
             const problems: string[] = [];
             for (const v of vectors) {
@@ -181,8 +176,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const vectors = (await loadStoredVectors(ctx)).filter(v => v.Vector != null);
             if (vectors.length === 0) {
-                skipNote('AE2', 'no parseable persisted embeddings — norm audit is unexercised');
-                return;
+                SkipCheck('no parseable persisted embeddings — norm audit is unexercised');
             }
             const zeros: string[] = [];
             const offUnit: string[] = [];
@@ -215,8 +209,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
             // (memory near-dup vs. query search) silently breaks.
             const vectors = (await loadStoredVectors(ctx)).filter(v => v.Vector != null && v.ModelId != null);
             if (vectors.length === 0) {
-                skipNote('AE3', 'no stamped persisted embeddings — cross-entity dimension audit is unexercised');
-                return;
+                SkipCheck('no stamped persisted embeddings — cross-entity dimension audit is unexercised');
             }
             const byModel = new Map<string, Map<number, string[]>>();
             for (const v of vectors) {
@@ -254,8 +247,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const vectors = (await loadStoredVectors(ctx)).filter(v => v.ModelId != null);
             if (vectors.length === 0) {
-                skipNote('AE4', 'no stamped persisted embeddings — model-reference audit is unexercised');
-                return;
+                SkipCheck('no stamped persisted embeddings — model-reference audit is unexercised');
             }
             const engine = AIEngineBase.Instance;
             await engine.Config(false, ctx.User, ctx.Provider);
@@ -285,14 +277,14 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
     },
     {
         Id: 'ai-embeddings.AE5',
-        Name: 'AE5: LocalEmbeddings catalog shape — the EmbedTextLocal chain has a driver-resolvable local Embeddings model (or is loudly absent)',
+        Name: 'AE5: LocalEmbeddings catalog shape — EmbedTextLocal resolves an active, driver-resolvable default local Embeddings model (or is loudly absent)',
         Fn: async (ctx): Promise<void> => {
             // The deterministic tier cannot CALL the local embedder (first use downloads an ONNX
             // model), but it CAN pin the catalog shape `AIEngine.EmbedTextLocal` resolves through:
             // an Active 'Embeddings'-type model from the LocalEmbeddings vendor carrying the
             // DriverClass used for ClassFactory resolution. When the deployment has no such model
             // the check reports the consequence (notes/examples/tags cannot self-embed and the
-            // memory near-dup guard degrades) and skips-as-pass.
+            // memory near-dup guard degrades) and records a skip.
             const engine = AIEngineBase.Instance;
             await engine.Config(false, ctx.User, ctx.Provider);
             const localEmbedders = engine.Models.filter(m =>
@@ -301,24 +293,31 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
             );
             if (localEmbedders.length === 0) {
                 const anyVectors = (await loadStoredVectors(ctx)).length;
-                skipNote('AE5', `no Active LocalEmbeddings 'Embeddings' model in the catalog — EmbedTextLocal has nothing to resolve` +
+                SkipCheck(`no Active LocalEmbeddings 'Embeddings' model in the catalog — EmbedTextLocal has nothing to resolve` +
                     (anyVectors > 0
                         ? ` (PRODUCT SUSPICION: ${anyVectors} persisted vector(s) exist, so embedding IS in use here — new note/example saves may be failing silently)`
-                        : ' (deployment does not use local embeddings; skip-as-pass)'));
-                return;
+                        : ' (deployment does not use local embeddings)'));
             }
+            // What EmbedTextLocal actually resolves: AIEngine's candidate list and the default it picks.
+            // Read from the getters only, without embedding anything, so the check never loads an ONNX model.
+            const candidates = AIEngine.Instance.LocalEmbeddingModels;
+            const chosen = AIEngine.Instance.DefaultLocalEmbeddingModel;
             const problems: string[] = [];
-            for (const model of localEmbedders) {
-                if (!model.IsActive) {
-                    problems.push(`'${model.Name}' is inactive — EmbedTextLocal filters to active models`);
-                }
-                if (!model.DriverClass || model.DriverClass.trim().length === 0) {
-                    problems.push(`'${model.Name}' has no DriverClass — ClassFactory resolution of the embedder is impossible`);
-                }
+            const inactiveCandidates = candidates.filter(m => !m.IsActive).map(m => m.Name);
+            if (inactiveCandidates.length > 0) {
+                problems.push(`LocalEmbeddingModels includes inactive model(s) ${inactiveCandidates.join(', ')} — EmbedTextLocal could pick one`);
+            }
+            if (!chosen) {
+                problems.push(`no default local embedding model resolves although ${localEmbedders.length} LocalEmbeddings model(s) exist — are they all inactive?`);
+            } else if (!chosen.DriverClass || chosen.DriverClass.trim().length === 0) {
+                problems.push(`default local embedding model '${chosen.Name}' has no DriverClass — ClassFactory resolution of the embedder is impossible`);
+            }
+            for (const model of candidates.filter(m => !m.DriverClass || m.DriverClass.trim().length === 0)) {
+                problems.push(`'${model.Name}' is active but has no DriverClass — it could become the default and fail to resolve`);
             }
             Assert(problems.length === 0, `LocalEmbeddings catalog shape violations: ${problems.join('; ')}`);
             AssertEqual(problems.length, 0, 'unreachable'); // keep the assert count honest for tooling
-            console.log(`      → ${localEmbedders.length} LocalEmbeddings model(s) present, active, driver-resolvable (e.g. '${localEmbedders[0].Name}' → ${localEmbedders[0].DriverClass})`);
+            console.log(`      → ${candidates.length} active LocalEmbeddings model(s); default '${chosen?.Name}' → ${chosen?.DriverClass}`);
         }
     }
 ];

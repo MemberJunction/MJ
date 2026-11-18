@@ -1,0 +1,38 @@
+{
+    "kind": "calendar#events",
+    "etag": "\"p32ofplf4dvcsg0h\"",
+    "summary": "organizer@example.org",
+    "updated": "2026-10-13T10:00:00.456Z",
+    "timeZone": "America/New_York",
+    "accessRole": "owner",
+    "nextSyncToken": "CPDAlvWDx70CEPDAlvWDx70CGAUggICA6NKw8wI=",
+    "items": [
+        {
+            "kind": "calendar#event",
+            "etag": "\"3463301002912000\"",
+            "id": "4p1mdkjvo9kq3c1oe8b6qoh3l8_20261021T170000Z",
+            "status": "confirmed",
+            "updated": "2026-10-13T10:00:00.456Z",
+            "summary": "Budget review",
+            "organizer": { "email": "organizer@example.org", "self": true },
+            "start": { "dateTime": "2026-10-21T13:00:00-04:00", "timeZone": "America/New_York" },
+            "end": { "dateTime": "2026-10-21T13:30:00-04:00", "timeZone": "America/New_York" },
+            "recurringEventId": "4p1mdkjvo9kq3c1oe8b6qoh3l8",
+            "originalStartTime": { "dateTime": "2026-10-21T13:00:00-04:00", "timeZone": "America/New_York" },
+            "iCalUID": "4p1mdkjvo9kq3c1oe8b6qoh3l8@google.com",
+            "sequence": 0,
+            "attendees": [
+                { "email": "organizer@example.org", "organizer": true, "self": true, "responseStatus": "accepted" },
+                { "email": "ada@example.org", "displayName": "Ada Lovelace", "responseStatus": "accepted" },
+                { "email": "alan@example.org", "responseStatus": "tentative" },
+                { "email": "grace@example.com", "optional": true, "responseStatus": "declined" }
+            ]
+        },
+        {
+            "kind": "calendar#event",
+            "etag": "\"3463301009999000\"",
+            "id": "0q9u3fh2c1v7o8r4k6b5e7m1a2",
+            "status": "cancelled"
+        }
+    ]
+}

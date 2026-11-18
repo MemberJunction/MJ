@@ -57,6 +57,14 @@ export interface TrailingVolatileStateSplit {
  */
 export abstract class BaseLLM extends BaseModel {
     /**
+     * Whether a reasoning block this driver replays is accepted only while everything before it
+     * in the request is unchanged since the turn that produced it. When true, a caller that
+     * replays reasoning must keep its history append-only: a message removed or rewritten between
+     * requests invalidates every replayed block after it.
+     */
+    public static readonly ReplayedReasoningRequiresStablePrefix: boolean = false;
+
+    /**
      * Protected property to store additional provider-specific settings
      */
     protected _additionalSettings: Record<string, any> = {};

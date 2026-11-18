@@ -9,7 +9,7 @@ import {
   ChangeDetectorRef,
   ViewChild
 } from '@angular/core';
-import { Metadata, EntityInfo, CompositeKey, BaseEntity, RunViewParams } from '@memberjunction/core';
+import { Metadata, EntityInfo, CompositeKey, BaseEntity, RunViewParams, ListMembershipFilter } from '@memberjunction/core';
 import { MJListEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import {
@@ -313,10 +313,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
     const primaryKeys = entityInfo.PrimaryKeys;
 
     if (primaryKeys.length === 1) {
-      // Simple case: single primary key
-      // Use a simple IN clause matching the first PK field
-      const pkField = primaryKeys[0].Name;
-      return `${pkField} IN (SELECT RecordID FROM ${listDetailsSchema}.vwListDetails WHERE ListID = '${listId}')`;
+      // Single primary key: an IN-subquery on List Details (RecordID is cast to the key's type for PostgreSQL)
+      return ListMembershipFilter(primaryKeys[0], `${listDetailsSchema}.vwListDetails`, listId);
     } else {
       // Composite key case: need to JOIN and match concatenated key format
       // RecordID format is "Field1|Value1||Field2|Value2" (using CompositeKey delimiters)

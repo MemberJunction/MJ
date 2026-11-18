@@ -253,7 +253,7 @@
             </div>
             <div class="suggest-field">
               <label class="suggest-label">Embedding Model</label>
-              <select class="suggest-select" [(ngModel)]="EditDocAIModelID">
+              <select class="suggest-select" [ngModel]="EditDocAIModelID" (ngModelChange)="OnEditEmbeddingModelChange($event)">
                 @for (model of AvailableEmbeddingModels; track model.ID) {
                   <option [value]="model.ID">{{ model.Name }}</option>
                 }
@@ -261,7 +261,7 @@
             </div>
             <div class="suggest-field">
               <label class="suggest-label">Vector Database</label>
-              <select class="suggest-select" [(ngModel)]="EditDocVectorDBID">
+              <select class="suggest-select" [ngModel]="EditDocVectorDBID" (ngModelChange)="OnEditVectorDBChange($event)">
                 @for (db of vectorDatabases; track db.ID) {
                   <option [value]="db.ID">{{ db.Name }}</option>
                 }
@@ -270,7 +270,7 @@
             <div class="suggest-field">
               <label class="suggest-label">Vector Index</label>
               @if (EditFilteredIndexes.length > 0) {
-                <select class="suggest-select" [(ngModel)]="EditDocVectorIndexID">
+                <select class="suggest-select" [ngModel]="EditDocVectorIndexID" (ngModelChange)="OnEditVectorIndexChange($event)">
                   <option value="">Auto (create/find matching index)</option>
                   @for (idx of EditFilteredIndexes; track idx.ID) {
                     <option [value]="idx.ID">{{ idx.Name }}</option>
@@ -540,7 +540,7 @@
                 </div>
                 <div class="suggest-field" style="margin-top: 0.75rem">
                   <label class="suggest-label">Embedding Model</label>
-                  <select class="suggest-select" [(ngModel)]="SelectedEmbeddingModelID">
+                  <select class="suggest-select" [ngModel]="SelectedEmbeddingModelID" (ngModelChange)="OnSuggestEmbeddingModelChange($event)">
                     @for (model of AvailableEmbeddingModels; track model.ID) {
                       <option [value]="model.ID">{{ model.Name }}</option>
                     }
@@ -548,7 +548,7 @@
                 </div>
                 <div class="suggest-field" style="margin-top: 0.75rem">
                   <label class="suggest-label">Vector Database</label>
-                  <select class="suggest-select" [(ngModel)]="SelectedVectorDBID">
+                  <select class="suggest-select" [ngModel]="SelectedVectorDBID" (ngModelChange)="OnSuggestVectorDBChange($event)">
                     @for (db of vectorDatabases; track db.ID) {
                       <option [value]="db.ID">{{ db.Name }}</option>
                     }
@@ -557,7 +557,7 @@
                 <div class="suggest-field" style="margin-top: 0.75rem">
                   <label class="suggest-label">Vector Index</label>
                   @if (FilteredIndexesForSelectedDB.length > 0) {
-                    <select class="suggest-select" [(ngModel)]="SelectedVectorIndexID">
+                    <select class="suggest-select" [ngModel]="SelectedVectorIndexID" (ngModelChange)="OnSuggestVectorIndexChange($event)">
                       <option value="">Auto (create/find matching index)</option>
                       @for (idx of FilteredIndexesForSelectedDB; track idx.ID) {
                         <option [value]="idx.ID">{{ idx.Name }}</option>

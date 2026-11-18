@@ -1,0 +1,35 @@
+{
+  "id": "D1c",
+  "namespace": "733c14fb-74e2-4bc8-bba2-45b47bae00a4",
+  "seed": 2210,
+  "description": "Planted binary drift: intercept shift of +0.75 (logit) from period 3 onward.",
+  "kind": "binary",
+  "nEntities": 4000,
+  "periodsPerEntity": 6,
+  "startYear": 2019,
+  "shiftFrom": 3,
+  "deltaIntercept": 0.75,
+  "features": {
+    "EngagementZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "TenureZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "AutoRenew": {
+      "dist": "bernoulli",
+      "p": 0.35
+    }
+  },
+  "betas": {
+    "EngagementZ": 0.9,
+    "TenureZ": 0.4,
+    "AutoRenew": 0.8
+  },
+  "intercept": -0.5,
+  "sizingNote": "4,000 entities x 6 periods = 24,000 rows (Ruling Q9: >= 3,000 x 6), shift in the later 3 periods (12,000 rows each side). The logit shift 0.75 has SE about 0.03, so it is > 20 SE; the positive rate moves by about 15 points, far beyond period-to-period sampling noise (SE ~0.008 per period)."
+}

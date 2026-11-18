@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Motion Engineer to author the HyperFrames HTML/CSS/JS composition.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Motion Engineer",
+            "message": "Compose the 16:9 HyperFrames source bundle.",
+            "terminateAfter": false
+        }
+    }
+}

@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for deleting entity records from the database.
@@ -51,7 +52,8 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to delete
-     *   - PrimaryKey (required): Object containing primary key field(s) and value(s)
+     *   - PrimaryKey (required): Object keyed by primary key column(s), the CompositeKey `{ KeyValuePairs }` shape,
+     *                 a JSON string of either, or (single-column keys only) the bare key value
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was deleted successfully
@@ -67,21 +69,60 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
             if (entityNameResult.error) return entityNameResult.error;
             const entityName = entityNameResult.value!;
 
-            const primaryKeyResult = this.getPrimaryKeyParam(params);
-            if (primaryKeyResult.error) return primaryKeyResult.error;
-            const primaryKey = primaryKeyResult.value!;
-
-            // Get entity object and metadata
+            // Get entity object and metadata (needed to interpret the PrimaryKey shape)
             const entityResult = await this.getEntityObject(entityName, params.ContextUser, params.Provider);
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
+
+            const primaryKeyResult = this.getPrimaryKeyParam(params, entityInfo!);
+            if (primaryKeyResult.error) return primaryKeyResult.error;
+            const primaryKey = primaryKeyResult.value!;
+
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Delete',
+            });
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
+            }
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
+                const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                    params,
+                    entityInfo: entityInfo!,
+                    primaryKey,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
+                });
+                if (rlsError) {
+                    return rlsError;
+                }
+            }
 
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
             // Store the record data before deletion
-            const deletedRecordData = entity.GetAll();
+            // fls-guard: loaded as params.ContextUser; width follows its user
+            const rawDeletedRecordData = entity.GetAll();
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.HasRecordConditionRules) {
+                const conditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: policyOutcome.Allowed.Policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Delete',
+                    record: rawDeletedRecordData,
+                });
+                if (conditionError) {
+                    return conditionError;
+                }
+            }
+            const deletedRecordData = policyOutcome.Allowed.Active
+                ? AgentDataPolicyGuard.MaskRecord(
+                      rawDeletedRecordData,
+                      policyOutcome.Allowed.EvalResult.deniedFieldPatterns
+                  )
+                : rawDeletedRecordData;
 
             // Delete the record
             const deleteResult = await entity.Delete();

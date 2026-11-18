@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
@@ -22,14 +22,14 @@ type SortBy = 'name' | 'date' | 'type';
               [class.active]="viewMode === 'grid'"
               (click)="viewMode = 'grid'"
               title="Grid View">
-              <i class="fas fa-grid"></i>
+              <i class="fa-solid fa-grid"></i>
             </button>
             <button
               class="mode-btn"
               [class.active]="viewMode === 'list'"
               (click)="viewMode = 'list'"
               title="List View">
-              <i class="fas fa-list"></i>
+              <i class="fa-solid fa-list"></i>
             </button>
           </div>
     
@@ -45,7 +45,7 @@ type SortBy = 'name' | 'date' | 'type';
     
           @if (canEdit) {
             <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
-              <i class="fas fa-plus"></i> Add
+              <i class="fa-solid fa-plus"></i> Add
             </button>
           }
         </div>
@@ -116,8 +116,20 @@ type SortBy = 'name' | 'date' | 'type';
     .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: var(--mj-bg-surface); border-radius: 12px; overflow: hidden; box-shadow: var(--mj-shadow-lg); }
   `]
 })
-export class CollectionViewComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
-  @Input() Collection!: MJCollectionEntity;
+export class CollectionViewComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
+  private _collection!: MJCollectionEntity;
+  private isInitialized = false;
+
+  @Input() set Collection(value: MJCollectionEntity) {
+    const prev = this._collection;
+    this._collection = value;
+    if (this.isInitialized && value !== prev) {
+      this.loadArtifacts();
+    }
+  }
+  get Collection(): MJCollectionEntity {
+    return this._collection;
+  }
 
   /** @deprecated Use {@link Collection}. */
   @Input() set collection(value: MJCollectionEntity) {
@@ -239,13 +251,8 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
   super();}
 
   ngOnInit() {
+    this.isInitialized = true;
     this.loadArtifacts();
-  }
-
-  ngOnChanges(changes: SimpleChanges) {
-    if (changes['collection'] && !changes['collection'].firstChange) {
-      this.loadArtifacts();
-    }
   }
 
   ngOnDestroy() {
@@ -262,14 +269,31 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const md = this.ProviderToUse;
 
+      // Resolve version IDs from Collection Artifacts first (no protected subquery)
+      const colArtifactsRes = await rv.RunView<{ ArtifactVersionID?: string | null }>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${this.Collection.ID}'`,
+        Fields: ['ArtifactVersionID'],
+        ResultType: 'simple'
+      }, this.CurrentUser);
+
+      const versionIds = Array.from(
+        new Set(
+          (colArtifactsRes.Success && colArtifactsRes.Results ? colArtifactsRes.Results : [])
+            .map((row) => (row.ArtifactVersionID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (versionIds.length === 0) {
+        this.ArtifactVersions = [];
+        return;
+      }
+
+      const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID IN (
-          SELECT ca.ArtifactVersionID
-          FROM [__mj].[vwCollectionArtifacts] ca
-          WHERE ca.CollectionID='${this.Collection.ID}'
-        )`,
+        ExtraFilter: `ID IN (${quotedVersionIds})`,
         OrderBy: this.getVersionOrderBy(),
         ResultType: 'entity_object'
       }, this.CurrentUser);
@@ -449,11 +473,12 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
           ExtraFilter: `ArtifactID='${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         }, this.CurrentUser);
 
         if (!versionResult.Success || !versionResult.Results || versionResult.Results.length === 0) {
-          alert('Failed to get artifact version');
+          MJNotificationService.Instance.CreateSimpleNotification('Failed to get artifact version', 'error', 4000);
           return;
         }
 
@@ -467,7 +492,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
       }
     } catch (error) {
       console.error('Failed to add artifact:', error);
-      alert('Failed to add artifact');
+      MJNotificationService.Instance.CreateSimpleNotification('Failed to add artifact', 'error', 4000);
     }
   }
 

@@ -207,6 +207,10 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
             if (sql.includes("FROM [__mj].[Entity]") && sql.includes("BaseTable = 'Customers'")) {
                return { recordset: [{ ID: 'E2000000-0000-0000-0000-000000000002' }] };
             }
+            if (sql.includes("FROM [__mj].[EntityField]") && sql.includes("'E2000000-0000-0000-0000-000000000002'")) {
+               // The soft FK's target column on Customers
+               return { recordset: [{ Name: 'ID', IsPrimaryKey: true, IsUnique: true }] };
+            }
             if (sql.includes("FROM [__mj].[EntityField]") && sql.includes("'CustomerID'")) {
                // Differing FK state: AutoUpdateRelatedEntityInfo is still true
                return {

@@ -113,6 +113,7 @@ class AggregateTestProvider extends GenericDatabaseProviderTestBase {
     protected CoerceSaveFieldValue(): SaveCoercedValue { throw new Error('Not supported in this test double'); }
     protected RenderSaveCallBinding(): SaveCallBinding { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallForResult(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
@@ -162,6 +163,7 @@ function widgetsEntity(deniedFields: string[] = []): EntityInfo {
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
         EnableFieldLevelSecurity: deniedFields.length > 0,
+        FieldLevelSecurityApplies: deniedFields.length > 0,
         GetDeniedReadFields: () => new Set(deniedFields.map((f) => f.toLowerCase())),
         HasBinaryFields: false,
         GetUserPermisions: () => ({ CanRead: true }),
@@ -238,10 +240,13 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         expect(plain.results[0].status).toBe('error');
         expect(provider.ExecutedSQL).toEqual([]);
 
-        // The gate does not see the look-alike spelling, so the rebuild must not resolve it to the column.
+        // The gate folds a look-alike spelling the way a collation may, so it refuses it with the
+        // same field-security error as the exact spelling, before any SQL runs; and the rebuild
+        // never resolves it to the column either way.
         const lookAlikeRun = await run(`MAX([${lookAlike}])`);
         expect(provider.ExecutedSQL.some((sql) => sql.includes(column))).toBe(false);
-        expect(lookAlikeRun.results[0].aggregateResults?.[0].error).toMatch(/not a column/);
+        expect(lookAlikeRun.results[0].status).toBe('error');
+        expect(lookAlikeRun.results[0].errorMessage).toMatch(/does not exist on entity 'Widgets' or you do not have access to it/);
     });
 
     it('a refused aggregate does not shift the values of the aggregates beside it', async () => {

@@ -568,6 +568,7 @@ export class SnapshotBuilder {
             OrderBy: 'ChangedAt DESC',
             Fields: ['ID', 'RecordID', 'ChangedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, contextUser);
 

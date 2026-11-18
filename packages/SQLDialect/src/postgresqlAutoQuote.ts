@@ -633,6 +633,19 @@ function previousWord(sql: string, to: number): string {
     return sql.substring(i + 1, end);
 }
 
+/**
+ * Whether {@link AutoQuotePostgreSQLIdentifiers} leaves the word at `start`–`end` of `sql` bare,
+ * so PostgreSQL folds it to lower case, instead of quoting it as written. A database error about
+ * that word names it in lower case in the first case and as written in the second.
+ *
+ * @param sql The SQL text the word is in
+ * @param start Offset of the word's first character
+ * @param end Offset just past the word
+ */
+export function AutoQuoteLeavesWordBare(sql: string, start: number, end: number): boolean {
+    return isBareWord(sql.substring(start, end), sql, start, end);
+}
+
 /** True when a word must be emitted verbatim rather than quoted as an identifier. */
 function isBareWord(word: string, sql: string, start: number, end: number): boolean {
     const precededByDot = start > 0 && sql[start - 1] === '.';

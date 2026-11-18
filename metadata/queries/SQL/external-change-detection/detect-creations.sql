@@ -1,8 +1,8 @@
 -- T-SQL variant for External Change Detection - Detect Creations
 SELECT
-    ot.*, ot.[{{ CreatedAtField }}] AS __ecd_CreatedAt, ot.[{{ UpdatedAtField }}] AS __ecd_UpdatedAt
+    ot.*, ot.{{ CreatedAtField | sqlIdentifier }} AS __ecd_CreatedAt, ot.{{ UpdatedAtField | sqlIdentifier }} AS __ecd_UpdatedAt
 FROM
-    [{{ SchemaName }}].[{{ BaseView }}] ot
+    {{ SchemaName | sqlIdentifier }}.{{ BaseView | sqlIdentifier }} ot
 LEFT JOIN
     __mj.vwRecordChanges rc
     ON

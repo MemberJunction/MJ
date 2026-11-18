@@ -13,7 +13,7 @@ Everything a channel needs to be usable by an agent that has never seen it is in
 | `@memberjunction/ai-core-plus` | The contract types (`RealtimeChannelDescriptor`, verbs, nouns, events), scoping (`ResolveRealtimeChannelScope`), exposure policy (`ResolveChannelExposure`, `IsVerbWithheld`), and the JSON-schema validator. Pure, shared by browser and server. |
 | `@memberjunction/realtime-runtime` | `BaseRealtimeChannelClient` (the class every channel extends), `ChannelActionDispatcher`, the catalog note, the perception coalescer, the visual-perception pump, `RealtimeSessionRuntime`. |
 | `@memberjunction/ng-realtime-channels` | `AngularComponentChannel` (wrap an existing component), and the opt-in DOM rasterizer (`EnableChannelFrameCapture`). Small on purpose: no overlay, no Explorer, no router. |
-| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (Whiteboard, Remote Browser, Media, Interactive Component, Identity Verification). |
+| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (`ArtifactWorkspace`, `Whiteboard`, `RemoteBrowser`, `Media`, `InteractiveComponent`, `IdentityVerification`, `Camera`, `ScreenShare`, `Avatar`). |
 | `@memberjunction/ng-realtime-widget` | `<mj-realtime-widget>`: the call, packaged for any web page (a one-script custom element and an Angular component). See section 10. |
 | `@memberjunction/ng-realtime-channel-examples` | A complete worked channel (tic-tac-toe). Not loaded by default; not a dependency of anything. |
 | `@memberjunction/ai-agents` | The server half of each channel (`BaseRealtimeChannelServer` plugins) and the server's scoping and exposure decisions. |
@@ -124,7 +124,7 @@ It is deliberately all-or-nothing. Nothing filters or edits a result. That is wh
 * A verb that **reads** is flagged: `'state'` for a result that is data, `'pixels'` for a result derived from what the surface looks like.
 * An unflagged verb returns what the channel says it returns. If a verb would reveal something, either flag it or lower the channel's own `MaxExposure`.
 
-Built-ins do this: Remote Browser flags `GetPageText` and `AchieveGoal` as `'state'` and `DescribePage` and `LocateElement` as `'pixels'`; the Interactive Component channel flags `GetDataState`, `Validate`, `IsDirty` and every custom method with a non-void return type. A verb offered by several instances (two open components) is withheld only if every offer is flagged.
+Built-ins do this: Remote Browser flags `GetPageText` and `AchieveGoal` as `'state'` and `DescribePage` and `LocateElement` as `'pixels'`; the Interactive Component channel flags `GetDataState`, `Validate`, `IsDirty` and every custom method with a non-void return type; the Whiteboard flags its three widget verbs as `'state'` (section 4). A verb offered by several instances (two open components) is withheld only if every offer is flagged.
 
 Pure helpers in `@memberjunction/ai-core-plus`: `IsVerbWithheld`, `WithheldVerbs`, `DescribeWithheldVerb`.
 
@@ -370,6 +370,53 @@ A host *adds* channels and supplies *defaults*; it cannot lift an agent or app `
 
 **How a decision is made.** At mint the browser reports its candidates (the plugins it has, with their descriptors) to the server; the server resolves scope, native tools and exposure with the same pure functions (`ResolveRealtimeChannelScope`, `ResolveChannelExposure`) and returns a policy; the browser applies it. Against an older server the extended mint is rejected and the runtime retries with the original and remembers; with no policy it resolves the same scope locally from code defaults and host declarations.
 
+### Example: the Whiteboard's widget keys
+
+The Whiteboard channel (`RealtimeWhiteboardChannel`, config key `Whiteboard`) reads two keys besides `maxExposure`, parsed by `ParseWhiteboardChannelConfig` (a wrong value falls back to its default with a console warning):
+
+| Key | Values | Default | Effect |
+|---|---|---|---|
+| `widgetAccess` | `"full"`, `"inspect-only"`, `"off"` | `"full"` | How far the agent may reach into live HTML widgets on the board: inspect, operate and call them; only inspect; or neither. It can only lower what the channel class declares. A refused call returns `access_denied`, and the agent is told once at session start which widget tools are unavailable. |
+| `persistWidgetState` | `true`, `false` | `true` | Whether widget runtime state (answers, progress) rides in the session save so it comes back on resume. `false` keeps it in memory only: it survives scrolling and page switches, not a resumed session. |
+
+```jsonc
+// Agent: realtime configuration
+{ "realtime": { "channels": { "config": {
+    "Whiteboard": { "widgetAccess": "inspect-only", "persistWidgetState": false }
+} } } }
+```
+
+```jsonc
+// App: Application.AgentSettings
+{ "Realtime": { "Channels": { "Config": {
+    "Whiteboard": { "widgetAccess": "off" }
+} } } }
+```
+
+A host that needs more than a fixed session value subclasses the channel (registered under `'RealtimeWhiteboardChannel'` with `@RegisterClass`, or supplied through `HostChannels[].Create`) and overrides its protected hooks:
+
+| Hook | Default | Use it to |
+|---|---|---|
+| `MaxWidgetAccess` (getter) | `'full'` | Cap which widget tools the channel **declares** to the model. It is read before the channel is initialized, so it depends on the class alone. |
+| `ResolveWidgetAccess()` | the lower of `MaxWidgetAccess` and `widgetAccess` | Change access **per call**, mid-session, without restarting it (for example `'off'` while a graded exercise is open). |
+| `OnBeforeWidgetCommand(cmd)` | `null` (allow) | Veto one command (`cmd` is a `WhiteboardChannelWidgetCommand`: `ToolName`, `ItemID`, `Args`, `ArgsJson`, `Access`). Return the refusal text; the call returns `vetoed` with it. |
+
+**Overriding `ApplyAgentTool` in a subclass.** It returns `string | Promise<string>`: the board tools return a string synchronously, and the three widget tools return a `Promise` (they wait for the widget). A subclass that post-processes results synchronously should send widget tools straight to `super`:
+
+```typescript
+public override ApplyAgentTool(toolName: string, argsJson: string): string | Promise<string> {
+  if (IsWhiteboardWidgetToolName(toolName)) {
+    return super.ApplyAgentTool(toolName, argsJson);   // async; don't treat it as a string
+  }
+  const result = super.ApplyAgentTool(toolName, argsJson);   // board tools return synchronously
+  return typeof result === 'string' ? this.decorate(result) : result;
+}
+```
+
+Code that assigned `super.ApplyAgentTool(...)` to a `string` before this release needs that split to compile.
+
+The three widget verbs (`InspectWidget`, `OperateWidget`, `CallWidget`) declare `ReturnsChannelData: 'state'` (section 1), because each result carries the widget's contents. Below `'state'` exposure they are refused with `exposure_restricted`. The widget API itself (what widget authors write, what persists where) is documented in the [whiteboard README](../packages/Angular/Generic/whiteboard/README.md#agents-and-live-widgets).
+
 ---
 
 ## 5. Opening a channel on demand
@@ -465,6 +512,21 @@ A channel of your own that hosts artifacts takes part the same way: say yes in `
 **Access.** Artifacts load through the signed-in user's own session and read permission (the agent cannot open anything the user cannot).
 
 Configuration (`channels.config.InteractiveComponent`): `autoOpenDelegatedComponents`, `swapToNewerVersions`, `maxInstances` (1 to 8), `maxStateRows` (25), `maxStateChars` (6000), `maxExposure`. Open components are live-only: not saved with the session, not restored on resume.
+
+---
+
+## 7b. The Artifact Workspace channel (`ArtifactWorkspace`)
+
+Collaborative Docs (`Markdown Document`), Slides (`Presentation`), Sheets (`Excel Spreadsheet`), and Whiteboards have their own dedicated bidirectional channel — **`ArtifactWorkspace`** (`ArtifactWorkspaceChannel`, registered as `'RealtimeArtifactWorkspaceChannel'` in `@memberjunction/ng-conversations`, paired with `ArtifactWorkspaceChannelServer` in `@memberjunction/ai-agents`, hosting `<mj-realtime-artifact-workspace-surface>`):
+
+| Capability | Behavior |
+|---|---|
+| **Multi-instance tabs** | Hosts up to `MaxInstances` (default `6`) concurrent `<mj-artifact-viewer-panel>` tabs (`w1`, `w2`, …) beside the realtime call (`DisplayPolicy: 'on-demand'`, `DefaultAvailability: 'all-sessions'`, `MaxExposure: 'pixels'`). |
+| **Dynamic delegation partitioning** | `AcceptsDelegationArtifacts` inspects each `ParsedDelegationArtifact`'s `ArtifactTypeName` and `DriverClass` (`IsCollaborativeArtifactDescriptor` / `IsComponentArtifactDescriptor`): collaborative Docs, Slides, Sheets, and Whiteboards route exclusively to `ArtifactWorkspace` (`open` refuses Component specs with `use_interactive_component`), while `Component` artifacts route exclusively to `InteractiveComponent`. |
+| **Verbs (`ContextTool`)** | Reserved `open` (`{ artifactId?, artifactVersionId?, versionNumber?, name?, artifactTypeName?, driverClass? }`), `focus` (`{ artifactId? }`), `show_version` (`{ artifactId?, versionId, versionNumber? }`), `refresh` (`{ artifactId?, versionNumber? }`), `close` (`{ artifactId? }`), **`navigate_to_anchor`** (`{ artifactId?, sheet?, range?, slideNumber?, elementId?, heading?, blockId?, highlightMs? }` to scroll/highlight a cell range, slide, heading, or block), and **`set_view_mode`** (`{ artifactId?, mode: 'edit' \| 'suggest' \| 'diff' \| 'present' }`). |
+| **Bidirectional perception & events** | Emits `opened`, `focused`, `version_changed`, `newer_version_available`, `refreshed`, **`selection_changed`** (driven by `EmitSelectionDelta` when a user changes active range/slide/block selection), `navigated_to_anchor`, `view_mode_changed`, and `closed`. `GetState()` reports `{ activeInstanceId, activeSelection, artifacts }`. |
+| **Live collaboration, ACL & scopes** | Workspace viewers connect via `/collaboration/yjs` with viewer permissions (`ArtifactPermissionEngine.ResolvePermissions` enforcing `Visibility <> 'System Only'`, `EnvironmentID`, and `CanEdit`), render spoof-proof live agent presence (`<AgentName> · for <ActingForUserName>`), and honor API/mutation scopes (`artifact:read`, `artifact:edit`, `artifact:comment`, and `artifact:share` for sharing/guest links). |
+| **Visual frame perception** | When `ChannelFrameCapture.Instance.Capturer` is enabled (`EnableChannelFrameCapture()`) and `Exposure === 'pixels'` on an active video track, `CaptureActiveFrame()` streams snapshots of the active workspace viewer tab to the session. |
 
 ---
 

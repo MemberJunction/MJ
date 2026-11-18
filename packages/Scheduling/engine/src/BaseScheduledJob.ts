@@ -4,8 +4,14 @@
  */
 
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, ValidationResult, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { ScheduledJobResult, ScheduledJobConfiguration, NotificationContent } from '@memberjunction/scheduling-base-types';
+import type { Observable } from 'rxjs';
+
+interface GlobalUserCacheLookup {
+    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
 
 /**
  * Context passed to job execution
@@ -14,6 +20,8 @@ export interface ScheduledJobExecutionContext {
     Schedule: MJScheduledJobEntity;
     Run: MJScheduledJobRunEntity;
     ContextUser: UserInfo;
+    /** The provider the engine read this job with; the plugin's reads and writes use it. */
+    Provider: IMetadataProvider;
 
     /**
      * Heartbeat the running job's lease (GH #2749). Calling this signals that
@@ -87,6 +95,39 @@ export abstract class BaseScheduledJob {
      */
     public get IsHighFrequencyByDesign(): boolean {
         return false;
+    }
+
+    /**
+     * Work gate (#6217). A driver whose job only has something to do when its own queue holds
+     * work overrides this so the engine runs the job, and wakes for it, only when work is due:
+     * - `undefined` (the default): not gated; the job runs on its cron like any other.
+     * - `null`: nothing pending; the job is not due and the poll timer ignores it.
+     * - a date: work is due then; the job is due once both that time and its `NextRunAt` pass.
+     *
+     * Called on every due check, so it must be synchronous and cheap: answer from state that
+     * {@link PrepareWorkGate} loaded and {@link WorkGateChanged$} reports changes to. Return
+     * `undefined` while that state is not loaded, so the job keeps its cron until it is.
+     */
+    public NextWorkDueAt(_job: MJScheduledJobEntity, _now: Date): Date | null | undefined {
+        return undefined;
+    }
+
+    /**
+     * Loads, or re-reads when older than `maxAgeMs`, the state {@link NextWorkDueAt} answers from.
+     * The engine calls it when polling starts, on each poll and when a job is activated; the
+     * age check keeps those calls free when nothing is stale. `maxAgeMs` is the engine's
+     * safety-net cadence for changes another server made without a cache event. No-op by default.
+     */
+    public async PrepareWorkGate(_contextUser: UserInfo, _provider: IMetadataProvider, _maxAgeMs: number): Promise<void> {
+        // not gated
+    }
+
+    /**
+     * Fires when the state behind {@link NextWorkDueAt} changes, so the engine re-arms its poll
+     * timer for the new due time. `null` (the default) for drivers that are not gated.
+     */
+    public get WorkGateChanged$(): Observable<void> | null {
+        return null;
     }
 
     /**
@@ -200,5 +241,47 @@ export abstract class BaseScheduledJob {
      */
     protected logError(message: string, error?: any): void {
         LogError(`[${this.constructor.name}] ${message}`, undefined, error);
+    }
+
+    /**
+     * Resolves the schedule owner's `UserInfo` when `schedule.OwnerUserID` is specified,
+     * ensuring scheduled runs execute under the schedule owner's security context rather
+     * than the background scheduler daemon user, and failing closed when the owner is
+     * missing or inactive.
+     */
+    protected async resolveScheduleOwnerUser(
+        schedule: { ID?: string; Name?: string; OwnerUserID?: string | null },
+        fallbackContextUser: UserInfo
+    ): Promise<UserInfo> {
+        const ownerUserID = schedule.OwnerUserID?.trim();
+        if (!ownerUserID) {
+            return fallbackContextUser;
+        }
+        if (fallbackContextUser?.ID && UUIDsEqual(fallbackContextUser.ID, ownerUserID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new Error(
+                    `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+                );
+            }
+            return fallbackContextUser;
+        }
+        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
+        if (!userCache || typeof userCache.FindUser !== 'function') {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": UserCache is unavailable to resolve owner user ${ownerUserID}.`
+            );
+        }
+        const ownerUser = await userCache.FindUser({ ID: ownerUserID });
+        if (!ownerUser) {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
+            );
+        }
+        if (ownerUser.IsActive === false) {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+            );
+        }
+        return ownerUser;
     }
 }

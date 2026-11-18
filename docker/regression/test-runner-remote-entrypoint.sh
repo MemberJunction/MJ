@@ -134,13 +134,18 @@ if [ -n "${ORACLES_MODULE:-}" ]; then
     fi
 fi
 
+# TEST_NAMES (comma-separated exact test names) runs only those tests of the suite.
+source "$SCRIPTS/lib/test-names.sh"
+build_test_name_args
+
 set +e
 node /app/packages/MJCLI/bin/run.js test suite --name "${TEST_SUITE_NAME}" \
     --format json \
     --output "$RUN_DIR/results.json" \
     --parallel \
     --max-parallel "$WORKERS" \
-    "${ORACLES_ARGS[@]}"
+    "${ORACLES_ARGS[@]}" \
+    "${TEST_ARGS[@]}"
 EXIT_CODE=$?
 set -e
 

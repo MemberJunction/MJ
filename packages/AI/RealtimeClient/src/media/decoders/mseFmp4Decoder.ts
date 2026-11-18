@@ -21,6 +21,16 @@
  */
 import { ReadFmp4Init, type RealtimeFmp4VideoFrame, type RealtimeVideoFrame } from '@memberjunction/ai';
 import type { IVideoFrameDecoder, VideoFrameDecoderContext, VideoFrameDecoderRegistration } from '../videoFrameDecoder';
+import { MimeCodec, MimeEssence } from './videoMimeTypes';
+
+/**
+ * Fallback codec strings probed when a caller or frame specifies bare `'video/mp4'` without a `codecs=` parameter.
+ * Real Chromium/WebKit `MediaSource.isTypeSupported('video/mp4')` returns `false` per W3C MSE spec unless codecs are given.
+ */
+const DEFAULT_FMP4_PROBE_TYPES: readonly string[] = [
+    'video/mp4; codecs="avc1.42c01f, mp4a.40.2"',
+    'video/mp4; codecs="avc1.42c01f"',
+];
 
 /** Back-buffer trims wait until this many more seconds have played, so a removal can never repeat in a loop. */
 const TRIM_STEP_SECONDS = 5;
@@ -63,6 +73,24 @@ function mseTypeOf(init: ArrayBuffer): string | null {
     return `video/mp4; codecs="${tracks.map((track) => track.Codec).join(', ')}"`;
 }
 
+/**
+ * Resolves `mimeType` to a codec-qualified MSE MIME string supported by this browser, or `null` if unsupported.
+ * Probes H.264/AAC codec strings when `mimeType` is bare `'video/mp4'`, matching real Chromium/WebKit MSE rules.
+ */
+function resolvePlayableMseType(mimeType: string): string | null {
+    const ms = mediaSourceClass();
+    if (!ms) {
+        return null;
+    }
+    if (ms.Class.isTypeSupported(mimeType)) {
+        return mimeType;
+    }
+    if (MimeEssence(mimeType) === 'video/mp4' && !MimeCodec(mimeType)) {
+        return DEFAULT_FMP4_PROBE_TYPES.find((candidate) => ms.Class.isTypeSupported(candidate)) ?? null;
+    }
+    return null;
+}
+
 /** Plays fragmented MP4 frames through MSE into one `<video>` element at a time. */
 export class MseFmp4Decoder implements IVideoFrameDecoder {
     private readonly mimeType: string;
@@ -91,7 +119,7 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
 
     /** Whether this browser can play `mimeType` through MSE. */
     public static CanPlay(mimeType: string): boolean {
-        return mediaSourceClass()?.Class.isTypeSupported(mimeType) ?? false;
+        return resolvePlayableMseType(mimeType) !== null;
     }
 
     /** @param context The player this decoder plays for. */
@@ -195,7 +223,7 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
         }
         this.detach();
         const mse = mediaSourceClass();
-        if (!mse || !mse.Class.isTypeSupported(this.mimeType)) {
+        if (!mse || !resolvePlayableMseType(this.mimeType)) {
             this.context.Report('unsupported', `This browser cannot play ${this.mimeType} through Media Source Extensions.`);
             return;
         }
@@ -274,10 +302,13 @@ export class MseFmp4Decoder implements IVideoFrameDecoder {
         }
     }
 
-    /** The type for a source buffer that takes `init`: the init's own codecs when this browser plays them, else the player's type. */
+    /** The type for a source buffer that takes `init`: the init's own codecs when this browser plays them, else the player's resolved MSE type. */
     private typeFor(init: ArrayBuffer | null): string {
         const fromInit = init ? mseTypeOf(init) : null;
-        return fromInit && mediaSourceClass()?.Class.isTypeSupported(fromInit) ? fromInit : this.mimeType;
+        if (fromInit && mediaSourceClass()?.Class.isTypeSupported(fromInit)) {
+            return fromInit;
+        }
+        return resolvePlayableMseType(this.mimeType) ?? this.mimeType;
     }
 
     /**

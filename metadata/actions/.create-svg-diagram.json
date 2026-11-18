@@ -19,14 +19,22 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Type of diagram to generate: 'flow' (flowchart), 'org' (org chart), or 'er' (entity-relationship diagram). Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "flow",
+                "org",
+                "er"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "ED22E312-286C-47C0-8F9C-E2E39BD62F1F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.962Z",
-            "checksum": "a9f08984cb2e9723b17f0357ffeb2a82b460da39ac1b0283a33aa3fd04d2e139"
+            "lastModified": "2026-10-20T23:18:47.840Z",
+            "checksum": "56a3b98488ca38c3ba29fbfddd18ae02bfddf22ec740e655920dd4192d62b884"
           }
         },
         {
@@ -74,14 +82,23 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Layout direction for flow diagrams: 'TB' (top-bottom), 'LR' (left-right), 'RL' (right-left), 'BT' (bottom-top). Default: 'TB'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "TB",
+                "LR",
+                "RL",
+                "BT"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "4AB95D44-F9D0-4F3E-A618-8459BF165E1D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.968Z",
-            "checksum": "bb415dc94b1b47e6382e830ba54a395739a7236773758b77f6e05241d1f1c737"
+            "lastModified": "2026-10-20T23:18:47.845Z",
+            "checksum": "9f93f39a00b8347a874f33c825bc16bafa13e1f35a36612842d6a4b150e416ce"
           }
         },
         {
@@ -93,14 +110,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Diagram width in pixels. Default: 800.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "8EF38607-E7DF-475B-B9EA-67E457710BF2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.970Z",
-            "checksum": "dca97a312f974bf336e051ac25e6731d0ad768c0e4cef024984d5c483fb53d5a"
+            "lastModified": "2026-10-20T23:18:47.850Z",
+            "checksum": "8a534d1e14f0558fc86d832b89f8e52792ba8551ce1460b28cdfea7df9c713a6"
           }
         },
         {
@@ -112,14 +132,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Diagram height in pixels. Default: 600.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "D7E158B8-F504-4338-B606-B635C9112453"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.972Z",
-            "checksum": "09cc81243bfef45fcfeeabf0ae215323e5dae893a240b812499c0aeff82e8b5d"
+            "lastModified": "2026-10-20T23:18:47.856Z",
+            "checksum": "98872d50ae80d38e43ed47134b7bcc587f07e018573433f7f0591bd5cf7858cb"
           }
         },
         {
@@ -149,14 +172,23 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "mjDefault",
+                "gray",
+                "pastel",
+                "highContrast"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "9536A0D4-A5D7-421E-8BBD-C67BB45BCF05"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.977Z",
-            "checksum": "ef1a52c105280711e99d530d794fa4b9a6497c5325f09930b9546d2185982f5a"
+            "lastModified": "2026-10-20T23:18:47.861Z",
+            "checksum": "c090dd50a8f6c67f8564792d639cdc439bd1ab5f3c158b46ed1128f68b5ae3c0"
           }
         },
         {
@@ -167,14 +199,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible diagrams.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "ADFA7B2F-D9FA-4EF9-B8A3-5497DFF173CD"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.979Z",
-            "checksum": "41b033c26df309baf4999a0da2953390652930251ec8b1b5c6d2b01a36a34bbd"
+            "lastModified": "2026-10-20T23:18:47.866Z",
+            "checksum": "5d5582e65df9a00e7928545bf0f6fa1f85c2b539fb3518fe7b4b90689242777a"
           }
         },
         {

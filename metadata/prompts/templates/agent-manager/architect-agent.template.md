@@ -102,9 +102,9 @@ interface AgentSpec {
     Name: string;                   // Step name (REQUIRED)
     Description?: string;           // What the step does
     StepType: 'Prompt' | 'Action' | 'Sub-Agent' | 'ForEach' | 'While' | 'Decision';  // REQUIRED
-    StartingStep: boolean;          // Is this the first step? (REQUIRED)
+    StartingStep: boolean;          // Is this an entry-point step? Multiple steps may set true for parallel wave-1 roots (REQUIRED)
     ActionID?: string;              // For Action type steps
-    SubAgentID?: string;            // For Sub-Agent type steps
+    SubAgentID?: string;            // For Sub-Agent steps and Sub-Agent loop bodies; "" links by step Name to the spec's sub-agent (or one active agent) of that name
     PromptID?: string;              // For Prompt type steps (can use existing prompt); for Decision steps, optional (empty = Default Decision)
     PromptText?: string;            // Or inline prompt text for Prompt type steps
     ActionInputMapping?: string | object;  // JSON string OR object: maps payload/static → action inputs
@@ -468,7 +468,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 6. **Validate Flow agent fields** (if TypeID is Flow):
    - `Steps` array must exist with at least one step
    - Each step needs Name, StepType, StartingStep
-   - At least ONE step must have `StartingStep: true`
+   - At least ONE step must have `StartingStep: true` (multiple steps may have `StartingStep: true` when the workflow starts with parallel wave-1 branches)
    - `Paths` array must exist
    - Each path needs OriginStepID, DestinationStepID, Priority
    - **Loop steps** (`ForEach` / `While`) additionally need `LoopBodyType`, a body ID in the field
@@ -665,7 +665,7 @@ This example shows all patterns in one agent: Flow orchestration, Action steps w
    - `TypeID`: Loop GUID, has `Prompts` array (REQUIRED for Loop)
    - Full nested AgentSpec with own Actions and Prompts
    - Can iterate and dynamically choose actions
-   - Name matches Sub-Agent step name for linking
+   - The step's `"SubAgentID": ""` links it to the sub-agent whose Name equals the step Name; no match, or several, fails the save
 
 5. **Conditional Paths**
    - High-priority/Technical tickets → Analysis step

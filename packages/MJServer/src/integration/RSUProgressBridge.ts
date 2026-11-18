@@ -25,6 +25,13 @@ import { BaseSingleton } from '@memberjunction/global';
 const RUN_STAGE = 'RSUPipeline';
 
 /**
+ * The pipeline step that kills this process. Named here because BOTH sides of the restart use it:
+ * this bridge closes the stage and checkpoints under it, and the post-restart consumer recognises a
+ * run as resumable by finding it as the run's last stage.
+ */
+export const RESTART_STAGE = 'RestartMJAPI';
+
+/**
  * How often an in-flight step reports that it is still alive.
  *
  * RSU's expensive steps — CodeGen, TypeScript compile, npm install — run for minutes with no
@@ -53,6 +60,15 @@ export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
     private currentRunID: string | null = null;
     /** Liveness timer for the step currently in flight — see {@link HEARTBEAT_INTERVAL_MS}. */
     private heartbeat: ReturnType<typeof setInterval> | null = null;
+    /**
+     * The stage the live heartbeat belongs to, held on the INSTANCE rather than only captured in
+     * the timer closure. A closure-only stage name is a leak waiting to happen: a timer that
+     * outlives its step (or its whole run) keeps firing with the name it was created with, and
+     * writes that stale name into whatever emitter the bridge is pointing at by then. Comparing the
+     * tick's captured name against this field makes that structurally impossible — a stopped or
+     * superseded heartbeat writes nothing.
+     */
+    private heartbeatStage: string | null = null;
     private emitterOptions: EmitterOptions = {};
 
     /** The one bridge for this process. */
@@ -96,8 +112,14 @@ export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
         this.currentRunID = null;
     }
 
-    /** The observer to hand to {@link RuntimeSchemaManager.PipelineObserver}. */
-    public readonly Observe = (event: RSUObserverEvent): void => {
+    /**
+     * The observer to hand to {@link RuntimeSchemaManager.PipelineObserver}.
+     *
+     * Returns a promise ONLY for `restart.pending` — the pipeline awaits that one (bounded) because
+     * the process is about to be killed and an unflushed write would be lost. Every other event
+     * stays fire-and-forget.
+     */
+    public readonly Observe = (event: RSUObserverEvent): void | Promise<void> => {
         switch (event.Kind) {
             case 'run.start':
                 return this.onRunStart(event);
@@ -105,24 +127,76 @@ export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
                 return this.onStepStart(event);
             case 'step.end':
                 return this.onStepEnd(event);
+            case 'restart.pending':
+                return this.onRestartPending(event);
             case 'run.end':
                 return this.onRunEnd(event);
         }
     };
 
+    /**
+     * Closes the `RestartMJAPI` stage and writes the checkpoint the next process re-attaches from,
+     * then FLUSHES — the caller awaits this, and pm2 kills the process moments later.
+     *
+     * Two separate things are written here, and they matter for different reasons:
+     *
+     *  - the `stage.complete` for `RestartMJAPI`, because `step.end` for that step is unreachable
+     *    (the process dies inside the step), so without it the stream ends on an open stage and a
+     *    determinate stepper stalls one short of the restart;
+     *  - the `checkpoint`, carrying the step position and the pending-work correlation, so the
+     *    consumer on the other side can resume the stepper where this process left it.
+     *
+     * The checkpoint is deliberately NOT the consumer's only way back to this run. Re-attachment
+     * keys off the MANIFEST — written minutes earlier, when the run opened — precisely because this
+     * write is the one racing a kill signal. If it is lost the run is still found and still
+     * resumed; only the step indices degrade to defaults.
+     */
+    private async onRestartPending(event: Extract<RSUObserverEvent, { Kind: 'restart.pending' }>): Promise<void> {
+        this.stopHeartbeat();
+        const emitter = this.emitter;
+        if (!emitter) return;
+        emitter.stageComplete(RESTART_STAGE);
+        emitter.checkpoint(RESTART_STAGE, {
+            runID: emitter.RunID,
+            remainingSteps: event.RemainingSteps,
+            stepIndex: event.StepIndex,
+            stepTotal: event.StepTotal,
+            companyIntegrationIDs: event.CompanyIntegrationIDs,
+            pendingWorkIDs: event.PendingWorkIDs,
+            migrationTotalCount: event.TotalCount,
+            migrationSuccessCount: event.SuccessCount,
+        });
+        // A failed flush must not stop the restart — the pipeline swallows this, but say so.
+        await emitter.flush().catch(err => LogError(`RSUProgressBridge: pre-restart flush failed — ${err}`));
+    }
+
     private onRunStart(event: Extract<RSUObserverEvent, { Kind: 'run.start' }>): void {
+        // Unconditional, and BEFORE the emitter check below. Stopping the previous run's liveness
+        // timer must not be reachable only via `closeCurrent`, whose call is gated on there being
+        // an emitter — that gate is the one path on which a live heartbeat could survive into the
+        // next run and stamp the previous run's stage name onto it.
+        this.stopHeartbeat();
         // A retry re-enters RunPipelineBatch, so it legitimately starts a NEW run. If a previous
         // emitter is still open (a throw escaped before run.end), close it rather than leak it.
         if (this.emitter) this.closeCurrent('Superseded by a new RSU run');
 
         const runID = IntegrationProgressEmitter.newRunID('rsu');
         this.currentRunID = runID;
+        const companyIntegrationIDs = event.CompanyIntegrationIDs ?? [];
         this.emitter = new IntegrationProgressEmitter(
             {
                 runID,
                 runKind: 'RSU',
                 triggerType: 'Pipeline',
                 startedAt: new Date().toISOString(),
+                // The run's IDENTITY, and the reason an RSU run is readable over the API at all: the
+                // run-artifact authorization check tests the caller against the connections on the
+                // manifest, and an RSU manifest never carried any. The plural field is the whole set
+                // (a batch may span connections); the singular one is populated ONLY for a
+                // single-connection run, so everything that reports "the" connection of a run keeps
+                // reporting one unambiguous answer rather than an arbitrary member of a set.
+                companyIntegrationIDs,
+                companyIntegrationID: companyIntegrationIDs.length === 1 ? companyIntegrationIDs[0] : undefined,
                 context: {
                     itemCount: event.ItemCount,
                     descriptions: event.Descriptions,
@@ -195,7 +269,12 @@ export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
     private startHeartbeat(stage: string): void {
         this.stopHeartbeat();
         const startedAt = Date.now();
+        this.heartbeatStage = stage;
         this.heartbeat = setInterval(() => {
+            // Guard on the INSTANCE's current stage, not just the captured one. A tick that fires
+            // after the heartbeat was stopped, or after a different step/run took over, must not
+            // write this step's name into someone else's stream.
+            if (this.heartbeatStage !== stage) return;
             const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
             this.emitter?.heartbeat(stage, `${stage} still running — ${elapsedSec}s elapsed`);
         }, HEARTBEAT_INTERVAL_MS);
@@ -205,6 +284,10 @@ export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
 
     /** Stops the liveness timer. Safe to call when none is running. */
     private stopHeartbeat(): void {
+        // Deliberately unconditional on the stage: clearing the name is what disarms a tick that is
+        // already queued on the event loop, so it must happen even when there is no timer handle
+        // left to clear.
+        this.heartbeatStage = null;
         if (!this.heartbeat) return;
         clearInterval(this.heartbeat);
         this.heartbeat = null;

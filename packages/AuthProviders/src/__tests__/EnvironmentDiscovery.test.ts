@@ -13,6 +13,7 @@ import { MSALProvider } from '../providers/MSALProvider.js';
 import { CognitoProvider } from '../providers/CognitoProvider.js';
 import { OktaProvider } from '../providers/OktaProvider.js';
 import { WorkOSProvider } from '../providers/WorkOSProvider.js';
+import { LocalDevProvider } from '../providers/LocalDevProvider.js';
 
 const EMPTY: NodeJS.ProcessEnv = {};
 
@@ -120,6 +121,30 @@ describe('ConfigFromEnvironment — providers that previously had no env-var for
       jwksUri: 'https://api.workos.com/sso/jwks/client_01H',
       audience: 'client_01H'
     });
+  });
+
+  it('LocalDevProvider returns null unless MJ_DEV_AUTH_ENABLED=true and throws in production', () => {
+    expect(LocalDevProvider.ConfigFromEnvironment(EMPTY)).toBeNull();
+    expect(LocalDevProvider.ConfigFromEnvironment({ MJ_DEV_AUTH_ENABLED: 'false' })).toBeNull();
+
+    const devConfig = LocalDevProvider.ConfigFromEnvironment({
+      MJ_DEV_AUTH_ENABLED: 'true',
+      GRAPHQL_PORT: '4000'
+    });
+    expect(devConfig).toEqual({
+      name: 'local',
+      type: 'local',
+      issuer: 'http://localhost:4000/local-dev',
+      audience: 'mj-local-dev',
+      jwksUri: 'http://localhost:4000/magic-link/jwks.json'
+    });
+
+    expect(() =>
+      LocalDevProvider.ConfigFromEnvironment({
+        MJ_DEV_AUTH_ENABLED: 'true',
+        NODE_ENV: 'production'
+      })
+    ).toThrow(/strictly forbidden when NODE_ENV=production/);
   });
 });
 

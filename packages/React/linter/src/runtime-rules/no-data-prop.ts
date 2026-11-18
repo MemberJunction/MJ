@@ -27,13 +27,15 @@ export class NoDataPropRule extends BaseLintRule {
 
     // Skip this rule for chart/visualization components that legitimately need generic data props
     // These are reusable components designed to work with any entity type
+    // Callers can pass an undefined name (a spec without `name`); without one there is
+    // no component signature to match, so the rule has nothing to check.
+    if (!componentName) {
+      return violations;
+    }
+    const lowerName = componentName.toLowerCase();
     const isChartComponent =
       componentSpec?.type === 'chart' ||
-      componentName.toLowerCase().includes('chart') ||
-      componentName.toLowerCase().includes('graph') ||
-      componentName.toLowerCase().includes('visualization') ||
-      componentName.toLowerCase().includes('grid') ||
-      componentName.toLowerCase().includes('table');
+      ['chart', 'graph', 'visualization', 'grid', 'table'].some((word) => lowerName.includes(word));
 
     if (isChartComponent) {
       return violations; // Skip - generic data prop is expected for chart components

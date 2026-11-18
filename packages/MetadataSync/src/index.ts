@@ -74,6 +74,7 @@ export {
   LoadFolderConfig, loadFolderConfig,
   type EntityConfig,
   type FolderConfig,
+  type FolderOverride,
   type RelatedEntityConfig
 } from './config';
 

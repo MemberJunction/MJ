@@ -31,7 +31,7 @@ export interface DeterministicParameter {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Inferred type based on how the parameter is used in the template */
     type: TemplateParamType;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Whether the parameter is required (used outside any conditional guard) */
+    /** Whether the parameter is required (used outside any conditional guard). Always false for system variables. */
     isRequired: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * Default value detected from `| default('value')` filter or `param or 'fallback'` pattern.
@@ -94,7 +94,8 @@ export interface EnrichmentResult {
  */
 export interface EnrichedParameterInfo {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    Description: string;
+    // case-violation-ok-legacy-back-compat: read off the AI prompt's JSON output, which says `description` (metadata/prompts/output/system/template-param-extraction.example.json). Renaming it dropped every AI description.
+    description: string;
 }
 
 /**

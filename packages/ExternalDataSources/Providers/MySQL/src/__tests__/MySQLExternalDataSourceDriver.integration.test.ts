@@ -48,7 +48,7 @@ CREATE VIEW customer_order_totals AS SELECT c.id AS customer_id, c.name, COUNT(o
 class TestableMySQLDriver extends MySQLExternalDataSourceDriver {
   protected override async resolveCredential<TCred extends Record<string, string> = Record<string, string>>(): Promise<ResolvedCredential<TCred> | null> {
     const values = { username: CONN.user, password: CONN.password } as unknown as TCred;
-    return { credential: null, values, source: 'request', expiresAt: null };
+    return { credential: null, values, source: 'request', expiresAt: null, expirationStatus: 'valid' };
   }
   public async closeAll(ds: MJExternalDataSourceEntity): Promise<void> {
     const pool = await this.getConnection(ds);

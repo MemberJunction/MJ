@@ -476,6 +476,8 @@ interface ThemeDefinition {
   Description?: string;
   /** Optional preview swatch colors for a future theme picker UI */
   PreviewColors?: string[];
+  /** Applied by Initialize() when the user has no saved preference; first registered wins */
+  IsDefault?: boolean;
 }
 ```
 
@@ -489,6 +491,7 @@ interface ThemeDefinition {
 | `AppliedTheme` | `string` | Currently applied theme ID (synchronous) |
 | `IsInitialized` | `boolean` | Whether `Initialize()` has been called |
 | `AvailableThemes` | `ThemeDefinition[]` | All registered themes |
+| `DefaultPreference` | `string` | What `Initialize()` applies with no saved preference: the first registered theme with `IsDefault`, else `'system'` |
 
 ### Methods
 
@@ -504,9 +507,27 @@ interface ThemeDefinition {
 ### Lifecycle
 
 1. **Registration** — Call `RegisterTheme()` / `RegisterThemes()` before `Initialize()` so saved preferences for custom themes are recognized.
-2. **Initialization** — The workspace initializer calls `Initialize()` after login. It loads the saved preference, resolves it, and applies the theme.
+2. **Initialization** — The workspace initializer calls `Initialize()` after login. It loads the saved preference, resolves it, and applies the theme. With no saved preference (or one that is no longer registered) it applies `DefaultPreference`: the registered theme flagged `IsDefault`, else `'system'`.
 3. **Switching** — User selects a theme from the menu, which calls `SetTheme()`. The service applies the theme and persists the preference.
 4. **Reset** — On logout, the shell calls `Reset()` to remove theme attributes and clean up.
+
+### Single-brand hosts: the compiled-in recipe
+
+A host with ONE brand (a learner portal, a white-labelled product) should not load its theme through `CssUrl`. Before login `Reset()` disables every dynamic theme `<link>` except the active org brand overlay, so a `CssUrl` base theme is gone and the login and loading screens render raw MJ tokens (plus the overlay, when one is active) no matter what was registered. The recipe that brands every screen from first paint, with no flash and no pre-paint script:
+
+1. **Compile the brand theme into the bundle** — the last entry in `angular.json`'s `styles`, keyed to plain `:root` (light) and `[data-theme='dark']` (dark). Every `--mj-*` token the brand overrides lives here; light/dark switching is attribute-only.
+2. **Register picker-only definitions** over the built-in slots so the theme menu shows the brand's names: `RegisterThemes([{ Id: 'light', Name: 'Brand', BaseTheme: 'light', IsBuiltIn: true, IsDefault: true }, { Id: 'dark', Name: 'Brand Dark', BaseTheme: 'dark', IsBuiltIn: true }])`. No `CssUrl` — the CSS is already loaded.
+3. **Flag the default** with `IsDefault: true` so a user with no saved preference lands on the brand rather than `'system'`.
+
+Keep `CssUrl` themes for what they are good at: themes selected at RUNTIME (per-tenant overlays, user-installed themes), where a `<link>` swap is the point.
+
+**How this composes with Theme Studio.** Theme Studio's "Set default" sets `MJ: Themes`.`IsDefault`, the org-wide **brand overlay**: at login bootstrap the workspace initializer registers it with `RegisterBrandTheme()` and applies it with `ApplyBrandOverlay()`, layered under whatever base theme is active, and `Reset()` keeps it so it survives logout. `ThemeDefinition.IsDefault` is a different axis: it picks the **base** theme `Initialize()` applies when the user has no saved light/dark preference, and it never looks at the brand registry. A picker-only built-in default (the recipe above) keeps the org overlay layered on top; a `CssUrl` theme flagged default replaces the overlay while it is selected, exactly as any explicitly selected custom theme does today.
+
+**The login screen.** Neither flag reaches a cold load of the sign-in page: `Initialize()` runs after login, and the org overlay's CSS is a session Blob that the pre-paint script cannot restore (only its `data-theme-overlay` attribute is). Right after a logout the overlay is still live, so the sign-in page stays branded until a reload. Branding the sign-in page from first paint is what the compiled-in recipe (and Login Studio's page data) is for. Since the cold-load restore below, the org overlay itself also survives a reload; see "The org brand on a cold load".
+
+### The org brand on a cold load
+
+The org brand overlay (Theme Studio's default, applied with `ApplyBrandOverlay()`) is a session Blob stylesheet, and workspace bootstrap re-emits it only after the metadata refresh. So that the shell's loading screen and the sign-in page paint branded from first paint anyway, `ApplyBrandOverlay()` persists the emitted CSS in localStorage beside the overlay id, and `RestorePersistedBrandOverlay()` re-injects it as a `<style>` before anything renders; explorer-app calls it from its constructor. Bootstrap's real `<link>` replaces the preloaded `<style>` for that id, a CSS entry whose id no longer matches the persisted overlay is dropped as stale, `ClearBrandOverlay()` removes both, bootstrap calls it when its brand query succeeds and finds no active brand (so a retired brand cannot keep painting from the cache), and a session-only overlay (`persist: false`, the Theme Studio preview) never persists. What this does not cover on its own is the pre-Angular frame itself, which only an inline script in the host's `index.html` can reach. For that, paste `BRAND_OVERLAY_PREPAINT_SCRIPT` (exported from this package) inside a `<script>` tag at the **top of `<body>`**, before the app's root element. Placement matters: the snippet appends its `<style>` to the end of `<head>`, and it has to land after the app stylesheet link to win the cascade, because the overlay's `[data-theme-overlay]` selectors tie MJ's `:root` tokens on specificity and source order decides. From `<body>` the app stylesheet is already in the DOM; from `<head>` it is not yet. (`RestorePersistedBrandOverlay()` re-appends a misplaced preload to the end of `<head>` once Angular boots, so a wrong placement degrades to the Angular-time branding rather than breaking.) MJExplorer carries the current copy; a spec pins it to the export. The snippet is dependency-free, fails open, and uses the same keys and marker attribute as the service, so the two are idempotent. A true first visit (nothing persisted yet) still paints the stock frame until the first sign-in; the server-side pre-auth branding described in `plans/pluggable-auth-providers/pre-auth-branding.md` is what would cover that.
 
 ---
 

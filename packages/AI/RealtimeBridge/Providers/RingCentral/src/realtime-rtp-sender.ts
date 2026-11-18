@@ -36,11 +36,13 @@ export const RTP_FRAME_MS = 20;
  */
 export class RealtimeRtpSender {
     /**
-     * Queued PCM16 bytes (at the codec rate) not yet sent — drained one `packetSize` frame per tick.
-     * Held as `Uint8Array` (not `Buffer`) to sidestep `@types/node`'s strict `Buffer<ArrayBufferLike>`
-     * generic invariance; converted to a `Buffer` only at the encoder boundary.
+     * Queued PCM16 byte chunks (at the codec rate) not yet sent — drained one `packetSize` frame per tick
+     * without O(N^2) concatenation on enqueue.
      */
-    private pending: Uint8Array = new Uint8Array(0);
+    private chunks: Uint8Array[] = [];
+    private chunkIndex = 0;
+    private headOffset = 0;
+    private bufferedBytes = 0;
 
     /** The 20 ms interval handle, or null when not running. */
     private timer: ReturnType<typeof setInterval> | null = null;
@@ -71,13 +73,13 @@ export class RealtimeRtpSender {
         return this.Start();
     }
 
-    /** Appends one outbound PCM16 frame (the model's voice, already at the codec rate) to the send queue. */
+    /** Appends one outbound PCM16 frame (the model's voice, already at the codec rate) to the send queue in O(1). */
     public Enqueue(pcm: ArrayBuffer): void {
         if (pcm.byteLength === 0) {
             return;
         }
-        const incoming = new Uint8Array(pcm);
-        this.pending = this.pending.length === 0 ? incoming : concatBytes(this.pending, incoming);
+        this.chunks.push(new Uint8Array(pcm));
+        this.bufferedBytes += pcm.byteLength;
     }
 
     /** @deprecated Use {@link Enqueue}. */
@@ -91,7 +93,10 @@ export class RealtimeRtpSender {
      * dropping the local queue is the whole flush.
      */
     public Flush(): void {
-        this.pending = new Uint8Array(0);
+        this.chunks = [];
+        this.chunkIndex = 0;
+        this.headOffset = 0;
+        this.bufferedBytes = 0;
     }
 
     /** @deprecated Use {@link Flush}. */
@@ -105,7 +110,7 @@ export class RealtimeRtpSender {
             clearInterval(this.timer);
             this.timer = null;
         }
-        this.pending = new Uint8Array(0);
+        this.Flush();
     }
 
     /** @deprecated Use {@link Stop}. */
@@ -119,12 +124,55 @@ export class RealtimeRtpSender {
      * clock deterministically.
      */
     public Tick(): void {
-        if (this.session.disposed || this.pending.length < this.packetSize) {
+        const size = this.packetSize;
+        if (this.session.disposed || this.bufferedBytes < size) {
             return;
         }
-        const frame = this.pending.subarray(0, this.packetSize);
-        this.pending = this.pending.subarray(this.packetSize);
+        const frame = this.dequeueFrame(size);
         this.sendFrame(frame);
+    }
+
+    /** Pulls `size` bytes from the head of the chunk queue, using a zero-copy subarray when contained in one chunk. */
+    private dequeueFrame(size: number): Uint8Array {
+        const head = this.chunks[this.chunkIndex];
+        const availableInHead = head.length - this.headOffset;
+        if (availableInHead >= size) {
+            const frame = head.subarray(this.headOffset, this.headOffset + size);
+            this.headOffset += size;
+            this.bufferedBytes -= size;
+            if (this.headOffset === head.length) {
+                this.advanceChunk();
+            }
+            return frame;
+        }
+
+        const frame = new Uint8Array(size);
+        let written = 0;
+        while (written < size) {
+            const current = this.chunks[this.chunkIndex];
+            const rem = current.length - this.headOffset;
+            const take = Math.min(rem, size - written);
+            frame.set(current.subarray(this.headOffset, this.headOffset + take), written);
+            written += take;
+            this.headOffset += take;
+            this.bufferedBytes -= take;
+            if (this.headOffset === current.length) {
+                this.advanceChunk();
+            }
+        }
+        return frame;
+    }
+
+    private advanceChunk(): void {
+        this.chunkIndex++;
+        this.headOffset = 0;
+        if (this.chunkIndex === this.chunks.length) {
+            this.chunks = [];
+            this.chunkIndex = 0;
+        } else if (this.chunkIndex >= 64) {
+            this.chunks = this.chunks.slice(this.chunkIndex);
+            this.chunkIndex = 0;
+        }
     }
 
     /** @deprecated Use {@link Tick}. */
@@ -164,12 +212,4 @@ export class RealtimeRtpSender {
         }
         this.session.timestamp += codec.timestampInterval;
     }
-}
-
-/** Concatenates two byte arrays into a fresh `Uint8Array` (the queued remainder + the next delta). */
-function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
-    const out = new Uint8Array(a.length + b.length);
-    out.set(a, 0);
-    out.set(b, a.length);
-    return out;
 }

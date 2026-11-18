@@ -1,0 +1,59 @@
+[
+  {
+    "_comments": [
+      "Documents that MJ: AI Models.APIName, DriverClass and DriverImportPath are flattened by vwAIModels",
+      "from the model's top-priority Active Inference Provider vendor row (#3066). They say nothing about",
+      "any other vendor serving the model, so vendor-specific code must read the MJ: AI Model Vendors row.",
+      "AutoUpdateDescription = 0 keeps CodeGen from replacing the text."
+    ],
+    "fields": {
+      "Name": "MJ: AI Models"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "AutoUpdateDescription": false,
+            "Description": "Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=APIName"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.972Z",
+            "checksum": "664947d513b743a5b8bf0c944b254b6fb9049468d145bc582d97cf4ac790deb9"
+          }
+        },
+        {
+          "fields": {
+            "AutoUpdateDescription": false,
+            "Description": "Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=DriverClass"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.982Z",
+            "checksum": "45dd57ca96c5b6280b1c63b20657d298823c9e25d8f0e223af542ffd317e1510"
+          }
+        },
+        {
+          "fields": {
+            "AutoUpdateDescription": false,
+            "Description": "Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=DriverImportPath"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:11.992Z",
+            "checksum": "26a960d1a9a10d60e9241872f38432b4b6d737ec393645b191a95340d99693a2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Models"
+    }
+  }
+]

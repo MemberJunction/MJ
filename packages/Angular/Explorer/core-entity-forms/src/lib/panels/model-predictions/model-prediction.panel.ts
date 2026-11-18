@@ -4,6 +4,7 @@ import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import {
+    ImportanceDisplay,
     OutcomeBand,
     resolveOutcomeConfig,
     resolveOutcomeStyle,
@@ -13,6 +14,7 @@ import {
     ModelHistorySummary,
     PredictionBand,
     PredictionDriver,
+    PredictionDrivers,
     PredictionHistoryItem,
     BandFor,
     FilterHistoryByModel,
@@ -20,7 +22,6 @@ import {
     FormatValue,
     GaugePct,
     GetDistinctModelsFromHistory,
-    ParseDrivers,
     ParseHistoryItem,
     ResolveLabel,
     ToNumber,
@@ -60,6 +61,8 @@ export interface PredictionCard {
     BadgeIcon: string | null;
     /** Top feature-importance drivers, or empty when unavailable. */
     Drivers: PredictionDriver[];
+    /** True when the model has importances that are hidden because of their kind (split / impurity counts). */
+    DriversHidden: boolean;
     /** Provenance: "Pipeline Name v3". */
     Provenance: string;
     /** "Last scored" timestamp string, or null when unavailable. */
@@ -103,6 +106,9 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
 
     /** The resolved cards to render. Empty → panel renders nothing. */
     public Cards: PredictionCard[] = [];
+
+    /** The note shown in place of a model's hidden drivers. */
+    public readonly DriversHiddenNote = ImportanceDisplay.HiddenNote;
     /** True once the binding lookup has completed (success or empty). */
     public Loaded = false;
     /** Resolved models by ID for lineage and history decoration. */
@@ -450,7 +456,8 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             StatusLabel: statusLabel,
             BadgeColor: badgeColor,
             BadgeIcon: badgeIcon,
-            Drivers: ParseDrivers(model.FeatureImportance),
+            Drivers: PredictionDrivers.DriversForModel(model.Lineage, model.FeatureImportance),
+            DriversHidden: PredictionDrivers.DriversHidden(model.Lineage, model.FeatureImportance),
             Provenance: `${model.Pipeline} v${model.Version}`,
             LastScored: FormatLastScored(binding.LastScoredAt),
         };

@@ -156,6 +156,23 @@
     font-size: 11px;
 }
 
+/* A parameter the host or the server sets: shown read-only */
+.field-locked {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+}
+
+.form-input:disabled {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+    cursor: not-allowed;
+}
+
 /* Field description */
 .field-description {
     font-size: var(--mj-text-xs);

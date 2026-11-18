@@ -18,6 +18,7 @@ type MockEntity = {
     Delete: ReturnType<typeof vi.fn>;
     Save: ReturnType<typeof vi.fn>;
     Set: ReturnType<typeof vi.fn>;
+    Get: ReturnType<typeof vi.fn>;
     Fields: Array<{ Name: string }>;
     LatestResult?: { CompleteMessage?: string };
 };
@@ -28,6 +29,7 @@ function mockEntity(overrides: Partial<MockEntity> = {}): MockEntity {
         Delete: vi.fn().mockResolvedValue(true),
         Save: vi.fn().mockResolvedValue(true),
         Set: vi.fn(),
+        Get: vi.fn().mockReturnValue(null),
         Fields: [
             { Name: '__mj_integration_SyncStatus' },
             { Name: '__mj_integration_LastSyncedAt' },
@@ -49,7 +51,7 @@ type OrphanSweepInternals = {
         companyIntegration: { ID: string },
         entityMap: { ID: string; Entity: string; ExternalObjectName: string; DeleteBehavior: string; EntityID: string },
         fetchedExternalIDs: ReadonlySet<string>,
-        result: { RecordsDeleted: number },
+        result: { RecordsDeleted: number; RecordsSkipped: number },
         contextUser: { ID: string },
         logger: { warning: (object: string, code: string, message: string, data?: unknown) => void },
     ) => Promise<unknown>;
@@ -57,7 +59,7 @@ type OrphanSweepInternals = {
 
 function harness(opts: {
     deleteBehavior: 'HardDelete' | 'SoftDelete' | 'DoNothing';
-    mapRows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>;
+    mapRows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string; Origin?: string }>;
     fetched: string[];
     dataEntity?: MockEntity;
 }) {
@@ -77,10 +79,22 @@ function harness(opts: {
     };
     Object.defineProperty(engine, 'ProviderToUse', { get: () => md });
     const internals = engine as unknown as OrphanSweepInternals;
-    internals.loadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
+    // The loader now STREAMS: the sweep passes a per-page consumer and keeps only the orphans, so a
+    // stub that just resolves rows would hand the sweep nothing to sweep. Feed the page through the
+    // callback exactly as the real loader does, and hand back the streaming shape (empty Rows +
+    // RowsRead) so this suite cannot pass against a sweep that went back to reading Rows.
+    internals.loadAllRecordMaps = vi.fn().mockImplementation(async (
+        _ci: string,
+        _entityID: string,
+        _user: unknown,
+        onPage?: (rows: ReadonlyArray<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>) => void,
+    ) => {
+        onPage?.(opts.mapRows);
+        return { Rows: [], RowsRead: opts.mapRows.length, Complete: true };
+    });
     const warnings: Array<{ code: string; data?: unknown }> = [];
     const logger = { warning: (_o: string, code: string, _m: string, data?: unknown) => warnings.push({ code, data }) };
-    const result = { RecordsDeleted: 0 };
+    const result = { RecordsDeleted: 0, RecordsSkipped: 0 };
     const run = async () =>
         internals.deleteOrphanedRecords(
             { ID: 'ci-1' },
@@ -150,3 +164,44 @@ describe('IntegrationEngine — the orphan sweep answers to DeleteBehavior', () 
         expect(h.mapEntities).toHaveLength(0);
     });
 });
+
+describe('IntegrationEngine — the orphan sweep never hard-deletes an adopted row (#3528)', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    const adopted = [{ ID: 'map-1', EntityRecordID: 'rec-1', ExternalSystemRecordID: 'ext-1', Origin: 'Adopted' }];
+
+    it('HardDelete + Adopted: archives instead of deleting, and prunes the map row', async () => {
+        const h = harness({ deleteBehavior: 'HardDelete', mapRows: adopted, fetched: [] });
+        await h.run();
+        expect(h.dataEntity.Delete).not.toHaveBeenCalled();
+        expect(h.dataEntity.Set).toHaveBeenCalledWith('__mj_integration_IsTombstoned', true);
+        expect(h.result.RecordsDeleted).toBe(1);
+        expect(h.mapEntities[0].Delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('HardDelete + Adopted on an entity with no tombstone columns: keeps the row and its map, with a warning', async () => {
+        const h = harness({ deleteBehavior: 'HardDelete', mapRows: adopted, fetched: [], dataEntity: mockEntity({ Fields: [{ Name: 'Name' }] }) });
+        await h.run();
+        expect(h.dataEntity.Delete).not.toHaveBeenCalled();
+        expect(h.dataEntity.Save).not.toHaveBeenCalled();
+        expect(h.result.RecordsDeleted).toBe(0);
+        expect(h.mapEntities).toHaveLength(0);
+        expect(h.warnings.map(w => w.code)).toEqual(expect.arrayContaining(['SOFT_DELETE_UNSUPPORTED', 'ADOPTED_ROW_KEPT']));
+    });
+
+    it('HardDelete + Created: deletes as before', async () => {
+        const h = harness({ deleteBehavior: 'HardDelete', mapRows: [{ ...adopted[0], Origin: 'Created' }], fetched: [] });
+        await h.run();
+        expect(h.dataEntity.Delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('SoftDelete on an entity with no tombstone columns: not counted, map kept, one warning for two orphans', async () => {
+        const h = harness({ deleteBehavior: 'SoftDelete', mapRows: rows, fetched: [], dataEntity: mockEntity({ Fields: [{ Name: 'Name' }] }) });
+        await h.run();
+        expect(h.dataEntity.Save).not.toHaveBeenCalled();
+        expect(h.result.RecordsDeleted).toBe(0);
+        expect(h.mapEntities).toHaveLength(0);
+        expect(h.warnings.filter(w => w.code === 'SOFT_DELETE_UNSUPPORTED')).toHaveLength(1);
+    });
+});
+

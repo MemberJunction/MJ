@@ -21,7 +21,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
 import type { ThemeSeeds } from '@memberjunction/theme-engine';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { UserSettingsModule } from '@memberjunction/ng-explorer-settings/user-settings.module';
 import { UserHoldsAuthorization } from '@memberjunction/ng-conversations';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
@@ -55,7 +55,7 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
 @Component({
     selector: 'mj-profile-dialog',
     standalone: true,
-    imports: [CommonModule, ExplorerSettingsModule],
+    imports: [CommonModule, UserSettingsModule],
     template: `
 <div class="mj-profile" [class.mj-profile--panel-open]="ActivePanel !== 'none'" role="document">
     <button class="mj-profile__close" type="button" aria-label="Close" (click)="OnCloseClick()">

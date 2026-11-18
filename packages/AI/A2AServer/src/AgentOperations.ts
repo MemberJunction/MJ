@@ -94,7 +94,7 @@ export class AgentOperations {
      * @param parameters Parameters containing agent ID/name and execution params
      * @returns The operation result with run info
      */
-    public async ExecuteAgent(parameters: OperationParameters): Promise<OperationResult> {
+    public async ExecuteAgent(parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
         try {
             // Find the agent
             const aiEngine = AIEngine.Instance;
@@ -125,7 +125,8 @@ export class AgentOperations {
                 agent,
                 conversationMessages: messages,
                 contextUser: this.contextUser,
-                data: parameters.data || {}
+                data: parameters.data || {},
+                ...(cancellationToken ? { cancellationToken } : {})
             });
             
             return { 
@@ -150,8 +151,8 @@ export class AgentOperations {
     }
 
     /** @deprecated Use {@link ExecuteAgent}. */
-    public async executeAgent(parameters: OperationParameters): Promise<OperationResult> {
-        return this.ExecuteAgent(parameters);
+    public async executeAgent(parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
+        return this.ExecuteAgent(parameters, cancellationToken);
     }
 
     /**
@@ -269,13 +270,13 @@ export class AgentOperations {
      * @param parameters The operation parameters
      * @returns The operation result
      */
-    public async ProcessOperation(operation: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async ProcessOperation(operation: string, parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
         switch(operation) {
             case 'discoverAgents':
                 return await this.DiscoverAgents(parameters);
                 
             case 'executeAgent':
-                return await this.ExecuteAgent(parameters);
+                return await this.ExecuteAgent(parameters, cancellationToken);
                 
             case 'getAgentRunStatus':
                 return await this.GetAgentRunStatus(parameters);
@@ -292,7 +293,7 @@ export class AgentOperations {
     }
 
     /** @deprecated Use {@link ProcessOperation}. */
-    public async processOperation(operation: string, parameters: OperationParameters): Promise<OperationResult> {
-        return this.ProcessOperation(operation, parameters);
+    public async processOperation(operation: string, parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
+        return this.ProcessOperation(operation, parameters, cancellationToken);
     }
 }

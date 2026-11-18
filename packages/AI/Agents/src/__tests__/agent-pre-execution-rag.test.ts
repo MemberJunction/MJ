@@ -7,6 +7,7 @@ vi.mock('@memberjunction/core-entities', () => {
     return {
         SearchEngineBase: {
             Instance: {
+                HasActiveAgentScopes: vi.fn(async () => true),
                 Config: vi.fn(async () => {}),
                 GetAgentScopes: vi.fn(() => []),
                 GetActiveScopeByID: vi.fn(() => undefined),
@@ -35,7 +36,7 @@ const {
         // Permitted by default, so a test that reaches the search path without stubbing the gate
         // behaves as before this gate existed, instead of tripping on an undefined verdict.
         mockResolvePermission: vi.fn(async (_input: ResolvePermissionInput): Promise<EffectivePermission> => PERMITTED),
-        mockRenderTemplate: vi.fn(async () => ({ Success: true, Output: 'rendered query' })),
+        mockRenderTemplate: vi.fn(async (..._args: unknown[]) => ({ Success: true, Output: 'rendered query' })),
         mockFindTemplate: vi.fn((_id: string): { GetHighestPriorityContent: () => { TemplateText: string } } | undefined => undefined),
         mockLogError: vi.fn((_message: string) => {}),
         mockLogStatusEx: vi.fn((_options: LogStatusOptions | string) => {}),
@@ -203,6 +204,8 @@ describe('AgentPreExecutionRAG', () => {
             await run();
             // Control: permitted, the template renders and its output is the query.
             expect(mockRenderTemplate).toHaveBeenCalledTimes(1);
+            // The render runs as the agent's caller, not as whoever last configured the engine.
+            expect(mockRenderTemplate.mock.calls[0][5]).toEqual({ ContextUser: fakeUser });
             expect(mockSearch.mock.calls[0][0]).toMatchObject({ Query: 'rendered query' });
 
             vi.clearAllMocks();
@@ -267,6 +270,23 @@ describe('AgentPreExecutionRAG', () => {
             await run({ activeSkillIDs: ['skill-1', 'skill-2'] });
             expect(resolverInput().Skill).toBeNull();
             expect(mockSearch.mock.calls[0][0].AISkillID).toBeUndefined();
+        });
+
+        it('injects the semantic graph lane\'s results, with their provenance, from the same search', async () => {
+            const breadcrumb = '"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"';
+            mockSearch.mockResolvedValue({
+                ...emptySearch,
+                Results: [{
+                    ID: 'abv-1', EntityName: 'MJ: Entity Alternate Base Views', RecordID: 'abv-1', SourceType: 'SemanticGraph',
+                    ResultType: 'entity-record', Title: 'Invoices.Open', Snippet: `${breadcrumb} — Unpaid invoices`, Score: 0.012,
+                    ScoreBreakdown: { Graph: 0.012 }, Tags: ['MJ Canon'], MatchedAt: new Date(),
+                }],
+                TotalCount: 1,
+                SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Graph: 1 },
+            });
+            const result = await run();
+            expect(result?.formattedSystemMessage).toContain('source: SemanticGraph');
+            expect(result?.formattedSystemMessage).toContain(breadcrumb);
         });
 
         describe('an audience (audienceReaders)', () => {
@@ -393,6 +413,53 @@ describe('AgentPreExecutionRAG', () => {
         expect(SearchEngineBase.Instance.GetAgentScopes).toHaveBeenCalledWith('agent-1', 'PreExecution');
     });
 
+    it('executes multiple active pre-execution scopes in parallel while preserving Priority order', async () => {
+        const callOrder: string[] = [];
+        const rag = new AgentPreExecutionRAG();
+        vi.spyOn(
+            rag as unknown as {
+                loadActiveAgentScopeRows: () => unknown[];
+                resolveSkillPrincipal: () => Promise<{ ok: boolean; skill?: unknown }>;
+                searchOneAgentScope: (row: { ID: string; Priority: number }) => Promise<unknown>;
+            },
+            'loadActiveAgentScopeRows'
+        ).mockReturnValue([
+            { ID: 'scope-high-priority', Priority: 1 },
+            { ID: 'scope-low-priority', Priority: 2 }
+        ]);
+        vi.spyOn(
+            rag as unknown as { resolveSkillPrincipal: () => Promise<{ ok: boolean; skill?: unknown }> },
+            'resolveSkillPrincipal'
+        ).mockResolvedValue({ ok: true });
+        vi.spyOn(
+            rag as unknown as { searchOneAgentScope: (row: { ID: string; Priority: number }) => Promise<unknown> },
+            'searchOneAgentScope'
+        ).mockImplementation(async (row) => {
+            callOrder.push(`start:${row.ID}`);
+            await new Promise((r) => setTimeout(r, row.Priority === 1 ? 20 : 5));
+            callOrder.push(`end:${row.ID}`);
+            return {
+                scopeID: row.ID,
+                scopeName: row.ID,
+                scopeDescription: null,
+                scopeIcon: null,
+                query: 'q',
+                results: [],
+                minScore: 0
+            };
+        });
+
+        const res = await rag.Execute({
+            agent: { ID: 'agent-1' } as never,
+            lastUserMessage: 'q',
+            contextUser: fakeUser
+        });
+
+        // Both scopes started before either finished, and results preserve Priority order
+        expect(callOrder.slice(0, 2)).toEqual(['start:scope-high-priority', 'start:scope-low-priority']);
+        expect(res?.queriedScopeIDs).toEqual(['scope-high-priority', 'scope-low-priority']);
+    });
+
     describe('BuildArtifactPayload', () => {
         it('returns undefined when no combined results', () => {
             const rag = new AgentPreExecutionRAG();
@@ -444,5 +511,22 @@ describe('AgentPreExecutionRAG', () => {
             expect((payload as { tables: { rows: unknown[] }[] }).tables[0].rows.length).toBe(1);
             expect(Array.isArray((payload as { computations: unknown[] }).computations)).toBe(true);
         });
+    });
+
+    it('skips SearchEngineBase.Config when HasActiveAgentScopes returns false', async () => {
+        const hasScopesSpy = vi.mocked(SearchEngineBase.Instance.HasActiveAgentScopes);
+        const configSpy = vi.mocked(SearchEngineBase.Instance.Config);
+        hasScopesSpy.mockResolvedValueOnce(false);
+
+        const rag = new AgentPreExecutionRAG();
+        const res = await rag.Execute({
+            agent: { ID: 'agent-no-scopes', Name: 'Empty' } as MJAIAgentEntity,
+            lastUserMessage: 'hello',
+            contextUser: fakeUser,
+        });
+
+        expect(res).toBeNull();
+        expect(hasScopesSpy).toHaveBeenCalledWith('agent-no-scopes', 'PreExecution', fakeUser);
+        expect(configSpy).not.toHaveBeenCalled();
     });
 });

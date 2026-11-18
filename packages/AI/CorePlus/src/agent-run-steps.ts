@@ -290,7 +290,7 @@ export type AgentRunStepInsertPrerequisites =
  * Failures are logged, never thrown — persistence is observability and must not break the run.
  */
 export class AgentRunStepSaveQueue {
-    private readonly queue = new BaseEntitySaveQueue();
+    private readonly queue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
 
     /**
      * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK
@@ -377,6 +377,16 @@ export class AgentRunStepSaveQueue {
      */
     public QueueUpdate(step: MJAIAgentRunStepEntity, applyMutation?: (step: MJAIAgentRunStepEntity) => void): void {
         this.queue.Update(step, applyMutation ? (entity) => applyMutation(entity as MJAIAgentRunStepEntity) : undefined);
+    }
+
+    /**
+     * Resolves once every save queued so far for `step` has settled (its INSERT and any UPDATE behind it),
+     * or at once when none is pending. Never rejects: a failed save is already logged. Await it before writing
+     * a row outside this queue that has a foreign key to the step, such as an `MJ: AI Agent Requests` row's
+     * `OriginatingAgentRunStepID`. {@link Insert}'s prerequisites only order writes within this queue.
+     */
+    public Settled(step: MJAIAgentRunStepEntity): Promise<void> {
+        return this.queue.Settled(step);
     }
 
     /** Awaits every queued save, drains the queue, and returns failure diagnostics. Call at run/goal finalize. */

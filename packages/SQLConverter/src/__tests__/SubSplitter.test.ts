@@ -257,3 +257,59 @@ describe('subSplitCompoundBatch', () => {
     expect(result[1]).toContain('IX_B');
   });
 });
+
+describe('subSplitCompoundBatch — issue #5364', () => {
+  it('keeps a CREATE OR ALTER TRIGGER whole instead of splitting it at statements in its body (item 7)', () => {
+    // A trigger body need not be wrapped in BEGIN/END, so its statements sit at depth 0.
+    const batch = [
+      'CREATE OR ALTER TRIGGER app.trg_X ON app.T AFTER INSERT AS',
+      'IF NOT EXISTS (SELECT 1 FROM inserted) RETURN;',
+      "INSERT INTO app.Log (Msg) VALUES ('x');",
+    ].join('\n');
+    expect(SubSplitCompoundBatch(batch)).toEqual([batch]);
+  });
+
+  it('splits an IF COL_LENGTH guard, with its BEGIN/END body, from the statements around it (item 3)', () => {
+    const batch = [
+      "IF COL_LENGTH('app.T', 'C') IS NULL",
+      'BEGIN',
+      '  ALTER TABLE app.T ADD C INT NULL;',
+      'END',
+      "UPDATE app.T SET C = 0 WHERE C IS NULL;",
+    ].join('\n');
+    const parts = SubSplitCompoundBatch(batch);
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toMatch(/^IF COL_LENGTH[\s\S]*END$/);
+    expect(parts[1]).toMatch(/^UPDATE/);
+  });
+});
+
+describe('subSplitCompoundBatch — statements after a CTE statement (issue #5799)', () => {
+  const cteUpdate = `WITH Tree AS (
+    SELECT e.ID FROM ${'${mjSchema}'}.Entity e WHERE e.Name = 'Root'
+    UNION ALL
+    SELECT c.ID FROM ${'${mjSchema}'}.Entity c INNER JOIN Tree t ON c.ParentID = t.ID
+)
+UPDATE ta
+SET RecordID = 'x; PRINT y'
+FROM dbo.Assignment ta
+WHERE ta.EntityID IN (SELECT ID FROM Tree)`;
+
+  it('splits a trailing PRINT off a WITH-led UPDATE ending in ;', () => {
+    const parts = SubSplitCompoundBatch(`${cteUpdate};\n\nPRINT CONCAT('Rows: ', @@ROWCOUNT);`);
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toBe(`${cteUpdate};`);
+    expect(parts[1]).toBe(`PRINT CONCAT('Rows: ', @@ROWCOUNT);`);
+  });
+
+  it('splits at a new statement line when the CTE statement has no ;', () => {
+    const parts = SubSplitCompoundBatch(`${cteUpdate}\nPRINT 'done'`);
+    expect(parts).toEqual([cteUpdate, `PRINT 'done'`]);
+  });
+
+  it('keeps INSERT … SELECT after a CTE together, and a lone CTE statement whole', () => {
+    const insert = `;WITH a AS (SELECT 1 AS x)\nINSERT INTO t (x)\nSELECT x FROM a`;
+    expect(SubSplitCompoundBatch(insert)).toEqual([insert]);
+    expect(SubSplitCompoundBatch(`${cteUpdate};`)).toEqual([`${cteUpdate};`]);
+  });
+});

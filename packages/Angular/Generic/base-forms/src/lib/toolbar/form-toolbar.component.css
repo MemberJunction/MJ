@@ -52,6 +52,7 @@
    MAIN TOOLBAR
    ============================================ */
 .mj-forms-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -479,88 +480,6 @@
   color: var(--mj-text-secondary);
 }
 
-/* ============================================
-   DIALOG (lightweight inline)
-   ============================================ */
-.mj-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--mj-bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: mj-fade-in 150ms ease;
-}
-
-.mj-dialog {
-  background: var(--mj-bg-surface-card);
-  border-radius: var(--mj-radius-lg);
-  box-shadow: var(--mj-shadow-lg);
-  min-width: 400px;
-  max-width: 550px;
-  animation: mj-slide-up 200ms ease;
-}
-
-.mj-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.mj-dialog-header h3 {
-  margin: 0;
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-semibold);
-}
-
-.mj-dialog-close {
-  background: none;
-  border: none;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  padding: 4px;
-  font-size: var(--mj-text-base);
-  transition: color var(--mj-transition-base);
-}
-
-.mj-dialog-close:hover {
-  color: var(--mj-text-primary);
-}
-
-.mj-dialog-body {
-  padding: 20px;
-  font-size: var(--mj-text-sm);
-  color: var(--mj-text-secondary);
-  line-height: 1.6;
-}
-
-.mj-dialog-body p {
-  margin: 0;
-}
-
-.mj-dialog-footer {
-  display: flex;
-  gap: 8px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--mj-border-default);
-}
-
-@keyframes mj-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes mj-slide-up {
-  from { transform: translateY(8px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
 /* ============================================================ */
 /* FORM-VARIANT PICKER (toolbar-embedded; right-side)            */
 /* ============================================================ */
@@ -897,3 +816,201 @@
   color: var(--mj-text-primary);
   outline: none;
 }
+
+.mj-forms-toolbar__btn--active {
+  background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 14%, transparent);
+  color: var(--mj-brand-primary, #3b82f6);
+  border-color: var(--mj-brand-primary, #3b82f6);
+}
+
+.mj-forms-edit-banner-conflicts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 18%, transparent);
+  color: var(--mj-status-warning-text, #b45309);
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning, #f59e0b) 40%, transparent);
+}
+
+/* ============================================
+   COLLAPSED READ-MODE TRIGGER PILL
+   Zero-layout-height corner pill ([✎ Edit | •••])
+   ============================================ */
+.mj-forms-toolbar-collapsed-pill {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface-card));
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full, 9999px);
+  box-shadow: var(--mj-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
+  padding: 2px;
+  gap: 2px;
+}
+
+.mj-forms-collapsed-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: var(--mj-font-semibold, 600);
+  line-height: 1;
+  color: var(--mj-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--mj-radius-full, 9999px);
+  cursor: pointer;
+  transition: background var(--mj-transition-base, 150ms) ease, color var(--mj-transition-base, 150ms) ease;
+  white-space: nowrap;
+}
+
+.mj-forms-collapsed-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-forms-collapsed-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mj-forms-collapsed-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mj-forms-collapsed-btn--edit {
+  color: var(--mj-brand-primary);
+  padding: 5px 12px;
+}
+
+.mj-forms-collapsed-btn--edit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+}
+
+.mj-forms-collapsed-btn--edit + .mj-forms-collapsed-btn--expand {
+  position: relative;
+}
+
+.mj-forms-collapsed-btn--edit + .mj-forms-collapsed-btn--expand::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--mj-border-default);
+}
+
+/* ============================================
+   MOBILE TOOLBAR & EDIT BANNER DENSITY (<= 768px)
+   ============================================ */
+@media (max-width: 768px) {
+  /* Accordion forms (no section rail): slim 40px right-aligned bar so the pill never overlaps
+     the first collapsible panel's header or collapse chevron. */
+  .mj-forms-toolbar-collapsed-pill {
+    position: sticky;
+    top: 0;
+    right: auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    height: 40px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    gap: 2px;
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    box-shadow: none;
+  }
+
+  /* Left-nav forms: dock flush as the right-side cap on the 44px mobile section rail */
+  .mj-forms-toolbar-collapsed-pill.mj-forms-toolbar-collapsed-pill--rail {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: auto;
+    height: 44px;
+    padding: 0 8px;
+    border-left: 1px solid var(--mj-border-default);
+    box-shadow: -6px 0 10px -6px rgba(0, 0, 0, 0.08);
+  }
+
+  .mj-forms-collapsed-btn {
+    height: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+
+  .mj-forms-collapsed-btn--edit {
+    padding: 0 11px;
+  }
+
+  .mj-forms-toolbar {
+    padding: 8px 12px;
+    gap: 6px;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .mj-forms-toolbar .mj-forms-btn {
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+
+  .mj-forms-edit-banner {
+    padding: 8px 12px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* Hide verbose record subtitle in mobile edit banner so Save/Discard fit on 1 row */
+  .mj-forms-edit-banner-record-name,
+  .mj-forms-dirty-chips {
+    display: none;
+  }
+
+  /* Phone: More and View are bottom sheets. The sheet owns position, surface and
+     scrolling; the menu keeps only its row layout. */
+  .mj-forms-menu--sheet {
+    position: static;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 0 var(--mj-space-2) var(--mj-space-3);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .mj-forms-menu--sheet .mj-forms-menu-item,
+  .mj-forms-menu--sheet .mj-form-variant-picker-row {
+    min-height: 44px;
+  }
+
+  .mj-forms-menu--sheet .mj-section-search {
+    max-width: none;
+    width: 100%;
+  }
+}
+

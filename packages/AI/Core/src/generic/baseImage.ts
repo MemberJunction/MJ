@@ -194,6 +194,12 @@ export class ImageGenerationParams {
     providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
+     * Optional reference images used to guide style, subject, or composition during generation.
+     * Providers that do not support reference-guided generation may ignore this field.
+     */
+    ReferenceImages?: MediaInput[];
+
+    /**
      * Optional signal for cancelling the request. The driver is responsible for honoring it: it
      * should refuse the call when the signal is already aborted and hand it to the provider's HTTP
      * client, so an abort tears the request down. A call the signal ends resolves with
@@ -202,6 +208,41 @@ export class ImageGenerationParams {
      */
     CancellationToken?: AbortSignal;
 }
+
+/**
+ * Shared media input reference for image and video generation parameters (such as
+ * `ReferenceImages`, `Keyframes[].Image`, and `SourceVideo`). Callers supply either
+ * inline binary/base64 `Data` paired with its `MimeType`, or a remote `URL`.
+ */
+export type MediaInput =
+    | {
+          /**
+           * Inline media payload as a binary `Buffer` or base64-encoded string.
+           */
+          Data: Buffer | string;
+          /**
+           * MIME type of the inline media payload (for example, `'image/png'` or `'video/mp4'`).
+           */
+          MimeType: string;
+          /**
+           * Omitted when inline `Data` is supplied.
+           */
+          URL?: undefined;
+      }
+    | {
+          /**
+           * HTTP(S) URL pointing to the media asset.
+           */
+          URL: string;
+          /**
+           * Optional MIME type hint when known alongside the URL.
+           */
+          MimeType?: string;
+          /**
+           * Omitted when `URL` is supplied.
+           */
+          Data?: undefined;
+      };
 
 /**
  * Parameters for image editing/inpainting

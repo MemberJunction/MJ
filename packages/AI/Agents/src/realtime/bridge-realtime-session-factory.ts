@@ -3,8 +3,8 @@
  * agent reference into a live {@link IRealtimeSession} for a Realtime Bridge. Given an agent id (or name)
  * + a context user + a metadata provider, it:
  *   1. resolves the `MJ: AI Agents` entity from the {@link AIEngine} cache,
- *   2. instantiates the correct {@link BaseAgent} subclass via the `ClassFactory` (the same path
- *      `AgentRunner` uses), and
+ *   2. instantiates the correct {@link BaseAgent} subclass via {@link CreateAgentInstance} (the same
+ *      path `AgentRunner` uses), and
  *   3. calls {@link BaseAgent.StartBridgeRealtimeSession} to open the raw model session.
  *
  * This is the seam every bridge needs — `LiveKitAgentRoomCoordinator.SetSessionFactory`, and the
@@ -24,8 +24,10 @@ import { AIEngine } from '@memberjunction/aiengine';
 import type { ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
+import { CreateAgentInstance } from '../agent-instance';
 import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime-platform-credentials';
 import { RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 /**
@@ -131,60 +133,10 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         );
     }
 
-    // Instantiate the agent's own BaseAgent subclass — or the plain BaseAgent when it declares none.
-    //
-    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK (#4111) ──
-    //
-    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass — the three shipped values are
-    // `LoopAgentType`, `FlowAgentType`, `RealtimeAgentType`. The key needed here is a **BaseAgent**
-    // one. Different ClassFactory registries, matched by exact key against the base class NAME, so
-    // the type's key resolved nothing here — ever. Dead code that looked alive.
-    //
-    // What that produced is worth stating precisely, because the wrong story invites the wrong fix:
-    // with no registration and no `@RequiresSubclass` marker, `resolveAndInstantiate` returns
-    // `new BaseClassConstructor(...)` — a plain `BaseAgent`. So every such seat silently ran the
-    // BASE implementation, dropping whatever subclass behaviour it was configured for. It did not
-    // run some other agent's class. The only signal was one `console.warn` from
-    // `reportResolutionFailure`, deduped per base+key and capped at 3 per base: effectively
-    // invisible in a busy log, which is the whole problem.
-    //
-    // A NULL key is the path that really does hand back somebody else's agent —
-    // `GetAllRegistrations` skips the key filter entirely for null, so the highest-priority
-    // registered `BaseAgent` subclass wins. That is why the else-branch below constructs
-    // `new BaseAgent()` directly instead of calling `CreateInstance(BaseAgent, null)`.
-    //
-    // Most agents declare no `DriverClass` at all and are meant to run on the base implementation
-    // (that is what makes them data rather than code), so an absent one is NOT an error — it is the
-    // common case, and the old throw was unreachable only because the wrong-registry lookup always
-    // produced a truthy key.
-    //
-    // Dropping the type fallback loses nothing: agent-type behaviour is resolved separately inside
-    // `BaseAgent` via `BaseAgentType.GetAgentTypeInstance`, so a seat on the plain `BaseAgent` still
-    // gets Loop/Realtime type semantics.
-    // Trimmed like every other externally-sourced string in this file (`RealtimeVoice`,
-    // `RealtimeModelID`, `AgentSessionID`): a whitespace-only value is a truthy key that would
-    // otherwise reach the ClassFactory and fail with a confusing quoted-blank message.
-    const driverClass = agent.DriverClass?.trim() || undefined;
-    let instance: BaseAgent | null;
-    if (driverClass) {
-        // `TryCreateInstance`, not `CreateInstance`: an unresolvable key must be an error here rather
-        // than a hollow anchor-base object that answers plausibly and wrongly.
-        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAgent>(BaseAgent, driverClass);
-        instance = resolution.Resolved ? resolution.Instance : null;
-        if (!instance) {
-            throw new Error(
-                `CreateBridgeRealtimeSession: no BaseAgent subclass is registered as '${driverClass}' ` +
-                    `(agent '${agent.Name}'). Refusing the base-class fallback: it would run a different ` +
-                    `agent than the one configured, in this agent's voice.`,
-            );
-        }
-    } else {
-        // `new BaseAgent()` and NOT `CreateInstance(BaseAgent, null)`: a null key makes
-        // `GetAllRegistrations` skip the key filter, so the factory would return the
-        // highest-priority registered subclass — an arbitrary agent. Direct construction is the only
-        // form that reliably yields the base implementation.
-        instance = new BaseAgent();
-    }
+    // The agent's own BaseAgent subclass, or the plain BaseAgent when it declares none. Never the
+    // agent type's DriverClass (#4111, #4112): see CreateAgentInstance. An unregistered key throws:
+    // the base-class fallback would run a different agent than the one configured, in this agent's voice.
+    const instance = await CreateAgentInstance(agent);
 
     return instance.StartBridgeRealtimeSession({
         agent,
@@ -317,15 +269,15 @@ export interface RealtimeModelVoices {
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
- * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
- *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
- *   passes none, so today the list always reflects the platform's keys.
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Omitted (the
+ *   voice-picker query has no run context), each vendor resolves as a session would: its platform MJ
+ *   Credential, then `AI_VENDOR_API_KEY__<driver>` — so the picker offers the models a session can mint.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
-    resolveAPIKey: AIAPIKeyResolver = MakeAIAPIKeyResolver(),
+    resolveAPIKey?: AIAPIKeyResolver,
 ): Promise<RealtimeModelVoices[]> {
     await AIEngine.Instance.Config(false, contextUser, provider);
     const isRealtime = (t: string | null | undefined): boolean =>
@@ -334,16 +286,22 @@ export async function GetRealtimeModelVoices(
         .filter((m) => m.IsActive && isRealtime(m.AIModelType))
         .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
 
+    const platform = resolveAPIKey
+        ? RealtimePlatformCredentials.None
+        : await ResolveRealtimePlatformCredentials(models.map((m) => m.ID), contextUser, 'Any');
+    const environment = MakeAIAPIKeyResolver();
+
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const selection = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+        const resolveKey = resolveAPIKey ?? platform.ResolverFor(model.ID, environment);
+        const selection = SelectRealtimeVendorForModel(model.ID, resolveKey);
         const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
 
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
+            BaseRealtimeModel, driverClass, resolveKey(driverClass),
         );
 
         // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars where the

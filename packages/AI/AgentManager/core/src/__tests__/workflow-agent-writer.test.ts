@@ -48,8 +48,11 @@ describe('WorkflowAgentWriter name indexes', () => {
             ]),
         });
         expect(indexes.Agents.get('sage')).toBe('agent-1');
+        expect(indexes.Agents.get('agent-1')).toBe('agent-1');
         expect(indexes.Actions.get('send email')).toBe('action-1');
+        expect(indexes.Actions.get('action-1')).toBe('action-1');
         expect(indexes.Prompts.get('triage decision')).toBe('prompt-1');
+        expect(indexes.Prompts.get('prompt-1')).toBe('prompt-1');
     });
 
     it('refuses to go on when a load fails, naming what could not be read', async () => {

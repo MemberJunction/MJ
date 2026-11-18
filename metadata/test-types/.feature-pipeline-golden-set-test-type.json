@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "Name": "Feature Pipeline Golden Set",
+    "Description": "Evaluates a Feature Pipeline version on a labelled golden set: the pipeline runs as a dry run with the cache bypassed over every case, each output is scored (accuracy with accepted alternates) with a Wilson interval, and the result is stored on the version in MJ: Feature Pipeline Versions. A gated pipeline's version runs only when that stored result is at or above the threshold its spec declares.",
+    "DriverClass": "FeaturePipelineGoldenSetDriver",
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CADC698D-753C-45E2-8B9F-7C8FE4781F64"
+  },
+  "sync": {
+    "lastModified": "2026-10-20T23:19:52.131Z",
+    "checksum": "9bbe3138c5d8937d332fd6a4c96f4f6230d54e2b724b5174e8dab32df502a0ee"
+  }
+}

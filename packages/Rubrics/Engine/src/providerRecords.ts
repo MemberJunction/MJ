@@ -372,6 +372,7 @@ async function LoadPrompt(provider: unknown, user: unknown, ref: RubricPromptRef
         ExtraFilter: filter,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
     }, user as never);
     if (!found.Success) throw new Error(found.ErrorMessage || `Could not read the ${ref.ID ?? ref.Name} prompt.`);
     const prompt = found.Results?.[0];
@@ -471,7 +472,12 @@ export function ProviderDecisionService(provider: unknown, user: unknown, execut
                 if (answer.Kind !== 'Score') throw new Error(`The decision answered ${key} with a ${answer.Kind}, not a score.`);
                 answers[key] = answer;
             }
-            return { Answers: answers, PromptRunID: result.promptRun?.ID ?? null };
+            return {
+                Answers: answers,
+                PromptRunID: result.promptRun?.ID ?? null,
+                ModelName: result.modelInfo?.modelName ?? null,
+                ResolvedModel: result.DecisionResult?.ResolvedModel ?? null,
+            };
         },
     };
 }

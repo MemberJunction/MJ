@@ -5,7 +5,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
   MJMeetingEntity,
   MJMeetingParticipantEntity,
@@ -25,6 +25,7 @@ import {
   UpdateMeetingInput,
   RSVPMeetingInput,
   MeetingParticipantType,
+  MeetingParticipantInput,
 } from './meetingTypes.js';
 import * as defaultHelpers from './meetingHelpers.js';
 
@@ -32,6 +33,39 @@ export type MeetingHelpers = typeof defaultHelpers;
 
 function resolveHelpers(overrides?: Partial<MeetingHelpers>): MeetingHelpers {
   return { ...defaultHelpers, ...overrides };
+}
+
+/**
+ * Indexes a meeting's participants by UserID, AgentID and lower-cased ExternalEmail, and returns a
+ * lookup that finds the participant an update input refers to. When the input matches different
+ * participants on different keys, the one listed first in `existing` wins, as a single
+ * `existing.find` over all three keys would answer.
+ */
+function indexParticipants(
+  existing: MeetingParticipantType[],
+): (input: MeetingParticipantInput) => MeetingParticipantType | undefined {
+  const byUserID = IndexByUUID(existing.filter((e) => e.UserID), (e) => e.UserID);
+  const byAgentID = IndexByUUID(existing.filter((e) => e.AgentID), (e) => e.AgentID);
+  const byEmail = new Map<string, MeetingParticipantType>();
+  const position = new Map<MeetingParticipantType, number>();
+  existing.forEach((e, i) => {
+    position.set(e, i);
+    const email = e.ExternalEmail?.toLowerCase();
+    if (email && !byEmail.has(email)) byEmail.set(email, e);
+  });
+
+  return (input) => {
+    const candidates = [
+      input.UserID ? byUserID.Get(input.UserID) : undefined,
+      input.AgentID ? byAgentID.Get(input.AgentID) : undefined,
+      input.ExternalEmail ? byEmail.get(input.ExternalEmail.toLowerCase()) : undefined,
+    ];
+    let first: MeetingParticipantType | undefined;
+    for (const candidate of candidates) {
+      if (candidate && (!first || (position.get(candidate) ?? 0) < (position.get(first) ?? 0))) first = candidate;
+    }
+    return first;
+  };
 }
 
 export async function ExecuteCreateMeeting(
@@ -235,15 +269,11 @@ export async function ExecuteUpdateMeeting(
     // If participants specified in update, sync participants (upsert by UserID/AgentID/ExternalEmail)
     if (input.Participants !== undefined) {
       const existing = await h.LoadParticipants(meeting.ID, user, provider);
+      const findExisting = indexParticipants(existing);
 
       for (const pInput of input.Participants) {
         const isSelf = pInput.UserID && UUIDsEqual(pInput.UserID, user.ID);
-        const match = existing.find(
-          (e) =>
-            (pInput.UserID && e.UserID && UUIDsEqual(e.UserID, pInput.UserID)) ||
-            (pInput.AgentID && e.AgentID && UUIDsEqual(e.AgentID, pInput.AgentID)) ||
-            (pInput.ExternalEmail && e.ExternalEmail && e.ExternalEmail.toLowerCase() === pInput.ExternalEmail.toLowerCase()),
-        );
+        const match = findExisting(pInput);
 
         if (match) {
           if (!isSelf && pInput.Role) {

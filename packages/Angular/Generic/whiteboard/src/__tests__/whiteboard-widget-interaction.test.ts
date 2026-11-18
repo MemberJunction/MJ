@@ -29,6 +29,9 @@ describe('recorder injection — ONE script block carries submit + recorder', ()
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(`'password'`);
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(`'hidden'`);
     expect(WHITEBOARD_SUBMIT_HELPER).toContain('VALUE_MAX=120');
+    // protected fields (card / PIN / OTP …) are skipped by change / input records too, resolved lazily
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('if(!isField(el)||isGuarded(el)){return;}var name=fieldLabel(el)');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('H.isProtected&&H.isProtected(el)');
     // batching + debounce constants ride in the script
     expect(WHITEBOARD_SUBMIT_HELPER).toContain('FLUSH_MS=1500');
     expect(WHITEBOARD_SUBMIT_HELPER).toContain('FLUSH_AT=12');
@@ -68,6 +71,13 @@ describe('EvaluateWidgetInteractionMessage — host-side validation matrix', () 
       Kind: 'interaction',
       Event: { ItemID: 'html-2', Title: 'Vibe picker', Summary: 'clicked "Playful pink"; changed "vibe" to "pink"' }
     });
+  });
+
+  it("maps a batch's by:'agent' claim to Author:'agent'; otherwise Author stays absent (= user)", () => {
+    const agent = EvaluateWidgetInteractionMessage({ __mjWhiteboardInteraction: true, events: goodEvents, by: 'agent' }, widget);
+    expect(agent.Kind === 'interaction' && agent.Event.Author).toBe('agent');
+    const user = EvaluateWidgetInteractionMessage({ __mjWhiteboardInteraction: true, events: goodEvents, by: 'user' }, widget);
+    expect(user.Kind === 'interaction' && 'Author' in user.Event).toBe(false);
   });
 
   it('untitled widgets surface Title as "" (consumers fall back to the item ID)', () => {

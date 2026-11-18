@@ -117,9 +117,10 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', async () => {
-    // Real rxjs Subject so JobsChanged$ is genuinely subscribable and the wake-on-
-    // activation path can be exercised by tests via the __emitJobsChanged() helper.
+// The scheduling engine base the engine reads jobs and its provider from (the mocked module's Instance). Hoisted so
+// the tests read the same typed object. A real rxjs Subject so JobsChanged$ is genuinely subscribable and the
+// wake-on-activation path can be exercised via __emitJobsChanged().
+const { fakeBase } = await vi.hoisted(async () => {
     const { Subject } = await import('rxjs');
     const jobsChanged = new Subject<void>();
     const fakeBase = {
@@ -149,12 +150,14 @@ vi.mock('@memberjunction/scheduling-engine-base', async () => {
         RunViewProviderToUse: {}
     };
 
-    return {
-        SchedulingEngineBase: {
-            get Instance() { return fakeBase; }
-        }
-    };
+    return { fakeBase };
 });
+
+vi.mock('@memberjunction/scheduling-engine-base', () => ({
+    SchedulingEngineBase: {
+        get Instance() { return fakeBase; }
+    }
+}));
 
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
@@ -171,13 +174,12 @@ vi.mock('../NotificationManager', () => ({
 }));
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
-import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
     // Access the mock base for setting up test state
-    const mockBase = SchedulingEngineBase.Instance as Record<string, unknown>;
+    const mockBase = fakeBase;
 
     beforeEach(() => {
         vi.clearAllMocks();

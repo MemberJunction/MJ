@@ -4,7 +4,7 @@
       <!-- Toolbar -->
       <div class="data-toolbar">
         <div class="data-title">
-          <i class="fas fa-table"></i>
+          <i class="fa-solid fa-table"></i>
           <span>{{ spec.title || "Data Results" }}</span>
           @if (IsLive) {
             <span class="live-badge">Live</span>
@@ -19,49 +19,49 @@
         <div class="data-actions">
           @if (IsLive) {
             <button class="btn-icon" title="Refresh data" (click)="OnRefresh()" [disabled]="IsLoading">
-              <i class="fas fa-sync-alt" [class.fa-spin]="IsLoading"></i> Refresh
+              <i class="fa-solid fa-sync-alt" [class.fa-spin]="IsLoading"></i> Refresh
             </button>
           }
 
           @switch (QuerySyncState) {
             <!-- S1: No saved query, latest version → Save Query -->
             @case ("no-query-latest") {
-              <button class="btn-icon btn-save" title="Save as reusable query" (click)="OnShowSaveDialog()"><i class="fas fa-save"></i> Save Query</button>
+              <button class="btn-icon btn-save" title="Save as reusable query" (click)="OnShowSaveDialog()"><i class="fa-solid fa-save"></i> Save Query</button>
             }
 
             <!-- S2: SQL matches → green badge + Open -->
             @case ("synced") {
-              <span class="query-badge query-badge-synced"> <i class="fas fa-check"></i> Saved at v{{ SavedAtVersion }} </span>
+              <span class="query-badge query-badge-synced"> <i class="fa-solid fa-check"></i> Saved at v{{ SavedAtVersion }} </span>
               <button class="btn-icon btn-open" title="Open saved query record" (click)="OnOpenSavedQuery()">
-                <i class="fas fa-external-link-alt"></i> Open Query
+                <i class="fa-solid fa-external-link-alt"></i> Open Query
               </button>
             }
 
             <!-- S3: SQL differs, latest version → amber badge + dropdown -->
             @case ("outdated-latest") {
-              <span class="query-badge query-badge-outdated"> <i class="fas fa-circle-exclamation"></i> Saved at v{{ SavedAtVersion }} </span>
+              <span class="query-badge query-badge-outdated"> <i class="fa-solid fa-circle-exclamation"></i> Saved at v{{ SavedAtVersion }} </span>
               <div class="dropdown-wrapper">
                 <button class="btn-icon btn-warning" title="Update or save query" (click)="OnToggleUpdateDropdown()">
-                  <i class="fas fa-save"></i> Update Query <i class="fas fa-caret-down"></i>
+                  <i class="fa-solid fa-save"></i> Update Query <i class="fa-solid fa-caret-down"></i>
                 </button>
                 @if (ShowUpdateDropdown) {
                   <div class="query-dropdown" (click)="$event.stopPropagation()">
                     <div class="query-dropdown-item" (click)="OnUpdateExistingQuery()">
-                      <i class="fas fa-arrow-up-from-bracket" style="color: #d97706"></i>
+                      <i class="fa-solid fa-arrow-up-from-bracket" style="color: #d97706"></i>
                       <div>
                         <div class="dropdown-label">Update "{{ SavedQueryDisplayName }}"</div>
                         <div class="dropdown-desc">Replace saved query SQL with this version's SQL</div>
                       </div>
                     </div>
                     <div class="query-dropdown-item" (click)="OnSaveAsNewQuery()">
-                      <i class="fas fa-plus" style="color: #16a34a"></i>
+                      <i class="fa-solid fa-plus" style="color: #16a34a"></i>
                       <div>
                         <div class="dropdown-label">Save as New Query</div>
                         <div class="dropdown-desc">Create a new query, keep the original unchanged</div>
                       </div>
                     </div>
                     <div class="query-dropdown-item" (click)="OnOpenSavedQuery(); OnCloseDropdown()">
-                      <i class="fas fa-external-link-alt" style="color: var(--mj-text-muted)"></i>
+                      <i class="fa-solid fa-external-link-alt" style="color: var(--mj-text-muted)"></i>
                       <div>
                         <div class="dropdown-label">Open Saved Query</div>
                         <div class="dropdown-desc">View "{{ SavedQueryDisplayName }}" (saved at v{{ SavedAtVersion }})</div>
@@ -74,17 +74,17 @@
 
             <!-- S4: Older version, query was updated ahead -->
             @case ("query-ahead") {
-              <span class="query-badge query-badge-muted"> <i class="fas fa-clock-rotate-left"></i> Query updated at v{{ SavedAtVersion }} </span>
+              <span class="query-badge query-badge-muted"> <i class="fa-solid fa-clock-rotate-left"></i> Query updated at v{{ SavedAtVersion }} </span>
               <button class="btn-icon btn-muted" title="Open saved query record" (click)="OnOpenSavedQuery()">
-                <i class="fas fa-external-link-alt"></i> Open Query
+                <i class="fa-solid fa-external-link-alt"></i> Open Query
               </button>
             }
 
             <!-- S5: Middle version, saved at older, not latest -->
             @case ("query-behind") {
-              <span class="query-badge query-badge-muted"> <i class="fas fa-clock-rotate-left"></i> Saved at v{{ SavedAtVersion }} </span>
+              <span class="query-badge query-badge-muted"> <i class="fa-solid fa-clock-rotate-left"></i> Saved at v{{ SavedAtVersion }} </span>
               <button class="btn-icon btn-muted" title="Open saved query record" (click)="OnOpenSavedQuery()">
-                <i class="fas fa-external-link-alt"></i> Open Query
+                <i class="fa-solid fa-external-link-alt"></i> Open Query
               </button>
             }
 
@@ -122,6 +122,16 @@
                 </span>
               </div>
             }
+          }
+        </div>
+      }
+
+      @if (UpdateQueryError) {
+        <div class="update-query-failure">
+          @if (UpdateQueryDiagnostics.length > 0) {
+            <mj-query-diagnostics [Headline]="UpdateQueryError" [Diagnostics]="UpdateQueryDiagnostics" Severity="error" />
+          } @else {
+            <mj-alert Variant="error" Size="sm">{{ UpdateQueryError }}</mj-alert>
           }
         </div>
       }
@@ -185,7 +195,7 @@
       <!-- Plan-only view (no results yet) -->
       <div class="data-toolbar">
         <div class="data-title">
-          <i class="fas fa-diagram-project"></i>
+          <i class="fa-solid fa-diagram-project"></i>
           <span>{{ spec.title || "Query Plan" }}</span>
         </div>
       </div>

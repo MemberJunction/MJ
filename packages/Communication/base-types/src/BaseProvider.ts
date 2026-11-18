@@ -2,6 +2,16 @@ import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
+import type {
+    CalendarEventResult,
+    CalendarTarget,
+    CancelEventParams,
+    CreateEventParams,
+    GetEventParams,
+    SyncEventsParams,
+    SyncEventsResult,
+    UpdateEventParams
+} from "./Calendar";
 
 /**
  * Information about a single recipient
@@ -274,6 +284,17 @@ export type GetMessageMessage = {
      * Optional: providers that cannot supply it leave it undefined.
      */
     CCRecipients?: string[];
+    /**
+     * All BCC recipients of the message, normalized to bare email addresses. Only a copy held by
+     * the sending mailbox carries them. Optional: undefined means the provider does not say.
+     */
+    BCCRecipients?: string[];
+    /**
+     * Whether the mailbox being read sent the message (`Outbound`) or received it (`Inbound`).
+     * A message sent on someone's behalf from this mailbox is `Outbound` even though its From is
+     * the other person. Optional: undefined means the provider does not say.
+     */
+    Direction?: 'Inbound' | 'Outbound';
     Body: string;
     /**
      * In some providers, such as MS Graph, replies can be sent to multiple other recipients
@@ -580,6 +601,12 @@ export type ForwardMessageParams = {
     * The recipients to send a blind copy of the forwarded message to
     */
     BCCRecipients?: string[];
+
+    /**
+     * Provider-specific context data, as on the other message operations. MS Graph reads
+     * `ContextData.Email` as the mailbox to forward from.
+     */
+    ContextData?: Record<string, unknown>;
 };
 
 export type ForwardMessageResult<T = Record<string, any>> = BaseMessageResult & {
@@ -1334,6 +1361,11 @@ export type ProviderOperation =
     | 'DeleteSubscription'
     | 'ParseNotification'
     | 'GetEvents'
+    | 'CreateEvent'
+    | 'UpdateEvent'
+    | 'CancelEvent'
+    | 'GetEvent'
+    | 'SyncEvents'
     | 'GetFreeBusy'
     | 'FindMeetingTimes'
     | 'CreateCalendarEvent'
@@ -1552,6 +1584,64 @@ export abstract class BaseCommunicationProvider {
             Events: [],
             ErrorMessage: `${this.ProviderName} does not support GetEvents (Identifier: ${params.Identifier || 'none'}, credentials provided: ${!!credentials})`
         };
+    }
+
+    // ========================================================================
+    // CALENDAR EVENTS - create, update, cancel, read one, sync (see Calendar.ts)
+    // Concrete for the same reason GetEvents is: a provider without a calendar inherits a refusal
+    // that names itself and the operation, instead of failing to compile. A provider that supports
+    // them overrides each one, lists it in getSupportedOperations(), and runs CalendarTargetError
+    // first: these operations never act on a default account.
+    // ========================================================================
+
+    /**
+     * Creates an event in the target calendar. With attendees, the provider sends the invitations.
+     * @param params - the calendar (required) and the event
+     * @param credentials - optional per-request credentials override
+     */
+    public async CreateEvent(params: CreateEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('CreateEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Changes the given fields of an event. A changed attendee list replaces the old one.
+     * @param params - the calendar (required), the event's ID in it, and the changes
+     * @param credentials - optional per-request credentials override
+     */
+    public async UpdateEvent(params: UpdateEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('UpdateEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Cancels an event. An event that is already gone counts as cancelled.
+     * @param params - the calendar (required), the event's ID in it, and an optional comment
+     * @param credentials - optional per-request credentials override
+     */
+    public async CancelEvent(params: CancelEventParams, credentials?: ProviderCredentialsBase): Promise<BaseMessageResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('CancelEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Reads one event, with each attendee's response.
+     * @param params - the calendar (required) and the event's ID in it
+     * @param credentials - optional per-request credentials override
+     */
+    public async GetEvent(params: GetEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('GetEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Reads what changed in a calendar since a sync token, or the whole window when there is none.
+     * @param params - the calendar (required), the token from the last sync, and the window for a full sync
+     * @param credentials - optional per-request credentials override
+     */
+    public async SyncEvents(params: SyncEventsParams, credentials?: ProviderCredentialsBase): Promise<SyncEventsResult> {
+        return { Success: false, Changes: [], ErrorMessage: this.calendarRefusal('SyncEvents', params.Target, credentials) };
+    }
+
+    /** The message every calendar operation a provider does not override returns. */
+    private calendarRefusal(operation: string, target: CalendarTarget | undefined, credentials?: ProviderCredentialsBase): string {
+        return `${this.ProviderName} does not support ${operation} (Identifier: ${target?.Identifier || 'none'}, credentials provided: ${!!credentials})`;
     }
 
     /**

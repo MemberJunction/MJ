@@ -7,7 +7,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
-import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { LookupConstraintValues, OutputConstraintResolver, RenderConstraintBlock, type DataFeatureOutput, type DataFeatureSpec, type ValueConstraint } from '@memberjunction/feature-pipelines';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -180,7 +180,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
     expect(f.componentInstance.IsDecisionPipeline).toBe(true);
-    expect(f.componentInstance.AvailableTargetModes.map((m) => m.Value)).toEqual(['field']);
+    expect(f.componentInstance.AvailableTargetModes.map((m) => m.Value)).toEqual(['none', 'field']);
     expect(f.componentInstance.AvailableConstraintTypes.map((c) => c.Value)).toEqual(['boolean', 'enum', 'numeric']);
   });
 
@@ -1177,3 +1177,242 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
   });
 });
+
+describe('the constraint block preview', () => {
+  const SENIORITY_LEVELS = new EntityInfo({ ID: 'e2', Name: 'Seniority Levels', Fields: [{ Name: 'Name', Type: 'nvarchar' }] });
+  const ROWS = [{ Name: 'Manager' }, { Name: 'Director' }];
+  const OUTPUTS: DataFeatureOutput[] = [
+    { Name: 'Tier', Ref: '$.Tier', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' } },
+    {
+      Name: 'Level', Ref: '$.Level', Target: { Mode: 'child', EntityName: 'Levels', ParentField: 'AccountID', Map: { Name: '$.Name' } },
+      Constraint: { Type: 'lookup', Entity: 'Seniority Levels', MatchField: 'Name', OnViolation: 'fail' },
+    },
+  ];
+
+  /** A provider that knows the lookup entity and answers its view with ROWS, recording every view it runs. */
+  function previewProvider(views: RunViewParams[]) {
+    const entities = [...ENTITIES, SENIORITY_LEVELS];
+    return Object.assign(
+      createFakeProvider({
+        entities,
+        entityByName: (name: string) => entities.find((e) => e.Name === name),
+        runViewResults: (params: RunViewParams) => {
+          views.push(params);
+          return params.EntityName === 'Seniority Levels' ? ROWS : [];
+        },
+      }),
+      { EntityByID: (id: string) => ENTITIES.find((e) => UUIDsEqual(e.ID, id)) }
+    );
+  }
+
+  it('shows field values at once, then the lookup rows, exactly as the runner renders them, reading each lookup once', async () => {
+    const views: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    expect(builder.RenderedConstraintPreview).toContain('"Hot"');
+
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    const rows = LookupConstraintValues.InStableOrder(ROWS.map((r) => ({ Match: r.Name, Display: null })));
+    const runnerBlock = RenderConstraintBlock(OUTPUTS, await OutputConstraintResolver.Resolve(OUTPUTS, ENTITIES[0], async () => rows));
+    expect(builder.RenderedConstraintPreview).toBe(runnerBlock);
+
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.OnFieldsCsvChange(eventWithValue('Name, Rating', 'input'));
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toBe(runnerBlock));
+    expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
+  });
+
+  it('reads a lookup once after typing in its filter pauses, with the filter as typed', async () => {
+    const views: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    const lookupViews = () => views.filter((v) => v.EntityName === 'Seniority Levels');
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    expect(lookupViews()).toHaveLength(1);
+
+    for (const typed of ["Name='D", "Name='Dir", "Name='Director'"]) {
+      builder.UpdateLookupFilter(1, eventWithValue(typed, 'input'));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(lookupViews()).toHaveLength(1); // nothing read while the filter is still being typed
+
+    await vi.waitFor(() => expect(lookupViews()).toHaveLength(2));
+    expect(lookupViews()[1].ExtraFilter).toBe("Name='Director'");
+  });
+
+  it('keeps a later edit\'s preview when an earlier lookup load finishes after it', async () => {
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider([]), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    await f.whenStable();
+    // One edit renders and starts its lookup step; before that step settles, a second edit drops the lookup
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.UpdateConstraintType(1, eventWithValue('freetext'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(builder.RenderedConstraintPreview).not.toContain('"Director"');
+    expect(builder.RenderedConstraintPreview).toContain('Free-form text');
+  });
+
+});
+
+describe('the constraint type picker and the lookup editor', () => {
+  const lookupOutput = (constraint: ValueConstraint): DataFeatureOutput => ({
+    Name: 'Level', Ref: '$.Level', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: constraint,
+  });
+  const SAVED_LOOKUP: ValueConstraint = {
+    Type: 'lookup', Entity: 'Accounts', MatchField: 'Summary', DisplayFields: ['Rating', 'Summary'], Filter: "Rating='Hot'", ItemRef: '$.Level', OnViolation: 'null',
+  };
+
+  /** The control of the given kind in the field whose label starts with `label`. */
+  const controlIn = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string, tag: 'select' | 'input'): Element => {
+    const field = Array.from((f.nativeElement as Element).querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim().startsWith(label));
+    const control = field?.querySelector(tag);
+    if (!control) {
+      throw new Error(`no ${tag} labelled '${label}'`);
+    }
+    return control;
+  };
+  const selectLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'select') as HTMLSelectElement;
+  const inputLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'input') as HTMLInputElement;
+  const constraintSelect = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => selectLabelled(f, 'Constraint Type');
+  const shownText = (select: HTMLSelectElement): string => select.options[select.selectedIndex]?.textContent?.trim() ?? '';
+  const renderOutput = (constraint: ValueConstraint) => render(makeRecord({ PipelineType: 'LLM', Outputs: [lookupOutput(constraint)] }));
+  const savedConstraint = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => savedSpec(f.componentInstance.Record as MJRecordProcessEntity)?.Outputs[0].Constraint;
+
+  it('offers every constraint type the LLM pipeline type declares, each with a label', () => {
+    const f = render(makeRecord());
+
+    const offered = f.componentInstance.AvailableConstraintTypes;
+    expect(offered.map((t) => t.Value)).toEqual(['none', 'boolean', 'enum', 'numeric', 'lookup', 'money', 'date', 'freetext']);
+    expect(offered.every((t) => t.Label.trim().length > 0)).toBe(true);
+  });
+
+  it('shows a saved lookup as Lookup and populates its fields', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    expect(shownText(constraintSelect(f))).toBe('Lookup (Existing Records)');
+    expect(f.componentInstance.IsConstraintTypeOffered(f.componentInstance.spec.Outputs[0])).toBe(true);
+    expect(selectLabelled(f, 'Lookup Entity').value).toBe('Accounts');
+    expect(inputLabelled(f, 'Match Field').value).toBe('Summary');
+    expect(inputLabelled(f, 'Display Fields').value).toBe('Rating, Summary');
+    expect(inputLabelled(f, 'Filter').value).toBe("Rating='Hot'");
+  });
+
+  it('keeps the other lookup fields when the filter is edited', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+    const emitted: DataFeatureSpec[] = [];
+    f.componentInstance.SpecChange.subscribe((s: DataFeatureSpec) => emitted.push(s));
+
+    f.componentInstance.UpdateLookupFilter(0, eventWithValue("Rating='Cold'", 'input'));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].Outputs[0].Constraint).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+    expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+  });
+
+  it('keeps the lookup when Lookup is selected again', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
+
+    expect(savedConstraint(f)).toEqual(SAVED_LOOKUP);
+  });
+});
+
+describe('FeaturePipelineBuilderComponent (feature value only target)', () => {
+  const FV_ONLY_TEXT = 'Stored as a Feature Value on each record; nothing is written to the entity.';
+
+  const targetModeSelect = (f: ComponentFixture<FeaturePipelineBuilderComponent>): HTMLSelectElement => {
+    const field = Array.from((f.nativeElement as Element).querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim() === 'Target Mode');
+    const select = field?.querySelector('select');
+    if (!select) {
+      throw new Error("no select labelled 'Target Mode'");
+    }
+    return select;
+  };
+
+  /** Drives the real select the way a user does: picks the option, fires change, lets the view settle. */
+  const chooseTargetMode = (f: ComponentFixture<FeaturePipelineBuilderComponent>, value: string): void => {
+    const select = targetModeSelect(f);
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+    f.detectChanges();
+  };
+
+  const mapping = (record: MJRecordProcessEntity): { fields: Record<string, string> } => JSON.parse(record.OutputMapping ?? '{}');
+
+  it('offers "Feature value only (no write-back)" first in the target mode select', () => {
+    const f = render(makeRecord());
+    const options = Array.from(targetModeSelect(f).options).map((o) => o.textContent?.trim());
+    expect(options[0]).toBe('Feature value only (no write-back)');
+    expect(f.componentInstance.AvailableTargetModes[0].Value).toBe('none');
+  });
+
+  it('removes the target, explains it, and drops the output from OutputMapping when chosen', () => {
+    const record = makeRecord();
+    const f = render(record);
+    f.componentInstance.UpdateOutputProp(0, 'Name', eventWithValue('ChurnRisk', 'input'));
+    expect(mapping(record).fields).toEqual({ Rating: 'risk' });
+
+    chooseTargetMode(f, 'none');
+
+    expect(f.componentInstance.spec.Outputs[0].Target).toBeUndefined();
+    expect(savedSpec(record)?.Outputs[0].Target).toBeUndefined();
+    expect((f.nativeElement as Element).textContent).toContain(FV_ONLY_TEXT);
+    expect(mapping(record).fields).toEqual({});
+    expect(targetModeSelect(f).value).toBe('none');
+  });
+
+  it('recreates a field target when "field" is chosen again', () => {
+    const record = makeRecord();
+    const f = render(record);
+    chooseTargetMode(f, 'none');
+
+    chooseTargetMode(f, 'field');
+
+    const target = f.componentInstance.spec.Outputs[0].Target;
+    expect(target?.Mode).toBe('field');
+    expect((f.nativeElement as Element).textContent).not.toContain(FV_ONLY_TEXT);
+    expect(savedSpec(record)?.Outputs[0].Target?.Mode).toBe('field');
+  });
+
+  it('onOutputPropertyChange updates Name and Ref and ignores out-of-bounds indices', () => {
+    const record = makeRecord({
+      PipelineType: 'LLM',
+      Outputs: [
+        {
+          Name: 'ChurnRisk',
+          Ref: '$.ChurnRisk',
+          Target: { Mode: 'field', EntityFieldName: 'Rating' },
+        },
+      ],
+    });
+    const f = render(record);
+    const builder = f.componentInstance;
+
+    // Updates Name and auto-updates matching $.prevName Ref
+    builder.onOutputPropertyChange(0, 'Name', eventWithValue('Sentiment', 'input'));
+    expect(builder.spec.Outputs[0].Name).toBe('Sentiment');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.Sentiment');
+
+    // Updates Ref explicitly
+    builder.onOutputPropertyChange(0, 'Ref', eventWithValue('$.customRef', 'input'));
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+
+    // Changing Name when Ref is custom preserves custom Ref
+    builder.onOutputPropertyChange(0, 'Name', eventWithValue('FinalScore', 'input'));
+    expect(builder.spec.Outputs[0].Name).toBe('FinalScore');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+
+    // Ignores out-of-bounds indices
+    builder.onOutputPropertyChange(-1, 'Name', eventWithValue('Ignored', 'input'));
+    builder.onOutputPropertyChange(5, 'Ref', eventWithValue('$.Ignored', 'input'));
+    expect(builder.spec.Outputs).toHaveLength(1);
+    expect(builder.spec.Outputs[0].Name).toBe('FinalScore');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+  });
+});
+

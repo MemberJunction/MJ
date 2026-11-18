@@ -62,6 +62,7 @@ const { mocks, state } = vi.hoisted(() => ({
         RenderTemplate: vi.fn<(template: object, content: object, data: Record<string, unknown>) => Promise<{ Success: boolean; Output: string }>>(),
         RunEmbedding: vi.fn<(params: { Texts: string[]; ModelID?: string; ContextUser?: object; Description?: string }) => Promise<{ Success: boolean; Vectors?: number[][]; ErrorMessage?: string }>>(),
         QueryIndex: vi.fn<(params: { id: string; vector: number[]; topK: number }) => Promise<{ success: boolean; data: { matches: VectorMatchFixture[] } }>>(),
+        BuildMetadataFilter: vi.fn((options: { EntityDocumentIDs?: string[] }) => ({ EntityDocumentID: { $in: options.EntityDocumentIDs } })),
         ExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
         ExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
     },
@@ -98,6 +99,7 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
         RequiresAPIKey = false;
         QueryKeyIsEntityDocumentID = false;
         QueryIndex = mocks.QueryIndex;
+        BuildMetadataFilter = mocks.BuildMetadataFilter;
     },
     BaseResponse: class {},
 }));
@@ -165,22 +167,27 @@ vi.mock('@memberjunction/templates', () => ({
     },
 }));
 
-vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: {
-        Instance: {
-            Config: vi.fn().mockResolvedValue(undefined),
-            Prompts: [
-                { ID: 'prompt-decision', Name: 'Default Decision' },
-                { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' },
-            ],
-            GetVectorIndexByID: mocks.GetVectorIndexByID,
-            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
-            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
+vi.mock('@memberjunction/aiengine', async () => {
+    const { ShippedDuplicateCalibrations, CalibrationEngineMethods } = await import('./helpers/decisionCalibration');
+    return {
+        AIEngine: {
+            Instance: {
+                Config: vi.fn().mockResolvedValue(undefined),
+                Prompts: [
+                    { ID: 'prompt-decision', Name: 'Default Decision' },
+                    { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' },
+                ],
+                GetVectorIndexByID: mocks.GetVectorIndexByID,
+                // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+                GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
+                ...CalibrationEngineMethods(ShippedDuplicateCalibrations),
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('@memberjunction/ai-prompts', () => ({
+    EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
     AIEmbeddingRunner: class { RunEmbedding = mocks.RunEmbedding; },
     AIDecisionRunner: class { ExecuteDecision = mocks.ExecuteDecision; },
     AIDecisionParams: class { Questions = {}; },

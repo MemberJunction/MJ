@@ -10,9 +10,14 @@ import {
   type DatedSourceSpec,
   detectSingleFeatureDominance,
   LeakageGuardEnforcer,
-  resolveAsOfDate,
-  daysSinceLastActivityAsOf,
+  ResolveAsOfDate,
+  DaysSinceLastActivityAsOf,
 } from '../feature-assembly';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { ConsoleCapture } from './fakes/console-capture';
+
+/** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
 
 /**
  * Unit tests for the FeatureAssembly executor + as-of / leakage primitives.
@@ -33,9 +38,9 @@ class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
     const rows = this.rowsByEntity[params.EntityName];
     if (!rows) {
-      return { Success: false, Rows: [], ErrorMessage: `No fixture for ${params.EntityName}` };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `No fixture for ${params.EntityName}` };
     }
-    return { Success: true, Rows: rows };
+    return { Success: true, Rows: rows, TotalRowCount: rows.length };
   }
 
   async fetchEmbedding(entity: string, recordId: string, _embeddingModelRef: string, _dims: number): Promise<number[] | null> {
@@ -70,6 +75,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     };
 
     const params: FeatureAssemblyParams = {
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -109,6 +115,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     const members: SourceRow[] = [{ ID: 'm1', score: 5, Renewed: 1 }];
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -134,6 +141,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
       Steps: [{ Id: 'e', Kind: 'embedding', Entity: 'Members', EmbeddingModelRef: 'minilm', Dims: 3 }],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -149,6 +157,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     const members: SourceRow[] = [{ ID: 'm1', tenure: 9 }];
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       recordSet: { EntityName: 'Members' },
       sources,
@@ -190,6 +199,7 @@ describe('FeatureAssemblyExecutor — golden as-of test (no future leakage)', ()
 
     const asOf: AsOfStrategy = { Mode: 'offset', OffsetDays: 30 };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -217,23 +227,23 @@ describe('FeatureAssemblyExecutor — golden as-of test (no future leakage)', ()
     // would use the post-decision activity a4 (2026-06-15) and produce a different,
     // smaller number. Assert the as-of value differs from the naive value.
     const allDated = activities.map((a) => ({ Date: new Date(a.ActivityDate as string), Row: a }));
-    const naiveRecency = daysSinceLastActivityAsOf(allDated, null); // measured from "now"
+    const naiveRecency = DaysSinceLastActivityAsOf(allDated, null); // measured from "now"
     expect(naiveRecency).not.toBe(7);
 
     // And the as-of recency, recomputed directly, excludes the post-cutoff rows.
-    const cutoff = resolveAsOfDate(asOf, members[0], labelEvent);
-    expect(daysSinceLastActivityAsOf(allDated, cutoff)).toBe(7);
+    const cutoff = ResolveAsOfDate(asOf, members[0], labelEvent);
+    expect(DaysSinceLastActivityAsOf(allDated, cutoff)).toBe(7);
   });
 
   it('column mode resolves the as-of date from a per-record decision-date column', () => {
     const record: SourceRow = { ID: 'm1', DecisionDate: '2026-03-15T00:00:00Z' };
     const asOf: AsOfStrategy = { Mode: 'column', Column: 'DecisionDate' };
-    const resolved = resolveAsOfDate(asOf, record, null);
+    const resolved = ResolveAsOfDate(asOf, record, null);
     expect(resolved?.toISOString()).toBe('2026-03-15T00:00:00.000Z');
   });
 
   it('none mode applies no point-in-time filtering (null cutoff)', () => {
-    expect(resolveAsOfDate({ Mode: 'none' }, { ID: 'm1' }, null)).toBeNull();
+    expect(ResolveAsOfDate({ Mode: 'none' }, { ID: 'm1' }, null)).toBeNull();
   });
 });
 
@@ -246,6 +256,7 @@ describe('LeakageGuard', () => {
       SingleFeatureDominanceThreshold: 0.6,
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -264,6 +275,7 @@ describe('LeakageGuard', () => {
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const guard: LeakageGuard = { DenyFields: ['leaky'], SingleFeatureDominanceThreshold: 0.6 };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -312,6 +324,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     Steps: [{ Id: 's', Kind: 'select', Columns: ['AutoRenew', 'MembershipType'] }],
   };
   const base = {
+    ...testScope,
     targetEntityName: 'Members',
     sources,
     steps,
@@ -404,7 +417,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
 
   it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
     // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
-    // handed rows without RegistrationDate → every record failed at resolveAsOfDate → 0/6747 +
+    // handed rows without RegistrationDate → every record failed at ResolveAsOfDate → 0/6747 +
     // circuit breaker. The as-of column must be hydrated exactly like a feature column.
     const narrowRows: SourceRow[] = [
       { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
@@ -430,7 +443,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
 
   it("hard-fails when the AsOfStrategy 'column' date cannot be resolved at score time", async () => {
     // The view fixture ALSO lacks RegistrationDate → hydration cannot fill it → refuse to assemble
-    // via the required-columns guardrail (not a per-record resolveAsOfDate crash).
+    // via the required-columns guardrail (not a per-record ResolveAsOfDate crash).
     const rows: SourceRow[] = [{ ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' }];
 
     await expect(
@@ -462,6 +475,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -495,6 +509,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -511,6 +526,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
   });
 
   it('skips column emission when Columns is empty', async () => {
+    const status = ConsoleCapture.Status();
     const members: SourceRow[] = [
       { ID: 'm1', tenure: 10, Renewed: 1 },
     ];
@@ -527,6 +543,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -539,6 +556,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
 
     expect(result.featureSchema.map((s) => s.Name)).toEqual(['tenure']);
     expect(result.matrix.columns).toEqual(['tenure', 'Renewed']);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Feature step llm-empty (llm-derived) has no Columns configured; skipping column emission.")]);
   });
 });
 

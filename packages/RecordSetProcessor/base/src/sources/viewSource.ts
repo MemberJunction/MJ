@@ -52,7 +52,7 @@ export class ViewSource implements IRecordSetSource {
         if (!result.Success) {
             throw new Error(`ViewSource: failed running view '${this.viewID}': ${result.ErrorMessage}`);
         }
-        const rows = (result.Results ?? []) as Record<string, unknown>[];
+        const rows = ((result.Results ?? []) as Record<string, unknown>[]).slice(0, batchSize);
         const records: RecordRef[] = rows.map((row) => ({
             EntityID: entity.ID,
             RecordID: SerializeRecordId(entity, row),

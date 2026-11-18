@@ -7,7 +7,7 @@ import 'reflect-metadata';
  * magic-link and widget sessions, so the resolver applies its own rule. These tests pin that it
  * refuses scope-limited sessions and callers who cannot read templates before it loads anything.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // As in RunDecisionResolver.test.ts: vitest's esbuild transform does not apply
 // `emitDecoratorMetadata`, so the decorators are no-ops and the resolver runs as a plain class.
@@ -29,7 +29,8 @@ vi.mock('type-graphql', () => {
   };
 });
 
-import { EntityInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityInfo, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { TemplateEngineServer } from '@memberjunction/templates';
 import { RunTemplateResolver } from '../resolvers/RunTemplateResolver.js';
 import type { AppContext, UserPayload } from '../types.js';
 
@@ -128,5 +129,37 @@ describe('RunTemplate authorization', () => {
 
     expect(result).toMatchObject({ success: false, error: 'reached data access for MJ: Templates' });
     expect(provider.EntityObjectRequests).toEqual(['MJ: Templates']);
+  });
+});
+
+/** Metadata plus a template that loads, so the resolver reaches the render. */
+class RenderingProvider {
+  public readonly Template = { Load: async () => true, IsSaved: true, Name: 'T' };
+  constructor(private readonly entities: EntityInfo[]) {}
+  public EntityByName(name: string): EntityInfo | undefined {
+    return this.entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase());
+  }
+  public async GetEntityObject(): Promise<object> {
+    return this.Template;
+  }
+}
+
+describe('RunTemplate render user', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('REGRESSION: renders as the calling user, not whoever last configured the engine', async () => {
+    const provider = new RenderingProvider(readableEverywhere());
+    const content = { ID: 'content-1', TemplateText: 'x' };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: async () => ({ Success: true, Results: [content] }),
+    } as unknown as RunView);
+    vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+    const render = vi.spyOn(TemplateEngineServer.Instance, 'RenderTemplate').mockResolvedValue({ Success: true, Output: 'ok', Message: undefined });
+    const caller = makeUser([UI_ROLE_ID]);
+
+    const result = await new RunTemplateResolver().RunTemplate(TEMPLATE_ID, contextFor(caller, provider as unknown as FakeProvider));
+
+    expect(result).toMatchObject({ success: true, output: 'ok' });
+    expect(render.mock.calls[0][5]).toEqual({ ContextUser: caller });
   });
 });

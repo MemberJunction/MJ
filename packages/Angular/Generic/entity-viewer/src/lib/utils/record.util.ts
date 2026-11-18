@@ -1,4 +1,4 @@
-import { EntityInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CompositeKey, EntityRecordNameInput, IMetadataProvider } from '@memberjunction/core';
 import { ViewGridState } from '../types';
 
 /**
@@ -17,6 +17,10 @@ export function buildCompositeKey(record: Record<string, unknown>, entityInfo: E
 /**
  * Build a PK concatenated string matching CompositeKey.ToConcatenatedString() format.
  * Used as a stable row identifier for selection, tracking, and map keys.
+ *
+ * **Not safe to use as a row IDENTITY on its own** — see {@link BuildUsablePkString}. When the
+ * record does not carry the primary-key column(s), `ToConcatenatedString` renders the missing
+ * value as the literal text and returns the constant `"ID|undefined"` for every row.
  */
 export function BuildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
     return BuildCompositeKey(record, entityInfo).ToConcatenatedString();
@@ -25,6 +29,37 @@ export function BuildPkString(record: Record<string, unknown>, entityInfo: Entit
 /** @deprecated Use {@link BuildPkString}. */
 export function buildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
     return BuildPkString(record, entityInfo);
+}
+
+/**
+ * The record's primary-key string, or `null` when the record does not actually carry a
+ * complete key.
+ *
+ * `CompositeKey.ToConcatenatedString()` is a formatter, not a validator: it interpolates
+ * whatever it finds, so a row missing its `ID` column yields the string `"ID|undefined"` —
+ * and yields the SAME string for every such row. Anything using that as an identity then
+ * collapses N rows into one. In ag-Grid that is error #2, *"Duplicate node id … from
+ * getRowId"*, and the visible symptom is a grid that silently renders one row where the data
+ * had hundreds.
+ *
+ * Validated on the key's VALUES rather than by sniffing the formatted string for the text
+ * `"undefined"`: a legitimate key value could be the word "undefined", and a key of `0` or
+ * `false` is perfectly usable and must not be rejected.
+ *
+ * @returns the concatenated key, or `null` when the key has no pairs or any pair's value is
+ * absent (null/undefined/empty string).
+ */
+export function BuildUsablePkString(record: Record<string, unknown>, entityInfo: EntityInfo): string | null {
+    const key = buildCompositeKey(record, entityInfo);
+    if (key.KeyValuePairs.length === 0) {
+        return null;
+    }
+    for (const pair of key.KeyValuePairs) {
+        if (pair.Value === null || pair.Value === undefined || String(pair.Value).length === 0) {
+            return null;
+        }
+    }
+    return key.ToConcatenatedString();
 }
 
 /**
@@ -161,6 +196,29 @@ export function ComputeFieldsList(
         fields.add('BoundaryGeoJSON');
     }
 
+    // For any polymorphic FK field (where EntityField.EntityIDFieldName is populated) included in
+    // the projection, always include its companion EntityIDFieldName column (and any mapped virtual
+    // name column) so the grid/cards/detail panel can resolve the target entity and record name
+    // even if the user hid the EntityID column in their view settings.
+    for (const f of entityInfo.Fields) {
+        if (!fields.has(f.Name)) continue;
+        const companionName = f.EntityIDFieldName?.trim();
+        if (companionName) {
+            const companionField = entityInfo.Fields.find(
+                cf => cf.Name.toLowerCase() === companionName.toLowerCase()
+            );
+            if (companionField) {
+                fields.add(companionField.Name);
+                if (companionField.RelatedEntityNameFieldMap) {
+                    fields.add(companionField.RelatedEntityNameFieldMap);
+                }
+            }
+        }
+        if (f.RelatedEntityNameFieldMap) {
+            fields.add(f.RelatedEntityNameFieldMap);
+        }
+    }
+
     return Array.from(fields);
 }
 
@@ -171,4 +229,105 @@ export function computeFieldsList(
     hostColumnFields?: readonly string[] | null,
 ): string[] {
     return ComputeFieldsList(entityInfo, gridState, hostColumnFields);
+}
+
+/**
+ * Resolves the target `EntityInfo` for a polymorphic FK field (`field.EntityIDFieldName`)
+ * on a plain record or `BaseEntity`-like map. Strictly relies on the hard metadata link
+ * `field.EntityIDFieldName` — never falls back to field-name heuristics.
+ */
+export function ResolvePolymorphicTargetEntity(
+    record: Record<string, unknown>,
+    field: EntityFieldInfo,
+    provider: IMetadataProvider | null | undefined,
+): EntityInfo | undefined {
+    const companionName = field.EntityIDFieldName?.trim();
+    if (!companionName || !provider || !record) return undefined;
+    const rawRef = record[companionName];
+    if (rawRef == null) return undefined;
+    const refStr = String(rawRef).trim();
+    if (!refStr) return undefined;
+    return provider.EntityByID(refStr) ?? provider.EntityByName(refStr);
+}
+
+/**
+ * Builds a `CompositeKey` for a polymorphic `RecordID` value against `targetEntity`,
+ * supporting both single-column bare values and `Field1|Val1||Field2|Val2` segments.
+ */
+export function BuildPolymorphicCompositeKey(
+    rawRecordId: unknown,
+    targetEntity: EntityInfo,
+): CompositeKey | null {
+    if (rawRecordId == null) return null;
+    const str = String(rawRecordId).trim();
+    if (!str) return null;
+    return CompositeKey.FromURLSegment(targetEntity, str);
+}
+
+/**
+ * Stable lookup key for a resolved polymorphic record name in a view's cache map.
+ */
+export function PolymorphicCacheKey(entityName: string, key: CompositeKey): string {
+    return `${entityName}::${key.ToConcatenatedString()}`;
+}
+
+/**
+ * Batch-resolves human-readable record names for all polymorphic FK fields (`EntityIDFieldName`)
+ * across a page of records using a single `provider.GetEntityRecordNames(...)` call.
+ */
+export async function BatchResolvePolymorphicRecordNames(
+    records: readonly Record<string, unknown>[],
+    entityInfo: EntityInfo | null | undefined,
+    provider: IMetadataProvider | null | undefined,
+    existingCache?: Map<string, string>,
+): Promise<Map<string, string>> {
+    const cache = existingCache ?? new Map<string, string>();
+    if (!entityInfo?.Fields || !provider || !records || records.length === 0) {
+        return cache;
+    }
+
+    const polyFields = entityInfo.Fields.filter(
+        f => typeof f.EntityIDFieldName === 'string' && f.EntityIDFieldName.trim().length > 0
+    );
+    if (polyFields.length === 0) {
+        return cache;
+    }
+
+    const pendingByKey = new Map<string, EntityRecordNameInput>();
+    for (const row of records) {
+        for (const pf of polyFields) {
+            const rawId = row[pf.Name];
+            if (rawId == null || rawId === '') continue;
+            const targetEntity = ResolvePolymorphicTargetEntity(row, pf, provider);
+            if (!targetEntity) continue;
+            const compositeKey = BuildPolymorphicCompositeKey(rawId, targetEntity);
+            if (!compositeKey || !compositeKey.HasValue) continue;
+            const cacheKey = PolymorphicCacheKey(targetEntity.Name, compositeKey);
+            if (!cache.has(cacheKey) && !pendingByKey.has(cacheKey)) {
+                pendingByKey.set(cacheKey, {
+                    EntityName: targetEntity.Name,
+                    CompositeKey: compositeKey,
+                });
+            }
+        }
+    }
+
+    if (pendingByKey.size === 0) {
+        return cache;
+    }
+
+    try {
+        const inputs = Array.from(pendingByKey.values());
+        const results = await provider.GetEntityRecordNames(inputs);
+        for (const res of results) {
+            if (res.Success && res.RecordName) {
+                const key = PolymorphicCacheKey(res.EntityName, res.CompositeKey);
+                cache.set(key, res.RecordName);
+            }
+        }
+    } catch {
+        // Non-fatal: unresolved cells fall back to showing the raw RecordID
+    }
+
+    return cache;
 }

@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
+import { ClientRealtimeSessionConfig, JSONObject, RealtimeContextNoteOptions, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -153,6 +153,7 @@ interface NativeWebSocketLike {
 export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
     // ── Transport / audio resources ────────────────────────────────────────────
     private socket: IAssemblyAIClientSocket | null = null;
+    private socketOpen = false;
     private micStream: MediaStream | null = null;
     private micCapture: IPcmMicCapture | null = null;
     private playback: IRealtimePcmPlayback | null = null;
@@ -194,9 +195,16 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
 
     // ── Context-note prompt tracking ───────────────────────────────────────────
     /** The server-authored base system prompt (from the SessionConfig pact). */
+    private initialBasePrompt = '';
     private basePrompt = '';
-    /** Accumulated {@link SendContextNote} texts, re-sent with the full prompt each time. */
-    private contextNotes: string[] = [];
+    /** Accumulated {@link SendContextNote} entries since the latest seed, re-sent with the full prompt each time. */
+    private contextNotes: Array<{ Text: string; StateKey?: string; Ephemeral?: boolean }> = [];
+    /** Last connected session config — retained so Reconnect can re-establish the session. */
+    private activeConfig: ClientRealtimeSessionConfig | null = null;
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
 
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
 
@@ -208,11 +216,15 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
+        this.activeConfig = config;
         this.micStream = micStream;
         this.closedByConsumer = false;
+        this.socketOpen = false;
         this.setState('connecting');
         const sessionObject = this.parseSessionObject(config);
-        this.basePrompt = typeof sessionObject['system_prompt'] === 'string' ? sessionObject['system_prompt'] : '';
+        this.initialBasePrompt = typeof sessionObject['system_prompt'] === 'string' ? sessionObject['system_prompt'] : '';
+        this.basePrompt = this.initialBasePrompt;
         this.contextNotes = [];
 
         let openSocket: (() => void) | null = null;
@@ -241,15 +253,38 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.resumeAttempted = false;
         const socket = this.createSocket(this.connectUrl);
         this.socket = socket;
-        socket.onopen = () => openSocket?.();
-        socket.onmessage = (data) => this.handleSocketMessage(data);
+        socket.onopen = () => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = true;
+            openSocket?.();
+        };
+        socket.onmessage = (data) => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.handleSocketMessage(data);
+        };
         socket.onerror = (message) => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = false;
             failConnect(new Error(message));
-            this.handleSocketError(message);
+            if (!this.IsReconnecting) {
+                this.handleSocketError(message);
+            }
         };
         socket.onclose = () => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = false;
             failConnect(new Error('AssemblyAI agent socket closed during connect'));
-            this.handleSocketClose();
+            if (!this.IsReconnecting) {
+                this.handleSocketClose();
+            }
         };
 
         await opened;
@@ -271,6 +306,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         // no-WebAudio environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+        this.ArmConnectionDurationTimer();
         this.setState('listening');
     }
 
@@ -282,6 +318,9 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.socketOpen = false;
+        this.DisposeReconnectTimers();
+        this.activeConfig = null;
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
@@ -291,22 +330,207 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.playback = null;
         this.clearRemoteMediaStream();
         if (this.socket) {
+            const s = this.socket;
+            this.socket = null;
+            s.onopen = null;
+            s.onmessage = null;
+            s.onerror = null;
+            s.onclose = null;
             try {
-                this.socket.send(JSON.stringify({ type: 'session.end' }));
+                s.send(JSON.stringify({ type: 'session.end' }));
             } catch {
                 /* socket already dead — closing anyway */
             }
             try {
-                this.socket.close();
+                s.close();
             } catch {
                 /* already closing */
             }
-            this.socket = null;
         }
         this.resetResponseState();
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    /**
+     * Re-establishes the AssemblyAI Voice Agent session on a fresh credential/socket while
+     * keeping the local mic capture and playback pipeline intact. When `UseNativeResumption`
+     * is true and a `ResumptionHandle` (`session_id`) is available, attempts `session.resume`;
+     * otherwise starts a fresh session and seeds prior conversation memory into `system_prompt`
+     * via `RenderRealtimeMemorySeedAsContextNote`.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        const baseConfig = this.activeConfig;
+        if (!baseConfig) {
+            throw new Error('AssemblyAIRealtimeClient.Reconnect: no session config available.');
+        }
+        if (context.Abandoned) {
+            throw new Error('AssemblyAIRealtimeClient.Reconnect: reconnect attempt abandoned.');
+        }
+        const config: ClientRealtimeSessionConfig = {
+            ...baseConfig,
+            EphemeralToken: context.Credential.EphemeralToken || baseConfig.EphemeralToken,
+            ExpiresAt: context.Credential.ExpiresAt || baseConfig.ExpiresAt,
+            ...(context.Credential.RelayUrl ? { RelayUrl: context.Credential.RelayUrl } : {}),
+            SessionConfig: context.Credential.SessionConfig ?? baseConfig.SessionConfig,
+        };
+
+        const prevSocket = this.socket;
+        const useNativeResume = context.UseNativeResumption && Boolean(context.ResumptionHandle);
+        const sessionObject = { ...this.parseSessionObject(config) };
+        delete sessionObject['greeting'];
+        const nextInitialBasePrompt = typeof sessionObject['system_prompt'] === 'string'
+            ? sessionObject['system_prompt']
+            : this.initialBasePrompt;
+        const notesAtAttemptStart = new Set(this.contextNotes);
+        const seedNote =
+            !useNativeResume && context.Seed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.Seed)
+                : null;
+        const nextBasePrompt = seedNote
+            ? (nextInitialBasePrompt ? `${nextInitialBasePrompt}\n\n${seedNote}` : seedNote)
+            : nextInitialBasePrompt;
+        const carryOverNotes = seedNote ? [] : this.contextNotes.filter((n) => !n.Ephemeral);
+        sessionObject['system_prompt'] =
+            carryOverNotes.length === 0
+                ? nextBasePrompt
+                : `${nextBasePrompt}\n\n## Background updates\n${carryOverNotes.map((n) => `- ${n.Text}`).join('\n')}`;
+
+        let openSocket: (() => void) | null = null;
+        let failOpen: ((error: Error) => void) | null = null;
+        let confirmReady: (() => void) | null = null;
+        let failReady: ((error: Error) => void) | null = null;
+        const opened = new Promise<void>((resolve, reject) => {
+            openSocket = resolve;
+            failOpen = reject;
+        });
+        const ready = new Promise<void>((resolve, reject) => {
+            confirmReady = resolve;
+            failReady = reject;
+        });
+        ready.catch(() => undefined);
+        const failConnect = (error: Error) => {
+            failOpen?.(error);
+            failReady?.(error);
+        };
+
+        const nextConnectUrl = `${ASSEMBLYAI_AGENT_WS_URL}?token=${encodeURIComponent(config.EphemeralToken)}`;
+        const nextSocket = this.createSocket(nextConnectUrl);
+        let nextSocketOpen = false;
+        let nextProviderSessionId: string | null = null;
+        const onAbort = () => {
+            failConnect(new Error('AssemblyAIRealtimeClient: reconnect attempt aborted'));
+            try { nextSocket.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('AssemblyAIRealtimeClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
+        nextSocket.onopen = () => {
+            nextSocketOpen = true;
+            openSocket?.();
+        };
+        nextSocket.onmessage = (data) => {
+            if (this.socket === nextSocket) {
+                this.handleSocketMessage(data);
+                return;
+            }
+            try {
+                const event = JSON.parse(data) as AssemblyAIServerEvent;
+                if (event.type === 'session.ready') {
+                    if (event.session_id) {
+                        nextProviderSessionId = event.session_id;
+                    }
+                    confirmReady?.();
+                    confirmReady = null;
+                }
+            } catch {
+                /* ignore non-JSON during handshake */
+            }
+        };
+        nextSocket.onerror = (message) => {
+            nextSocketOpen = false;
+            failConnect(new Error(message));
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
+                this.handleSocketError(message);
+            }
+        };
+        nextSocket.onclose = () => {
+            nextSocketOpen = false;
+            failConnect(new Error('AssemblyAI agent socket closed during reconnect'));
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
+                this.handleSocketClose();
+            }
+        };
+
+        try {
+            await opened;
+            if (context.Abandoned) {
+                throw new Error('AssemblyAIRealtimeClient: reconnect attempt abandoned after open');
+            }
+            if (useNativeResume && context.ResumptionHandle) {
+                nextSocket.send(JSON.stringify({ type: 'session.resume', session_id: context.ResumptionHandle }));
+            } else {
+                nextSocket.send(JSON.stringify({ type: 'session.update', session: sessionObject }));
+            }
+
+            await ready;
+            if (context.Abandoned) {
+                throw new Error('AssemblyAIRealtimeClient: reconnect attempt abandoned after session.ready');
+            }
+        } catch (err) {
+            nextSocket.onopen = null;
+            nextSocket.onmessage = null;
+            nextSocket.onerror = null;
+            nextSocket.onclose = null;
+            try { nextSocket.close(); } catch { /* ignore */ }
+            throw err;
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+
+        if (prevSocket) {
+            prevSocket.onopen = null;
+            prevSocket.onmessage = null;
+            prevSocket.onerror = null;
+            prevSocket.onclose = null;
+        }
+        this.activeConfig = config;
+        this.ApplySessionConfigTiming(config);
+        if (!useNativeResume) {
+            for (const callID of this.pendingToolCallIds) {
+                this.callsFromBeforeReseed.add(callID);
+            }
+        }
+        const arrivedDuringAttempt = this.contextNotes.filter((n) => !notesAtAttemptStart.has(n));
+        this.contextNotes = seedNote ? arrivedDuringAttempt : [...carryOverNotes, ...arrivedDuringAttempt];
+        this.initialBasePrompt = nextInitialBasePrompt;
+        this.basePrompt = nextBasePrompt;
+        this.connectUrl = nextConnectUrl;
+        this.resumeAttempted = false;
+        this.socket = nextSocket;
+        this.socketOpen = nextSocketOpen;
+        if (nextProviderSessionId) {
+            this.providerSessionId = nextProviderSessionId;
+            this.RecordResumptionHandle(nextProviderSessionId);
+        }
+
+        try {
+            prevSocket?.close();
+        } catch {
+            /* already closing */
+        }
+
+        this.responseActive = false;
+        this.suppressReplyAudio = false;
+        this.activeResponseKind = 'normal';
+        this.flushQueuedSends();
+        this.setState('listening');
     }
 
     // ── BaseRealtimeClient: outbound actions ──────────────────────────────────
@@ -322,7 +546,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * queued send starts a new reply, the text queues behind it, preserving delivery order.
      */
     public SendText(text: string): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.CancelActiveResponse();
@@ -341,7 +565,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * delivery is never dropped by a cancel). No-op when nothing is active.
      */
     public CancelActiveResponse(): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         if (!this.responseActive && !this.IsAudioPlaying) {
@@ -365,12 +589,31 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * `session.update`. A config write never triggers or disturbs generation, so it is sent
      * immediately even while a reply is in flight (no queueing applies).
      */
-    public SendContextNote(text: string): void {
-        if (!this.socket) {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        if ((!this.socket || !this.socketOpen) && !this.IsReconnecting) {
             return;
         }
-        this.contextNotes.push(text);
-        this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
+        const stateKey = options?.StateKey?.trim();
+        if (stateKey) {
+            const storedText = options?.MemoryText ?? text;
+            this.contextNotes = this.contextNotes.filter((n) => n.StateKey !== stateKey);
+            if (storedText.trim().length > 0 && !options?.Ephemeral) {
+                this.contextNotes.push({ Text: storedText, StateKey: stateKey });
+            }
+        } else if (options?.Ephemeral) {
+            this.contextNotes = this.contextNotes.filter((n) => !n.Ephemeral);
+            this.contextNotes.push({ Text: text, Ephemeral: true });
+        } else {
+            this.contextNotes.push({ Text: text });
+        }
+        if (this.socket && this.socketOpen) {
+            this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
+        } else if (this.IsReconnecting) {
+            this.queuedSends.push(() =>
+                this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } })
+            );
+        }
     }
 
     /**
@@ -380,10 +623,18 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * collision rule (an overlapping `reply.create` would collide with active generation).
      */
     public RequestSpokenUpdate(instructions: string): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'narration', false));
+    }
+
+    /** A spoken TURN: the same reply trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.socket || !this.socketOpen) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'normal', false));
     }
 
     /**
@@ -396,17 +647,24 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * not clobbered. The wire `result` slot expects a JSON-STRING, which is exactly the
      * contract's `outputJson` shape — it passes through verbatim.
      */
-    public SendToolResult(callID: string, outputJson: string): void {
-        if (!this.socket) {
-            return;
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
+        if (!this.socket || !this.socketOpen) {
+            return false;
         }
         if (!this.pendingToolCallIds.has(callID)) {
             console.warn(
                 `AssemblyAIRealtimeClient.SendToolResult: no pending tool call '${callID}' — duplicate or unknown result dropped.`
             );
-            return;
+            return false;
         }
         this.pendingToolCallIds.delete(callID);
+        const name = this.resolveToolName(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.enqueueOrRun(() =>
+                this.sendReplyCreate(RenderLateToolResultNote(name, outputJson), 'normal', true)
+            );
+            return;
+        }
         this.enqueueOrRun(() => this.sendToolResultFrame(callID, outputJson));
     }
 
@@ -516,14 +774,14 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
 
     /** Streams one base64 PCM16 mic chunk as an `input.audio` frame. */
     private sendMicChunk(base64Pcm16: string): void {
-        if (this.socket) {
+        if (this.socket && this.socketOpen) {
             this.sendFrame({ type: 'input.audio', audio: base64Pcm16 });
         }
     }
 
     /** Surfaces a fatal socket error and marks the session unusable (obligation #6). */
     private handleSocketError(message: string): void {
-        if (this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         this.emitError({ Message: `AssemblyAI realtime transport error: ${message}`, Fatal: true });
@@ -536,7 +794,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * session death reaches the host (obligation #6).
      */
     private handleSocketClose(): void {
-        if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.closedByConsumer || this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         // The provider holds the session for a 30-second resume window — try ONE reattach
@@ -567,10 +825,34 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         try {
             const socket = this.createSocket(this.connectUrl);
             this.socket = socket;
-            socket.onopen = () => this.sendFrame({ type: 'session.resume', session_id: sessionId });
-            socket.onmessage = (data) => this.handleSocketMessage(data);
-            socket.onerror = (message) => this.handleSocketError(message);
-            socket.onclose = () => this.handleSocketClose(); // resumeAttempted → fatal path
+            this.socketOpen = false;
+            socket.onopen = () => {
+                if (this.socket !== socket) {
+                    return;
+                }
+                this.socketOpen = true;
+                this.sendFrame({ type: 'session.resume', session_id: sessionId });
+            };
+            socket.onmessage = (data) => {
+                if (this.socket !== socket) {
+                    return;
+                }
+                this.handleSocketMessage(data);
+            };
+            socket.onerror = (message) => {
+                if (this.socket !== socket) {
+                    return;
+                }
+                this.socketOpen = false;
+                this.handleSocketError(message);
+            };
+            socket.onclose = () => {
+                if (this.socket !== socket) {
+                    return;
+                }
+                this.socketOpen = false;
+                this.handleSocketClose(); // resumeAttempted → fatal path
+            };
             // The resume handshake's `session.ready` restores the live state.
             this.onSessionReady = () => this.setState('listening');
             return true;
@@ -598,6 +880,9 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
             case 'session.ready':
                 // The provider-assigned id is the `session.resume` key (30s reattach window).
                 this.providerSessionId = event.session_id ?? this.providerSessionId;
+                if (event.session_id) {
+                    this.RecordResumptionHandle(event.session_id);
+                }
                 this.onSessionReady?.();
                 this.onSessionReady = null;
                 break;
@@ -836,7 +1121,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         if (this.contextNotes.length === 0) {
             return this.basePrompt;
         }
-        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n}`).join('\n')}`;
+        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n.Text}`).join('\n')}`;
     }
 
     /** JSON-serializes and sends one client frame (no-op once the socket is gone). */
@@ -851,6 +1136,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.queuedSends = [];
         this.suppressReplyAudio = false;
         this.pendingToolCallIds.clear();
+        this.callsFromBeforeReseed.clear();
         this.onSessionReady = null;
         this.contextNotes = [];
     }

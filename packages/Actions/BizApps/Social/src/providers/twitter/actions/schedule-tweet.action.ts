@@ -6,9 +6,8 @@ import { MediaFile } from '../../../base/base-social.action';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
- * Action to schedule a tweet for future posting on Twitter/X
- * Note: Twitter API v2 doesn't have native scheduling, so this action
- * saves the tweet data for later posting via a separate scheduler service
+ * Validates a request to schedule a tweet, then refuses it with `NOT_SUPPORTED`: Twitter/X API v2 has no scheduling
+ * endpoint and this action stores nothing for a later post (#3790).
  */
 @RegisterClass(BaseAction, 'TwitterScheduleTweetAction')
 export class TwitterScheduleTweetAction extends TwitterBaseAction {
@@ -100,63 +99,15 @@ export class TwitterScheduleTweetAction extends TwitterBaseAction {
                 };
             }
 
-            // Handle media files
-            let uploadedMediaIds: string[] = [];
-            if (mediaFiles && Array.isArray(mediaFiles) && mediaFiles.length > 0) {
-                if (mediaFiles.length > 4) {
-                    throw new Error('Twitter supports a maximum of 4 media items per tweet');
-                }
-
-                // For scheduling, we'll upload the media now and store the IDs
-                // Note: Twitter media IDs expire after 24 hours if not used
-                const hoursUntilScheduled = (scheduleDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-                
-                if (hoursUntilScheduled <= 24) {
-                    // Upload now if scheduling within 24 hours
-                    LogStatus(`Uploading ${mediaFiles.length} media files...`);
-                    uploadedMediaIds = await this.uploadMedia(mediaFiles as MediaFile[]);
-                    tweetData.media = {
-                        media_ids: uploadedMediaIds
-                    };
-                } else {
-                    // For tweets scheduled beyond 24 hours, we'll need to store media
-                    // data and upload closer to the scheduled time
-                    LogStatus('Media will be uploaded closer to scheduled time due to Twitter\'s 24-hour media expiration');
-                }
-            }
-
-            // Create scheduled tweet record
-            // In a real implementation, this would save to a database or queue service
-            const scheduledTweet = {
-                id: this.generateScheduledTweetId(),
-                scheduledFor: scheduleDate.toISOString(),
-                tweetData: tweetData,
-                mediaFiles: mediaFiles, // Store for later upload if needed
-                companyIntegrationId: companyIntegrationId,
-                createdAt: new Date().toISOString(),
-                status: 'scheduled'
-            };
-
-            // Simulate saving to a scheduling service
-            LogStatus(`Tweet scheduled for ${scheduleDate.toLocaleString()}`);
-
-            // Get user info for context
-            const user = await this.getCurrentUser();
-
-            // Update output parameters
-            const outputParams = [...Params];
-            const scheduledIdParam = outputParams.find(p => p.Name === 'ScheduledTweetID');
-            if (scheduledIdParam) scheduledIdParam.Value = scheduledTweet.id;
-            const scheduledDataParam = outputParams.find(p => p.Name === 'ScheduledTweetData');
-            if (scheduledDataParam) scheduledDataParam.Value = scheduledTweet;
-            const estimatedUrlParam = outputParams.find(p => p.Name === 'EstimatedURL');
-            if (estimatedUrlParam) estimatedUrlParam.Value = `https://twitter.com/${user.username}/status/[pending]`;
-
+            // Twitter/X API v2 has no scheduling endpoint, and this action stores nothing for a later post.
+            // It used to report SUCCESS with a made-up ID (and upload media that then expired) (#3790).
             return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: `Successfully scheduled tweet for ${scheduleDate.toLocaleString()}`,
-                Params: outputParams
+                Success: false,
+                ResultCode: 'NOT_SUPPORTED',
+                Message:
+                    'Twitter/X has no scheduling API, and this action does not store tweets for later posting, so the tweet was not scheduled. ' +
+                    'Post it at the chosen time with the Create Tweet action, or schedule it in the X client.',
+                Params
             };
 
         } catch (error) {
@@ -169,13 +120,6 @@ export class TwitterScheduleTweetAction extends TwitterBaseAction {
                 Params
             };
         }
-    }
-
-    /**
-     * Generate a unique ID for scheduled tweet
-     */
-    private generateScheduledTweetId(): string {
-        return `scheduled_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     /**

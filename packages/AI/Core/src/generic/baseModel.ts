@@ -37,7 +37,7 @@ export class BaseParams {
     responseFormat?: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
-     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific'. 
+     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific' (the Gemini driver also merges it alongside 'JSON', e.g. a thinkingConfig on a JSON prompt). 
      */
     modelSpecificResponseFormat?: any  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
@@ -86,9 +86,9 @@ export class BaseParams {
  * A kind being listed here does NOT mean runs recorded in it can be priced. Pricing is driven by
  * `MJ: AI Model Price Unit Types` drivers, and both `AIEngineBase.CalculateModelCost` and
  * `MJAIPromptRunEntityServer` deliberately REFUSE to price a run whose kind no driver claims,
- * rather than produce a plausible wrong number. `Characters` has no driver yet — per-character TTS
- * billing is real and will arrive — so such a run is left uncosted with a logged reason, which is
- * the intended safe behaviour rather than an oversight.
+ * rather than produce a plausible wrong number. `Characters` is priced by the data-driven `Linear`
+ * driver through the `Per 1K Characters` unit type; a run is costed once a cost row for its model
+ * and vendor uses that unit, and until then it is left uncosted with a logged reason.
  */
 export const MODEL_USAGE_UNIT_KINDS = ['Tokens', 'Seconds', 'Characters', 'Images'] as const;
 

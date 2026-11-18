@@ -19,15 +19,19 @@ import {
   type RealtimeChannelContext,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
+  type RealtimeDelegationNarration,
   type RealtimeDelegationProgress,
   type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations, capture } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaDevice, MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { WhiteboardState } from '@memberjunction/ng-whiteboard';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
+import { RealtimeComposerComponent } from './realtime-composer.component';
+import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
 import { RealtimeCameraChannel } from './capture/realtime-capture-channel';
@@ -82,6 +86,8 @@ function fakeSession() {
   const focus$ = new Subject<RealtimeChannelFocusEvent>();
   /** Channels the session marks as used, as the runtime does when the agent first uses one. */
   const activity$ = new Subject<BaseRealtimeChannelClient>();
+  const usedChannels = new Set<string>();
+  activity$.subscribe((plugin) => usedChannels.add(plugin.ChannelName));
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
   /** The call's microphone and the ones it can move to, as the runtime lists them. */
@@ -98,6 +104,8 @@ function fakeSession() {
   const active$ = new BehaviorSubject(false);
   /** The progress of the agent's runs, as the runtime reports it: a run's first report gives the call an Activity tab. */
   const progress$ = new Subject<RealtimeDelegationProgress>();
+  /** The spoken progress notes of the agent's runs, as the runtime emits them (latest only). */
+  const narration$ = new Subject<RealtimeDelegationNarration>();
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
@@ -114,7 +122,7 @@ function fakeSession() {
     Captions$: captions$.asObservable(),
     DelegationProgress$: progress$.asObservable(),
     DelegationResult$: EMPTY,
-    DelegationNarration$: EMPTY,
+    DelegationNarration$: narration$.asObservable(),
     ThoughtNarration$: EMPTY,
     ConnectionState$: state$.asObservable(),
     ModelName$: new BehaviorSubject<string | null>(null).asObservable(),
@@ -158,7 +166,7 @@ function fakeSession() {
     },
     get IsActive(): boolean { return active$.value; },
     CurrentAgentSessionId: null,
-    HasChannelBeenUsed: (): boolean => false,
+    HasChannelBeenUsed: (channelName: string): boolean => usedChannels.has(channelName),
     SetFocusedChannel: (): void => undefined,
     GetAudioActivity: () => null,
     SetVideoSourceEnabled: (): boolean => true,
@@ -172,7 +180,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels };
+  return { service, channels$, focus$, activity$, usedChannels, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
 }
 
 /**
@@ -258,7 +266,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       autoDetect: true,
     });
     session.channels$.next([board]);
-    f.componentInstance.OnDetailsToggled();
+    session.activity$.next(board);
     await settle();
     return { f, board, ...session };
   };
@@ -1209,6 +1217,20 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   });
 
   describe('the "Agent can see" chip', () => {
+    it('stays hidden by default when only background surface bridges exist and no camera or screen is shared', async () => {
+      const { f, sources$ } = await renderWithBoard();
+      sources$.next([{
+        SourceID: 'Whiteboard#1',
+        Label: 'Whiteboard',
+        Kind: 'surface',
+        Enabled: true,
+        Active: true,
+        FramesSent: 1,
+      }]);
+      await settle();
+      expect(query(f, '.perception-chip__trigger')).toBeNull();
+    });
+
     it("passes the user's pick of the source the agent sees, and the return to the call's choice, to the session", async () => {
       const { f, sources$, calls } = await renderWithBoard();
       const state = (id: string, label: string, active: boolean, picked = false): VideoSourceState => ({
@@ -1431,6 +1453,19 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Avatar","Placement":"pip"}]');
     });
 
+    it('keeps the conversation and the typing box when the video arrives after the box was opened with captions on (#6120)', async () => {
+      const { f, sendVideo } = await renderWithAvatar('orb');
+      f.componentInstance.SetCaptions(true);
+      await settle();
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      await settle();
+      await sendVideo();
+      expect(f.componentInstance.PresenterOnStage).toBe(true);
+      expect(f.componentInstance.ComposerOpen).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+    });
+
     describe('captions over the video', () => {
       const caption = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) => query(f, '.hero__caption')?.textContent?.replace(/\s+/g, ' ').trim();
 
@@ -1490,8 +1525,10 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
 
     it('gives the stage to a whiteboard moved there, and the avatar goes to picture-in-picture', async () => {
       const board = new TestWhiteboardChannel();
-      const { f, sendVideo } = await renderWithAvatar('console', [board]);
+      const { f, sendVideo, activity$ } = await renderWithAvatar('console', [board]);
       await sendVideo();
+      activity$.next(board);
+      await settle();
       f.componentInstance.OnMoveRequested({ Key: 'Whiteboard', Placement: 'stage' });
       await settle();
       expect(f.componentInstance.ChannelFocusMode).toBe(true);
@@ -1603,7 +1640,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
           { provide: RealtimeSessionService, useValue: session.service },
           { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
         ],
-        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        inputs: { Chrome: chrome, AgentName: 'Sage', ShowAvatarNotice: true, ...inputs },
         autoDetect: true,
       });
       await settle();
@@ -1619,6 +1656,13 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       const index = timers.mock.calls.findIndex((call) => call[1] === NOTICE_MS);
       return index >= 0 ? timers.mock.results[index].value : undefined;
     };
+
+    it('is hidden by default unless ShowAvatarNotice is enabled', async () => {
+      const { f, notice$ } = await renderCall('console', { ShowAvatarNotice: false });
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(alertOf(f)).toBeNull();
+    });
 
     it('says why under the banner once the call has a notice, as a polite status with a dismiss button', async () => {
       const { f, notice$ } = await renderCall('console');
@@ -1752,6 +1796,724 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       expect(alertOf(f)).not.toBeNull();
       await ExpectNoAxeViolations(f);
+    });
+  });
+
+  describe('host switches (#6101)', () => {
+    /** A live call fronting Sage, in the given chrome, with the given host inputs bound. */
+    const renderCall = async (chrome: 'orb' | 'console' = 'console', inputs: Record<string, unknown> = {}) => {
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      await settle();
+      return { f, ...session };
+    };
+    type Fixture = Awaited<ReturnType<typeof renderCall>>['f'];
+    const TYPE_BUTTON = '[aria-label="Open the typed-input composer"]';
+    const keydown = (f: Fixture, key: string): void => {
+      f.componentInstance.OnDocumentKeydown(new KeyboardEvent('keydown', { key, bubbles: true }));
+      f.detectChanges();
+    };
+
+    it('AllowTyping=false removes the Type buttons, ignores the hotkey and refuses a programmatic open', async () => {
+      const { f } = await renderCall('console', { AllowTyping: false });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('AllowTextReveal=false also removes typing, the hero reveal button and the captions control', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      expect(query(f, '.hero')).not.toBeNull();
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__reveal')).toBeNull();
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      expect(queryAll(f, '[aria-label="Captions"]')).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('ShowSurfacePanel=false removes the Details control from the call strip (#6120)', async () => {
+      const { f } = await renderCall('console', { ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(queryAll(f, '[title="Peek at the session panels"]')).toHaveLength(0);
+    });
+
+    it('the lean dock drops its "more" menu when typing, the surface panel, camera and share are all off (#6120)', async () => {
+      const { f } = await renderCall('orb', { AllowTyping: false, ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(query(f, '.lean-more')).toBeNull();
+    });
+
+    it('an open dock closes when the host turns typing off, and the draft survives', async () => {
+      const { f } = await renderCall('console');
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      await settle();
+      const composer = f.debugElement.query(By.directive(RealtimeComposerComponent)).componentInstance as RealtimeComposerComponent;
+      const input = query(f, '.dock__input') as HTMLTextAreaElement;
+      input.value = 'keep me';
+      input.dispatchEvent(new Event('input'));
+      f.detectChanges();
+      expect(composer.Draft).toBe('keep me');
+      f.componentInstance.AllowTyping = false;
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      expect(composer.Draft).toBe('keep me');
+    });
+
+    it('the UiConfig bag gates typing', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false } });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+    });
+
+    it('a dedicated AllowTyping=true wins over a UiConfig bag false', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false }, AllowTyping: true });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(1);
+    });
+
+    it('ShowEnd=false removes End from the composer', async () => {
+      const { f } = await renderCall('console', { ShowEnd: false });
+      expect(queryAll(f, '[aria-label="End call"]')).toHaveLength(0);
+    });
+
+    it('ShowDevLinks=false removes the gear toggle and passes no dev mode to the banner and thread even after DevMode is on', async () => {
+      const { f } = await renderCall('console', { ShowDevLinks: false });
+      f.componentInstance.OnDevModeToggled(true);
+      f.detectChanges();
+      const banner = f.debugElement.query(By.directive(RealtimeAgentBannerComponent)).componentInstance as RealtimeAgentBannerComponent;
+      expect(banner.DevMode).toBe(false);
+      expect(banner.AllowDevLinks).toBe(false);
+      click(f, 'mj-realtime-agent-banner .bar-actions .iconb[aria-expanded]');
+      await settle();
+      expect(query(f, '.gear-pop')).not.toBeNull();
+      expect(query(f, '.gp-link')).toBeNull();
+      expect(query(f, '.dev-link')).toBeNull();
+    });
+
+    it('RevealText and SetCaptions(true) are refused when text is disallowed: nothing emitted, hero stays', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      const revealed = capture(f.componentInstance.TextRevealed);
+      f.componentInstance.ShowCaptions = false;
+      f.componentInstance.RevealText();
+      f.componentInstance.SetCaptions(true);
+      f.detectChanges();
+      expect(revealed).toHaveLength(0);
+      expect(f.componentInstance.ShowCaptions).toBe(false);
+      expect(query(f, '.hero')).not.toBeNull();
+    });
+
+    it('a captions preference saved as on cannot leak text under AllowTextReveal=false', async () => {
+      vi.mocked(UserInfoEngine.Instance.GetSetting).mockImplementation((key: string) =>
+        key === 'mj.realtimeVoice.captions.v1' ? 'true'
+          : key === 'mj.realtime.placement.v1' ? savedLayout
+          : key === 'mj.realtime.pip.v1' ? savedPips
+          : undefined
+      );
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      expect(f.componentInstance.ShowCaptions).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__caption')).toBeNull();
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+      // The gate must hold even while the agent's video presents in the hero (captions would run over it).
+      vi.spyOn(f.componentInstance, 'PresenterOnStage', 'get').mockReturnValue(true);
+      expect(f.componentInstance.ShowHero).toBe(true);
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+    });
+
+    it('the focus pill hides End when the host disallows it, and keeps its exit as "Back to the call" when text is disallowed', async () => {
+      const { f, board, focus$ } = await renderWithBoard(undefined, new TestWhiteboardChannel(), 'console');
+      f.componentInstance.ShowEnd = false;
+      f.componentInstance.AllowTextReveal = false;
+      focus$.next({ Channel: board, Focused: true });
+      await settle();
+      expect(query(f, '.board-focus-pill')).not.toBeNull();
+      expect(query(f, '.board-focus-pill__btn--end')).toBeNull();
+      expect(query(f, '[aria-label="Show the conversation thread"]')).toBeNull();
+      // The exit is the only way off a focused surface, so a pure-voice user keeps it, relabelled.
+      const exit = query(f, '[aria-label="Leave focus mode and return to the call"]') as HTMLButtonElement;
+      expect(exit).not.toBeNull();
+      expect(exit.title).toBe('Back to the call');
+      exit.click();
+      await settle();
+      expect(board.FocusExits).toBe(1);
+    });
+
+    describe('the narration note under the banner', () => {
+      /** A live call at the thread's disclosure level, with a spoken progress note and no working card. */
+      const renderNarrating = async (inputs: Record<string, unknown> = {}) => {
+        const call = await renderCall('console', inputs);
+        call.f.componentInstance.Disclosure.Raise('text');
+        call.narration$.next({ Text: 'Looking that up now' });
+        call.f.detectChanges();
+        await settle();
+        return call;
+      };
+
+      it('shows by default', async () => {
+        const { f } = await renderNarrating();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+      });
+
+      it('is absent under AllowTextReveal=false', async () => {
+        const { f } = await renderNarrating({ AllowTextReveal: false });
+        expect(f.componentInstance.State.Narration).toBe('Looking that up now');
+        expect(query(f, '.banner-live-note')).toBeNull();
+      });
+    });
+
+    describe('the note line follows the thread (Caliber follow-up)', () => {
+      /** A live call in the given chrome with captions as given and a spoken progress note with no working card. */
+      const renderNoting = async (chrome: 'orb' | 'console', captionsOn: boolean) => {
+        const call = await renderCall(chrome);
+        call.f.componentInstance.SetCaptions(captionsOn);
+        call.narration$.next({ Text: 'Looking that up now' });
+        call.f.detectChanges();
+        await settle();
+        return call;
+      };
+
+      it('the note line hides when the participant turns captions off (auto chrome)', async () => {
+        const { f } = await renderNoting('orb', true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+        f.componentInstance.SetCaptions(false);
+        f.detectChanges();
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(f.componentInstance.State.Narration).toBe('Looking that up now');
+        expect(query(f, '.banner-live-note')).toBeNull();
+      });
+
+      it('the note line stays in a console, where the thread stays', async () => {
+        const { f } = await renderNoting('console', false);
+        expect(f.componentInstance.ShowCaptions).toBe(false);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+      });
+    });
+
+    describe('the typing box is open only while the conversation is readable (Caliber follow-up)', () => {
+      /** A live call in the orb chrome with captions off, so the thread is hidden behind the hero. */
+      const renderHidden = async (inputs: Record<string, unknown> = {}) => {
+        const call = await renderCall('orb', inputs);
+        call.f.componentInstance.SetCaptions(false);
+        call.f.detectChanges();
+        await settle();
+        expect(query(call.f, 'mj-realtime-session-thread')).toBeNull();
+        return call;
+      };
+      const composerOf = (f: Fixture): RealtimeComposerComponent =>
+        f.debugElement.query(By.directive(RealtimeComposerComponent)).componentInstance as RealtimeComposerComponent;
+
+      it('opening the typing box with captions off reveals the conversation first', async () => {
+        const { f } = await renderHidden();
+        const revealed = capture(f.componentInstance.TextRevealed);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(true);
+        expect(f.componentInstance.ShowCaptions).toBe(true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(revealed).toHaveLength(1);
+      });
+
+      it('the hotkey with captions off opens the box, reveals the conversation and keeps the typed letter', async () => {
+        const { f } = await renderHidden();
+        keydown(f, 'h');
+        await settle();
+        f.detectChanges();
+        expect(f.componentInstance.ComposerOpen).toBe(true);
+        expect(f.componentInstance.ShowCaptions).toBe(true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(composerOf(f).Draft).toBe('h');
+        expect((query(f, '.dock__input') as HTMLTextAreaElement).value).toBe('h');
+      });
+
+      it('turning captions off closes the typing box and keeps the draft', async () => {
+        const { f } = await renderCall('orb');
+        f.componentInstance.SetCaptions(true);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        const composer = composerOf(f);
+        const input = query(f, '.dock__input') as HTMLTextAreaElement;
+        input.value = 'keep me';
+        input.dispatchEvent(new Event('input'));
+        f.detectChanges();
+        expect(composer.Draft).toBe('keep me');
+        f.componentInstance.SetCaptions(false);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(false);
+        expect(query(f, '.dock__input')).toBeNull();
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(composerOf(f)).toBe(composer);
+        expect(composer.Draft).toBe('keep me');
+        expect((query(f, '.dock__input') as HTMLTextAreaElement).value).toBe('keep me');
+      });
+
+      it('with typing disallowed, opening is still refused and nothing is revealed', async () => {
+        const { f } = await renderHidden({ AllowTyping: false });
+        const revealed = capture(f.componentInstance.TextRevealed);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(false);
+        expect(f.componentInstance.ShowCaptions).toBe(false);
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(revealed).toHaveLength(0);
+      });
+
+      it('in a console, opening the typing box with captions off turns captions on', async () => {
+        // A console keeps the thread with captions off, but the thread hides every caption turn — the conversation
+        // is shown yet unreadable, so the box must still reveal it. The thread scrolls to new turns; jsdom has no scrollIntoView.
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+        try {
+          const { f, captions$ } = await renderCall('console');
+          f.componentInstance.SetCaptions(false);
+          captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+          f.detectChanges();
+          await settle();
+          expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+          expect(f.componentInstance.ShowCaptions).toBe(false);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(0);
+          f.componentInstance.OnComposerOpenChanged(true);
+          f.detectChanges();
+          await settle();
+          expect(f.componentInstance.ComposerOpen).toBe(true);
+          expect(f.componentInstance.ShowCaptions).toBe(true);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(1);
+        } finally {
+          Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+        }
+      });
+    });
+  });
+
+  describe('channel activity auto-switching', () => {
+    class TestSurfaceChannel extends BaseRealtimeChannelClient<TestBoardComponent> {
+      public constructor(
+        private readonly channelName: string,
+        private readonly tabTitle: string,
+        private readonly prefix: string,
+      ) {
+        super();
+      }
+      public get ChannelName(): string { return this.channelName; }
+      public get ToolNamePrefix(): string { return this.prefix; }
+      public get TabTitle(): string { return this.tabTitle; }
+      public get TabIcon(): string { return 'fa-solid fa-window-maximize'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+      public override GetSurfaceComponent(): Type<TestBoardComponent> { return TestBoardComponent; }
+    }
+
+    class TestHeadlessChannel extends BaseRealtimeChannelClient {
+      public get ChannelName(): string { return 'ClientContextChannel'; }
+      public get ToolNamePrefix(): string { return 'ContextTool'; }
+      public get TabTitle(): string { return 'Context'; }
+      public get TabIcon(): string { return 'fa-solid fa-code'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+    }
+
+    const activeTabTitle = (f: ReturnType<typeof renderComponentFixture<RealtimeSessionOverlayComponent>>): string =>
+      query(f, '.s-tab--active')?.textContent?.trim() ?? '';
+
+    it('switches to whichever channel the agent is acting on, including returning to earlier channels', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const docs = new TestSurfaceChannel('ArtifactWorkspace', 'Workspace', 'ArtifactWorkspace_');
+      const browser = new TestSurfaceChannel('Remote Browser', 'Browser', 'browser_');
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, docs, browser, media]);
+      await settle();
+
+      expect(query(f, '.call-panel')).toBeNull();
+
+      // Unused channels (including Whiteboard) must not appear before any channel is used.
+      f.componentInstance.OnDetailsToggled();
+      await settle();
+      expect(queryAll(f, '.s-tab')).toHaveLength(0);
+
+      // First workspace doc opens/focuses directly onto Workspace (never Whiteboard)
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Workspace');
+      expect(queryAll(f, '.s-tab').map((el) => el.textContent?.trim() ?? '')).not.toContain('Whiteboard');
+
+      // Agent switches to Remote Browser
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      // Agent switches to Media
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // Agent switches BACK to Workspace, then BACK to Browser, then to Whiteboard (now Whiteboard joins!)
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Workspace');
+
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      session.activity$.next(board);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Whiteboard');
+    });
+
+    it('reopens a collapsed or hidden panel onto the channel the agent acts on', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, media]);
+      await settle();
+
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User collapses panel strip; new activity on Media must re-expand it onto Media.
+      click(f, '.surface__toggle');
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(true);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(false);
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User hides the panel via Details; new activity on Media must reopen it onto Media.
+      f.componentInstance.OnDetailsToggled();
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(true);
+      expect(activeTabTitle(f)).toContain('Media');
+    });
+
+    it('ignores activity from headless channels with no surface', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const headless = new TestHeadlessChannel();
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, headless]);
+      await settle();
+
+      session.activity$.next(headless);
+      await settle();
+
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+      expect(query(f, '.call-panel')).toBeNull();
+    });
+  });
+
+  describe('session review workspace tabs', () => {
+    const emptyReview = (): RealtimeSessionReview => ({
+      SessionID: 'past-ws-1',
+      AgentID: 'agent-1',
+      AgentName: 'Sage',
+      TargetAgentID: 'agent-1',
+      ConversationID: null,
+      Status: 'Closed',
+      CloseReason: null,
+      StartedAt: null,
+      LastActiveAt: null,
+      ClosedAt: null,
+      RecordingFileID: null,
+      RecordingStartedAt: null,
+      RecordingMedia: null,
+      Turns: [],
+      DelegatedRuns: [],
+      ChannelStates: [],
+      Legs: [],
+      Artifacts: [],
+    });
+
+    it('restores saved Docs (ArtifactWorkspace) and Media workspace tabs, focuses Docs, and keeps Docs read-only', async () => {
+      const savedDocs = JSON.stringify({
+        activeArtifactId: 'art-1',
+        instances: [
+          {
+            ArtifactID: 'art-1',
+            ArtifactVersionID: 'ver-1',
+            VersionNumber: 3,
+            Name: 'Canadian Maple Syrup Production',
+            ArtifactTypeName: 'Excel Spreadsheet',
+          },
+          {
+            ArtifactID: 'art-2',
+            ArtifactVersionID: 'ver-2',
+            VersionNumber: 2,
+            Name: 'Canadian Maple Syrup: Liquid Gold',
+            ArtifactTypeName: 'Presentation',
+          },
+        ],
+      });
+      const savedMedia = JSON.stringify({
+        V: 1,
+        Items: [
+          {
+            Id: 'm-1',
+            Type: 'image',
+            Url: 'https://example.com/syrup.png',
+            DisplayName: 'Syrup Chart',
+          },
+        ],
+        ActiveItemId: 'm-1',
+      });
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        ChannelStates: [
+          { ChannelName: 'ArtifactWorkspace', StateJson: savedDocs },
+          { ChannelName: 'Media', StateJson: savedMedia },
+        ],
+        Artifacts: [
+          { ArtifactID: 'art-1', ArtifactVersionID: 'ver-1', Name: 'Canadian Maple Syrup Production' },
+          { ArtifactID: 'art-2', ArtifactVersionID: 'ver-2', Name: 'Canadian Maple Syrup: Liquid Gold' },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      const stripTitles = queryAll(f, '.s-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(stripTitles.some((t) => t.includes('Workspace'))).toBe(true);
+      expect(stripTitles.some((t) => t.includes('Media'))).toBe(true);
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+
+      // Workspace renders both tabs with art-1 selected and no close button (read-only review).
+      const workspaceTabs = queryAll(f, '.aw-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(workspaceTabs).toHaveLength(2);
+      expect(query(f, '.aw-tab--active')?.textContent?.trim()).toContain('Canadian Maple Syrup Production');
+      expect(query(f, '.aw-close')).toBeNull();
+    });
+
+    it('falls back to deduplicated non-component review.Artifacts in Workspace when no ArtifactWorkspace ChannelState was saved', async () => {
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        Artifacts: [
+          { ArtifactID: 'art-1', ArtifactVersionID: 'v1', Name: 'Draft v1' },
+          { ArtifactID: 'art-1', ArtifactVersionID: 'v2', Name: 'Draft v2' },
+          { ArtifactID: 'art-comp', ArtifactVersionID: 'c1', Name: 'Widget', ArtifactTypeName: 'Component' },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+      const workspaceTabs = queryAll(f, '.aw-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(workspaceTabs).toHaveLength(1);
+      expect(workspaceTabs[0]).toContain('Draft v2');
+    });
+
+    it('clears stale Workspace/Media review tabs when transitioning review → live without active live tabs', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      try {
+        const savedDocs = JSON.stringify({
+          activeArtifactId: 'art-1',
+          instances: [{ ArtifactID: 'art-1', ArtifactVersionID: 'ver-1', VersionNumber: 1, Name: 'Plan Doc' }],
+        });
+        const review: RealtimeSessionReview = {
+          ...emptyReview(),
+          ChannelStates: [{ ChannelName: 'ArtifactWorkspace', StateJson: savedDocs }],
+        };
+
+        const session = fakeSession();
+        const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+          providers: [
+            { provide: RealtimeSessionService, useValue: session.service },
+            { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+          ],
+          inputs: { Chrome: 'console', ReviewData: review },
+          autoDetect: true,
+        });
+        await settle();
+        expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+
+        // Start live session and resolve empty live channel set: stale review Docs tab must not linger.
+        click(f, '.start-live-pill');
+        session.active$.next(true);
+        session.channels$.next([]);
+        f.componentRef.setInput('ReviewData', null);
+        await settle();
+
+        expect(f.componentInstance.ReviewWorkspaceEngine).toBeNull();
+        f.componentInstance.OnDetailsToggled();
+        await settle();
+        expect(queryAll(f, '.s-tab')).toHaveLength(0);
+      } finally {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
+    });
+
+    it('restores saved Browser tab with snapshot + visited URLs from ChannelStates', async () => {
+      const savedBrowser = JSON.stringify({
+        V: 1,
+        CurrentUrl: 'https://example.com/maple',
+        History: [{ Url: 'https://example.com/maple', VisitedAt: '2026-11-17T16:00:00Z' }],
+        ScreenshotDataUrl: 'data:image/png;base64,AAAA',
+      });
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        ChannelStates: [{ ChannelName: 'Remote Browser', StateJson: savedBrowser }],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/maple');
+      expect(query(f, '.rb-screenshot')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+    });
+
+    it('reconstructs Browser tab retroactively from browser_* DirectActions when no ChannelState exists', async () => {
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        DirectActions: [
+          {
+            ID: 'act-1',
+            CallID: 'call-1',
+            ToolName: 'browser_OpenUrl',
+            ArgsJson: JSON.stringify({ url: 'https://example.com/start' }),
+            ResultJson: JSON.stringify({ success: true, currentUrl: 'https://example.com/final', detail: 'Loaded final page' }),
+            Success: true,
+            DurationMs: 250,
+            At: new Date('2026-11-17T16:01:00Z'),
+          },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/final');
+      expect(query(f, '.rb-iframe')).not.toBeNull();
+      expect(query(f, '.rb-open-btn')?.getAttribute('href')).toBe('https://example.com/final');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+      expect(query(f, '.rb-history__detail')?.textContent?.trim()).toBe('Loaded final page');
+    });
+
+    it('labels the review resume pill "Resume session" and auto-opens restored prior tabs on resume', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      try {
+        const review: RealtimeSessionReview = {
+          ...emptyReview(),
+          AgentName: 'Sage',
+          ChannelStates: [{ ChannelName: 'Whiteboard', StateJson: '{}' }],
+        };
+        const session = fakeSession();
+        const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+          providers: [
+            { provide: RealtimeSessionService, useValue: session.service },
+            { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+          ],
+          inputs: { Chrome: 'console', ReviewData: review },
+          autoDetect: true,
+        });
+        await settle();
+
+        expect(query(f, '.start-live-pill')?.textContent?.trim()).toContain('Resume session');
+
+        // Transition review → resumed live call where PriorChannelStatesJson marked Whiteboard used.
+        click(f, '.start-live-pill');
+        session.active$.next(true);
+        f.componentRef.setInput('ReviewData', null);
+        const restoredBoard = new TestWhiteboardChannel();
+        session.usedChannels.add('Whiteboard');
+        session.channels$.next([restoredBoard]);
+        await settle();
+
+        expect(f.componentInstance.DetailsPeek).toBe(true);
+        expect(queryAll(f, '.s-tab').map(el => el.textContent?.trim())).toContain('Whiteboard');
+      } finally {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
     });
   });
 });

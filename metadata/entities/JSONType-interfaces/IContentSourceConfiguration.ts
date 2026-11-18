@@ -11,6 +11,16 @@
  */
 export interface IContentSourceConfiguration {
     /**
+     * The entity this source's items are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Overrides the source type's, the content type's and the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
+    /**
      * Options passed to the segmentation strategy named by SegmenterKey.
      *
      * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
@@ -153,6 +163,23 @@ export interface IContentSourceConfiguration {
      * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+
+    /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
     /**
      * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
      * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
@@ -164,6 +191,47 @@ export interface IContentSourceConfiguration {
      * implementation; other source types will follow the same pattern as their knobs grow.
      */
     Website?: IContentSourceWebsiteConfiguration;
+    /**
+     * Optional Semantic Graph overlay configuration for the Content Pipeline `Graph` stage
+     * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
+     * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
+     * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     */
+    GraphOverlay?: IContentSourceGraphOverlayConfig;
+}
+
+/**
+ * Per-source Semantic Graph overlay configuration for the Content Pipeline `Graph` stage.
+ */
+export interface IContentSourceGraphOverlayConfig {
+    /** Enable the Graph overlay stage after Embed for this Content Source. Default false. */
+    Enabled?: boolean;
+    /**
+     * Concept taxonomy mode:
+     * - 'constrained': only link chunks to existing approved/proposed GraphConcepts in the target Graph.
+     * - 'auto-grow': link to existing GraphConcepts when matched; synthesize new proposed GraphConcepts for unmatched clusters.
+     * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
+     */
+    ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
+    /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
+    SynthesizeConcepts?: boolean;
+    /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
+    MinChunksForConceptCluster?: number;
+    /** Cosine similarity threshold (0.0-1.0) for clustering chunk vectors or matching existing concepts. Default 0.82. */
+    ConceptSimilarityThreshold?: number;
+    /**Confidence threshold (0.0-1.0) at or above which inferred edges/concepts are auto-approved; below routes to Proposed. Default 0.90. */
+    AutoApproveThreshold?: number;
+    /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
+    DetectContradictions?: boolean;
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
+    SynthesizerKey?: string;
+    /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
+    MaxConceptsPerRun?: number;
 }
 
 /**
@@ -224,6 +292,12 @@ export interface IContentSourceVectorMetadataFieldConfig {
      * SQL numeric column types store as numbers automatically without setting this.
      */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**
@@ -259,6 +333,20 @@ export interface IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+    /**
+     * Seed the crawl from the site's sitemaps: those in {@link SitemapURLs}, else the ones robots.txt
+     * names, else `/sitemap.xml`. Each in-scope page a sitemap lists is found (unless its `lastmod` is
+     * older than the walk's `Since`) and its links are followed like any other page's. Default false.
+     */
+    UseSitemaps?: boolean;
+    /** Sitemaps to read instead of looking in robots.txt. A sitemap index is followed. */
+    SitemapURLs?: string[];
+    /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
+    CrawlDelayMs?: number;
+    /** The most pages whose links one walk reads (across all its parts). Unset: no limit. */
+    MaxPages?: number;
+    /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
+    RenderTimeoutMs?: number;
 }
 
 /**

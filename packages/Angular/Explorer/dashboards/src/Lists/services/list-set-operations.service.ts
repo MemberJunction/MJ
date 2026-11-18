@@ -281,7 +281,7 @@ export class ListSetOperationsService {
 
       // Get entity info from the first list (assuming all lists are same entity)
       const entityId = lists[0]?.EntityID;
-      const entityName = lists[0]?.Entity;
+      const entityName = lists[0]?.Entity ?? undefined;
 
       return { sets, intersections, entityId, entityName };
     } finally {

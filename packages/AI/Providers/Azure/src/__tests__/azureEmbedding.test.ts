@@ -64,6 +64,50 @@ async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | un
     throw new Error('expected the call to reject');
 }
 
+/**
+ * The `dimensions` parameter (#5234). With no model name the driver calls its default,
+ * text-embedding-ada-002, which has one width and rejects `dimensions`. A named model is a deployment,
+ * which could be any model, so its width is sent as requested.
+ */
+describe('AzureEmbedding and the dimensions parameter', () => {
+    let e: AzureEmbedding;
+    beforeEach(() => {
+        mockPost.mockReset();
+        mockPost.mockResolvedValue(postResponse([Array<number>(1536).fill(0.1)]));
+        e = new AzureEmbedding('k');
+        e.SetAdditionalSettings({ endpoint: 'https://example.openai.azure.com' });
+    });
+
+    it('omits dimensions for the default model when asked for its own width', async () => {
+        const r = await e.EmbedTexts({ texts: ['a'], model: '', dimensions: 1536 });
+
+        expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'text-embedding-ada-002' });
+        expect(mockPost.mock.calls[0][0].body).not.toHaveProperty('dimensions');
+        expect(r.vectors[0]).toHaveLength(1536);
+
+        await e.EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 1536 });
+        expect(mockPost.mock.calls[1][0].body).not.toHaveProperty('dimensions');
+    });
+
+    it('does the same for a single text', async () => {
+        await e.EmbedText({ text: 'a', model: '', dimensions: 1536 });
+
+        expect(mockPost.mock.calls[0][0].body).not.toHaveProperty('dimensions');
+    });
+
+    it('refuses a width the default model cannot produce before calling the API', async () => {
+        await expect(e.EmbedTexts({ texts: ['a'], model: '', dimensions: 512 })).rejects.toThrow(/can't produce 512-dimension vectors/);
+        await expect(e.EmbedText({ text: 'a', model: '', dimensions: 512 })).rejects.toThrow(/can't produce 512-dimension vectors/);
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('sends the width as requested to a named deployment', async () => {
+        await e.EmbedTexts({ texts: ['a'], model: 'my-embedding-deployment', dimensions: 512 });
+
+        expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'my-embedding-deployment', dimensions: 512 });
+    });
+});
+
 describe('AzureEmbedding cancellation', () => {
     let e: AzureEmbedding;
     beforeEach(() => {

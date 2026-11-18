@@ -6,7 +6,8 @@ import { URL } from 'url';
 import { z } from 'zod';
 import { DataSourceInfo, ProviderInfo } from './types';
 import sql from 'mssql';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import { DatabaseProviderBase, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 const gzip = promisify(gzipCallback);
 
@@ -176,13 +177,28 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
    * Returns the read-only provider if one is configured. Otherwise returns the first (read-write)
    * provider ONLY when `options.allowFallbackToReadWrite` is true, and `null` when it is omitted.
    *
+   * When `options.purpose` is `'adhoc'` (untrusted caller-supplied SQL such as `ExecuteAdhocQuery`
+   * or `TestQuerySQL`), prefers the bounded `'Adhoc-Read-Only'` provider when present before
+   * falling back to `'Read-Only'`, keeping ad-hoc SQL isolated from the application `RunView*`
+   * read-only pool.
+   *
    * The read-only pool exists only when `dbReadOnlyUsername`/`dbReadOnlyPassword` are set, which
    * most deployments leave unset — so a caller that omits the flag gets `null` on those servers.
    * Pass it for any pure read.
    */
-  export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase {
-    if (!providers || providers.length === 0) 
+  export function GetReadOnlyProvider(
+    providers: Array<ProviderInfo>,
+    options?: { allowFallbackToReadWrite?: boolean; purpose?: 'app' | 'adhoc' }
+  ): DatabaseProviderBase {
+    if (!providers || providers.length === 0)
       return null; // no providers available
+
+    if (options?.purpose === 'adhoc') {
+      const adhocProvider = providers.find((p) => p.type === 'Adhoc-Read-Only');
+      if (adhocProvider) {
+        return adhocProvider.provider;
+      }
+    }
 
     const readOnlyProvider = providers.find((p) => p.type === 'Read-Only');
     if (readOnlyProvider) {
@@ -249,8 +265,59 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
           sqlQuery = sqlQuery.replace(/\?/g, () => `@p${paramIndex++}`);
         }
       }
-      const result = await request.query(sqlQuery);
-      return result.recordset || [];
+      const startTime = performance.now();
+      const notifyPoolSqlObservers = (rowCount: number, errorMessage?: string): void => {
+        if (typeof IsDiagnosticCaptureSuppressed === 'function' && IsDiagnosticCaptureSuppressed()) {
+          return;
+        }
+        const observers = GetGlobalObjectStore()?.['___MJ_SQL_OBSERVERS___'] as
+          | Set<{ onSqlExecuted: (obs: Record<string, unknown>) => void }>
+          | undefined;
+        if (!observers || observers.size === 0) {
+          return;
+        }
+        const ctx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const obs: Record<string, unknown> = {
+          ts: Date.now(),
+          sql: sqlQuery,
+          parameterTypes: Array.isArray(parameters)
+            ? parameters.map((v, idx) => ({
+                name: `p${idx}`,
+                sqlType: v === null ? 'null' : typeof v,
+                byteLength: typeof v === 'string' ? v.length : 0,
+              }))
+            : [],
+          durationMs: performance.now() - startTime,
+          rowCount,
+          isMutation: false,
+          description: 'ConnectionPool.query',
+          ...(errorMessage ? { errorMessage } : {}),
+          ...(ctx
+            ? {
+                diagnosticContext: ctx,
+                sessionId: ctx.sessionId ?? ctx.SessionID,
+                traceId: ctx.traceId ?? ctx.TraceID,
+                spanId: ctx.spanId ?? ctx.SpanID,
+              }
+            : {}),
+        };
+        for (const observer of observers) {
+          try {
+            observer.onSqlExecuted(obs);
+          } catch {
+            // Observer errors must never affect SQL execution
+          }
+        }
+      };
+      try {
+        const result = await request.query(sqlQuery);
+        const rows = result.recordset || [];
+        notifyPoolSqlObservers(rows.length);
+        return rows;
+      } catch (err) {
+        notifyPoolSqlObservers(0, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     };
     return extendedPool;
   }

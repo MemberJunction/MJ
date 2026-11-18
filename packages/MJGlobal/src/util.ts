@@ -1,5 +1,6 @@
 import { v4 } from 'uuid';
 import _ from 'lodash';
+import { ExtractJavaScriptFences, FindJsonFence } from './util/MarkdownFences';
 
 /**
  * Type definition for the global object store that allows arbitrary string indexing.
@@ -46,6 +47,14 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
         __globalObjectStore = null;
     }
     return __globalObjectStore;
+}
+
+/**
+ * Returns `true` when executing in a browser environment (where the global `window` object is
+ * defined and non-null), and `false` in Node.js or other non-browser runtimes.
+ */
+export function IsBrowser(): boolean {
+    return typeof window !== 'undefined' && Boolean(window);
 }
 
 
@@ -95,6 +104,71 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
  */
 export function IsPlainObject(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Deep-merges plain-object layers, EARLIEST first — later layers win per key — into a fresh object,
+ * without prototype pollution.
+ *
+ * Merge rules (per key):
+ * - plain object vs plain object → recursive per-key merge;
+ * - a plain object over anything else → a deep copy of the incoming object REPLACES;
+ * - arrays → a shallow copy (`slice()`) of the incoming array REPLACES;
+ * - anything else (strings, numbers, booleans, `null`) → the incoming value REPLACES;
+ * - `undefined` incoming values are skipped;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth, so untrusted JSON
+ *   (e.g. a client-supplied override layer) cannot write into `Object.prototype`.
+ *
+ * Layers that are not plain objects (`null`, `undefined`, arrays, scalars) are skipped. Inputs are
+ * never mutated.
+ *
+ * @param layers - The layers to merge, base first, most specific last
+ * @returns The merged object (an empty object when no layer contributes)
+ *
+ * @example
+ * ```typescript
+ * SafeDeepMerge({ a: { x: 1, y: 2 } }, { a: { y: 3 } });   // { a: { x: 1, y: 3 } }
+ * SafeDeepMerge({}, JSON.parse('{"__proto__":{"p":1}}'));   // {} — Object.prototype untouched
+ * ```
+ */
+export function SafeDeepMerge(...layers: ReadonlyArray<unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const layer of layers) {
+        if (IsPlainObject(layer)) {
+            safeMergeInto(result, layer);
+        }
+    }
+    return result;
+}
+
+/** Recursive worker for {@link SafeDeepMerge} — merges `source` into `target` in place. */
+function safeMergeInto(target: Record<string, unknown>, source: Record<string, unknown>): void {
+    for (const key of Object.keys(source)) {
+        // Keys a deep merge must never write: assigning through them reaches `Object.prototype` (or a
+        // constructor's prototype) instead of creating an own property. `JSON.parse('{"__proto__":{}}')`
+        // produces an own `__proto__` key, so parsed input can carry them. Written as inline equality
+        // checks, not a Set lookup, because CodeQL (js/prototype-pollution-utility) only recognizes
+        // this form as a guard.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            continue;
+        }
+        const incoming = source[key];
+        if (incoming === undefined) {
+            continue;
+        }
+        const existing = target[key];
+        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
+            safeMergeInto(existing, incoming);
+        } else if (IsPlainObject(incoming)) {
+            const copy: Record<string, unknown> = {};
+            safeMergeInto(copy, incoming);
+            target[key] = copy;
+        } else if (Array.isArray(incoming)) {
+            target[key] = incoming.slice();
+        } else {
+            target[key] = incoming;
+        }
+    }
 }
 
 export function CopyScalarsAndArrays<T extends object>(
@@ -644,16 +718,11 @@ function escapeJSONStringChar(char: string): string {
  * @returns
  */
 export function CleanJavaScript(javaScriptCode: string): string {
-    // Regular expression to match JavaScript code blocks within Markdown fences
-    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
-    const markdownRegex = /```(?:js|javascript)?\s*([\s\S]*?)```/gi;
+    const blocks = ExtractJavaScriptFences(javaScriptCode);
 
-    // Check if the input contains Markdown code fences for JavaScript
-    const matches = Array.from(javaScriptCode.matchAll(markdownRegex));
-
-    if (matches.length > 0) {
-        // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
-        return matches.map(match => match[1].trim()).join('\n');
+    if (blocks.length > 0) {
+        // If there are fenced blocks, concatenate them (in case there are multiple code blocks)
+        return blocks.join('\n');
     } else {
         // If there are no Markdown code fences, assume the input is plain JavaScript code
         return javaScriptCode.trim();
@@ -1138,6 +1207,35 @@ export function stripWhitespace(s: string): string {
   return StripWhitespace(s);
 }
 
+/**
+ * Removes one pair of double quotes that wraps a whole search term: `"Steering Review"` and
+ * `“Steering Review”` both become `Steering Review`.
+ *
+ * In full-text search syntax the quotes mark a phrase, and agents and people write searches that way.
+ * A substring search (SQL `LIKE '%term%'`, or `includes`) has no phrase syntax: it looks for the quote
+ * marks themselves and finds nothing, while the unquoted words, matched as one substring, already are
+ * the phrase.
+ *
+ * Only a wrapping pair is removed, and only when it holds something besides whitespace. A quote inside
+ * the term (`6" pipe`) stays, and `""` or `" "` come back unchanged, so the result is never an empty
+ * pattern that matches everything. Straight and curly double quotes are accepted at either end; single
+ * quotes are not, since they are apostrophes.
+ *
+ * @param term - The search term as typed.
+ * @returns The term without its wrapping quotes, trimmed, or `term` unchanged.
+ *
+ * @example
+ * ```typescript
+ * UnwrapPhraseQuotes('"Executive Steering Review"'); // 'Executive Steering Review'
+ * UnwrapPhraseQuotes('6" pipe');                     // '6" pipe'
+ * UnwrapPhraseQuotes('""');                          // '""'
+ * ```
+ */
+export function UnwrapPhraseQuotes(term: string): string {
+    const inner = /^\s*["“”]([\s\S]*)["“”]\s*$/.exec(term)?.[1].trim();
+    return inner ? inner : term;
+}
+
 
 
 
@@ -1494,11 +1592,104 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
  * ```
  */
 export function TrimTrailingSlashes(s: string): string {
+    return TrimTrailingChars(s, '/');
+}
+
+/**
+ * Removes every trailing character that appears in `chars`, the linear-time replacement for an
+ * end-anchored run such as `/=+$/`, `/ +$/` or `/[-_]+$/`.
+ *
+ * Those regexes backtrack quadratically on a string holding many of the characters that are NOT
+ * at the end: the engine retries the run from each one. This walks back from the end once.
+ *
+ * @param s - The string to trim.
+ * @param chars - Every character to strip; `'='` strips `=` only, `'-_'` strips both.
+ *
+ * @example
+ * ```typescript
+ * TrimTrailingChars('abc===', '=');   // 'abc'
+ * TrimTrailingChars('a-b-_-', '-_');  // 'a-b'
+ * ```
+ */
+export function TrimTrailingChars(s: string, chars: string): string {
     let end = s.length;
-    while (end > 0 && s.charCodeAt(end - 1) === 47 /* '/' */) {
+    while (end > 0 && chars.includes(s[end - 1])) {
         end--;
     }
     return end === s.length ? s : s.substring(0, end);
+}
+
+/**
+ * Removes every leading character that appears in `chars`. The start-anchored counterpart of
+ * {@link TrimTrailingChars}.
+ *
+ * @example
+ * ```typescript
+ * TrimLeadingChars('//a/b', '/'); // 'a/b'
+ * ```
+ */
+export function TrimLeadingChars(s: string, chars: string): string {
+    let start = 0;
+    while (start < s.length && chars.includes(s[start])) {
+        start++;
+    }
+    return start === 0 ? s : s.substring(start);
+}
+
+/**
+ * Removes every leading and trailing character that appears in `chars`, the linear-time
+ * replacement for `/^x+|x+$/g`.
+ *
+ * @example
+ * ```typescript
+ * TrimChars('//a/b//', '/');  // 'a/b'
+ * TrimChars('--a-b--', '-');  // 'a-b'
+ * ```
+ */
+export function TrimChars(s: string, chars: string): string {
+    return TrimTrailingChars(TrimLeadingChars(s, chars), chars);
+}
+
+/**
+ * Whether a string has the loose `local@domain.tld` shape: no whitespace, exactly one `@`, a
+ * non-empty local part, and a domain with a `.` that is neither its first nor its last character.
+ * Not RFC validation.
+ *
+ * Accepts exactly what `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` accepts, but checks by index: that regex's
+ * overlapping classes make a crafted value cost quadratic time.
+ *
+ * @example
+ * ```typescript
+ * IsEmailShaped('a@b.co');   // true
+ * IsEmailShaped('a@b.');     // false
+ * IsEmailShaped('a b@c.co'); // false
+ * ```
+ */
+export function IsEmailShaped(value: string): boolean {
+    if (/\s/.test(value)) return false;
+    const at = value.indexOf('@');
+    if (at <= 0 || value.indexOf('@', at + 1) !== -1) return false;
+    const domain = value.substring(at + 1);
+    const dot = domain.indexOf('.', 1);
+    return dot > 0 && dot < domain.length - 1;
+}
+
+/**
+ * Prepares a caller-supplied string for a log line: caps its length, then strips every CR and LF
+ * so the value cannot start a forged log entry.
+ *
+ * @param value - The string to log.
+ * @param maxLength - Characters kept before the value is cut off. Default 10,000.
+ * @returns The value on one line, with `…[truncated]` appended when it was cut off.
+ *
+ * @example
+ * ```typescript
+ * SanitizeForLog('bob\n[ERROR] forged'); // 'bob[ERROR] forged'
+ * ```
+ */
+export function SanitizeForLog(value: string, maxLength: number = 10_000): string {
+    const capped = value.length > maxLength ? `${value.substring(0, maxLength)}…[truncated]` : value;
+    return capped.replace(/[\r\n]/g, '');
 }
 
 
@@ -2048,12 +2239,12 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
   if (options?.extractInlineJson) {
       // Look for JSON patterns within the string
       // First try ```json blocks
-      const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (codeBlockMatch) {
+      const codeBlock = FindJsonFence(str);
+      if (codeBlock) {
         try {
-          const parsedJson = JSON.parse(codeBlockMatch[1]);
+          const parsedJson = JSON.parse(codeBlock.Body);
           return {
-            text: str.replace(codeBlockMatch[0], '').trim(),
+            text: str.replace(codeBlock.Whole, '').trim(),
             json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
           };
         } catch (e) {

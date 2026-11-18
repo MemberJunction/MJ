@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { MJInstanceConfigurationEntity } from "../generated/entity_subclasses";
 
 /**
@@ -27,6 +27,7 @@ import { MJInstanceConfigurationEntity } from "../generated/entity_subclasses";
  * await engine.Set('Shell.SearchBar.Enabled', 'true', contextUser);
  * ```
  */
+@RegisterForStartup()
 export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there

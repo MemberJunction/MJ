@@ -15,9 +15,14 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './agent-instance';
+export * from './repeated-failing-step';
+export * from './bound-action-params';
+export * from './unsafe-object-keys';
 export * from './decision-discovery';
+export * from './handoff-target';
 // The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
-export { OpeningRequestText, CATALOG_NARROWING_REQUEST_MAX_CHARS } from './catalog-narrowing';
+export * from './catalog-narrowing';
 export * from './prior-turn-tool-result-cache';
 export * from './tool-result-format';
 export * from './prompt-component-resolver';
@@ -30,11 +35,16 @@ export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './constants';
 export * from './runtime-state-fragment';
+export * from './sub-agent-consult';
 export * from './volatile-child-prompt';
 export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
 export * from './AgentDecisionService';
+export * from './AgentTreeBudgetTracker';
+export * from './AgentFeedbackCoordinator';
+export * from './AgentContextAssembler';
+export * from './AgentStepDispatcher';
 export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
@@ -51,6 +61,13 @@ export * from './artifact-tools/DocxToolLibrary';
 export * from './artifact-tools/SearchResultSetToolLibrary';
 export * from './artifact-tools/CSVToolLibrary';
 export * from './artifact-tools/GenericBinaryToolLibrary';
+export * from './artifact-tools/DocumentToolLibrary';
+export * from './artifact-tools/WhiteboardToolLibrary';
+export * from './artifact-tools/SlideDeckToolLibrary';
+export * from './artifact-tools/SpreadsheetToolLibrary';
+export * from './artifact-presence-locator';
+export * from './GovernedArtifactService';
+export * from './realtime/artifact-workspace-channel-server';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
@@ -61,16 +78,20 @@ export * from './agent-pre-execution-rag';
 export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
+export * from './memory-decision-uses';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
+export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
+export * from './client-tool-results';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
 export * from './realtime/bridge-session-transcript-sink';
 export * from './realtime/realtime-turn-moderator';
+export * from './realtime/realtime-moderator-decision';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
@@ -79,6 +100,7 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-platform-credentials';
 export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';
@@ -100,17 +122,13 @@ export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
 export * from './realtime/realtime-recording-ledger';
 export * from './realtime/realtime-recording-opus-assembly';
+export * from './realtime/realtime-artifact-helpers';
 
-// Re-export from ai-reranker for backward compatibility
-export {
-  RerankerService,
-  RerankerConfiguration,
-  parseRerankerConfiguration,
-  RerankServiceResult,
-  RerankObservabilityOptions,
-  LLMReranker,
-} from '@memberjunction/ai-reranker';
 export * from './native-tools/action-tool-builder';
+export * from './native-tools/action-param-schema';
 export * from './native-tools/dual-channel';
 export * from './native-tools/control-tools';
+export * from './native-tools/native-control-config';
+export * from './native-tools/agent-tools';
+export * from './native-tools/framework-tools';
 export * from './native-tools/tool-result-turns';

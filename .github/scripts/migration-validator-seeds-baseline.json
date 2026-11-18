@@ -1,0 +1,11 @@
+{
+  "$comment": "Competing GeneratedCode validator seeds accepted by check-migration-validator-seeds.mjs. Each entry is a released pair that cannot be edited. Add an entry only for a pair already released; fix a new pair in its own migration instead.",
+  "Pairs": [
+    {
+      "Key": "df238f34-2837-ef11-86d4-6045bdee16e6|6c2142c1-e36c-4c94-ad23-78237fd6397a",
+      "AppliedFile": "V202609211844__v6.2.x__NativeToolCallCount_Validator_Metadata.sql",
+      "SkippedFile": "V202609212241__v6.2.x__Feature_Pipelines.sql",
+      "Reason": "MJ: AI Agent Run Steps.NativeToolCallCount validator (MJ#4673). Both files are released. The earlier file always applies first, so its wording is the one every database holds and the one the committed entity class carries; the later CodeGen tail is skipped by its existence guard."
+    }
+  ]
+}

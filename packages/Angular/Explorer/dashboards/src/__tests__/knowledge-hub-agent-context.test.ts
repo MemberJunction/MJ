@@ -174,9 +174,10 @@ function visualizeInput(overrides: Partial<VisualizeAgentContextInput> = {}): Vi
 }
 
 describe('isValidVisualizationMode', () => {
-    it('accepts clusters / tagcloud, rejects others', () => {
+    it('accepts clusters / tagcloud / graph, rejects others', () => {
         expect(IsValidVisualizationMode('clusters')).toBe(true);
         expect(IsValidVisualizationMode('tagcloud')).toBe(true);
+        expect(IsValidVisualizationMode('graph')).toBe(true);
         expect(IsValidVisualizationMode('grid')).toBe(false);
         expect(IsValidVisualizationMode(undefined)).toBe(false);
     });
@@ -186,7 +187,7 @@ describe('buildVisualizeAgentContext', () => {
     it('publishes mode + available modes; omits drilldown detail when closed', () => {
         const ctx = BuildVisualizeAgentContext(visualizeInput());
         expect(ctx['ActiveVisualizationMode']).toBe('clusters');
-        expect(ctx['AvailableVisualizationModes']).toEqual(['clusters', 'tagcloud']);
+        expect(ctx['AvailableVisualizationModes']).toEqual(['clusters', 'tagcloud', 'graph']);
         expect(ctx['DrilldownVisible']).toBe(false);
         expect('DrilldownTitle' in ctx).toBe(false);
         expect('DrilldownRecords' in ctx).toBe(false);

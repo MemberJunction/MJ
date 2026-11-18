@@ -339,7 +339,7 @@ FROM
             entity: makeEntity(),
             relatedFieldsSelect: '\n    Customer_CustomerID.[Name] AS [Customer]',
             relatedFieldsJoins:
-                'INNER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
+                'LEFT OUTER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
             parentFieldsSelect: '',
             parentJoins: '',
             rootFieldsSelect: '',
@@ -348,6 +348,35 @@ FROM
         const generatedWithJoin = provider.generateBaseView(context);
         const pool = new MockConnection(STORED_DEFINITION_IN_SYNC);
         expect(await probe.Check(pool, makeEntity(), generatedWithJoin)).toBe(true);
+    });
+
+    it('GM-DECIDE-05b: DB view still has an INNER display join, emission now has LEFT OUTER (#4533) → regenerate', async () => {
+        const provider = new SQLServerCodeGenProvider();
+        const context: BaseViewGenerationContext = {
+            entity: makeEntity(),
+            relatedFieldsSelect: '\n    Customer_CustomerID.[Name] AS [Customer]',
+            relatedFieldsJoins:
+                'LEFT OUTER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
+            parentFieldsSelect: '',
+            parentJoins: '',
+            rootFieldsSelect: '',
+            rootJoins: '',
+        };
+        const generated = provider.generateBaseView(context);
+        const dbInnerJoin = `CREATE VIEW [__mj].[vwRegenTargets]
+AS
+SELECT
+    r.*,
+    Customer_CustomerID.[Name] AS [Customer]
+FROM
+    [__mj].[RegenTarget] AS r
+INNER JOIN
+    [__mj].[Customer] AS Customer_CustomerID
+  ON
+    [r].[CustomerID] = Customer_CustomerID.[ID]
+`;
+        const pool = new MockConnection(dbInnerJoin);
+        expect(await probe.Check(pool, makeEntity(), generated)).toBe(true);
     });
 
     it('GM-DECIDE-06: display column REMOVED from metadata while the DB view still carries it → regenerate', async () => {
@@ -373,7 +402,7 @@ INNER JOIN
             entity: makeEntity(),
             relatedFieldsSelect: '\n    Customer_CustomerID.[Name] AS [Customer]',
             relatedFieldsJoins:
-                'INNER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
+                'LEFT OUTER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
             parentFieldsSelect: '',
             parentJoins: '',
             rootFieldsSelect: '',
@@ -387,7 +416,7 @@ SELECT
     Customer_CustomerID.[Name] AS [CustomerName]
 FROM
     [__mj].[RegenTarget] AS r
-INNER JOIN
+LEFT OUTER JOIN
     [__mj].[Customer] AS Customer_CustomerID
   ON
     [r].[CustomerID] = Customer_CustomerID.[ID]

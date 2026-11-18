@@ -184,6 +184,17 @@ export class BaseUserMenu {
                 tooltip: 'Reset workspace to default layout'
             },
             {
+                id: 'diagnostic-bundle',
+                label: 'Diagnostic Bundle',
+                icon: 'fa-solid fa-stethoscope',
+                group: 'system',
+                order: 15,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Capture, download, or submit a diagnostic bundle (.mjdiag)'
+            },
+            {
                 id: 'about',
                 label: 'About MemberJunction',
                 icon: 'fa-solid fa-circle-info',
@@ -425,6 +436,15 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'about'
+        };
+    }
+
+    /** Signal the shell to open the Diagnostic Bundle dialog */
+    protected async Handle_diagnostic_bundle(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'diagnostic-bundle'
         };
     }
 

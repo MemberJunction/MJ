@@ -13,13 +13,141 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/rubric-drift-period-means.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "C10D9100-5343-4C40-89E3-85DB1D48CF13"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.798Z",
+            "checksum": "8fd66f616874de1c271e2726013b14b1fc54dd8651f307cdfdafb2f7622dc069"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "currentStart",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The start date of the current drift window.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B0B400DF-CE0B-4F9C-9603-0124B8249221"
+          }
+        },
+        {
+          "fields": {
+            "Name": "periodEnd",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The end date of the evaluation period.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D41FA741-2356-4F0D-ACB8-221DA9451B72"
+          }
+        },
+        {
+          "fields": {
+            "Name": "previousStart",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The start date of the previous drift window.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "17397939-16A5-43C9-B695-05E539E06B52"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "AgentName",
+            "Description": "The name of the AI agent.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "50275291-E0CF-4E3B-91A9-5BD17EF23145"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RubricName",
+            "Description": "The name of the rubric used for evaluation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9B33FC0D-ED89-470B-8362-E0974FD61A70"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CriterionKey",
+            "Description": "The key identifier of the rubric criterion.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E95282D3-486A-458C-95A4-F2B3D6DADCE6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CurrentMean",
+            "Description": "The average normalized score for the current drift window.",
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN evaluation.[SubmittedAt] >= currentStart AND evaluation.[SubmittedAt] < periodEnd THEN score.[NormalizedScore] END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "610C6B2D-A5F5-4B6C-9676-6340341D65E4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PreviousMean",
+            "Description": "The average normalized score for the previous drift window.",
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN evaluation.[SubmittedAt] >= previousStart AND evaluation.[SubmittedAt] < currentStart THEN score.[NormalizedScore] END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AEACF408-F0FC-42FD-B258-961F89012BCA"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "4513AE64-76A5-432C-BA67-360C8A97753F"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:35.022Z",
-      "checksum": "1d6b4620299a3e3f154719032b8b55ce1dceb6dff396bcf40b1bf12c98870c26"
+      "lastModified": "2026-10-28T22:14:02.262Z",
+      "checksum": "491f8262ab44b2ebf6d96f0ab32a09658d3ab8b519dc1ccad40c076dee4e331b"
     }
   }
 ]

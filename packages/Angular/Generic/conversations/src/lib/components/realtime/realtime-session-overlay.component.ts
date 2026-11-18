@@ -47,10 +47,22 @@ import {
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
-import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
-import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
+import { RealtimeChannelTabRegistration, ShouldRemoveReviewChannelTab } from './realtime-surface-tabs.model';
+import { ChannelTabSortOrder, ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { SafeJSONParse } from '@memberjunction/global';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
+import { ArtifactWorkspaceEngine } from './artifact-workspace/artifact-workspace-engine';
+import { RealtimeArtifactWorkspaceSurfaceComponent } from './artifact-workspace/realtime-artifact-workspace-surface.component';
+import { IsComponentArtifactDescriptor, type ArtifactWorkspaceOpenPayload } from './artifact-workspace/artifact-workspace-types';
+import { IsAllowedExternalMediaUrl, MediaChannelState } from './media/media-channel-state';
+import { RealtimeMediaSurfaceComponent } from './media/realtime-media-surface.component';
+import {
+  IsSafeRasterImageDataUrl,
+  RemoteBrowserSurfaceComponent,
+  type RemoteBrowserHistoryEntry,
+  type SerializedRemoteBrowserState,
+} from './remote-browser/remote-browser-surface.component';
 import {
   AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
   SharePanelDirective, SharePanelRegistry,
@@ -180,6 +192,9 @@ export interface RealtimeAvatarCaption {
     MediaStagePipActionsDirective,
     SharePanelDirective,
     RealtimeWhiteboardBoardComponent,
+    RealtimeArtifactWorkspaceSurfaceComponent,
+    RealtimeMediaSurfaceComponent,
+    RemoteBrowserSurfaceComponent,
     MJStorageMediaPlayerComponent,
     MJAlertComponent
   ],
@@ -219,6 +234,23 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * this version doesn't know, such as a newer server's, in place of `AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT`.
    */
   @Input() AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
+
+  /**
+   * Whether the top "Audio only: this voice model can't show an avatar" notice banner is shown when
+   * an audio-only call connects. Default `false` so standard voice sessions stay calm and uncluttered
+   * unless a host explicitly opts into showing avatar capability notices.
+   */
+  @Input() ShowAvatarNotice = false;
+
+  /**
+   * Whether the bottom "Agent can see" perception chip is always shown even when only background channel
+   * bridges exist. Default `false`: the chip is only shown when the user actively captures their camera or
+   * screen ({@link CameraOn} / {@link Sharing}), or when explicitly enabled via `[ShowPerceptionChip]="true"`.
+   */
+  @Input() ShowPerceptionChip = false;
+
+  /** Whether inline markdown links in the session thread open in a new browser tab. Default true. */
+  @Input() OpenLinksInNewTab = true;
 
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
@@ -263,10 +295,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   set Compact(value: boolean | undefined) { this.setUiInput('compact', value); }
   get Compact(): boolean | undefined { return this._uiInputs.compact; }
 
-  /** Fade non-essential controls when the session is idle (orb chrome only). Default `true`. */
+  /**
+   * @deprecated No-op since 6.2: the idle fade was never implemented. Kept so existing bindings compile.
+   */
   @Input()
-  set AutoHideControls(value: boolean | undefined) { this.setUiInput('autoHideControls', value); }
-  get AutoHideControls(): boolean | undefined { return this._uiInputs.autoHideControls; }
+  set AutoHideControls(value: boolean | undefined) { void value; }
+  get AutoHideControls(): boolean | undefined { return undefined; }
 
   /**
    * May the user reveal the transcript at all? `false` makes the widget a pure voice orb
@@ -275,6 +309,18 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   @Input()
   set AllowTextReveal(value: boolean | undefined) { this.setUiInput('allowTextReveal', value); }
   get AllowTextReveal(): boolean | undefined { return this._uiInputs.allowTextReveal; }
+
+  /**
+   * May the user type into the live session? Default `true`. Mirrors {@link RealtimeUiInputs.allowTyping}.
+   *
+   * Invariant: `false` removes every road to the composer (the strip's Type button, the lean sheet's Type
+   * button, the type-to-compose hotkey, and a programmatic open) and nothing else. It does not touch the
+   * transcript, captions, the surface panel or the channel strip. `AllowTextReveal=false` implies
+   * `AllowTyping=false`. Turning it off while the dock is open closes the dock; the draft is kept.
+   */
+  @Input()
+  set AllowTyping(value: boolean | undefined) { this.setUiInput('allowTyping', value); }
+  get AllowTyping(): boolean | undefined { return this._uiInputs.allowTyping; }
 
   /** Show the captions toggle. Default `true`. */
   @Input()
@@ -420,7 +466,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * A generic hook fired when ANY control is invoked — even one the host hid via inputs
    * and re-rendered itself. Lets a host observe/react to the full control surface from a
-   * single binding.
+   * single binding. An open of the typing box that first reveals the conversation reports
+   * `'captions'` and `'reveal-text'` before `'type'`.
    */
   @Output() ControlInvoked = new EventEmitter<RealtimeControlId>();
 
@@ -500,18 +547,34 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * True while the surface panel carries the REVIEW-registered (template-based, read-only)
-   * Whiteboard tab. Drives the review→live continuation edge: when the resumed live
-   * session's channel set resolves WITHOUT a Whiteboard channel, the stale review tab is
-   * removed (see {@link cleanupStaleReviewBoardTab}); when it resolves WITH one, the live
-   * plugin re-registers the same key and the tab upgrades in place.
+   * Keys of template-based review tabs currently registered on the surface panel
+   * (`ArtifactWorkspace`, `Whiteboard`, `Media`, `Recording`). Drives cleanup when
+   * switching reviewed sessions, closing review, or transitioning review → live.
    */
-  private reviewWhiteboardTabRegistered = false;
+  private registeredReviewTabs = new Set<string>();
 
   /** True while the overlay renders a PAST session (review data set, no live call). */
   public get IsReviewing(): boolean {
     return this._reviewData !== null && !this.realtime.IsActive;
   }
+
+  /**
+   * The reviewed session's rehydrated Docs workspace (`ArtifactWorkspace` state or deduplicated
+   * non-component artifacts) — rendered read-only by the review Docs tab. Null = no tab.
+   */
+  public ReviewWorkspaceEngine: ArtifactWorkspaceEngine | null = null;
+
+  /**
+   * The reviewed session's rehydrated Media surface state, when it saved valid Media items.
+   * Null = no tab.
+   */
+  public ReviewMedia: MediaChannelState | null = null;
+
+  /**
+   * The reviewed session's rehydrated Remote Browser snapshot + visited-page history (from
+   * `ChannelStates` or `DirectActions` fallback). Null = no tab.
+   */
+  public ReviewBrowser: SerializedRemoteBrowserState | null = null;
 
   /**
    * The reviewed session's rehydrated whiteboard, when it saved a parseable Whiteboard
@@ -533,8 +596,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public ReviewCues: MediaTranscriptCue[] = [];
 
-  /** True while the Recording tab is registered (a recording exists for the reviewed session). */
-  private reviewRecordingTabRegistered = false;
+  /** True while the overlay renders a PAST session's recording tab (also tracked in {@link registeredReviewTabs}). */
+  private get reviewRecordingTabRegistered(): boolean {
+    return this.registeredReviewTabs.has('Recording');
+  }
 
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
@@ -605,6 +670,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private surfaceTabs?: RealtimeSurfaceTabsComponent;
   @ViewChild(RealtimeSurfaceTabsComponent)
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
+    if (ref === this.surfaceTabs) {
+      return;
+    }
     this.surfaceTabs = ref;
     if (!ref) {
       // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
@@ -623,11 +691,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
       this.pendingRevealKey = null;
+      const revealSeq = this.revealSequence;
       // Deferred: focus/expand feed the parent's width bindings (wide tier) — never
       // mutate those inside the change-detection pass that created the panel.
       setTimeout(() => {
+        if (revealSeq !== this.revealSequence) {
+          return;
+        }
         if (reveal) {
-          // The agent's first channel activity caused this creation — land ON the board.
+          // The agent's channel activity caused this creation — land ON that channel.
           ref.RevealChannel(reveal);
         } else {
           // Default for a fresh panel (live AND review): the marquee surface — channels
@@ -649,14 +721,29 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** The bottom dock — type-to-compose seeds + focuses its input. */
   @ViewChild(RealtimeComposerComponent) private composer?: RealtimeComposerComponent;
 
-  /** Channel keys already auto-revealed this session (first activity only). */
-  private revealedChannelKeys = new Set<string>();
+  /** Presenter channel keys already auto-revealed this session (avoid re-placing video on repeat frames). */
+  private revealedPresenterKeys = new Set<string>();
+
+  /** Interactive surface channel keys already surfaced in the live panel during this session. */
+  private surfacedLiveChannelKeys = new Set<string>();
 
   /** Auto-reveal that arrived before the (disclosure-gated) panel rendered. */
   private pendingRevealKey: string | null = null;
 
+  /** Monotonic sequence guarding deferred initial-mount reveals against newer channel switches. */
+  private revealSequence = 0;
+
   /** Previous Active$ value — edges drive disclosure session begin/ratchet. */
   private prevActive = false;
+
+  /** Template hosting the read-only review Docs (`ArtifactWorkspace`) surface. */
+  @ViewChild('reviewDocsTpl') private reviewDocsTpl?: TemplateRef<unknown>;
+
+  /** Template hosting the read-only review Media surface. */
+  @ViewChild('reviewMediaTpl') private reviewMediaTpl?: TemplateRef<unknown>;
+
+  /** Template hosting the read-only review Remote Browser surface. */
+  @ViewChild('reviewBrowserTpl') private reviewBrowserTpl?: TemplateRef<unknown>;
 
   /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
   @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
@@ -693,7 +780,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Whether captions run over the agent's video: they are on, and the video presents in the hero. */
   public get ShowAvatarCaptions(): boolean {
-    return this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
+    return this._ui.allowTextReveal && this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
   }
 
   /**
@@ -816,11 +903,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Why this live call shows no avatar its agent asked for, while the notice shows: from the moment the call connects
-   * until the user dismisses it or it hides itself. `null` otherwise, and always in review.
+   * until the user dismisses it or it hides itself. `null` otherwise, when {@link ShowAvatarNotice} is off, and always in review.
    */
   public get AvatarNotice(): RealtimeAvatarNotice | null {
     const notice = this.avatarNotice;
-    return notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
+    return this.ShowAvatarNotice && notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
   }
 
   /**
@@ -866,6 +953,23 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
   public VideoSources: readonly VideoSourceState[] = [];
+
+  /**
+   * The video sources surfaced to `<mj-realtime-perception-chip>`.
+   * By default (`ShowPerceptionChip = false`), the chip only appears when the user has an active camera or
+   * screen capture (`CameraOn`, `Sharing`, or an enabled `'camera'` / `'screen'` source), preventing
+   * background channel bridges from cluttering pure-voice calls.
+   */
+  public get VisibleVideoSources(): readonly VideoSourceState[] {
+    const hasUserCapture =
+      this.CameraOn ||
+      this.Sharing ||
+      this.VideoSources.some((s) => (s.Kind === 'camera' || s.Kind === 'screen') && s.Enabled);
+    if (!this.ShowPerceptionChip && !hasUserCapture) {
+      return [];
+    }
+    return this.VideoSources;
+  }
 
   /** The user's camera and screen share (see {@link RealtimeSessionService.Captures$}). */
   public CaptureStates: RealtimeCaptureStates = REALTIME_CAPTURES_OFF;
@@ -1107,12 +1211,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.viewReady = true;
     this.startResizeObserver();
     this.flushPendingChannelTabs();
-    this.registerReviewBoardTab();
-    this.registerReviewArtifactTabs();
-    // Cues were already built by enterReview() when ReviewData was set; here we only need to
-    // (re)register the recording tab now that the #recordingTpl ref exists. The storage media
-    // player resolves the authenticated audio itself from the RecordingFileID.
-    this.registerReviewRecordingTab();
+    this.registerReviewTabs();
   }
 
   // ── Declarative UI config: inputs → signals → resolved view-model ────────────
@@ -1175,7 +1274,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // only asking for the conversation opens the thread.
       TextRevealed: this.ShowCaptions && (this.conversationShown || !this.PresenterOnStage),
       DisclosureShowThread: disclosure.ShowThread,
-      DisclosureShowComposer: disclosure.ShowComposer,
       DisclosureShowPanel: disclosure.ShowPanel,
       DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
@@ -1199,6 +1297,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
+    // The host just took typing away: close an open dock (the composer keeps its draft).
+    if (!next.allowTyping && this.ComposerOpen) {
+      this.ComposerOpen = false;
+    }
     if (next.chrome !== prevChrome) {
       this.ChromeChanged.emit(next.chrome);
     }
@@ -1308,14 +1410,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Resizing is meaningless while collapsed or when the surface fills (focus mode), and a
-   * host may hard-disable it via `[AllowResize]="false"` — in review the resolver's
-   * `allowResize` is false (no live surface to resize), so this also reads the host flag
-   * directly (defaulting to the historical `true`) rather than the resolved value, keeping
-   * drag available in review exactly as before.
+   * host may hard-disable it via `[AllowResize]="false"`. The resolver has no resize output,
+   * so this reads the host flag directly (defaulting to the historical `true`), which keeps
+   * drag available in review too.
    */
   public get PanelResizeDisabled(): boolean {
     const hostAllows = this.mergedUiInputs.allowResize ?? DEFAULT_REALTIME_UI_INPUTS.allowResize;
     return this.PanelCollapsed || this.ChannelFocusMode || !hostAllows;
+  }
+
+  /**
+   * The host's ceiling on developer links (`[ShowDevLinks]` / the bag), for the banner's gear toggle. Not the
+   * resolved `Ui.showDevLinks`: that one is already ANDed with {@link DevMode}, which the toggle itself sets, so
+   * binding it would hide the toggle until it was on.
+   */
+  public get AllowDevLinks(): boolean {
+    return this.mergedUiInputs.showDevLinks ?? DEFAULT_REALTIME_UI_INPUTS.showDevLinks;
   }
 
   public OnPanelCollapsedChange(collapsed: boolean): void {
@@ -1486,17 +1596,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._ui.showSurfacePanel || this.IsReviewing;
   }
 
-  /** The Details (tabs) toggle is offered while live — it's the panel's one door. */
+  /**
+   * The Details (tabs) toggle is offered while live — it's the panel's one door — unless the host turned the surface
+   * panel off. Reads the host ceiling, not the resolved {@link Ui.showSurfacePanel}: that one also needs the panel to be
+   * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
+   */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing;
+    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
-   * Whether the active-channels strip renders. Preserves the historical disclosure gate
-   * (level 2+, {@link RealtimeDisclosureModel.ShowComposer}) AND honours the host's
-   * `[ShowChannels]` input + the resolver's focus rule: a host that sets `[ShowChannels]`
-   * false hard-disables the strip, and channel-focus mode hides it. The strip component
-   * itself self-hides when no channels are active, so this stays decluttered.
+   * Whether the active-channels strip renders: the resolved {@link Ui.showChannelStrip}, which
+   * honours the host's `[ShowChannels]` input (false hard-disables the strip), needs an active
+   * channel and console chrome, and hides it in channel-focus mode. The strip component itself
+   * self-hides when no channels are active, so this stays decluttered.
    */
   public get ChannelStripVisible(): boolean {
     // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's
@@ -1567,34 +1680,48 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * The agent ACTED on a channel (a tool call routed to its local executor — e.g. the
-   * first whiteboard write). THE ONE AUTO-REVEAL: the surface panel opens (as a peek —
-   * the left column stays exactly as it was, pure audio included) with the channel's tab
-   * focused and flashed, exactly once per channel — so the user discovers the board the
-   * moment it comes alive. Disclosure levels are NOT raised: no text, no composer, no
-   * extra chrome — just the board.
+   * The agent ACTED on a channel (a native channel tool call, ContextTool dispatch, or
+   * accepted delegation artifact). Auto-reveals and switches to that channel's surface tab
+   * whenever the agent switches resources or the panel is hidden/collapsed, while leaving
+   * the user alone if they are already viewing that exact expanded channel tab.
+   * Headless channels (no surface) never open the panel, and presenter video is placed once.
    */
   private onChannelActivity(plugin: BaseRealtimeChannelClient): void {
-    if (this.IsReviewing || this.revealedChannelKeys.has(plugin.ChannelName)) {
+    if (this.IsReviewing) {
       return;
     }
-    this.revealedChannelKeys.add(plugin.ChannelName);
     if (plugin.ShowsAgentVideo) {
+      if (this.revealedPresenterKeys.has(plugin.ChannelName)) {
+        return;
+      }
+      this.revealedPresenterKeys.add(plugin.ChannelName);
       this.revealPresenter(plugin);
       return;
     }
-    this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
-    // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
-    // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
-    // The whiteboard already has its tab from session start; re-registering is idempotent.
-    if (plugin.HasSurface()) {
+    if (!plugin.HasSurface()) {
+      return;
+    }
+
+    const hadPanel = this.DetailsPeek && Boolean(this.surfaceTabs);
+    const alreadyViewing =
+      hadPanel &&
+      !this.surfaceTabs!.Collapsed &&
+      this.surfaceTabs!.ActiveTab.Key === plugin.ChannelName;
+
+    if (!this.hasChannelTab(plugin)) {
       this.registerPluginChannelTab(plugin);
     }
+
+    if (alreadyViewing) {
+      return;
+    }
+
+    this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
+    this.revealSequence++;
     if (this.surfaceTabs) {
       // Stream handler (a tool call), not a change-detection pass — reveal synchronously
-      // so the board is the visible tab the instant the agent's first stroke lands. The
-      // microtask-deferred RegisterChannelTab above is ordered before this RevealChannel,
-      // so the tab is in place when the focus lands.
+      // so the channel is visible the instant the agent acts. Any microtask-deferred
+      // RegisterChannelTab above is ordered before this RevealChannel.
       this.surfaceTabs.RevealChannel(plugin.ChannelName);
     } else {
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
@@ -1602,6 +1729,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     // DetailsPeek flipped — surfacePanelEarned changed; re-resolve (marks for check).
     this.recomputeUi();
+  }
+
+  /** Whether the channel's tab and current plugin instance are already registered. */
+  private hasChannelTab(plugin: BaseRealtimeChannelClient): boolean {
+    if (this.SurfaceStage.PluginFor(plugin.ChannelName) !== plugin) {
+      return false;
+    }
+    if (this.surfaceTabs) {
+      return this.surfaceTabs.Model.Tabs.some(t => t.Key === plugin.ChannelName);
+    }
+    return this.pendingChannelTabs.some(t => t.Key === plugin.ChannelName);
   }
 
   /**
@@ -1621,8 +1759,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.Disclosure.BeginSession();
       this.DetailsPeek = false;
       this.ComposerOpen = false; // typing is opt-in per session (voice-first)
-      this.revealedChannelKeys.clear();
+      this.revealedPresenterKeys.clear();
+      this.surfacedLiveChannelKeys.clear();
       this.pendingRevealKey = null;
+      this.revealSequence++;
       this.startAudioVisualLoop();
     } else if (!active && this.prevActive) {
       this.persistDisclosure(this.Disclosure.RatchetOnSessionEnd());
@@ -1745,6 +1885,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The hero's "Show the conversation" affordance — turns the text preference on, and opens the thread even over the agent's video. */
   public OnTextReveal(): void {
+    if (!this._ui.allowTextReveal) {
+      return;
+    }
     this.conversationShown = true;
     this.OnCaptionsToggled(true);
     this.TextRevealed.emit();
@@ -1803,7 +1946,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
-    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive) {
+    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive || !this._ui.allowTyping) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -1819,7 +1962,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const typedChar = event.key;
     this.OnComposerOpenChanged(true);
     // The dock may have just been created — seed the typed character + focus after this CD pass.
-    setTimeout(() => this.composer?.AppendAndFocus(typedChar));
+    setTimeout(() => {
+      this.composer?.AppendAndFocus(typedChar);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -1852,10 +1998,30 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The composer dock opened (strip Type control / type-to-compose keystroke) or closed (the
    * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
+   *
+   * Invariant: the typing box is open only while the conversation is readable — a participant must
+   * see what they type (Caliber). Readable = the thread is shown AND captions are on: a console keeps
+   * the thread with captions off, but the thread then hides every caption turn. (While the agent's
+   * video presents in the hero, captions run over the video instead, and the thread waits for an
+   * explicit reveal.) So an open while the conversation is unreadable reveals it first, through the
+   * same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and persisted,
+   * {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a programmatic
+   * open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
+    // The host disallows typing: refuse any open (closing is always allowed). Checked before the reveal,
+    // so a refused open reveals nothing.
+    if (open && !this._ui.allowTyping) {
+      return;
+    }
+    if (open && !(this._ui.showThread && this.ShowCaptions)) {
+      this.OnTextReveal();
+    }
     this.ComposerOpen = open;
     if (open) {
+      // Opening the box asks for the conversation, like "Show the conversation": pin the thread, so the agent's video
+      // arriving later (which keeps the hero for captions alone) does not hide it under an open box.
+      this.conversationShown = true;
       this.Disclosure.Raise('engaged'); // emits Changed$ → recomputeUi()
       this.ControlInvoked.emit('type');
       setTimeout(() => this.composer?.FocusInput());
@@ -1875,6 +2041,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       sub.unsubscribe();
     }
     this.subs = [];
+    this.disposeReviewModels();
     this.State.Detach();
   }
 
@@ -1919,15 +2086,37 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * tab — their tools + perception are wired by the session service regardless.
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
-    this.cleanupStaleReviewBoardTab(channels);
-    for (const plugin of channels) {
+    this.cleanupStaleReviewChannelTabs(channels);
+    const ordered = [...channels].sort(
+      (a, b) => ChannelTabSortOrder(a.ChannelName) - ChannelTabSortOrder(b.ChannelName)
+    );
+    let newlyUsedSurface = false;
+    let firstSurfacedKey: string | null = null;
+    for (const plugin of ordered) {
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
       if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
         continue; // not the whiteboard and not used yet — it earns its tab on first activity.
       }
+      if (!firstSurfacedKey) {
+        firstSurfacedKey = plugin.ChannelName;
+      }
+      if (!this.surfacedLiveChannelKeys.has(plugin.ChannelName)) {
+        this.surfacedLiveChannelKeys.add(plugin.ChannelName);
+        newlyUsedSurface = true;
+      }
       this.registerPluginChannelTab(plugin);
+    }
+    // Resuming a prior session restores used channels before live tools fire; auto-open the
+    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Whiteboard/Browser/Media)
+    // keep their canonical order and pick up visibly where the previous session left off.
+    if (newlyUsedSurface && this.realtime.IsActive && !this.IsReviewing && !this.DetailsPeek) {
+      this.DetailsPeek = true;
+      if (!this.pendingRevealKey && firstSurfacedKey) {
+        this.pendingRevealKey = firstSurfacedKey;
+      }
+      this.recomputeUi();
     }
     this.cdr.markForCheck();
   }
@@ -2005,23 +2194,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * REVIEW→LIVE continuation edge: when the resumed live session resolves its channel set
-   * WITHOUT a Whiteboard channel, the review-registered read-only board tab is now a dead
-   * surface — remove it (Activity regains focus if it was active). When the set HAS a
-   * Whiteboard channel, the plugin registration above upgrades the same tab key in place,
-   * so the review flag is simply released. Review ARTIFACT tabs are deliberately kept —
-   * they are wanted carryover into the live session.
+   * WITHOUT a matching up-front live channel, remove any stale read-only review template tab
+   * (`ArtifactWorkspace`, `Media`, `Whiteboard`) so dead/empty review panes never linger.
+   * Up-front live channels (`Whiteboard`) upgrade the matching tab key in place.
    */
-  private cleanupStaleReviewBoardTab(channels: BaseRealtimeChannelClient[]): void {
-    if (!this.reviewWhiteboardTabRegistered) {
-      return;
-    }
-    if (ShouldRemoveReviewWhiteboardTab(this.realtime.IsActive, this.reviewWhiteboardTabRegistered, channels)) {
-      this.surfaceTabs?.RemoveTab('Whiteboard');
-      // Also drop a still-queued review registration (panel not rendered yet — rare but possible).
-      this.pendingChannelTabs = this.pendingChannelTabs.filter(r => !(r.Key === 'Whiteboard' && r.Content));
-      this.reviewWhiteboardTabRegistered = false;
-    } else if (channels.some(c => c.ChannelName === 'Whiteboard')) {
-      this.reviewWhiteboardTabRegistered = false; // live plugin owns the tab now (upgraded in place)
+  private cleanupStaleReviewChannelTabs(channels: BaseRealtimeChannelClient[]): void {
+    for (const key of [...this.registeredReviewTabs]) {
+      if (key === 'Recording') {
+        continue;
+      }
+      const hasLiveUpFront =
+        this.realtime.IsActive &&
+        channels.some(c => c.ChannelName.trim().toLowerCase() === key.toLowerCase()) &&
+        ShouldRegisterChannelTabUpFront(key, this.realtime.HasChannelBeenUsed(key));
+      if (ShouldRemoveReviewChannelTab(this.realtime.IsActive, true, key, channels) || (this.realtime.IsActive && !hasLiveUpFront)) {
+        this.removeReviewTab(key);
+      } else if (hasLiveUpFront) {
+        this.registeredReviewTabs.delete(key); // live plugin owns the tab now (upgraded in place)
+      }
     }
   }
 
@@ -2039,13 +2229,25 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The captions toggle = the persisted text-vs-orb switch: on → the thread renders
    * (raising the text disclosure milestone); off → the orb hero owns the screen again,
    * at any level. Persisted per-user so the choice survives refresh and devices.
+   *
+   * Invariant: the typing box is open only while the conversation is readable (thread shown AND
+   * captions on) — a participant must see what they type (Caliber). So turning captions off closes an
+   * open box, in a console too, where the thread stays but hides its caption turns; the composer instance
+   * is kept, so its draft survives and comes back with the next open. Every captions road (the CC
+   * buttons, {@link SetCaptions}, {@link ToggleCaptions}) funnels through here;
+   * {@link OnComposerOpenChanged} holds the other half.
    */
   public OnCaptionsToggled(on: boolean): void {
+    // The host disallows text: refuse turning captions on (nothing persisted or emitted). Off is always allowed.
+    if (on && !this._ui.allowTextReveal) {
+      return;
+    }
     this.ShowCaptions = on;
     if (on) {
       this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
     } else {
       this.conversationShown = false;
+      this.ComposerOpen = false;
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');
@@ -2118,15 +2320,19 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Enters review: replaces the shared state's thread with the historical items (all
-   * chain legs, dividers between legs), names the cards after the reviewed agent,
-   * rehydrates the saved whiteboard (when any), and registers the chain's history
-   * ARTIFACTS as unfocused surface tabs.
+   * Enters review: clears any prior review tabs, populates the thread with historical items,
+   * rehydrates saved workspace channels (`Docs` / `ArtifactWorkspace`, `Whiteboard`, `Media`)
+   * plus the recording and `Activity` rail, and registers their read-only surface tabs.
    */
   private enterReview(review: RealtimeSessionReview): void {
+    this.clearReviewSurfaceTabs();
+    this.disposeReviewModels();
     this.State.AgentName = review.AgentName;
     this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
+    this.ReviewWorkspaceEngine = this.parseReviewDocsWorkspace(review);
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
+    this.ReviewMedia = this.parseReviewMedia(review);
+    this.ReviewBrowser = this.parseReviewBrowser(review);
     this.reviewArtifacts = review.Artifacts ?? [];
     this.ReviewCues = this.buildReviewCues(review);
     if (this.viewReady) {
@@ -2134,11 +2340,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // ngZone.run is REQUIRED: review often opens through the deep-link/query-param
       // path (a plain RxJS stream outside Angular's zone) — without re-entering the
       // zone, the registration's markForCheck never gets a change-detection pass and
-      // the Whiteboard tab stays invisible until the user's next click.
+      // the review tabs stay invisible until the user's next click.
       setTimeout(() => this.ngZone.run(() => {
-        this.registerReviewBoardTab();
-        this.registerReviewArtifactTabs();
-        this.registerReviewRecordingTab();
+        this.registerReviewTabs();
       }), 0);
     }
     // isReviewing flipped on — review always wants the console (marks for check).
@@ -2190,22 +2394,109 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    *  - plain CLOSE: clear everything so the conversation view returns clean.
    */
   private exitReview(): void {
-    this.ReviewWhiteboard = null;
-    this.ReviewCues = [];
+    this.disposeReviewModels();
     if (this.reviewRecordingTabRegistered) {
-      this.surfaceTabs?.RemoveTab('Recording');
-      this.pendingChannelTabs = this.pendingChannelTabs.filter(r => r.Key !== 'Recording');
-      this.reviewRecordingTabRegistered = false;
+      this.removeReviewTab('Recording');
     }
     if (this.pendingLiveContinuation) {
       this.pendingLiveContinuation = false;
       this.State.StartLiveContinuation();
     } else {
+      this.clearReviewSurfaceTabs();
       this.reviewArtifacts = [];
       this.State.Clear();
     }
     // isReviewing flipped off — re-resolve the chrome/gates (marks for check).
     this.recomputeUi();
+  }
+
+  /** Removes a single review-registered template tab (both live strip and pending queue). */
+  private removeReviewTab(key: string): void {
+    this.surfaceTabs?.RemoveTab(key);
+    this.pendingChannelTabs = this.pendingChannelTabs.filter(
+      r => !(r.Key.trim().toLowerCase() === key.toLowerCase() && r.Content)
+    );
+    this.registeredReviewTabs.delete(key);
+  }
+
+  /** Removes all review-registered template tabs. */
+  private clearReviewSurfaceTabs(): void {
+    for (const key of [...this.registeredReviewTabs]) {
+      this.removeReviewTab(key);
+    }
+  }
+
+  /** Disposes / clears all rehydrated review models. */
+  private disposeReviewModels(): void {
+    this.ReviewWorkspaceEngine?.Dispose();
+    this.ReviewWorkspaceEngine = null;
+    this.ReviewMedia = null;
+    this.ReviewBrowser = null;
+    this.ReviewWhiteboard = null;
+    this.ReviewCues = [];
+  }
+
+  /**
+   * Registers all review-mode surface tabs in live-call order (`Workspace`, `Whiteboard`,
+   * `Browser`, `Media`, `Recording`, plus `Activity` on the right) and focuses the primary
+   * workspace tab so past sessions open with the same tabbed workspace layout as live calls.
+   */
+  private registerReviewTabs(): void {
+    const focusKey = this.ReviewWorkspaceEngine
+      ? 'ArtifactWorkspace'
+      : this.ReviewWhiteboard
+        ? 'Whiteboard'
+        : this.ReviewBrowser
+          ? 'Remote Browser'
+          : this.ReviewMedia
+            ? 'Media'
+            : null;
+
+    if (this.ReviewWorkspaceEngine && this.reviewDocsTpl) {
+      this.registerReviewTemplateTab({
+        Key: 'ArtifactWorkspace',
+        Title: 'Workspace',
+        Icon: 'fa-solid fa-file-lines',
+        Content: this.reviewDocsTpl,
+        Focus: focusKey === 'ArtifactWorkspace'
+      });
+    }
+    if (this.ReviewWhiteboard && this.reviewBoardTpl) {
+      this.registerReviewTemplateTab({
+        Key: 'Whiteboard',
+        Title: 'Whiteboard',
+        Icon: 'fa-solid fa-chalkboard',
+        Content: this.reviewBoardTpl,
+        Focus: focusKey === 'Whiteboard'
+      });
+    }
+    if (this.ReviewBrowser && this.reviewBrowserTpl) {
+      this.registerReviewTemplateTab({
+        Key: 'Remote Browser',
+        Title: 'Browser',
+        Icon: 'fa-solid fa-globe',
+        Content: this.reviewBrowserTpl,
+        Focus: focusKey === 'Remote Browser'
+      });
+    }
+    if (this.ReviewMedia && this.reviewMediaTpl) {
+      this.registerReviewTemplateTab({
+        Key: 'Media',
+        Title: 'Media',
+        Icon: 'fa-solid fa-images',
+        Content: this.reviewMediaTpl,
+        Focus: focusKey === 'Media'
+      });
+    }
+    this.registerReviewArtifactTabs();
+    this.registerReviewRecordingTab();
+  }
+
+  /** Shared registration helper for read-only review template tabs. */
+  private registerReviewTemplateTab(registration: RealtimeChannelTabRegistration): void {
+    this.RegisterChannelTab(registration);
+    this.registeredReviewTabs.add(registration.Key);
+    this.cdr.markForCheck();
   }
 
   /**
@@ -2222,6 +2513,152 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     // flips the gate on without opening any tab of its own.
     this.surfaceTabs.RegisterArtifactTab(this.reviewArtifacts[0], false);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Rehydrates the reviewed session's saved `ArtifactWorkspace` (`Docs`) state from
+   * `review.ChannelStates`, falling back to deduplicated non-component artifacts from
+   * `review.Artifacts` when an older session has no saved `ArtifactWorkspace` channel row.
+   */
+  private parseReviewDocsWorkspace(review: RealtimeSessionReview): ArtifactWorkspaceEngine | null {
+    const channel = review.ChannelStates.find(c => c.ChannelName.trim().toLowerCase() === 'artifactworkspace');
+    if (channel?.StateJson) {
+      const parsed = SafeJSONParse<{
+        activeArtifactId?: string | null;
+        instances?: ArtifactWorkspaceOpenPayload[];
+      }>(channel.StateJson);
+      if (parsed && Array.isArray(parsed.instances) && parsed.instances.length > 0) {
+        const validItems = parsed.instances.filter(
+          item =>
+            item != null &&
+            typeof item === 'object' &&
+            Boolean(item.ArtifactID) &&
+            !IsComponentArtifactDescriptor(item.ArtifactTypeName, item.DriverClass)
+        );
+        if (validItems.length > 0) {
+          const engine = new ArtifactWorkspaceEngine(Math.min(Math.max(validItems.length, 6), 12));
+          for (const item of validItems) {
+            engine.AddOrFocus({ ...item, CanEdit: false });
+          }
+          if (parsed.activeArtifactId) {
+            const active = engine.FindByArtifact(parsed.activeArtifactId);
+            if (active) {
+              engine.SetActive(active.InstanceID);
+            }
+          }
+          return engine;
+        }
+      }
+    }
+
+    const fallback = (review.Artifacts ?? []).filter(
+      a => Boolean(a.ArtifactID) && !IsComponentArtifactDescriptor(a.ArtifactTypeName, a.DriverClass)
+    );
+    if (fallback.length === 0) {
+      return null;
+    }
+    const uniqueCount = new Set(fallback.map(a => a.ArtifactID.trim().toLowerCase())).size;
+    const engine = new ArtifactWorkspaceEngine(Math.min(Math.max(uniqueCount, 6), 12));
+    for (const artifact of fallback) {
+      engine.AddOrFocus({
+        ArtifactID: artifact.ArtifactID,
+        ArtifactVersionID: artifact.ArtifactVersionID,
+        Name: artifact.Name,
+        ArtifactTypeName: artifact.ArtifactTypeName,
+        DriverClass: artifact.DriverClass,
+        CanEdit: false
+      });
+    }
+    return engine;
+  }
+
+  /**
+   * Rehydrates the reviewed session's saved Media channel state. TOLERANT: missing,
+   * empty, or malformed state returns null so review skips the Media tab cleanly.
+   */
+  private parseReviewMedia(review: RealtimeSessionReview): MediaChannelState | null {
+    const channel = review.ChannelStates.find(c => c.ChannelName.trim().toLowerCase() === 'media');
+    if (!channel?.StateJson) {
+      return null;
+    }
+    const state = new MediaChannelState();
+    return state.LoadFromJSON(channel.StateJson) && state.Items.length > 0 ? state : null;
+  }
+
+  /**
+   * Rehydrates the reviewed session's Remote Browser snapshot & visited-page history from
+   * saved `ChannelStates` and/or recorded `browser_*` `DirectActions` (fallback for sessions
+   * before client-side browser persistence existed).
+   */
+  private parseReviewBrowser(review: RealtimeSessionReview): SerializedRemoteBrowserState | null {
+    const channel = review.ChannelStates.find(c => c.ChannelName.trim().toLowerCase() === 'remote browser');
+    const saved = channel?.StateJson
+      ? SafeJSONParse<Partial<SerializedRemoteBrowserState>>(channel.StateJson)
+      : null;
+
+    let currentUrl =
+      saved && typeof saved.CurrentUrl === 'string' && IsAllowedExternalMediaUrl(saved.CurrentUrl)
+        ? saved.CurrentUrl.trim()
+        : null;
+    const savedHistory: RemoteBrowserHistoryEntry[] =
+      saved && Array.isArray(saved.History)
+        ? saved.History.filter(
+            (h): h is RemoteBrowserHistoryEntry =>
+              h != null && typeof h === 'object' && typeof h.Url === 'string' && IsAllowedExternalMediaUrl(h.Url)
+          )
+        : [];
+    const screenshot =
+      saved && typeof saved.ScreenshotDataUrl === 'string' && IsSafeRasterImageDataUrl(saved.ScreenshotDataUrl)
+        ? saved.ScreenshotDataUrl
+        : null;
+
+    const actionHistory: RemoteBrowserHistoryEntry[] = [];
+    for (const action of review.DirectActions ?? []) {
+      if (!action.ToolName.startsWith('browser_')) {
+        continue;
+      }
+      const parsedResult = action.ResultJson
+        ? SafeJSONParse<{ currentUrl?: string; detail?: string }>(action.ResultJson)
+        : null;
+      const parsedArgs = action.ArgsJson
+        ? SafeJSONParse<{ url?: string }>(action.ArgsJson)
+        : null;
+      const candidateUrl =
+        typeof parsedResult?.currentUrl === 'string' && IsAllowedExternalMediaUrl(parsedResult.currentUrl)
+          ? parsedResult.currentUrl.trim()
+          : typeof parsedArgs?.url === 'string' && IsAllowedExternalMediaUrl(parsedArgs.url)
+            ? parsedArgs.url.trim()
+            : null;
+      if (!candidateUrl) {
+        continue;
+      }
+      currentUrl = candidateUrl;
+      const actionLabel = action.ToolName.replace(/^browser_/, '');
+      const detail = typeof parsedResult?.detail === 'string' ? parsedResult.detail : undefined;
+      const prev = actionHistory[actionHistory.length - 1];
+      if (!prev || prev.Url !== candidateUrl || detail) {
+        actionHistory.push({
+          Url: candidateUrl,
+          ActionLabel: actionLabel,
+          ...(detail ? { Detail: detail } : {}),
+          ...(action.At ? { VisitedAt: action.At.toISOString() } : {}),
+        });
+      }
+    }
+
+    const history = actionHistory.length > 0 ? actionHistory : savedHistory;
+    if (!currentUrl && history.length > 0) {
+      currentUrl = history[history.length - 1].Url;
+    }
+    if (!currentUrl && history.length === 0 && !screenshot) {
+      return null;
+    }
+    return {
+      V: 1,
+      CurrentUrl: currentUrl,
+      History: history,
+      ...(screenshot ? { ScreenshotDataUrl: screenshot } : {}),
+    };
   }
 
   /**
@@ -2242,26 +2679,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Registers the read-only review whiteboard tab (no-op without a board / template) —
-   * FOCUSED: the session's channel surface is what the reviewer came to see; the
-   * Activity rail stays available but is never the default focus.
-   */
-  private registerReviewBoardTab(): void {
-    if (!this.ReviewWhiteboard || !this.reviewBoardTpl) {
-      return;
-    }
-    this.RegisterChannelTab({
-      Key: 'Whiteboard',
-      Title: 'Whiteboard',
-      Icon: 'fa-solid fa-chalkboard',
-      Content: this.reviewBoardTpl,
-      Focus: true
-    });
-    this.reviewWhiteboardTabRegistered = true;
-    this.cdr.markForCheck();
-  }
-
-  /**
    * Registers the read-only review RECORDING tab (the time-aligned storage media player) — ONLY when
    * the reviewed session carried a `RecordingFileID`. Idempotent (re-registering the same key updates
    * it in place). The player resolves the authenticated audio itself from the `RecordingFileID` and
@@ -2272,14 +2689,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (!this._reviewData?.RecordingFileID || !this.recordingTpl) {
       return;
     }
-    this.RegisterChannelTab({
+    this.registerReviewTemplateTab({
       Key: 'Recording',
       Title: 'Recording',
       Icon: 'fa-solid fa-circle-play',
       Content: this.recordingTpl
     });
-    this.reviewRecordingTabRegistered = true;
-    this.cdr.markForCheck();
   }
 
   /**
@@ -2379,7 +2794,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * Reveal the transcript programmatically — the imperative twin of the orb's "Show the
    * conversation" affordance. Raises the text disclosure level, turns captions on, and
-   * emits {@link TextRevealed}.
+   * emits {@link TextRevealed}. Does nothing when the host disallows text (`AllowTextReveal=false`).
    */
   public RevealText(): void {
     this.OnTextReveal();
@@ -2413,7 +2828,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Set captions (the text-vs-orb preference) to an explicit state. Persisted per-user;
-   * turning them on also raises the text disclosure level.
+   * turning them on also raises the text disclosure level. Turning them on does nothing when
+   * the host disallows text (`AllowTextReveal=false`); turning them off is always allowed.
    *
    * @param on whether captions/text should be shown.
    */

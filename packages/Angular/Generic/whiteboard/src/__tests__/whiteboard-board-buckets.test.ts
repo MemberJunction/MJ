@@ -230,4 +230,33 @@ describe('RealtimeWhiteboardBoardComponent — render-bucket precompute', () => 
       expect(board.InkItems).toHaveLength(1);
     });
   });
+
+  describe('minimap memoization and ResizeObserver cleanup (MJ-NG-4 & MJ-NG-6)', () => {
+    it('memoizes MinimapItems across change-detection reads and invalidates on State.Changed$', () => {
+      state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 's1' }, 'user');
+      board.ngOnInit();
+
+      const first = board.MinimapItems;
+      const second = board.MinimapItems;
+      expect(second).toBe(first);
+      expect(first).toHaveLength(1);
+
+      state.AddItem({ Kind: 'shape', Shape: 'rect', X: 50, Y: 60, W: 100, H: 80, Label: 's2' }, 'agent');
+      const third = board.MinimapItems;
+      expect(third).not.toBe(first);
+      expect(third).toHaveLength(2);
+      expect(board.MinimapItems).toBe(third);
+    });
+
+    it('disconnects canvasResizeObserver in ngOnDestroy', () => {
+      board.ngOnInit();
+      const disconnectSpy = vi.fn();
+      (board as unknown as { canvasResizeObserver: { disconnect: () => void } | null }).canvasResizeObserver = {
+        disconnect: disconnectSpy,
+      };
+      board.ngOnDestroy();
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+      expect((board as unknown as { canvasResizeObserver: unknown }).canvasResizeObserver).toBeNull();
+    });
+  });
 });

@@ -88,8 +88,8 @@ covered in [§4](#4-the-four-work-types); `FunctionRecordProcessor` wraps an arb
 - Your own `IProcessRunTracker` — persist into domain-specific tables.
 
 ### What the engine owns (so no consumer re-invents it)
-Batching · bounded concurrency within a batch (`maxConcurrency`) · optional token-bucket **rate limiting** ·
-an **error-rate circuit breaker** · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
+Batching · bounded concurrency within a batch (`MaxConcurrency`) · optional token-bucket **rate limiting** ·
+an **error-rate circuit breaker** (over *attempted* records: a record skipped on its watermark does not count) · a **budget gate** (`OnAfterBatch`) · **progress events** per batch · a
 **pause/cancel handshake** (the tracker re-reads its cancellation flag at each checkpoint) · **resume** from an
 offset or keyset cursor · and **per-record error isolation** — one bad record never aborts its batch.
 
@@ -98,15 +98,15 @@ import { RecordSetProcessor, FunctionRecordProcessor } from '@memberjunction/rec
 import { ViewSource } from '@memberjunction/record-set-processor-base';
 
 const result = await RecordSetProcessor.Instance.Process({
-    source: new ViewSource(activeCustomersViewID),
-    processor: new FunctionRecordProcessor(async (record, ctx) => {
-        // ...work for `record` using ctx.provider / ctx.contextUser...
+    Source: new ViewSource(activeCustomersViewID),
+    Processor: new FunctionRecordProcessor(async (record, ctx) => {
+        // ...work for `record` using ctx.Provider / ctx.ContextUser...
         return { Status: 'Succeeded', ResultPayload: { summarized: true } };
     }),
-    contextUser,
-    batchSize: 100,
-    maxConcurrency: 4,
-    triggeredBy: 'Schedule',
+    ContextUser: contextUser,
+    BatchSize: 100,
+    MaxConcurrency: 4,
+    TriggeredBy: 'Schedule',
 });
 // result.Status, result.Success/result.Processed, result.ProcessRunID
 ```
@@ -129,7 +129,7 @@ A **Record Process** (`MJ: Record Processes`) is a saved operation. Its columns 
 | `ScheduleEnabled` + `CronExpression` + `Timezone` | trigger on a schedule |
 | `OnDemandEnabled` | runnable from the UI / API |
 | `BatchSize` / `MaxConcurrency` | substrate knobs |
-| `SkipUnchanged` | don't write (or count) records the work left unchanged |
+| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values. A real `Checksum` run without `SkipUnchanged` (such as a version backfill) skips nothing but writes the watermark of each record whose processor computes a basis hash (`Infer`) |
 
 The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 
@@ -137,14 +137,14 @@ The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 
 const result = await new RecordProcessExecutor().RunByID(recordProcessID, {
-    contextUser,
-    triggeredBy: 'OnDemand',
-    dryRun: true,                          // compute-only preview (FieldRules) — see §6
-    scope: { Kind: 'records', RecordIDs }, // runtime scope override — see §5
+    ContextUser: contextUser,
+    TriggeredBy: 'OnDemand',
+    DryRun: true,                          // compute-only preview (FieldRules) — see §6
+    Scope: { Kind: 'records', RecordIDs }, // runtime scope override — see §5
 });
 ```
 
-Internally it calls `buildSource(rp, …)` (scope → Source) and `buildProcessor(rp, dryRun)` (work type → Processor),
+Internally it calls `BuildSource(rp, …)` (scope → Source) and `BuildProcessor(rp, DryRun, …)` (work type → Processor),
 then hands both to `RecordSetProcessor.Process`.
 
 ---
@@ -217,7 +217,7 @@ current view without editing the saved definition.
 
 ## 6. Dry-run — preview the per-record diff without writing
 
-For `FieldRules`, `dryRun: true` computes the exact per-record change set and persists it (as `Process Run
+For `FieldRules`, `DryRun: true` computes the exact per-record change set and persists it (as `Process Run
 Details`) **without writing anything to the target records**. This powers the preview step of the bulk-update UX:
 review the diff, then apply.
 
@@ -227,9 +227,9 @@ compute-only preview from a real apply (the studio renders a **"Dry Run"** chip)
 
 ```typescript
 // preview
-await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: true,  scope });
+await new RecordProcessExecutor().RunByID(id, { ContextUser: contextUser, DryRun: true,  Scope: scope });
 // apply
-await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: false, scope });
+await new RecordProcessExecutor().RunByID(id, { ContextUser: contextUser, DryRun: false, Scope: scope });
 ```
 
 ---
@@ -300,6 +300,9 @@ graph LR
 - The **run header** tracks status (`Running → Completed / Failed / Paused / Cancelled`), the counts
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
+- When a processor implements `BuildRunSummary`, `ResultSummary` holds its JSON summary (and `WouldRefuse` on a dry run
+  when a real run would be refused). Processors that set `FailRunOnRecordError = true` mark the run `Failed` whenever
+  any record failed or was rejected by output constraints; other work types keep their status rules.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that
   was — or would be — applied). Details are written **fire-and-forget** by the tracker's `BaseEntitySaveQueue`
   and flushed before the run finalizes.
@@ -368,7 +371,7 @@ column (`*ID` / mapping). The `Infer` work type is the worked example — see th
 
 - **Deep sweeps** → `KeysetSource` (O(log N)/page at any depth; single-column PK required). UI-depth paging can
   stay on offset.
-- **Throughput** → tune `BatchSize` × `MaxConcurrency`; add `rateLimit` for provider-bound work (Action/Agent/Infer).
+- **Throughput** → tune `BatchSize` × `MaxConcurrency`; add `RateLimit` for provider-bound work (Action/Agent/Infer).
 - **Resilience** → the circuit breaker auto-fails a runaway error rate; per-record isolation contains a thrown
   processor; resume continues an interrupted run from its cursor.
 - **Server-only** → `@memberjunction/record-set-processor` executes + persists; import it on the server. The

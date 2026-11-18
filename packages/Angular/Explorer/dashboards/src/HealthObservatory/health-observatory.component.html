@@ -1,0 +1,651 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Health & Telemetry Observatory"
+        Icon="fa-solid fa-heart-pulse"
+        Subtitle="Live health probes, instance telemetry, OpenTelemetry spine & share layer preview"
+    >
+        <div meta class="observatory-header-meta">
+            @if (HealthReport) {
+                <div class="status-hero-pill" [class]="'status-' + HealthReport.overallStatus.toLowerCase()">
+                    <span class="status-pulse-dot"></span>
+                    <span class="status-label">{{ HealthReport.overallStatus }}</span>
+                </div>
+                <mj-stat-badge
+                    [Count]="HealthReport.summaryCounts.green"
+                    [Total]="HealthReport.signals.length"
+                    Label="probes passed"
+                />
+                <span class="duration-badge">
+                    <i class="fa-solid fa-stopwatch"></i>
+                    {{ HealthReport.totalDurationMs.toFixed(1) }}ms
+                </span>
+            } @else {
+                <span class="status-loading-pill">Evaluating health...</span>
+            }
+        </div>
+
+        <div actions class="observatory-header-actions">
+            <!-- Check Mode Selector -->
+            <div class="mode-select-group">
+                <label class="action-label">Mode:</label>
+                <select
+                    class="mj-select-input"
+                    [value]="CheckMode"
+                    (change)="OnCheckModeChange($any($event.target).value)"
+                >
+                    <option value="passive">Passive</option>
+                    <option value="startup">Startup</option>
+                    <option value="readiness">Readiness</option>
+                    <option value="live-test">Live Test</option>
+                </select>
+            </div>
+
+            <!-- Auto-Refresh Selector -->
+            <div class="refresh-interval-group">
+                <label class="action-label">Auto:</label>
+                <select
+                    class="mj-select-input"
+                    [value]="AutoRefreshIntervalSeconds"
+                    (change)="OnAutoRefreshChange(+$any($event.target).value)"
+                >
+                    <option [value]="0">Off</option>
+                    <option [value]="10">10s</option>
+                    <option [value]="30">30s</option>
+                    <option [value]="60">60s</option>
+                </select>
+            </div>
+
+            <!-- Live CRUD Verification Action -->
+            <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                [disabled]="IsExecutingLiveTest"
+                (click)="RunLiveCrudVerification()"
+            >
+                @if (IsExecutingLiveTest) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Verifying CRUD...
+                } @else {
+                    <i class="fa-solid fa-shield-halved"></i>
+                    Run Live CRUD
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <mj-refresh-button
+                [Loading]="IsLoading || IsRefreshing"
+                (Clicked)="RefreshAll()"
+            />
+        </div>
+
+        <div toolbar class="observatory-header-toolbar">
+            <!-- Navigation Tabs -->
+            <div class="tab-pill-group">
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'probes'"
+                    (click)="OnTabChange('probes')"
+                >
+                    <i class="fa-solid fa-stethoscope"></i>
+                    Health Probes & CRUD
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'telemetry'"
+                    (click)="OnTabChange('telemetry')"
+                >
+                    <i class="fa-solid fa-chart-line"></i>
+                    Telemetry & AI Velocity
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'otel'"
+                    (click)="OnTabChange('otel')"
+                >
+                    <i class="fa-solid fa-satellite-dish"></i>
+                    OpenTelemetry Spine
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'share-layer'"
+                    (click)="OnTabChange('share-layer')"
+                >
+                    <i class="fa-solid fa-share-nodes"></i>
+                    Zero-Trust Share Layer
+                </button>
+            </div>
+
+            <!-- Contextual Filter Controls -->
+            <div class="toolbar-filters">
+                @if (ActiveTab === 'telemetry') {
+                    <!-- Time Window Selector -->
+                    <div class="filter-control-item">
+                        <label>Window:</label>
+                        <select
+                            class="mj-select-input"
+                            [value]="TimeWindow"
+                            (change)="OnTimeWindowChange($any($event.target).value)"
+                        >
+                            <option value="15m">15 Minutes</option>
+                            <option value="1h">1 Hour</option>
+                            <option value="6h">6 Hours</option>
+                            <option value="24h">24 Hours</option>
+                        </select>
+                    </div>
+
+                    <!-- Category Filter -->
+                    <div class="filter-control-item">
+                        <label>Category:</label>
+                        <select
+                            class="mj-select-input"
+                            [value]="SelectedCategory"
+                            (change)="OnCategoryChange($any($event.target).value)"
+                        >
+                            <option value="All">All Categories</option>
+                            <option value="RunView">RunView</option>
+                            <option value="RunQuery">RunQuery</option>
+                            <option value="AI">AI Tokens</option>
+                            <option value="Cache">Cache</option>
+                            <option value="Engine">Engine</option>
+                            <option value="Server">Server</option>
+                        </select>
+                    </div>
+                }
+
+                @if (ActiveTab === 'probes') {
+                    <div class="filter-control-item app-filter-item">
+                        <label>App Filter:</label>
+                        <input
+                            type="text"
+                            class="mj-text-input"
+                            placeholder="e.g. Core, AI..."
+                            [value]="AppFilter"
+                            (input)="OnAppFilterChange($any($event.target).value)"
+                        />
+                    </div>
+                }
+            </div>
+        </div>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (LoadError) {
+            <div class="observatory-error-banner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div class="error-content">
+                    <strong>Observatory Error:</strong>
+                    <span>{{ LoadError }}</span>
+                </div>
+            </div>
+        }
+
+        <!-- ================================================================= -->
+        <!-- TAB 1: HEALTH PROBES & LIVE ROLLBACK CRUD VERIFIER -->
+        <!-- ================================================================= -->
+        @if (ActiveTab === 'probes') {
+            <section class="observatory-section">
+                <!-- Live CRUD Rollback Verifier Panel -->
+                <div class="crud-verifier-card">
+                    <div class="card-header-row">
+                        <div class="card-title">
+                            <i class="fa-solid fa-vial-circle-check"></i>
+                            <h3>Live CRUD Transaction Rollback Verifier</h3>
+                        </div>
+                        <div class="card-badges">
+                            @if (LiveCrudExecutionSuccess === true) {
+                                <span class="badge badge-success">
+                                    <i class="fa-solid fa-check"></i>
+                                    Zero-Residue Rollback Verified ({{ LiveCrudDurationMs }}ms)
+                                </span>
+                            } @else if (LiveCrudExecutionSuccess === false) {
+                                <span class="badge badge-error">
+                                    <i class="fa-solid fa-xmark"></i>
+                                    Verification Failed
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <p class="card-description">
+                        Executes a full lifecycle test (Create &rarr; Read &rarr; Update &rarr; Delete) within an isolated SQL transaction that is explicitly rolled back. Guarantees zero residual test rows in the production database.
+                    </p>
+
+                    <!-- Interactive Step Progress Waterfall -->
+                    <div class="crud-steps-waterfall">
+                        @for (step of LiveCrudSteps; track step.name) {
+                            <div class="step-card" [class]="'step-' + step.status">
+                                <div class="step-icon">
+                                    @switch (step.status) {
+                                        @case ('pending') { <i class="fa-regular fa-circle"></i> }
+                                        @case ('running') { <i class="fa-solid fa-spinner fa-spin"></i> }
+                                        @case ('success') { <i class="fa-solid fa-circle-check"></i> }
+                                        @case ('failed') { <i class="fa-solid fa-circle-xmark"></i> }
+                                    }
+                                </div>
+                                <div class="step-content">
+                                    <span class="step-name">{{ step.name }}</span>
+                                    @if (step.durationMs !== undefined) {
+                                        <span class="step-duration">{{ step.durationMs }}ms</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (LiveTestError) {
+                        <div class="step-error-box">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span>{{ LiveTestError }}</span>
+                        </div>
+                    }
+                </div>
+
+                <!-- 7-Probe Live Signal Matrix -->
+                <div class="section-title-row">
+                    <h3>Registered Live Probes Matrix</h3>
+                    <span class="count-tag">{{ HealthReport?.signals?.length ?? 0 }} Registered</span>
+                </div>
+
+                <div class="probes-grid">
+                    @for (signal of HealthReport?.signals ?? []; track signal.code) {
+                        <div
+                            class="probe-card"
+                            [class]="'probe-' + signal.status.toLowerCase()"
+                            [class.selected]="SelectedProbeCode === signal.code"
+                        >
+                            <div class="probe-header" (click)="SelectProbe(signal.code)">
+                                <div class="probe-status-indicator">
+                                    <span class="indicator-dot"></span>
+                                    <span class="probe-title">{{ signal.title }}</span>
+                                </div>
+                                <div class="probe-meta-badges">
+                                    <span class="tag-badge layer-tag">{{ signal.layer }}</span>
+                                    <span class="tag-badge duration-tag">{{ signal.durationMs.toFixed(1) }}ms</span>
+                                </div>
+                            </div>
+
+                            <p class="probe-summary">{{ signal.summary }}</p>
+
+                            <!-- Mini Sparkline for this probe -->
+                            <div class="probe-sparkline-row">
+                                <span class="sparkline-label">24h Latency:</span>
+                                <svg class="probe-mini-sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+                                    <polyline
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        [attr.points]="GetSparklinePointsForSignal(signal.code)"
+                                    />
+                                </svg>
+                            </div>
+
+                            <!-- Expandable Diagnostics / Remediation Playbook -->
+                            <div class="probe-footer">
+                                <button
+                                    type="button"
+                                    class="expand-toggle-btn"
+                                    (click)="ToggleProbeExpanded(signal.code)"
+                                >
+                                    <i class="fa-solid" [class.fa-chevron-down]="!ExpandedProbeCodes.has(signal.code)" [class.fa-chevron-up]="ExpandedProbeCodes.has(signal.code)"></i>
+                                    {{ ExpandedProbeCodes.has(signal.code) ? 'Hide Diagnostics' : 'Inspect Diagnostics' }}
+                                </button>
+                            </div>
+
+                            @if (ExpandedProbeCodes.has(signal.code)) {
+                                <div class="probe-expanded-details">
+                                    <div class="detail-block">
+                                        <span class="detail-label">Signal Code:</span>
+                                        <code>{{ signal.code }}</code>
+                                    </div>
+                                    <div class="detail-block">
+                                        <span class="detail-label">Owner App:</span>
+                                        <span>{{ signal.ownerApp }}</span>
+                                    </div>
+                                    <div class="detail-block">
+                                        <span class="detail-label">Observed Metrics:</span>
+                                        <pre class="json-code-block">{{ signal.observedMetricsJson }}</pre>
+                                    </div>
+
+                                    @if (signal.activePlaybook) {
+                                        <div class="playbook-box">
+                                            <div class="playbook-header">
+                                                <i class="fa-solid fa-robot"></i>
+                                                <strong>Remediation Playbook:</strong>
+                                            </div>
+                                            <p class="playbook-instruction">{{ signal.activePlaybook.agentInstructions }}</p>
+                                            <div class="playbook-criteria">
+                                                <span class="crit-label">Escalation Criteria:</span>
+                                                <span>{{ signal.activePlaybook.humanEscalationCriteria }}</span>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (signal.diagnosticError) {
+                                        <div class="probe-diagnostic-error">
+                                            <i class="fa-solid fa-bug"></i>
+                                            <span>{{ signal.diagnosticError }}</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: INSTANCE TELEMETRY & AI TOKEN VELOCITY -->
+        <!-- ================================================================= -->
+        @if (ActiveTab === 'telemetry') {
+            <section class="observatory-section">
+                <!-- KPI Grid -->
+                <div class="telemetry-kpi-grid">
+                    @for (agg of CategoryAggregates; track agg.category) {
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <span class="kpi-category">{{ agg.category }}</span>
+                                <span class="kpi-count">{{ agg.eventCount }} events</span>
+                            </div>
+                            <div class="kpi-metrics-row">
+                                <div class="metric-item">
+                                    <span class="metric-label">Avg</span>
+                                    <span class="metric-val">{{ agg.avgElapsedMs.toFixed(1) }}ms</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">P50</span>
+                                    <span class="metric-val">{{ agg.p50ElapsedMs.toFixed(1) }}ms</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">P95</span>
+                                    <span class="metric-val">{{ agg.p95ElapsedMs.toFixed(1) }}ms</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Errors</span>
+                                    <span class="metric-val" [class.has-errors]="agg.errorCount > 0">{{ agg.errorCount }}</span>
+                                </div>
+                            </div>
+
+                            @if (agg.category === 'AI' || agg.totalInputTokens > 0 || agg.totalOutputTokens > 0) {
+                                <div class="ai-token-velocity-pill">
+                                    <i class="fa-solid fa-microchip"></i>
+                                    <span>Tokens: {{ agg.totalInputTokens.toLocaleString() }} in / {{ agg.totalOutputTokens.toLocaleString() }} out</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- 24-Hour Minute-Bucket SVG Time-Series Charts -->
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <i class="fa-solid fa-chart-area"></i>
+                            <h4>Request Volume (24h Minute Buckets)</h4>
+                        </div>
+                        <div class="svg-chart-container">
+                            <svg class="time-series-svg" viewBox="0 0 600 120" preserveAspectRatio="none">
+                                <path [attr.d]="VolumeChartAreaPath" class="chart-area-fill" />
+                                <polyline [attr.points]="VolumeChartPoints" class="chart-line-stroke" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <i class="fa-solid fa-wave-square"></i>
+                            <h4>Average Duration & Latency (ms)</h4>
+                        </div>
+                        <div class="svg-chart-container">
+                            <svg class="time-series-svg" viewBox="0 0 600 120" preserveAspectRatio="none">
+                                <polyline [attr.points]="DurationChartPoints" class="chart-latency-stroke" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feature Usage Routes (Scrubbed by RouteScrubber) -->
+                @if (MinuteSeries?.featureUsageBuckets && MinuteSeries!.featureUsageBuckets.length > 0) {
+                    <div class="feature-usage-panel">
+                        <div class="chart-header">
+                            <i class="fa-solid fa-route"></i>
+                            <h4>Active Feature Routes (PII-Scrubbed)</h4>
+                        </div>
+                        <div class="route-pills-container">
+                            @for (route of MinuteSeries!.featureUsageBuckets; track route.routeTemplate) {
+                                <div class="route-pill">
+                                    <span class="route-app">{{ route.applicationName }}</span>
+                                    <span class="route-template">{{ route.routeTemplate }}</span>
+                                    <span class="route-count">{{ route.count }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Live Ring-Buffer Event Stream & Flame Waterfall -->
+                <div class="events-waterfall-card">
+                    <div class="waterfall-header">
+                        <div class="waterfall-title">
+                            <i class="fa-solid fa-fire"></i>
+                            <h4>Live Ring-Buffer Events & Waterfall ({{ FilteredEvents.length }} Events)</h4>
+                        </div>
+                        <div class="waterfall-search">
+                            <input
+                                type="text"
+                                class="mj-text-input event-search-input"
+                                placeholder="Search operations, categories, users..."
+                                [value]="EventSearchTerm"
+                                (input)="OnEventSearchChange($any($event.target).value)"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="events-table-wrapper">
+                        <table class="events-table">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Operation</th>
+                                    <th>Category</th>
+                                    <th>Latency / Flame</th>
+                                    <th>User</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (event of FilteredEvents; track event.id) {
+                                    <tr class="event-row">
+                                        <td class="status-cell">
+                                            @if (event.success) {
+                                                <i class="fa-solid fa-circle-check text-success"></i>
+                                            } @else {
+                                                <i class="fa-solid fa-circle-xmark text-danger" [title]="event.errorMessage ?? 'Error'"></i>
+                                            }
+                                        </td>
+                                        <td class="op-cell">
+                                            <span class="op-name">{{ event.operation }}</span>
+                                        </td>
+                                        <td class="category-cell">
+                                            <span class="tag-badge">{{ event.category }}</span>
+                                        </td>
+                                        <td class="flame-cell">
+                                            <div class="flame-bar-container">
+                                                <div
+                                                    class="flame-bar"
+                                                    [style.width.%]="CalculateFlameBarPercent(event.elapsedMs)"
+                                                ></div>
+                                                <span class="flame-elapsed">{{ event.elapsedMs?.toFixed(1) ?? '0' }}ms</span>
+                                            </div>
+                                        </td>
+                                        <td class="user-cell">
+                                            <span>{{ event.userId ?? '-' }}</span>
+                                        </td>
+                                        <td class="details-cell">
+                                            <button
+                                                type="button"
+                                                class="view-json-btn"
+                                                (click)="ToggleProbeExpanded(event.id)"
+                                            >
+                                                {{ ExpandedProbeCodes.has(event.id) ? 'Hide' : 'Params' }}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    @if (ExpandedProbeCodes.has(event.id)) {
+                                        <tr class="event-details-row">
+                                            <td colspan="6">
+                                                <pre class="event-params-block">{{ event.paramsJson }}</pre>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        }
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: OPENTELEMETRY SPINE STATUS -->
+        <!-- ================================================================= -->
+        @if (ActiveTab === 'otel') {
+            <section class="observatory-section">
+                <div class="otel-panel-card">
+                    <div class="card-header-row">
+                        <div class="card-title">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                            <h3>OpenTelemetry SDK Spine Status</h3>
+                        </div>
+                        <div class="card-badges">
+                            @if (OtelStatus?.enabled) {
+                                <span class="badge badge-success">
+                                    <i class="fa-solid fa-circle-dot"></i>
+                                    Spine Active
+                                </span>
+                            } @else {
+                                <span class="badge badge-warning">
+                                    <i class="fa-solid fa-circle-pause"></i>
+                                    Spine Disabled (Local Ring Buffer Active)
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="otel-properties-grid">
+                        <div class="prop-item">
+                            <span class="prop-label">Service Name:</span>
+                            <span class="prop-val">{{ OtelStatus?.serviceName ?? 'memberjunction' }}</span>
+                        </div>
+                        <div class="prop-item">
+                            <span class="prop-label">Service Version:</span>
+                            <span class="prop-val">{{ OtelStatus?.serviceVersion ?? '6.3.0' }}</span>
+                        </div>
+                        <div class="prop-item">
+                            <span class="prop-label">Environment:</span>
+                            <span class="prop-val">{{ OtelStatus?.environment ?? 'production' }}</span>
+                        </div>
+                        <div class="prop-item">
+                            <span class="prop-label">Database Platform:</span>
+                            <span class="prop-val">{{ OtelStatus?.databasePlatform ?? 'sqlserver' }}</span>
+                        </div>
+                        <div class="prop-item">
+                            <span class="prop-label">Sampling Ratio:</span>
+                            <span class="prop-val">{{ ((OtelStatus?.samplingRatio ?? 1.0) * 100).toFixed(0) }}%</span>
+                        </div>
+                        <div class="prop-item">
+                            <span class="prop-label">W3C Trace Context:</span>
+                            <span class="prop-val text-success">
+                                <i class="fa-solid fa-check"></i>
+                                Enabled (traceparent / tracestate propagation)
+                            </span>
+                        </div>
+                        <div class="prop-item full-width">
+                            <span class="prop-label">OTLP Exporter Endpoint:</span>
+                            <code>{{ OtelStatus?.otlpEndpoint || 'Not configured (using in-process memory ring-buffer)' }}</code>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: ZERO-TRUST SHARE LAYER PREVIEW -->
+        <!-- ================================================================= -->
+        @if (ActiveTab === 'share-layer') {
+            <section class="observatory-section">
+                <div class="share-layer-card">
+                    <div class="card-header-row">
+                        <div class="card-title">
+                            <i class="fa-solid fa-shield-cat"></i>
+                            <h3>Opt-In Zero-Trust Share Layer Inspector</h3>
+                        </div>
+                        <div class="card-badges">
+                            @if (SharePreview?.allowlistCompliant) {
+                                <span class="badge badge-success">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    TelemetrySchemaDsl 100% Compliant
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <p class="card-description">
+                        MemberJunction utilizes strict opt-in telemetry sharing. Payloads are scrubbed with cryptographic HMAC hashing, evaluated against strict JSON schema allowlists, and contain only completed day rollups.
+                    </p>
+
+                    <!-- Consent Tier Selector -->
+                    <div class="tier-selector-row">
+                        <label class="action-label">Consent Tier:</label>
+                        <select
+                            class="mj-select-input"
+                            [value]="ShareTier"
+                            (change)="OnShareTierChange($any($event.target).value)"
+                        >
+                            <option value="HealthOnly">Tier 1: Heartbeat Pulse (Health Only)</option>
+                            <option value="HealthAndAggregatedUsage">Tier 2: Operational Rollup (Health + Usage)</option>
+                            <option value="DiagnosticWithErrors">Tier 3: Diagnostic Bundle (Errors & Insights)</option>
+                        </select>
+                    </div>
+
+                    <!-- Cryptographic Proof Badges -->
+                    <div class="proof-badges-row">
+                        <div class="proof-card">
+                            <i class="fa-solid fa-fingerprint"></i>
+                            <div>
+                                <span class="proof-title">Payload HMAC Digest:</span>
+                                <code>{{ SharePreview?.payloadHashHex ?? 'Pending' }}</code>
+                            </div>
+                        </div>
+                        <div class="proof-card">
+                            <i class="fa-solid fa-calendar-check"></i>
+                            <div>
+                                <span class="proof-title">Boundary Rule:</span>
+                                <span>CompletedDaysOnly (Zero Intraday Bleed)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- JSON Payload Viewer -->
+                    <div class="payload-preview-box">
+                        <div class="payload-header">
+                            <span>Pre-Flight Transmission Payload Preview</span>
+                            <button mjButton variant="secondary" size="sm" (click)="CopySharePayload()">
+                                <i class="fa-regular fa-copy"></i>
+                                Copy JSON
+                            </button>
+                        </div>
+                        @if (CopyFeedbackMessage) {
+                            <div class="copy-feedback-toast">{{ CopyFeedbackMessage }}</div>
+                        }
+                        <pre class="payload-code-block">{{ SharePreview?.payloadJson }}</pre>
+                    </div>
+                </div>
+            </section>
+        }
+    </mj-page-body>
+</mj-page-layout>

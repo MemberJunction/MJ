@@ -61,6 +61,16 @@ export interface FinishAssemblyInput {
     FileID: string | null;
 }
 
+/** Input to {@link IRealtimeRecordingLedger.StampFile}. An omitted field is left as stored. */
+export interface StampFileInput {
+    /** The recording's `MJ: Files` id. */
+    fileID?: string;
+    /** The recording's media kind. */
+    media?: 'Audio' | 'AudioVideo' | 'None';
+    /** The recording's t0 (`RecordingStartedAt`). */
+    startedAt?: Date;
+}
+
 /** A stored shard's position, without its bytes. */
 export interface LedgerShardMetadata {
     Index: number;
@@ -94,6 +104,12 @@ export interface IRealtimeRecordingLedger {
      * Returns false when a newer claim superseded this one.
      */
     StampAssemblyGaps(sessionID: string, version: number, gaps: RecordingGap[]): Promise<boolean>;
+    /**
+     * Writes the session's recording file id, media kind and t0 through the stamp proc. These columns are
+     * owned by the ledger procs and are not updatable through an entity save (#6010). An omitted field is
+     * left as stored. Returns the session's `RecordingStatus` after the write.
+     */
+    StampFile(sessionID: string, file: StampFileInput): Promise<{ RecordingStatus: string | null }>;
     /** Every stored shard of the session, in index order. */
     LoadShards(sessionID: string): Promise<LedgerShard[]>;
     /** Every stored shard's position, in index order, without the bytes (cheap pre-checks). */
@@ -109,6 +125,7 @@ export interface IRealtimeRecordingLedger {
 const SHARD_ENTITY = 'MJ: AI Agent Session Recording Shards';
 const SP_RECORD_SHARD = 'spRecordAIAgentSessionRecordingShard';
 const SP_STAMP_TERMINAL = 'spStampAIAgentSessionRecordingTerminal';
+const SP_STAMP_FILE = 'spStampAIAgentSessionRecordingFile';
 const SP_CLAIM = 'spClaimAIAgentSessionRecordingAssembly';
 const SP_FINISH = 'spFinishAIAgentSessionRecordingAssembly';
 const SP_DELETE = 'spDeleteAIAgentSessionRecordingShards';
@@ -176,6 +193,23 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
             throw new Error(`${SP_STAMP_TERMINAL} returned unknown outcome '${row.Outcome}' for session ${sessionID}`);
         }
         return { Outcome: outcome, RecordingStatus: row.RecordingStatus ?? null };
+    }
+
+    public async StampFile(sessionID: string, file: StampFileInput): Promise<{ RecordingStatus: string | null }> {
+        assertSessionID(sessionID);
+        const { fileID, media, startedAt } = file;
+        if (fileID !== undefined && !IsValidUUID(fileID)) {
+            throw new Error(`recording ledger: invalid file id '${fileID}' for session ${sessionID}`);
+        }
+        if (startedAt !== undefined && (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime()))) {
+            throw new Error(`recording ledger: startedAt must be a valid Date for session ${sessionID}`);
+        }
+        if (fileID === undefined && media === undefined && startedAt === undefined) {
+            throw new Error(`recording ledger: StampFile for session ${sessionID} needs at least one of fileID, media, startedAt`);
+        }
+        const row = await this.callForOneRow<{ RecordingStatus: string | null }>(
+            SP_STAMP_FILE, sessionID, [sessionID, fileID ?? null, media ?? null, startedAt ?? null]);
+        return { RecordingStatus: row.RecordingStatus ?? null };
     }
 
     public async ClaimAssembly(sessionID: string, staleBefore: Date | null): Promise<number | null> {

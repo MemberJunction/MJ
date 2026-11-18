@@ -5,7 +5,7 @@
  * `POST /widget/session`, which verifies it against the host's registered public key
  * and folds the host-provided identity into the minted guest claims. The minted token
  * is still validated by the same `magic-link` AuthProviderFactory path + synthesized by
- * `buildMagicLinkSessionUser` — host-identity is a MINT-TIME strategy, not a second
+ * `BuildMagicLinkSessionUser` — host-identity is a MINT-TIME strategy, not a second
  * session-validation provider (it converges on the one pathway, per D1).
  *
  * Pure + unit-testable: verification takes the PEM as an argument.

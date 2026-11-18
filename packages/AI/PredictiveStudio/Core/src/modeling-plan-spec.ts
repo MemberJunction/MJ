@@ -10,14 +10,22 @@
  * {@link LeaderboardEntry} shape used to rank experiment iterations.
  */
 
+import type { ValidationStrategy } from './pipeline-spec';
+
 /**
  * Explicit resource budget for an experiment session — the bounded-autonomy
  * guardrail (plan §8.4). Enforced by Record Set Processing's budget gate within
  * each wave and re-checked by the orchestrator between waves.
  */
 export interface Budget {
-  /** Max total compute cost the session may spend. */
+  /** Max total compute cost the session may spend, in USD. */
   MaxComputeCost?: number;
+  /**
+   * Max total compute seconds the session's training attempts may spend, failed attempts included. Set by a caller's
+   * budget override or by the bound Evaluation Protocol's `budgets.maxComputeSeconds` (the smaller wins); a plan's
+   * `ProposedBudget` does not carry it.
+   */
+  MaxComputeSeconds?: number;
   /** Max number of training runs/iterations the session may execute. */
   MaxRuns?: number;
   /** Max wall-clock minutes the session may run. */
@@ -77,7 +85,7 @@ export interface ModelingPlanSpec {
     Priority: number;
   }>;
   /** Validation strategy for the search. */
-  ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+  ValidationStrategy: ValidationStrategy;
   /** Proposed resource budget for the experiment session. */
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
   /** User approval gate — execution does not begin until this is true. */
@@ -87,13 +95,13 @@ export interface ModelingPlanSpec {
 }
 
 /** The allowed kinds for candidate features proposed by the Data Scout. */
-export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 /** Structured warning emitted when a candidate feature cannot be mapped to a training pipeline step. */
 export interface FeatureStepWarning {
   /** The name of the candidate feature that was dropped or could not be mapped. */
   FeatureName: string;
-  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived'). */
+  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived'). */
   Kind: CandidateFeatureKind | (string & {});
   /** Explanatory reason why the feature was dropped or requires upstream handling. */
   Reason: string;

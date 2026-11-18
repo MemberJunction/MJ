@@ -371,7 +371,6 @@ export function LoadRepo(parentDir: string, dirName: string, options?: LoadRepoO
   const apps = appGlobs.length > 0 ? loadRepoPackages(repoPath, appGlobs) : { Packages: [], UnsupportedGlobs: [] };
   const seen = new Set(enumerated.Packages.map((p) => p.RelPath));
   const packages = [...enumerated.Packages, ...apps.Packages.filter((p) => !seen.has(p.RelPath))];
-  const turboPath = path.join(repoPath, 'turbo.json');
   return {
     Name: dirName,
     Path: repoPath,
@@ -381,7 +380,6 @@ export function LoadRepo(parentDir: string, dirName: string, options?: LoadRepoO
     UnsupportedGlobs: [...enumerated.UnsupportedGlobs, ...apps.UnsupportedGlobs],
     ...(appGlobs.length > 0 ? { AppGlobs: appGlobs } : {}),
     Lockfile: ReadMemberLockfile(repoPath),
-    TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
     ...readMjApp(repoPath),
     WorkspaceGlobs: workspaceGlobs.Globs,
     WorkspaceGlobsSource: workspaceGlobs.Source,
