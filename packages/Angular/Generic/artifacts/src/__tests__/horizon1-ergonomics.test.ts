@@ -237,11 +237,11 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
-      // Unpin 'theme' and pin 'presenter'
-      comp.TogglePinToolbarAction('theme');
+      // Unpin 'add-slide' and pin 'presenter'
+      comp.TogglePinToolbarAction('add-slide');
       comp.TogglePinToolbarAction('presenter');
       expect(comp.PinnedToolbarActions).toContain('presenter');
-      expect(comp.PinnedToolbarActions).not.toContain('theme');
+      expect(comp.PinnedToolbarActions).not.toContain('add-slide');
       expect(setSettingSpy).toHaveBeenCalledWith(
         SLIDES_TOOLBAR_PINS_SETTING_KEY,
         expect.stringContaining('presenter'),
@@ -249,6 +249,14 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
       comp.ResetToolbarPreferences();
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
+
+      // Slides Cmd+K command palette opens cleanly and exposes layouts, themes & present actions
+      comp.OpenCommandPalette();
+      expect(comp.ShowCommandPalette).toBe(true);
+      expect(comp.SlidesCommandPaletteItems.some((c) => c.Id === 'layout:KpiStrip')).toBe(true);
+      expect(comp.SlidesCommandPaletteItems.some((c) => c.Id === 'theme:executive-slate')).toBe(true);
+      comp.ExecuteSlidePaletteCommand('layout:KpiStrip');
+      expect(comp.ActiveSlide.Layout).toBe('KpiStrip');
 
       getSettingSpy.mockRestore();
       setSettingSpy.mockRestore();
@@ -268,9 +276,13 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS]);
-      // Already at max (6), pinning another should not exceed 6
+      // Starts with 2 calm defaults; fill up to MaxPinnedToolbarActions (4), then verify 5th is capped
+      comp.TogglePinToolbarAction('bold');
+      comp.TogglePinToolbarAction('freeze-header');
+      expect(comp.PinnedToolbarActions.length).toBe(comp.MaxPinnedToolbarActions);
       comp.TogglePinToolbarAction('export-xlsx');
       expect(comp.PinnedToolbarActions.length).toBe(comp.MaxPinnedToolbarActions);
+      expect(comp.PinnedToolbarActions).not.toContain('export-xlsx');
 
       comp.TogglePinToolbarAction('add-chart');
       comp.TogglePinToolbarAction('export-xlsx');
@@ -279,6 +291,12 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
         SHEETS_TOOLBAR_PINS_SETTING_KEY,
         expect.stringContaining('export-xlsx'),
       );
+
+      // Sheets Cmd+K command palette opens cleanly and exposes Freeze/Protect actions
+      comp.OpenCommandPalette();
+      expect(comp.ShowCommandPalette).toBe(true);
+      expect(comp.SheetsCommandPaletteItems.some((c) => c.Id === 'freeze-top-row')).toBe(true);
+      expect(comp.SheetsCommandPaletteItems.some((c) => c.Id === 'toggle-protect')).toBe(true);
 
       comp.ngOnDestroy();
     });

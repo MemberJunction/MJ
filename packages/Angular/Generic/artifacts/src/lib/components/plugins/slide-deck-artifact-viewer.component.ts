@@ -92,6 +92,7 @@ import {
 } from '../../services/slide-deck-export.service';
 import { EscapeHtml } from '../previews/office-preview.logic';
 import type { ContextMenuItem } from '../context-menu/context-menu.types';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 import {
   ComputeElementContextMenuAnchor,
   IsKeyboardContextMenuShortcut,
@@ -208,10 +209,6 @@ export type SlidesToolbarItemKey =
 export const DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS: readonly SlidesToolbarItemKey[] = [
   'present',
   'add-slide',
-  'duplicate-slide',
-  'delete-slide',
-  'theme',
-  'export-pptx',
 ];
 
 export interface ResolvedSlidesToolbarItem {
@@ -347,64 +344,43 @@ export interface ResolvedSlidesToolbarItem {
                 }
               </button>
             }
-
-            <label class="mj-slides-inline-select-label">
-              <span>Layout:</span>
-              <select
-                class="mj-slides-select"
-                [ngModel]="ActiveSlide.Layout"
-                (ngModelChange)="OnChangeActiveSlideLayout($event)"
-                [disabled]="!CanEditSlideElements"
-                data-testid="slide-layout-select"
-              >
-                @for (layoutMeta of LayoutCatalog; track layoutMeta.Kind) {
-                  <option [value]="layoutMeta.Kind">{{ layoutMeta.Label }}</option>
-                }
-              </select>
-            </label>
-
-            <label class="mj-slides-inline-select-label" title="Slide transition in Present mode">
-              <span>Motion:</span>
-              <select
-                class="mj-slides-select"
-                [ngModel]="ActiveSlide.Transition || 'fade'"
-                (ngModelChange)="OnChangeActiveSlideTransition($event)"
-                [disabled]="!CanEditSlideElements"
-                data-testid="slide-transition-select"
-              >
-                <option value="none">None</option>
-                <option value="fade">Fade</option>
-                <option value="slide">Slide</option>
-                <option value="zoom">Zoom</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              class="mj-slides-tool-btn mj-slides-polish-btn"
-              (click)="OnPolishActiveSlide()"
-              [disabled]="!CanEditSlideElements"
-              title="Auto-polish typography, KPI cards, and progressive reveal steps on this slide"
-              data-testid="polish-slide-btn"
-            >
-              <i class="fa-solid fa-sparkles"></i>
-              <span>Polish</span>
-            </button>
           </div>
         }
 
-        <!-- Right-side Collaboration, Export & Comments Controls -->
-        <div class="mj-slides-toolbar-group">
+        <!-- Right-side Calm Status, Presence, AI, ⌘K, Comments & Overflow -->
+        <div class="mj-slides-toolbar-group mj-slides-toolbar-right">
+          @if (IsEditable) {
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.primary]="HasUnsavedChanges"
+              [class.mj-slides-save-quiet]="!HasUnsavedChanges"
+              (click)="OnSaveVersionCheckpoint()"
+              [disabled]="IsSavingVersion || !HasUnsavedChanges"
+              [title]="IsSavingVersion ? 'Saving checkpoint...' : (HasUnsavedChanges ? 'Save changes as a new version' : 'All changes synced — no unsaved changes')"
+              data-testid="save-slide-version-btn"
+            >
+              @if (IsSavingVersion) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              } @else if (HasUnsavedChanges) {
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              } @else {
+                <span class="mj-slides-saved-dot" aria-hidden="true"></span>
+              }
+              <span>{{ IsSavingVersion ? 'Saving…' : (!HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : (HasUnsavedChanges ? 'Save v' + (LastSavedVersionNumber || CurrentVersionNumber) : 'Saved')) }}</span>
+            </button>
+          }
+
           <div
-            class="mj-slides-collab-pill"
+            class="mj-slides-collab-pill mj-slides-collab-pill--compact"
             [attr.data-status]="ConnectionStatus"
+            [title]="GetCollaborationStatusLabel()"
             data-testid="slides-collab-status"
           >
             <span class="mj-slides-status-dot"></span>
-            <span>{{ GetCollaborationStatusLabel() }}</span>
             @if (IsWaitingForInitialCollabSync) {
               <span class="mj-slides-syncing-pill" data-testid="slides-initial-sync-badge">
-                <i class="fa-solid fa-spinner fa-spin"></i> Syncing…
+                <i class="fa-solid fa-spinner fa-spin"></i>
               </span>
             }
             @if (ConnectionStatus === 'error') {
@@ -420,16 +396,18 @@ export interface ResolvedSlidesToolbarItem {
             }
           </div>
 
-          <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
-            @for (peer of HumanCollaborators; track peer.ClientID) {
-              <span
-                class="mj-slides-peer-avatar"
-                [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
-              >
-                {{ GetInitials(peer.Name) }}
-              </span>
-            }
-          </div>
+          @if (HumanCollaborators.length > 0) {
+            <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
+              @for (peer of HumanCollaborators; track peer.ClientID) {
+                <span
+                  class="mj-slides-peer-avatar"
+                  [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
+                >
+                  {{ GetInitials(peer.Name) }}
+                </span>
+              }
+            </div>
+          }
           <mj-artifact-agent-presence-bar
             [Collaborators]="Collaborators"
             ActiveDomain="slides"
@@ -453,57 +431,16 @@ export interface ResolvedSlidesToolbarItem {
             </button>
           }
 
-          @if (IsEditable && WorkspaceMode === 'edit') {
+          @if (IsEditable && WorkspaceMode === 'edit' && IsAiAssistantEnabled) {
             <button
               type="button"
-              class="mj-slides-tool-btn"
-              [class.active]="!!ActiveSlide.Locked"
-              [disabled]="!CanToggleCurrentSlideLock"
-              (click)="ToggleCurrentSlideLock()"
-              [title]="ActiveSlide.Locked ? (ActiveSlide.AllowEditors ? 'Locked to collaborators with edit rights (click to unlock)' : 'Locked to owner-only (click to unlock)') : 'Lock current slide'"
-              data-testid="slides-lock-slide-quick-btn"
+              class="mj-slides-tool-btn mj-slides-ai-pill"
+              (click)="OpenAskAiForPresentation()"
+              title="Ask AI about this presentation (/ai)"
+              data-testid="slides-ask-ai-quick-btn"
             >
-              <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
-              <span>{{ ActiveSlide.Locked ? 'Locked' : 'Lock' }}</span>
-            </button>
-            @if (ActiveSlide.Locked && CanToggleCurrentSlideLock) {
-              <button
-                type="button"
-                class="mj-slides-tool-btn"
-                [class.active]="!!ActiveSlide.AllowEditors"
-                (click)="ToggleCurrentSlideLockScope()"
-                [title]="ActiveSlide.AllowEditors ? 'Switch lock to Owner-only' : 'Allow other editors to edit this locked slide'"
-                data-testid="slides-lock-slide-scope-btn"
-              >
-                <i class="fa-solid" [ngClass]="ActiveSlide.AllowEditors ? 'fa-users' : 'fa-user-shield'"></i>
-                <span>{{ ActiveSlide.AllowEditors ? 'Editors OK' : 'Owner Only' }}</span>
-              </button>
-            }
-            @if (IsAiAssistantEnabled) {
-              <button
-                type="button"
-                class="mj-slides-tool-btn primary"
-                (click)="OpenAskAiForPresentation()"
-                title="Open slide-in AI Assistant for this slide"
-                data-testid="slides-ask-ai-quick-btn"
-              >
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Ask AI</span>
-              </button>
-            }
-          }
-
-          @if (IsEditable) {
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              (click)="OnSaveVersionCheckpoint()"
-              [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="IsSavingVersion ? 'Saving checkpoint...' : (HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save')"
-              data-testid="save-slide-version-btn"
-            >
-              <i class="fa-solid" [ngClass]="IsSavingVersion ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'"></i>
-              <span>{{ IsSavingVersion ? 'Saving…' : (!HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save v' + (LastSavedVersionNumber || CurrentVersionNumber)) }}</span>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI</span>
             </button>
           }
 
@@ -512,10 +449,23 @@ export interface ResolvedSlidesToolbarItem {
             class="mj-slides-tool-btn"
             [class.active]="RightDrawerTab === 'comments'"
             (click)="ToggleRightDrawer('comments')"
+            [title]="'Comments (' + OpenThreadCount + ')'"
             data-testid="toggle-slide-comments-btn"
           >
             <i class="fa-regular fa-comments"></i>
-            <span>Comments ({{ OpenThreadCount }})</span>
+            @if (OpenThreadCount > 0) {
+              <span class="mj-slides-count-badge">{{ OpenThreadCount }}</span>
+            }
+          </button>
+
+          <button
+            type="button"
+            class="mj-slides-tool-btn mj-slides-cmdk-btn"
+            (click)="OpenCommandPalette()"
+            title="Search all slide actions, layouts, themes & exports (Cmd/Ctrl+K)"
+            data-testid="slides-cmdk-btn"
+          >
+            <span class="mj-slides-kbd-tag">⌘K</span>
           </button>
 
           <div class="mj-slides-more-anchor" #moreToolsAnchor>
@@ -1602,6 +1552,131 @@ export interface ResolvedSlidesToolbarItem {
                     ></textarea>
                   </div>
                 }
+
+                <!-- Option A Contextual Floating Slide Design Pill (keeps Row 1 calm while putting Layout/Theme/Motion/Lock/Polish inline) -->
+                @if (WorkspaceMode === 'edit' && IsEditable && !IsPresentationActive) {
+                  <div class="mj-slides-floating-design-wrap">
+                    @if (ShowDesignPopover) {
+                      <div class="mj-slides-design-popover" data-testid="slides-design-popover">
+                        <div class="mj-slides-design-popover-head">
+                          <span>Layout &amp; Theme Preset</span>
+                          <button
+                            type="button"
+                            class="mj-slides-icon-btn"
+                            aria-label="Close design popover"
+                            (click)="ShowDesignPopover = false"
+                          >
+                            <i class="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                        <div class="mj-slides-design-grid">
+                          @for (layoutMeta of LayoutCatalog; track layoutMeta.Kind) {
+                            <button
+                              type="button"
+                              class="mj-slides-design-chip"
+                              [class.active]="ActiveSlide.Layout === layoutMeta.Kind"
+                              [disabled]="!CanEditSlideElements"
+                              [title]="layoutMeta.Description"
+                              [attr.data-testid]="'slide-layout-opt-' + layoutMeta.Kind"
+                              (click)="OnChangeActiveSlideLayout(layoutMeta.Kind); ShowDesignPopover = false"
+                            >
+                              {{ layoutMeta.Label }}
+                            </button>
+                          }
+                        </div>
+                        <div class="mj-slides-design-section-label">Theme Presets</div>
+                        <div class="mj-slides-design-swatches">
+                          @for (preset of ThemePresets; track preset.ThemeID) {
+                            <button
+                              type="button"
+                              class="mj-slides-design-swatch"
+                              [class.active]="Deck.Theme.ThemeID === preset.ThemeID"
+                              [title]="preset.ThemeID"
+                              [attr.data-testid]="'slide-theme-swatch-' + preset.ThemeID"
+                              (click)="OnSelectThemePreset(preset.ThemeID)"
+                            >
+                              <span
+                                class="mj-slides-swatch-dot"
+                                [style.background]="preset.PrimaryColor"
+                              ></span>
+                              <span>{{ preset.ThemeID }}</span>
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <div class="mj-slides-floating-pill" data-testid="slides-floating-design-pill">
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [class.active]="ShowDesignPopover"
+                        [disabled]="!CanEditSlideElements"
+                        (click)="ShowDesignPopover = !ShowDesignPopover"
+                        title="Choose slide layout or theme preset"
+                        data-testid="slides-floating-layout-btn"
+                      >
+                        <i class="fa-solid fa-table-columns"></i>
+                        <span>{{ ActiveSlideLayoutLabel }}</span>
+                        <i class="fa-solid fa-caret-down"></i>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [disabled]="!CanEditSlideElements"
+                        (click)="CycleActiveSlideTransition()"
+                        title="Cycle Present transition (None / Fade / Slide / Zoom)"
+                        data-testid="slides-floating-motion-btn"
+                      >
+                        <i class="fa-solid fa-wand-sparkles"></i>
+                        <span>{{ ActiveSlide.Transition || 'fade' }}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [class.active]="!!ActiveSlide.Locked"
+                        [disabled]="!CanToggleCurrentSlideLock"
+                        (click)="ToggleCurrentSlideLock()"
+                        [title]="ActiveSlide.Locked ? (ActiveSlide.AllowEditors ? 'Locked (editors allowed)' : 'Locked (owner only)') : 'Lock slide'"
+                        data-testid="slides-lock-slide-quick-btn"
+                      >
+                        <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
+                        @if (ActiveSlide.Locked) {
+                          <span>Locked</span>
+                        }
+                      </button>
+
+                      @if (ActiveSlide.Locked && CanToggleCurrentSlideLock) {
+                        <button
+                          type="button"
+                          class="mj-slides-pill-btn"
+                          [class.active]="!!ActiveSlide.AllowEditors"
+                          (click)="ToggleCurrentSlideLockScope()"
+                          [title]="ActiveSlide.AllowEditors ? 'Switch to Owner-only lock' : 'Allow collaborators with edit rights'"
+                          data-testid="slides-lock-slide-scope-btn"
+                        >
+                          <i class="fa-solid" [ngClass]="ActiveSlide.AllowEditors ? 'fa-users' : 'fa-user-shield'"></i>
+                        </button>
+                      }
+
+                      <span class="mj-slides-pill-sep"></span>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn polish"
+                        (click)="OnPolishActiveSlide()"
+                        [disabled]="!CanEditSlideElements"
+                        title="Auto-polish typography, KPI cards, and progressive reveal steps"
+                        data-testid="polish-slide-btn"
+                      >
+                        <i class="fa-solid fa-sparkles"></i>
+                        <span>Polish</span>
+                      </button>
+                    </div>
+                  </div>
+                }
               </div>
 
               <!-- Presenter View Side Cockpit (Next Slide + Speaker Notes + Elapsed Timer) -->
@@ -2241,6 +2316,15 @@ export interface ResolvedSlidesToolbarItem {
         (ItemSelected)="OnSlidesContextMenuCommand($event)"
         (Closed)="CloseContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Slide Deck Commands"
+        Placeholder="Search layouts, themes, transitions, present, export..."
+        [Commands]="SlidesCommandPaletteItems"
+        (Execute)="ExecuteSlidePaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2370,19 +2454,198 @@ export interface ResolvedSlidesToolbarItem {
       }
       .mj-slides-toolbar {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        padding: 8px 14px;
-        background: var(--mj-bg-surface-card);
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-slides-toolbar::-webkit-scrollbar {
+        display: none;
       }
       .mj-slides-toolbar-group {
         display: flex;
         align-items: center;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
+      }
+      .mj-slides-toolbar-right {
+        margin-left: auto;
+      }
+      .mj-slides-save-quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+      }
+      .mj-slides-save-quiet:hover:not(:disabled) {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+      .mj-slides-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+      .mj-slides-ai-pill {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+      .mj-slides-cmdk-btn {
+        padding: 3px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+      .mj-slides-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+      .mj-slides-count-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--mj-brand-primary);
+        color: var(--mj-brand-on-primary);
+      }
+      .mj-slides-collab-pill--compact {
+        padding: 4px 7px;
+      }
+      .mj-slides-floating-design-wrap {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 8px;
+        z-index: var(--mj-z-dropdown, 100);
+      }
+      .mj-slides-floating-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 6px;
+        border-radius: 999px;
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-strong);
+        box-shadow: var(--mj-shadow-lg);
+      }
+      .mj-slides-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 26px;
+        padding: 0 9px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mj-text-primary);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mj-slides-pill-btn:hover:not(:disabled),
+      .mj-slides-pill-btn.active {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-slides-pill-btn.polish {
+        color: var(--mj-text-violet);
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, transparent);
+      }
+      .mj-slides-pill-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .mj-slides-pill-sep {
+        width: 1px;
+        height: 16px;
+        background: var(--mj-border-default);
+        margin: 0 2px;
+      }
+      .mj-slides-design-popover {
+        width: min(380px, 92vw);
+        margin-bottom: 8px;
+        padding: 10px;
+        border-radius: 12px;
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-default);
+        box-shadow: var(--mj-shadow-lg);
+      }
+      .mj-slides-design-popover-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        margin-bottom: 8px;
+      }
+      .mj-slides-design-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+      }
+      .mj-slides-design-chip {
+        padding: 6px 7px;
+        border-radius: 7px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+      }
+      .mj-slides-design-chip.active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+      .mj-slides-design-section-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        margin: 10px 0 6px;
+      }
+      .mj-slides-design-swatches {
+        display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 5px;
+      }
+      .mj-slides-design-swatch {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .mj-slides-design-swatch.active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+      }
+      .mj-slides-swatch-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
       }
 
       .mj-slides-undo-group {
@@ -3697,7 +3960,7 @@ export class SlideDeckArtifactViewerComponent
 
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
 
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
   public ShowMoreToolsMenu = false;
   public DraggingSlideID: string | null = null;
   public DragOverSlideID: string | null = null;
@@ -3740,6 +4003,8 @@ export class SlideDeckArtifactViewerComponent
   public ActiveSlideID = 'slide-1';
   public FocusedRegionID = 'main';
   public WorkspaceMode: SlideWorkspaceMode = 'edit';
+  public ShowCommandPalette = false;
+  public ShowDesignPopover = false;
   public RightDrawerTab: SlideRightDrawerTab = 'none';
   public ShowFilmstrip = true;
   public StatusBannerMessage = '';
@@ -4242,6 +4507,18 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
 
+    const isCmdOrCtrl = event.metaKey || event.ctrlKey;
+    if (isCmdOrCtrl && !event.altKey && event.key.toLowerCase() === 'k') {
+      const targetEl = event.target instanceof HTMLElement ? event.target : null;
+      const hostEl = this.hostElRef?.nativeElement ?? null;
+      if (!hostEl || (targetEl && hostEl.contains(targetEl))) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.OpenCommandPalette();
+      }
+      return;
+    }
+
     if (IsKeyboardContextMenuShortcut(event)) {
       const targetEl = event.target instanceof HTMLElement ? event.target : null;
       const hostEl = this.hostElRef?.nativeElement ?? null;
@@ -4700,6 +4977,150 @@ export class SlideDeckArtifactViewerComponent
   /**
    * Auto-polishes the active slide deterministically (`BeautifySlide`), syncing via Yjs (`Accept #1`).
    */
+  public get ActiveSlideLayoutLabel(): string {
+    const meta = this.LayoutCatalog.find((m) => m.Kind === this.ActiveSlide.Layout);
+    return meta?.Label ?? this.ActiveSlide.Layout;
+  }
+
+  public CycleActiveSlideTransition(): void {
+    const transitions: ReadonlyArray<SlideTransitionKind> = ['none', 'fade', 'slide', 'zoom'];
+    const current = this.ActiveSlide.Transition || 'fade';
+    const next = transitions[(transitions.indexOf(current) + 1) % transitions.length];
+    this.OnChangeActiveSlideTransition(next);
+  }
+
+  public OpenCommandPalette(): void {
+    this.ShowMoreToolsMenu = false;
+    this.ShowDesignPopover = false;
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get SlidesCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'present',
+        Label: 'Present Fullscreen',
+        Category: 'Present',
+        Icon: 'fa-play',
+        Description: 'Start full-screen slide presentation',
+      },
+      {
+        Id: 'presenter',
+        Label: 'Open Presenter View',
+        Category: 'Present',
+        Icon: 'fa-chalkboard-user',
+        Description: 'Speaker notes, next-slide cockpit & timer',
+      },
+      {
+        Id: 'polish-slide',
+        Label: 'Polish Active Slide',
+        Category: 'Design',
+        Icon: 'fa-sparkles',
+        Disabled: !this.CanEditSlideElements,
+        Description: 'Auto-improve spacing, KPI cards, and reveal steps',
+      },
+      {
+        Id: 'toggle-filmstrip',
+        Label: this.ShowFilmstrip ? 'Hide Slide Sorter Filmstrip' : 'Show Slide Sorter Filmstrip',
+        Category: 'View',
+        Icon: 'fa-film',
+      },
+      {
+        Id: 'comments',
+        Label: `Toggle Comments (${this.OpenThreadCount})`,
+        Category: 'Review',
+        Icon: 'fa-comments',
+      },
+      {
+        Id: 'lock-slide',
+        Label: this.ActiveSlide.Locked ? 'Unlock Current Slide' : 'Lock Current Slide',
+        Category: 'Permissions',
+        Icon: this.ActiveSlide.Locked ? 'fa-lock-open' : 'fa-lock',
+        Disabled: !this.CanToggleCurrentSlideLock,
+      },
+    ];
+
+    for (const item of this.AllToolbarItems) {
+      if (!items.some((existing) => existing.Id === `tb:${item.Key}`)) {
+        items.push({
+          Id: `tb:${item.Key}`,
+          Label: item.Label,
+          Category: item.Category,
+          Icon: item.Icon,
+          Description: item.Description,
+          Active: item.Active,
+          Disabled: item.Disabled,
+        });
+      }
+    }
+
+    for (const layoutMeta of this.LayoutCatalog) {
+      items.push({
+        Id: `layout:${layoutMeta.Kind}`,
+        Label: `Layout: ${layoutMeta.Label}`,
+        Category: 'Layout',
+        Icon: 'fa-table-columns',
+        Active: this.ActiveSlide.Layout === layoutMeta.Kind,
+        Disabled: !this.CanEditSlideElements,
+      });
+    }
+
+    for (const preset of this.ThemePresets) {
+      items.push({
+        Id: `theme:${preset.ThemeID}`,
+        Label: `Theme: ${preset.ThemeID}`,
+        Category: 'Theme',
+        Icon: 'fa-palette',
+        Active: this.Deck.Theme.ThemeID === preset.ThemeID,
+        Disabled: !this.IsEditable,
+      });
+    }
+    return items;
+  }
+
+  public ExecuteSlidePaletteCommand(commandId: string): void {
+    if (commandId === 'present') {
+      this.SetWorkspaceMode('present');
+      return;
+    }
+    if (commandId === 'presenter') {
+      this.SetWorkspaceMode('presenter');
+      return;
+    }
+    if (commandId === 'polish-slide') {
+      this.OnPolishActiveSlide();
+      return;
+    }
+    if (commandId === 'toggle-filmstrip') {
+      this.ToggleFilmstrip();
+      return;
+    }
+    if (commandId === 'comments') {
+      this.ToggleRightDrawer('comments');
+      return;
+    }
+    if (commandId === 'lock-slide') {
+      this.ToggleCurrentSlideLock();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as SlidesToolbarItemKey;
+      const found = this.AllToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+      return;
+    }
+    if (commandId.startsWith('layout:')) {
+      this.OnChangeActiveSlideLayout(commandId.slice(7) as SlideLayoutKind);
+      return;
+    }
+    if (commandId.startsWith('theme:')) {
+      this.OnSelectThemePreset(commandId.slice(6));
+    }
+  }
+
   public OnPolishActiveSlide(): void {
     if (!this.IsEditable || !this.CanEditSlideElements) {
       return;
