@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/global
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 2d938cf: Prompt output parsing: an object reply holding one complete JSON value followed by a stray fragment now uses the value and logs the dropped text (#3065, new exported `ExtractLeadingJSONValue`); a prompt with `ValidationBehavior: 'None'` no longer has its reply keys rewritten by validation-syntax cleaning unless `cleanValidationSyntax` is set, and keys that clean to the same name are kept as written instead of one overwriting the other (#4827); the "your … here" / "insert … here" placeholder check scans linearly (#4819).
+- 2b4969f: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `TrimTrailingChars`, `TrimLeadingChars`, `TrimChars` and `IsEmailShaped` helpers in `@memberjunction/global`, used for URL, path and base64 trims and email-shape checks, plus index scans for Markdown fences and Slack link conversion. Results are unchanged for every input.
+- 6ea73e6: Wave 5 UI bundle splitting, lazy loading, and ESBuild script minification safety:
+  - `@memberjunction/global`, `@memberjunction/core`: `BaseSingleton` detects a name-mangled build (its own class name no longer reads `BaseSingleton`) and then keys unstamped singletons by constructor, so unrelated classes the minifier gave the same name — even with byte-identical source — never share an instance. With real class names (Node, dev builds) it keys by name exactly as before, so duplicate copies of a class still share one instance even when their package versions differ. Stamped names and explicit `getInstance(className)` keys work in both modes. `BaseEngineRegistry` resolves names via `GetClassName` and registers a different engine class whose name is already taken under `Name#2`, `Name#3`… instead of overwriting the first engine's registration.
+  - `@memberjunction/ng-auth-services`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`: Move the seven built-in auth providers out of the main barrel into dedicated subpath exports (`./msal`, `./auth0`, `./okta`, `./cognito`, `./workos`, `./magic-link`, `./local-dev`), declare provider files in `sideEffects`, extract `HasMagicLinkSessionToken` to a zero-dependency helper, and add `LoadAuthProvider`/`PreloadActiveAuthProvider` so Explorer loads only the active IdP SDK before bootstrapping `AppModule` while `@memberjunction/ng-bootstrap` retains eager registration via `EAGER_AUTH_PROVIDERS`.
+  - `@memberjunction/ng-explorer-settings`, `@memberjunction/ng-dashboards`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-explorer-modules`: Extract lightweight `UserSettingsModule` (`./user-settings.module`) and `DashboardEditorModule` (`./dashboard-editor.module`), sever unused `AITestHarnessModule` plus eager `CoreDashboardsModule` / `ExplorerSettingsModule` imports from `ExplorerCoreModule`, `ShellModule`, `ProfileDialogComponent`, and `MJExplorerModulesBundle`, and split `LiveKitRoomResource`, `HumanHandoffConsoleResource`, and `MeetingsResource` into a lazy `LiveKitResourcesModule` registered via `LIVEKIT_LAZY_FEATURE_CONFIG`.
+  - `MJExplorer`: Enable `optimization.scripts = true` in `production` and `staging`, switch `main.ts` from `platformBrowserDynamic` to AOT `platformBrowser` with `PreloadActiveAuthProvider`, move `@angular/compiler` to `devDependencies` (removing `@angular/platform-browser-dynamic`), and remove unused MSAL imports from `AppModule`.
+
+- ce32cbf: Wave 4.2b: True lazy modules, deferred browser engines, and ClassFactory minification safety.
+  - `@memberjunction/global`: Add minification-safe class name stamping via `MJ_CLASS_NAME_SYMBOL`, `StampClassName`, and `RegisterClassEx({ className, baseClassName })`, and add `IsBrowser()` to detect browser vs. non-browser runtimes. Ensure reflection and ClassFactory lookup methods use `GetClassName` with own-property symbol and string checks rather than mangled `.name` properties.
+  - `@memberjunction/ng-explorer-core`: Sever static import of `FileStorageModule` from `ExplorerCoreModule` imports array so it loads lazily on demand via dynamic import configuration.
+  - `@memberjunction/ai-engine-base`, `@memberjunction/core-entities`, `@memberjunction/integration-engine-base`, `@memberjunction/api-keys-base`: Defer non-shell browser startup for `AIEngineBase`, `QueryEngine`, `IntegrationEngineBase`, `SearchEngineBase`, `APIKeysEngineBase`, and `EncryptionEngineBase` via `@RegisterForStartup({ deferred: IsBrowser() })`.
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

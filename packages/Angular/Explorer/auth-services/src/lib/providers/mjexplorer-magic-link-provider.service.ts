@@ -2,6 +2,11 @@ import { Injectable } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import {
+  HasMagicLinkSessionToken,
+  MAGIC_LINK_PROVIDER_TYPE,
+  MAGIC_LINK_TOKEN_STORAGE_KEY,
+} from '../magic-link-session';
+import {
   StandardUserInfo,
   StandardAuthToken,
   StandardAuthError,
@@ -12,7 +17,7 @@ import {
 } from '../auth-types';
 
 /** sessionStorage key holding the magic-link session token for this tab. */
-const TOKEN_STORAGE_KEY = 'mj_magic_link_token';
+const TOKEN_STORAGE_KEY = MAGIC_LINK_TOKEN_STORAGE_KEY;
 
 /**
  * Client-side auth provider for MemberJunction-issued magic-link sessions.
@@ -32,7 +37,7 @@ const TOKEN_STORAGE_KEY = 'mj_magic_link_token';
 @Injectable({ providedIn: 'root' })
 @RegisterClass(MJAuthBase, 'magic-link')
 export class MJMagicLinkProvider extends MJAuthBase {
-  static readonly PROVIDER_TYPE = 'magic-link';
+  static readonly PROVIDER_TYPE = MAGIC_LINK_PROVIDER_TYPE;
   readonly type = MJMagicLinkProvider.PROVIDER_TYPE;
 
   private token: string | null = null;
@@ -54,19 +59,7 @@ export class MJMagicLinkProvider extends MJAuthBase {
    * guest's session expires or logs out).
    */
   static HasSessionToken(): boolean {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    try {
-      const hash = window.location?.hash ?? '';
-      const fragment = hash.startsWith('#') ? hash.slice(1) : hash;
-      if (new URLSearchParams(fragment).get('token')) {
-        return true;
-      }
-      return !!window.sessionStorage?.getItem(TOKEN_STORAGE_KEY);
-    } catch {
-      return false;
-    }
+    return HasMagicLinkSessionToken();
   }
 
   /** @deprecated Use {@link HasSessionToken}. */

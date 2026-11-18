@@ -1,36 +1,55 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, NeedsHandAuthoring, AddNullsNotDistinct } from './ExpressionHelpers.js';
+
+/** `DROP INDEX [IF EXISTS] name ON table`, after identifier conversion. One index per statement. */
+const DROP_INDEX_ON_TABLE = /^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?("[^"]+"|\w+)\s+ON\s+([^\s;(,]+)\s*;?$/i;
 
 /**
- * Quote one entry of an index column list when it is an unquoted PascalCase identifier, keeping any
- * sort modifier that follows it (`ASC`/`DESC`, optionally `NULLS FIRST|LAST`).
- *
- * The modifier is why this is not a bare-identifier test: `StartedAt DESC` is one list entry, and a
- * test for `^[A-Za-z_]\w*$` against the whole entry left it unquoted, so PostgreSQL folded it to
- * `startedat` and the CREATE INDEX failed with `column "startedat" does not exist`.
+ * T-SQL `DROP INDEX name ON [schema].[table]` → PostgreSQL `DROP INDEX IF EXISTS schema."name";`.
+ * PostgreSQL has no `ON` clause: an index lives in its table's schema and is dropped by
+ * schema-qualified name (issue #5955). Takes SQL whose identifiers are already converted and
+ * returns null for any other shape (a comma list of indexes, the `table.index` form).
+ */
+export function ConvertDropIndex(sql: string): string | null {
+  const m = sql.trim().match(DROP_INDEX_ON_TABLE);
+  if (!m) return null;
+  const name = m[1].replace(/^"|"$/g, '');
+  const schema = m[2].match(/^(.+)\.(?:"[^"]+"|\w+)$/)?.[1];
+  return `DROP INDEX IF EXISTS ${schema ? `${schema}.` : ''}"${name}";`;
+}
+
+/**
+ * Quote one entry of an index column list when PostgreSQL would otherwise fold it to lowercase:
+ * a name with an upper-case letter, or one of MJ's `__mj_` columns. A trailing sort modifier
+ * (`ASC`/`DESC`, optionally `NULLS FIRST|LAST`) stays outside the quotes. Before, only an entry that
+ * was a bare identifier was quoted, so `Name ASC`, `StartedAt DESC` and `__mj_CreatedAt DESC` reached
+ * PostgreSQL unquoted and the CREATE INDEX failed with `column "startedat" does not exist` (issue #5567).
  *
  * @param entry - One comma-separated entry, with its surrounding whitespace.
  * @returns The entry with its identifier quoted, or unchanged when it needs no quoting.
  */
 export function QuoteIndexColumn(entry: string): string {
-  const match = entry.match(/^(\s*)([A-Za-z_]\w*)((?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)$/i);
-  if (!match) return entry;
-  const [, lead, ident, modifier] = match;
-  if (!/[A-Z]/.test(ident)) return entry;
-  return `${lead}"${ident}"${modifier}`;
+  const m = entry.match(/^(\s*)([A-Za-z_]\w*)((?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)$/i);
+  if (!m) return entry;
+  const [, lead, name, modifier] = m;
+  if (!/[A-Z]/.test(name) && !/^__mj_/i.test(name)) return entry;
+  return `${lead}"${name}"${modifier}`;
 }
 
 export class CreateIndexRule implements IConversionRule {
   Name = 'CreateIndexRule';
   SourceDialect = 'tsql';
   TargetDialect = 'postgres';
-  AppliesTo: StatementType[] = ['CREATE_INDEX'];
+  AppliesTo: StatementType[] = ['CREATE_INDEX', 'DROP_INDEX'];
   Priority = 70;
   BypassSqlglot = true;
   BypassJustification = 'Custom output adds CREATE INDEX IF NOT EXISTS for idempotency, strips T-SQL filegroup syntax (ON [PRIMARY]), removes WITH NOCHECK, truncates index names to PG\'s 63-char limit (with hash suffix), and quotes column names with PascalCase. sqlglot does not apply MJ\'s naming conventions or idempotency wrappers.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = ConvertIdentifiers(sql);
+    if (/^\s*DROP\s+INDEX\b/i.test(result)) {
+      return (ConvertDropIndex(result) ?? NeedsHandAuthoring('DROP INDEX', 'only `DROP INDEX name ON table` converts', sql).trimEnd()) + '\n';
+    }
 
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');
@@ -51,14 +70,19 @@ export class CreateIndexRule implements IConversionRule {
     result = result.replace(/=\s*\(1\)/g, '=TRUE');
     result = result.replace(/=\s*\(0\)/g, '=FALSE');
 
+    // Quote an unquoted index name, as the split path does: PostgreSQL folds a bare `IX_Foo_Name`
+    // to lowercase, and a later quoted `DROP INDEX … "IX_Foo_Name"` then misses it (issue #5567).
+    result = result.replace(
+      /^(\s*CREATE\s+(?:UNIQUE\s+)?\s*INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)([A-Za-z_]\w*)(?=\s+ON\b)/i,
+      (_match, head: string, name: string) => `${head}"${name}"`
+    );
+
     // Quote PascalCase column names inside index column lists
-    // Matches: table("Col1", Col2) or table(Col1, Col2 DESC) — quote unquoted PascalCase identifiers
+    // Matches: table("Col1", Col2 DESC) or table(Col1) — quote unquoted PascalCase identifiers
     result = result.replace(
       /(ON\s+\S+\s*\()([^)]+)(\))/gi,
-      (_match, prefix: string, cols: string, suffix: string) => {
-        const quotedCols = cols.split(',').map(QuoteIndexColumn).join(',');
-        return `${prefix}${quotedCols}${suffix}`;
-      }
+      (_match, prefix: string, cols: string, suffix: string) =>
+        `${prefix}${cols.split(',').map(QuoteIndexColumn).join(',')}${suffix}`
     );
 
     // Quote PascalCase identifiers in WHERE clause of filtered indexes
@@ -82,6 +106,9 @@ export class CreateIndexRule implements IConversionRule {
         return `${whereKw}${quotedClause}`;
       }
     );
+
+    // A SQL Server unique index treats NULLs as equal; keep that on PostgreSQL (#5194).
+    result = AddNullsNotDistinct(result);
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
