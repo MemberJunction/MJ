@@ -334,10 +334,12 @@ packages/TestingFramework/integration-test-suite/src/checks/ps-prediction-servin
 # PR 2's checks and rig read binding.MLModelID, which M5 removes
 packages/TestingFramework/integration-test-suite/src/checks/predictive-studio.checks.ts
 packages/TestingFramework/integration-test-suite/rigs/ps-inproc-scheduled-scoring.ts
+packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts
 # Caller and CI maintenance (owner ruling 2026-11-10, D4-69, program D-082): the in-repo PS tests and rigs this PR's
 # own changes break, and the workflow that gains the sidecar pytest step; not a D-062 scope addition
 # M5.4: its line 220 asserts ModeBadgeClass('Materialized'), the case M5.4 removes
 packages/Angular/Explorer/dashboards/src/__tests__/production-distribution.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts
 # M4.3: its lines 25, 29, 35, 63, 111, 149 read the four @deprecated grid aliases M4.3 deletes
 packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-grid-record-names.test.ts
 # M4.4: its BusinessPredictionInput literals gain the RunID that M4.4's traced trust line requires (D-082, D4-118)

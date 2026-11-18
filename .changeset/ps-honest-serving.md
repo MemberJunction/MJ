@@ -5,6 +5,7 @@
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
+"@memberjunction/feature-pipelines": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
