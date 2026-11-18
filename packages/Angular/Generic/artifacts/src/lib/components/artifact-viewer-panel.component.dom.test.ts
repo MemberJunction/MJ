@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import type { CompositeKey, IEntityDataProvider, IMetadataProvider, IRunViewProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { ConversationEngine, type ConversationScope, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -9,6 +10,7 @@ import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateC
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
 import type { ArtifactNavigationAnchor, ArtifactSelectionAnchor, ArtifactViewerTab, ArtifactViewerViewMode, NavigationRequest, PreVerifiedFrozenSnapshotEntry } from './base-artifact-viewer.component';
 import type { InteractiveFormApplyResult } from '../services/interactive-form-apply.service';
+import { DocumentCollaborationService, type LivingReportScheduleSummary } from '../services/document-collaboration.service';
 import { ArtifactVersionCompareComponent } from './version-diff/artifact-version-compare.component';
 import { OpenHtmlInSandboxedWindow, SanitizeHtmlForSandboxedFrame } from '../utils/html-sandbox.util';
 
@@ -48,17 +50,20 @@ function stubEntity<T extends object>(fields: Partial<T>): T {
   return Object.assign(Object.create(null) as T, fields);
 }
 
-const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
+const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
 const ARTIFACT = stubEntity<MJArtifactEntity>({ Name: 'Q3 Report', Description: 'Quarterly numbers' });
 const VERSION = stubEntity<MJArtifactVersionEntity>({ ID: 'v1', VersionNumber: 2 });
 
-interface State { isLoading?: boolean; error?: string | null; artifact?: MJArtifactEntity | null; allVersions?: MJArtifactVersionEntity[]; selectedVersionNumber?: number; artifactVersion?: MJArtifactVersionEntity | null; activeTab?: string; driverClass?: string | null; displayMarkdown?: string | null; displayHtml?: string | null }
+interface State { isLoading?: boolean; error?: string | null; artifact?: MJArtifactEntity | null; allVersions?: MJArtifactVersionEntity[]; selectedVersionNumber?: number; artifactVersion?: MJArtifactVersionEntity | null; activeTab?: string; driverClass?: string | null; displayMarkdown?: string | null; displayHtml?: string | null; activeLivingReportSchedule?: LivingReportScheduleSummary | null; showLivingReportModal?: boolean }
 function render(state: State = {}, inputs: Record<string, string | number | boolean | object | null | undefined> = {}) {
   vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
   return renderComponentFixture(ArtifactViewerPanelComponent, {
     imports: CHILDREN,
     declarations: [ArtifactViewerPanelComponent],
-    providers: [{ provide: MJNotificationService, useValue: {} }, { provide: ArtifactFileService, useValue: fileServiceStub }],
+    providers: [
+      { provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } },
+      { provide: ArtifactFileService, useValue: fileServiceStub },
+    ],
     inputs: { artifactId: 'a1', ...inputs },
     setup: (c) => {
       c.isLoading = state.isLoading ?? false;
@@ -73,6 +78,8 @@ function render(state: State = {}, inputs: Record<string, string | number | bool
       }
       if (state.displayMarkdown !== undefined) c.displayMarkdown = state.displayMarkdown;
       if (state.displayHtml !== undefined) c.DisplayHtml = state.displayHtml;
+      if (state.activeLivingReportSchedule !== undefined) c.ActiveLivingReportSchedule = state.activeLivingReportSchedule;
+      if (state.showLivingReportModal !== undefined) c.ShowLivingReportModal = state.showLivingReportModal;
     },
   });
 }
@@ -748,5 +755,141 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
     const emittedSelections = capture(f.componentInstance.SelectionChanged);
     stub.SelectionChanged.emit({ domain: 'spreadsheet', sheet: 'sheet-1', range: 'D10' });
     expect(emittedSelections).toEqual([{ domain: 'spreadsheet', sheet: 'sheet-1', range: 'D10' }]);
+  });
+
+  it('hides Living Report refresh & schedule controls on read-only views', () => {
+    const readOnly = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-ro', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      { canEdit: false, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    expect(query(readOnly, '[data-testid="living-report-refresh-btn"]')).toBeNull();
+    expect(query(readOnly, '[data-testid="living-report-schedule-btn"]')).toBeNull();
+  });
+
+  it('shows Living Report refresh, badge, and schedule modal on editable Docs/Slides/Sheets', () => {
+    const editable = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-edit', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+        activeLivingReportSchedule: {
+          ScheduleID: 'sched-99',
+          Name: 'Daily Executive Brief',
+          CronExpression: '0 0 8 * * *',
+          Timezone: 'Asia/Tokyo',
+          Status: 'Active',
+          Enabled: true,
+          ForceSaveIfUnchanged: false,
+          RunCount: 2,
+          SuccessCount: 2,
+          FailureCount: 0,
+          IsCallerScheduleOwner: true,
+          CanDelete: true,
+        },
+        showLivingReportModal: true,
+      },
+      { canEdit: true, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    expect(query(editable, '[data-testid="living-report-refresh-btn"]')).not.toBeNull();
+    expect(query(editable, '[data-testid="living-report-schedule-btn"]')).not.toBeNull();
+    expect(text(editable, '[data-testid="living-report-status-badge"]')).toContain('Scheduled');
+    expect(query(editable, '[data-testid="living-report-schedule-modal"]')).not.toBeNull();
+    expect(query(editable, '[data-testid="living-report-remove-btn"]')).not.toBeNull();
+    expect(editable.componentInstance.LivingReportTimezoneOptions).toContain('Asia/Tokyo');
+  });
+
+  it('hides Living Report controls on Frozen guest snapshot views even if canEdit=true', () => {
+    const guestView = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-guest', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      {
+        canEdit: true,
+        DriverClass: 'MarkdownArtifactViewerPlugin',
+        PreVerifiedFrozenSnapshots: { b1: { Verified: true } },
+      },
+    );
+    expect(query(guestView, '[data-testid="living-report-refresh-btn"]')).toBeNull();
+    expect(query(guestView, '[data-testid="living-report-schedule-btn"]')).toBeNull();
+  });
+
+  it('OnRefreshLivingArtifactNow reloads target version, advances token, and emits VersionSaved', async () => {
+    const refreshSpy = vi
+      .spyOn(DocumentCollaborationService.prototype, 'RefreshLivingArtifactNow')
+      .mockResolvedValue({
+        HandledByServer: true,
+        Success: true,
+        Changed: true,
+        SavedNewVersion: true,
+        ArtifactVersionID: 'ver-2',
+        VersionNumber: 2,
+        DiffSummary: 'ARR updated 500 -> 750',
+        HighlightLines: ['ARR -> 750'],
+      });
+
+    const fixture = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-emit', Name: 'ARR Report' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      { canEdit: true, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    const comp = fixture.componentInstance;
+    comp.artifactId = 'art-lr-emit';
+
+    const emitted: Array<{ ArtifactID: string; VersionID?: string; VersionNumber?: number }> = [];
+    const sub = comp.VersionSaved.subscribe((evt) => emitted.push(evt));
+
+    const internal = Object.assign(comp) as {
+      artifactLoadToken: number;
+      loadArtifact: (versionNumber?: number) => Promise<void>;
+    };
+    vi.spyOn(internal, 'loadArtifact').mockImplementation(async (versionNumber?: number) => {
+      // Simulate real loadArtifact incrementing the private artifactLoadToken once
+      internal.artifactLoadToken += 1;
+      comp.selectedVersionNumber = versionNumber ?? 2;
+      comp.artifactVersion = stubEntity<MJArtifactVersionEntity>({ ID: 'ver-2', VersionNumber: 2 });
+    });
+
+    await comp.OnRefreshLivingArtifactNow();
+    sub.unsubscribe();
+
+    expect(refreshSpy).toHaveBeenCalledWith(
+      'art-lr-emit',
+      expect.objectContaining({ ForceSaveIfUnchanged: false }),
+      undefined,
+    );
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toEqual(
+      expect.objectContaining({
+        ArtifactID: 'art-lr-emit',
+        VersionID: 'ver-2',
+        VersionNumber: 2,
+      }),
+    );
+    expect(comp.LivingReportRefreshing).toBe(false);
   });
 });

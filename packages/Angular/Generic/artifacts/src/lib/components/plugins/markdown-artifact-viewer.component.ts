@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -22,6 +22,7 @@ import {
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
+  QueryEngine,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
@@ -633,9 +634,30 @@ interface DocsInlineToken {
           >
             <i class="fa-solid fa-circle-info"></i> Callout
           </button>
+          <span class="mj-docs-ribbon-sep"></span>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Chart (/sheet-chart)"
+            data-testid="fmt-sheet-chart-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-chart')"
+          >
+            <i class="fa-solid fa-chart-column"></i> Sheet Chart
+          </button>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Linked Spreadsheet Range (/sheet-range)"
+            data-testid="fmt-sheet-range-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="OpenSlashBlockInsert('/sheet-range')"
+          >
+            <i class="fa-solid fa-table-cells"></i> Sheet Range
+          </button>
           <span class="mj-docs-ribbon-hint">
-            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>, or
-            <strong>Whiteboard</strong>
+            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>,
+            <strong>Sheet Chart/Range</strong>, or <strong>Whiteboard</strong>
           </span>
           <button
             type="button"
@@ -2536,7 +2558,8 @@ interface DocsInlineToken {
                   <span>Target Artifact ID</span>
                   <input
                     type="text"
-                    [(ngModel)]="NewBlockArtifactID"
+                    [ngModel]="NewBlockArtifactID"
+                    (ngModelChange)="OnNewBlockArtifactIdChanged($event)"
                     placeholder="Artifact UUID"
                     data-testid="new-block-artifact-id-input"
                   />
@@ -9999,6 +10022,7 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      this.syncDirtySegmentsFromDomIntoBlocks(blocks);
       const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
       const trimmedSnippet = trimTrailingNewlines(snippet);
       if (trimmedSnippet.trim().length === 0) {
@@ -10038,6 +10062,21 @@ export class MarkdownArtifactViewerComponent
     if (this.DocumentSegments.length > 0) {
       const lastSeg = this.DocumentSegments[this.DocumentSegments.length - 1];
       this.FocusEditableSegment(lastSeg.SegmentID, 'end');
+    }
+  }
+
+  /**
+   * Opens the interactive block-insert dialog preselected to a known slash command
+   * (used by direct formatting-ribbon actions such as Sheet Chart and Sheet Range).
+   */
+  public OpenSlashBlockInsert(commandName: '/sheet-chart' | '/sheet-range'): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.ActiveSlashTargetSegmentID = null;
+    const cmd = this.collabService.GetSlashCommands().find((c) => c.Command === commandName);
+    if (cmd) {
+      this.ExecuteSlashCommand(cmd);
     }
   }
 
@@ -10364,6 +10403,17 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public OnNewBlockArtifactIdChanged(value: string): void {
+    this.NewBlockArtifactID = value;
+    const trimmed = value.trim();
+    if (IsValidUUID(trimmed) && this.IsSpreadsheetArtifactPickerSelected) {
+      void this.loadSelectedWorkbookSheets(trimmed);
+    } else if (!trimmed) {
+      this.SelectedWorkbookSheets = [];
+      this.SelectedArtifactLatestVersionID = '';
+    }
+  }
+
   public SelectArtifactOption(artOpt: DocsArtifactPickerOption): void {
     this.NewBlockArtifactID = artOpt.ID;
     this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
@@ -10558,7 +10608,8 @@ export class MarkdownArtifactViewerComponent
     if (!md) {
       return [];
     }
-    const queries: QueryInfo[] = md.Queries ?? [];
+    // The QueryEngine bound to this viewer's provider; it loads at client startup.
+    const queries = (QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine).Queries ?? [];
     if (queries.length === 0) {
       return [];
     }
@@ -10756,11 +10807,21 @@ export class MarkdownArtifactViewerComponent
           if (this.NewBlockSheetMode !== 'full' && this.NewBlockSheetName.trim()) {
             descriptor.SheetID = this.NewBlockSheetName.trim();
           }
-          if (this.NewBlockSheetMode === 'chart' && this.NewBlockSheetChartID.trim()) {
-            descriptor.SheetChartID = this.NewBlockSheetChartID.trim();
+          if (this.NewBlockSheetMode === 'chart') {
+            const chartId = this.NewBlockSheetChartID.trim();
+            if (!chartId) {
+              this.notifyError('Select a Spreadsheet Chart (or switch embed mode to Cell Range / Entire Workbook).');
+              return;
+            }
+            descriptor.SheetChartID = chartId;
             descriptor.SheetRange = undefined;
-          } else if (this.NewBlockSheetMode === 'range' && this.NewBlockSheetRange.trim()) {
-            descriptor.SheetRange = this.NewBlockSheetRange.trim();
+          } else if (this.NewBlockSheetMode === 'range') {
+            const sheetRange = this.NewBlockSheetRange.trim();
+            if (!sheetRange) {
+              this.notifyError('Enter a Spreadsheet cell range (for example, A1:D8) to embed.');
+              return;
+            }
+            descriptor.SheetRange = sheetRange;
             descriptor.SheetChartID = undefined;
           } else {
             descriptor.SheetChartID = undefined;

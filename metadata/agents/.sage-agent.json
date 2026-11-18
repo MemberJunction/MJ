@@ -40,7 +40,7 @@
       "TypeConfiguration": {
         "realtime": {
           "video": {
-            "enabled": true,
+            "enabled": false,
             "avatarId": "Ben"
           },
           "directActions": {

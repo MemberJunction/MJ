@@ -10,7 +10,7 @@ This package has **no** dependency on `@memberjunction/core`, `@memberjunction/c
 | --- | --- | --- |
 | `GET` | `/health` | Probes HyperFrames, `ffmpeg`, `ffprobe`, and Chromium; returns `200` (`Healthy: true`) or `503` (`Healthy: false`). Requires `Authorization: Bearer <token>` when `VIDEO_STUDIO_RENDER_TOKEN` is set. |
 | `POST` | `/check` | Runs the deterministic check pipeline: RND-1 security/lint gate → static authored-file checks → preamble + default fonts → `hyperframes check --json` CLI audit → in-page DOM text measurements (`SampleTimestampsSeconds ?? [0]`) and DOM rules. A lint-blocked bundle returns lint issues immediately without launching Chromium. |
-| `POST` | `/render` | Validates, lints, injects the CSP + `window.MJVideo` preamble, renders an H.264/AAC MP4 (`yuv420p`, `+faststart`), streams `RenderStreamEvent` NDJSON lines, and stores the MP4 for one-shot retrieval at `/videos/<VideoID>`. |
+| `POST` | `/render` | Validates, lints, injects the CSP + `window.MJVideo` preamble, renders an H.264/AAC MP4 (`yuv420p`, `+faststart`) with parallel capture workers, builds/normalizes/checks the soundtrack (see below), streams `RenderStreamEvent` NDJSON lines (the `Result` carries `Workers` and the `Audio` report), and stores the MP4 for one-shot retrieval at `/videos/<VideoID>`. |
 | `GET` | `/videos/<VideoID>` | Streams a rendered MP4 (`video/mp4`) once and removes it from the ephemeral video store. |
 | `POST` | `/stills` | Captures still frames (`png` or `jpeg`) across `Points` in a single Chromium session. |
 | `POST` | `/contact-sheet` | Builds a contact sheet grid (and optional `TransitionStrip`) from captured stills in a single Chromium session. |
@@ -27,6 +27,7 @@ This package has **no** dependency on `@memberjunction/core`, `@memberjunction/c
 | `VIDEO_STUDIO_RENDER_CONCURRENCY` | `1` | Maximum concurrent heavy jobs (`/render`, `/stills`, `/contact-sheet`, `/check`, `/keyframes`); excess requests wait in a FIFO queue. |
 | `VIDEO_STUDIO_RENDER_MAX_TIMEOUT_MS` | `1800000` (30 min) | Hard ceiling for `/render` jobs (`min(req.TimeoutMs, VIDEO_STUDIO_RENDER_MAX_TIMEOUT_MS)`). Non-render routes time out after 5 minutes (`300000` ms). |
 | `VIDEO_STUDIO_RENDER_ALLOW_ROOT` | `false` | Refuses to start when running as `uid === 0` unless set to `1` or `true`. |
+| `VIDEO_STUDIO_RENDER_WORKERS` | half the CPUs, 1 to 4 | Parallel HyperFrames capture workers per render (headless Chromium sessions that split the frame range). `RenderRequest.Workers` overrides it. Always clamped to `[1, min(CPUs, 8)]` (`MAX_RENDER_CAPTURE_WORKERS`). |
 
 Optional browser/telemetry overrides read by the backend:
 - `CHROME_PATH` / `PUPPETEER_EXECUTABLE_PATH` / `PUPPETEER_CACHE_DIR`: Path to the pinned `chrome-headless-shell` binary or Puppeteer cache directory.
@@ -36,6 +37,35 @@ Optional browser/telemetry overrides read by the backend:
 
 - If `VIDEO_STUDIO_RENDER_HOST` is non-loopback (e.g., `0.0.0.0` inside Docker) and `VIDEO_STUDIO_RENDER_TOKEN` is empty, `CreateRenderWorkerServer` throws immediately on startup.
 - When `VIDEO_STUDIO_RENDER_TOKEN` is configured, every request to every route (`GET /health`, `POST /render`, `GET /videos/<id>`, `POST /stills`, `POST /contact-sheet`, `POST /check`, `POST /keyframes`) must supply `Authorization: Bearer <token>`. Token comparison hashes both values with SHA-256 and compares the 32-byte digests via `crypto.timingSafeEqual`.
+
+## Render Workers (`ResolveRenderCaptureWorkers`)
+
+`/render` passes HyperFrames' own `workers` option to `createRenderJob`: the producer splits the frame range across that many headless Chromium sessions and joins the segments, so frames render in parallel with no change to determinism. The count comes from `RenderRequest.Workers`, else `VIDEO_STUDIO_RENDER_WORKERS`, else `DefaultRenderCaptureWorkers(cpus)` (half the CPUs, between 1 and 4), clamped to the CPU count and `MAX_RENDER_CAPTURE_WORKERS` (8). Each worker is a Chromium process, so memory grows roughly linearly with it; `VIDEO_STUDIO_RENDER_CONCURRENCY` multiplies it. `DockerRenderDriver` sends its `--cpus` quota as the default because `os.availableParallelism()` inside a container reports the host's CPUs. The count used is returned as `RenderResult.Workers`.
+
+## Audio: Mix, Loudness, and Checks (`FinalizeRenderAudio`)
+
+After HyperFrames writes the picture, `RunRenderJob` calls `backend.FinalizeAudio`:
+
+- **With `RenderRequest.AudioMix`** (the engine always sends one): the soundtrack is rebuilt from the plan and **replaces** any audio the composition played. Narration clips (staged assets) are decoded to 48 kHz float PCM with `ffmpeg` and placed at their `StartSeconds`; music (a staged licensed file, or a synthesized bed) gets its base `GainDb` plus a gain envelope: an automatic duck under every narration line (default -7.5 dB, 80 ms attack ending at the first word, 400 ms release; lines closer than attack + release merge so the music does not pump between them) combined with explicit `MusicDuck` (deepest duck wins) and `MusicSwell` (strongest swell added) events; sound effects are staged files or synthesized. The mix is written as a float WAV.
+- **Without a plan**: the composition's own audio is kept.
+- **Loudness**: two-pass `loudnorm` (first pass measures, second applies one linear gain) to `I=-14 LUFS, TP=-1.5 dBTP, LRA=11` by default (`RenderAudioMixPlan.Loudness`, configured in MJAPI under `videoStudio.render.audio.loudness`). The video stream is copied; audio is encoded as 48 kHz AAC 192 kbps with `+faststart`.
+- **Procedural audio** (`src/audio/synth.ts`, no dependencies, seeded, bit-for-bit deterministic): `SynthesizeSfx` (`Whoosh`, `Click`, `Tick`, `Impact`, `Chime`, `Riser` — a riser ends on its cue) and `SynthesizeMusicBed` (a pad playing a mood-specific diatonic progression, a bass on the chord roots, and a soft pulse, faded in and out, RMS about -18 dBFS). Every synthesized source is listed in `RenderAudioReport.Synthesized` for disclosure.
+
+### Audio Check Codes (`src/checks/audio-checks.ts`)
+
+Measured with `ffmpeg` (`ebur128`, `astats`, `silencedetect`) and the worker's own stems, before any vision-critic call. All are `Category: 'Audio'`, `Severity: 'Error'`, returned in `RenderResult.Audio.Issues`; the engine fails the render step with them (timestamps included) so they route back like other deterministic failures.
+
+| Code | Fails when |
+| --- | --- |
+| `MJ_AUDIO_MISSING` | Narration, music, or effects are specified but the MP4 has no audio stream or the mix is silent (below -60 LUFS). |
+| `MJ_AUDIO_SOURCE_MISSING` | A plan source (narration clip, music, effect file) is missing from the bundle or cannot be decoded. |
+| `MJ_AUDIO_LOUDNESS` | Integrated loudness is more than 1.5 LU from the target. |
+| `MJ_AUDIO_TRUE_PEAK` | True peak exceeds the target by more than 0.5 dB. |
+| `MJ_AUDIO_CLIPPING` | Two or more samples reach full scale. |
+| `MJ_AUDIO_NARRATION_MASKED` | Over a narration line, narration is less than 10 dB above the music. |
+| `MJ_AUDIO_LINE_PAUSE` | A silence of 0.15 s or more (below -45 dB) sits entirely inside one narration line and the line's punctuation does not explain it. With word timings the pause is attributed to the word before it (or reported as inside a word, the "A … I" case); without them, pauses beyond the count of interior `, ; : . ! ? … — –` are reported. Dots inside a token (`3.5`, `A.I.`) never count as pauses. |
+
+Thresholds come from `RenderAudioMixPlan.Checks` (MJAPI: `videoStudio.render.audio.checks`). `npx vitest run src/__tests__/audio-pipeline.ffmpeg.test.ts` exercises the whole pipeline against real ffmpeg on generated fixtures (skipped when `ffmpeg`/`ffprobe` are not at `/usr/bin` or `FFMPEG_PATH`/`FFPROBE_PATH`).
 
 ## Deterministic Check Pipeline (`RunCheckJob`)
 

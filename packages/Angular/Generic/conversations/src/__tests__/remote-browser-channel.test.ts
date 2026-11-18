@@ -11,7 +11,10 @@ import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
 } from '../lib/components/realtime/remote-browser/remote-browser-channel';
 import {
-  MapToViewportCoords, RemoteBrowserHumanInputEvent, RemoteBrowserSurfaceComponent
+  MapToViewportCoords,
+  RemoteBrowserHumanInputEvent,
+  RemoteBrowserSurfaceComponent,
+  RemoteBrowserViewportSize,
 } from '../lib/components/realtime/remote-browser/remote-browser-surface.component';
 import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES,
@@ -488,9 +491,10 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     log = { Notes: [], Calls: [] };
   });
 
-  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection. */
+  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection + ViewportResize. */
   function makeSurface(): RemoteBrowserSurfaceComponent & {
     HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+    ViewportResize: EventEmitter<RemoteBrowserViewportSize>;
     FetchSelection: (() => Promise<string>) | null;
   } {
     const surface = {
@@ -499,6 +503,7 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       AudioAvailable: false,
       AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
+      ViewportResize: new EventEmitter<RemoteBrowserViewportSize>(),
       AudioMutedChange: new EventEmitter<boolean>(),
       // BindSurface sets this to the channel's copy-out fetcher; captured so a test can call it.
       FetchSelection: null as (() => Promise<string>) | null,
@@ -507,6 +512,7 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     };
     return surface as unknown as RemoteBrowserSurfaceComponent & {
       HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+      ViewportResize: EventEmitter<RemoteBrowserViewportSize>;
       FetchSelection: (() => Promise<string>) | null;
     };
   }
@@ -639,6 +645,26 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     surface.HumanInput.emit({ kind: 'pointer-move', x: 1, y: 2 });
 
     expect(log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'))).toBeUndefined();
+  });
+
+  it('relays surface ViewportResize events to the ResizeRemoteBrowserViewport mutation and tears down on UnbindSurface', () => {
+    channel.Initialize(makeContext(log, { ResizeRemoteBrowserViewport: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.ViewportResize.emit({ Width: 540, Height: 760 });
+
+    const resizeCall = log.Calls.find(c => c.Query.includes('ResizeRemoteBrowserViewport'));
+    expect(resizeCall).toBeTruthy();
+    expect(resizeCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1',
+      width: 540,
+      height: 760,
+    });
+
+    channel.UnbindSurface();
+    surface.ViewportResize.emit({ Width: 1440, Height: 820 });
+    expect(log.Calls.filter(c => c.Query.includes('ResizeRemoteBrowserViewport'))).toHaveLength(1);
   });
 });
 
@@ -1577,6 +1603,62 @@ describe('ConversationRemoteBrowserController', () => {
       await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
       expect(c.ConversationId).toBe('conv-1');
       expect(refused).toEqual([]);
+    });
+  });
+
+  describe('RemoteBrowserChannel state serialization & restore', () => {
+    it('saves URL history and bounded PNG/JPEG snapshot, and validates unsafe URIs on restore', () => {
+      const saved: string[] = [];
+      const channel = new RemoteBrowserChannel();
+      const context: RealtimeChannelContext = {
+        AgentName: 'Sage',
+        Provider: null,
+        AgentSessionID: 'sess-rb-1',
+        SendContextNote: () => undefined,
+        RequestSave: (json) => saved.push(json),
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        ExecuteServerAction: async <T>(query: string): Promise<T | null> => {
+          if (query.includes('ExecuteRemoteBrowserAction')) {
+            return {
+              ExecuteRemoteBrowserAction: {
+                Success: true,
+                CurrentUrl: 'https://example.com/pricing',
+                Detail: 'Opened',
+              },
+            } as T;
+          }
+          return null;
+        },
+      };
+      channel.Initialize(context);
+      expect(channel.SerializeState()).toBeNull();
+
+      channel.GetToolDefinitions();
+      channel.RestoreState(JSON.stringify({
+        V: 1,
+        CurrentUrl: 'https://example.com/pricing',
+        History: [{ Url: 'https://example.com/pricing', VisitedAt: '2026-11-17T16:00:00Z' }],
+        ScreenshotDataUrl: 'data:image/png;base64,AAAA',
+      }));
+
+      const serialized = channel.SerializeState();
+      expect(serialized).not.toBeNull();
+      expect(JSON.parse(serialized!)).toMatchObject({
+        V: 1,
+        CurrentUrl: 'https://example.com/pricing',
+        History: [{ Url: 'https://example.com/pricing', VisitedAt: '2026-11-17T16:00:00Z' }],
+        ScreenshotDataUrl: 'data:image/png;base64,AAAA',
+      });
+
+      // Unsafe javascript:/svg+xml payloads must be rejected.
+      const unsafeRestore = channel.RestoreState(JSON.stringify({
+        V: 1,
+        CurrentUrl: 'javascript:alert(1)',
+        History: [{ Url: 'javascript:alert(1)' }],
+        ScreenshotDataUrl: 'data:image/svg+xml;base64,PHN2Zz4=',
+      }));
+      expect(unsafeRestore).toBe(false);
     });
   });
 });

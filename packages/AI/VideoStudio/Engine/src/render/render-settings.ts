@@ -1,5 +1,13 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogWarning } from '@memberjunction/core';
+import {
+    DEFAULT_AUDIO_CHECK_THRESHOLDS,
+    DEFAULT_DUCKING_SETTINGS,
+    DEFAULT_LOUDNESS_TARGET,
+    type RenderAudioCheckThresholds,
+    type RenderDuckingSettings,
+    type RenderLoudnessTarget,
+} from '@memberjunction/video-studio-core';
 
 /** Default `VideoRenderDriverBase` registration key when `videoStudio.render.driver` is unset or invalid. */
 export const DEFAULT_VIDEO_RENDER_DRIVER = 'LocalWorker';
@@ -99,9 +107,30 @@ export interface VideoRenderDockerSettings {
 }
 
 /**
+ * Soundtrack settings sent to the worker in every `RenderRequest.AudioMix` (§8):
+ * automatic ducking, final loudness target, and audio check thresholds.
+ */
+export interface VideoRenderAudioSettings {
+    /** Automatic music ducking under narration (`videoStudio.render.audio.ducking`). */
+    Ducking: RenderDuckingSettings;
+    /** Final loudness normalization target (`videoStudio.render.audio.loudness`). */
+    Loudness: RenderLoudnessTarget;
+    /** Audio check thresholds (`videoStudio.render.audio.checks`). */
+    Checks: RenderAudioCheckThresholds;
+}
+
+/**
  * Normalized PascalCase settings for `VideoRenderEngine` and its drivers (§7.2).
  */
 export interface VideoRenderSettings {
+    /**
+     * Optional parallel HyperFrames capture workers per render (`videoStudio.render.workers`). The worker
+     * clamps it to its CPU count and `MAX_RENDER_CAPTURE_WORKERS`; when omitted the worker picks a
+     * CPU-based default (or `VIDEO_STUDIO_RENDER_WORKERS`), and `DockerRenderDriver` uses its `--cpus`.
+     */
+    Workers?: number;
+    /** Soundtrack mix, loudness, and audio check settings (defaults from `BuildDefaultAudioSettings()` when omitted). */
+    Audio?: VideoRenderAudioSettings;
     /** Registered `VideoRenderDriverBase` key (`'LocalWorker'`, `'Remote'`, or `'Docker'`). */
     Driver: string;
     /** Hard maximum allowed MP4 output size in bytes (default: `536_870_912` / 512 MiB). */
@@ -121,6 +150,8 @@ export interface VideoRenderSettings {
  */
 interface RawVideoRenderConfig {
     driver?: unknown;
+    workers?: unknown;
+    audio?: unknown;
     maxOutputBytes?: unknown;
     timeouts?: unknown;
     local?: unknown;
@@ -258,6 +289,115 @@ function buildDefaultRemoteSettings(): VideoRenderRemoteSettings {
     return remote;
 }
 
+/** Default soundtrack settings (see `DEFAULT_DUCKING_SETTINGS`, `DEFAULT_LOUDNESS_TARGET`, `DEFAULT_AUDIO_CHECK_THRESHOLDS`). */
+export function BuildDefaultAudioSettings(): VideoRenderAudioSettings {
+    return {
+        Ducking: { ...DEFAULT_DUCKING_SETTINGS },
+        Loudness: { ...DEFAULT_LOUDNESS_TARGET },
+        Checks: { ...DEFAULT_AUDIO_CHECK_THRESHOLDS },
+    };
+}
+
+function readBoolean(rawValue: unknown, fieldPath: string, defaultValue: boolean): boolean {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'boolean') {
+        return rawValue;
+    }
+    LogWarning(`${fieldPath} '${String(rawValue)}' is not a boolean; using default ${defaultValue}.`);
+    return defaultValue;
+}
+
+function readFiniteNumberInRange(
+    rawValue: unknown,
+    fieldPath: string,
+    defaultValue: number,
+    min: number,
+    max: number,
+): number {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue >= min && rawValue <= max) {
+        return rawValue;
+    }
+    LogWarning(`${fieldPath} '${String(rawValue)}' is not a number in [${min}, ${max}]; using default ${defaultValue}.`);
+    return defaultValue;
+}
+
+function readSubsection(parent: Record<string, unknown>, key: string, fieldPath: string): Record<string, unknown> | undefined {
+    const raw = parent[key];
+    if (raw === undefined || raw === null) {
+        return undefined;
+    }
+    if (!isPlainObject(raw)) {
+        LogWarning(`${fieldPath} in mj.config is not an object; using defaults.`);
+        return undefined;
+    }
+    return raw;
+}
+
+function readDuckingSettings(raw: Record<string, unknown> | undefined, defaults: RenderDuckingSettings): RenderDuckingSettings {
+    if (!raw) {
+        return defaults;
+    }
+    const path = 'videoStudio.render.audio.ducking';
+    return {
+        Enabled: readBoolean(raw.enabled, `${path}.enabled`, defaults.Enabled),
+        DuckDb: readFiniteNumberInRange(raw.duckDb, `${path}.duckDb`, defaults.DuckDb, -40, 0),
+        AttackSeconds: readFiniteNumberInRange(raw.attackMs, `${path}.attackMs`, defaults.AttackSeconds * 1000, 0, 2000) / 1000,
+        ReleaseSeconds: readFiniteNumberInRange(raw.releaseMs, `${path}.releaseMs`, defaults.ReleaseSeconds * 1000, 0, 5000) / 1000,
+    };
+}
+
+function readLoudnessSettings(raw: Record<string, unknown> | undefined, defaults: RenderLoudnessTarget): RenderLoudnessTarget {
+    if (!raw) {
+        return defaults;
+    }
+    const path = 'videoStudio.render.audio.loudness';
+    return {
+        Enabled: readBoolean(raw.enabled, `${path}.enabled`, defaults.Enabled),
+        IntegratedLufs: readFiniteNumberInRange(raw.integratedLufs, `${path}.integratedLufs`, defaults.IntegratedLufs, -70, -5),
+        TruePeakDb: readFiniteNumberInRange(raw.truePeakDb, `${path}.truePeakDb`, defaults.TruePeakDb, -9, 0),
+        LoudnessRangeLu: readFiniteNumberInRange(raw.lra, `${path}.lra`, defaults.LoudnessRangeLu, 1, 50),
+    };
+}
+
+function readAudioCheckSettings(raw: Record<string, unknown> | undefined, defaults: RenderAudioCheckThresholds): RenderAudioCheckThresholds {
+    if (!raw) {
+        return defaults;
+    }
+    const path = 'videoStudio.render.audio.checks';
+    return {
+        LoudnessToleranceLu: readFiniteNumberInRange(raw.loudnessToleranceLu, `${path}.loudnessToleranceLu`, defaults.LoudnessToleranceLu, 0.1, 20),
+        MinNarrationToMusicDb: readFiniteNumberInRange(raw.minNarrationToMusicDb, `${path}.minNarrationToMusicDb`, defaults.MinNarrationToMusicDb, 0, 40),
+        TruePeakToleranceDb: readFiniteNumberInRange(raw.truePeakToleranceDb, `${path}.truePeakToleranceDb`, defaults.TruePeakToleranceDb, 0, 6),
+        MinLinePauseSeconds: readFiniteNumberInRange(raw.minLinePauseSeconds, `${path}.minLinePauseSeconds`, defaults.MinLinePauseSeconds, 0.05, 2),
+        SilenceThresholdDb: readFiniteNumberInRange(raw.silenceThresholdDb, `${path}.silenceThresholdDb`, defaults.SilenceThresholdDb, -90, -20),
+    };
+}
+
+/**
+ * Reads `videoStudio.render.audio` (`ducking`, `loudness`, `checks`) into {@link VideoRenderAudioSettings}.
+ * Missing or invalid values fall back to the defaults with a warning. Never throws.
+ */
+export function ReadAudioSettings(rawAudio: unknown): VideoRenderAudioSettings {
+    const defaults = BuildDefaultAudioSettings();
+    if (rawAudio === undefined || rawAudio === null) {
+        return defaults;
+    }
+    if (!isPlainObject(rawAudio)) {
+        LogWarning('videoStudio.render.audio in mj.config is not an object; using default audio settings.');
+        return defaults;
+    }
+    return {
+        Ducking: readDuckingSettings(readSubsection(rawAudio, 'ducking', 'videoStudio.render.audio.ducking'), defaults.Ducking),
+        Loudness: readLoudnessSettings(readSubsection(rawAudio, 'loudness', 'videoStudio.render.audio.loudness'), defaults.Loudness),
+        Checks: readAudioCheckSettings(readSubsection(rawAudio, 'checks', 'videoStudio.render.audio.checks'), defaults.Checks),
+    };
+}
+
 function buildDefaultDockerSettings(): VideoRenderDockerSettings {
     return {
         Image: DEFAULT_DOCKER_RENDER_IMAGE,
@@ -277,6 +417,7 @@ function buildDefaultDockerSettings(): VideoRenderDockerSettings {
 export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): VideoRenderSettings {
     const defaults: VideoRenderSettings = {
         Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+        Audio: BuildDefaultAudioSettings(),
         MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
         Timeouts: {
             StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
@@ -449,8 +590,11 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         }
     }
 
+    const workers = readOptionalPositiveInteger(renderSection.workers, 'videoStudio.render.workers');
     return {
         Driver: driver,
+        ...(workers !== undefined ? { Workers: workers } : {}),
+        Audio: ReadAudioSettings(renderSection.audio),
         MaxOutputBytes: maxOutputBytes,
         Timeouts: timeouts,
         Local: local,
