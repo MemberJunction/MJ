@@ -2030,7 +2030,7 @@ describe('ArtifactToolManager', () => {
             const result = await manager.ExecuteSingleToolCall({
                 artifactId: 'A',
                 tool: 'replace_block',
-                input: { blockId: firstBlock.blockId, content: 'Agent edit.' },
+                input: { blockId: firstBlock.blockId, markdown: 'Agent edit.' },
             });
 
             expect(saveCount).toBe(2);
@@ -2136,7 +2136,7 @@ describe('ArtifactToolManager', () => {
             const result = await manager.ExecuteSingleToolCall({
                 artifactId: 'A',
                 tool: 'replace_block',
-                input: { blockId: firstBlock.blockId, content: 'Agent edit.' },
+                input: { blockId: firstBlock.blockId, markdown: 'Agent edit.' },
             });
 
             expect(result.result.success).toBe(false);
@@ -3554,5 +3554,53 @@ describe('ArtifactToolManager', () => {
                 expect(data.initialOperationResults?.map((r) => r.tool)).toEqual(['write_cells']);
             });
         });
+    });
+
+    it('rejects invalid tool parameters upfront against tool inputSchema before invoking DB checks or library execution', async () => {
+        const localManager = new ArtifactToolManager();
+        const runViewSpy = vi.fn(async () => ({ Success: true, Results: [] }));
+        const user = new UserInfo();
+        user.ID = '11111111-0099-4000-8000-000000000099';
+        user.Name = 'Schema Tester';
+        user.Email = 'schema@example.com';
+        user.IsActive = true;
+
+        localManager.Initialize(
+            [
+                {
+                    name: 'Deck.slides.json',
+                    typeName: 'Presentation',
+                    toolLibraryClass: 'SlideDeckToolLibrary',
+                    artifactId: 'dddd1111-2222-4333-8444-999999999999',
+                    versionId: 'ver-schema-1',
+                    versionNumber: 1,
+                    content: JSON.stringify({ Title: 'Deck', Slides: [] }),
+                },
+            ],
+            {
+                contextUser: user,
+                provider: Object.assign(Object.create(null) as IMetadataProvider, { RunView: runViewSpy }),
+            },
+        );
+
+        const badLayout = await localManager.ExecuteSingleToolCall({
+            artifactId: 'A',
+            tool: 'add_slide',
+            input: { title: 'Test Slide', layout: 'InventedLayout' },
+        });
+        expect(badLayout.result.success).toBe(false);
+        expect(badLayout.result.errorMessage).toContain("Invalid parameters for tool 'add_slide'");
+        expect(badLayout.result.errorMessage).toContain('layout');
+        expect((badLayout.result.data as { validationErrors: string[] }).validationErrors.length).toBeGreaterThan(0);
+
+        const missingRequired = await localManager.ExecuteSingleToolCall({
+            artifactId: 'A',
+            tool: 'update_slide',
+            input: { title: 'Missing SlideID' },
+        });
+        expect(missingRequired.result.success).toBe(false);
+        expect(missingRequired.result.errorMessage).toContain('slideId');
+        // Never wasted a DB RunView / permission round trip on invalid params
+        expect(runViewSpy).not.toHaveBeenCalled();
     });
 });

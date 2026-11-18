@@ -107,6 +107,8 @@ export interface SuiteFlags extends CommonFlags {
      * Filter tests in the suite by transport layer (`'server'` | `'client'` | `'all'`).
      */
     transport?: 'server' | 'client' | 'all';
+    /** Run only these suite tests, by exact name. */
+    test?: string[];
 }
 
 /**

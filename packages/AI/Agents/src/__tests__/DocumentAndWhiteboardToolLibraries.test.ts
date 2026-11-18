@@ -954,7 +954,7 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
       // 4. SlideDeckToolLibrary.upsert_slide_element resolves mjBlock.ArtifactID "D" -> UUID and mjBlock.VersionID "E" -> UUID
       const deckRes = await slideLib.InvokeTool(
         'add_slide',
-        { title: 'Trade Sheet Slide', layout: 'title-body' },
+        { title: 'Trade Sheet Slide', layout: 'TitleAndBody' },
         '',
         ctx,
       );

@@ -28,7 +28,6 @@ import { CoreGeneratedFormsModule } from '@memberjunction/ng-core-entity-forms';
 import { WorkspaceInitializerModule } from '@memberjunction/ng-workspace-initializer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
 
 /**
@@ -40,7 +39,6 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
  * This module provides:
  * - All MemberJunction Explorer functionality (forms, grids, directives, shell)
  * - Workspace initialization
- * - User settings and preferences
  *
  * @module MJExplorerModulesBundle
  */
@@ -52,7 +50,6 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
     WorkspaceInitializerModule,
     LinkDirectivesModule,
     ContainerDirectivesModule,
-    ExplorerSettingsModule,
     ShellModule,
   ]
 })

@@ -66,7 +66,7 @@ import type {
               </button>
             }
           </div>
-          @if (ActiveRecord; as active) {
+          @if (!ReadOnly && ActiveRecord; as active) {
             <button
               type="button"
               class="aw-close"
@@ -97,8 +97,8 @@ import type {
                     [Provider]="Provider"
                     [environmentId]="EnvironmentID"
                     [refreshTrigger]="RefreshTrigger$"
-                    [canEdit]="record.CanEdit ?? false"
-                    [viewMode]="record.ViewMode ?? 'edit'"
+                    [canEdit]="ReadOnly ? false : (record.CanEdit ?? false)"
+                    [viewMode]="ReadOnly ? 'edit' : (record.ViewMode ?? 'edit')"
                     [navigationAnchor]="GetNavigationAnchorForRecord(record)"
                     [showHeader]="false"
                     [showTabs]="false"
@@ -264,6 +264,7 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
   @Input() public AgentName = 'The agent';
   @Input() public CurrentUser: UserInfo | null = null;
   @Input() public EnvironmentID = '';
+  @Input() public ReadOnly = false;
 
   @Input()
   public set Engine(value: ArtifactWorkspaceEngine | null) {

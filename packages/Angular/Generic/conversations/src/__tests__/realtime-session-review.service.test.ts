@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Subject } from 'rxjs';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, RunView, RunViewParams } from '@memberjunction/core';
 import type { RealtimeCaption, RealtimeDelegationNarration, RealtimeDelegationProgress, RealtimeDelegationResult } from '@memberjunction/realtime-runtime';
 import {
@@ -218,6 +219,34 @@ describe('RealtimeSessionReviewService', () => {
       expect(review?.TargetAgentID).toBe('AGENT-CO');
     });
 
+    it('resolves the target agent display name (e.g. Sage) from AIEngineBase when Config carries a distinct targetAgentID', async () => {
+      vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue({
+        Agents: [{ ID: 'AGENT-TARGET', Name: 'Sage' }]
+      } as unknown as AIEngineBase);
+      mockRunViews([ok([sessionRow()]), ok([]), ok([]), ok([])]);
+      const review = await service.LoadSessionReview('SESSION-1', provider);
+      expect(review?.AgentName).toBe('Sage');
+      expect(review?.TargetAgentID).toBe('AGENT-TARGET');
+    });
+
+    it('extracts ModelID from Config.realtimeMintSnapshot.modelID so resume keeps the session voice model', async () => {
+      mockRunViews([
+        ok([
+          sessionRow({
+            Config: JSON.stringify({
+              targetAgentID: 'AGENT-TARGET',
+              realtimeMintSnapshot: { modelID: 'MODEL-GROK-VOICE-3' }
+            })
+          })
+        ]),
+        ok([]),
+        ok([]),
+        ok([])
+      ]);
+      const review = await service.LoadSessionReview('SESSION-1', provider);
+      expect(review?.ModelID).toBe('MODEL-GROK-VOICE-3');
+    });
+
     it('tolerates malformed Config JSON (fallback target, no run exclusion)', async () => {
       mockRunViews([ok([sessionRow({ Config: '{not json' })]), ok([]), ok([runRow('RUN-CO')]), ok([])]);
       const review = await service.LoadSessionReview('SESSION-1', provider);
@@ -415,11 +444,34 @@ describe('RealtimeSessionReviewService', () => {
       expect(review?.Legs.map(l => l.SessionID)).toEqual(['SESSION-A', 'SESSION-B']);
       expect(review?.Legs[0].CloseReason).toBe('Janitor');
       expect(review?.Turns.map(t => t.Text)).toEqual(['first leg turn', 'second leg turn']);
-      // Prior-leg query carries NO channel query (channel state is latest-leg-only).
+      // Prior-leg queries also collect channels so earlier legs' saved channel states merge forward.
       expect(capturedCalls[1].map(p => p.EntityName)).toEqual([
         'MJ: AI Agent Sessions',
         'MJ: Conversation Details',
-        'MJ: AI Agent Runs'
+        'MJ: AI Agent Runs',
+        'MJ: AI Agent Session Channels'
+      ]);
+    });
+
+    it('preserves earlier legs saved channel states across a multi-leg session chain', async () => {
+      mockRunViewsSequence([
+        [
+          ok([sessionRow({ ID: 'SESSION-B', LastSessionID: 'SESSION-A' })]),
+          ok([]),
+          ok([]),
+          ok([channelRow('Media', '{"items":[]}')])
+        ],
+        [
+          ok([sessionRow({ ID: 'SESSION-A' })]),
+          ok([]),
+          ok([]),
+          ok([channelRow('Remote Browser', '{"url":"https://example.com"}')])
+        ]
+      ]);
+      const review = await service.LoadSessionReview('SESSION-B', provider);
+      expect(review?.ChannelStates).toEqual([
+        { ChannelName: 'Remote Browser', StateJson: '{"url":"https://example.com"}' },
+        { ChannelName: 'Media', StateJson: '{"items":[]}' }
       ]);
     });
 

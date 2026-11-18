@@ -1,5 +1,117 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- 16a66fc: Tests only: field-level security integration checks for related rows, constraint-error redaction and the enable snapshot (#5981, #5982, #5988), and a provider-level test that a failed save hides the SQL and quoted values from a caller denied a field.
+- 0aff9f9: Loading a record (including its relationships), checking record dependencies, and the row-level security check on a record now refuse a value for a numeric primary key that is not a number, with a clear error, instead of failing later in the database. Cleaning up geocodes after a delete and loading relationships now handle a key containing a quote, and numeric SET values in SQL Server save statements are validated as decimal/scientific number literals.
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- cd8e5e5: A tracked save's Record Change `FullRecordJSON` is now built in the save's own statement from the row the save returned (`@ResultTable` on SQL Server, `save_result` on PostgreSQL), not serialized from the entity in memory before the save. It costs no extra round trip.
+  - The snapshot holds what the database stored: a column another server changed after this object was loaded, the new `__mj_UpdatedAt`, server-set defaults and IDs on a create, and current joined display values. Restoring a version no longer reverts another writer's change.
+  - Encrypted columns are recorded as their stored ciphertext. Before, the decrypted value was written to the audit table.
+  - PostgreSQL no longer stores `'` as `''` in `FullRecordJSON`.
+  - Values are written as a loaded entity serializes them: date-times as UTC ISO-8601 with milliseconds and `Z` (including `datetime`/`datetime2`, which have no offset), `bigint` as a string, binary as base64, JSON columns as text, and SQL Server spatial and `hierarchyid` columns as text.
+  - Entities whose save procedure returns datestamps only keep the in-memory snapshot, as do SQL Server entities with a `.` in a column name.
+  - A restricted user's update reads stored values only for the fields it wrote without being able to read them; it no longer reads the rest of the row to widen the snapshot.
+
+- dc30912: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `SqlTypeBaseName` in `@memberjunction/core` for stripping a SQL type's parameter list, an index scan for query template tags, a linear parser for simple aggregate expressions, and a loop for the next token in a SQL Server `DECLARE` list. Results are unchanged for every input.
+- d1bf1c9: RunView binds the user's row-level-security values as query parameters, so every user runs the same SQL text and the database reuses one plan per query shape (#5713).
+- 0af123e: Check `TransactionGroup` updates for concurrent changes, as single-record saves already are. An update queued with `ConcurrencyCheck` of `'log'` or `'enforce'` (per save, or the provider-wide setting) now gets a locked read of its row inside the group's transaction, before any of the group's statements run; in `'enforce'` mode a conflict rolls back the whole group, `Submit()` returns `false`, and the conflicting entity's `LatestResult.ConcurrencyConflict` names the fields. Groups with checking off do no extra work, and batched submits stay batched. Grouped saves from the browser now send each update's old values, and `ExecuteTransactionGroup` checks them the way the single-record update mutation does, so a form that saves child records alongside its main record no longer silently overwrites another user's change. Adds integration test IT173.
+- 1197598: Optimize MJServer per-request context initialization, cross-instance cache invalidation, O(1) user auth lookups, and long-lived server memory retention:
+  - **Zero-allocation lazy per-request `ProviderInfo` + synchronous global metadata config (`@memberjunction/core`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`)**: Avoid eager per-request `SQLServerDataProvider` construction and `Promise.all` async metadata configuration on warm GraphQL requests via `ConfigureFromGlobalSync`, pool-level resolved view column order sharing, and automatic `DetachInvalidationListeners()` cleanup on HTTP response close.
+  - **Origin session stamping & cross-instance entity invalidation (`@memberjunction/server`)**: Propagate `sessionId` via `AsyncLocalStorage` + `WeakMap` provider stamping (`ResolveOriginSessionId`) so browser self-echo suppression works for mutations executed outside `ResolverBase`, suppress read-only `Action: 'set'` cache-populate browser storms, and broadcast entity save/delete events across horizontal MJServer instances over `'entity-cache-invalidation'`.
+  - **O(1) `UserCache` email/ID indexes (`@memberjunction/generic-database-provider`, `@memberjunction/server`)**: Index users by normalized email and UUID with deterministic duplicate-email ordering and blank-email diagnostics so every authenticated request resolves its `UserInfo` in `O(1)`.
+  - **Eliminate `GetDataResolver` & `ResolverBase` memory leaks (`@memberjunction/server`)**: Store lightweight query summary stats (capped at 100 entries per token) instead of retaining multi-MB SQL result sets in `GetDataResolver` token history, and consolidate ~455 per-subclass `MJGlobal` entity event subscriptions into a single shared process-wide listener with TTL cleanup.
+
+- 64cc6f4: Wave 4.3a runtime SQL and `TransactionGroup` optimizations: release database locks (`CommitGroupTransaction` / `RollbackGroupTransaction`) before `TransactionNotifications$` and `LocalCacheManager.EndEntityEventBatch`, defer transactional `GeoCodeSyncService` HTTP I/O via `RunAfterCommit`, skip redundant post-hook `CheckCreateRLS` when `BeforeSave` leaves field state unchanged, quote `UserViewID` / `UserViewRunID` GUID filters, rewrite eligible `COUNT(*)` queries to `BaseTable`, extend bound-parameter RLS to `Load` and `CheckCreateRLS` / `CheckUpdateRLSPostImage`, chunk `SQLServerTransactionGroup.BatchedSubmit` under SQL Server's 2,100-parameter ceiling, and implement `ExecuteSQLBatch` + `UNION ALL` `getBatchedServerCacheStatus` on `PostgreSQLDataProvider`.
+- 3e9d745: Wave 5 backend and core performance optimizations:
+  - **Zero-readback `TrackRecordChanges` (`@memberjunction/sqlserver-dataprovider`)**: Add optional `@EntityID` and `@SuppressReturn` parameters to `[__mj].[spCreateRecordChange_Internal]` and emit `@EntityID` + `@SuppressReturn=1` inside inline save/delete batches instead of allocating `@ResultChangesTable` and joining `vwRecordChanges` for discarded rows. Also terminate `TrackRecordChanges` delete statements with `;` and harden `SQLServerTransactionGroup.ScopeItemVariables` EXEC-span boundary detection.
+  - **Batched `RelatedRecordCollection` request deserialization (`@memberjunction/core`)**: Preload existing child rows and pending removals in O(1) `RunView` queries per entity type (`BaseEntity.HydrateFromRow`) instead of N serial `InnerLoad` roundtrips when entities use default `InnerLoad`.
+  - **Contiguous leaf-node batching in `EntitySavePlan` (`@memberjunction/core`)**: Group consecutive homogeneous `CanBatchLeaf` steps inside `ExecuteEntitySavePlan` into a `TransactionGroup` with `BatchedSubmit = true`.
+  - **Savepoint-safe post-commit task coalescing (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**: Add `ScheduleAfterCommit` (`coalesceKey`, `coalesceMode`: `'coalesce' | 'dedupe' | 'append'`) on `DatabaseProviderBase` / `GenericDatabaseProvider`, respecting transaction rollback and savepoints.
+  - **Pure-interpolation template fast-path (`@memberjunction/templates`)**: Compile pure `{{ a.b }}` Nunjucks templates without tags, filters, or comments directly against the sandboxed member lookup helpers (`ResolveSafeMemberLookup` / `ResolveSafeRootBinding`).
+  - **`UserInfo` linked entity typing (`@memberjunction/core`)**: Fix `UserInfo.LinkedEntityID` and `UserInfo.LinkedEntityRecordID` from `number` to `string`.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/encryption@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/queue@6.3.0-edge.1
+  - @memberjunction/query-processor@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

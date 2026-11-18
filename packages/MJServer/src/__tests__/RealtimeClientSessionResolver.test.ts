@@ -1812,6 +1812,107 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(Object.keys(states)).toEqual(['First']);
     });
 
+    it('merges channel states across a multi-leg LastSessionID chain (newest non-empty state wins, earlier-leg channels preserved)', async () => {
+        setupHappyStart();
+        const sessionA = makeSessionEntity({ ID: PRIOR_1, UserID: 'user-1', LastSessionID: null });
+        const sessionB = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+        const conversation = makeSessionEntity({ ExternalID: 'scope-res-1' });
+        const runView = vi.fn(async () => ({
+            Success: true,
+            Results: [
+                // Returned out of order by DB — resolver must sort newest leg (PRIOR_2) ahead of PRIOR_1.
+                { AgentSessionID: PRIOR_1, Channel: 'Remote Browser', Config: '{"url":"https://leg1.example"}' },
+                { AgentSessionID: PRIOR_1, Channel: 'ArtifactWorkspace', Config: '{"active":"leg1"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'ArtifactWorkspace', Config: '{"active":"leg2"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'Media', Config: '{"items":[1]}' },
+            ],
+        }));
+        const resolver = makeResolver();
+
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name?: string) => {
+                if (name === 'MJ: Conversations') {
+                    return conversation;
+                }
+                const wrapper = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+                wrapper.Load = vi.fn(async (id: string) => {
+                    if (id === PRIOR_2) {
+                        Object.assign(wrapper, sessionB);
+                        return true;
+                    }
+                    if (id === PRIOR_1) {
+                        Object.assign(wrapper, sessionA);
+                        return true;
+                    }
+                    return false;
+                });
+                return wrapper;
+            }),
+            RunView: runView,
+        };
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
+        expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
+            ArtifactWorkspace: '{"active":"leg2"}',
+            Media: '{"items":[1]}',
+            'Remote Browser': '{"url":"https://leg1.example"}',
+        });
+    });
+
+    it('synthesizes ArtifactWorkspace restore state from ConversationDetailArtifact when no ArtifactWorkspace channel row was saved', async () => {
+        setupHappyStart();
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'art-doc',
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+        });
+        const runView = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: AI Agent Session Channels':
+                    return { Success: true, Results: [{ AgentSessionID: PRIOR_1, Channel: 'Media', Config: '{"items":[]}' }] };
+                case 'MJ: Conversation Details':
+                    return { Success: true, Results: [{ ID: 'det-1' }] };
+                case 'MJ: Conversation Detail Artifacts':
+                    return { Success: true, Results: [{ ConversationDetailID: 'det-1', ArtifactVersionID: 'ver-doc' }] };
+                case 'MJ: Artifact Versions':
+                    return { Success: true, Results: [{ ID: 'ver-doc', ArtifactID: 'art-doc', VersionNumber: 2, Name: 'Demo Document' }] };
+                case 'MJ: Artifacts':
+                    return { Success: true, Results: [{ ID: 'art-doc', Name: 'Demo Document', Type: 'Markdown Document' }] };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const { provider: baseProvider } = makeRestoreProvider({});
+        currentProvider = {
+            ...(baseProvider as object),
+            RunView: runView,
+        };
+        const resolver = makeResolver();
+
+        try {
+            const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+            const parsed = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
+            expect(parsed.Media).toBe('{"items":[]}');
+            expect(JSON.parse(parsed.ArtifactWorkspace)).toEqual({
+                activeArtifactId: 'art-doc',
+                instances: [
+                    {
+                        ArtifactID: 'art-doc',
+                        ArtifactVersionID: 'ver-doc',
+                        VersionNumber: 2,
+                        Name: 'Demo Document',
+                        ArtifactTypeName: 'Markdown Document',
+                    },
+                ],
+            });
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
     it('tolerates a failed restore query (start succeeds, field omitted)', async () => {
         setupHappyStart();
         const { provider } = makeRestoreProvider({ runViewResult: { Success: false, ErrorMessage: 'db down' } });
