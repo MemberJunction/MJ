@@ -19,12 +19,16 @@ interface MockRunViewParams {
     MaxRows?: number;
     StartRow?: number;
     AfterKey?: { KeyValuePairs: Array<{ FieldName: string; Value: string }> };
+    BypassCache?: boolean;
 }
 
 const mockRunViewCalls: MockRunViewParams[] = [];
 
-/** The row cap a view applies when MaxRows is absent, as UserViewMaxRows does. */
+/** The row cap the view applies whatever MaxRows asks for, as UserViewMaxRows can. */
 const MOCK_USER_VIEW_MAX_ROWS = 1000;
+
+/** Queries after which the mock refuses to answer, so a paging loop that never ends fails fast. */
+const MOCK_RUNAWAY_QUERY_LIMIT = 200;
 
 /**
  * Whether a row still matches the filter. Tests replace it to model rows that leave the
@@ -32,16 +36,24 @@ const MOCK_USER_VIEW_MAX_ROWS = 1000;
  */
 let mockRowMatchesFilter: (record: MockBaseEntity) => boolean = () => true;
 
+/** The first ID literal of a composite-key seek filter (`[ID] > N'rec-0099'`), if any. */
+function seekAfterId(extraFilter: string | undefined): string | undefined {
+    return extraFilter?.match(/\[ID\] > N?'([^']*)'/)?.[1];
+}
+
 /**
  * Serves mockRunViewResults.Results as a table ordered by ID: applies the filter predicate,
- * then AfterKey (rows with a greater ID) or StartRow (1-based), then MaxRows, else the
- * UserViewMaxRows cap.
+ * then AfterKey or a composite-key seek (rows with a greater ID) or StartRow (1-based), then
+ * MaxRows, never returning more than the UserViewMaxRows cap.
  */
 function serveRunView(params: MockRunViewParams): { Success: boolean; Results: MockBaseEntity[]; ErrorMessage?: string } {
+    if (mockRunViewCalls.length > MOCK_RUNAWAY_QUERY_LIMIT) {
+        throw new Error(`runaway paging: more than ${MOCK_RUNAWAY_QUERY_LIMIT} queries`);
+    }
     if (!mockRunViewResults.Success) {
         return mockRunViewResults;
     }
-    const afterId = params.AfterKey?.KeyValuePairs[0]?.Value;
+    const afterId = params.AfterKey?.KeyValuePairs[0]?.Value ?? seekAfterId(params.ExtraFilter);
     let rows = [...mockRunViewResults.Results]
         .filter(r => mockRowMatchesFilter(r))
         .sort((a, b) => (a.ID < b.ID ? -1 : a.ID > b.ID ? 1 : 0));
@@ -51,25 +63,49 @@ function serveRunView(params: MockRunViewParams): { Success: boolean; Results: M
     if (params.StartRow) {
         rows = rows.slice(params.StartRow - 1);
     }
-    return { Success: true, Results: rows.slice(0, params.MaxRows ?? MOCK_USER_VIEW_MAX_ROWS) };
+    return { Success: true, Results: rows.slice(0, Math.min(params.MaxRows ?? MOCK_USER_VIEW_MAX_ROWS, MOCK_USER_VIEW_MAX_ROWS)) };
 }
 
 const mockDetailSave = vi.fn(() => Promise.resolve(true));
 
-/** Primary keys of the entity being archived; tests set two to exercise StartRow paging. */
-let mockPrimaryKeys: Array<{ Name: string; Type: string }> = [{ Name: 'ID', Type: 'uniqueidentifier' }];
+interface MockKeyField {
+    Name: string;
+    Type: string;
+    TSType: 'string' | 'number' | 'Date' | 'boolean';
+}
+
+/** Primary keys of the entity being archived; tests set two to exercise composite-key paging. */
+let mockPrimaryKeys: MockKeyField[] = [{ Name: 'ID', Type: 'uniqueidentifier', TSType: 'string' }];
+/** The platform the processor resolves from its provider. */
+let mockPlatform: 'sqlserver' | 'postgresql' = 'sqlserver';
 
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     IsKeysetPaginationOrderableType: (type: string) => ['uniqueidentifier', 'int', 'nvarchar'].includes(type),
+    ResolvePlatformKey: () => mockPlatform,
+    EntityFieldTSType: { String: 'string', Number: 'number', Date: 'Date', Boolean: 'boolean' },
+    CompositeKey: class MockCompositeKey {
+        KeyValuePairs: Array<{ FieldName: string; Value: unknown }>;
+        constructor(pairs: Array<{ FieldName: string; Value: unknown }>) {
+            this.KeyValuePairs = pairs;
+        }
+        GetValueByFieldName(name: string): unknown {
+            return this.KeyValuePairs.find(kvp => kvp.FieldName === name)?.Value;
+        }
+    },
     Metadata: class MockMetadata {
         GetEntityObject = vi.fn().mockResolvedValue(createMockEntity());
         static Provider = {
             GetEntityObject: vi.fn(() =>
                 Promise.resolve({ Set: vi.fn(), Save: mockDetailSave })
             ),
-            EntityByName: vi.fn((name: string) => ({ Name: name, PrimaryKeys: mockPrimaryKeys })),
+            EntityByName: vi.fn((name: string) => ({
+                Name: name,
+                PrimaryKeys: mockPrimaryKeys,
+                // Every field exists except NotAField; FieldByName is case-insensitive like the real one.
+                FieldByName: (field: string) => (field && field.toLowerCase() !== 'notafield' ? { Name: field } : undefined),
+            })),
         };
     },
     RunView: class MockRunView {
@@ -136,9 +172,10 @@ interface MockBaseEntity {
     DefaultBatchSize?: number;
 }
 
+/** A key over mockPrimaryKeys: ID holds `id`; any other key column holds 1. */
 function createMockPrimaryKey(id: string) {
     return {
-        KeyValuePairs: [{ FieldName: 'ID', Value: id }],
+        KeyValuePairs: mockPrimaryKeys.map(k => ({ FieldName: k.Name, Value: k.Name === 'ID' ? id : '1' })),
         Values: (delimiter?: string) => id,
     };
 }
@@ -253,7 +290,8 @@ describe('ArchiveProcessor', () => {
         mockRunViewResults.ErrorMessage = undefined;
         mockRunViewCalls.length = 0;
         mockRowMatchesFilter = () => true;
-        mockPrimaryKeys = [{ Name: 'ID', Type: 'uniqueidentifier' }];
+        mockPrimaryKeys = [{ Name: 'ID', Type: 'uniqueidentifier', TSType: 'string' }];
+        mockPlatform = 'sqlserver';
         mockBuildEligibilityFilter.mockReturnValue(null);
         mockShouldArchive.mockReturnValue(true);
         mockArchiveRecord.mockResolvedValue({
@@ -651,7 +689,7 @@ describe('ArchiveProcessor', () => {
                 createMockConfigEntity(validFieldConfigJson, { RetentionDays: null }),
                 createMockConfig({ DefaultRetentionDays: 30 })
             );
-            expect(filter).toBe("__mj_CreatedAt < '2026-09-15T00:00:00.000Z'");
+            expect(filter).toBe("[__mj_CreatedAt] < '2026-09-15T00:00:00.000Z'");
         });
 
         it('should use the entity RetentionDays over the configuration default', async () => {
@@ -659,7 +697,7 @@ describe('ArchiveProcessor', () => {
                 createMockConfigEntity(validFieldConfigJson, { RetentionDays: 7 }),
                 createMockConfig({ DefaultRetentionDays: 30 })
             );
-            expect(filter).toBe("__mj_CreatedAt < '2026-10-08T00:00:00.000Z'");
+            expect(filter).toBe("[__mj_CreatedAt] < '2026-10-08T00:00:00.000Z'");
         });
 
         it('should append the FilterExpression to the retention cutoff', async () => {
@@ -667,7 +705,7 @@ describe('ArchiveProcessor', () => {
                 createMockConfigEntity(validFieldConfigJson, { RetentionDays: 7, FilterExpression: "Status = 'Closed'" }),
                 createMockConfig()
             );
-            expect(filter).toBe("__mj_CreatedAt < '2026-10-08T00:00:00.000Z' AND (Status = 'Closed')");
+            expect(filter).toBe("[__mj_CreatedAt] < '2026-10-08T00:00:00.000Z' AND (Status = 'Closed')");
         });
 
         it('should refuse a negative retention period without reading any records', async () => {
@@ -683,7 +721,7 @@ describe('ArchiveProcessor', () => {
                 createMockConfigEntity(validFieldConfigJson, { RetentionDays: 0 }),
                 createMockConfig({ DefaultRetentionDays: 30 })
             );
-            expect(filter).toBe("__mj_CreatedAt < '2026-10-15T00:00:00.000Z'");
+            expect(filter).toBe("[__mj_CreatedAt] < '2026-10-15T00:00:00.000Z'");
         });
 
         it('should refuse to select records when the entity has no DateField', async () => {
@@ -751,7 +789,7 @@ describe('ArchiveProcessor', () => {
         }): Promise<import('../ArchiveProcessor').EntityProcessingResult> {
             mockRunViewResults.Results = options.records;
             return processor.ProcessEntity(
-                createMockConfigEntity(validFieldConfigJson, { BatchSize: options.batchSize, Mode: options.mode ?? 'StripFields' }) as unknown as MJArchiveConfigurationEntityEntity,
+                createMockConfigEntity(validFieldConfigJson, { Entity: 'Test Entity', BatchSize: options.batchSize, Mode: options.mode ?? 'StripFields' }) as unknown as MJArchiveConfigurationEntityEntity,
                 createMockConfig({ StorageMode: options.storageMode ?? 'Purge' }) as unknown as MJArchiveConfigurationEntity,
                 createMockEntity({ ID: 'run-1' }) as unknown as MJArchiveRunEntity,
                 null,
@@ -759,77 +797,127 @@ describe('ArchiveProcessor', () => {
             );
         }
 
-        /** IDs of the records handed to the driver, in order. */
-        function archivedIds(): string[] {
-            return mockArchiveRecord.mock.calls.map(call => (call[0] as ArchiveRecordContext).Record.PrimaryKey.Values());
-        }
+        /** IDs of the records handed to the driver, in order, read when the driver receives them. */
+        const handedIds: string[] = [];
 
-        /** Makes archived records leave the filter, as a StripFields run with an eligibility filter does. */
+        beforeEach(() => {
+            handedIds.length = 0;
+            mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
+                handedIds.push(context.Record.PrimaryKey.Values());
+                return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
+            });
+        });
+
+        /** Makes processed records leave the filter, as a StripFields run with an eligibility filter does. */
         function archivedRecordsLeaveFilter(): void {
             const archived = new Set<string>();
             mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
+                handedIds.push(context.Record.PrimaryKey.Values());
                 archived.add(context.Record.PrimaryKey.Values());
                 return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
             });
             mockRowMatchesFilter = record => !archived.has(record.ID);
         }
 
+        /**
+         * Models a HardDelete: the row leaves the table, and the entity object clears its key the
+         * way BaseEntity.Delete() does (NewRecord() gives it a fresh key, or none).
+         */
+        function deletesClearTheKey(freshKey: (id: string) => string | null): void {
+            const deleted = new Set<string>();
+            mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
+                const id = context.Record.PrimaryKey.Values();
+                handedIds.push(id);
+                deleted.add(id);
+                const record = context.Record as unknown as MockBaseEntity;
+                record.PrimaryKey = { KeyValuePairs: [{ FieldName: 'ID', Value: freshKey(id) as string }], Values: () => String(freshKey(id)) };
+                return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
+            });
+            mockRowMatchesFilter = record => !deleted.has(record.ID);
+        }
+
         it('should process every eligible record in one run, beyond the batch size and the view row cap', async () => {
             const result = await runEntity({ records: createRecords(2500), batchSize: 100 });
 
             expect(result.Archived).toBe(2500);
-            expect(new Set(archivedIds()).size).toBe(2500);
-            expect(mockRunViewCalls.every(call => call.MaxRows === 100)).toBe(true);
+            expect(new Set(handedIds).size).toBe(2500);
+            expect(mockRunViewCalls.every(call => call.MaxRows === 100 && call.BypassCache === true)).toBe(true);
         });
 
         it('should load one batch per query, ordered by primary key, after the last key of the previous page', async () => {
             await runEntity({ records: createRecords(250), batchSize: 100 });
 
-            expect(mockRunViewCalls.map(call => call.AfterKey?.KeyValuePairs[0].Value)).toEqual([undefined, 'rec-0099', 'rec-0199']);
+            expect(mockRunViewCalls.map(call => call.AfterKey?.KeyValuePairs[0].Value)).toEqual([undefined, 'rec-0099', 'rec-0199', 'rec-0249']);
             expect(mockRunViewCalls.every(call => call.OrderBy === 'ID' && call.StartRow === undefined)).toBe(true);
         });
 
-        it('should stop after a page that comes back short', async () => {
+        it('should stop at the first empty page', async () => {
             await runEntity({ records: createRecords(150), batchSize: 100 });
-            expect(mockRunViewCalls).toHaveLength(2);
+            expect(mockRunViewCalls.map(call => call.AfterKey?.KeyValuePairs[0].Value)).toEqual([undefined, 'rec-0099', 'rec-0149']);
         });
 
-        it('should stop after an empty page when the count is an exact multiple of the batch size', async () => {
-            const result = await runEntity({ records: createRecords(200), batchSize: 100 });
-            expect(mockRunViewCalls).toHaveLength(3);
-            expect(result.Archived).toBe(200);
+        it('should keep paging when the view returns fewer rows than the batch size asks for', async () => {
+            const result = await runEntity({ records: createRecords(2500), batchSize: 5000 });
+
+            expect(result.Archived).toBe(2500);
+            expect(new Set(handedIds).size).toBe(2500);
         });
 
         it('should add the driver eligibility filter so stripped records are not loaded again', async () => {
-            mockBuildEligibilityFilter.mockReturnValue('Description IS NOT NULL OR Notes IS NOT NULL');
+            mockBuildEligibilityFilter.mockReturnValue('[Description] IS NOT NULL OR [Notes] IS NOT NULL');
             archivedRecordsLeaveFilter();
 
             const result = await runEntity({ records: createRecords(250), batchSize: 100 });
 
             expect(result.Archived).toBe(250);
-            expect(archivedIds()).toHaveLength(250);
-            expect(mockRunViewCalls[0].ExtraFilter).toContain(' AND (Description IS NOT NULL OR Notes IS NOT NULL)');
+            expect(handedIds).toHaveLength(250);
+            expect(mockRunViewCalls[0].ExtraFilter).toContain(' AND ([Description] IS NOT NULL OR [Notes] IS NOT NULL)');
+        });
+
+        it('should hand the driver the field configuration, entity metadata and configuration records', async () => {
+            await runEntity({ records: createRecords(1), batchSize: 100 });
+
+            const context = mockBuildEligibilityFilter.mock.calls[0][0] as import('../types').EligibilityFilterContext;
+            expect(context.FieldConfig.Fields.map(f => f.FieldName)).toEqual(['Description', 'Notes']);
+            expect(context.EntityInfo.Name).toBe('Test Entity');
+            expect(context.ConfigEntity).toBeDefined();
+            expect(context.Config).toBeDefined();
         });
 
         it('should count a failed record, keep going, and not load the failed record again', async () => {
-            mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => Promise.resolve(
-                context.Record.PrimaryKey.Values() === 'rec-1500'
+            mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
+                const id = context.Record.PrimaryKey.Values();
+                handedIds.push(id);
+                return Promise.resolve(id === 'rec-1500'
                     ? { Success: false, StoragePath: null, BytesArchived: 0, ErrorMessage: 'save blocked' }
-                    : { Success: true, StoragePath: null, BytesArchived: 0 }
-            ));
+                    : { Success: true, StoragePath: null, BytesArchived: 0 });
+            });
 
             const result = await runEntity({ records: createRecords(2500), batchSize: 100 });
 
             expect(result.Failed).toBe(1);
             expect(result.Archived).toBe(2499);
-            expect(archivedIds()).toHaveLength(2500);
+            expect(handedIds).toHaveLength(2500);
         });
 
         it('should advance through ArchiveOnly records, which never leave the filter', async () => {
             const result = await runEntity({ records: createRecords(2500), batchSize: 100, mode: 'ArchiveOnly', storageMode: 'Store' });
 
             expect(result.Archived).toBe(2500);
-            expect(new Set(archivedIds()).size).toBe(2500);
+            expect(new Set(handedIds).size).toBe(2500);
+        });
+
+        it.each([
+            ['a fresh UUID that sorts after every row', () => 'zzzz-new-record'],
+            ['no key at all', () => null],
+        ])('should page from the key it loaded when a HardDelete leaves the record with %s', async (_label, freshKey) => {
+            deletesClearTheKey(freshKey);
+
+            const result = await runEntity({ records: createRecords(250), batchSize: 100, mode: 'HardDelete' });
+
+            expect(result.Archived).toBe(250);
+            expect(new Set(handedIds).size).toBe(250);
+            expect(mockRunViewCalls.map(call => call.AfterKey?.KeyValuePairs[0].Value)).toEqual([undefined, 'rec-0099', 'rec-0199', 'rec-0249']);
         });
 
         it('should throw when a later page fails to load, keeping the existing behavior', async () => {
@@ -846,61 +934,83 @@ describe('ArchiveProcessor', () => {
             await expect(runEntity({ records: createRecords(250), batchSize: 100 })).rejects.toThrow('connection lost');
         });
 
-        describe('with a composite primary key (StartRow paging)', () => {
+        it('should quote the DateField and refuse one that is not a field of the entity', async () => {
+            await runEntity({ records: createRecords(1), batchSize: 100 });
+            expect(mockRunViewCalls[0].ExtraFilter).toMatch(/^\[__mj_CreatedAt\] < '/);
+
+            mockRunViewCalls.length = 0;
+            await expect(processor.ProcessEntity(
+                createMockConfigEntity(validFieldConfigJson, { Entity: 'Test Entity', DateField: 'NotAField' }) as unknown as MJArchiveConfigurationEntityEntity,
+                createMockConfig() as unknown as MJArchiveConfigurationEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as MJArchiveRunEntity,
+                null,
+                { ID: 'user-1' } as unknown as UserInfo
+            )).rejects.toThrow('DateField "NotAField" is not a field of entity "Test Entity"');
+            expect(mockRunViewCalls).toHaveLength(0);
+        });
+
+        describe('with a composite primary key (seek paging)', () => {
             beforeEach(() => {
-                mockPrimaryKeys = [{ Name: 'ID', Type: 'uniqueidentifier' }, { Name: 'Version', Type: 'int' }];
+                mockPrimaryKeys = [
+                    { Name: 'ID', Type: 'nvarchar', TSType: 'string' },
+                    { Name: 'Version', Type: 'int', TSType: 'number' },
+                ];
             });
 
-            it('should order by every key column and page with StartRow', async () => {
+            it('should order by every key column and seek past the last key of the previous page', async () => {
                 await runEntity({ records: createRecords(150), batchSize: 100, mode: 'ArchiveOnly', storageMode: 'Store' });
 
-                expect(mockRunViewCalls.map(call => call.StartRow)).toEqual([1, 101]);
-                expect(mockRunViewCalls.every(call => call.OrderBy === 'ID, Version' && call.AfterKey === undefined)).toBe(true);
+                expect(mockRunViewCalls.map(call => call.OrderBy)).toEqual(['[ID], [Version]', '[ID], [Version]', '[ID], [Version]']);
+                expect(mockRunViewCalls.every(call => call.AfterKey === undefined && call.StartRow === undefined)).toBe(true);
+                expect(mockRunViewCalls[1].ExtraFilter).toMatch(/\) AND \(\(\[ID\] > N'rec-0099'\) OR \(\[ID\] = N'rec-0099' AND \[Version\] > 1\)\)$/);
             });
 
-            it('should not skip records when archived records leave the filter', async () => {
-                mockBuildEligibilityFilter.mockReturnValue('Description IS NOT NULL');
-                archivedRecordsLeaveFilter();
+            it("should write plain '' string literals on PostgreSQL", async () => {
+                mockPlatform = 'postgresql';
+                await runEntity({ records: createRecords(150), batchSize: 100, mode: 'ArchiveOnly', storageMode: 'Store' });
+                expect(mockRunViewCalls[1].ExtraFilter).toContain("([ID] > 'rec-0099') OR ([ID] = 'rec-0099' AND [Version] > 1)");
+            });
+
+            it('should end when processed records still match the filter (SkipIfAllNullFields names a column the run does not clear)', async () => {
+                mockBuildEligibilityFilter.mockReturnValue('[Notes] IS NOT NULL');
 
                 const result = await runEntity({ records: createRecords(250), batchSize: 100 });
 
                 expect(result.Archived).toBe(250);
-                expect(new Set(archivedIds()).size).toBe(250);
-                expect(mockRunViewCalls.map(call => call.StartRow)).toEqual([1, 1, 1]);
+                expect(handedIds).toHaveLength(250);
             });
 
-            it('should step past records that failed and still match the filter', async () => {
-                mockBuildEligibilityFilter.mockReturnValue('Description IS NOT NULL');
-                const archived = new Set<string>();
-                mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
-                    const id = context.Record.PrimaryKey.Values();
-                    if (id === 'rec-0010') {
-                        return Promise.resolve({ Success: false, StoragePath: null, BytesArchived: 0, ErrorMessage: 'save blocked' });
-                    }
-                    archived.add(id);
-                    return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
-                });
-                mockRowMatchesFilter = record => !archived.has(record.ID);
-
-                const result = await runEntity({ records: createRecords(250), batchSize: 100 });
-
-                expect(result).toMatchObject({ Archived: 249, Failed: 1 });
-                expect(archivedIds()).toHaveLength(250);
-                expect(mockRunViewCalls.map(call => call.StartRow)).toEqual([1, 2, 2]);
-            });
-
-            it('should step past every record for HardDelete only when the driver deletes it', async () => {
+            it('should not skip records when the driver also deletes a record on the page it is processing', async () => {
                 const deleted = new Set<string>();
                 mockArchiveRecord.mockImplementation((context: ArchiveRecordContext) => {
-                    deleted.add(context.Record.PrimaryKey.Values());
+                    const id = context.Record.PrimaryKey.Values();
+                    handedIds.push(id);
+                    if (deleted.has(id)) {
+                        return Promise.resolve({ Success: false, StoragePath: null, BytesArchived: 0, ErrorMessage: 'already deleted' });
+                    }
+                    deleted.add(id);
+                    if (id === 'rec-0010') {
+                        deleted.add('rec-0011'); // a cascade reaches another row of the same entity
+                    }
                     return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
                 });
                 mockRowMatchesFilter = record => !deleted.has(record.ID);
 
-                const result = await runEntity({ records: createRecords(2500), batchSize: 100, mode: 'HardDelete' });
+                const result = await runEntity({ records: createRecords(250), batchSize: 100, mode: 'HardDelete' });
 
-                expect(result.Archived).toBe(2500);
-                expect(new Set(archivedIds()).size).toBe(2500);
+                expect(new Set(handedIds).size).toBe(250);
+                expect(result).toMatchObject({ Archived: 249, Failed: 1 });
+            });
+
+            it('should refuse before reading when a key column is a date', async () => {
+                mockPrimaryKeys = [
+                    { Name: 'ID', Type: 'nvarchar', TSType: 'string' },
+                    { Name: 'ValidFrom', Type: 'datetimeoffset', TSType: 'Date' },
+                ];
+
+                await expect(runEntity({ records: createRecords(10), batchSize: 100 }))
+                    .rejects.toThrow('primary key column "ValidFrom" is not a string or number column');
+                expect(mockRunViewCalls).toHaveLength(0);
             });
         });
     });

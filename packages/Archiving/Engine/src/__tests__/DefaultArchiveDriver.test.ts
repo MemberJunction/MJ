@@ -289,11 +289,25 @@ describe('DefaultArchiveDriver', () => {
             expect(driver.ShouldArchiveRecord(context)).toBe(true);
         });
 
-        it('should treat an empty string in a NOT NULL column as no value, since StripFields writes it there', () => {
+        it('should treat an empty string in a NOT NULL column as no value in StripFields mode, since StripFields writes it there', () => {
             const record = createRecordWithNotNullColumn('');
             const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
 
             expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(false);
+        });
+
+        it.each(['HardDelete', 'ArchiveOnly'] as const)('should treat an empty string in a NOT NULL column as a value in %s mode', (mode) => {
+            const record = createRecordWithNotNullColumn('');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig, mode }))).toBe(true);
+        });
+
+        it('should treat whitespace in a NOT NULL column as a value, as the SQL filter does', () => {
+            const record = createRecordWithNotNullColumn('   ');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(true);
         });
 
         it('should treat text in a NOT NULL column as a value', () => {
@@ -310,47 +324,73 @@ describe('DefaultArchiveDriver', () => {
             { Name: 'Notes', AllowsNull: true, TSType: 'string' },
             { Name: 'ChangesJSON', AllowsNull: false, TSType: 'string' },
             { Name: 'RunCount', AllowsNull: false, TSType: 'number' },
+            { Name: 'Order', AllowsNull: true, TSType: 'string' },
+            { Name: 'Ship Date', AllowsNull: true, TSType: 'Date' },
+            { Name: 'Odd]Name', AllowsNull: true, TSType: 'string' },
         ];
 
-        it('should OR an IS NOT NULL test over the active nullable fields', () => {
-            const filter = driver.BuildEligibilityFilter(createFieldConfig(), createEntityInfo(fields));
-            expect(filter).toBe('Description IS NOT NULL OR Notes IS NOT NULL');
+        function filterFor(fieldConfig: ArchiveFieldConfiguration, mode: 'StripFields' | 'HardDelete' | 'ArchiveOnly' = 'StripFields'): string | null {
+            const context = createArchiveContext({ fieldConfig, mode });
+            return driver.BuildEligibilityFilter({
+                FieldConfig: fieldConfig,
+                EntityInfo: createEntityInfo(fields),
+                ConfigEntity: context.ConfigEntity,
+                Config: context.Config,
+            });
+        }
+
+        it('should OR a bracketed IS NOT NULL test over the active nullable fields', () => {
+            expect(filterFor(createFieldConfig())).toBe('[Description] IS NOT NULL OR [Notes] IS NOT NULL');
         });
 
-        it("should test a NOT NULL string field for <> ''", () => {
+        it('should bracket column names that are reserved words or contain spaces', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Order' }, { FieldName: 'Ship Date' }] });
+            expect(filterFor(fieldConfig)).toBe('[Order] IS NOT NULL OR [Ship Date] IS NOT NULL');
+        });
+
+        it('should return null for a column name holding a bracket', () => {
+            expect(filterFor(createFieldConfig({ Fields: [{ FieldName: 'Odd]Name' }] }))).toBeNull();
+        });
+
+        it("should test a NOT NULL string field with LIKE '_%' in StripFields mode", () => {
             const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }, { FieldName: 'Notes' }] });
-            const filter = driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields));
-            expect(filter).toBe("ChangesJSON <> '' OR Notes IS NOT NULL");
+            expect(filterFor(fieldConfig)).toBe("[ChangesJSON] LIKE '_%' OR [Notes] IS NOT NULL");
+        });
+
+        it.each(['HardDelete', 'ArchiveOnly'] as const)('should return null in %s mode when a checked field is a NOT NULL column, which always holds a value', (mode) => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }, { FieldName: 'Notes' }] });
+            expect(filterFor(fieldConfig, mode)).toBeNull();
+        });
+
+        it('should keep the IS NOT NULL test for nullable fields in every mode', () => {
+            expect(filterFor(createFieldConfig(), 'HardDelete')).toBe('[Description] IS NOT NULL OR [Notes] IS NOT NULL');
         });
 
         it('should use SkipIfAllNullFields over the field list', () => {
-            const fieldConfig = createFieldConfig({ SkipIfAllNullFields: ['Notes'] });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Notes IS NOT NULL');
+            expect(filterFor(createFieldConfig({ SkipIfAllNullFields: ['Notes'] }))).toBe('[Notes] IS NOT NULL');
         });
 
         it('should leave out inactive fields', () => {
             const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Notes', IsActive: false }] });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Description IS NOT NULL');
+            expect(filterFor(fieldConfig)).toBe('[Description] IS NOT NULL');
         });
 
         it('should write the metadata field name, not the configured spelling', () => {
-            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'description' }] });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Description IS NOT NULL');
+            expect(filterFor(createFieldConfig({ Fields: [{ FieldName: 'description' }] }))).toBe('[Description] IS NOT NULL');
         });
 
         it('should return null when a checked field is not on the entity', () => {
             const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Missing; DROP TABLE x' }] });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
+            expect(filterFor(fieldConfig)).toBeNull();
         });
 
         it('should return null when a checked field is a NOT NULL column that is not a string', () => {
             const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'RunCount' }] });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
+            expect(filterFor(fieldConfig)).toBeNull();
         });
 
         it('should return null for a full-record configuration with no fields', () => {
-            const fieldConfig = createFieldConfig({ Fields: [], ArchiveFullRecord: true });
-            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
+            expect(filterFor(createFieldConfig({ Fields: [], ArchiveFullRecord: true }))).toBeNull();
         });
     });
 
