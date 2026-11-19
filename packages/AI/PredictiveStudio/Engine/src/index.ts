@@ -59,7 +59,8 @@ export * from './governance';
 PredictiveStudioStatusGuard.Register();
 PredictiveStudioEvidenceGuard.Register();
 
-// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
+// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
+// retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).
 export * from './scoring';
 
 // Scheduling — CreateScheduledModelScoring: bind a trained model to write its

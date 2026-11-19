@@ -37,4 +37,6 @@ export * from './ml-model-score-enricher';
 export * from './scoring-process';
 export * from './auto-train';
 export * from './shadow-scoring';
+export * from './prediction-retention';
+export * from './prediction-retention-driver';
 

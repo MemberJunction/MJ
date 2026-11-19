@@ -33,6 +33,8 @@
     "@memberjunction/predictive-studio-sidecar": "6.3.0-edge.0",
     "@memberjunction/record-set-processor": "6.3.0-edge.0",
     "@memberjunction/record-set-processor-base": "6.3.0-edge.0",
+    "@memberjunction/scheduling-base-types": "6.3.0-edge.0",
+    "@memberjunction/scheduling-engine": "6.3.0-edge.0",
     "@memberjunction/storage": "6.3.0-edge.0",
     "rxjs": "^7.8.2"
   },
