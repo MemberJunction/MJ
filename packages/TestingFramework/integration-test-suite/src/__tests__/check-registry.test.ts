@@ -92,6 +92,8 @@ import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks'
 import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { TaskGraphWaitingStepChecks } from '../checks/task-graph-waiting-steps.checks';
+import { TaskGraphDurableRetryChecks } from '../checks/task-graph-durable-retry.checks';
 import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
@@ -258,6 +260,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // so it triggers the same run-half `defer` verdict through an unreadable run instead. Every
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
+        ['task-graph-waiting-steps', TaskGraphWaitingStepChecks, 7], // WS1-WS7 External / Wait / provider-Human steps on the live dispatcher (IT180)
+        ['task-graph-durable-retry', TaskGraphDurableRetryChecks, 3], // DR1-DR3 durable step retry across dispatcher instances (IT181)
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
         ['fls-enforcement', FlsEnforcementChecks, 27], // FLS1-FLS27 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS25-FLS27 related rows, constraint errors and re-enable, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
@@ -304,7 +308,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
         ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
-        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT180)
+        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT182)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -591,6 +595,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'task-graph-security': 10,
+        'task-graph-waiting-steps': 7,
+        'task-graph-durable-retry': 3,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-group-concurrency-client': 4,
@@ -633,7 +639,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(250);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(252);
     });
 });
 
@@ -1079,6 +1085,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'server-cache.S30',
         'server-cache.S31b',
         'server-cache.S34',
+        'task-graph-durable-retry.DR1',
+        'task-graph-durable-retry.DR2',
+        'task-graph-durable-retry.DR3',
         'task-graph-execution.TX1',
         'task-graph-execution.TX10',
         'task-graph-execution.TX11',
@@ -1120,6 +1129,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-security.TGS7',
         'task-graph-security.TGS8',
         'task-graph-security.TGS9',
+        'task-graph-waiting-steps.WS1',
+        'task-graph-waiting-steps.WS2',
+        'task-graph-waiting-steps.WS3',
+        'task-graph-waiting-steps.WS4',
+        'task-graph-waiting-steps.WS5',
+        'task-graph-waiting-steps.WS6',
+        'task-graph-waiting-steps.WS7',
         'transaction-group-concurrency-client.TGC1',
         'transaction-group-concurrency-client.TGC2',
         'transaction-group-concurrency-client.TGC3',

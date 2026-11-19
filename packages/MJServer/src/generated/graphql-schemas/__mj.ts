@@ -98615,6 +98615,16 @@ export class MJTask_ {
     @MaxLength(36)
     CompensatesTaskID?: string;
         
+    @Field({nullable: true, description: "For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step."}) 
+    @MaxLength(400)
+    CorrelationKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it."}) 
+    AttemptCount?: number;
+        
+    @Field({nullable: true, description: "For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free."}) 
+    NextAttemptAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -98766,6 +98776,15 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     CompensatesTaskID: string | null;
 
+    @Field({ nullable: true })
+    CorrelationKey: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -98856,6 +98875,15 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     CompensatesTaskID?: string | null;
+
+    @Field({ nullable: true })
+    CorrelationKey?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

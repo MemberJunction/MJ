@@ -201,6 +201,119 @@
                 }
               </div>
             }
+            <!-- Person (Human) step -->
+            @if (ShowHumanConfig) {
+              <div class="mj-agent-props-field">
+                <label>Asks</label>
+                <div class="mj-agent-props-hint">What the person is asked is this step's description.</div>
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Provider</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="Built-in inbox"
+                    [value]="ConfigText('provider')"
+                    (change)="OnConfigTextChange('provider', InputValue($event))">
+                  <div class="mj-agent-props-hint">Leave empty for MemberJunction's own inbox, or name the app that should put this in front of someone.</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('provider') || 'Built-in inbox' }}</div>
+                }
+              </div>
+              @if (ConfigText('provider')) {
+                <div class="mj-agent-props-field">
+                  <label>Provider settings (JSON)</label>
+                  <mj-code-editor
+                    [value]="ConfigText('providerConfiguration')"
+                    language="json"
+                    [readonly]="ReadOnly"
+                    setup="minimal"
+                    [lineWrapping]="true"
+                    (change)="OnProviderConfigurationChange($any($event))">
+                  </mj-code-editor>
+                </div>
+              }
+              <div class="mj-agent-props-field">
+                <label>Expires after (hours)</label>
+                @if (!ReadOnly) {
+                  <input type="number" min="0" step="1" class="mj-agent-props-input" placeholder="Never"
+                    [value]="ConfigText('expiresInHours')"
+                    (change)="OnConfigNumberChange('expiresInHours', InputValue($event))">
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('expiresInHours') || 'Never' }}</div>
+                }
+              </div>
+            }
+            <!-- External signal step -->
+            @if (ShowExternalConfig) {
+              <div class="mj-agent-props-field">
+                <label>Waits on</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="external"
+                    [value]="ConfigText('domain')"
+                    (change)="OnConfigTextChange('domain', InputValue($event))">
+                  <div class="mj-agent-props-hint">A label for what sends the signal, such as "stripe" or "hr-system".</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('domain') || 'external' }}</div>
+                }
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Correlation key</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="Signalled by task ID"
+                    [value]="ConfigText('correlationKey')"
+                    (change)="OnConfigTextChange('correlationKey', InputValue($event))">
+                  <div class="mj-agent-props-hint">A fixed key, or <code>payload.&lt;path&gt;</code> read when the step is reached. One signal completes every step waiting on its key.</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('correlationKey') || 'Signalled by task ID' }}</div>
+                }
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Expires after (hours)</label>
+                @if (!ReadOnly) {
+                  <input type="number" min="0" step="1" class="mj-agent-props-input" placeholder="Never"
+                    [value]="ConfigText('expiresInHours')"
+                    (change)="OnConfigNumberChange('expiresInHours', InputValue($event))">
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('expiresInHours') || 'Never' }}</div>
+                }
+              </div>
+            }
+            <!-- Wait step -->
+            @if (ShowWaitConfig) {
+              <div class="mj-agent-props-field">
+                <label>Wait</label>
+                @if (!ReadOnly) {
+                  <select class="mj-agent-props-input" [value]="WaitFields.Mode"
+                    (change)="OnWaitModeChange($any(InputValue($event)))">
+                    <option value="duration">For a length of time</option>
+                    <option value="until">Until a moment</option>
+                  </select>
+                }
+              </div>
+              @if (WaitFields.Mode === 'duration') {
+                <div class="mj-agent-props-field">
+                  <label>Seconds</label>
+                  @if (!ReadOnly) {
+                    <input type="number" min="0" step="1" class="mj-agent-props-input"
+                      [value]="WaitFields.DurationSeconds ?? ''"
+                      (change)="OnConfigNumberChange('durationSeconds', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ WaitFields.DurationSeconds ?? '—' }}</div>
+                  }
+                </div>
+              } @else {
+                <div class="mj-agent-props-field">
+                  <label>Until</label>
+                  @if (!ReadOnly) {
+                    <input type="text" class="mj-agent-props-input" placeholder="payload.renewal.chargeOn"
+                      [value]="WaitFields.Until"
+                      (change)="OnConfigTextChange('until', InputValue($event))">
+                    <div class="mj-agent-props-hint">An ISO date and time, or <code>payload.&lt;path&gt;</code> holding one. A moment already past continues at once.</div>
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ WaitFields.Until || '—' }}</div>
+                  }
+                </div>
+              }
+            }
             <!-- Loop Configuration (JSON) -->
             @if (showLoopConfig) {
               <div class="mj-agent-props-field">

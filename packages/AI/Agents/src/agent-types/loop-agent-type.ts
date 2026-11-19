@@ -23,7 +23,7 @@ import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
-         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
+         FormatValidationErrors, ValidateTaskGraphSpec, MAX_TASKS_PER_AGENT_GRAPH, type TaskGraphSpec,
     ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest, type ArtifactDirective, type ArtifactJsonValue } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended, type AgentToolCallRequest } from '@memberjunction/ai-core-plus';
@@ -216,8 +216,9 @@ export class LoopAgentType extends BaseAgentType {
 
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
-        // malformed graph should not discover the problems one round-trip at a time.
-        const validation = ValidateTaskGraphSpec(spec);
+        // malformed graph should not discover the problems one round-trip at a time. The model-output
+        // cap applies here, and only here: it bounds what a model may emit, not what a workflow may be.
+        const validation = ValidateTaskGraphSpec(spec, { MaxTasks: MAX_TASKS_PER_AGENT_GRAPH });
         if (!validation.Valid) {
             retVal.step = 'Retry';
             retVal.message =

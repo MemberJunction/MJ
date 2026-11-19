@@ -260,9 +260,13 @@ export interface TaskGraphFrameEvent {
     conditionText?: string;
     reason?: string;
     /** ClaimChanged */
-    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed' | 'retry-scheduled';
     claimedBy?: string;
     claimExpiresAt?: string;
+    /** On a 'retry-scheduled' claim event: which retry is coming, counting from 1. */
+    attempt?: number;
+    /** On a 'retry-scheduled' claim event: the earliest moment the retry may run. */
+    nextAttemptAt?: string;
     /** PassCompleted */
     passNumber?: number;
     eligibleCount?: number;
@@ -5593,6 +5597,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 claimEvent
                 claimedBy
                 claimExpiresAt
+                attempt
+                nextAttemptAt
                 passNumber
                 eligibleCount
                 heldCount

@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT180 - MJ Docs in the Semantic Graph",
+    "Name": "IT182 - MJ Docs in the Semantic Graph",
     "Description": "Live proof that MJ Docs reach the semantic graph with the artifact ACL intact, deterministic (no model calls). DSG1 checks the seeded MJ Docs content source, the Library Knowledge graph, its Document Links and Shared Concepts edge providers and the LinksTo and SharesConceptWith edge types. DSG2-DSG6 share a fixture of two Markdown Document artifacts (A private to the harness user, B shared read-only with a peer user, A linking to B with [[B]]): indexing creates one record:// Content Item per artifact with its latest text, linked to the artifact and chunked, and re-indexing identical text is a no-op; [[B]] becomes a LinksTo record link the graph projects as an edge; a doc's item and chunks are visible to a person exactly when ArtifactPermissionEngine lets them read the doc; a concept sourced from both docs relates them for the owner and is redacted for the peer; re-indexing A retracts its old chunks' inferred edges, deleting a concept left with no source and keeping one still sourced from B. The bundle removes every row it creates.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

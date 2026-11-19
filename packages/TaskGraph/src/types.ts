@@ -342,8 +342,15 @@ export type TaskGraphFrame = {
     Reason?: string;
 
     // ── ClaimChanged ────────────────────────────────────────────────────────
-    /** What happened to the claim. */
-    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    /**
+     * What happened to the claim. `retry-scheduled`: the run failed, the claim was released and the
+     * step is Pending again, to be retried no earlier than `NextAttemptAt` (`ErrorMessage` says why).
+     */
+    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed' | 'retry-scheduled';
+    /** On `retry-scheduled`: which retry is coming, counting from 1. */
+    Attempt?: number;
+    /** On `retry-scheduled`: the earliest moment the retry may run, ISO 8601. */
+    NextAttemptAt?: string;
     /** The dispatcher instance holding (or losing) the claim. */
     ClaimedBy?: string;
     /** When the claim lapses unless extended, ISO 8601. */
