@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { MLSidecar, SidecarError } from '@memberjunction/predictive-studio-sidecar';
-import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
+import type { MonitorDriftRequest, MonitorDriftResponse, PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { MJSidecarTrainer, type ITrainerEvaluator } from '@memberjunction/predictive-studio';
 import { TruthSuite } from '../truth-suite';
 import { SuiteSidecarFiles } from './sidecar-files';
@@ -113,6 +113,18 @@ export class HarnessSidecar {
       if (e instanceof SidecarError) return { Status: e.Status, Response: null, Body: e.Body };
       throw e;
     }
+  }
+
+  /**
+   * One look of monitor procedure M on the suite sidecar's `/monitor/drift` (remote mode), bypassing the product: the
+   * statistical monitoring gates (G6.6, G6.8) replay hundreds of seeds' inputs through it.
+   *
+   * @throws when the sidecar's URL file is missing, or the call fails
+   */
+  public static async SuiteMonitorDrift(req: MonitorDriftRequest): Promise<MonitorDriftResponse> {
+    const sidecar = new MLSidecar({ url: HarnessSidecar.UseSuiteSidecar() });
+    await sidecar.Start();
+    return sidecar.MonitorDrift(req);
   }
 
   /** A trainer on the sidecar at `url` (remote mode: no child process is started). */

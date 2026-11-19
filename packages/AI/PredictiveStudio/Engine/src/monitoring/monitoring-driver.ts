@@ -192,7 +192,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
       if (!(e instanceof OutcomeJoinFailedError)) throw e;
       return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: e.message }, ctx);
     }
-    const counted = { ...base, ScoredRows: join.ScoredRows, JoinedRows: join.Rows.length, ExcludedInTrainingRows: join.ExcludedInTrainingRows };
+    const counted = { ...base, ScoredRows: join.ScoredRows, JoinedRows: join.Rows.filter((r) => r.Outcome !== null).length, ExcludedInTrainingRows: join.ExcludedInTrainingRows };
     if (!join.Rows.some((r) => r.Outcome !== null)) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `no realised outcome among the period's ${join.Rows.length} joined prediction(s)` }, ctx);
     }

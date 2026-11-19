@@ -26,6 +26,7 @@ import {
   type MetricWithInterval,
   type MonitorDriftRequest,
   type MonitorDriftResponse,
+  type PredictionUnitSpec,
   type ScoredRow,
   type TaskType,
 } from '@memberjunction/predictive-studio-core';
@@ -243,9 +244,15 @@ export class RunViewMonitoringStore implements IMonitoringStore {
 
   // ----- helpers ---------------------------------------------------------------------------------------------------
 
-  /** The unit's rows through PR 3's reader, read completely as of `now`; `keepOpen` keeps rows whose window is open. */
+  /**
+   * The unit's rows through PR 3's reader, read completely as of `now` with the unit's censoring cutoff moved to `now`
+   * (a training cutoff froze the snapshot; monitoring reads every label known by now); `keepOpen` keeps rows whose
+   * window is still open.
+   */
   private static async readUnit(unit: MonitoredUnit, now: Date, keepOpen: boolean, ctx: RegistryContext): Promise<readonly UnitRow[]> {
-    const read = await new PredictionUnitRowReader().Read(unit.Spec, {
+    const cutoff: PredictionUnitSpec['censoring']['cutoff'] = { kind: 'now' };
+    const spec: PredictionUnitSpec = { ...unit.Spec, censoring: { ...unit.Spec.censoring, cutoff } };
+    const read = await new PredictionUnitRowReader().Read(spec, {
       DataAccess: new RunViewDataAccess(ctx.ContextUser, ctx.Provider), Metadata: new ProviderAssemblyMetadata(ctx.Provider), Read: { mode: 'complete' }, Now: now, KeepOpenWindows: keepOpen,
     });
     if (read.Status === 'refused') throw new Error(`Monitoring: reading Prediction Unit ${unit.ID}'s rows was refused: ${JSON.stringify(read.Refusal)}`);
