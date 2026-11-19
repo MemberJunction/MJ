@@ -106,14 +106,19 @@ export class RunViewMonitoringStore implements IMonitoringStore {
     return { ID: row.ID, Spec: parsed.Value, LabelWindowDays: row.LabelWindowDays, LabelGapDays: row.LabelGapDays, RowEntity: PredictionUnit.UnitRowEntityName(parsed.Value.rows) };
   }
 
-  /** @inheritdoc — the oldest `Active` binding of the pipeline when it has several. */
-  public async ActiveBinding(pipelineId: string, ctx: RegistryContext): Promise<MonitoredBinding | null> {
-    const r = await StoredRowReads.Run<MJMLModelScoringBindingEntity>({
-      EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLTrainingPipelineID='${EscapeSQLString(pipelineId)}' AND Status='Active'`,
-      OrderBy: '__mj_CreatedAt ASC', ResultType: 'entity_object', MaxRows: 1,
+  /** @inheritdoc — the oldest `Active` binding when the pipeline has several; else the newest `Withdrawn` one with rows in the period. */
+  public async BindingOf(pipelineId: string, modelId: string, period: MonitoringPeriod, ctx: RegistryContext): Promise<MonitoredBinding | null> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'Status'>>({
+      EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLTrainingPipelineID='${EscapeSQLString(pipelineId)}'`,
+      Fields: ['ID', 'MLTrainingPipelineID', 'Status'], OrderBy: '__mj_CreatedAt ASC', ResultType: 'simple',
     }, ctx);
     if (!r.Success) throw new Error(`Monitoring: reading the scoring bindings of pipeline ${pipelineId} failed: ${r.ErrorMessage}`);
-    return r.Results[0] || null;
+    const active = r.Results.find((b) => b.Status === 'Active');
+    if (active) return { ID: active.ID, MLTrainingPipelineID: active.MLTrainingPipelineID };
+    for (const withdrawn of r.Results.filter((b) => b.Status === 'Withdrawn').reverse()) {
+      if ((await this.ModelRows(modelId, withdrawn.ID, 'Champion', period, ctx)).length > 0) return { ID: withdrawn.ID, MLTrainingPipelineID: withdrawn.MLTrainingPipelineID };
+    }
+    return null;
   }
 
   /** @inheritdoc — of several rows of one record in the period, the one with the latest `EffectiveAsOf`. */

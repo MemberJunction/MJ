@@ -97,7 +97,7 @@ export class WorldStore implements IMonitoringStore {
   public async LoadUnit(): Promise<MonitoredUnit> {
     return this.Unit;
   }
-  public async ActiveBinding(): Promise<MonitoredBinding | null> {
+  public async BindingOf(): Promise<MonitoredBinding | null> {
     return this.Binding;
   }
   public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod): Promise<ModelPrediction[]> {

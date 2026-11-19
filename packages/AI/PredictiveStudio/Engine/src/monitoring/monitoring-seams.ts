@@ -165,8 +165,12 @@ export interface IMonitoringStore {
   TaskOf(model: MonitoredModel): TaskType;
   /** The model's Prediction Unit. @throws when it cannot be read or parsed */
   LoadUnit(unitId: string, ctx: RegistryContext): Promise<MonitoredUnit>;
-  /** The pipeline's `Active` scoring binding; null when it has none (the shadow path, D4-67). */
-  ActiveBinding(pipelineId: string, ctx: RegistryContext): Promise<MonitoredBinding | null>;
+  /**
+   * The binding whose stored rows the period joins: the pipeline's `Active` binding; else its newest `Withdrawn`
+   * binding that stored `Model` rows of `modelId` in the period (a withdrawn binding's rows still join for the periods
+   * it scored); null when neither (the shadow path, D4-67).
+   */
+  BindingOf(pipelineId: string, modelId: string, period: MonitoringPeriod, ctx: RegistryContext): Promise<MonitoredBinding | null>;
   /**
    * The model's stored `Source = 'Model'` rows of `role` with `EffectiveAsOf` in the period, one per record (the row as
    * of the period, never a later one), including `InTraining` rows (the caller counts and excludes them).

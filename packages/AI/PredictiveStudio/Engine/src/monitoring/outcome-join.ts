@@ -2,9 +2,10 @@
  * @module monitoring/outcome-join
  *
  * `OutcomeJoin` — step 1 of a monitored period (C7 (1), §5.8.6, D4-67): the model's predictions as of the period
- * joined to their realised outcomes. A model whose pipeline has an `Active` scoring binding is joined on the binding's
- * stored `Champion` `Model` rows whose `EffectiveAsOf` falls in the period (the prediction as of the period, never a
- * later one); a model with no `Active` binding stores nothing, so it is joined on a shadow `Predict` of the period's
+ * joined to their realised outcomes. A model whose pipeline has an `Active` scoring binding (or a withdrawn one that
+ * scored the period) is joined on the binding's stored `Champion` `Model` rows whose `EffectiveAsOf` falls in the
+ * period (the prediction as of the period, never a later one); a model with no such binding stores nothing, so it is
+ * joined on a shadow `Predict` of the period's
  * unit rows, each assembled as of its own decision date (one `MJ: ML Scoring Runs` row, `Path = 'monitoring'`,
  * `DryRun = 1`, nothing written). Rows in the model's training snapshot (`InTraining`) are counted and excluded. The
  * outcomes come from PR 3's unit row reader at the unit's label rule; a record the reader has no label for joins with
@@ -60,7 +61,7 @@ export class OutcomeJoin {
    */
   public static async Join(model: MonitoredModel, unit: MonitoredUnit, period: MonitoringPeriod, ctx: MonitoringContext): Promise<OutcomeJoinResult> {
     const now = ctx.Seams.Clock.Now();
-    const binding = await ctx.Seams.Store.ActiveBinding(model.PipelineID, ctx);
+    const binding = await ctx.Seams.Store.BindingOf(model.PipelineID, model.ID, period, ctx);
     const found = binding !== null
       ? { Predictions: await ctx.Seams.Store.ModelRows(model.ID, binding.ID, 'Champion', period, ctx), ShadowScoringRunID: null }
       : await OutcomeJoin.shadow(model, unit, period, now, ctx);
