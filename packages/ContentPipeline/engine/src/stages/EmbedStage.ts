@@ -216,11 +216,14 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                 CancellationToken: context.Signal,
                 Description: 'Content pipeline Embed stage',
             });
-            if (!embedding.Success) {
+            if (!embedding.Success || embedding.Vectors.length !== textOnly.length) {
+                const reason = !embedding.Success
+                    ? (embedding.ErrorMessage ?? 'embedding failed')
+                    : `embedding model returned ${embedding.Vectors.length} vector(s) for ${textOnly.length} text record(s)`;
                 outcomes.push(
                     ...textOnly.map((t) => ({
                         Key: t.Routed.Record.Identity.Key,
-                        Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'embedding failed'),
+                        Outcome: Outcome.Retry(reason),
                     })),
                 );
             } else {
@@ -242,11 +245,14 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                 CancellationToken: context.Signal,
                 Description: 'Content pipeline Embed stage (multimodal)',
             });
-            if (!embedding.Success) {
+            if (!embedding.Success || embedding.Vectors.length !== multimodal.length) {
+                const reason = !embedding.Success
+                    ? (embedding.ErrorMessage ?? 'multimodal embedding failed')
+                    : `embedding model returned ${embedding.Vectors.length} vector(s) for ${multimodal.length} multimodal record(s)`;
                 outcomes.push(
                     ...multimodal.map((m) => ({
                         Key: m.Routed.Record.Identity.Key,
-                        Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'multimodal embedding failed'),
+                        Outcome: Outcome.Retry(reason),
                     })),
                 );
             } else {
@@ -287,7 +293,7 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
             ...this.recordReceipts(
                 readyToUpsert.map((entry) => entry.Routed),
                 payload,
-                readyToUpsert[0].ModelID,
+                readyToUpsert.map((entry) => entry.ModelID),
                 context,
             ),
         );
@@ -321,9 +327,15 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
     }
 
     /** Record the receipt. Without VectorRecordID nothing can later delete the vector this row produced. */
-    private recordReceipts(group: readonly RoutedRecord[], payload: readonly { id: string }[], modelID: string | null, context: StageContext): FinalizeResult[] {
+    private recordReceipts(
+        group: readonly RoutedRecord[],
+        payload: readonly { id: string }[],
+        modelIDs: string | readonly string[] | null,
+        context: StageContext,
+    ): FinalizeResult[] {
         const now = new Date();
         for (const [i, { Record: record }] of group.entries()) {
+            const modelID = Array.isArray(modelIDs) ? modelIDs[i] : modelIDs;
             record.SetExtension('Pipeline', 'columns', {
                 ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
                 VectorRecordID: payload[i].id,

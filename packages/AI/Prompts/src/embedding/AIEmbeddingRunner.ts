@@ -21,6 +21,7 @@ import {
   ModelVendorCandidate,
   FailoverConfiguration,
 } from '../BaseModelRunner';
+import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
 import {
   EmbeddingRunParams,
   EmbeddingRunResult,
@@ -240,6 +241,16 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     }
     if (hasTexts && hasContents) {
       return 'Provide either Texts or Contents for embedding, not both';
+    }
+    if (hasContents) {
+      const hasEmptyEntry = params.Contents!.some((entry) =>
+        typeof entry === 'string'
+          ? entry.trim().length === 0
+          : !Array.isArray(entry) || entry.length === 0
+      );
+      if (hasEmptyEntry) {
+        return 'Contents contains an empty entry';
+      }
     }
     if (!params?.ContextUser) {
       return 'ContextUser is required';
@@ -638,7 +649,8 @@ export class AIEmbeddingRunner extends BaseModelRunner {
 
   /**
    * Embeds multimodal `params.Contents` through `driver.EmbedContent` with bounded concurrency,
-   * preserving input order and failing cleanly if any entry returns an empty vector.
+   * preserving input order, stopping remaining workers on first failure, and returning a retriable
+   * `ModelError` result if any entry returns an empty vector.
    */
   private async callDriverForContents(
     driver: BaseEmbeddings,
@@ -652,46 +664,66 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     const vectors: number[][] = new Array(contents.length);
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalCacheWriteTokens = 0;
+    let totalQueueTime = 0;
+    let totalPromptTime = 0;
+    let totalCompletionTime = 0;
     let totalCost = 0;
     let costCurrency: string | undefined;
     let nextIndex = 0;
+    let failed = false;
+    let emptyVectorReturned = false;
 
     const worker = async (): Promise<void> => {
-      while (true) {
+      for (let idx = nextIndex++; !failed && idx < contents.length; idx = nextIndex++) {
         if (bound.Signal?.aborted) {
-          throw new Error(`The ${this.RequiredModelType} call was cancelled`);
+          failed = true;
+          throw bound.TimedOut()
+            ? (bound.Signal.reason instanceof AIPromptTimeoutError
+                ? bound.Signal.reason
+                : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0))
+            : this.BuildCancellationError(`The ${this.RequiredModelType} call was cancelled`);
         }
-        const idx = nextIndex++;
-        if (idx >= contents.length) {
-          return;
-        }
-        const preparedContent = this.prepareMultimodalContent(
-          contents[idx],
-          candidate,
-          params.InputType
-        );
-        const result = await this.RaceWithinBound(
-          driver.EmbedContent({
-            content: preparedContent,
-            model: candidate.apiName,
-            dimensions: params.Dimensions,
-            inputType: params.InputType,
-            CancellationToken: bound.Signal,
-          }),
-          bound,
-          prompt
-        );
-        if (!result || !result.vector || result.vector.length === 0) {
-          throw new Error(`No vectors returned from embedding model '${candidate.model.Name}'`);
-        }
-        vectors[idx] = result.vector;
-        if (result.ModelUsage) {
-          totalPromptTokens += result.ModelUsage.promptTokens ?? 0;
-          totalCompletionTokens += result.ModelUsage.completionTokens ?? 0;
-          totalCost += result.ModelUsage.cost ?? 0;
-          if (!costCurrency && result.ModelUsage.costCurrency) {
-            costCurrency = result.ModelUsage.costCurrency;
+        try {
+          const preparedContent = this.prepareMultimodalContent(
+            contents[idx],
+            candidate,
+            params.InputType
+          );
+          const result = await this.RaceWithinBound(
+            driver.EmbedContent({
+              content: preparedContent,
+              model: candidate.apiName,
+              dimensions: params.Dimensions,
+              inputType: params.InputType,
+              CancellationToken: bound.Signal,
+            }),
+            bound,
+            prompt
+          );
+          if (!result || !result.vector || result.vector.length === 0) {
+            failed = true;
+            emptyVectorReturned = true;
+            return;
           }
+          vectors[idx] = result.vector;
+          if (result.ModelUsage) {
+            totalPromptTokens += result.ModelUsage.promptTokens ?? 0;
+            totalCompletionTokens += result.ModelUsage.completionTokens ?? 0;
+            totalCacheReadTokens += result.ModelUsage.cacheReadTokens ?? 0;
+            totalCacheWriteTokens += result.ModelUsage.cacheWriteTokens ?? 0;
+            totalQueueTime += result.ModelUsage.queueTime ?? 0;
+            totalPromptTime += result.ModelUsage.promptTime ?? 0;
+            totalCompletionTime += result.ModelUsage.completionTime ?? 0;
+            totalCost += result.ModelUsage.cost ?? 0;
+            if (!costCurrency && result.ModelUsage.costCurrency) {
+              costCurrency = result.ModelUsage.costCurrency;
+            }
+          }
+        } catch (err) {
+          failed = true;
+          throw err;
         }
       }
     };
@@ -699,7 +731,16 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     const concurrency = Math.min(4, contents.length);
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
+    if (emptyVectorReturned) {
+      return this.callResultFrom(undefined, candidate, startTime);
+    }
+
     const usage = new ModelUsage(totalPromptTokens, totalCompletionTokens);
+    usage.cacheReadTokens = totalCacheReadTokens;
+    usage.cacheWriteTokens = totalCacheWriteTokens;
+    usage.queueTime = totalQueueTime;
+    usage.promptTime = totalPromptTime;
+    usage.completionTime = totalCompletionTime;
     usage.cost = totalCost;
     if (costCurrency) {
       usage.costCurrency = costCurrency;

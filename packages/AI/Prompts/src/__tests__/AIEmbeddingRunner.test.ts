@@ -1118,5 +1118,73 @@ describe('AIEmbeddingRunner', () => {
       expect(result.ErrorMessage).toContain('No vectors returned');
       expect(result.Vectors).toEqual([]);
     });
+
+    it('rejects empty entries inside Contents', async () => {
+      const result = await runner.RunEmbedding({
+        Contents: [[]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('empty entry');
+    });
+
+    it('stops remaining workers on empty vector and fails over to the next vendor as ModelError', async () => {
+      addSecondVendorToModel1();
+      let vendor1Calls = 0;
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        vendor1Calls++;
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(0, 0),
+          vector: [],
+        };
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(10, 0),
+        vector: [0.5, 0.5, 0.5],
+      });
+
+      const items = Array.from({ length: 10 }, (_, i) => [{ type: 'text' as const, content: `item ${i}` }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(10);
+      expect(vendor1Calls).toBeLessThan(10);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(10);
+    });
+
+    it('fails over to the next vendor on Contents timeout rather than misclassifying as user cancellation', async () => {
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).ContentAnswer = () => new Promise(() => { /* never settles */ });
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(5, 0),
+        vector: [0.1, 0.2, 0.3],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'text', content: 'first' }],
+          [{ type: 'text', content: 'second' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 30,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(2);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(2);
+    });
   });
 });
