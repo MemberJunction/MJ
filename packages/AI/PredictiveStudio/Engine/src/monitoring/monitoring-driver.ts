@@ -81,8 +81,8 @@ interface EvaluatedPeriod {
   readonly Degradation: MonitoringPeriodResult['Degradation'];
 }
 
-/** What one period's run resolved before its steps: the model, its unit and task, and the spec. */
-interface PeriodPlan {
+/** What one period's run resolved before its steps: the model, its unit and task, the spec and the initiator. */
+export interface PeriodPlan {
   readonly Model: MonitoredModel;
   readonly Unit: MonitoredUnit;
   readonly Task: TaskType;

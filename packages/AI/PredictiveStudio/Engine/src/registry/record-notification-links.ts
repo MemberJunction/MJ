@@ -4,8 +4,8 @@
  * `RecordNotificationLinks` — the record link of a Predictive Studio `MJ: User Notifications` row: the `Records`
  * resource type (`ResourceTypeID`), the record's ID (`ResourceRecordID`) and the `ResourceConfiguration` JSON whose
  * `Entity` member Explorer's notification list reads to open the record (`RecordResourceConfig.Entity`,
- * `user-notifications.component.ts`). Shared by the drift alert (`DefaultDriftAlertEmitter`) and the lifecycle
- * gate's notifications (`PublishNotifications`), so the two never resolve the link differently.
+ * `user-notifications.component.ts`). Shared by the lifecycle gate's notifications (`PublishNotifications`) and the
+ * monitoring notifications (`UserNotificationMonitoringNotifier`), so the two never resolve the link differently.
  */
 import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResourceTypeEngine } from '@memberjunction/core-entities';
@@ -28,7 +28,7 @@ export class RecordNotificationLinks {
    * `LogError` naming why) when it is not seeded or the engine cannot load, so the caller still sends its notification,
    * without the link.
    *
-   * @param source who is asking, for the log line (e.g. `DefaultDriftAlertEmitter`)
+   * @param source who is asking, for the log line (e.g. `Predictive Studio monitoring`)
    * @param notification what the caller is sending, for the log line (e.g. `drift alert`)
    */
   public static async RecordsResourceTypeID(provider: IMetadataProvider, contextUser: UserInfo | undefined, source: string, notification: string): Promise<string | null> {
