@@ -16910,6 +16910,9 @@ importers:
       '@memberjunction/api-keys':
         specifier: 6.2.2
         version: link:../../APIKeys/Engine
+      '@memberjunction/archiving-engine':
+        specifier: 6.2.2
+        version: link:../../Archiving/Engine
       '@memberjunction/auth-providers':
         specifier: 6.2.2
         version: link:../../AuthProviders

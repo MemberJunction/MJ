@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT180 - Archive Runs Page Through Every Eligible Row",
+    "Description": "A Purge + StripFields archive configuration over throwaway MJ: Action Execution Logs rows, run with a batch size smaller than the eligible row count, so the engine pages with the keyset cursor and the driver's eligibility filter on the real database. ARP1 one run strips every row older than the cutoff across several pages, counts no row as skipped (an already-stripped row is never loaded), and leaves recent rows and non-stripped columns alone; ARP2 a second run of the same configuration loads no rows. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "One run strips every eligible row page by page, and stripped rows are never loaded again."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "archive-paging"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9B7F78B1-EA38-4157-AF07-80F6410C6DAD"
+  }
+}

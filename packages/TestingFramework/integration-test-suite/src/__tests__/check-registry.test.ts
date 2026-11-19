@@ -112,6 +112,7 @@ import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks'
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { ArchivePagingChecks } from '../checks/archive-paging.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -276,6 +277,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
+        ['archive-paging', ArchivePagingChecks, 2], // ARP1-ARP2 one archive run strips every row past the cutoff page by page; a second run loads nothing (IT180)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -357,6 +359,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 11,
+        'archive-paging': 2,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
@@ -525,7 +528,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(179);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(180);
     });
 });
 
@@ -566,6 +569,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'archive-paging.ARP1',
+        'archive-paging.ARP2',
         'binary-fields.BF4',
         'binary-fields.BF6',
         'cache-architecture.CA10',

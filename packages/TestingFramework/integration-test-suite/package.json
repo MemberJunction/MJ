@@ -35,6 +35,7 @@
     "@memberjunction/ai-vectordb": "6.2.2",
     "@memberjunction/aiengine": "6.2.2",
     "@memberjunction/api-keys": "6.2.2",
+    "@memberjunction/archiving-engine": "6.2.2",
     "@memberjunction/auth-providers": "6.2.2",
     "@memberjunction/codegen-lib": "6.2.2",
     "@memberjunction/communication-engine": "6.2.2",
