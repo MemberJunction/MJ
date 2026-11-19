@@ -245,8 +245,34 @@ describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extens
             const explorer = new SemanticGraphExplorerComponent();
             explorer.SelectedGraphID = 'G1';
             explorer.GraphOptions = [
-                { ID: 'G1', Name: 'Real Org Graph', GraphTypeName: 'Canon', IsCanon: true, Status: 'Active', LinkedSourceCount: 1, IsSample: false },
-                { ID: 'G-SAMPLE', Name: 'Sample Graph', GraphTypeName: 'Canon', IsCanon: true, Status: 'Active', LinkedSourceCount: 1, IsSample: true },
+                {
+                    ID: 'G1',
+                    Name: 'Real Org Graph',
+                    Description: '',
+                    GraphTypeID: 'GT-CANON',
+                    GraphTypeName: 'Canon',
+                    IsCanon: true,
+                    GraphTypeRank: 1,
+                    IconClass: 'fa-solid fa-diagram-project',
+                    ConceptCount: 1,
+                    ConflictCount: 0,
+                    SourceNames: ['Source 1'],
+                    IsSample: false,
+                },
+                {
+                    ID: 'G-SAMPLE',
+                    Name: 'Sample Graph',
+                    Description: '',
+                    GraphTypeID: 'GT-CANON',
+                    GraphTypeName: 'Canon',
+                    IsCanon: true,
+                    GraphTypeRank: 1,
+                    IconClass: 'fa-solid fa-diagram-project',
+                    ConceptCount: 1,
+                    ConflictCount: 0,
+                    SourceNames: [],
+                    IsSample: true,
+                },
             ];
             explorer.Provider = makeProvider(makeUser('u-staff', STAFF_ROLE_ID), staffSave);
 
