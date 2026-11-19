@@ -2,7 +2,7 @@
 // stores model artifacts write-once and verifies every load, the registry's read of a model row's entry, the
 // lifecycle gate (the only writer of a model's Status) with its publish records, locks, versions and monitoring jobs,
 // the one unattended publish path over it (AutomatedPublisher) and the notifications of its automatic outcomes
-// (PublishNotifications, with the record link they share with the drift alert),
+// (PublishNotifications, with the record link they share with the monitoring notifications),
 // its reads of stored rows (always past the RunView cache), and the PreSave guards that hold the platform to it (the
 // status guard and the write-once evidence guard).
 export * from './registry-context';

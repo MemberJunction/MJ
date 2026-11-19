@@ -1,45 +1,56 @@
 /**
  * predictive-shadow-drift.checks.ts — the 'predictive-shadow-drift' bundle (PSD1–PSD2): deterministic integration
- * checks for Predictive Studio's live challenger and `PredictiveStudioEvaluateDriftAction`.
+ * checks for Predictive Studio's live challenger and its divergence on the monitoring period row.
  *
  * PSD1 (D-069, §5.8.3 step 5): a bound Record Process with a `ChallengerConfiguration` scored through `ScoringService`
  * writes its champion's and its challenger's predictions as `Source = 'Model'` rows, each role under its own
  * `MJ: ML Scoring Runs` row, and no `Source = 'Pipeline'` row. The sidecar and the model runtime are doubles (no model is
  * trained); the challenger is read from the Record Process by the production `ShadowScoringCoordinator`.
- * PSD2: the drift action over `MJ: Feature Values` (M6.8 supersedes it).
+ * PSD2 (M6.8, D-069): the same binding's live mirror measured by the monitoring driver's divergence step and stored on
+ * the champion's `MJ: ML Monitoring Results` row (`ChallengerResult.mirror`): paired records, agreement, mean score
+ * delta and failures. #6180's PSI drift action is gone; drift is procedure M in the monitoring job.
  */
 import { createHash } from 'node:crypto';
 import { DatabaseProviderBase, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, FilterByUUIDs, IndexByUUID, MJGlobal, UUIDSet, UUIDsEqual, type UUIDMap } from '@memberjunction/global';
+import { EscapeSQLString, FilterByUUIDs, IndexByUUID, UUIDSet, type UUIDMap } from '@memberjunction/global';
 import type {
     MJFeatureValueEntity,
     MJFileEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
     MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJRecordProcessEntity,
-    MJUserNotificationEntity,
 } from '@memberjunction/core-entities';
-import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
-import { RunActionParams } from '@memberjunction/actions-base';
-import { UserCache } from '@memberjunction/generic-database-provider';
 import {
-    EVALUATE_DRIFT_DRIVER_CLASS,
-    EvaluateFeatureAndPredictionDriftAction,
     InMemoryArtifactLoader,
+    MonitoringPeriods,
+    PredictiveStudioModelMonitoringJobDriver,
     LoadMLModelInferenceProcessor,
-    LoadPredictiveStudioActions,
     ScoringBindings,
     ScoringService,
     type IScoringModelRuntime,
     type IScoringPreparedModel,
     type ISidecarPredictor,
     type LoadedModel,
+    type MonitoredUnit,
+    type MonitoringPeriod,
+    type OutcomeJoinResult,
+    type PeriodPlan,
     type ScoringContext,
 } from '@memberjunction/predictive-studio';
-import { resolveOutcomeConfig, type FeatureSchemaEntry, type PredictRequest, type PredictResponse } from '@memberjunction/predictive-studio-core';
+import {
+    JsonParse,
+    resolveOutcomeConfig,
+    type FeatureSchemaEntry,
+    type MonitoringJobReadSpec,
+    type MonitoringMirror,
+    type PredictionUnitSpec,
+    type PredictRequest,
+    type PredictResponse,
+} from '@memberjunction/predictive-studio-core';
 import {
     Assert,
     AssertEqual,
@@ -52,7 +63,6 @@ import {
 const TAG = '(mj-integration-test — safe to delete)';
 
 LoadMLModelInferenceProcessor();
-LoadPredictiveStudioActions();
 
 async function resolveFirstId(
     entityName: string,
@@ -187,6 +197,7 @@ async function deletePsd1Fixtures(provider: DatabaseProviderBase, tag: string): 
     const bindings = `SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name}`;
     const pipelines = `SELECT ID FROM ${t('MJ: ML Training Pipelines')} WHERE Name = ${name}`;
     await provider.ExecuteSQL(`
+        DELETE FROM ${t('MJ: ML Monitoring Results')} WHERE ModelID IN (SELECT ID FROM ${t('MJ: ML Models')} WHERE PipelineID IN (${pipelines}));
         DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelScoringBindingID IN (${bindings});
         DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (${bindings});
         DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name};
@@ -243,6 +254,63 @@ async function assertPsd1Rows(ctx: IntegrationCheckContext, f: Psd1Fixtures): Pr
     assertPsd1Role('Challenger', f.Challenger, PSD1_SCORES.Challenger, rows, runsByModel);
 }
 
+/** The monitoring driver with its divergence and period-row steps exposed (PSD2 runs them on the fixture binding). */
+class Psd2MirrorDriver extends PredictiveStudioModelMonitoringJobDriver {
+    /** The binding's mirror over `period`, measured by the driver's own step and stored on the champion's period row. */
+    public async MeasureAndStore(ctx: IntegrationCheckContext, f: Psd1Fixtures, period: MonitoringPeriod): Promise<MonitoringMirror> {
+        const monitoring = this.ContextFor(ctx.User, ctx.Provider, null);
+        const unit: MonitoredUnit = { ID: '', Spec: PSD2_UNIT, LabelWindowDays: 365, LabelGapDays: 0, RowEntity: PSD1_TARGET };
+        const plan: PeriodPlan = {
+            Model: f.Champion, Unit: unit, Task: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 }, Spec: PSD2_SPEC(f.Champion.ID),
+            Initiator: { kind: 'human', userId: ctx.User.ID },
+        };
+        const join: OutcomeJoinResult = { Path: 'binding', Binding: f.Binding, ShadowScoringRunID: null, ScoredRows: 0, ExcludedInTrainingRows: 0, Rows: [] };
+        const mirror = await this.MeasureDivergence(plan, join, period, monitoring);
+        Assert(mirror !== null, 'the binding names a live challenger, so the period has a mirror');
+        await this.WritePeriod({
+            ModelID: f.Champion.ID, ScheduledJobRunID: null, Period: period, State: 'window-open', ScoredRows: PSD1_RECORDS, JoinedRows: 0, ExcludedInTrainingRows: 0,
+            Primary: null, Tracked: null, Calibration: null, DriftLook: null, DriftAlarms: [], Parity: null, TriggersFired: [], ChallengerRunID: null,
+            Challenger: { outcome: 'none', trainingRunId: null, recordId: null, reason: null, mirror }, Rollback: null, ErrorMessage: null,
+        }, monitoring);
+        return mirror!;
+    }
+}
+
+/** The unit PSD2's plan names (the divergence step reads no unit; the plan's type carries one). */
+const PSD2_UNIT: PredictionUnitSpec = {
+    id: 'psd2', lineageRootId: 'psd2', version: 1, name: 'psd2',
+    rows: { kind: 'grain', grainEntity: PSD1_TARGET, decisionDate: { kind: 'fixed', date: '2026-01-01' }, filter: [] },
+    label: { rule: { kind: 'column', column: 'Lapsed' }, windowDays: 365, gapDays: 0, outcome: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 }, labelVersion: 1 },
+    censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'now' } }, history: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, groupKey: null, temporal: null,
+    decision: { action: 'call', actorRole: 'team', capacityPerPeriod: null, period: 'month' }, incumbent: { kind: 'none' }, authoredBy: { kind: 'system', component: 'psd2' },
+};
+
+/** The monitoring spec PSD2's plan carries (the divergence step reads none of it). */
+function PSD2_SPEC(modelId: string): MonitoringJobReadSpec {
+    return {
+        modelId, evaluationProtocolId: 'psd2', schedule: { cronExpression: '0 3 1 * *', timezone: 'UTC' },
+        outcomeJoin: { predictionUnitId: 'psd2', runWhen: 'label-window-closed', joinOn: 'entity-and-as-of-date', excludeInTrainingRows: true },
+        performance: { primaryScore: { family: 'binary', metric: 'log-loss' }, period: 'month', interval: { level: 0.95, method: 'bootstrap', resamples: 100, pairedTest: 'paired-bootstrap' }, calibration: true },
+        drift: { features: 'all-model-features', statistic: 'z-mean', fdr: { method: 'benjamini-hochberg', q: 0.0095 }, nullCalibration: { kind: 'empirical-replay', looks: 12, inputs: 1, replays: 4_000_000, q: 0.0095 }, documentedFalseAlarmRate: 0.05, action: 'alert' },
+        challenger: { comparison: 'same-row-ids', score: { family: 'binary', metric: 'log-loss' }, onPass: 'publish-through-gate' },
+        retrainTriggers: [], rollback: null, parity: { sampleRows: 100, tolerance: 1e-9 },
+    };
+}
+
+/** Asserts the champion's period row stores the measured mirror in `ChallengerResult` (camelCase JSON). */
+async function assertPsd2Row(ctx: IntegrationCheckContext, champion: MJMLModelEntity, period: MonitoringPeriod, mirror: MonitoringMirror): Promise<void> {
+    const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLMonitoringResultEntity, 'ID' | 'State' | 'ChallengerResult'>>({
+        EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID = '${EscapeSQLString(champion.ID)}' AND PeriodGrain = 'month' AND Period = '${period.Start.toISOString().slice(0, 10)}'`,
+        Fields: ['ID', 'State', 'ChallengerResult'], ResultType: 'simple', BypassCache: true,
+    }, ctx.User);
+    Assert(rows.Success && rows.Results.length === 1, `one period row of the champion (got ${rows.Results.length}: ${rows.ErrorMessage})`);
+    const stored = JsonParse.ParseJsonText(rows.Results[0].ChallengerResult, 'ChallengerResult');
+    Assert(stored.Ok === true && JsonParse.IsJsonObject(stored.Value), 'the period row stores its ChallengerResult as JSON');
+    const value = stored.Ok === true && JsonParse.IsJsonObject(stored.Value) ? JsonParse.JsonObjectField(stored.Value, 'mirror') : null;
+    Assert(value !== null && JsonParse.JsonNumber(value, 'paired') === mirror.paired && JsonParse.JsonNumber(value, 'failures') === mirror.failures
+        && JsonParse.JsonString(value, 'challengerModelId') === mirror.challengerModelId, `the stored mirror equals the measured one (${JSON.stringify(value)})`);
+}
+
 export const PredictiveShadowDriftChecks: NamedCheck[] = [
     {
         Id: 'predictive-shadow-drift.PSD1',
@@ -267,247 +335,28 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
     },
     {
         Id: 'predictive-shadow-drift.PSD2',
-        Name: 'PSD2: PredictiveStudioEvaluateDriftAction loads baseline and evaluation windows from MJ: Feature Values, enforces MinSampleSize=100 InsufficientData gating, detects Critical PSI drift, and emits an alert record',
+        Name: "PSD2: the live mirror's divergence over the period (paired records, agreement, mean score delta, failures) is stored on the champion's MJ: ML Monitoring Results row",
         Fn: async (ctx: IntegrationCheckContext) => {
-            const md = ctx.Provider;
-            const user = ctx.User;
-            const createdFeatureValues: MJFeatureValueEntity[] = [];
-            let recordProcess: MJRecordProcessEntity | null = null;
-            const createdAlertIds: string[] = [];
-
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) SkipCheck('PSD2 needs a database provider: its fixtures place model status by SQL');
+            const provider = ctx.Provider;
+            let fixtures: Psd1Fixtures | null = null;
+            const tagOf = (): string => fixtures?.Tag || '';
             try {
-                const targetEntityId = await resolveFirstId('MJ: Entities', user, md);
-                Assert(!!targetEntityId, 'Could not resolve a seed MJ: Entities row');
-
-                recordProcess = await md.GetEntityObject<MJRecordProcessEntity>(
-                    'MJ: Record Processes',
-                    user,
+                fixtures = await createPsd1Fixtures(ctx, provider);
+                const asOf = new Date();
+                const scored = await new ScoringService(psd1Context(ctx, fixtures.Artifacts)).Score(
+                    fixtures.Binding, { kind: 'record-ids', entity: PSD1_TARGET, ids: [...fixtures.RecordIDs] }, asOf, false,
                 );
-                recordProcess.NewRecord();
-                recordProcess.Name = `PSD2 Drift Record Process ${TAG}`;
-                recordProcess.EntityID = targetEntityId!;
-                recordProcess.WorkType = 'ML Model';
-                recordProcess.ScopeType = 'Filter';
-                recordProcess.ScopeFilter = '1=0';
-                recordProcess.Status = 'Active';
-                recordProcess.ScheduleEnabled = false;
-                recordProcess.OnDemandEnabled = true;
-                Assert(
-                    await recordProcess.Save(),
-                    `Failed to save PSD2 RecordProcess: ${recordProcess.LatestResult?.CompleteMessage}`,
-                );
-
-                // Seed 12 baseline Champion rows inside the 28-day baseline window (14 days ago)
-                // and 12 evaluation Champion rows inside the 7-day evaluation window (1 day ago).
-                const DAY_MS = 86_400_000;
-                const nowMs = Date.now();
-                for (let i = 0; i < 12; i++) {
-                    const baseRow = await md.GetEntityObject<MJFeatureValueEntity>(
-                        'MJ: Feature Values',
-                        user,
-                    );
-                    baseRow.NewRecord();
-                    baseRow.RecordProcessID = recordProcess.ID;
-                    baseRow.EntityID = targetEntityId!;
-                    baseRow.RecordID = `psd2-base-${i}`;
-                    baseRow.FeatureName = 'ChurnRisk';
-                    baseRow.Role = 'Champion';
-                    baseRow.Source = 'Pipeline';
-                    baseRow.ValueNumeric = (i + 1) / 15;
-                    baseRow.Confidence = 0.9;
-                    baseRow.ComputedAt = new Date(nowMs - 14 * DAY_MS + i * 60_000);
-                    Assert(
-                        await baseRow.Save(),
-                        `Failed to save baseline Feature Value: ${baseRow.LatestResult?.CompleteMessage}`,
-                    );
-                    createdFeatureValues.push(baseRow);
-                }
-
-                for (let i = 0; i < 12; i++) {
-                    const evalRow = await md.GetEntityObject<MJFeatureValueEntity>(
-                        'MJ: Feature Values',
-                        user,
-                    );
-                    evalRow.NewRecord();
-                    evalRow.RecordProcessID = recordProcess.ID;
-                    evalRow.EntityID = targetEntityId!;
-                    evalRow.RecordID = `psd2-eval-${i}`;
-                    evalRow.FeatureName = 'ChurnRisk';
-                    evalRow.Role = 'Champion';
-                    evalRow.Source = 'Pipeline';
-                    evalRow.ValueNumeric = 0.99;
-                    evalRow.Confidence = 0.45;
-                    evalRow.ComputedAt = new Date(nowMs - 1 * DAY_MS + i * 60_000);
-                    Assert(
-                        await evalRow.Save(),
-                        `Failed to save evaluation Feature Value: ${evalRow.LatestResult?.CompleteMessage}`,
-                    );
-                    createdFeatureValues.push(evalRow);
-                }
-
-                await ActionEngineServer.Instance.Config(false, user);
-                const driftAction = ActionEngineServer.Instance.Actions.find(
-                    (a) => a.DriverClass === EVALUATE_DRIFT_DRIVER_CLASS,
-                );
-                Assert(
-                    !!driftAction,
-                    `Expected MJ: Actions row with DriverClass='${EVALUATE_DRIFT_DRIVER_CLASS}' in ActionEngineServer.Instance.Actions`,
-                );
-                const resolvedInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
-                    BaseAction,
-                    driftAction!.DriverClass,
-                );
-                Assert(
-                    resolvedInstance instanceof EvaluateFeatureAndPredictionDriftAction,
-                    `Expected ClassFactory to resolve EvaluateFeatureAndPredictionDriftAction for '${driftAction!.DriverClass}'`,
-                );
-
-                // 1. Default MinSampleSize=100 guard: 12 samples per window < 100 -> InsufficientData=true, OverallSeverity='None'
-                const insufficientParams = new RunActionParams();
-                insufficientParams.Action = driftAction!;
-                insufficientParams.ContextUser = user;
-                insufficientParams.Provider = md;
-                insufficientParams.SkipActionLog = true;
-                insufficientParams.Params = [
-                    { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
-                    { Name: 'MinSampleSize', Type: 'Input', Value: 100 },
-                    { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
-                ];
-
-                const insufficientResult = await ActionEngineServer.Instance.RunAction(insufficientParams);
-                Assert(
-                    insufficientResult.Success,
-                    `Evaluate Feature and Prediction Drift (MinSampleSize=100) failed: ${insufficientResult.Message}`,
-                );
-                const insufficientFlag = insufficientParams.Params.find(
-                    (p) => p.Name === 'InsufficientData' && p.Type === 'Output',
-                )?.Value;
-                const insufficientSeverity = insufficientParams.Params.find(
-                    (p) => p.Name === 'OverallSeverity' && p.Type === 'Output',
-                )?.Value;
-                const insufficientAlert = insufficientParams.Params.find(
-                    (p) => p.Name === 'AlertEmitted' && p.Type === 'Output',
-                )?.Value;
-                AssertEqual(insufficientFlag, true, 'Expected InsufficientData=true at MinSampleSize=100');
-                AssertEqual(insufficientSeverity, 'None', 'Expected OverallSeverity=None at MinSampleSize=100');
-                AssertEqual(insufficientAlert, false, 'Expected AlertEmitted=false at MinSampleSize=100');
-
-                // 2. MinSampleSize=10 without NotifyUserID: drift detected (Critical). The caller is notified,
-                //    except the system user, who notifies no one without a NotifyUserID.
-                const callerIsSystem = UUIDsEqual(user.ID, UserCache.Instance.GetSystemUser()?.ID);
-                const callerParams = new RunActionParams();
-                callerParams.Action = driftAction!;
-                callerParams.ContextUser = user;
-                callerParams.Provider = md;
-                callerParams.SkipActionLog = true;
-                callerParams.Params = [
-                    { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
-                    { Name: 'MinSampleSize', Type: 'Input', Value: 10 },
-                    { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
-                ];
-
-                const callerResult = await ActionEngineServer.Instance.RunAction(callerParams);
-                Assert(
-                    callerResult.Success,
-                    `Evaluate Feature and Prediction Drift (no NotifyUserID) failed: ${callerResult.Message}`,
-                );
-                AssertEqual(
-                    callerParams.Params.find((p) => p.Name === 'OverallSeverity' && p.Type === 'Output')?.Value,
-                    'Critical',
-                    'Expected OverallSeverity=Critical without NotifyUserID',
-                );
-                AssertEqual(
-                    callerParams.Params.find((p) => p.Name === 'ShouldAlert' && p.Type === 'Output')?.Value,
-                    true,
-                    'Expected ShouldAlert=true without NotifyUserID',
-                );
-                AssertEqual(
-                    callerParams.Params.find((p) => p.Name === 'AlertEmitted' && p.Type === 'Output')?.Value,
-                    !callerIsSystem,
-                    callerIsSystem
-                        ? 'Expected AlertEmitted=false for the system user without NotifyUserID'
-                        : 'Expected AlertEmitted=true: a caller without NotifyUserID is notified themselves',
-                );
-                const callerAlertId = callerParams.Params.find((p) => p.Name === 'AlertID' && p.Type === 'Output')?.Value;
-                if (typeof callerAlertId === 'string') {
-                    createdAlertIds.push(callerAlertId);
-                }
-
-                // 3. MinSampleSize=10 with NotifyUserID = the caller: honoured for the system user or an Owner,
-                //    and the caller is the fallback for anyone else, so the alert reaches this user either way.
-                const runParams = new RunActionParams();
-                runParams.Action = driftAction!;
-                runParams.ContextUser = user;
-                runParams.Provider = md;
-                runParams.SkipActionLog = true;
-                runParams.Params = [
-                    { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
-                    { Name: 'MinSampleSize', Type: 'Input', Value: 10 },
-                    { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
-                    { Name: 'NotifyUserID', Type: 'Input', Value: user.ID },
-                ];
-
-                const result = await ActionEngineServer.Instance.RunAction(runParams);
-                Assert(result.Success, `Evaluate Feature and Prediction Drift failed: ${result.Message}`);
-
-                const overallSeverity = runParams.Params.find(
-                    (p) => p.Name === 'OverallSeverity' && p.Type === 'Output',
-                )?.Value;
-                const shouldAlert = runParams.Params.find(
-                    (p) => p.Name === 'ShouldAlert' && p.Type === 'Output',
-                )?.Value;
-                const alertEmitted = runParams.Params.find(
-                    (p) => p.Name === 'AlertEmitted' && p.Type === 'Output',
-                )?.Value;
-                const alertId = runParams.Params.find(
-                    (p) => p.Name === 'AlertID' && p.Type === 'Output',
-                )?.Value;
-
-                AssertEqual(overallSeverity, 'Critical', 'Expected OverallSeverity=Critical');
-                AssertEqual(shouldAlert, true, 'Expected ShouldAlert=true');
-                AssertEqual(alertEmitted, true, 'Expected AlertEmitted=true');
-                Assert(typeof alertId === 'string' && alertId.length > 0, 'Expected AlertID output parameter');
-                createdAlertIds.push(alertId as string);
-
-                // The saved alert is addressed to the caller and titled from the stored Record Process name.
-                const alertRes = await RunView.FromMetadataProvider(md).RunView<MJUserNotificationEntity>(
-                    {
-                        EntityName: 'MJ: User Notifications',
-                        ExtraFilter: `ID = '${alertId as string}'`,
-                        ResultType: 'entity_object',
-                        BypassCache: true,
-                    },
-                    user,
-                );
-                const alert = alertRes.Results?.[0];
-                Assert(!!alert, 'Expected the drift alert to be readable as its recipient');
-                Assert(UUIDsEqual(alert!.UserID, user.ID), 'Expected the drift alert to be addressed to the caller');
-                Assert(
-                    (alert!.Title ?? '').includes(recordProcess!.Name),
-                    `Expected the alert title to name the stored Record Process, got '${alert!.Title}'`,
-                );
+                AssertEqual(scored.Status, 'completed', `the binding run completed (${JSON.stringify(scored)})`);
+                const period = MonitoringPeriods.Containing(asOf, 'month');
+                const mirror = await new Psd2MirrorDriver().MeasureAndStore(ctx, fixtures, period);
+                AssertEqual(mirror.paired, PSD1_RECORDS, 'every champion record is paired with its challenger row');
+                AssertEqual(mirror.failures, 0, 'no champion record is missing its challenger row');
+                AssertEqual(mirror.agreement, 0, `the champion (${PSD1_SCORES.Champion}) and the challenger (${PSD1_SCORES.Challenger}) fall on opposite sides of 0.5`);
+                Assert(Math.abs(mirror.meanScoreDelta - (PSD1_SCORES.Challenger - PSD1_SCORES.Champion)) < 1e-9, `the mean score delta is challenger minus champion (got ${mirror.meanScoreDelta})`);
+                await assertPsd2Row(ctx, fixtures.Champion, period, mirror);
             } finally {
-                if (createdAlertIds.length > 0) {
-                    const rv = RunView.FromMetadataProvider(md);
-                    const notifRes = await rv.RunView<MJUserNotificationEntity>(
-                        {
-                            EntityName: 'MJ: User Notifications',
-                            ExtraFilter: `ID IN (${createdAlertIds.map((id) => `'${id}'`).join(', ')})`,
-                            ResultType: 'entity_object',
-                            BypassCache: true,
-                        },
-                        user,
-                    );
-                    for (const n of notifRes.Results ?? []) {
-                        await n.Delete().catch(() => undefined);
-                    }
-                }
-                for (const fv of createdFeatureValues) {
-                    await fv.Delete().catch(() => undefined);
-                }
-                if (recordProcess?.IsSaved) {
-                    await recordProcess.Delete().catch(() => undefined);
-                }
+                if (tagOf() !== '') await deletePsd1Fixtures(provider, tagOf());
             }
         },
     },

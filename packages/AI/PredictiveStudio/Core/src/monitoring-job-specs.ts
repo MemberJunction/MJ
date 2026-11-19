@@ -14,9 +14,12 @@
  * sampled scored rows at the fixed tolerance 1e-9.
  */
 import { z } from 'zod';
-import type { EvaluationProtocolSpec } from './evaluation-protocol';
-import { JsonParse, type ParseResult } from './json-value';
+import { EvaluationProtocol, type EvaluationProtocolSpec } from './evaluation-protocol';
+import { JsonParse, type JsonValue, type ParseResult } from './json-value';
 import type { MonitoringJobSpec } from './monitoring-contracts';
+
+/** What the monitoring job reads back of its stored spec: all of it but the challenger's promotion rule (the gate reads the protocol's). */
+export type MonitoringJobReadSpec = Omit<MonitoringJobSpec, 'challenger'> & { readonly challenger: Omit<MonitoringJobSpec['challenger'], 'rule'> };
 
 /** What the spec reads of the model it monitors. */
 export interface MonitoredModel {
@@ -147,5 +150,29 @@ export class MonitoringJobSpecs {
     const parsed = monitoringJobSpec.safeParse(spec);
     if (parsed.success) return JsonParse.ParseOk(spec);
     return JsonParse.ParseFail<MonitoringJobSpec>(...parsed.error.issues.map((x) => `${x.path.join('.') || '(root)'}: ${x.message}`));
+  }
+
+  /**
+   * Checks a parsed JSON value (a stored `Configuration`) against the same strict schema and returns what the monitoring
+   * job reads of it: everything but the challenger's promotion rule, which the lifecycle gate reads from the protocol
+   * row itself when it judges the challenger. The margins come back as `NonNegative` (the schema checked them).
+   */
+  public static ValidateJson(value: JsonValue): ParseResult<MonitoringJobReadSpec> {
+    const parsed = monitoringJobSpec.safeParse(value);
+    if (!parsed.success) return JsonParse.ParseFail<MonitoringJobReadSpec>(...parsed.error.issues.map((x) => `${x.path.join('.') || '(root)'}: ${x.message}`));
+    const d = parsed.data;
+    const nn = EvaluationProtocol.ToNonNegative;
+    return JsonParse.ParseOk<MonitoringJobReadSpec>({
+      modelId: d.modelId,
+      evaluationProtocolId: d.evaluationProtocolId,
+      schedule: d.schedule,
+      outcomeJoin: d.outcomeJoin,
+      performance: d.performance,
+      drift: d.drift,
+      challenger: { comparison: d.challenger.comparison, score: d.challenger.score, onPass: d.challenger.onPass },
+      retrainTriggers: d.retrainTriggers.map((t) => (t.kind === 'outcome-degradation' ? { ...t, margin: nn(t.margin) } : t)),
+      rollback: d.rollback === null ? null : { ...d.rollback, margin: nn(d.rollback.margin) },
+      parity: d.parity,
+    });
   }
 }

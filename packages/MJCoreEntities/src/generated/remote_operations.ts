@@ -692,6 +692,52 @@ export interface PredictiveStudioRunFeaturePipelineOutput {
     wouldRefuse?: string;
 }
 
+/** Input for `PredictiveStudio.RunModelMonitoring`. */
+export interface PredictiveStudioRunModelMonitoringInput {
+    /** Id of the Published `MJ: ML Models` row to monitor; its open monitoring job's spec is used. */
+    modelId: string;
+    /** First day (`YYYY-MM-DD`) of the period to monitor, of the job's grain; omitted: the last complete period. */
+    periodStart?: string;
+}
+
+/** One monitored period of `PredictiveStudio.RunModelMonitoring`: its `MJ: ML Monitoring Results` row as written. */
+export interface PredictiveStudioMonitoredPeriod {
+    /** First day of the period (`YYYY-MM-DD`). */
+    period: string;
+    /** Id of the period's `MJ: ML Monitoring Results` row (a re-run updates it). */
+    monitoringResultId: string;
+    /** `window-open` (outcomes not yet known), `evaluated` or `failed`. */
+    state: 'window-open' | 'evaluated' | 'failed';
+    /** Predictions joined to a realised outcome. */
+    joinedRows: number;
+    /** The primary score's value and its 95% bounds; absent unless evaluated. */
+    primaryValue?: number;
+    primaryLower?: number;
+    primaryUpper?: number;
+    /** Inputs whose drift alarm fired at the period's look. */
+    driftAlarms: number;
+    /** Kinds of the retrain triggers that fired. */
+    triggersFired: string[];
+    /** What a fired trigger's challenger came to (`none`, `waiting`, `published`, `withheld`, `stopped`, `failed`). */
+    challengerOutcome?: string;
+    /** The challenger's `MJ: ML Training Runs` row, when one was started. */
+    challengerRunId?: string;
+    /** The rollback check in words. */
+    rollback?: string;
+    /** Why the period failed. */
+    errorMessage?: string;
+}
+
+/**
+ * Output of `PredictiveStudio.RunModelMonitoring`: the monitored periods; `skipped` names why nothing ran (the model is
+ * no longer Published).
+ */
+export interface PredictiveStudioRunModelMonitoringOutput {
+    modelId: string;
+    skipped?: string;
+    periods: PredictiveStudioMonitoredPeriod[];
+}
+
 /**
  * The scope of records to score. Mirrors the Record Set Processing scope shapes
  * (records / view / list / filter / single). Exactly one shape should be populated;
@@ -2512,6 +2558,23 @@ export class PredictiveStudioRunFeaturePipelineOperation extends BaseRemotableOp
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_86183f935f9f16a3";
+}
+
+// ============================================================
+// PredictiveStudio.RunModelMonitoring — Run ML Model Monitoring
+// ============================================================
+/**
+ * Run ML Model Monitoring
+ * Run one Published MJ: ML Models row's monitoring now, for one period (periodStart, the first day of a period of its monitoring job's grain) or the last complete one: the period's predictions (its binding's Champion Model Feature Values, or a shadow Predict of the period's unit rows when no binding is Active) joined to realised outcomes once the label window has closed, the primary score and tracked metrics with 95% intervals, drift by monitor procedure M, the retrain triggers (a fired one starts a challenger through the automated publisher), the rollback check against the predecessor on the same rows, the live mirror's divergence and parity. Writes or updates the period's MJ: ML Monitoring Results row and returns it. Uses the spec of the model's open monitoring job. Delegates to PredictiveStudioModelMonitoringJobDriver in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.RunModelMonitoring'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioRunModelMonitoringOperation extends BaseRemotableOperation<PredictiveStudioRunModelMonitoringInput, PredictiveStudioRunModelMonitoringOutput> {
+    public readonly OperationKey = "PredictiveStudio.RunModelMonitoring";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5e74188c0105c479";
 }
 
 // ============================================================

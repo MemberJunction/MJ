@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { ALLOWED_OUTCOMES, EvaluationProtocol, type EvaluationProtocolSpec } from '../evaluation-protocol';
 import { MonitoringJobSpecs } from '../monitoring-job-specs';
+import { MonitoringResultSchemas } from '../monitoring-result-schemas';
 
 const MODEL = { ModelID: 'c3d4e5f6-0718-4293-a4b5-c6d7e8f90a1b', PredictionUnitID: 'unit-v3', FeatureCount: 7 };
 
@@ -77,5 +78,37 @@ describe('MonitoringJobSpecs.Validate', () => {
     const r = MonitoringJobSpecs.Validate(bad);
     expect(r.Ok).toBe(false);
     expect(r.Ok === false && r.Errors.map((e) => e.split(':')[0])).toEqual(['modelId', 'drift.fdr.q']);
+  });
+});
+
+describe('MonitoringResultSchemas (M6.3: the job reads its stored spec and earlier period rows)', () => {
+  it('reads a stored job spec back with its triggers and rollback rule, but not the challenger promotion rule', () => {
+    const spec = MonitoringJobSpecs.FromProtocol(Protocol(), MODEL);
+    const read = MonitoringResultSchemas.ParseJobSpec(JSON.stringify(spec));
+    expect(read.Ok).toBe(true);
+    if (!read.Ok) return;
+    expect(read.Value.retrainTriggers).toEqual(spec.retrainTriggers);
+    expect(read.Value.rollback).toEqual(spec.rollback);
+    expect(read.Value.drift.fdr.q).toBe(0.0095);
+    expect('rule' in read.Value.challenger).toBe(false);
+  });
+
+  it('refuses a stored spec with an unknown key, naming it', () => {
+    const spec = { ...MonitoringJobSpecs.FromProtocol(Protocol(), MODEL), extra: 1 };
+    const read = MonitoringResultSchemas.ParseJobSpec(JSON.stringify(spec));
+    expect(read.Ok).toBe(false);
+    if (read.Ok) return;
+    expect(read.Errors.join(' ')).toContain('extra');
+  });
+
+  it('reads a stored primary score, calibration and triggers; refuses malformed text naming the column', () => {
+    expect(MonitoringResultSchemas.ParsePrimaryScore(JSON.stringify({ metric: 'log-loss', value: 0.5, interval: { level: 0.95, lower: 0.4, upper: 0.6 }, n: 10 })).Ok).toBe(true);
+    expect(MonitoringResultSchemas.ParseCalibration(JSON.stringify({ method: 'platt', intercept: 0, slope: 1, reliability: [] })).Ok).toBe(true);
+    const fired = MonitoringResultSchemas.ParseTriggersFired(JSON.stringify([{ kind: 'outcome-degradation', reason: 'r' }]));
+    expect(fired.Ok && fired.Value[0].kind).toBe('outcome-degradation');
+    const bad = MonitoringResultSchemas.ParseTriggersFired(JSON.stringify([{ kind: 'row-count' }]));
+    expect(bad.Ok).toBe(false);
+    if (!bad.Ok) expect(bad.Errors[0]).toContain('TriggersFired');
+    expect(MonitoringResultSchemas.ParsePrimaryScore(null).Ok).toBe(false);
   });
 });

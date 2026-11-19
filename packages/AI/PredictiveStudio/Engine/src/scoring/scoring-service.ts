@@ -18,7 +18,7 @@
 import { LogError, RunView, type BaseEntity, type EntityFieldInfo, type EntityInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { ModelValueRow, RecordModelValuesParams } from '@memberjunction/feature-pipelines';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { HumanValueQuestion } from '@memberjunction/record-set-processor';
 import {
   RegistrySchemas,
@@ -36,6 +36,7 @@ import {
 import { PreChangeArtifacts } from '../migration/pre-change-artifacts';
 import { ArtifactRegistry } from '../registry/artifact-registry';
 import { ProviderTransactions } from '../registry/provider-transactions';
+import { PublishRecords } from '../registry/publish-records';
 import { StoredRowReads } from '../registry/stored-row-reads';
 import { BindingHumanValueGuard, type BindingGuardSnapshot } from './binding-human-value-guard';
 import { MatrixToFeatureRows } from './ml-model-inference-processor';
@@ -171,14 +172,15 @@ export class ScoringService {
 
   /**
    * The model path; never writes a Feature Value or a column: Score Record Set without a binding, monitoring's shadow
-   * run, parity.
+   * run, parity. On the `monitoring` path every unit model is assembled with its unit rule (each row as of its own
+   * decision date, D4-67), and the predecessor of `MonitoredSuccessorID` is admitted (D4-17).
    *
    * @throws ModelNeedsTrainingError when the model is not found (no run row is written: it would name no model)
    */
   public async Predict(request: ScoringRequest): Promise<ScoringPrediction> {
     const model = await this.loadModel(request.ModelID);
     if (model === null) throw new ModelNeedsTrainingError(`ScoringService.Predict: ML Model '${request.ModelID}' not found`);
-    const resolved: ResolvedModel = { Model: model, Admission: model.Status === 'Unevaluated' && model.ServingWhileUnevaluated ? 'serving-while-unevaluated' : 'published' };
+    const resolved: ResolvedModel = { Model: model, Admission: await this.PredictAdmission(model) };
     const day = ScoringService.Normalize(new Date(request.AsOfDate));
     const fields: ScoringRunRequestFields = { ID: request.ScoringRunID, ReadPolicy: request.Read, RequestedBy: request.RequestedBy };
     const run = await ScoringRunRecorder.Open(model, null, request.Scope, day, request.DryRun, this.ctx, fields);
@@ -262,6 +264,19 @@ export class ScoringService {
     return model;
   }
 
+  /**
+   * How `Predict` admits a model: kept serving while Unevaluated; the predecessor of the context's
+   * `MonitoredSuccessorID` on the monitoring path, when the successor's latest applied `publish` record replaced it;
+   * otherwise as the Published model (check 1 refuses any other status).
+   */
+  protected async PredictAdmission(model: MJMLModelEntity): Promise<ScoringAdmission> {
+    if (model.Status === 'Unevaluated' && model.ServingWhileUnevaluated) return 'serving-while-unevaluated';
+    const successor = this.ctx.Path === 'monitoring' ? this.ctx.MonitoredSuccessorID : null;
+    if (model.Status !== 'Archived' || !successor) return 'published';
+    const replaced = await PublishRecords.FindLatestReplaced(successor, this.ctx);
+    return replaced !== null && UUIDsEqual(replaced, model.ID) ? 'predecessor' : 'published';
+  }
+
   /** The run row, `running`, before any record is read. */
   protected async OpenRun(model: MJMLModelEntity, binding: MJMLModelScoringBindingEntity | null, scope: ScoringScope, asOf: Date, dryRun: boolean): Promise<MJMLScoringRunEntity> {
     return ScoringRunRecorder.Open(model, binding, scope, asOf, dryRun, this.ctx);
@@ -296,11 +311,13 @@ export class ScoringService {
 
   /**
    * Assembles the records with PR 3's assembly: a `grain-x-periods` unit with its unit rule (each row dated by its own
-   * decision date), every other model with the normalised as-of date (D4-66).
+   * decision date), every other model with the normalised as-of date (D4-66); on the monitoring path every unit model
+   * with its unit rule (D4-67).
    */
   protected async Assemble(ready: ReadyModel, recordIds: readonly string[], keyField: string, asOf: Date, entityName: string): Promise<ScoringAssembled | ScoringRefusal> {
     const unit = ready.Prepared.Loaded.unit;
-    const assembly = await ready.Prepared.Assemble(recordIds, keyField, unit !== null && unit.Spec.rows.kind === 'grain-x-periods' ? 'unit-rule' : asOf, entityName, this.ctx);
+    const unitRule = unit !== null && (unit.Spec.rows.kind === 'grain-x-periods' || this.ctx.Path === 'monitoring');
+    const assembly = await ready.Prepared.Assemble(recordIds, keyField, unitRule ? 'unit-rule' : asOf, entityName, this.ctx);
     if (assembly.Status === 'refused') return { kind: 'assembly-refused', refusal: assembly.Refusal };
     if (assembly.Status === 'missing-columns') return ScoringService.missingColumns(ready.Model, assembly.Columns);
     if (assembly.RowIDs.length !== recordIds.length) throw new Error(`ScoringService: assembly returned ${assembly.RowIDs.length} rows for ${recordIds.length} records`);

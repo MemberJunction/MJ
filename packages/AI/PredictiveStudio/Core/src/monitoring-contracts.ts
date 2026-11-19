@@ -13,7 +13,7 @@
  * period result as the job computes it never leave the process and are PascalCase.
  */
 import type { CalibrationReport } from './trainer-contract';
-import type { IntervalSpec, MetricWithInterval, PromotionRule, ProperScore, RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
+import type { Interval, IntervalSpec, MetricWithInterval, PromotionRule, ProperScore, RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
 
 /** The null a drift test's thresholds are calibrated on: block replay (the contract) or procedure M's empirical replay. */
 export type DriftNullCalibration =
@@ -88,9 +88,106 @@ export interface MonitoringPeriodResult {
   readonly Period: string;
   readonly JoinedRows: number;
   readonly Primary: MetricWithInterval;
+  /**
+   * The interval of (period − reference) primary loss under the protocol's `IntervalSpec`, the reference being the
+   * model's stored holdout score (PR 4 delta, M6.2): the `outcome-degradation` trigger fires when its lower bound is
+   * above the trigger's margin. Null when the period joined no rows.
+   */
+  readonly Degradation: Interval | null;
   readonly Calibration: CalibrationReport | null;
   readonly DriftAlarms: readonly { readonly Feature: string; readonly AdjustedP: number }[];
   readonly Parity: { readonly Sampled: number; readonly MaxAbsDifference: number; readonly Passed: boolean };
   readonly TriggersFired: readonly RetrainTrigger['kind'][];
   readonly ChallengerRunID: string | null;
 }
+
+// ------------------------------------------------------------------ the period row's JSON columns (M6.3, D-054) -----
+// `MJ: ML Monitoring Results` stores these camelCase, as every stored JSON column of the program does.
+
+/** A tracked metric of one period beside the primary score: a proper score, a label rate or the mean prediction. */
+export interface TrackedMetric {
+  /** A proper or secondary metric, the share of a class among the realised labels, or the mean predicted score. */
+  readonly metric: MetricWithInterval['metric'] | 'positive-rate' | 'class-rate' | 'mean-prediction';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** The class a `class-rate` (or the adverse class a `positive-rate`) is for; null otherwise. */
+  readonly className: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly value: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly interval: Interval;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** One input's procedure-M result at the period's look (`DriftLook` holds every input's; `DriftAlarms` the flagged ones). */
+export interface DriftLookEntry {
+  readonly input: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly kind: 'mean' | 'proportion' | 'series';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly z: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** Empirical two-sided p against the look's no-drift replays. */
+  readonly p: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** Benjamini–Hochberg adjusted p across the look's inputs. */
+  readonly pAdjusted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly q: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly look: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly flagged: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's scoring parity check (`Parity`): sampled scored rows recomputed, re-sampled once on a failure (D4-20). */
+export interface MonitoringParity {
+  readonly sampled: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly maxAbsDifference: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly passed: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly tolerance: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** True when the first sample failed and a second one was drawn. */
+  readonly resampled: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** The training run a confirmed failure started; null otherwise. */
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** Why parity was not checked (no binding stores this model's predictions, or nothing to sample); null when checked. */
+  readonly skipped: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** One retrain trigger that fired at the period (`TriggersFired` is an array of these). */
+export interface MonitoringTriggerFired {
+  readonly kind: RetrainTrigger['kind'];  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The live challenger mirror's divergence over the period (D-069; `MonitoringRules.Divergence`'s result, stored camelCase). */
+export interface MonitoringMirror {
+  readonly challengerModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly paired: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly agreement: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly meanScoreDelta: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly failures: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/**
+ * The period's challenger outcome (`ChallengerResult`): a fired trigger's challenger training run and what the gate did
+ * with it (`published` or `withheld` with the record the gate wrote; `stopped` when Evaluate shipped no model;
+ * `waiting` while a trigger stays fired after the period that started a challenger, D4-11), or `none`; plus the live
+ * mirror's divergence when the binding has a challenger.
+ */
+export interface MonitoringChallengerResult {
+  readonly outcome: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  /** The publish record of a published challenger, or the refusal record of a withheld one. */
+  readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly mirror: MonitoringMirror | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's automated rollback check (`RollbackCheck`, D4-17, §5.7 R5). */
+export type MonitoringRollbackCheck =
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'off' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'no-predecessor' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'not-eligible'; readonly predecessorModelId: string; readonly reason: string }
+  | {
+      readonly kind: 'checked' | 'rolled-back' | 'rollback-withheld';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly predecessorModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      /** Rows both models scored, outside either model's training snapshot, this period. */
+      readonly sharedRowIds: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      /** The paired (current − predecessor) loss interval of each checked period, oldest first. */
+      readonly comparisons: readonly Interval[];  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      /** The publish or refusal record of the rollback; null when it did not fire. */
+      readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    };

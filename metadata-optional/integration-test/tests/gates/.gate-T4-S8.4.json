@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T4 -> S8.4",
+    "Description": "Gate G6.4 (owner PR 4, phase 6, dataset T4, criterion S8.4): T4's trigger fires 0 times over 12 no-shift months after a model trained on the first 228 months of the AR(1) series.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.4\", \"owner:PR4\", \"phase:6\", \"dataset:T4\", \"criterion:S8.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "0 fires over 12 monitored months."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t4-s8-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5023E2D5-77FB-4CC7-A2FB-9CEFBB2B479B"
+  }
+}

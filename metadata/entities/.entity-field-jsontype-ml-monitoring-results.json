@@ -1,0 +1,136 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on the nine JSON columns of MJ: ML Monitoring Results so CodeGen emits typed",
+      "PrimaryScoreObject / TrackedMetricsObject / CalibrationObject / DriftLookObject / DriftAlarmsObject / ParityObject /",
+      "TriggersFiredObject / ChallengerResultObject / RollbackCheckObject accessors on MJMLMonitoringResultEntity. Every type in the",
+      "shared JSONType-interfaces/IMLMonitoringResultJsonTypes.ts mirrors its @memberjunction/predictive-studio-core type field for",
+      "field (PR 4 Task M6.3). The EntityField rows exist since M1 (D4-44); all fields bind the one combined file, so CodeGen emits",
+      "its declarations once."
+    ],
+    "fields": {
+      "Name": "MJ: ML Monitoring Results"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "MetricWithInterval",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "PrimaryScore field \u2014 the protocol's primary metric over the joined rows, with its 95% interval"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=PrimaryScore"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "TrackedMetric",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "TrackedMetrics field \u2014 the other tracked metrics (label rates, the other proper scores, the mean prediction), each with its interval"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=TrackedMetrics"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "CalibrationReport",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "Calibration field \u2014 a binary model's calibration over the joined rows"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=Calibration"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "DriftLookEntry",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "DriftLook field \u2014 every input's procedure-M result at the period's look"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=DriftLook"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "DriftLookEntry",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "DriftAlarms field \u2014 the inputs whose drift alarm fired"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=DriftAlarms"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "MonitoringParity",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "Parity field \u2014 the period's scoring parity check"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=Parity"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "MonitoringTriggerFired",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "TriggersFired field \u2014 the retrain triggers that fired, with their reasons"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=TriggersFired"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "MonitoringChallengerResult",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "ChallengerResult field \u2014 a fired trigger's challenger outcome and the live mirror's divergence"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=ChallengerResult"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "MonitoringRollbackCheck",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLMonitoringResultJsonTypes.ts"
+          },
+          "_comments": [
+            "RollbackCheck field \u2014 the automated rollback check against the predecessor"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=RollbackCheck"
+          }
+        }
+      ]
+    }
+  }
+]

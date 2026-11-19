@@ -3,13 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
-import { ActionEngineServer } from '@memberjunction/actions';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import type { ActionResult, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
-import {
-    EVALUATE_DRIFT_DRIVER_CLASS,
-    EvaluateFeatureAndPredictionDriftAction,
-} from '@memberjunction/predictive-studio';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
 
@@ -201,7 +195,6 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
     afterEach(() => {
         vi.restoreAllMocks();
         UserCache.Instance.SetUsers([]);
-        EvaluateFeatureAndPredictionDriftAction.SetDefaultAlertEmitter(null);
     });
 
     it('registers IT166 (without colliding with IT164 or IT165) and uses non-hand-typed v4 UUIDs (R3, R6a)', () => {
@@ -260,34 +253,17 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD1 needs a database provider: its fixtures place model status by SQL' });
     });
 
-    it('PSD2 verifies real ActionEngineServer registration (no fallback action object) and exercises both MinSampleSize=100 InsufficientData and MinSampleSize=10 Critical drift (R6b, R6c)', async () => {
+    it("PSD2 measures the binding's mirror with the monitoring driver's own step and reads it back from the champion's MJ: ML Monitoring Results row; it skips, naming why, on a provider that cannot place model status by SQL (M6.8)", async () => {
         const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
-        expect(source).not.toContain('6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00');
+        const psd2Source = source.slice(source.indexOf("Id: 'predictive-shadow-drift.PSD2'"));
+        expect(source).not.toMatch(/EvaluateFeatureAndPrediction|EVALUATE_DRIFT|PSIDrift/);
+        expect(source).toContain('this.MeasureDivergence(plan, join, period, monitoring)');
+        expect(source).toContain("EntityName: 'MJ: ML Monitoring Results'");
+        expect(psd2Source).toContain('new Psd2MirrorDriver().MeasureAndStore(');
 
-        const { ctx, notificationRows } = buildInMemoryHarness();
+        const { ctx } = buildInMemoryHarness();
         const psd2 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD2');
         expect(psd2).toBeDefined();
-
-        vi.spyOn(ActionEngineServer.Instance, 'Config').mockResolvedValue(undefined);
-        vi.spyOn(ActionEngineServer.Instance, 'Actions', 'get').mockReturnValue([
-            {
-                ID: '9673E816-6985-4773-B172-E669522FC13D',
-                Name: 'Evaluate Feature and Prediction Drift',
-                DriverClass: EVALUATE_DRIFT_DRIVER_CLASS,
-                Type: 'Custom',
-                Status: 'Active',
-            } as unknown as MJActionEntityExtended,
-        ]);
-        const runActionSpy = vi
-            .spyOn(ActionEngineServer.Instance, 'RunAction')
-            .mockImplementation(async (runParams: RunActionParams): Promise<ActionResult> => {
-                const simple = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
-                return { RunParams: runParams, Success: simple.Success, ResultCode: simple.ResultCode, Message: simple.Message, Params: runParams.Params };
-            });
-
-        await expect(psd2!.Fn(ctx)).resolves.toBeUndefined();
-        expect(runActionSpy).toHaveBeenCalledTimes(3);
-        // A non-system caller is notified without NotifyUserID too; the check cleaned both alerts up.
-        expect(notificationRows).toHaveLength(0);
+        await expect(psd2!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD2 needs a database provider: its fixtures place model status by SQL' });
     });
 });

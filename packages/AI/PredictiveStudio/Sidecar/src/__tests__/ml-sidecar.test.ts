@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import {
+  type MonitorCalibrateRequest,
+  type MonitorCalibrateResponse,
+  type MonitorDriftRequest,
+  type MonitorDriftResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerFailed,
@@ -240,5 +244,62 @@ describe('MLSidecar.RunTrainer', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(s.Predict(buildPredictRequest(), controller.signal)).rejects.toThrow(/aborted/);
+  });
+});
+
+describe('MLSidecar monitor procedure M (M6.1)', () => {
+  beforeEach(() => {
+    responseQueue.length = 0;
+    requestLog.length = 0;
+  });
+
+  function buildDriftRequest(): MonitorDriftRequest {
+    return {
+      inputs: [{ name: 'EngagementZ', kind: 'mean', reference: [0.1, -0.2, 0.3], current: [0.4, 0.5] }],
+      look: 1,
+      q: 0.0171,
+      replays: 2000,
+      seed: 7,
+    };
+  }
+
+  it('MonitorDrift() POSTs the look to /monitor/drift and returns the per-input results and alarms', async () => {
+    const flagged = { input: 'EngagementZ', kind: 'mean' as const, z: 5.2, p: 1 / 2001, pAdjusted: 1 / 2001, q: 0.0171, look: 1, flagged: true };
+    const expected: MonitorDriftResponse = { look: 1, q: 0.0171, replays: 2000, results: [flagged], alarms: [flagged] };
+    queue(200, expected);
+    const req = buildDriftRequest();
+    const result = await new MLSidecar({ url: URL_BASE }).MonitorDrift(req);
+
+    expect(result).toEqual(expected);
+    expect(requestLog[0]).toMatchObject({ method: 'POST', path: '/monitor/drift' });
+    expect(JSON.parse(requestLog[0].body!)).toEqual(req);
+  });
+
+  it('MonitorCalibrate() POSTs the design to /monitor/calibrate and returns q(L)', async () => {
+    const expected: MonitorCalibrateResponse = { q: 0.0095, looks: 12, replays: 2000, target: 0.05, anyAlarmRate: 0.05 };
+    queue(200, expected);
+    const req: MonitorCalibrateRequest = {
+      inputs: [{ name: 'LagValue', kind: 'series', reference: [100, 101, 99.5, 100.2], lookSize: 1 }],
+      looks: 12,
+      replays: 2000,
+      seed: 7,
+      target: 0.05,
+    };
+    const result = await new MLSidecar({ url: URL_BASE }).MonitorCalibrate(req);
+
+    expect(result).toEqual(expected);
+    expect(requestLog[0]).toMatchObject({ method: 'POST', path: '/monitor/calibrate' });
+    expect(JSON.parse(requestLog[0].body!)).toEqual(req);
+  });
+
+  it('surfaces a 422 refusal of a request outside the contract as SidecarError', async () => {
+    queue(422, { detail: [{ msg: 'the reference window has no variation, so the z statistic is undefined' }] });
+    await expect(new MLSidecar({ url: URL_BASE }).MonitorDrift(buildDriftRequest())).rejects.toMatchObject({ name: 'SidecarError', Status: 422 });
+  });
+
+  it('forwards an AbortSignal on MonitorDrift', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(new MLSidecar({ url: URL_BASE }).MonitorDrift(buildDriftRequest(), controller.signal)).rejects.toThrow(/aborted/);
   });
 });

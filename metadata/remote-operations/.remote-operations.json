@@ -216,6 +216,29 @@
   },
   {
     "fields": {
+      "Name": "Run ML Model Monitoring",
+      "OperationKey": "PredictiveStudio.RunModelMonitoring",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Run one Published MJ: ML Models row's monitoring now, for one period (periodStart, the first day of a period of its monitoring job's grain) or the last complete one: the period's predictions (its binding's Champion Model Feature Values, or a shadow Predict of the period's unit rows when no binding is Active) joined to realised outcomes once the label window has closed, the primary score and tracked metrics with 95% intervals, drift by monitor procedure M, the retrain triggers (a fired one starts a challenger through the automated publisher), the rollback check against the predecessor on the same rows, the live mirror's divergence and parity. Writes or updates the period's MJ: ML Monitoring Results row and returns it. Uses the spec of the model's open monitoring job. Delegates to PredictiveStudioModelMonitoringJobDriver in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioRunModelMonitoringInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-run-model-monitoring.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioRunModelMonitoringOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-run-model-monitoring.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8A03475E-DAA3-4706-AEC9-AE9C01CD95A9"
+    }
+  },
+  {
+    "fields": {
       "Name": "Score Record Set",
       "OperationKey": "PredictiveStudio.ScoreRecordSet",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",

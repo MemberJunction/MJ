@@ -8,6 +8,8 @@ Endpoints:
   * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
   * ``POST /trainer`` — one protocol-driven training: inner-CV selection, one holdout scoring, baselines, the gate
   * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing (legacy or v2 artifacts)
+  * ``POST /monitor/drift`` — one look of monitor procedure M (z per input, empirical p, BH at q(L))
+  * ``POST /monitor/calibrate`` — q(L) for a design by bisection on seeded no-drift replays
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from . import algorithms, artifacts, preprocessing
+from . import algorithms, artifacts, monitor, preprocessing
 from .array_types import FArr, IntArr
 from .artifacts_v2 import PredictorEnvelope
 from .failures import RequestRefused
@@ -69,6 +71,25 @@ def trainer(req: TrainerRequest) -> JSONResponse:
     except RequestRefused as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result.model_dump(mode="json"))
+
+
+# ---------------------------------------------------------------------------
+# /monitor (procedure M, D4-11)
+# ---------------------------------------------------------------------------
+
+@app.post("/monitor/drift", response_model=monitor.DriftResponse)
+def monitor_drift(req: monitor.DriftRequest) -> monitor.DriftResponse:
+    """One look of monitor procedure M: each input's z against its training window, its empirical p against seeded
+    no-drift replays at the look, and Benjamini-Hochberg across the look's inputs at q(L). A request outside the
+    contract is a 422."""
+    return monitor.drift_look(req)
+
+
+@app.post("/monitor/calibrate", response_model=monitor.CalibrateResponse)
+def monitor_calibrate(req: monitor.CalibrateRequest) -> monitor.CalibrateResponse:
+    """q(L) for a design: the largest level whose any-alarm rate over L looks on seeded no-drift replays is at most
+    the target, found by bisection. A request outside the contract is a 422."""
+    return monitor.calibrate_q(req)
 
 
 def _positive_scores(estimator: Any, X: FArr) -> FArr:

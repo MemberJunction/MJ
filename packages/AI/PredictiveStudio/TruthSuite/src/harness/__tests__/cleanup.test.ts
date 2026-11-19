@@ -104,6 +104,7 @@ const RUN_REFUSAL = 'RECORD-RUN-REFUSAL';
 const PENDING_JOB = 'JOB-PENDING-M1';
 const JOB_RUN = 'JOB-RUN-1';
 const OUTPUT_BINDING = 'OUTPUT-BINDING-1';
+const MONITORING_RESULT = 'MONITORING-RESULT-1';
 
 /** A fake store: answers from fixed rows, records each filter and every delete in order. */
 class FakeStore implements CleanupStore {
@@ -280,6 +281,7 @@ class FakeStore implements CleanupStore {
     if (entityName === 'MJ: Scheduled Job Runs') return this.options.FullGateRun ? [this.row(entityName, JOB_RUN)] : [];
     if (entityName === 'MJ: Actions') return this.options.GateRows ? [this.row(entityName, 'ACT-1')] : [];
     if (entityName === 'MJ: ML Output Bindings') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, OUTPUT_BINDING)] : [];
+    if (entityName === 'MJ: ML Monitoring Results') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, MONITORING_RESULT)] : [];
     if (entityName === 'MJ: ML Training Pipelines') return [this.row(entityName, P1), this.row(entityName, AGENT_P)];
     if (entityName === 'MJ: Process Runs') return [this.row(entityName, PR1)];
     if (entityName === 'MJ: Process Run Details') return this.options.Details ? [...this.options.Details] : [this.row(entityName, 'DETAIL-1')];
@@ -338,6 +340,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: Action Params | Name = 'ModelID' AND Type = 'Input' AND (DefaultValue IN ('${M1}','${M2}'))`,
       `MJ: ML Model Publish Records | ModelID IN ('${M1}','${M2}') OR ReplacesModelID IN ('${M1}','${M2}') OR TrainingRunID IN ('RUN-1')`,
       `MJ: ML Output Bindings | ModelID IN ('${M1}','${M2}')`,
+      `MJ: ML Monitoring Results | ModelID IN ('${M1}','${M2}')`,
       // read again after the withdrawal: a row read before it still says Active and its Delete() is refused
       `MJ: ML Model Scoring Bindings | ID IN ('BINDING-1','BINDING-WITHDRAWN')`,
     ]);
@@ -371,11 +374,12 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const store = new FakeStore(new Set(), { GateRows: true });
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
-    for (const gateRow of ['MJ: ML Model Publish Records:RECORD-1', 'MJ: Scheduled Jobs:JOB-M1', 'MJ: Action Params:PARAM-MODELID', 'MJ: Action Params:PARAM-SCOPE', 'MJ: Actions:ACT-1', `MJ: ML Output Bindings:${OUTPUT_BINDING}`]) {
+    for (const gateRow of ['MJ: ML Model Publish Records:RECORD-1', 'MJ: Scheduled Jobs:JOB-M1', 'MJ: Action Params:PARAM-MODELID', 'MJ: Action Params:PARAM-SCOPE', 'MJ: Actions:ACT-1', `MJ: ML Output Bindings:${OUTPUT_BINDING}`, `MJ: ML Monitoring Results:${MONITORING_RESULT}`]) {
       expect(at(gateRow)).toBeGreaterThanOrEqual(0);
       expect(at(gateRow)).toBeLessThan(at(`MJ: ML Models:${M1}`));
     }
     expect(at('MJ: Action Params:PARAM-SCOPE')).toBeLessThan(at('MJ: Actions:ACT-1'));
+    expect(at(`MJ: ML Monitoring Results:${MONITORING_RESULT}`)).toBeLessThan(at('MJ: Scheduled Jobs:JOB-M1'));
     expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
     expect(store.Filters).toContain(`MJ: Actions | ParentID IS NOT NULL AND (ID IN ('ACT-1'))`);
   });

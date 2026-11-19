@@ -71,6 +71,18 @@ export class MonitoringJobs {
     return (await MonitoringJobs.openJobsOf(modelId, ctx)).length;
   }
 
+  /**
+   * The `Configuration` (its `MonitoringJobSpec` JSON) of the model's open monitoring job; null when it has none.
+   * `PredictiveStudio.RunModelMonitoring` runs a period with it.
+   *
+   * @throws Error when a read fails, or the model has more than one open job
+   */
+  public static async OpenJobConfiguration(modelId: string, ctx: RegistryContext): Promise<string | null> {
+    const open = await MonitoringJobs.openJobsOf(modelId, ctx);
+    if (open.length > 1) throw new Error(`ML Model ${modelId} has ${open.length} open monitoring jobs; exactly one is expected`);
+    return open[0]?.Configuration || null;
+  }
+
   /** The model's open monitoring jobs: found by type and status, matched on their configuration's `modelId` with `UUIDsEqual`. */
   private static async openJobsOf(modelId: string, ctx: RegistryContext): Promise<MJScheduledJobEntity[]> {
     const jobTypeId = await MonitoringJobs.jobTypeId(ctx);
