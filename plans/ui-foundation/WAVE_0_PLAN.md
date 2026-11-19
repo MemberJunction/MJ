@@ -70,11 +70,11 @@ The README's wave 0 row is wider than the unified plan's checklist. It also list
 
 The repo already runs `@playwright/test` and `@axe-core/playwright` under `e2e/` (`e2e/playwright.config.ts`, `pnpm test:e2e`, `e2e/specs/a11y.spec.ts`, `e2e/visual-capture/`, and `.github/workflows/release-test.yml` with a primed MSAL auth profile), plus `ExpectNoAxeViolations` in `@memberjunction/ng-test-utils` for Vitest DOM specs. What does not exist yet is `toHaveScreenshot` pixel-diff regression assertions.
 
-Proposal: extend `e2e/` with Playwright's built-in `toHaveScreenshot` comparisons rather than creating a second Playwright harness.
+Proposal: extend `e2e/` with Playwright's built-in `toHaveScreenshot` comparisons, on the same Playwright install, rather than creating a second harness.
 
-- First target (`e2e/ui-primitives/`) is the standalone prototype host page, in light and dark, at desktop and phone widths
-- Second target (`e2e/specs/ui-foundation-baseline.spec.ts`, reusing `e2e/fixtures.ts`'s authenticated MSAL session) is a fixed list of Explorer screens captured before Step 7 and diffed in Step 7
-- Prototype screenshots run cleanly anywhere; Explorer baseline comparison stays opt-in (`PW_VISUAL_BASELINE=1`) until Phase 3 seeds deterministic gallery data for CI
+- First target (`e2e/ui-primitives/`) is the standalone prototype host page, in light and dark, at desktop and phone widths. It sits outside the root config's `testDir` (`e2e/specs`), so it runs under its own config from PR #6673: `npx playwright test --config e2e/ui-primitives/playwright.config.ts`. That config serves the prototype's sample page and needs no signed-in profile, which the root config's fixtures assume
+- Second target (`e2e/specs/ui-foundation-baseline.spec.ts`, under the root config, reusing `e2e/fixtures.ts`'s authenticated MSAL session) is a fixed list of Explorer screens captured before Step 7 and diffed in Step 7
+- Prototype screenshots need no database or sign-in; Explorer baseline comparison stays opt-in (`PW_VISUAL_BASELINE=1`) until Phase 3 seeds deterministic gallery data for CI
 
 ## Step 5: the prototype
 
@@ -116,7 +116,7 @@ Merge order, agreed at the UI/UX Check-In: Colin's #6609 (WS6b tokens) and #6610
 | 2 | What the third look is | Something dense and flat with square corners and a serif face, so it shares nothing with MJ or LXP |
 | 3 | Spec scope | Full wave 0 at contract level; prototype builds surface, layer, row only |
 | 4 | Class prefix, given the `_common.scss` collisions | **Decided:** `.mj-` prefix kept; Wave 0 (`surface`, `layer`, `row`) has zero collisions, and Wave 1/2 PRs retire or rename colliding `_common.scss` globals per component. `.mj-btn*` and `.mj-input` are the library's own classes, not collisions |
-| 5 | Harness tooling and where it runs | `toHaveScreenshot` inside existing `e2e/` (`e2e/ui-primitives/` + `e2e/specs/`), Explorer baselines opt-in locally first |
+| 5 | Harness tooling and where it runs | `toHaveScreenshot` inside existing `e2e/`: `e2e/ui-primitives/` under its own config (#6673), `e2e/specs/` under the root config; Explorer baselines opt-in locally first |
 | 6 | Who implements the control-height and radius role tokens | Colin declares, Matt's component PRs adopt |
 | 7 | Branch and file | `WAVE_0_SPEC.md` in this folder, on a new docs branch off `next` |
 
