@@ -32,6 +32,7 @@ vi.mock('@memberjunction/core', () => {
         RunView: class MockRunView {
             RunView = vi.fn().mockImplementation(() => Promise.resolve(mockChildRunViewResult));
         },
+        EntityFieldTSType: { String: 'string', Number: 'number', Date: 'Date', Boolean: 'boolean' },
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }>;
             constructor(pairs: Array<{ FieldName: string; Value: string }>) {
@@ -168,6 +169,36 @@ function createArchiveContext(overrides?: Partial<{
     };
 }
 
+interface MockTypedFieldInfo {
+    Name: string;
+    AllowsNull: boolean;
+    TSType: 'string' | 'number' | 'Date' | 'boolean';
+}
+
+/** An EntityInfo stand-in whose FieldByName finds fields case-insensitively, as the real one does. */
+function createEntityInfo(fields: MockTypedFieldInfo[]): import('@memberjunction/core').EntityInfo {
+    return {
+        Name: 'Test Entity',
+        FieldByName: (name: string) => fields.find(f => f.Name.toLowerCase() === name.toLowerCase()),
+    } as unknown as import('@memberjunction/core').EntityInfo;
+}
+
+/** A record whose entity has a NOT NULL string column ChangesJSON, as Record Changes does. */
+function createRecordWithNotNullColumn(value: string | null): MockBaseEntity {
+    const fields = [
+        { Name: 'ChangesJSON', AllowsNull: false },
+        { Name: 'Description', AllowsNull: true },
+    ];
+    const record = createMockRecord();
+    record.EntityInfo = {
+        ...record.EntityInfo,
+        Fields: fields,
+        FieldByName: (name: string) => fields.find(f => f.Name === name),
+    } as MockBaseEntity['EntityInfo'];
+    record.Get.mockImplementation((field: string) => (field === 'ChangesJSON' ? value : null));
+    return record;
+}
+
 // ---- Tests ----
 
 describe('DefaultArchiveDriver', () => {
@@ -256,6 +287,70 @@ describe('DefaultArchiveDriver', () => {
             const context = createArchiveContext({ record });
 
             expect(driver.ShouldArchiveRecord(context)).toBe(true);
+        });
+
+        it('should treat an empty string in a NOT NULL column as no value, since StripFields writes it there', () => {
+            const record = createRecordWithNotNullColumn('');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(false);
+        });
+
+        it('should treat text in a NOT NULL column as a value', () => {
+            const record = createRecordWithNotNullColumn('{"a":1}');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(true);
+        });
+    });
+
+    describe('BuildEligibilityFilter', () => {
+        const fields: MockTypedFieldInfo[] = [
+            { Name: 'Description', AllowsNull: true, TSType: 'string' },
+            { Name: 'Notes', AllowsNull: true, TSType: 'string' },
+            { Name: 'ChangesJSON', AllowsNull: false, TSType: 'string' },
+            { Name: 'RunCount', AllowsNull: false, TSType: 'number' },
+        ];
+
+        it('should OR an IS NOT NULL test over the active nullable fields', () => {
+            const filter = driver.BuildEligibilityFilter(createFieldConfig(), createEntityInfo(fields));
+            expect(filter).toBe('Description IS NOT NULL OR Notes IS NOT NULL');
+        });
+
+        it("should test a NOT NULL string field for <> ''", () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }, { FieldName: 'Notes' }] });
+            const filter = driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields));
+            expect(filter).toBe("ChangesJSON <> '' OR Notes IS NOT NULL");
+        });
+
+        it('should use SkipIfAllNullFields over the field list', () => {
+            const fieldConfig = createFieldConfig({ SkipIfAllNullFields: ['Notes'] });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Notes IS NOT NULL');
+        });
+
+        it('should leave out inactive fields', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Notes', IsActive: false }] });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Description IS NOT NULL');
+        });
+
+        it('should write the metadata field name, not the configured spelling', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'description' }] });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBe('Description IS NOT NULL');
+        });
+
+        it('should return null when a checked field is not on the entity', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Missing; DROP TABLE x' }] });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
+        });
+
+        it('should return null when a checked field is a NOT NULL column that is not a string', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'RunCount' }] });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
+        });
+
+        it('should return null for a full-record configuration with no fields', () => {
+            const fieldConfig = createFieldConfig({ Fields: [], ArchiveFullRecord: true });
+            expect(driver.BuildEligibilityFilter(fieldConfig, createEntityInfo(fields))).toBeNull();
         });
     });
 
