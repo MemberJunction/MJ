@@ -42,7 +42,7 @@ import {
     PredictionPanelQueries, resolveOutcomeConfig, type FeatureSchemaEntry, type PredictRequest, type PredictResponse, type ScoringResult,
 } from '@memberjunction/predictive-studio-core';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
-import { BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, type MintedUserKeyIds } from './fls-client.checks';
+import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, type MintedUserKeyIds } from './fls-client.checks';
 import { ScoringLineage, type LineageModelRow, type LineageRunRow, type LineageValueRow } from './ps-gates/ps-gate-scoring-lineage';
 import { WaitUntil } from './wait-until';
 
@@ -148,32 +148,47 @@ export class PsPredictionServing {
     }
 
     /**
-     * Creates the restricted (UI role) and authorized (Developer role) scratch users as `ctx.User`, mints a user API key
-     * for each and waits until each authenticates through MJAPI and reads `MJ: Latest Feature Values`.
+     * Creates the restricted (UI role) and authorized (Developer role) scratch users, mints a user API key for each and
+     * waits until each authenticates through MJAPI and reads `MJ: Latest Feature Values`. The users, roles, keys and
+     * scope rules are written THROUGH MJAPI on a system-key connection, so MJAPI's own user and key-scope caches see
+     * them at once (written in process on a server transport, MJAPI saw them only on its timed reload: IT180 Setup was
+     * refused "No matching key scope rules" for over 200 s). When minting fails, whatever was created is released
+     * before the error is rethrown (Setup's failure leaves no identity behind).
      */
     public static async MintIdentities(ctx: IntegrationCheckContext, tag: string): Promise<ServingIdentities> {
         const keys: MintedUserKeyIds = { CreatedKeyIds: [], CreatedScopeRuleIds: [] };
         const userIds: string[] = [];
+        const wire = await BuildSystemKeyProvider();
         const make = async (label: string, roleName: string): Promise<ServingIdentity> => {
             const roleId = await PsPredictionServing.FirstId(ctx, 'MJ: Roles', `Name = '${EscapeSQLString(roleName)}'`);
             const email = `ps-serving-${label}-${Date.now()}@integration.test`;
-            const user = await PsPredictionServing.CreateRow<MJUserEntity>(ctx, 'MJ: Users', (u) => { u.Name = `${tag} ${label}`; u.Email = email; u.Type = 'User'; u.IsActive = true; });
+            const user = await PsPredictionServing.CreateWireRow<MJUserEntity>(wire, 'MJ: Users', (u) => { u.Name = `${tag} ${label}`; u.Email = email; u.Type = 'User'; u.IsActive = true; });
             userIds.push(user.ID);
-            await PsPredictionServing.CreateRow<MJUserRoleEntity>(ctx, 'MJ: User Roles', (ur) => { ur.UserID = user.ID; ur.RoleID = roleId; });
-            const raw = await MintFullAccessUserKey(ctx, keys, user.ID, `${tag} ${label}`);
+            await PsPredictionServing.CreateWireRow<MJUserRoleEntity>(wire, 'MJ: User Roles', (ur) => { ur.UserID = user.ID; ur.RoleID = roleId; });
+            const raw = await MintFullAccessUserKey(ctx, keys, user.ID, `${tag} ${label}`, wire);
             const provider = await BuildUserKeyProviderWithRetry(raw);
             await WaitUntil(async () => (await PsPredictionServing.canRead(provider)), `${label} identity reads MJ: Latest Feature Values through MJAPI`, { TimeoutMs: IDENTITY_PROPAGATION_MS });
             return { UserID: user.ID, Email: email, Provider: provider };
         };
-        const restricted = await make('restricted', 'UI');
-        const authorized = await make('authorized', 'Developer');
-        return { Restricted: restricted, Authorized: authorized, Keys: keys, UserIDs: userIds };
+        try {
+            const restricted = await make('restricted', 'UI');
+            const authorized = await make('authorized', 'Developer');
+            return { Restricted: restricted, Authorized: authorized, Keys: keys, UserIDs: userIds };
+        } catch (e) {
+            await PsPredictionServing.releaseCreated(ctx, keys, userIds);
+            throw e;
+        }
     }
 
     /** Deletes the identities' keys, role rows and users, best effort (teardown never throws). */
     public static async ReleaseIdentities(ctx: IntegrationCheckContext, ids: ServingIdentities): Promise<void> {
-        await DeleteMintedUserKeys(ctx, ids.Keys);
-        for (const userId of ids.UserIDs) {
+        await PsPredictionServing.releaseCreated(ctx, ids.Keys, ids.UserIDs);
+    }
+
+    /** Deletes minted keys (with their scope rules and usage logs), then each user's role rows and the user. */
+    private static async releaseCreated(ctx: IntegrationCheckContext, keys: MintedUserKeyIds, userIds: readonly string[]): Promise<void> {
+        await DeleteMintedUserKeys(ctx, keys);
+        for (const userId of userIds) {
             const roles = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJUserRoleEntity>({ EntityName: 'MJ: User Roles', ExtraFilter: `UserID = '${EscapeSQLString(userId)}'`, ResultType: 'entity_object' }, ctx.User);
             for (const r of roles.Results || []) await r.Delete();
             const user = await ctx.Provider.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User);
@@ -251,6 +266,15 @@ export class PsPredictionServing {
         return id;
     }
 
+    /** Saves a new `entityName` row through MJAPI on `wire` (a system-key connection), as its current user; throws on failure. */
+    public static async CreateWireRow<T extends BaseEntity>(wire: IMetadataProvider, entityName: string, fill: (row: T) => void): Promise<T> {
+        const row = await wire.GetEntityObject<T>(entityName, wire.CurrentUser);
+        row.NewRecord();
+        fill(row);
+        if (!(await row.Save())) throw new Error(`${entityName} did not save through MJAPI: ${row.LatestResult?.CompleteMessage}`);
+        return row;
+    }
+
     /** Saves a new row of `entityName` with `fill` applied as `ctx.User`; throws with the provider's message. */
     public static async CreateRow<T extends BaseEntity>(ctx: IntegrationCheckContext, entityName: string, fill: (row: T) => void): Promise<T> {
         const row = await ctx.Provider.GetEntityObject<T>(entityName, ctx.User);
@@ -316,11 +340,11 @@ function sqlProvider(ctx: IntegrationCheckContext): DatabaseProviderBase {
     return ctx.Provider;
 }
 
-/** Scores `binding` over `recordIds` on `asOf` as `ctx.User`, with `sidecar` and the batch size given. */
+/** Scores `binding` over `recordIds` on `asOf` as `ctx.User`, with `sidecar` and the batch size given; the run's clock reads `asOf` (the fixture model has no Prediction Unit, so it scores only its run date). */
 function score(ctx: IntegrationCheckContext, f: Pick<ServingFixture, 'Artifacts' | 'RecordIDs'>, binding: MJMLModelScoringBindingEntity, asOf: Date, sidecar: ServingSidecar, batchSize?: number): Promise<ScoringResult> {
     const sc: ScoringContext = {
         ContextUser: ctx.User, Provider: ctx.Provider, Path: 'score-record-set', OverwriteHumanValues: false, ProcessRunID: null, ScheduledJobRunID: null,
-        Seams: { Sidecar: sidecar, Runtime: new ServingRuntime(f.RecordIDs), ArtifactLoader: f.Artifacts, ...(batchSize === undefined ? {} : { BatchSize: batchSize }) },
+        Seams: { Sidecar: sidecar, Runtime: new ServingRuntime(f.RecordIDs), ArtifactLoader: f.Artifacts, Clock: { Now: () => asOf }, ...(batchSize === undefined ? {} : { BatchSize: batchSize }) },
     };
     return new ScoringService(sc).Score(binding, { kind: 'record-ids', entity: TARGET, ids: [...f.RecordIDs] }, asOf, false);
 }
