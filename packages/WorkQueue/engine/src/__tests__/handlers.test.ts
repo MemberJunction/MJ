@@ -8,7 +8,6 @@ import { BoundWorkHandler, SharedProviderSource } from '../handlers/BoundWorkHan
 import type { WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
 import { IndependentProviderSource } from '../handlers/IndependentProviderSource';
-import type { IndependentProviderFactory } from '../handlers/IndependentProviderSource';
 import { MakeContext, MakeMessage, SilentLogger, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
 
 class EchoHandler extends BaseWorkHandler {
@@ -123,39 +122,6 @@ describe('SharedProviderSource', () => {
     });
 });
 
-describe('IndependentProviderSource', () => {
-    function root() {
-        const minted: Array<{ Name: string; Released: number; ReleaseIndependentInstance(): Promise<void> }> = [];
-        const provider = {
-            Name: 'root',
-            CreateIndependentInstance: async () => {
-                const child = { Name: `child-${minted.length + 1}`, Released: 0, ReleaseIndependentInstance: async (): Promise<void> => { child.Released++; } };
-                minted.push(child);
-                return child;
-            },
-        };
-        return { provider, minted };
-    }
-
-    it('mints a new instance for every delivery instead of sharing the root provider (#6273)', async () => {
-        const { provider, minted } = root();
-        const source = new IndependentProviderSource(provider as unknown as IndependentProviderFactory);
-        const first = await source.CreateProvider();
-        const second = await source.CreateProvider();
-        expect(first).not.toBe(second);
-        expect(first).not.toBe(provider);
-        expect(minted).toHaveLength(2);
-    });
-
-    it('releases the instance it minted', async () => {
-        const { provider, minted } = root();
-        const source = new IndependentProviderSource(provider as unknown as IndependentProviderFactory);
-        const child = await source.CreateProvider();
-        await source.ReleaseProvider(child);
-        expect(minted[0].Released).toBe(1);
-    });
-});
-
 class SlowHandler extends BaseWorkHandler {
     public static Seen: IMetadataProvider[] = [];
     public async Handle(message: WorkMessage, _context: WorkContext): Promise<WorkOutcome> {
@@ -181,6 +147,23 @@ describe('IndependentProviderSource — a provider per delivery (#6273)', () => 
         };
         return { base, released };
     }
+
+    it('mints a new instance for every delivery instead of sharing the root provider', async () => {
+        const { base } = factory();
+        const source = new IndependentProviderSource(base);
+        const first = await source.CreateProvider();
+        const second = await source.CreateProvider();
+        expect(first).not.toBe(second);
+        expect(first).not.toBe(base);
+        expect(base.CreateIndependentInstance).toHaveBeenCalledTimes(2);
+    });
+
+    it('releases the instance it minted', async () => {
+        const { base, released } = factory();
+        const source = new IndependentProviderSource(base);
+        await source.ReleaseProvider(await source.CreateProvider());
+        expect(released).toEqual(['p1']);
+    });
 
     it('gives two concurrent deliveries distinct providers and releases each once', async () => {
         const { base, released } = factory();

@@ -199,19 +199,14 @@ after that long and drains; keep it below the scheduler's job deadline. `SIGTERM
 released when the delivery settles, so parallel handlers never share transaction state. `--concurrency` above 1 is
 safe in both modes.
 
-**Long-running mode.** A `--once` job neither sweeps nor re-plans. Without `--once` the worker may be the only host
-against the database, so it runs the sweeper (lease expiry, retention and dedup purge) every 60 s and re-plans its
-subscriptions every 30 s, the same defaults as MJAPI. `--sweeper-interval-ms` and `--reconcile-interval-ms` override
-either, and `0` disables.
+**Long-running mode.** By default a `--once` job neither sweeps nor re-plans. Without `--once` the worker may be the
+only host against the database, so it runs the sweeper (lease expiry, retention and dedup purge) every 60 s and
+re-plans its subscriptions every 30 s, the same defaults as MJAPI. `--sweeper-interval-ms` and
+`--reconcile-interval-ms` override either in both modes, and `0` disables.
 
 **When no host sweeps.** Retention and dedup purge only happen in a sweeper pass. If every MJAPI instance is
-publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or enable
-the sweeper on a publish-only MJAPI:
-
-```javascript
-// mj.config.cjs — an MJAPI that publishes and sweeps but runs no handlers
-workQueue: { enabled: true, subscriptions: [], sweeperEnabled: true },
-```
+publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or leave the
+sweeper on in a publish-only MJAPI (see "Publish-only MJAPI with a separate worker" above).
 
 **Exit codes.** `0` when the host ran — including "the queue was empty", a spent budget, `--max-duration-ms`, a
 signal, or a subscription an operator paused — so a scheduler never records a failure for idleness. **Non-zero** when
