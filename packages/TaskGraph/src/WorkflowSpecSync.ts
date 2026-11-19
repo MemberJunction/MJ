@@ -21,7 +21,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ExcludeByUUIDs, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
     MJActionFilterEntity,
@@ -76,6 +76,54 @@ export const EXECUTE_AGENT_ACTION = 'Execute Agent';
  * engine's own scope resolver, which is what makes "watch THIS invoice" actually watch one invoice.
  */
 type TriggerScope = { EntityID: string | null; RecordID: string | null };
+
+/** What a workflow's record-change binding is set to: `Active` only while the workflow is. */
+type BindingStatus = MJEntityActionEntity['Status'];
+
+/**
+ * Record-change triggers that land on ONE binding row: same entity, same scope.
+ *
+ * `Conflicts` names the triggers whose filter differs from the first one's. A filter belongs to the
+ * binding, so only one can be honoured; the rest are reported rather than silently overwritten.
+ */
+export type EntityEventBindingGroup = {
+    Triggers: WorkflowEntityEventTrigger[];
+    Conflicts: string[];
+};
+
+/**
+ * Groups record-change triggers by the binding they reconcile onto (entity + scope).
+ *
+ * Exported for testing: it is the pure half of reconciliation, and the part that decides whether two
+ * triggers collide.
+ */
+export function GroupEntityEventTriggers(events: readonly WorkflowEntityEventTrigger[]): EntityEventBindingGroup[] {
+    const groups = new Map<string, EntityEventBindingGroup>();
+    for (const event of events) {
+        const key = [
+            event.entityName.trim().toLowerCase(),
+            (event.scopeEntityName ?? '').trim().toLowerCase(),
+            (event.scopeRecordID ?? '').trim().toLowerCase(),
+        ].join('|');
+        const group = groups.get(key);
+        if (!group) {
+            groups.set(key, { Triggers: [event], Conflicts: [] });
+            continue;
+        }
+        const filter = (event.filter ?? '').trim();
+        const existingFilter = (group.Triggers[0].filter ?? '').trim();
+        if (filter !== existingFilter) {
+            group.Conflicts.push(
+                `EntityEvent on ${event.entityName} (${event.invocationType}): its filter differs from another trigger on ` +
+                `the same entity and scope, and one binding can carry only one filter. The first trigger's filter ` +
+                `is in force; split the workflow or make the filters identical.`,
+            );
+            continue;
+        }
+        group.Triggers.push(event);
+    }
+    return [...groups.values()];
+}
 
 /** Everything reconciliation needs beyond the spec itself. */
 export type WorkflowSyncContext = {
@@ -164,16 +212,7 @@ export class WorkflowSpecSync {
         const schedules = triggers.filter((t): t is WorkflowScheduleTrigger => t.type === 'Schedule');
 
         const events = triggers.filter((t): t is WorkflowEntityEventTrigger => t.type === 'EntityEvent');
-        const unreconciled: string[] = [];
-        for (const event of events) {
-            try {
-                await this.reconcileEntityEvent(event, agentID, context);
-            } catch (e) {
-                // Reported, never dropped: a user who asked for "run this when an invoice changes"
-                // and got a workflow that never fires has no way to discover why from the UI.
-                unreconciled.push(`EntityEvent on ${event.entityName}: ${e instanceof Error ? e.message : String(e)}`);
-            }
-        }
+        const unreconciled = await this.reconcileEntityEvents(spec, events, agentID, context);
 
         const typeID = await this.resolveJobTypeID(context);
         const owned = await this.findOwnedJobs(typeID, agentID, context);
@@ -232,10 +271,12 @@ export class WorkflowSpecSync {
      * through `EntityActionFilter`, the row the invocation path already consults.
      */
     private async reconcileEntityEvent(
-        trigger: WorkflowEntityEventTrigger,
+        group: EntityEventBindingGroup,
         agentID: string,
+        bindingStatus: BindingStatus,
         context: WorkflowSyncContext,
-    ): Promise<void> {
+    ): Promise<string> {
+        const trigger = group.Triggers[0];
         const rv = RunView.FromMetadataProvider(context.Provider);
 
         const entity = context.Provider.EntityByName(trigger.entityName);
@@ -250,24 +291,15 @@ export class WorkflowSpecSync {
         const action = actionResult.Results?.[0];
         if (!action) throw new Error(`the '${EXECUTE_AGENT_ACTION}' action is not present — has the metadata seed been pushed?`);
 
-        // Resolved through the shared normalizer so the shorthand an author writes ("Update") and
-        // the name the platform fires ("AfterUpdate") cannot drift apart.
-        const invocationName = NormalizeInvocationType(trigger.invocationType);
-        if (!invocationName) throw new Error(`invocation type "${trigger.invocationType}" is not one this platform fires`);
+        const invocationTypeIDs = await this.resolveInvocationTypeIDs(group.Triggers, context);
 
-        const invocationResult = await rv.RunView<MJEntityActionInvocationTypeEntity>(
-            {
-                EntityName: 'MJ: Entity Action Invocation Types',
-                ExtraFilter: `Name='${invocationName}'`,
-                ResultType: 'entity_object',
-            },
-            context.ContextUser,
-        );
-        const invocationType = invocationResult.Results?.[0];
-        if (!invocationType) throw new Error(`invocation type "${invocationName}" is not seeded`);
-
-        const entityAction = await this.upsertEntityAction(entity.ID, action.ID, agentID, scope, context);
-        await this.upsertInvocation(entityAction.ID, invocationType.ID, context);
+        const entityAction = await this.upsertEntityAction(entity.ID, action.ID, agentID, scope, bindingStatus, context);
+        for (const invocationTypeID of invocationTypeIDs) {
+            await this.upsertInvocation(entityAction.ID, invocationTypeID, context);
+        }
+        // An invocation the spec no longer names (the author changed "Update" to "Create") is
+        // disabled, or the binding would go on firing on the change the author removed.
+        await this.disableInvocationsExcept(entityAction.ID, invocationTypeIDs, context);
 
         // Which agent to run — fixed for the life of the binding.
         await this.upsertActionParam(entityAction.ID, action.ID, 'AgentID', 'Static', agentID, context);
@@ -280,6 +312,155 @@ export class WorkflowSpecSync {
         await this.upsertActionParam(entityAction.ID, action.ID, 'Data', 'Entity Object Data', null, context);
 
         await this.reconcileTriggerFilter(entityAction.ID, trigger.filter ?? null, context);
+        return entityAction.ID;
+    }
+
+    /**
+     * Reconciles every record-change trigger, then disables any binding this workflow owns that
+     * the spec no longer asks for.
+     *
+     * **A binding follows the workflow's status.** It is saved `Active` only while the spec is
+     * `Active`; a `Draft` or `Paused` workflow keeps its bindings, `Disabled`, exactly as its
+     * Scheduled Jobs are kept. Before this, a binding was saved `Active` whatever the status, so a
+     * Draft workflow fired on the next matching save, and removing a trigger left its binding
+     * firing. Both were documented gaps; neither was visible from the workflow itself.
+     *
+     * Triggers that share an entity and a scope share one binding (ownership is matched on agent +
+     * scope), so they are grouped first: one binding, one invocation row per change type. A filter
+     * lives on the binding, so two triggers in one group with DIFFERENT filters cannot both be
+     * honoured. That is reported in the result rather than letting the second silently overwrite
+     * the first.
+     */
+    private async reconcileEntityEvents(
+        spec: WorkflowSpec,
+        events: WorkflowEntityEventTrigger[],
+        agentID: string,
+        context: WorkflowSyncContext,
+    ): Promise<string[]> {
+        const bindingStatus: BindingStatus = spec.status === 'Active' ? 'Active' : 'Disabled';
+        const unreconciled: string[] = [];
+        const keptBindingIDs: string[] = [];
+
+        for (const group of GroupEntityEventTriggers(events)) {
+            for (const conflict of group.Conflicts) unreconciled.push(conflict);
+            try {
+                keptBindingIDs.push(await this.reconcileEntityEvent(group, agentID, bindingStatus, context));
+            } catch (e) {
+                // Reported, never dropped: a user who asked for "run this when an invoice changes"
+                // and got a workflow that never fires has no way to discover why from the UI.
+                unreconciled.push(`EntityEvent on ${group.Triggers[0].entityName}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        try {
+            await this.disableUnwantedBindings(agentID, keptBindingIDs, context);
+        } catch (e) {
+            unreconciled.push(`Could not disable record-change triggers removed from the workflow: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return unreconciled;
+    }
+
+    /** The invocation type rows the group's triggers fire on, resolved by name. */
+    private async resolveInvocationTypeIDs(
+        triggers: readonly WorkflowEntityEventTrigger[],
+        context: WorkflowSyncContext,
+    ): Promise<string[]> {
+        const names = new Set<string>();
+        for (const trigger of triggers) {
+            // Resolved through the shared normalizer so the shorthand an author writes ("Update") and
+            // the name the platform fires ("AfterUpdate") cannot drift apart.
+            const invocationName = NormalizeInvocationType(trigger.invocationType);
+            if (!invocationName) throw new Error(`invocation type "${trigger.invocationType}" is not one this platform fires`);
+            names.add(invocationName);
+        }
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJEntityActionInvocationTypeEntity>(
+            {
+                EntityName: 'MJ: Entity Action Invocation Types',
+                ExtraFilter: `Name IN (${[...names].map((n) => `'${EscapeSQLString(n)}'`).join(',')})`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) throw new Error(`could not read invocation types: ${result.ErrorMessage}`);
+        const rows = result.Results ?? [];
+        const missing = [...names].filter((n) => !rows.some((r) => r.Name.trim().toLowerCase() === n.toLowerCase()));
+        if (missing.length > 0) throw new Error(`invocation type "${missing.join('", "')}" is not seeded`);
+        return rows.map((r) => r.ID);
+    }
+
+    /** Disables every invocation on a binding other than the ones the spec names. */
+    private async disableInvocationsExcept(
+        entityActionID: string,
+        keepInvocationTypeIDs: readonly string[],
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJEntityActionInvocationEntity>(
+            {
+                EntityName: 'MJ: Entity Action Invocations',
+                ExtraFilter: `EntityActionID='${entityActionID}' AND Status<>'Disabled'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) throw new Error(`could not read the binding's invocations: ${result.ErrorMessage}`);
+        const keep = new UUIDSet(keepInvocationTypeIDs);
+        for (const invocation of result.Results ?? []) {
+            if (keep.Has(invocation.InvocationTypeID)) continue;
+            invocation.Status = 'Disabled';
+            if (!(await invocation.Save())) {
+                throw new Error(`could not disable a removed invocation: ${invocation.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
+    }
+
+    /**
+     * Disables every `Execute Agent` binding owned by this workflow's agent that is not in `keep`.
+     *
+     * Disabled, not deleted, for the same reason a Scheduled Job is: the row and its filter are the
+     * record of what the trigger was, and re-adding it reactivates the same binding.
+     */
+    private async disableUnwantedBindings(
+        agentID: string,
+        keepBindingIDs: readonly string[],
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const params = await rv.RunView<MJEntityActionParamEntity>(
+            {
+                EntityName: 'MJ: Entity Action Params',
+                ExtraFilter: `ActionParam='AgentID' AND Value='${EscapeSQLString(agentID)}'`,
+                ResultType: 'simple',
+                Fields: ['ID', 'EntityActionID', 'Value'],
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!params.Success) throw new Error(`could not read the workflow's bindings: ${params.ErrorMessage}`);
+        const ownedIDs = ExcludeByUUIDs(
+            (params.Results ?? []).filter((p) => p.Value != null && UUIDsEqual(p.Value, agentID)).map((p) => p.EntityActionID),
+            keepBindingIDs,
+            (id) => id,
+        );
+        if (ownedIDs.length === 0) return;
+
+        const bindings = await rv.RunView<MJEntityActionEntity>(
+            {
+                EntityName: 'MJ: Entity Actions',
+                ExtraFilter: `ID IN (${ownedIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND Status<>'Disabled' AND Action='${EXECUTE_AGENT_ACTION}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!bindings.Success) throw new Error(`could not read the workflow's bindings: ${bindings.ErrorMessage}`);
+        for (const binding of bindings.Results ?? []) {
+            binding.Status = 'Disabled';
+            if (!(await binding.Save())) {
+                throw new Error(`could not disable binding ${binding.ID}: ${binding.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            LogStatus(`[WorkflowSpecSync] Disabled record-change binding ${binding.ID} — its trigger is no longer in the workflow.`);
+        }
     }
 
     /**
@@ -417,14 +598,15 @@ export class WorkflowSpecSync {
         actionID: string,
         agentID: string,
         scope: TriggerScope,
+        status: BindingStatus,
         context: WorkflowSyncContext,
     ): Promise<MJEntityActionEntity> {
         const existing = await this.findOwnedEntityAction(entityID, actionID, agentID, scope, context);
         if (existing) {
-            if (existing.Status !== 'Active') {
-                existing.Status = 'Active';
+            if (existing.Status !== status) {
+                existing.Status = status;
                 if (!(await existing.Save())) {
-                    throw new Error(`could not reactivate the entity-action binding: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    throw new Error(`could not set the entity-action binding to ${status}: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
             }
             return existing;
@@ -436,7 +618,7 @@ export class WorkflowSpecSync {
         row.ActionID = actionID;
         row.ScopeEntityID = scope.EntityID;
         row.ScopeRecordID = scope.RecordID;
-        row.Status = 'Active';
+        row.Status = status;
         if (!(await row.Save())) {
             throw new Error(`could not create the entity-action binding: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -487,6 +669,11 @@ export class WorkflowSpecSync {
         return mine ? candidates.find((c) => UUIDsEqual(c.ID, mine.EntityActionID)) ?? null : null;
     }
 
+    private async reactivate(invocation: MJEntityActionInvocationEntity): Promise<boolean> {
+        invocation.Status = 'Active';
+        return invocation.Save();
+    }
+
     /** Finds or creates the invocation row that says which change fires the action. */
     private async upsertInvocation(
         entityActionID: string,
@@ -503,9 +690,8 @@ export class WorkflowSpecSync {
         );
         const existing = result.Results?.[0];
         if (existing) {
-            if (existing.Status !== 'Active') {
-                existing.Status = 'Active';
-                await existing.Save();
+            if (existing.Status !== 'Active' && !(await this.reactivate(existing))) {
+                throw new Error(`could not reactivate the invocation binding: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             return;
         }
