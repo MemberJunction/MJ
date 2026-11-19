@@ -13,7 +13,7 @@
  * period result as the job computes it never leave the process and are PascalCase.
  */
 import type { CalibrationReport } from './trainer-contract';
-import type { IntervalSpec, MetricWithInterval, PromotionRule, ProperScore, RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
+import type { Interval, IntervalSpec, MetricWithInterval, PromotionRule, ProperScore, RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
 
 /** The null a drift test's thresholds are calibrated on: block replay (the contract) or procedure M's empirical replay. */
 export type DriftNullCalibration =
@@ -88,6 +88,12 @@ export interface MonitoringPeriodResult {
   readonly Period: string;
   readonly JoinedRows: number;
   readonly Primary: MetricWithInterval;
+  /**
+   * The interval of (period − reference) primary loss under the protocol's `IntervalSpec`, the reference being the
+   * model's stored holdout score (PR 4 delta, M6.2): the `outcome-degradation` trigger fires when its lower bound is
+   * above the trigger's margin. Null when the period joined no rows.
+   */
+  readonly Degradation: Interval | null;
   readonly Calibration: CalibrationReport | null;
   readonly DriftAlarms: readonly { readonly Feature: string; readonly AdjustedP: number }[];
   readonly Parity: { readonly Sampled: number; readonly MaxAbsDifference: number; readonly Passed: boolean };
