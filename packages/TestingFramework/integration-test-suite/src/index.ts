@@ -256,5 +256,6 @@ export * from './checks/docs-slides-sheets-library.checks';
 export * from './checks/record-change-snapshot.checks';
 export * from './checks/transaction-group-concurrency-client.checks';
 export * from './checks/gemini-decisions.checks';
+export * from './checks/archive-paging.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';
