@@ -20,7 +20,7 @@ export const PsGateD1rS85Checks: NamedCheck[] = [
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const dataset = await h.EnsureLoaded({ Kind: 'scenario', ID: 'D1r', Seed: UnitFixtures.ScenarioBaseSeed('D1r') });
-      const model = await MonitoringFixture.PublishOnPeriods(h, dataset, PUBLISH_PERIODS, { Scenario: 'D1r', Task: TASK, Calendar: CALENDAR });
+      const model = await MonitoringFixture.PublishOnPeriods(h, dataset, PUBLISH_PERIODS, { Scenario: 'D1r', Task: TASK, Calendar: CALENDAR, Challenger: true });
       const periods = await MonitoringFixture.RunPeriods(h, model, MONITOR_PERIODS);
       const started = periods.find((p) => p.ChallengerRunID !== null);
       const run = started && started.ChallengerRunID ? await StoredRuns.Read(started.ChallengerRunID, { ContextUser: h.User, Provider: h.Provider }) : null;

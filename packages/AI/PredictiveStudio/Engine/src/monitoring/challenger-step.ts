@@ -1,8 +1,9 @@
 /**
  * @module monitoring/challenger-step
  *
- * `ChallengerStep` — what a fired retrain trigger does (D-029, D4-20, architecture C7): one challenger training run on
- * a fresh snapshot of the pipeline, published unattended through `AutomatedPublisher.EvaluateAndPublish` with the
+ * `ChallengerStep` — what a fired retrain trigger does (D-029, D4-20, architecture C7): the pipeline's protocol
+ * prepared for it (`ChallengerProtocol`, P-F2: a date-carved holdout re-carved over the current rows), then one
+ * challenger training run on a fresh snapshot of the pipeline, published unattended through `AutomatedPublisher.EvaluateAndPublish` with the
  * scheduled-job initiator. The trainer compares the challenger with the incumbent on the incumbent's holdout rows and
  * the gate publishes it only when its paired lower bound beats the margin; monitoring writes no status. A trigger that
  * stays fired in the period after the one that started a challenger does not start another until it has been clear for
@@ -42,6 +43,8 @@ export class ChallengerStep {
     }
     let trainingRunId: string;
     try {
+      const refusal = await ctx.Seams.Publisher.PrepareChallenger(model.PipelineID, initiator, ctx.Seams.Clock.Now(), ctx);
+      if (refusal !== null) return { ChallengerRunID: null, Result: ChallengerStep.result('stopped', null, null, refusal, mirror) };
       trainingRunId = (await ctx.Seams.Publisher.Train(model.PipelineID, ctx)).TrainingRunID;
     } catch (e) {
       const reason = e instanceof TrainingInFlightError ? `another training of the pipeline is in flight (run ${e.InFlightRunID})` : e instanceof Error ? e.message : String(e);

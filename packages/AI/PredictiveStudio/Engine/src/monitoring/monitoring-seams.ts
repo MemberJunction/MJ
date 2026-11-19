@@ -220,6 +220,12 @@ export interface IMonitoringDrift {
 
 /** A challenger's training and its unattended publish through `AutomatedPublisher` (D-029). */
 export interface IMonitoringPublisher {
+  /**
+   * Prepares the pipeline's protocol for a challenger (`ChallengerProtocol.Prepare`, P-F2): its date-carved holdout
+   * re-carved over the unit's current rows as of `now`. Returns null when the challenger may train, else the reason it
+   * may not.
+   */
+  PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<string | null>;
   /** Trains the pipeline on a fresh snapshot (single-flight); the model is compared with the incumbent on its rows. */
   Train(pipelineId: string, ctx: RegistryContext): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }>;
   /** `AutomatedPublisher.EvaluateAndPublish` with the scheduled-job initiator. */

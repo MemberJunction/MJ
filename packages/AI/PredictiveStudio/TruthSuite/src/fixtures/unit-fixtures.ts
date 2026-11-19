@@ -369,12 +369,33 @@ export class UnitFixtures {
 
   /**
    * A monitored scenario pipeline (M6.6): the scenario's rows dated by `T` and censored at `trainThrough` (the training
-   * snapshot holds only the periods before it; monitoring reads every label known by now), bound to the year-cutoff
-   * protocol with `triggers` as its retrain triggers.
+   * snapshot holds only the periods before it; monitoring reads every label known by now), bound to `holdout` (default
+   * the year cutoff) with `triggers` as its retrain triggers.
    */
-  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
+  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
     const draft = UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, monitored through ${trainThrough})`, { kind: 'column', column: 'T' }, trainThrough, null);
-    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), { Kind: 'year-cutoff' }, undefined, undefined, triggers);
+    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), holdout, undefined, undefined, triggers);
+  }
+
+  /**
+   * Moves a pipeline's unit censoring cutoff to `through` (a fixture's clock advancing: the periods before it have
+   * arrived): the unit's next version with the fixed cutoff `through`, recorded, and the pipeline pointed at it, so the
+   * pipeline's next training (a monitoring challenger) snapshots them.
+   */
+  public static async AdvanceCensoring(h: TruthHarness, pipelineId: string, through: string): Promise<void> {
+    const factory = UnitFixtures.EntityFactory(h);
+    const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
+    if (!(await pipeline.Load(pipelineId))) throw new Error(`ML Training Pipeline ${pipelineId} not found`);
+    if (!pipeline.PredictionUnitID) throw new Error(`ML Training Pipeline ${pipelineId} has no Prediction Unit`);
+    const latest = await factory.getEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', h.User);
+    if (!(await latest.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID} not found`);
+    const next = await PredictionUnitVersioning.CreateNextPredictionUnitVersion(
+      latest, { Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: through } } }, { kind: 'human', userId: h.User.ID }, factory, h.User);
+    h.Created.RecordPredictionUnit(next.ID);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(next);
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
+    if (!(await pipeline.Save())) throw new Error(`Pointing pipeline ${pipelineId} at unit v${next.Version} failed: ${pipeline.LatestResult?.CompleteMessage}`);
   }
 
   /**

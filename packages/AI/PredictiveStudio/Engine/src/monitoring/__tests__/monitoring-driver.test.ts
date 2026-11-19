@@ -93,6 +93,15 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Store.Last().Parity).toMatchObject({ skipped: expect.stringContaining('no Active binding') });
   });
 
+  it('a fired trigger prepares the challenger\'s protocol before it trains (P-F2), and a refusal to prepare stops it with no training', async () => {
+    PeriodRows(JUNE, 300, 0.1, 150);
+    world.Publisher.PrepareRefusal = 'the protocol\'s guard fields are human-only, so the scheduled job cannot re-carve its holdout';
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`]);
+    expect(world.Publisher.Trained).toEqual([]);
+    expect(challengerOf()).toMatchObject({ outcome: 'stopped', trainingRunId: null, reason: expect.stringContaining('human-only') });
+  });
+
   it('a fired trigger starts one challenger through AutomatedPublisher and records the outcome; monitoring writes no Status', async () => {
     PeriodRows(JUNE, 300, 0.1, 150);
     await driver.Execute(await Context(D('2026-07-31')));

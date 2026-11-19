@@ -206,8 +206,17 @@ export class WorldPublisher implements IMonitoringPublisher {
   public readonly Trained: string[] = [];
   public readonly Published: { readonly TrainingRunID: string; readonly Initiator: Actor }[] = [];
   public Answer: (trainingRunId: string) => PublishOutcome | EvaluateOutcome = (id) => ({ Kind: 'published', Purpose: 'publish', ModelID: `model-of-${id}`, PublishRecordID: `publish-of-${id}`, Replaces: CURRENT, Approver: 'automated-gate' });
+  /** The refusal `PrepareChallenger` answers with; null prepares it. */
+  public PrepareRefusal: string | null = null;
+  /** `prepare:<pipeline>` and `train:<pipeline>`, in call order. */
+  public readonly Calls: string[] = [];
+  public async PrepareChallenger(pipelineId: string): Promise<string | null> {
+    this.Calls.push(`prepare:${pipelineId}`);
+    return this.PrepareRefusal;
+  }
   public async Train(pipelineId: string): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }> {
     const id = `run-${this.Trained.length + 1}`;
+    this.Calls.push(`train:${pipelineId}`);
     this.Trained.push(pipelineId);
     return { TrainingRunID: id, ModelID: `model-of-${id}` };
   }

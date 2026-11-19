@@ -28,7 +28,7 @@ export const PsGateR1S76Checks: NamedCheck[] = [
       const ids = await h.SampleRowIds(r1, 200, 42);
       const scored = await h.Score(model, { bindingId: binding, scope: { records: ids }, asOfDate: DECISION });
       if (!scored.Ok) throw new Error(`G6.12: scoring failed: ${scored.ErrorMessage || 'no message'}`);
-      const monitored = { ModelID: model, PipelineID: '', BindingID: binding, Dataset: r1, Calendar: R1_MONTH };
+      const monitored = { ModelID: model, PipelineID: '', BindingID: binding, Dataset: r1, Calendar: R1_MONTH, Arriving: false };
       const [clean] = await MonitoringFixture.RunPeriods(h, monitored, [0]);
       const rows = await RunView.FromMetadataProvider(h.Provider).RunView<MJFeatureValueEntity>({ EntityName: 'MJ: Feature Values', ExtraFilter: `MLModelScoringBindingID='${EscapeSQLString(binding)}' AND Source='Model'`, ResultType: 'entity_object', IgnoreMaxRows: true, BypassCache: true }, h.User);
       let planted = 0;

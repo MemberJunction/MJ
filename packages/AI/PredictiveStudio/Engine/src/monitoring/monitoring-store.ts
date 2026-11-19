@@ -55,6 +55,7 @@ import { SnapshotManifest } from '../snapshot/snapshot-manifest';
 import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { MetadataEntityFactory } from '../training/seams';
+import { ChallengerProtocol } from './challenger-protocol';
 import type {
   DriftInputValues,
   IMonitoringDrift,
@@ -445,6 +446,11 @@ export class SidecarMonitoringDrift implements IMonitoringDrift {
 
 /** The challenger's training (single-flight, on a fresh snapshot) and its publish through `AutomatedPublisher`. */
 export class AutomatedMonitoringPublisher implements IMonitoringPublisher {
+  /** @inheritdoc */
+  public async PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<string | null> {
+    return ChallengerProtocol.Prepare(pipelineId, initiator, now, ctx);
+  }
+
   /** @inheritdoc */
   public async Train(pipelineId: string, ctx: RegistryContext): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }> {
     return PipelineAutoTrainer.TrainThroughEngine(pipelineId, ctx.Provider, ctx.ContextUser);

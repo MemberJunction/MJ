@@ -42,6 +42,8 @@ export interface MonitoredGateModel {
   readonly BindingID: string | null;
   readonly Dataset: LoadedDataset;
   readonly Calendar: PeriodCalendar;
+  /** The monitored periods arrive into the pipeline's snapshot before they are monitored ({@link PublishOnPeriodsOptions.Challenger}). */
+  readonly Arriving: boolean;
 }
 
 /** One monitored period as its `MJ: ML Monitoring Results` row stores it. */
@@ -81,6 +83,13 @@ export interface PublishOnPeriodsOptions {
   readonly Triggers?: readonly RetrainTrigger[];
   /** Bind the model and score these later periods through the binding, each as of its period's first day. */
   readonly ScorePeriods?: readonly number[];
+  /**
+   * A challenger gate: before `RunPeriods` the monitored periods arrive (the unit's fixed censoring cutoff — the
+   * fixture's clock — moves past them, `UnitFixtures.AdvanceCensoring`), so a fired trigger's challenger snapshots
+   * them; the monitoring job re-carves the protocol's date-carved holdout over them (`ChallengerProtocol`, P-F2), so
+   * the challenger trains on the later periods and is compared with the incumbent on the newest one.
+   */
+  readonly Challenger?: boolean;
 }
 
 /** The monitoring gates' fixture steps. */
@@ -104,24 +113,31 @@ export class MonitoringFixture {
    */
   public static async PublishOnPeriods(h: TruthHarness, dataset: LoadedDataset, periods: readonly number[], o: PublishOnPeriodsOptions): Promise<MonitoredGateModel> {
     const trainThrough = MonitoringFixture.PeriodStart(o.Calendar, Math.max(...periods) + 1);
-    const { Pipeline: pipeline } = await UnitFixtures.ProvisionMonitoredScenarioPipeline(h, o.Scenario, o.Task, trainThrough, o.Triggers || [MonitoringFixture.DEGRADATION]);
+    const triggers = o.Triggers || [MonitoringFixture.DEGRADATION];
+    const { Pipeline: pipeline } = await UnitFixtures.ProvisionMonitoredScenarioPipeline(h, o.Scenario, o.Task, trainThrough, triggers);
     const trained = await h.Train(pipeline);
-    if (!trained.ModelID) throw new Error(`monitoring fixture: training ${o.Scenario} failed (${trained.RefusalCode || 'no refusal code'}): ${trained.ErrorMessage || 'no model'}`);
+    if (!trained.ModelID) {
+      const run = trained.Ok ? await UnitFixtures.LatestRun(h, pipeline.ID) : null;
+      const why = run === null ? trained.ErrorMessage || 'no model' : `run ${run.ID} ${run.Status}, no model: ${(run.Notes || '').slice(0, 600)} ${(run.ValidationResults || '').slice(0, 600)}`;
+      throw new Error(`monitoring fixture: training ${o.Scenario} failed (${trained.RefusalCode || 'no refusal code'}): ${why}`);
+    }
     await RunFixtures.PublishModel(h, trained.ModelID, `monitoring ${o.Scenario}`);
     const scored = o.ScorePeriods || [];
-    if (scored.length === 0) return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: null, Dataset: dataset, Calendar: o.Calendar };
+    const arriving = o.Challenger === true;
+    if (scored.length === 0) return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: null, Dataset: dataset, Calendar: o.Calendar, Arriving: arriving };
     const binding = await HarnessScoring.Binding(h, trained.ModelID, `PS monitoring ${o.Scenario} ${h.RunID}`);
     for (const p of scored) {
       const day = MonitoringFixture.PeriodStart(o.Calendar, p);
       const r = await h.Score(trained.ModelID, { bindingId: binding, scope: { filter: { entityName: dataset.Entity.Name, extraFilter: `T = '${EscapeSQLString(day)}'` } }, asOfDate: `${day}T00:00:00.000Z` });
       if (!r.Ok) throw new Error(`monitoring fixture: scoring period ${p} of ${o.Scenario} failed: ${r.ErrorMessage || 'no message'}`);
     }
-    return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: binding, Dataset: dataset, Calendar: o.Calendar };
+    return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: binding, Dataset: dataset, Calendar: o.Calendar, Arriving: arriving };
   }
 
   /** Runs `PredictiveStudio.RunModelMonitoring` for each period in order and reads each period's row back. */
   public static async RunPeriods(h: TruthHarness, model: MonitoredGateModel, periods: readonly number[]): Promise<MonitoredGatePeriod[]> {
     const out: MonitoredGatePeriod[] = [];
+    if (model.Arriving) await UnitFixtures.AdvanceCensoring(h, model.PipelineID, MonitoringFixture.PeriodStart(model.Calendar, Math.max(...periods) + 1));
     for (const index of periods) {
       const start = MonitoringFixture.PeriodStart(model.Calendar, index);
       const attempt = await h.RunMonitoring(model.ModelID, new Date(`${start}T00:00:00.000Z`));
