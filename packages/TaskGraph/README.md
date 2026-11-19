@@ -146,7 +146,7 @@ the payload they were reached with), and something else finishes them.
 |---|---|---|
 | `Wait` | the dispatcher, once `DueAt` passes | — |
 | `External` | a signal, by task ID or correlation key | `TaskGraphWaitingSteps.CompleteWaitingStep()` in-process; `TaskGraph.CompleteWaitingStep` remote operation |
-| `Human` + `provider` | the provider, with the same call | subclass `BaseHumanTaskProvider`, `@RegisterClass(BaseHumanTaskProvider, '<key>')` |
+| `Human` + `provider` | the provider, with the same call | subclass `BaseHumanTaskProvider` (`@memberjunction/ai-core-plus`), `@RegisterClass(BaseHumanTaskProvider, '<key>')`; may be the install default (see the guide) |
 
 A Human step with no provider (or `'AgentRequest'`) keeps the built-in `MJ: AI Agent Requests` inbox.
 Full model, examples and troubleshooting: [Workflows and Task Graphs Guide § Waiting steps](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#waiting-steps-external-wait-and-human-providers).
