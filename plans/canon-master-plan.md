@@ -56,6 +56,7 @@ The reference for all of it is [`guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md`](../
 | [Skip client 50](https://github.com/BlueCypress/Skip-Client-Open-App/pull/50) | `MS-BC` | Sends a `canon` section to Skip, a note-to-Canon bridge, and Skip Local agents bound to `Get Graph Context`. Draft. | Revise per decisions 3, 4 and 5, then merge. |
 | [Skip-Brain 677](https://github.com/BlueCypress/Skip-Brain/pull/677) | `MS-BC` | Consumes the `canon` section in Skip's prompts. Draft. | Revise per decision 5, then merge after Skip client 50. |
 | [Skip-Brain 612](https://github.com/BlueCypress/Skip-Brain/pull/612) | `AN-BC`; `MS-BC` | The plan that Skip client 50 and Skip-Brain 677 implement. | Merge or close once those two land. |
+| [MJ 6762](https://github.com/MemberJunction/MJ/pull/6762) | `AN-BC`; `cmbrock-BC` | MJ Docs in the semantic graph: auto-indexing, `[[links]]`, a Related tab, authority tiers driven by metadata, pluggable graph access policies. Adds `GraphConcept.Origin` and graph-type defaults. Added by the sponsor on 2026-11-19. | `cmbrock-BC` tests and merges. Promoting a Docs concept to Canon is not built; when it is, it follows decisions 2 and 3. |
 
 ### Adjacent: watched, not coordinated
 
@@ -165,7 +166,7 @@ Reading the graph is already checked against the caller: every node is re-read a
 |---|---|---|
 | 5a | Concept approval goes through the same gate as edges: a server-side rule on `MJ: Graph Concepts` so that approving, rejecting or deprecating a concept, or editing an approved one, needs `Graph: Approve Edges`. The pipeline's own approved concepts use the same scope its approved edges already use. | Before December 1. A named exception to the freeze. |
 | 5b | Permissions per graph (read, use, approve), modelled on search-scope permissions, including a review of the default grants. Approval is checked per graph. | `canon` issue for December 3 |
-| 5c | A concept is no more visible than its sources, mirroring search's gate on derived content. Until this lands, an app serving members or the public sends no concept text (name, synonyms, description, specification) to its users or its model, only the chunk IDs that pass its own entitlement checks. | `canon` issue for December 3 |
+| 5c | A concept is no more visible than its sources, mirroring search's gate on derived content. MJ 6762's provenance access policies implement most of this (full, redacted or hidden by readable sources; an `Approved` Canon concept stays visible); issue 6724 is re-scoped to what remains once it merges. Until this lands, an app serving members or the public sends no concept text (name, synonyms, description, specification) to its users or its model, only the chunk IDs that pass its own entitlement checks. | `canon` issue for December 3 |
 | 5d | Concept lookups by name take a graph, starting with `ExplainConcept`. | `canon` issue for December 3 |
 
 Betty consumes Canon for many tenants, so its plan depends on 5b and 5c: its training contradictions, synonym retrieval and feedback promotion should wait for them. Betty work that needs only per-source authority ranking can go ahead.
@@ -225,4 +226,5 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-17 | Workstream 4 handed from `MS-BC` to `ct-bc`. |
 | 2026-11-17 | `ct-bc` and `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstreams 4 and 5. |
 | 2026-11-18 | `cmbrock-BC` opened MJ 6731 for workstream 5a and filed issues 6723, 6724 and 6725 for 5b to 5d. Watched MJ 6583 merged. |
+| 2026-11-19 | The sponsor added MJ 6762 (MJ Docs in the semantic graph), assigned to `cmbrock-BC`. Its provenance access policies cover most of 5c. |
 | 2026-11-18 | MJ 6688 (the non-Canon part of 6404) merged. `cmbrock-BC` filed MJ 6757 (authority per concept), added to the backlog. The sponsor closed design input: decisions 1 to 7 stand, and `rkihm-BC` leads development. |
