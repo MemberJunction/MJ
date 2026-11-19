@@ -707,7 +707,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       }
       rows.push(...page.Results);
       if (page.Results.length < PSPredictionsGridComponent.latestPageSize) return { Rows: rows, Capped: false };
-      afterKey = CompositeKey.FromID(page.Results[page.Results.length - 1].ID);
+      afterKey = CompositeKey.FromID(page.Results[page.Results.length - 1].ID); // first-pk-ok: keyset AfterKey over MJ: Latest Feature Values (single ID key)
       if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
         // Capped only when more really exist: exactly the cap is complete.
         const probe = await rv.RunView<Pick<LatestPredictionRow, 'ID'>>(

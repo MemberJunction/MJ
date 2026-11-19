@@ -15,7 +15,7 @@ import type {
     MJMLScoringRunEntity,
     MJvwLatestFeatureValuesEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AtRiskRules, JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
 
 /** The neutral tercile a 0–1 value falls into: position on the value axis only, no moral direction. */
@@ -205,9 +205,10 @@ export class ModelPredictionLogic {
     ): T[] {
         const evaluator = new AuthorizationEvaluator();
         const all = [...authorizations];
+        const byId = IndexByUUID(all);
         return bindings.filter((b) => {
             if (!b.ViewAuthorizationID) return false;
-            const auth = all.find((a) => UUIDsEqual(a.ID, b.ViewAuthorizationID));
+            const auth = byId.Get(b.ViewAuthorizationID);
             if (!auth) return false;
             return user.Type === 'Owner' || evaluator.UserCanExecuteWithAncestors(auth, user, all);
         });
