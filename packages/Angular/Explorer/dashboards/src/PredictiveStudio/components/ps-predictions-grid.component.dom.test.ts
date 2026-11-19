@@ -332,9 +332,11 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
     fixture.detectChanges();
     (query(fixture, '[data-testid="ps-predictions-save-list"]') as HTMLButtonElement).click();
     for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-    expect([view.EntityID, view.UserID, view.WhereClause, view.CustomWhereClause, view.IsShared]).toEqual(['E-MEMBERS', 'test-user-id', "ID IN ('r1','r2')", true, false]);
-    expect(runs.map((r) => [r.ActionID, r.Params.map((p) => `${p.Name}=${String(p.Value)}`)])).toEqual([
-      ['ACT-MATERIALIZE', ['ViewID=VIEW-1', `ListName=${view.Name}`, 'RememberLineage=true']],
+    // not a custom clause: MJ refuses CustomWhereClause from a non-Owner user; a plain view keeps a WhereClause set before its first save
+    expect([view.EntityID, view.UserID, view.WhereClause, view.CustomWhereClause, view.IsShared]).toEqual(['E-MEMBERS', 'test-user-id', "ID IN ('r1','r2')", false, false]);
+    // every value is a string: the GraphQL action input types Value as String, so a boolean is refused on the wire
+    expect(runs.map((r) => [r.ActionID, r.Params.map((p) => [p.Name, p.Value])])).toEqual([
+      ['ACT-MATERIALIZE', [['ViewID', 'VIEW-1'], ['ListName', view.Name], ['RememberLineage', 'true']]],
     ]);
     expect(opened).toEqual(['MJ: Lists:ID|LIST-1']);
   });

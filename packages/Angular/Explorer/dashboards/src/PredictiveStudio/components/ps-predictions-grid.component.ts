@@ -1700,14 +1700,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       view.EntityID = entity.ID;
       view.UserID = user.ID;
       view.IsShared = false;
-      view.CustomWhereClause = true;
+      // A plain view (not CustomWhereClause, which MJ allows only an Owner): the clause set before the first save is
+      // kept, and the provider screens it when the view runs.
       view.WhereClause = BuildRecordIdFilter(entity, this.FilteredRows.map((r) => r.recordId));
       if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
       const actionId = await this.materializeActionID();
       const result = await this.RunListAction(actionId, [
         { Name: 'ViewID', Value: view.ID, Type: 'Input' },
         { Name: 'ListName', Value: name, Type: 'Input' },
-        { Name: 'RememberLineage', Value: true, Type: 'Input' },
+        { Name: 'RememberLineage', Value: 'true', Type: 'Input' },
       ]);
       const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
       if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
