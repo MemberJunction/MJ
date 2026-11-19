@@ -84,7 +84,7 @@ describe('ListSourceRefreshPanelComponent (DOM)', () => {
   it('shows the source, its match status, the mode and the schedule in words', async () => {
     const f = await render();
     expect(text(f, '.srp-source')).toContain('Active members');
-    expect(text(f, '.srp-pill--ok')).toContain('Matches approved version');
+    expect(text(f, '.srp-pill--ok')).toContain('Definition unchanged');
     expect(text(f, '.srp-segmented__on')).toBe('Sync');
     expect(text(f, '.srp-schedule')).toContain('Daily at 2:00 am · America/New_York');
   });

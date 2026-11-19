@@ -6,6 +6,15 @@
 export { ListOperations, type DeltaTarget } from './ListOperations';
 export { ListSharing, DEFAULT_INVITATION_TTL_MS } from './ListSharing';
 export { AudienceResolver } from './AudienceResolver';
+export { UserListQueries, USER_LISTS_QUERY_CATEGORY_ID, type SaveUserListQueryResult } from './UserListQueries';
+export {
+  ListFromQuery,
+  MAX_STATIC_LIST_RECORDS,
+  type CheckedCallerSQL,
+  type ListFromQueryOutcome,
+  type ListFromQueryRefusalCode,
+  type ListFromQueryRequest,
+} from './ListFromQuery';
 export {
   ComputeSourceSignature,
   DeltaTokenVerificationError,
