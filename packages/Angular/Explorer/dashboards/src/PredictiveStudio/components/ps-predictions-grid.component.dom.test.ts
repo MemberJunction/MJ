@@ -3,8 +3,9 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import type { RunViewParams } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import type { CompositeKey, EntityInfo, RunViewParams } from '@memberjunction/core';
+import type { ActionParam } from '@memberjunction/actions-base';
+import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLOutputBindingEntity, MJUserViewEntity } from '@memberjunction/core-entities';
 import type { SemanticsCheckBinding } from '@memberjunction/predictive-studio-core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
@@ -284,5 +285,57 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
     const grid = await RenderLatest([Latest('r1', 0.9)], []);
     expect(grid.AllRows[0].drivers.map((d) => [d.Label, d.Up])).toEqual([['Days Since Login', true]]);
     expect(grid.AllRows[0].scoredAtDate?.toISOString()).toBe('2026-11-03T00:00:00.000Z');
+  });
+});
+
+describe('PSPredictionsGridComponent (DOM) — the selection becomes a List through "Materialize List From View"', () => {
+  const model: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = { ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null, OutputSemantics: null };
+  const members = { ID: 'E-MEMBERS', Name: 'Members', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } };
+
+  /** A User View double: the fields the grid writes and the save it calls. */
+  class ViewDouble {
+    public ID = '';
+    public Name = '';
+    public EntityID = '';
+    public UserID = '';
+    public WhereClause: string | null = null;
+    public CustomWhereClause = false;
+    public IsShared = true;
+    public LatestResult: { CompleteMessage: string } | null = null;
+    public NewRecord(): boolean { return true; }
+    public async Save(): Promise<boolean> { this.ID = 'VIEW-1'; return true; }
+  }
+
+  it('saves the filtered rows as a User View of the target entity and runs the action with its ID', async () => {
+    const view = new ViewDouble();
+    const opened: string[] = [];
+    const runs: Array<{ ActionID: string; Params: ActionParam[] }> = [];
+    vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [detail('r1', 0.9), detail('r2', 0.8), detail('r3', 0.1)], Capped: false });
+    vi.spyOn(PSPredictionsGridComponent.prototype, 'RunListAction').mockImplementation(async (actionId: string, params: ActionParam[]) => {
+      runs.push({ ActionID: actionId, Params: params });
+      return { Success: true, Message: 'ok', Params: [{ Name: 'CreatedListID', Value: 'LIST-1', Type: 'Output' }] };
+    });
+    const fake = createFakeProvider<ModelRow | { ID: string }>({
+      runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : p.EntityName === 'MJ: Actions' ? [{ ID: 'ACT-MATERIALIZE' }] : []),
+      // the entity double carries only the key members the record filter reads
+      entityByName: (name: string) => (name === 'Members' ? (members as unknown as EntityInfo) : undefined),
+    });
+    // the grid creates its User View through the provider; the double carries only the members the grid calls
+    const provider = Object.assign(fake, { GetEntityObject: async () => view as unknown as MJUserViewEntity });
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: model.ID, RunId: 'run-1', EntityName: 'Members', Provider: provider },
+      providers: [{ provide: NavigationService, useValue: { OpenEntityRecord: (entity: string, key: CompositeKey) => { opened.push(`${entity}:${key.ToURLSegment()}`); return 'tab'; } } }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    fixture.componentInstance.SetTier('high');
+    fixture.detectChanges();
+    (query(fixture, '[data-testid="ps-predictions-save-list"]') as HTMLButtonElement).click();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect([view.EntityID, view.UserID, view.WhereClause, view.CustomWhereClause, view.IsShared]).toEqual(['E-MEMBERS', 'test-user-id', "ID IN ('r1','r2')", true, false]);
+    expect(runs.map((r) => [r.ActionID, r.Params.map((p) => `${p.Name}=${String(p.Value)}`)])).toEqual([
+      ['ACT-MATERIALIZE', ['ViewID=VIEW-1', `ListName=${view.Name}`, 'RememberLineage=true']],
+    ]);
+    expect(opened).toEqual(['MJ: Lists:ID|LIST-1']);
   });
 });

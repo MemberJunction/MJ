@@ -60,8 +60,24 @@
         (click)="ExportCSV()">
         <i class="fa-solid fa-file-export"></i> Export
       </button>
+      @if (!ReadOnly) {
+        <button
+          mjButton
+          variant="secondary"
+          size="sm"
+          data-testid="ps-predictions-save-list"
+          [disabled]="!CanSaveAsList"
+          [title]="FilteredRows.length > ListSelectionLimit ? 'Narrow the selection to at most ' + ListSelectionLimit + ' records' : 'Save the shown records as a new list'"
+          (click)="SaveSelectionAsList()">
+          <i class="fa-solid" [class.fa-list-check]="!SavingList" [class.fa-spinner]="SavingList" [class.fa-spin]="SavingList"></i> Save as list
+        </button>
+      }
     </div>
   </div>
+
+  @if (ListMessage) {
+    <div class="ps-small ps-muted" data-testid="ps-predictions-list-message">{{ ListMessage }}</div>
+  }
 
   @if (SemanticsProblem) {
     <div class="ps-load-error" role="alert" data-testid="ps-semantics-problem">
