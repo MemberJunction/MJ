@@ -158,7 +158,8 @@ describe('Validated → Published (automatic, or an interactive user, through Pu
     expect(modelSaves.indexOf(`MJ: ML Models ${incumbent.ID}`)).toBeGreaterThanOrEqual(0);
     expect(modelSaves.indexOf(`MJ: ML Models ${incumbent.ID}`)).toBeLessThan(modelSaves.indexOf(`MJ: ML Models ${candidate.ID}`));
     expect(store.PublishRecords(candidate.ID)).toHaveLength(1);
-    expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Pending' })]);
+    // D4-179: the published model's monitoring job is created Active, so the scheduler runs it.
+    expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Active' })]);
   });
   it('reads every model, run, protocol, publish-record and monitoring-job row it decides on past the RunView cache (M3.6: a cached run row was published from after an out-of-band write; D4-108: the pinned protocol row)', async () => {
     const decided = new Set(['MJ: ML Models', 'MJ: ML Training Runs', 'MJ: ML Evaluation Protocols', 'MJ: ML Model Publish Records', 'MJ: Scheduled Jobs', 'MJ: Scheduled Job Types']);
@@ -361,8 +362,18 @@ describe('Published → Unevaluated (only AdoptPublished, M7): Unevaluated never
 describe('Published → Archived (a reason; also inside the publish that replaces it)', () => {
   it('archives a Published model with its reason and disables its monitoring job', async () => {
     await gate.Publish(request, ctx);
+    expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Active' })]);
     expect(await gate.Archive(candidate.ID, 'retired', human, ctx)).toEqual({ Ok: true, ModelID: candidate.ID, From: 'Published', To: 'Archived', Archived: null });
     expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Disabled' })]);
+  });
+  it('a publish that supersedes a Published model disables its Active monitoring job and creates the successor\'s Active (D4-179)', async () => {
+    await gate.Publish(request, ctx);
+    expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Active' })]);
+    const successor = world.Model('Validated', 'model', { IncumbentID: candidate.ID });
+    expect(await gate.Publish({ ...request, modelId: successor.ID }, ctx)).toMatchObject({ Kind: 'published', Replaces: candidate.ID });
+    expect(store.Status(candidate.ID)).toBe('Archived');
+    expect(store.ScheduledJobs(candidate.ID)).toEqual([expect.objectContaining({ Status: 'Disabled' })]);
+    expect(store.ScheduledJobs(successor.ID)).toEqual([expect.objectContaining({ Status: 'Active' })]);
   });
   it('the replaced incumbent gets the replacement reason', async () => {
     await gate.Publish(request, ctx);

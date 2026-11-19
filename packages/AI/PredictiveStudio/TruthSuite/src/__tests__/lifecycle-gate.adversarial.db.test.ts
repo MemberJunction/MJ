@@ -728,8 +728,8 @@ describe('concurrent publish — an incumbent and two validated candidates publi
     const loserRecords = await recordsOf({ ModelID: loser.ModelID, RunID: loser.RunID });
     expect(loserRecords.map((r) => [r.Kind, r.Purpose])).toEqual([['refusal', 'publish']]);
     expect(JSON.parse(loserRecords[0].Refusal || 'null')).toEqual({ kind: 'incumbent-not-current', comparedWith: incumbent.ModelID, current: winner.ModelID });
-    // Monitoring: the winner's job Pending, the archived incumbent's disabled.
-    expect(await monitoringJobStatuses(winner.ModelID)).toEqual(['Pending']);
+    // Monitoring: the winner's job Active (D4-179), the archived incumbent's disabled.
+    expect(await monitoringJobStatuses(winner.ModelID)).toEqual(['Active']);
     expect(await monitoringJobStatuses(incumbent.ModelID)).toEqual(['Disabled']);
   });
 
@@ -938,7 +938,7 @@ describe('the pinned protocol row changed by direct SQL after the gate has read 
     expect(published.Unexpected).toEqual([]);
     expect(published.Result).toMatchObject({ Kind: 'published', ModelID: target.ModelID, Replaces: sibling.ModelID });
     // The monitoring job the publish created carries the stored row's promotion rule as its challenger rule.
-    expect(await monitoringJobRules(target.ModelID)).toEqual([{ Status: 'Pending', Margin: 0, RequiresHumanSignOff: false, SignOffExpiryDays: 45 }]);
+    expect(await monitoringJobRules(target.ModelID)).toEqual([{ Status: 'Active', Margin: 0, RequiresHumanSignOff: false, SignOffExpiryDays: 45 }]);
     const recs = await recordsOf({ ModelID: target.ModelID, RunID: target.RunID });
     expect(recs.filter((r) => UUIDsEqual(r.ModelID, target.ModelID)).map((r) => [r.Kind, r.Purpose])).toEqual([['refusal', 'publish'], ['publish', 'publish']]);
   });

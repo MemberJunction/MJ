@@ -7,8 +7,8 @@
  * trigger; the members the protocol does not hold (the schedule, the period, the drift test and the parity sample) take
  * the defaults below.
  *
- * **The defaults are M3's and M6 revises them before it activates any job.** The gate creates the job `Pending` and the
- * scheduler runs only `Active` jobs, so nothing reads these values until M6's monitoring driver exists: a monthly
+ * **The defaults are M3's, as M6 runs them.** The gate creates the job `Active` (D4-179) and M6's monitoring driver
+ * reads these values on every run: a monthly
  * schedule and period; drift by monitor procedure M (`z-mean`, Benjamini–Hochberg) at q(12) = 0.0095 over 12 monthly
  * looks (gate G6.6's design), with 4,000,000 null replays and the documented false-alarm rate 0.05; and parity on 100
  * sampled scored rows at the fixed tolerance 1e-9.

@@ -4,8 +4,8 @@
  * Per-model monitoring jobs are data, not metadata (§5.1): the publish transaction creates one `MJ: Scheduled Jobs` row
  * for the published model, of the `Predictive Studio Model Monitoring` type (M3.1's row), configured by the
  * `MonitoringJobSpec` built from the protocol the model was evaluated under, owned by the user the publish ran under,
- * and `Pending`. The scheduler loads only `Active` jobs (`SchedulingEngineBase`), so the row is inert until M6 activates
- * it. Archiving the model sets its job `Disabled`.
+ * and `Active`, so the scheduler (which loads only `Active` jobs) runs it from the publish on (D4-179). Archiving the
+ * model, or a publish that supersedes it, sets its job `Disabled`.
  */
 import type { MJMLModelEntity, MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
@@ -23,12 +23,12 @@ export class MonitoringJobs {
   public static readonly JOB_TYPE_NAME = 'Predictive Studio Model Monitoring';
 
   /**
-   * Creates the model's `Pending` monitoring job and returns its ID. The `Configuration` is
+   * Creates the model's `Active` monitoring job (D4-179) and returns its ID. The `Configuration` is
    * `MonitoringJobSpecs.FromProtocol(protocol, model)`, checked against its schema first.
    *
    * @throws Error when the job type is missing, the model has no Prediction Unit, the spec fails its schema, or the save fails
    */
-  public static async CreatePending(model: MonitoredModelColumns, protocol: EvaluationProtocolSpec, ctx: RegistryContext): Promise<string> {
+  public static async CreateActive(model: MonitoredModelColumns, protocol: EvaluationProtocolSpec, ctx: RegistryContext): Promise<string> {
     if (!model.PredictionUnitID) throw new Error(`ML Model ${model.ID} has no Prediction Unit, so its monitoring job has no label window to join on`);
     const jobTypeId = await MonitoringJobs.jobTypeId(ctx);
     const spec = MonitoringJobSpecs.FromProtocol(protocol, { ModelID: model.ID, PredictionUnitID: model.PredictionUnitID, FeatureCount: MonitoringJobs.featureCountOf(model) });
@@ -38,10 +38,10 @@ export class MonitoringJobs {
     job.NewRecord();
     job.JobTypeID = jobTypeId;
     job.Name = `Predictive Studio model monitoring: v${model.Version} (${model.ID})`;
-    job.Description = 'Created Pending by the lifecycle gate when the model was published; activated by Predictive Studio monitoring.';
+    job.Description = 'Created Active by the lifecycle gate when the model was published; disabled when the model is archived or superseded.';
     job.CronExpression = spec.schedule.cronExpression;
     job.Timezone = spec.schedule.timezone;
-    job.Status = 'Pending';
+    job.Status = 'Active';
     job.Configuration = JSON.stringify(spec);
     job.OwnerUserID = ctx.ContextUser.ID;
     if (await job.Save()) return job.ID;
