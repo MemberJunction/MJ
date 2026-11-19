@@ -200,12 +200,14 @@ Not started and not to be opened as pull requests. Each becomes a `canon` issue 
 - Every backlog item, and every implementation phase of MJ 6213, exists as a `canon` issue.
 - The governance below is in force.
 
+Two plans by the sponsor feed the December 3 review: [MJ 6765](https://github.com/MemberJunction/MJ/pull/6765) treats Canon as a property of approved, visible members of a Canon graph, with one visibility rule, one retrieval path and one health loop; [MJ 6769](https://github.com/MemberJunction/MJ/pull/6769) adds continuous ingest from Slack, Teams and email, reaching Canon only by promotion. Both keep decisions 1 to 7. 6765's one visibility rule and permission domains bear directly on 5b and 5c, so issues 6723 and 6724 are reviewed alongside it.
+
 December 1 closes the *coordination* problem. It does not mean the v6.3 learning loop is built; that work continues afterwards, one issue at a time.
 
 ## How we coordinate until then
 
 - **One thread.** Questions that cross pull requests go on this plan's pull request, not on the individual ones.
-- **No new Canon pull requests** until December 1, other than re-cuts of the ones listed and these named exceptions: workstream 5a. A new idea is a `canon` issue.
+- **No new Canon pull requests** until December 1, other than re-cuts of the ones listed and these named exceptions: workstream 5a, and the sponsor's plan-only pull requests for the December 3 review, [MJ 6765](https://github.com/MemberJunction/MJ/pull/6765) (Canon unification) and [MJ 6769](https://github.com/MemberJunction/MJ/pull/6769) (Living Canon, continuous ingest). A new idea is a `canon` issue.
 - **Alignment check each day.** Each listed pull request's new commits and comments are compared with this plan, and the repositories are scanned for new Canon and graph pull requests and issues. Where one diverges from a decision, or two start to overlap, a comment is posted on that pull request linking the relevant section here. The check is run by an automated Claude session on the sponsor's behalf, and its comments say so.
 - **Disagreeing is fine.** If the plan is wrong, say so on its pull request and it changes. What we are avoiding is silent divergence.
 
@@ -228,4 +230,5 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-18 | `cmbrock-BC` opened MJ 6731 for workstream 5a and filed issues 6723, 6724 and 6725 for 5b to 5d. Watched MJ 6583 merged. |
 | 2026-11-18 | MJ 6688 (the non-Canon part of 6404) merged. `cmbrock-BC` filed MJ 6757 (authority per concept), added to the backlog. The sponsor closed design input: decisions 1 to 7 stand, and `rkihm-BC` leads development. |
 | 2026-11-19 | The sponsor added MJ 6762 (MJ Docs in the semantic graph), assigned to `cmbrock-BC`. Its provenance access policies cover most of 5c. |
+| 2026-11-19 | The sponsor opened two plan-only pull requests for the December 3 review: MJ 6765 (Canon unification) and MJ 6769 (Living Canon). Both keep decisions 1 to 7 and are named exceptions to the freeze. |
 | 2026-11-19 | `rkihm-BC` reviewed MJ 6731 and requested one change (regenerate the two server class manifests). He ruled that 5a's pipeline exception keeps existing approved concepts in every graph; narrowing by graph type goes to 5b and 5c. `MS-BC` brought MJ 6667 up to date with `next` and re-approved it. |
