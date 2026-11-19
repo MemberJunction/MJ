@@ -284,3 +284,82 @@ describe('ExecBlockRule — SET value holding a subquery (#6074)', () => {
     expect(convert(SUBQUERY_BLOCK)).toContain("p_Name_ab12 := 'see [__mj].[Widget]';");
   });
 });
+
+// The last save of an mj-sync log carries the logger's session trailer after its `END;`. The
+// upsert parser needs the block to end in `END`, so with the trailer attached the block fell to
+// the single-EXEC path and came out as half-converted T-SQL (issue #6097). The same fixture pins
+// that BIT and numeric SETs survive the upsert form (issue #5918).
+describe('ExecBlockRule — last save with the logger trailer (issues #6097, #5918)', () => {
+  const lastSave = [
+    '-- Save MJ: AI Models (core SP call only)',
+    'DECLARE @ID_a4e2b58a01b1 UNIQUEIDENTIFIER,',
+    '@Name_a4e2b58a01b1 NVARCHAR(50),',
+    '@PowerRank_a4e2b58a01b1 INT,',
+    '@IsActive_a4e2b58a01b1 BIT,',
+    '@InputCost_a4e2b58a01b1 DECIMAL(18, 6)',
+    'SET',
+    "  @ID_a4e2b58a01b1 = '7955CA7C-9599-48AB-B62F-519228ECE31E'",
+    'SET',
+    "  @Name_a4e2b58a01b1 = N'Placeholder Model'",
+    'SET',
+    '  @PowerRank_a4e2b58a01b1 = 150',
+    'SET',
+    '  @IsActive_a4e2b58a01b1 = 1',
+    'SET',
+    '  @InputCost_a4e2b58a01b1 = 0.125 IF NOT EXISTS (',
+    '    SELECT 1 FROM [__mj].[AIModel] WHERE [ID] = @ID_a4e2b58a01b1',
+    '  )',
+    'BEGIN',
+    'EXEC [__mj].spCreateAIModel @ID = @ID_a4e2b58a01b1,',
+    '  @Name = @Name_a4e2b58a01b1,',
+    '  @PowerRank = @PowerRank_a4e2b58a01b1,',
+    '  @IsActive = @IsActive_a4e2b58a01b1,',
+    '  @InputCost = @InputCost_a4e2b58a01b1',
+    'END ELSE',
+    'BEGIN',
+    'EXEC [__mj].spUpdateAIModel @ID = @ID_a4e2b58a01b1,',
+    '  @Name = @Name_a4e2b58a01b1,',
+    '  @PowerRank = @PowerRank_a4e2b58a01b1,',
+    '  @IsActive = @IsActive_a4e2b58a01b1,',
+    '  @InputCost = @InputCost_a4e2b58a01b1',
+    'END;',
+    '',
+    '',
+    '-- End of SQL Logging Session',
+    '-- Session ID: 00000000-0000-0000-0000-000000000000',
+    '-- Total Statements: 1',
+  ].join('\n');
+
+  it('converts the block as an upsert, with no T-SQL left', () => {
+    const out = convert(lastSave);
+    expect(out).toMatch(/IF NOT EXISTS \(SELECT 1 FROM __mj\."AIModel" WHERE "ID" = p_ID_a4e2b58a01b1\) THEN/);
+    expect(out).toContain('END IF;');
+    expect(out).not.toMatch(/\bBEGIN\s*\n\s*EXEC|\[__mj\]/);
+    expect(out).not.toContain('SKIPPED');
+  });
+
+  it('keeps the trailer, after the converted block', () => {
+    const out = convert(lastSave);
+    expect(out.indexOf('-- End of SQL Logging Session')).toBeGreaterThan(out.indexOf('END $mj$;'));
+    expect(out).toContain('-- Total Statements: 1');
+  });
+
+  it('keeps BIT, integer and decimal values (issue #5918)', () => {
+    const out = convert(lastSave);
+    expect(out).toContain('p_IsActive_a4e2b58a01b1 := TRUE;');
+    expect(out).toContain('p_PowerRank_a4e2b58a01b1 := 150;');
+    expect(out).toContain('p_InputCost_a4e2b58a01b1 := 0.125;');
+  });
+
+  it("leaves N''x'' inside a stored query's literal alone (issue #5838)", () => {
+    const sql = [
+      'DECLARE @SQL_ab12 NVARCHAR(MAX), @ID_ab12 UNIQUEIDENTIFIER',
+      'SET',
+      "  @SQL_ab12 = N'SELECT ISNULL(a, 0) FROM t WHERE n = N''x'''",
+      'SET',
+      "  @ID_ab12 = '7955CA7C-9599-48AB-B62F-519228ECE31E'",
+      'EXEC [__mj].spUpdateQuery @ID = @ID_ab12, @SQL = @SQL_ab12',
+    ].join('\n');
+    expect(convert(sql)).toContain("p_SQL_ab12 := 'SELECT ISNULL(a, 0) FROM t WHERE n = N''x''';");
+  });
+});

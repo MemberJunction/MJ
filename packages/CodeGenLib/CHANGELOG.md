@@ -1,5 +1,172 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- d4350c0: Integration engine fixes, with two migrations (minor).
+  - Connection Configuration `batchSize`, `maxBatchesPerMap` and `watermarkLookbackSeconds`. Reaching the page cap fails the run with `BATCH_CAP_REACHED`; any Critical error fails the run; stale CRUD procedures stop the object after one error (`SchemaNotGeneratedError.Reason = 'Stale'`); monotonic timestamp watermarks re-read a short overlap (300 s for external-data-source connectors).
+  - SoftDelete on an entity without tombstone columns is refused with `SOFT_DELETE_UNSUPPORTED` instead of counting a delete that never happened. Entity-map `sourceDeleteField` / `sourceDeleteValue` follow `DeleteBehavior` for sources that flag deletions. New `CompanyIntegrationRecordMap.Origin` (`Created` / `Adopted`); neither the orphan sweep nor a source delete flag under HardDelete hard-deletes an adopted row. A flagged row under HardDelete prunes its record map once deleted, and a matched row already gone counts as skipped, not errored.
+  - New index `IX_CompanyIntegrationRun_CompanyIntegrationID_StartedAt`; `vwCompanyIntegrations` finds the latest run with `OUTER APPLY`.
+  - Staging columns keep declared integer, decimal, float, boolean and date types for new columns; CodeGen re-selects a created row NULL-safely on nullable key columns.
+  - The Integration Connections Create Tables panel shows a listing failure with Retry.
+
+- 5c0fba9: Add `AIPrompt.TimeoutMS`, a per-prompt bound on each model call (#3064, #3133).
+  - New nullable `TimeoutMS` column on `MJ: AI Prompts` (migration + CodeGen: entity, GraphQL and form field). It must be positive; NULL means the prompt sets no bound.
+  - The runner resolves the timeout as the caller's `AIPromptParams.timeoutMS`, then the prompt's `TimeoutMS`, then the runner's `DefaultPromptTimeoutMS`. A caller passing `0` opts that call out of any bound.
+  - The parallel coordinator applies the prompt's `TimeoutMS` to each task in place of its default backstop.
+  - `getEffectiveTimeoutMS` now takes the prompt as its first argument; a subclass that calls or overrides it must pass the prompt.
+
+- f49a2e1: A column of a multi-column foreign key now gets a related entity only when the column it references
+  is unique on its own: a single-column primary key, or the sole key of an unfiltered unique index.
+  CodeGen used to give every component a RelatedEntityID, so a component that references a non-unique
+  column (typically a copy of the parent's own key) got a label join that multiplied rows in the base
+  view. The SQL Server and PostgreSQL new-field queries and `spUpdateExistingEntityFieldsFromSchema`
+  (SQL Server by migration, PostgreSQL in the support objects) drop those components, using the same
+  single-column key snapshots that `IsUnique` is computed from. On an existing database the next
+  CodeGen run clears the relationship on such fields; soft foreign keys are untouched.
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+### Patch Changes
+
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- add9e8f: CodeGen output fixes:
+  - A stored validator with real line breaks and `\"` escapes is unescaped when only that form parses; one that parses neither way is written unchanged with a warning naming the entity and validator (#6510).
+  - Search-flag hygiene filters by `includeSchemas` and the authored `excludeSchemas`, never the compiled exclude list, so an Open App capture no longer touches entities in other schemas (#6384).
+  - The auto FK and soft-PK index guards skip the index when another unfiltered index already leads with the column(s), on SQL Server and PostgreSQL. Every entity's index file is rewritten once. Integration check MC4 accepts such an index (#6466).
+  - A pinned name field (`AutoUpdateIsNameField = 0`) always wins, so CodeGen no longer flags a second one; the integrity check warns about entities with more than one name field (#6554).
+  - `mj codegen --all-schemas` re-emits the generated files of every schema for one run (#5163).
+
+- f671eff: CodeGen's organic-key config pass reads entities and existing rows once instead of up to three queries per (key, related entity) pair, writes only rows that differ from additionalSchemaInfo, drops duplicate related-entity entries (last one wins, with a warning), and logs progress every 250 pairs.
+- e9472ef: PostgreSQL CodeGen: the logged base-view SQL (migration log and bake capture) now carries the guarded `spRebindLayeredOuterView` call for each alternate base view, so `vw*Active` views pick up new columns on migrate-only installs (#6539). `vwSQLColumnsAndEntityFields` reports `NULL` as the `DefaultValue` of a generated column; the expression stays in `ComputedColumnDefinition` (#6511).
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- cdcbfd1: Unify governed artifact tools and real-time collaborative workspaces across agents and Explorer viewers:
+  - Add governed artifact CoreActions and realtime channel / client-tool integrations (`ArtifactWorkspaceChannel`, live Explorer workspace actions, and realtime delegation routing) alongside updated Sage, Query Builder, and Loop agent prompts.
+  - Add multi-agent live collaboration presence indicators and cursor/region overlays across Markdown, Slide Deck, Whiteboard, and Spreadsheet viewers plus server Yjs relay awareness (`ArtifactCollaborationServer`).
+  - Resolve session-scoped alpha short IDs (e.g. `"D"`) to canonical `MJ: Artifacts` UUIDs in `ResolveEmbeddedArtifactId` and across `ArtifactToolManager`, `DocumentToolLibrary`, `SlideDeckToolLibrary`, and `SpreadsheetToolLibrary`, with frontend UUID guards before SQL `RunView` lookups.
+  - Add on-sheet floating charts (`Placement: 'sheet' | 'dock'`), drag/resize handles, comma-separated non-contiguous chart ranges and row/column orientation controls, a full Chart & Range Properties editor modal, and persisted horizontal chart-pane splitter height (`WorkbookSpec.PreferredObjectsPaneHeightPx`) synced across Yjs CRDT, XLSX metadata, and server room checkpoints.
+  - Add shared `<mj-context-menu>` overlay component and Docs/Slides/Sheets context-menu helpers with full keyboard navigation, viewport clamping, and mobile long-press support.
+  - Fix Explorer conversation chat change-detection (`NG0100`), suppress redundant `"Open Document"` action chips when an artifact is already opened inline, and prevent duplicate prompt emissions.
+- fff3a52: Waves 5.4, 5.5, and 5.6 performance & bundle-splitting improvements:
+  - **Wave 5.4**: Lazy `EntityInfo.Fields` / `EntityFieldInfo` instantiation on first field access, native structured-clone IndexedDB metadata caching in `ProviderBase` / `BrowserIndexedDBStorageProvider`, and `IT128 PB20` hydration benchmarks.
+  - **Wave 5.5**: Added `@memberjunction/ng-bootstrap/types` secondary entry point to decouple `ng-explorer-app` from eager dashboard registrations, switched `MarkdownArtifactViewerComponent` to `ChangeDetectionStrategy.OnPush`, and extended `check-browser-manifest-leakage.mjs` with bundle-splitting regression guards.
+  - **Wave 5.6**: Added `@memberjunction/ng-auth-services/preload` lightweight entry point for `MJExplorer/src/main.ts` and decoupled `@memberjunction/core-entities/schemas` Zod schemas from entity classes (with CodeGen support).
+- a78d855: Wave 4.3b CodeGen SQL single-write and query plan optimizations:
+  - Single-write `[__mj_UpdatedAt] = GETUTCDATE()` in generated `spUpdate*` stored procedures when updatable fields exist, paired with an `IF NOT UPDATE([__mj_UpdatedAt])` guard in `trgUpdate*` triggers to eliminate double clustered-index writes on CRUD updates while maintaining automatic trigger updates for ad-hoc SQL.
+  - Collapse SQL Server `fn*GetHierarchyMeta` table-valued function from triple CTE evaluations to a single scan with `OUTER APPLY` for `ChildCount` and `IsLeaf`.
+  - Join physical `RecordGeoCode` base table instead of `vwRecordGeoCodes` view in generated views, eliminating 3 transitive joins to `Entity`, `Country`, and `StateProvince`.
+  - Automatically index polymorphic foreign-key column pairs (`EntityField.EntityIDFieldName`, such as `RecordID` + `EntityID`) on bounded columns in `GenerateForeignKeyIndexes`.
+- c705137: Wave 4.6 build, CodeGen, and class-registration manifest optimizations: include `peerDependencies` in `@RegisterClass` manifest topological sort, prefer live workspace package directories over nested `node_modules`/`.pnpm` copies during dependency walking, cache `@RegisterClass` AST extraction by `(filePath, mtimeMs, size, isCompiledJS)`, eliminate duplicate SQL/DB generation passes on phased CodeGen providers, preload live base-view definitions/column sets in a single catalog read, and schedule PostgreSQL entity CodeGen across conflict-free 2-hop dependency waves with serialized `42P16` fallback recovery.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [c17c7be]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/core-entities-server@6.3.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.3.0-edge.1
+  - @memberjunction/sql-parser@6.3.0-edge.1
+  - @memberjunction/external-data-sources@6.3.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.3.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.3.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.3.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.3.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.3.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.3.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.3.0-edge.1
+  - @memberjunction/query-processor@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+  - @memberjunction/cli-core@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+  - @memberjunction/config@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

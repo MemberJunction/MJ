@@ -578,4 +578,345 @@ test.describe.serial('Library workspace & collaborative Docs, Slides, and Sheets
     await expect(page).toHaveURL(/artifactId=/, { timeout: 15_000 });
     await expect(page.locator('[data-testid="mj-slides-shell"]')).toBeVisible({ timeout: 30_000 });
   });
+
+  test('isolates per-user Y.UndoManager Undo/Redo across live 2-context Docs edits and toolbars in Sheets & Slides', async ({
+    page,
+    browser,
+  }) => {
+    const docTitle = `E2E Scoped Undo Doc ${Date.now()}`;
+    await openCreateDialogFromLibrary(page);
+    await page.locator('[data-testid="dialog-starter-document"]').click();
+    await page.locator('[data-testid="library-create-title-input"]').fill(docTitle);
+    await page.locator('[data-testid="library-create-submit-btn"]').click();
+
+    await expect(page.locator('[data-testid="mj-docs-workspace"]')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid="collaboration-presence-pill"]')).toHaveAttribute(
+      'data-status',
+      'connected',
+      { timeout: 25_000 },
+    );
+    const sharedUrl = page.url();
+
+    const contextB = await openAuthenticatedSiblingContext(browser, page);
+    try {
+      const pageB = await contextB.newPage();
+      await pageB.goto(sharedUrl, { waitUntil: 'domcontentloaded' });
+      await expect(pageB.locator('[data-testid="mj-docs-workspace"]')).toBeVisible({ timeout: 30_000 });
+      await expect(pageB.locator('[data-testid="collaboration-presence-pill"]')).toHaveAttribute(
+        'data-status',
+        'connected',
+        { timeout: 25_000 },
+      );
+
+      // Context A writes local marker A (captured in A's Y.UndoManager local origin)
+      await page.locator('[data-testid="mode-edit-btn"]').click();
+      const paraA = page.locator('[data-testid^="editable-paragraph-"]').first();
+      await expect(paraA).toBeVisible({ timeout: 15_000 });
+      await paraA.click();
+      const markerA = `LocalUndoMarkerA-${Date.now()}`;
+      await paraA.fill(markerA);
+      await paraA.blur();
+      await expect(pageB.locator('[data-testid="mj-docs-workspace"]')).toContainText(markerA, {
+        timeout: 20_000,
+      });
+
+      // Context B appends remote marker B on top
+      await pageB.locator('[data-testid="mode-edit-btn"]').click();
+      const paraB = pageB.locator('[data-testid^="editable-paragraph-"]').first();
+      await expect(paraB).toBeVisible({ timeout: 15_000 });
+      await paraB.click();
+      const markerB = `PeerMarkerB-${Date.now()}`;
+      await paraB.fill(`${markerA}\n${markerB}`);
+      await paraB.blur();
+      await expect(page.locator('[data-testid="mj-docs-workspace"]')).toContainText(markerB, {
+        timeout: 20_000,
+      });
+
+      // Context A clicks Undo -> reverts A's local edit while preserving B's concurrent edit
+      const docsUndoBtn = page.locator('[data-testid="docs-undo-btn"]');
+      const docsRedoBtn = page.locator('[data-testid="docs-redo-btn"]');
+      await expect(docsUndoBtn).toBeEnabled({ timeout: 10_000 });
+      await docsUndoBtn.click();
+      await expect(page.locator('[data-testid="mj-docs-workspace"]')).toContainText(markerB, {
+        timeout: 15_000,
+      });
+      await expect(page.locator('[data-testid="mj-docs-workspace"]')).not.toContainText(markerA, {
+        timeout: 15_000,
+      });
+
+      // Redo restores marker A cleanly
+      await expect(docsRedoBtn).toBeEnabled({ timeout: 10_000 });
+      await docsRedoBtn.click();
+      await expect(page.locator('[data-testid="mj-docs-workspace"]')).toContainText(markerA, {
+        timeout: 15_000,
+      });
+    } finally {
+      await contextB.close();
+    }
+  });
+
+  test('verifies Sheets desktop ergonomics (Arrow/Shift+Arrow, Col/Row drag-resize, Fill Handle, Undo/Redo) and Slides filmstrip drag-reorder', async ({
+    page,
+  }) => {
+    // 1) Sheets ergonomics
+    const sheetTitle = `E2E Ergonomics Sheet ${Date.now()}`;
+    await openCreateDialogFromLibrary(page);
+    await page.locator('[data-testid="dialog-starter-spreadsheet"]').click();
+    await page.locator('[data-testid="library-create-title-input"]').fill(sheetTitle);
+    await page.locator('[data-testid="library-create-submit-btn"]').click();
+
+    await expect(page.locator('[data-testid="mj-sheets-shell"]')).toBeVisible({ timeout: 30_000 });
+
+    const setCell = async (addr: string, val: string): Promise<void> => {
+      await page.locator(`[data-testid="sheet-cell-${addr}"]`).click();
+      await page.locator('[data-testid="sheet-formula-input"]').fill(val);
+      await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+    };
+
+    await setCell('B2', '10');
+    await setCell('B3', '20');
+    await expect(page.locator('[data-testid="sheet-cell-B3"]')).toContainText('20', { timeout: 10_000 });
+
+    // Keyboard navigation & Shift+Arrow range selection
+    await page.locator('[data-testid="sheet-cell-B2"]').click();
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('[data-testid="sheet-selected-range-input"]')).toHaveValue('B2:B3', {
+      timeout: 10_000,
+    });
+
+    // Fill handle drag from B2 down to B4 extends numeric step (10, 20 -> 30)
+    const fillHandle = page.locator('[data-testid="sheet-fill-handle-B2"]');
+    await expect(fillHandle).toBeVisible({ timeout: 10_000 });
+    const handleBox = await fillHandle.boundingBox();
+    const b4Box = await page.locator('[data-testid="sheet-cell-B4"]').boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(b4Box).not.toBeNull();
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b4Box!.x + b4Box!.width / 2, b4Box!.y + b4Box!.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await expect(page.locator('[data-testid="sheet-cell-B4"]')).toContainText('30', {
+      timeout: 10_000,
+    });
+
+    // Sheets Undo/Redo assert actual cell mutation rollback & restore
+    const sheetUndo = page.locator('[data-testid="sheet-undo-btn"]');
+    const sheetRedo = page.locator('[data-testid="sheet-redo-btn"]');
+    await expect(sheetUndo).toBeEnabled({ timeout: 10_000 });
+    await sheetUndo.click();
+    await expect(page.locator('[data-testid="sheet-cell-B4"]')).not.toContainText('30', {
+      timeout: 10_000,
+    });
+    await expect(sheetRedo).toBeEnabled({ timeout: 10_000 });
+    await sheetRedo.click();
+    await expect(page.locator('[data-testid="sheet-cell-B4"]')).toContainText('30', {
+      timeout: 10_000,
+    });
+
+    // Column & Row drag-resize actually alter rendered cell geometry
+    const b2Before = await page.locator('[data-testid="sheet-cell-B2"]').boundingBox();
+    const colResizeB = page.locator('[data-testid="sheet-col-resize-B"]');
+    const colHandleBox = await colResizeB.boundingBox();
+    expect(b2Before).not.toBeNull();
+    expect(colHandleBox).not.toBeNull();
+    await page.mouse.move(colHandleBox!.x + colHandleBox!.width / 2, colHandleBox!.y + colHandleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(colHandleBox!.x + 60, colHandleBox!.y + colHandleBox!.height / 2, { steps: 6 });
+    await page.mouse.up();
+    const b2AfterCol = await page.locator('[data-testid="sheet-cell-B2"]').boundingBox();
+    expect((b2AfterCol?.width ?? 0) > b2Before!.width + 20).toBe(true);
+
+    const rowResize2 = page.locator('[data-testid="sheet-row-resize-2"]');
+    const rowHandleBox = await rowResize2.boundingBox();
+    const b2PreRow = await page.locator('[data-testid="sheet-cell-B2"]').boundingBox();
+    expect(rowHandleBox).not.toBeNull();
+    expect(b2PreRow).not.toBeNull();
+    await page.mouse.move(rowHandleBox!.x + rowHandleBox!.width / 2, rowHandleBox!.y + rowHandleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(rowHandleBox!.x + rowHandleBox!.width / 2, rowHandleBox!.y + 30, { steps: 6 });
+    await page.mouse.up();
+    const b2AfterRow = await page.locator('[data-testid="sheet-cell-B2"]').boundingBox();
+    expect((b2AfterRow?.height ?? 0) > b2PreRow!.height + 10).toBe(true);
+
+    // 2) Slides filmstrip drag-reorder + Undo/Redo
+    const deckTitle = `E2E Slide Reorder Deck ${Date.now()}`;
+    await openCreateDialogFromLibrary(page);
+    await page.locator('[data-testid="dialog-starter-presentation"]').click();
+    await page.locator('[data-testid="library-create-title-input"]').fill(deckTitle);
+    await page.locator('[data-testid="library-create-submit-btn"]').click();
+
+    await expect(page.locator('[data-testid="mj-slides-shell"]')).toBeVisible({ timeout: 30_000 });
+    await page.locator('[data-testid="add-slide-btn"]').click();
+    await expect(page.locator('[data-testid^="filmstrip-slide-"]')).toHaveCount(2, { timeout: 15_000 });
+
+    const thumbs = page.locator('[data-testid^="filmstrip-slide-"]');
+    const firstSlideId = await thumbs.nth(0).getAttribute('data-testid');
+    const secondSlideId = await thumbs.nth(1).getAttribute('data-testid');
+    await thumbs.nth(0).dragTo(thumbs.nth(1));
+    await expect(thumbs.nth(1)).toHaveAttribute('data-testid', firstSlideId ?? '', { timeout: 10_000 });
+    await expect(thumbs.nth(0)).toHaveAttribute('data-testid', secondSlideId ?? '', { timeout: 10_000 });
+
+    // Slides Undo & Redo toggle order cleanly
+    const slidesUndo = page.locator('[data-testid="slides-undo-btn"]');
+    const slidesRedo = page.locator('[data-testid="slides-redo-btn"]');
+    await expect(slidesUndo).toBeEnabled({ timeout: 10_000 });
+    await slidesUndo.click();
+    await expect(thumbs.nth(0)).toHaveAttribute('data-testid', firstSlideId ?? '', { timeout: 10_000 });
+    await expect(slidesRedo).toBeEnabled({ timeout: 10_000 });
+    await slidesRedo.click();
+    await expect(thumbs.nth(0)).toHaveAttribute('data-testid', secondSlideId ?? '', { timeout: 10_000 });
+  });
+
+  test('links a Spreadsheet Range via Docs formatting ribbon and tests Living Report manual refresh + recurring schedule lifecycle', async ({
+    page,
+  }) => {
+    const stamp = Date.now();
+    const sourceSheetTitle = `E2E Live Source Sheet ${stamp}`;
+
+    // 1) Create Source Workbook v1
+    await openCreateDialogFromLibrary(page);
+    await page.locator('[data-testid="dialog-starter-spreadsheet"]').click();
+    await page.locator('[data-testid="library-create-title-input"]').fill(sourceSheetTitle);
+    await page.locator('[data-testid="library-create-submit-btn"]').click();
+    await expect(page.locator('[data-testid="mj-sheets-shell"]')).toBeVisible({ timeout: 30_000 });
+
+    await page.locator('[data-testid="sheet-cell-A1"]').click();
+    await page.locator('[data-testid="sheet-formula-input"]').fill('Metric');
+    await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+    await page.locator('[data-testid="sheet-cell-B1"]').click();
+    await page.locator('[data-testid="sheet-formula-input"]').fill('ARR');
+    await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+    await page.locator('[data-testid="sheet-cell-A2"]').click();
+    await page.locator('[data-testid="sheet-formula-input"]').fill('Q4 Total');
+    await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+    await page.locator('[data-testid="sheet-cell-B2"]').click();
+    await page.locator('[data-testid="sheet-formula-input"]').fill('500');
+    await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+
+    await page.locator('[data-testid="sheet-save-version-btn"]').click();
+    await expect(page.locator('[data-testid="sheet-save-version-btn"]')).toContainText(/Saved v\d+/i, {
+      timeout: 20_000,
+    });
+    const sourceSheetIdMatch = page.url().match(/artifactId=([^&]+)/i);
+    const sourceSheetId = sourceSheetIdMatch?.[1] ?? '';
+    expect(sourceSheetId.length).toBeGreaterThan(10);
+
+    // 2) Create Living Report Doc, link Sheet Range via ribbon button, and test Refresh + Schedule UI
+    const livingDocTitle = `E2E Living Report Doc ${stamp}`;
+    await openCreateDialogFromLibrary(page);
+    await page.locator('[data-testid="dialog-starter-document"]').click();
+    await page.locator('[data-testid="library-create-title-input"]').fill(livingDocTitle);
+    await page.locator('[data-testid="library-create-submit-btn"]').click();
+
+    await expect(page.locator('[data-testid="mj-docs-workspace"]')).toBeVisible({ timeout: 30_000 });
+    await page.locator('[data-testid="mode-edit-btn"]').click();
+
+    // Reveal Formatting Ribbon if collapsed, then click Sheet Range button
+    if (!(await page.locator('[data-testid="docs-format-ribbon"]').isVisible())) {
+      await page.locator('[data-testid="toggle-format-ribbon-btn"]').click();
+    }
+    await expect(page.locator('[data-testid="fmt-sheet-range-btn"]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-testid="fmt-sheet-range-btn"]').click();
+
+    await expect(page.locator('[data-testid="insert-block-modal"]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-testid="new-block-artifact-id-input"]').fill(sourceSheetId);
+    await page.locator('[data-testid="sheet-embed-range-input"]').fill('A1:B2');
+    await page.locator('[data-testid="confirm-insert-block-btn"]').click();
+
+    await expect(page.locator('[data-testid^="ole-artifact-block-"]').first()).toContainText('500', {
+      timeout: 25_000,
+    });
+
+    await page.locator('[data-testid="save-doc-version-btn"]').click();
+    await expect(page.locator('[data-testid="save-doc-version-btn"]')).toContainText(/Saved/i, {
+      timeout: 20_000,
+    });
+    const livingDocUrl = page.url();
+
+    // 2b) Update Source Workbook v2 (B2: 500 -> 750) so Manual Living Report Refresh propagates real data changes
+    await page.goto(`${livingDocUrl.split('/app/')[0]}/app/Library?artifactId=${sourceSheetId}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.locator('[data-testid="mj-sheets-shell"]')).toBeVisible({ timeout: 30_000 });
+    await page.locator('[data-testid="sheet-cell-B2"]').click();
+    await page.locator('[data-testid="sheet-formula-input"]').fill('750');
+    await page.locator('[data-testid="sheet-formula-apply-btn"]').click();
+    await page.locator('[data-testid="sheet-save-version-btn"]').click();
+    await expect(page.locator('[data-testid="sheet-save-version-btn"]')).toContainText(/Saved v2/i, {
+      timeout: 20_000,
+    });
+
+    await page.goto(livingDocUrl, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="mj-docs-workspace"]')).toBeVisible({ timeout: 30_000 });
+
+    // 3) Manual Refresh Live Data via GraphQL mutation and verify live workbook change -> Doc v2
+    const refreshBtn = page.locator('[data-testid="living-report-refresh-btn"]');
+    await expect(refreshBtn).toBeVisible({ timeout: 15_000 });
+    const refreshRespPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes('/graphql') &&
+        res.request().method() === 'POST' &&
+        (res.request().postData() ?? '').includes('RefreshLivingArtifact'),
+      { timeout: 30_000 },
+    );
+    await refreshBtn.click();
+    const refreshResp = await refreshRespPromise;
+    expect(refreshResp.status()).toBe(200);
+    const refreshJson = (await refreshResp.json()) as {
+      data?: {
+        RefreshLivingArtifact?: {
+          Success?: boolean;
+          Changed?: boolean;
+          SavedNewVersion?: boolean;
+          VersionNumber?: number;
+        };
+      };
+    };
+    expect(refreshJson.data?.RefreshLivingArtifact?.Success).toBe(true);
+    expect(refreshJson.data?.RefreshLivingArtifact?.Changed).toBe(true);
+    expect(refreshJson.data?.RefreshLivingArtifact?.SavedNewVersion).toBe(true);
+    expect(refreshJson.data?.RefreshLivingArtifact?.VersionNumber).toBe(2);
+    await expect(page.locator('[data-testid^="ole-artifact-block-"]').first()).toContainText('750', {
+      timeout: 25_000,
+    });
+
+    // 4) Living Report Schedule lifecycle (Create -> Verify Active badge -> Remove)
+    await page.locator('[data-testid="living-report-schedule-btn"]').click();
+    await expect(page.locator('[data-testid="living-report-schedule-modal"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.locator('[data-testid="living-report-name-input"]').fill(`E2E Living Cadence ${stamp}`);
+    await page.locator('[data-testid="living-report-preset-select"]').selectOption('hourly');
+    await expect(page.locator('[data-testid="living-report-cron-input"]')).toHaveValue('0 0 * * * *');
+
+    const saveSchedulePromise = page.waitForResponse(
+      (res) =>
+        res.url().includes('/graphql') &&
+        res.request().method() === 'POST' &&
+        (res.request().postData() ?? '').includes('UpsertArtifactLivingReportSchedule'),
+      { timeout: 25_000 },
+    );
+    await page.locator('[data-testid="living-report-save-btn"]').click();
+    const saveSchedResp = await saveSchedulePromise;
+    expect(saveSchedResp.status()).toBe(200);
+    const saveSchedJson = (await saveSchedResp.json()) as {
+      data?: { UpsertArtifactLivingReportSchedule?: { Success?: boolean; Schedule?: { Enabled?: boolean } } };
+    };
+    expect(saveSchedJson.data?.UpsertArtifactLivingReportSchedule?.Success).toBe(true);
+    expect(saveSchedJson.data?.UpsertArtifactLivingReportSchedule?.Schedule?.Enabled).toBe(true);
+
+    await expect(page.locator('[data-testid="living-report-status-badge"]')).toContainText('Scheduled', {
+      timeout: 15_000,
+    });
+
+    // Reopen and remove schedule cleanly so database stays clean
+    await page.locator('[data-testid="living-report-schedule-btn"]').click();
+    await expect(page.locator('[data-testid="living-report-remove-btn"]')).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator('[data-testid="living-report-remove-btn"]').click();
+    await expect(page.locator('[data-testid="living-report-status-badge"]')).toHaveCount(0, {
+      timeout: 15_000,
+    });
+  });
 });

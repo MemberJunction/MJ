@@ -554,4 +554,56 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
         const preservedRegion = updatedDeck.Slides[0].Regions.find((r) => r.RegionID === 'reg-frozen');
         expect(preservedRegion?.BlockSpec?.FrozenSnapshot).toEqual(signedOrigSnap);
     });
+
+    it('supports modern designer presets, 5 new visual layouts, BeautifySlide, and PPTX export geometry', () => {
+        let deck = engine.CreateDefaultDeck('Modern Slides Studio', 'deck-modern');
+        expect(SLIDE_DECK_THEME_PRESETS.length).toBeGreaterThanOrEqual(8);
+
+        // Apply dark editorial preset + zoom transition via ApplyDesignPreset
+        deck = engine.ApplyDesignPreset(deck, 'cobalt-editorial', {
+            Transition: 'zoom',
+            CardElevation: 'glass',
+            BackgroundStyle: 'mesh',
+        });
+        expect(deck.Theme.ThemeID).toBe('cobalt-editorial');
+        expect(deck.Theme.CardElevation).toBe('glass');
+        expect(deck.Theme.BackgroundStyle).toBe('mesh');
+        expect(deck.Slides.every((s) => s.Transition === 'zoom')).toBe(true);
+
+        // Create and verify each of the 5 new rich layouts
+        const newLayouts = ['KpiStrip', 'Timeline', 'BentoGrid', 'Quadrant', 'MetricComparison'] as const;
+        for (const layout of newLayouts) {
+            const added = engine.AddSlide(deck, { Title: `${layout} Slide`, Layout: layout });
+            deck = added.Deck;
+            expect(added.AddedSlide.Regions.length).toBeGreaterThanOrEqual(3);
+        }
+
+        // BeautifySlide upgrades 3 KPI bullets on TitleAndBody to KpiStrip with RevealSteps
+        const kpiBulletSlide = engine.AddSlide(deck, {
+            Title: 'Quarterly KPIs',
+            Layout: 'TitleAndBody',
+            Regions: [
+                {
+                    RegionID: 'main',
+                    Label: 'Slide Body',
+                    Kind: 'rich-text',
+                    MarkdownContent: '- ARR: $18.2M (+31% YoY)\n- NRR: 122% (+6 pts)\n- Pipeline: $44M (+19%)',
+                },
+            ],
+        });
+        deck = engine.UpdateSlideMetadata(kpiBulletSlide.Deck, kpiBulletSlide.AddedSlide.SlideID, {
+            Transition: 'none',
+        }).Deck;
+        const polished = engine.BeautifySlide(deck, kpiBulletSlide.AddedSlide.SlideID);
+        expect(polished.UpdatedSlide?.Layout).toBe('KpiStrip');
+        expect(polished.UpdatedSlide?.Transition).toBe('slide');
+        expect(polished.UpdatedSlide?.Regions.map((r) => r.RevealStep)).toEqual([1, 2, 3]);
+        expect(polished.UpdatedSlide?.Regions[0].BigNumberValue).toBe('$18.2M');
+
+        // Export to PPTX with new layouts & gradient background cleanly
+        const pptxBytes = engine.ExportDeckToPptxBytes(polished.Deck);
+        expect(pptxBytes.length).toBeGreaterThan(500);
+        const reimported = engine.ImportDeckFromPptxBytes(pptxBytes);
+        expect(reimported.Slides.length).toBe(polished.Deck.Slides.length);
+    });
 });

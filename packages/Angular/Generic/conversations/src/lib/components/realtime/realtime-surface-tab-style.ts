@@ -24,12 +24,12 @@ export function IsWhiteboardChannel(channelName: string | null | undefined): boo
  * Whether a channel should get its surface tab registered UP FRONT (at the
  * registry-resolved emission) rather than waiting for first use.
  *
- * True only for the whiteboard (see {@link IsWhiteboardChannel}) OR a channel the agent has
- * already used this session (`hasBeenUsed`). Every other channel stays tab-less until its
- * first activity registers it — keeping the strip decluttered to the surfaces actually in play.
+ * True only when the channel has ALREADY been used this session (`hasBeenUsed`).
+ * Every channel — including the whiteboard — stays tab-less until first activity or
+ * prior-state restore registers it, keeping the strip decluttered to surfaces actually in play.
  */
-export function ShouldRegisterChannelTabUpFront(channelName: string, hasBeenUsed: boolean): boolean {
-  return IsWhiteboardChannel(channelName) || hasBeenUsed;
+export function ShouldRegisterChannelTabUpFront(_channelName: string, hasBeenUsed: boolean): boolean {
+  return hasBeenUsed;
 }
 
 /**
@@ -123,4 +123,25 @@ export function ParseActivitySplitPercent(raw: string | null | undefined): numbe
 /** Serializes the right-pane width percentage for persistence (`{ "percent": number }`). */
 export function SerializeActivitySplitPercent(percent: number): string {
   return JSON.stringify({ percent: ClampActivitySplitPercent(percent) });
+}
+
+const CANONICAL_CHANNEL_ORDER: Readonly<Record<string, number>> = {
+  artifactworkspace: 0,
+  whiteboard: 1,
+  'remote browser': 2,
+  media: 3,
+  recording: 90,
+};
+
+/**
+ * Deterministic display rank for left-cluster surface channel tabs so the strip keeps a
+ * consistent order (`Workspace`, `Whiteboard`, `Browser`, `Media`, then custom/other channels,
+ * then `Recording`) across live calls, session review, and multi-leg resume — regardless of
+ * which channel restores or mounts first.
+ */
+export function ChannelTabSortOrder(channelKey: string | null | undefined): number {
+  const normalized = (channelKey ?? '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(CANONICAL_CHANNEL_ORDER, normalized)
+    ? CANONICAL_CHANNEL_ORDER[normalized]
+    : 50;
 }

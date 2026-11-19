@@ -129,5 +129,16 @@
     "primaryKey": {
       "ID": "1FCA9C31-3AD9-4725-AD70-8BD3201EB674"
     }
+  },
+  {
+    "fields": {
+      "Name": "User Lists",
+      "ParentID": null,
+      "Description": "Queries saved so a list can refresh from them, one subcategory per user. A query here is saved Pending; its owner can approve it.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "D6E999CC-BF2C-4D98-8BC8-4A86764D164C"
+    }
   }
 ]

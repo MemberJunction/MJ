@@ -4,6 +4,13 @@ import { FeatureValueKey, type FeatureValueKeyInput } from '../spec/feature-valu
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 
 /**
+ * Wall-clock ceiling for the pathological-input check (5,000-digit string). It guards against
+ * catastrophic/polynomial backtracking (seconds), not machine speed: tight millisecond bounds
+ * fail on shared CI runners (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 1000;
+
+/**
  * The RunView stand-in: each call returns the next entry of `queue` when there is one, else `mockResults`; tests read
  * the `lastParams` (and every call's params in `calls`) the service passed.
  */
@@ -813,7 +820,7 @@ describe('FeatureValueCacheService', () => {
         it('rejects long digit strings with trailing non-numeric characters without polynomial backtracking', () => {
             const start = Date.now();
             const result = T('1'.repeat(5000) + 'a', 'numeric');
-            expect(Date.now() - start).toBeLessThan(100);
+            expect(Date.now() - start).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
             expect(result.ValueNumeric).toBeNull();
             expect(result.ValueText).toBe('1'.repeat(5000) + 'a');
         });

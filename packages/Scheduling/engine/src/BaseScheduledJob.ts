@@ -4,9 +4,14 @@
  */
 
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, ValidationResult, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { ScheduledJobResult, ScheduledJobConfiguration, NotificationContent } from '@memberjunction/scheduling-base-types';
 import type { Observable } from 'rxjs';
+
+interface GlobalUserCacheLookup {
+    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
 
 /**
  * Context passed to job execution
@@ -236,5 +241,47 @@ export abstract class BaseScheduledJob {
      */
     protected logError(message: string, error?: any): void {
         LogError(`[${this.constructor.name}] ${message}`, undefined, error);
+    }
+
+    /**
+     * Resolves the schedule owner's `UserInfo` when `schedule.OwnerUserID` is specified,
+     * ensuring scheduled runs execute under the schedule owner's security context rather
+     * than the background scheduler daemon user, and failing closed when the owner is
+     * missing or inactive.
+     */
+    protected async resolveScheduleOwnerUser(
+        schedule: { ID?: string; Name?: string; OwnerUserID?: string | null },
+        fallbackContextUser: UserInfo
+    ): Promise<UserInfo> {
+        const ownerUserID = schedule.OwnerUserID?.trim();
+        if (!ownerUserID) {
+            return fallbackContextUser;
+        }
+        if (fallbackContextUser?.ID && UUIDsEqual(fallbackContextUser.ID, ownerUserID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new Error(
+                    `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+                );
+            }
+            return fallbackContextUser;
+        }
+        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
+        if (!userCache || typeof userCache.FindUser !== 'function') {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": UserCache is unavailable to resolve owner user ${ownerUserID}.`
+            );
+        }
+        const ownerUser = await userCache.FindUser({ ID: ownerUserID });
+        if (!ownerUser) {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
+            );
+        }
+        if (ownerUser.IsActive === false) {
+            throw new Error(
+                `Cannot execute scheduled job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+            );
+        }
+        return ownerUser;
     }
 }

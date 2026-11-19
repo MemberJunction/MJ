@@ -409,6 +409,11 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             padding: 10px 0 2px;
             border-top: 1px solid var(--mj-border-subtle);
         }
+        /* When no model/voice rows sit between the list and record row, the list's bottom border already divides them. */
+        .mj-voice-picker__list + .mj-voice-picker__record-row {
+            margin-top: 0;
+            border-top: none;
+        }
         .mj-voice-picker__record-label {
             display: flex; align-items: center; gap: 8px;
             font-size: 12px; color: var(--mj-text-secondary);
