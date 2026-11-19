@@ -2,13 +2,13 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "R1 -> S7.3",
-    "Description": "Gate G5.1 (owner PR 4, phase 5, dataset R1, criterion S7.3): scoring the R1 model on a copy table with DistanceZ renamed is refused with an error naming the scope entity and writes 0 rows, 1 of 1 (FM-15; today the value is read from the training table). The check fills pstruth.Scn_R1Copy with R1's rows (DistanceZ renamed DistanceZRenamed), creates a test scoring binding of the published R1 unit model on the copy entity and scores 25 of its records through Score Record Set: check 3 must refuse scope-entity-mismatch naming the copy entity before any row is read, with the run row stored refused, Written 0, and no Feature Value for the binding. No scope ever maps onto another entity (the Score Record Set entityMapping input is removed), so a copy's keys are never scored from the training table.",
+    "Description": "Gate G5.1 (owner PR 4, phase 5, dataset R1, criterion S7.3): scoring the R1 model on a copy table with DistanceZ renamed is refused with an error naming the scope entity and writes 0 rows, 1 of 1 (FM-15; today the value is read from the training table). The check fills pstruth.Scn_R1Copy with R1's rows (DistanceZ renamed DistanceZRenamed) and shuts both doors to it: (a) a scoring binding of the published R1 unit model on the copy entity is refused at save naming the copy entity, with no binding row left (D4-168: a binding's target is the entity its pipeline's models score); (b) a Score Record Set call of the model without a binding, scoped over 25 of the copy's records, is refused scope-entity-mismatch naming the copy entity before any row is read, its run row stored refused with Written 0 and no Feature Value. No scope maps onto another entity (the entityMapping input is removed, D4-163), so a copy's keys are never scored from the training table.",
     "Status": "Active",
     "Tags": "[\"gate\", \"G5.1\", \"owner:PR4\", \"phase:5\", \"dataset:R1\", \"criterion:S7.3\"]",
     "InputDefinition": {},
     "MaxExecutionTimeMS": 1800000,
     "ExpectedOutcomes": {
-      "summary": "The R1 model on the renamed copy is refused scope-entity-mismatch naming the copy entity, 0 rows written, 1 of 1."
+      "summary": "A binding of the R1 model on the renamed copy is refused at save, and a no-binding scoring call over the copy is refused scope-entity-mismatch naming the copy entity with 0 rows written, 1 of 1."
     },
     "Configuration": {
       "tier": "mutation",

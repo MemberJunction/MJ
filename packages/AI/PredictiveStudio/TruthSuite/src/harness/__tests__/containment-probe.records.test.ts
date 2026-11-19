@@ -4,7 +4,7 @@
  * real lifecycle gate, so the records the probe reads are the ones the gate writes.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { TrustVerdicts, type Actor } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, TrustVerdicts, type Actor, type OutcomeModelLike, type RunDetailLike } from '@memberjunction/predictive-studio-core';
 
 import { GateTestStore, GateWorld, FakeClock, type Cell, type WorldModel } from '../../../../Engine/src/__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../../../Engine/src/__tests__/fakes/scoring-action-fakes';
@@ -142,5 +142,62 @@ describe('ContainmentProbe.ReadRefusalKinds', () => {
     store.Insert('MJ: ML Model Publish Records', { ID: '6A1D2E3F-0000-4000-8000-00000000F002', TrainingRunID: run.ID, ModelID: null, Kind: 'refusal', Purpose: 'evaluate', Reason: 'r', Refusal: 'not json' });
     store.Insert('MJ: ML Model Publish Records', { ID: '6A1D2E3F-0000-4000-8000-00000000F003', TrainingRunID: run.ID, ModelID: null, Kind: 'refusal', Purpose: 'evaluate', Reason: 'r', Refusal: '{}' });
     expect(await ContainmentProbe.ReadRefusalKinds(run.ID, reader)).toEqual([]);
+  });
+});
+
+describe('ContainmentProbe.TopDriverRows (D4-167)', () => {
+  const RUN_1 = '6A1D2E3F-0000-4000-8000-00000000A101';
+  const RUN_2 = '6A1D2E3F-0000-4000-8000-00000000A102';
+  const RUN_OTHER = '6A1D2E3F-0000-4000-8000-00000000A103';
+  const MODEL = '6A1D2E3F-0000-4000-8000-00000000A201';
+  const OTHER_MODEL = '6A1D2E3F-0000-4000-8000-00000000A202';
+  const model: OutcomeModelLike = { Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null };
+  const label = AtRiskRules.HumanizeFeatureName('AutoRenew');
+  const inverted = AtRiskRules.BuildAtRiskOptions(model, null).InvertedRisk === true;
+
+  /** A Feature Value's `ValueJSON` as the Engine writes a classification row (`ModelValueRows.FromScoredRow`). */
+  const valueJson = (drivers: ReadonlyArray<readonly [string, number]>): string => JSON.stringify({
+    Probabilities: { '0': 0.3, '1': 0.7 },
+    Drivers: drivers.map(([c, v]) => ({ sourceColumn: c, contribution: v, effect: v > 0 ? 'raises-adverse' : 'lowers-adverse' })),
+  });
+  const featureValue = (id: string, recordId: string, runId: string, modelId: string, role: 'Champion' | 'Challenger', drivers: ReadonlyArray<readonly [string, number]>): Record<string, string | number | null> => ({
+    ID: id, RecordID: recordId, MLScoringRunID: runId, MLModelID: modelId, Source: 'Model', Role: role, ValueNumeric: 0.3, ValueText: '0', ValueJSON: valueJson(drivers),
+  });
+  /** A bound record's Process Run Detail: its batch's scoring run and score, no drivers (`MLBoundRecordPayload`). */
+  const boundDetail = (recordId: string, runId: string): RunDetailLike => ({
+    RecordID: recordId, ResultPayload: JSON.stringify({ scoringRunId: runId, modelId: MODEL, modelVersion: 1, inTraining: false, scoredAt: '2026-11-19T00:00:00.000Z', score: 0.7, class: '1', adverseProbability: 0.3 }),
+  });
+
+  beforeEach(() => {
+    store.Insert('MJ: ML Scoring Runs', { ID: RUN_1, ModelID: MODEL, Status: 'completed' });
+    store.Insert('MJ: ML Scoring Runs', { ID: RUN_2, ModelID: MODEL, Status: 'completed' });
+    store.Insert('MJ: ML Scoring Runs', { ID: RUN_OTHER, ModelID: MODEL, Status: 'completed' });
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F101', 'rec-a', RUN_1, MODEL, 'Champion', [['AutoRenew', -0.4], ['Tenure', 0.1]]));
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F102', 'rec-b', RUN_2, MODEL, 'Champion', [['AutoRenew', 0.5]]));
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F103', 'rec-c', RUN_2, MODEL, 'Champion', [['Tenure', 0.9], ['AutoRenew', 0.2]]));
+    // Not the run's champion: a challenger row, a row of another model, a row of a run the details do not name.
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F104', 'rec-a', RUN_1, MODEL, 'Challenger', [['AutoRenew', 0.9]]));
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F105', 'rec-d', RUN_1, OTHER_MODEL, 'Champion', [['AutoRenew', 0.9]]));
+    store.Insert('MJ: Feature Values', featureValue('6A1D2E3F-0000-4000-8000-00000000F106', 'rec-e', RUN_OTHER, MODEL, 'Champion', [['AutoRenew', 0.9]]));
+  });
+
+  it("finds a bound run's top drivers through its runs' Champion Model Feature Values, not its Process Run Details", async () => {
+    const details = [boundDetail('rec-a', RUN_1), boundDetail('rec-b', RUN_2), boundDetail('rec-c', RUN_2)];
+    const rows = await ContainmentProbe.TopDriverRows(details, label, model, reader);
+    expect(rows).toEqual([
+      { RecordID: 'rec-a', RaisesRisk: AtRiskRules.DriverRaisesRisk(-0.4, inverted) },
+      { RecordID: 'rec-b', RaisesRisk: AtRiskRules.DriverRaisesRisk(0.5, inverted) },
+    ]);
+  });
+
+  it('an unbound run still reads the drivers its Process Run Details carry, with the same result for the same contributions', async () => {
+    const unbound = (recordId: string, drivers: ReadonlyArray<readonly [string, number]>): RunDetailLike => ({
+      RecordID: recordId, ResultPayload: JSON.stringify({ modelId: MODEL, score: 0.7, class: '1', drivers: drivers.map(([feature, value]) => ({ feature, value })) }),
+    });
+    const rows = await ContainmentProbe.TopDriverRows([unbound('rec-a', [['AutoRenew', -0.4], ['Tenure', 0.1]]), unbound('rec-b', [['AutoRenew', 0.5]]), unbound('rec-c', [['Tenure', 0.9]])], label, model, reader);
+    expect(rows).toEqual([
+      { RecordID: 'rec-a', RaisesRisk: AtRiskRules.DriverRaisesRisk(-0.4, inverted) },
+      { RecordID: 'rec-b', RaisesRisk: AtRiskRules.DriverRaisesRisk(0.5, inverted) },
+    ]);
   });
 });

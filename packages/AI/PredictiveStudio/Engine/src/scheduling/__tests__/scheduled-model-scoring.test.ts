@@ -185,9 +185,9 @@ function setup(
   return { opts, rp, binding };
 }
 
-// ----- cadenceToCron (pure) ----------------------------------------------------
+// ----- CadenceToCron (pure) ----------------------------------------------------
 
-describe('cadenceToCron', () => {
+describe('CadenceToCron', () => {
   it('defaults to Monthly (0 0 1 * *) when undefined', () => {
     expect(CadenceToCron(undefined)).toBe('0 0 1 * *');
     expect(CADENCE_CRON.Monthly).toBe('0 0 1 * *');
@@ -205,9 +205,9 @@ describe('cadenceToCron', () => {
   });
 });
 
-// ----- createScheduledModelScoring — happy path --------------------------------
+// ----- CreateScheduledModelScoring — happy path --------------------------------
 
-describe('createScheduledModelScoring — assembled Record Process', () => {
+describe('CreateScheduledModelScoring — assembled Record Process', () => {
   it('sets Active status, ML Model work type, schedule, and resolves the entity id', async () => {
     const { opts, rp } = setup();
     const result = await CreateScheduledModelScoring(opts);
@@ -285,7 +285,7 @@ describe('createScheduledModelScoring — assembled Record Process', () => {
 
 // ----- scoring binding (lineage) -----------------------------------------------
 
-describe('createScheduledModelScoring — scoring binding (lineage row)', () => {
+describe('CreateScheduledModelScoring — scoring binding (lineage row)', () => {
   it('creates an Active binding of the model\'s pipeline: feature name, view authorization, record process, column and source, Mode=Scheduled', async () => {
     const { opts, rp, binding } = setup();
     const result = await CreateScheduledModelScoring(opts);
@@ -320,7 +320,7 @@ describe('createScheduledModelScoring — scoring binding (lineage row)', () => 
     // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
     expect(rp.SaveCalled).toBe(true);
     expect(binding.SaveCalled).toBe(true);
-    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining(`ScoringBindings.Upsert: failed to save scoring binding "Renewal" of pipeline 'pipe-1': binding duplicate key`), expect.stringContaining("createScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed for model 'model-1'")]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining(`ScoringBindings.Upsert: failed to save scoring binding "Renewal" of pipeline 'pipe-1': binding duplicate key`), expect.stringContaining("CreateScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed for model 'model-1'")]);
   });
 
   it('takes the feature name, view authorization and class copy source from the options', async () => {
@@ -341,13 +341,13 @@ describe('createScheduledModelScoring — scoring binding (lineage row)', () => 
     const noSeed: IMetadataProvider = Object.assign(Object.create(opts.provider), { Authorizations: [] });
     await expect(CreateScheduledModelScoring({ ...opts, provider: noSeed })).rejects.toThrow(/no view authorization was given and the 'View Model Predictions' authorization is not in the metadata/);
     expect(binding.SaveCalled).toBe(false);
-    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("createScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed")]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("CreateScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed")]);
   });
 });
 
 // ----- generic output (no write-back column) -----------------------------------
 
-describe('createScheduledModelScoring — generic output (no outputField)', () => {
+describe('CreateScheduledModelScoring — generic output (no outputField)', () => {
   it('omits OutputMapping and creates a binding with no column, keeping the RP otherwise intact', async () => {
     const { opts, rp, binding } = setup({ outputField: undefined });
     const result = await CreateScheduledModelScoring(opts);
@@ -378,7 +378,7 @@ describe('createScheduledModelScoring — generic output (no outputField)', () =
 
 // ----- scope mapping -----------------------------------------------------------
 
-describe('createScheduledModelScoring — scope → ScopeType', () => {
+describe('CreateScheduledModelScoring — scope → ScopeType', () => {
   it('maps a filter scope to ScopeType=Filter + ScopeFilter', async () => {
     const { opts, rp } = setup({ scope: { filter: "RenewalDue=1" } });
     await CreateScheduledModelScoring(opts);
@@ -415,7 +415,7 @@ describe('createScheduledModelScoring — scope → ScopeType', () => {
 
 // ----- validation --------------------------------------------------------------
 
-describe('createScheduledModelScoring — validation', () => {
+describe('CreateScheduledModelScoring — validation', () => {
   it('throws when modelId is missing', async () => {
     const { opts } = setup({ modelId: '' });
     await expect(CreateScheduledModelScoring(opts)).rejects.toThrow(/`modelId` is required/);

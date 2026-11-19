@@ -448,7 +448,7 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 
 ### 6.4 Single, batch, on-demand, scheduled
 
-The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
+The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`ScoringBindings.Upsert`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
 
 ### 6.5 Where predictions go — the four storage paths
 
@@ -650,7 +650,7 @@ For the agent / workflow / low-code boundary, six capabilities have thin Actions
 | Score Record Set | `PredictiveStudioScoreRecordSetAction` | `ProductionScoreRecordSetRunner` → `MLModelInferenceProcessor` |
 | Run Experiment Session | `PredictiveStudioRunExperimentAction` | `ExperimentOrchestrator.runSession` |
 | Promote ML Model | `PredictiveStudioPromoteModelAction` | `ProductionModelPromotionGate` |
-| Schedule Model Scoring | `PredictiveStudioScheduleModelScoringAction` | `createScheduledModelScoring` (§15.6) |
+| Schedule Model Scoring | `PredictiveStudioScheduleModelScoringAction` | `CreateScheduledModelScoring` (§15.6) |
 | Migrate Pipelines to Prediction Units and Evaluation Protocols | `PredictiveStudioMigratePipelinesAction` | `PipelineMigration.MigratePipelines` |
 
 **Train ML Model** takes `PipelineID` only. A supplied `MaxRows` is refused by name (`TRAINING_FAILED`: the row cap is a retired input). Its outputs are `ModelID` (null when no model ships), `HoldoutMetrics`, `LeakageFlagged`, `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID`; a run whose decision ships no model succeeds with its stored reason as the message.
@@ -1091,7 +1091,7 @@ if (utilities.ml) {
 
 **What it is.** The end-to-end composition Phase 2 builds toward: *"build a model, write the renewal probability back into the member record, and re-score it on the 1st of every month"* — as a **single call**, with **no new scheduling, dispatch, or write-back code**. Everything underneath already exists (PS2-1 + the scheduled-job machinery); the helper just assembles one `MJ: Record Processes` row.
 
-**Key entry point.** `createScheduledModelScoring(opts: ScheduleModelScoringOptions): Promise<MJRecordProcessEntity>` (`Engine/src/scheduling/scheduled-model-scoring.ts`). Required quartet: `modelId`, `targetEntityName`, `outputField`, and exactly one `scope` selector (`filter` | `viewId` | `listId`); sensible defaults otherwise (`'Monthly'` cadence = `0 0 1 * *`, `ID` primary key, numeric `'score'`, UTC). It validates, maps the `ScoringCadence` to a cron (`cadenceToCron`), and populates the row:
+**Key entry point.** `CreateScheduledModelScoring(opts: ScheduleModelScoringOptions): Promise<ScheduledModelScoringResult>` (`Engine/src/scheduling/scheduled-model-scoring.ts`). Required quartet: `modelId`, `targetEntityName`, `outputField`, and exactly one `scope` selector (`filter` | `viewId` | `listId`); sensible defaults otherwise (`'Monthly'` cadence = `0 0 1 * *`, `ID` primary key, numeric `'score'`, UTC). It validates, maps the `ScoringCadence` to a cron (`CadenceToCron`), and populates the row:
 
 - `WorkType='ML Model'` — set via `rp.Set('WorkType', 'ML Model')`, the **documented legitimate exception** to the no-`.Set()` rule: the CodeGen'd `WorkType` union (`'Action' | 'Agent' | 'FieldRules' | 'Infer'`) cannot represent a runtime-registered extension work type. (Same exception PS2-1's path uses.)
 - `Configuration = { modelId, primaryKeyField }`, `OutputMapping = { fields: { <outputField>: '$.score' | '$.class' } }`.
@@ -1104,7 +1104,7 @@ sequenceDiagram
     actor User
     participant Agent as Model Dev Agent
     participant Train as TrainingEngine
-    participant Helper as createScheduledModelScoring
+    participant Helper as CreateScheduledModelScoring
     participant RP as MJ: Record Processes
     participant Job as Owned MJ: Scheduled Jobs
     participant Sched as SchedulingEngine
@@ -1114,7 +1114,7 @@ sequenceDiagram
     User->>Agent: "predict renewal & re-score monthly"
     Agent->>Train: trainModel(pipeline)
     Train-->>Agent: published MJ: ML Models row
-    Agent->>Helper: createScheduledModelScoring({ modelId, targetEntity, outputField, scope, cadence:'Monthly' })
+    Agent->>Helper: CreateScheduledModelScoring({ modelId, targetEntity, outputField, scope, cadence:'Monthly' })
     Helper->>RP: save row (WorkType='ML Model', ScheduleEnabled, cron='0 0 1 * *', OutputMapping)
     RP->>Job: Save → reconcileScheduledJob (auto-creates owned job)
     loop 1st of every month
@@ -1123,7 +1123,7 @@ sequenceDiagram
     end
 ```
 
-**Proven live by** `ps-inproc-scheduled-scoring.ts` — one `createScheduledModelScoring(...)` call, then it verifies the owned Scheduled Job the scheduler *would* dispatch and runs the Record Process now via `RecordProcessExecutor.RunByID` (the same path the job driver uses), asserting the write-back landed.
+**Proven live by** `ps-inproc-scheduled-scoring.ts` — one `CreateScheduledModelScoring(...)` call, then it verifies the owned Scheduled Job the scheduler *would* dispatch and runs the Record Process now via `RecordProcessExecutor.RunByID` (the same path the job driver uses), asserting the write-back landed.
 
 ### 15.7 Integration-test proofs
 
@@ -1134,7 +1134,7 @@ Each Phase 2 capability ships with an MJServer integration script that exercises
 | PS2-1 — saved Record Process scoring | `ps-live-recordprocess-scoring.ts` | live / GraphQL | a saved `WorkType='ML Model'` Record Process scores a view + writes columns, via the **startup-registered** scorer |
 | PS2-2 — per-model Action on Promote | `ps-live-modelaction-generation.ts` | live / GraphQL | promoting to Published generates `Score with <pipeline> v<n>` with `ModelID` `DefaultValue` baked in |
 | PS2-3 — scored-query enrichment | `ps-inproc-scored-query.ts` | in-process | `RunQuery` + `Enrichment` appends the model's prediction column |
-| PS2-6 — scheduled model scoring | `ps-inproc-scheduled-scoring.ts` | in-process | one `createScheduledModelScoring(...)` call → owned Scheduled Job + a real scored write-back |
+| PS2-6 — scheduled model scoring | `ps-inproc-scheduled-scoring.ts` | in-process | one `CreateScheduledModelScoring(...)` call → owned Scheduled Job + a real scored write-back |
 
 > PS2-5 (catalog awareness for agents) is delivered *through* PS2-2: every published model is a discoverable Action, which ActionSmith / CodeSmith see for free — no separate code.
 
@@ -1170,7 +1170,7 @@ flowchart LR
     User["Business user<br/>(Home → 'Ask the agent')"]
     Agent["Model Development Agent<br/>(collaborate → approve → train → promote)"]
     Offer{{"Offer to operationalize<br/>'score everyone + refresh monthly?'"}}
-    Sched["createScheduledModelScoring()<br/>= Record Process (WorkType='ML Model', monthly cron)<br/>+ MJ: ML Model Scoring Binding"]
+    Sched["CreateScheduledModelScoring()<br/>= Record Process (WorkType='ML Model', monthly cron)<br/>+ MJ: ML Model Scoring Binding"]
     Job["Owned MJ: Scheduled Jobs<br/>→ SchedulingEngine (1st of month)"]
     WB["RecordProcessExecutor<br/>score + write prediction back"]
     Rec[("Entity record<br/>(prediction column)")]
@@ -1202,7 +1202,7 @@ The agent (§12) now closes the loop. Its prompt (`metadata/prompts/templates/mo
 
 It offers clear `suggestedResponses` (*Yes, score & schedule monthly* / *Just score once now* / *Not yet*). On a **yes**, it calls the **Schedule Model Scoring** action — now in its `MJ: AI Agent Actions` toolkit (`metadata/agents/.model-development-agent.json`) and fully metadata-synced (`metadata/actions/predictive-studio/.predictive-studio-actions.json`: `ModelID`, `TargetEntityName`, `OutputField`, `ScopeFilter`, optional `Cadence` (default `Monthly`) / `PrimaryKeyField` / `ValueKind`; result codes `SUCCESS` / `VALIDATION_ERROR` / `SCHEDULE_FAILED`). It proposes a column name if the user hasn't named one, confirms the population (`ScopeFilter`), then reports back in plain English what it scheduled. Keeps it **generic** — "this works for any entity and any prediction target, not just members or renewal."
 
-The Action wraps `createScheduledModelScoring` (§15.6); the helper now **also records the scoring binding** (§16.6), which is the seam that makes the next two surfaces light up.
+The Action wraps `CreateScheduledModelScoring` (§15.6); the helper now **also records the scoring binding** (§16.6), which is the seam that makes the next two surfaces light up.
 
 ### 16.3 The generic model-prediction form panel (the risk card)
 
@@ -1237,7 +1237,7 @@ Each mutation force-refreshes the engine (`Config(true, …)`) and reports succe
 
 ### 16.6 The scoring-binding lineage (the seam that lights it all up)
 
-Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationalizing must **record a binding**, not just create a scheduled Record Process. `createScheduledModelScoring` (`packages/AI/PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts`) now, after saving the Record Process, calls `upsertScoringBinding(...)` to create/update the binding row with `MLModelID`, `RecordProcessID`, `TargetEntityID`, `TargetColumn`, and `Mode='Scheduled'`. That binding is the lineage record — *"this model is in production, scoring these records into this column on this schedule"* — and the seam that connects the headless scoring loop to the human-facing surfaces. Without it the scheduled job would run silently and both surfaces would stay dark.
+Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationalizing must **record a binding**, not just create a scheduled Record Process. `CreateScheduledModelScoring` (`packages/AI/PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts`) now, after saving the Record Process, calls `ScoringBindings.Upsert(...)` to create/update the binding row with `MLTrainingPipelineID`, `FeatureName`, `RecordProcessID`, `TargetEntityID`, `TargetColumn`, and `Mode='Scheduled'`. That binding is the lineage record — *"this model is in production, scoring these records into this column on this schedule"* — and the seam that connects the headless scoring loop to the human-facing surfaces. Without it the scheduled job would run silently and both surfaces would stay dark.
 
 ### 16.7 The enablers
 
@@ -1252,7 +1252,7 @@ Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationaliz
 | Generic risk card (`'*'` form panel) | `core-entity-forms/.../panels/model-predictions/` · `Generic/base-forms/.../panel-slot/` (`'*'` wildcard) | binding-driven render (lights up via the binding from `ps-inproc-scheduled-scoring.ts`) |
 | Models in Production section | `dashboards/.../PredictiveStudio/components/ps-production.component.*` · `resources/ps-production-resource.component.ts` · `production-distribution.ts` | reads bindings + `MJ: Process Runs` (live) |
 | De-mocked Studio + ops wired | `dashboards/.../PredictiveStudio/predictive-studio.view-models.ts` (+ Registry / Experiments components) | `PredictiveStudioPromoteModelOperation` / `…ControlExperimentSessionOperation` |
-| Scoring-binding on operationalize | `PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts` (`upsertScoringBinding`) | `ps-inproc-scheduled-scoring.ts` (binding asserted) |
+| Scoring-binding on operationalize | `PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts` (`ScoringBindings.Upsert`) | `ps-inproc-scheduled-scoring.ts` (binding asserted) |
 | `'ML Model'` WorkType dropdown | `migrations/v5/V202606280215__…RecordProcess_WorkType_AddMLModel.sql` (CHECK drop+add) | (needs CodeGen) |
 | Enrichment over GraphQL | `MJServer/src/resolvers/QueryResolver.ts` · `GraphQLDataProvider` | `ps-inproc-scored-query.ts` |
 

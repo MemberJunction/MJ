@@ -1462,7 +1462,7 @@
   },
   {
     "_comments": [
-      "Schedule Model Scoring — thin Action boundary over the PS2-6 createScheduledModelScoring helper.",
+      "Schedule Model Scoring — thin Action boundary over the PS2-6 CreateScheduledModelScoring helper.",
       "Schedules a trained ML Model to score a record scope on a recurring cadence. OutputField is OPTIONAL:",
       "set it to write the prediction into that column (+ a scoring binding); omit for generic output (predictions",
       "in the process run history only). Validates ModelID + TargetEntityName + exactly one scope selector,",

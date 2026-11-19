@@ -30,7 +30,7 @@ export const PsGateR1S71Checks: NamedCheck[] = [
       PsGate.Assert({
         Passed: refused === 1,
         Measured: { refused, refusalCode: swapped.RefusalCode, namesBothHashes: namesBoth, scored: swapped.Total, registered, swappedIn },
-        Detail: `refused by SHA-256 mismatch, ${refused} of 1: the swapped artifact ${swapped.Ok ? `scored ${swapped.Total} of ${r1.RowCount} rows` : `was refused ${swapped.RefusalCode ?? 'without a refusal code'}`}`
+        Detail: `refused by SHA-256 mismatch, ${refused} of 1: the swapped artifact ${swapped.Ok ? `scored ${swapped.Total} of ${r1.RowCount} rows` : `was refused ${swapped.RefusalCode || 'without a refusal code'}`}`
           + `${swapped.Ok ? '' : `, ${namesBoth ? 'naming' : 'not naming'} both hashes`}`,
       });
     },

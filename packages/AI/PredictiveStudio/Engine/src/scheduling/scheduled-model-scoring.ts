@@ -141,7 +141,7 @@ export const CADENCE_CRON: Readonly<Record<'Monthly' | 'Weekly' | 'Daily', strin
 };
 
 /** The helper name used to prefix this module's errors + binding-failure logs. */
-const HELPER_NAME = 'createScheduledModelScoring';
+const HELPER_NAME = 'CreateScheduledModelScoring';
 
 /**
  * The result of {@link CreateScheduledModelScoring}: the saved scheduled Record

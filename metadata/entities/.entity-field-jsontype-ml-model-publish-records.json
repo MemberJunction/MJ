@@ -24,10 +24,6 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Initiator"
-          },
-          "sync": {
-            "lastModified": "2026-11-11T00:24:47.188Z",
-            "checksum": "f69d839c042c4e0f27736b8c1b4dc4ed173b2a7b634c3c56f5b7f36e019ba993"
           }
         },
         {
@@ -41,10 +37,6 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=GateDecision"
-          },
-          "sync": {
-            "lastModified": "2026-11-11T00:24:47.210Z",
-            "checksum": "ba546fb588705890c12b29e9122ab5a3b261355f141664b1a5a91269e6b383e8"
           }
         },
         {
@@ -58,10 +50,6 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Evidence"
-          },
-          "sync": {
-            "lastModified": "2026-11-11T00:24:47.223Z",
-            "checksum": "215170433e17b3bbbc1dc67d831410bd3461d37907e4f3bcbbbe496adc6c5c64"
           }
         },
         {
@@ -75,10 +63,6 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Refusal"
-          },
-          "sync": {
-            "lastModified": "2026-11-11T00:24:47.236Z",
-            "checksum": "1c001d9d25e53222523fa06d7e89aaf2740bd20a5bded86d258bef86e71996f4"
           }
         }
       ]

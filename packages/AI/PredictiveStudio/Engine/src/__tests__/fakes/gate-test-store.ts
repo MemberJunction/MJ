@@ -663,14 +663,16 @@ export class GateTestStore {
 
 /**
  * The store's provider: the unit-testing `DatabaseProviderStub` (a real `DatabaseProviderBase`, so no cast), with the
- * members the registry calls answered from the store: entity transactions, `RunQuery`, `RunView` and `GetEntityObject`
- * (the last two through `vi.fn`, as the repo's other stub providers do, since their generic results are field bags).
+ * members the registry calls answered from the store: entity transactions, `RunQuery`, `RunView`, `RunViews` and `GetEntityObject`
+ * (`RunView`, `RunViews` and `GetEntityObject` through `vi.fn`, as the repo's other stub providers do, since their generic results are
+ * field bags).
  */
 export class GateTestProvider extends DatabaseProviderStub {
   constructor(private readonly store: GateTestStore) {
     super();
     this.RunView = vi.fn().mockImplementation(async (params: RunViewParams, contextUser?: UserInfo) => store.RunViewRows(params, contextUser));
     this.GetEntityObject = vi.fn().mockImplementation(async (entityName: string, contextUser?: UserInfo) => store.NewRecordOf(entityName, contextUser));
+    this.RunViews = vi.fn().mockImplementation(async (params: RunViewParams[], contextUser?: UserInfo) => params.map((p) => store.RunViewRows(p, contextUser)));
   }
 
   public override get SupportsEntityTransactions(): boolean {

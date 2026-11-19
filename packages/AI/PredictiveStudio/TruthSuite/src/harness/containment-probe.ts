@@ -1,14 +1,15 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import type { MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, IndexByUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import type { MJFeatureValueEntity, MJMLModelPublishRecordEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { PublishRecords, StoredPublishInputsLoader, StoredRowReads, type RegistryContext } from '@memberjunction/predictive-studio';
 import {
   AtRiskRules,
   EvaluationLineage,
   JsonParse,
   PublishRules,
+  type JsonValue,
   RegistrySchemas,
   type AtRiskRow,
   type GateDecision,
@@ -66,6 +67,11 @@ export interface ProbeReader {
   /** The user every read runs as. */
   readonly User: UserInfo;
 }
+
+/** A scoring run's model, for joining its Feature Values (D4-167). */
+type ScoringRunModelRow = Pick<MJMLScoringRunEntity, 'ID' | 'ModelID'>;
+/** A `Champion` `Model` Feature Value's columns the driver probe reads (D4-167). */
+type ChampionValueRow = Pick<MJFeatureValueEntity, 'RecordID' | 'MLScoringRunID' | 'MLModelID' | 'ValueJSON'>;
 
 /** How the gate bodies read containment behaviour. Static members only: the class is the one seam. */
 export class ContainmentProbe {
@@ -209,13 +215,79 @@ export class ContainmentProbe {
 
   /**
    * The rows whose top per-record driver has `label`, each with whether that driver raises the displayed risk
-   * (`AtRiskRules.DriverRaisesRisk`, the rule the drawer's badge renders from).
+   * (`AtRiskRules.DriverRaisesRisk`, the rule the drawer's badge renders from). The drivers follow the store (D4-167):
+   * a bound run's Process Run Details carry only the record's scoring run and score, so its drivers are read from the
+   * `Champion` `Model` Feature Values of those scoring runs (one `RunViews`); an unbound run's details still carry them.
+   *
+   * @throws Error when the bound run's reads fail
    */
-  public static TopDriverRows(details: RunDetailLike[], label: string, model: OutcomeModelLike): TopDriverRow[] {
+  public static async TopDriverRows(details: RunDetailLike[], label: string, model: OutcomeModelLike, reader: ProbeReader): Promise<TopDriverRow[]> {
+    const runIds = ContainmentProbe.boundScoringRunIDs(details);
+    const options = AtRiskRules.BuildAtRiskOptions(model, null);
     const out: TopDriverRow[] = [];
-    for (const row of ContainmentProbe.resourceRows(details, model)) {
-      const top = row.Drivers?.[0];
-      if (top && top.Label === label) out.push({ RecordID: row.RecordID, RaisesRisk: top.Up });
+    if (runIds.length === 0) {
+      for (const row of ContainmentProbe.resourceRows(details, model)) {
+        const top = row.Drivers?.[0];
+        if (top && top.Label === label) out.push({ RecordID: row.RecordID, RaisesRisk: top.Up });
+      }
+      return out;
+    }
+    for (const value of await ContainmentProbe.championValuesOf(runIds, reader)) {
+      const top = AtRiskRules.ParseRowDrivers(ContainmentProbe.storedDrivers(value.ValueJSON), options.InvertedRisk === true)?.[0];
+      if (top && top.Label === label) out.push({ RecordID: value.RecordID, RaisesRisk: top.Up });
+    }
+    return out;
+  }
+
+  /** The scoring runs a bound run's details name (`MLBoundRecordPayload.scoringRunId`), each once; none for an unbound run. Pure. */
+  private static boundScoringRunIDs(details: RunDetailLike[]): string[] {
+    const ids = new Map<string, string>();
+    for (const d of details) {
+      const parsed = JsonParse.ParseJsonText(d.ResultPayload, 'ResultPayload');
+      if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) continue;
+      const runId = JsonParse.JsonString(parsed.Value, 'scoringRunId');
+      if (runId) ids.set(runId.toLowerCase(), runId);
+    }
+    return [...ids.values()];
+  }
+
+  /**
+   * The `Champion` `Model` Feature Values the scoring runs `runIds` wrote, each kept only when its model is its run's:
+   * the runs and the values in one `RunViews`, joined by run ID.
+   *
+   * @throws Error when either read fails
+   */
+  private static async championValuesOf(runIds: readonly string[], reader: ProbeReader): Promise<ChampionValueRow[]> {
+    const list = runIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const [runs, values] = await RunView.FromMetadataProvider(reader.Provider).RunViews<ScoringRunModelRow | ChampionValueRow>([
+      { EntityName: 'MJ: ML Scoring Runs', ExtraFilter: `ID IN (${list})`, Fields: ['ID', 'ModelID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
+      {
+        EntityName: 'MJ: Feature Values', ExtraFilter: `MLScoringRunID IN (${list}) AND Source='Model' AND Role='Champion'`,
+        Fields: ['RecordID', 'MLScoringRunID', 'MLModelID', 'ValueJSON'], OrderBy: 'RecordID ASC', ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true,
+      },
+    ], reader.User);
+    if (!runs.Success) throw new Error(`Reading the scoring runs of the bound run failed: ${runs.ErrorMessage || 'unknown error'}`);
+    if (!values.Success) throw new Error(`Reading the Feature Values of the bound run failed: ${values.ErrorMessage || 'unknown error'}`);
+    const byRun = IndexByUUID(runs.Results.filter((r): r is ScoringRunModelRow => 'ModelID' in r));
+    return values.Results.filter((v): v is ChampionValueRow => 'RecordID' in v).filter((v) => {
+      const run = v.MLScoringRunID ? byRun.Get(v.MLScoringRunID) : undefined;
+      return run !== undefined && UUIDsEqual(run.ModelID, v.MLModelID);
+    });
+  }
+
+  /**
+   * A `Model` row's `ValueJSON.Drivers` (`{ sourceColumn, contribution }`, the sidecar's per-row contributions in its
+   * order, `ModelValueRows`) in the details' driver shape (`{ feature, value }`), for `AtRiskRules.ParseRowDrivers`. Pure.
+   */
+  private static storedDrivers(valueJson: string | null): JsonValue[] {
+    const parsed = JsonParse.ParseJsonText(valueJson, 'ValueJSON');
+    if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return [];
+    const out: JsonValue[] = [];
+    for (const d of JsonParse.JsonArrayField(parsed.Value, 'Drivers') || []) {
+      if (!JsonParse.IsJsonObject(d)) continue;
+      const feature = JsonParse.JsonString(d, 'sourceColumn');
+      const value = JsonParse.JsonNumber(d, 'contribution');
+      if (feature !== null && value !== null) out.push({ feature, value });
     }
     return out;
   }

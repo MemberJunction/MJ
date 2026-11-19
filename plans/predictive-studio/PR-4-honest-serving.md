@@ -1497,7 +1497,7 @@ texts are unchanged.
 | G3.9 | `W9 → S9.5` | W9 | S9.5 | on W9-multiclass s42, the probability displayed for the named class equals the artifact's `predict_proba` column for that class on 20 of 20 sampled rows | — | — | M5 |
 | G3.10 | `C3 → S9.5` | C3 | S9.5 | `SemanticsCheck` passes for 3 of 3 classes (UI label, At-Risk sort and class list match the artifact's class order and polarity), and a binding that swaps the adverse class is refused, 1 of 1 | — | — | M4 |
 | G3.11 | `W1 → C1.2` | W1 | C1.2 | an agent tool call that writes a gate threshold, a margin, a leakage flag or the holdout policy is refused, 4 of 4 | — | — | M3 |
-| G5.1 | `R1 → S7.3` | R1 | S7.3 | scoring the R1 model on a copy table with `DistanceZ` renamed is refused with an error naming the scope entity and writes 0 rows, 1 of 1 (FM-15; today the value is read from the training table; D4-164) | the value is read from the training table | — | M5 |
+| G5.1 | `R1 → S7.3` | R1 | S7.3 | scoring the R1 model on a copy table with `DistanceZ` renamed is refused naming the scope entity and writes 0 rows: a binding on the copy is refused at save (D4-168) and a no-binding Score Record Set call over it is refused `scope-entity-mismatch`, 1 of 1 (FM-15; D4-164) | the value is read from the training table | — | M5 |
 | G5.2 | `W1 → S7.3 #2` | W1 | S7.3 | `/predict` with a renamed feature for a W1-signal s42 model returns 400 naming the feature, and a model with no stored schema is refused, 2 of 2 (T16(b)) | — | — | M5 |
 | G5.3 | `R1 → S7.4` | R1 | S7.4 | over 20 scoring calls on the R1 model, 20 of 20 create an `MJ: ML Scoring Runs` row, and 100% of written scores carry model ID, artifact hash, scoring-run ID and as-of date (FM-16; ProcessRun stays 25 → 25 today) | nothing is recorded | — | M5 |
 | G5.4 | `C1 → S7.4` | C1 | S7.4 | every score row from a scenario C1 scoring run carries the four lineage fields and each resolves to an existing record, 100% | — | — | M5 |
@@ -1548,7 +1548,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | G3.9 | `W9 -> S9.5` | `mutation` · `client` | Scoring | `ps-gate-w9-s9-5` | the displayed probability is read from the wrong column of the class vector (class order not the artifact's) |
 | G3.10 | `C3 -> S9.5` | `mutation` · `client` | Registry and Gate | `ps-gate-c3-s9-5` | an output binding that swaps the adverse class saves, or a surface ignores its binding |
 | G3.11 | `W1 -> C1.2` | `mutation` · `client` | Registry and Gate | `ps-gate-w1-c1-2` | an agent tool call writes a gate threshold, a margin, a leakage flag or the holdout policy |
-| G5.1 | `R1 -> S7.3` | `mutation` · `client` | Scoring | `ps-gate-r1-s7-3` | a renamed column is read from the training table by primary key and scored |
+| G5.1 | `R1 -> S7.3` | `mutation` · `client` | Scoring | `ps-gate-r1-s7-3` | a binding on a copy table saves, or a scoring call scoped over the copy is scored (the renamed column read from the training table by primary key)
 | G5.2 | `W1 -> S7.3 #2` | `mutation` · `client` | Scoring | `ps-gate-w1-s7-3-2` | `/predict` falls back to `output_columns` without a schema, or scores a renamed feature |
 | G5.3 | `R1 -> S7.4` | `mutation` · `client` | Scoring | `ps-gate-r1-s7-4` | a call leaves no `MJ: ML Scoring Runs` row, or a written score's lineage does not join to the run and model |
 | G5.4 | `C1 -> S7.4` | `mutation` · `client` | Scoring | `ps-gate-c1-s7-4` | a score row's lineage does not resolve (wrong model, run or as-of instant) |
@@ -1580,7 +1580,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G3.9:** index the probability vector by the class names in reverse sorted order instead of the artifact's `classOrder` (the sorted order equals W9's artifact order, so a plain sort is a no-op there; D4-162) → `ps-gate-w9-s9-5` matches fewer than 20 of 20 sampled rows (measured 2 of 20).
 **Mutation check G3.10:** remove the adverse-class comparison from Core's `SemanticsRules.CheckRow` (`semantics-rules.ts:147`, the label/adverse-class check; amended at M4's exit per the M4.2 review's finding 3 — `SemanticsChecker.Run` holds no such comparison) → `ps-gate-c3-s9-5` fails "swapped binding refused, 1 of 1".
 **Mutation check G3.11:** drop the agent-actor refusal for the protocol's `margin` field → `ps-gate-w1-c1-2` counts 3 of 4 refused.
-**Mutation check G5.1:** skip check 3's `scope-entity-mismatch` refusal in `ScoringService.RunChecksBeforeAssembly` → `ps-gate-r1-s7-3` sees the copy scored (25 written, run completed) and no refusal (D4-164).
+**Mutation check G5.1:** skip check 3's `scope-entity-mismatch` refusal in `ScoringService.RunChecksBeforeAssembly` → `ps-gate-r1-s7-3`'s no-binding call over the copy is scored (25, run completed) and the gate counts 0 of 1 (D4-164, D4-168).
 **Mutation check G5.2:** restore the `/predict` fallback to `output_columns` when `feature_schema` is absent → `ps-gate-w1-s7-3-2` gets 200 instead of 400, 1 of 2.
 **Mutation check G5.3:** write `MLScoringRun.ArtifactSha256` as null on the Score Record Set path → `ps-gate-r1-s7-4`'s lineage join finds 0% of rows with the run's hash equal to the model's.
 **Mutation check G5.4:** write `EffectiveAsOf` as the write time instead of the run's normalised as-of instant → `ps-gate-c1-s7-4` finds `MLScoringRun.AsOfDate` ≠ `EffectiveAsOf` on every row.
@@ -5997,23 +5997,23 @@ list), so M5's merge resolves both files.
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] (M5) branch check (D4-63, serial default): work continues on the PR branch after M4b's checkpoint; `git branch -vv`
+- [x] (M5) branch check (D4-63, serial default): work continues on the PR branch after M4b's checkpoint; `git branch -vv`
   shows `[origin/ps/pr-4-honest-serving]`. Only under D4-63's parallel option: `ps/pr-4-honest-serving--m5` created from
   the PR branch after M3's checkpoint, its upstream set in the M3 exit push (review minor m6), `git branch -vv` showing
   `[origin/ps/pr-4-honest-serving--m5]` (conventions §3, CLAUDE.md rule 3).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -6858,7 +6858,7 @@ milestone; counts, cells and claims go to §11.
 **Files:** Modify `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/scoring-service.adversarial.db.test.ts`
 (Task M5.1's file)
 
-- [ ] Step 1: On `MJ_PS_PR4_<agent>` with the real `ScoringService`, `FeatureValueCacheService`, `ArtifactRegistry` and
+- [x] Step 1: On `MJ_PS_PR4_<agent>` with the real `ScoringService`, `FeatureValueCacheService`, `ArtifactRegistry` and
   the sidecar: the cases the table names that Tasks M5.1–M5.10 did not write — an unverifiable artifact (object
   removed); pre-change bindings migrated on a scratch copy; a second publish of the pipeline landing between batch 1 and
   batch 2 (the run's rows all carry the model it resolved); two `Promise.all` runs of one binding and as-of date (one
@@ -6870,16 +6870,16 @@ milestone; counts, cells and claims go to §11.
   refuses `artifact-unverified`), scored on the run date through a binding and through its Record Process — `a serving pre-change model of a unitless pipeline
   scores through the transform-only assembly and writes its rows` (D4-61); plus a record whose
   `RecordID` is a 900-character CompositeKey (A-FV-VOLUME's warning 1945: its batch fails loudly, D4-09).
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db scoring-service'`
+- [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db scoring-service'`
   → every case as its cell says; counts measured at M5.
-- [ ] Step 3: The reviewer flips the M5 guards one at a time — each of checks 1–6; "any failed record fails the run";
+- [x] Step 3: The reviewer flips the M5 guards one at a time — each of checks 1–6; "any failed record fails the run";
   dry run writes 0; both `/predict` refusals (pytest); the newest-only copy rule; the human-value guard on the copy;
   `TargetColumnSource` validation; same-`asOf` replacement (`UQ_FeatureValue_ModelRow` dropped on a scratch copy);
   `CK_FeatureValue_SourceLineage`; the withdrawn-binding refusal; per-batch atomicity; the Champion filters — and names
   the failing case of Step 2, of the Engine and FeaturePipelines tests or of G5.1–G5.5/G3.9 for each.
-- [ ] Step 4: A claim the harness breaks is fixed at the invariant (one helper, a cross-surface test) and the harness
+- [x] Step 4: A claim the harness breaks is fixed at the invariant (one helper, a cross-surface test) and the harness
   re-run → 0 claims broken.
-- [ ] Step 5: Counts (cases, cells, claims broken) and each mutation's failing case written to §11.
+- [x] Step 5: Counts (cases, cells, claims broken) and each mutation's failing case written to §11.
 
 **Exit tests:**
 
@@ -6911,17 +6911,17 @@ milestone; counts, cells and claims go to §11.
 **Milestone exit, in order (design §6.5; M5 changes how existing surfaces read a binding but ships no new surface; the
 record panel and the binding editor are M5b's, whose browser walk is D-076's):**
 
-- [ ] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
+- [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
-- [ ] Task M5.12's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md` (PascalCase statics and
+- [x] Task M5.12's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] self-audit of every added and changed line against `reference/coding-standards.md` (PascalCase statics and
   public members, no `any`, derived unions, statics on owning classes, no SQL text in TypeScript, the provider passed
   in, D-067), findings fixed
-- [ ] tasks ticked (Task M5.11 ticked `not applicable` with the merge state when the condition is false)
-- [ ] §11 entry `### <date> — <agent> — M5` with the counts, the six `**Mutation output G…:**` lines, A-FV-AUTHZ,
+- [x] tasks ticked (Task M5.11 ticked `not applicable` with the merge state when the condition is false)
+- [x] §11 entry `### <date> — <agent> — M5` with the counts, the six `**Mutation output G…:**` lines, A-FV-AUTHZ,
   A-FV-VOLUME and A-FV-BINDINGS outcomes
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5` → exit 0, summary in the commit body
 - [ ] one checkpoint commit on the working branch, each path staged by name, the plan and `.changeset/ps-honest-serving.md` among them (under D4-63's parallel option only: on
@@ -10337,6 +10337,26 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `IMaintenanceLoader.LoadPipelineTargetEntity`. M5.12's review added four ScoringService cases no test had covered: a
   short scope read refused `truncated-read` (I1), an assembly refusal carried through check 4 (M1), the named "sidecar
   returned no prediction" failure (M2), and a create-only caller refused (M3); each mutation-proved.
+- **D4-167 · The driver probe follows the store** (controller ruling, M5 exit fix round). Since D4-153 a scoring process
+  always has a binding, so a Record Process run is bound and its Process Run Details carry `MLBoundRecordPayload` (the
+  batch's scoring run and the score, no drivers); the drivers live in the `Champion` `Model` Feature Value's `ValueJSON`
+  (`ModelValueRows`). `ContainmentProbe.TopDriverRows(details, label, model, reader)` reads a bound run's drivers from
+  the scoring runs its details name: one `RunViews` (`MJ: ML Scoring Runs` by ID, `MJ: Feature Values` by
+  `MLScoringRunID` with `Source = 'Model'` and `Role = 'Champion'`), joined with `IndexByUUID`, keeping a value only
+  when its model is its run's; the stored `{ sourceColumn, contribution }` items go through the same
+  `AtRiskRules.ParseRowDrivers` as the details' `{ feature, value }`. An unbound run's details still carry the drivers
+  (`ml-model-inference-processor.ts` `toPayload`), so that path is unchanged. The payload stays lean. G0.4 reads it;
+  G0.5 reads only scores, which the bound payload carries, and is unchanged. Tests:
+  `containment-probe.records.test.ts › TopDriverRows (D4-167)` (red against the details-only probe).
+- **D4-168 · A binding's target is the entity its pipeline's models score** (owner ruling 2026-11-19).
+  `MJMLModelScoringBindingEntityServer.ValidateAsync` refuses a binding whose `TargetEntityID` is not the scoring
+  entity: the row entity of the pipeline's Prediction Unit when it names one (`PredictionUnit.ParsePredictionUnitRow` +
+  `UnitRowEntityName`), else the pipeline's `TargetEntityID`; compared by entity ID; a unit that does not parse or
+  cannot be read fails the save naming the reason. Every creator is covered (`ScoringBindings.Upsert`, GraphQL,
+  metadata). Without it every scoring run of such a binding would be refused `scope-entity-mismatch`. Unit tests: a
+  grain unit, a child-row unit and a unitless pipeline each accept their own entity and refuse another, plus an
+  unparseable unit. G5.1 now shuts both doors to a copy table: the binding is refused at save, and the no-binding call
+  is refused `scope-entity-mismatch`; no other test or rig bound another entity.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10439,7 +10459,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Thirty-two flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start); OF4-30 is closed, so thirty-one remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Thirty-seven flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit); OF4-30 is closed, so thirty-six remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -10604,6 +10624,24 @@ default implemented:
   up PB7's first scripted reply, so Sage runs 3 prompts. PB18 fails because of PB7's pointer counts. **Default:**
   recorded; not PR 4's check.
 
+- **OF4-37 · The scoring-run recorder writes its six JSON columns as text** (M5.9 review M3, M5 exit). Moving
+  `scoring-run-recorder.ts` onto the typed `…Object` setters breaks 5 Engine tests: the unit fake
+  `GateTestProvider.GetEntityObject` returns a plain field bag, so a typed setter never reaches the raw column.
+  **Default:** recorded; the move waits for the fake to build real entity subclasses.
+- **OF4-38 · Score Record Set's `Scope` action param is cast, not parsed** (M5.6+M5.11 review Nit, M5 exit).
+  `score-record-set.action.ts` casts the untyped JSON param to `ScoreRecordSetScope`; a typed parse would validate each
+  selector's shape and refuse input that runs today. The operation's path is typed (its cast removed at the M5 exit).
+  **Default:** recorded.
+- **OF4-39 · The IT fixture's binding names `md.Authorizations[0]`** (M5.4 review M3). `predictive-studio.checks.ts`
+  builds its binding without `ScoringBindings.ResolveViewAuthorizationID`; every production creator uses the resolver.
+  Switching changes which authorization the IT binding names. **Default:** recorded.
+- **OF4-40 · `ParityCheck.Sample` does not run `CheckCallerHoldsBinding`** (M5.8 review Nit). The caller-scoped
+  `RunView` (the view gate after M5b) covers it. **Default:** owned by M6, which calls it with D4-157's job user holding
+  the authorization.
+- **OF4-41 · PSD1's teardown deletes tracked rows with direct SQL** (M5.6+M5.11 review M7, M5 exit self-audit A-4).
+  `predictive-shadow-drift.checks.ts` deletes Feature Values, ML Models and the rest by `DELETE`, which leaves their
+  Record Changes behind. PSD1 survives M6.8. **Default:** recorded.
+
 ## 10. PR description draft
 
 **Title:** feat(predictive-studio): honest serving — lifecycle gate, durable fingerprinted artifacts, sign-offs, scoring
@@ -10652,9 +10690,9 @@ are monitored on real outcomes.
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611170733__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->10<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->10<!-- /gen:checks -->
-- Head: <!-- gen:head -->a5c50d8950<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->16<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->16<!-- /gen:checks -->
+- Head: <!-- gen:head -->a0e30d4fb0<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -12276,12 +12314,90 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   161, root build 351/351 + 322/322, IT166 2/0/0, `check:guards`/`check:naming` clean. Review: Spec ✅ / Quality
   Approved (`task-M5.10-review.md`); the reviewer's check-3 mutation and G5.5 mutation both red. Minor dead code
   (`ScoringLineage.Rows`, `BindingOptions.Factory`) removed by the controller.
-**Mutation output G5.1:** (`RunChecksBeforeAssembly` returns the check-3 refusal only when it is not `scope-entity-mismatch`; Engine rebuilt, MJAPI restarted; m510/m51.log) `✗ ps-gate-r1-s7-3.G5.1: refused naming the scope entity, 0 of 1: 25 records of PS Truth: Scn_R1Copy (6000 R1 rows, DistanceZ renamed) through a binding of the R1 model scored 25, wrote 25; run row completed, 25 Feature Values` — FM-15 itself.
+**Mutation output G5.1:** (D4-168 rework; `RunChecksBeforeAssembly` returns check 3's refusal only when it is not `scope-entity-mismatch`; Engine rebuilt, MJAPI restarted; m510/b-m51.log) `✗ ps-gate-r1-s7-3.G5.1: refused naming the scope entity, 0 of 1: a binding of the R1 model on PS Truth: Scn_R1Copy (6000 R1 rows, DistanceZ renamed) was refused at save (0 binding rows left); 25 of its records scored without a binding were scored (25), run row completed, 0 Feature Values`
 **Mutation output G5.2:** (`main.py`: `feature_cols = … if req.feature_schema else list(fitted.get("output_columns") or [])`, sidecar restarted; m510/m52.log) `✗ ps-gate-w1-s7-3-2.G5.2: refused 1 of 2: renamed EventsAttended → 400 {"detail":"rows lack the model's feature columns: ['EventsAttended']; row columns the model's feature schema does not name: ['EventsAttendedRenamed']"} (unrenamed control 200 (5 predictions)); legacy model without a stored schema → 200 (3 predictions) (with its schema 200 (3 predictions))`
 **Mutation output G5.3:** (`ScoringRunRecorder.Close`: `run.ArtifactSha256 = run.Path === 'score-record-set' ? null : result.ArtifactSha256`; Engine rebuilt, MJAPI restarted; m510/m53.log) `✗ ps-gate-r1-s7-4.G5.3: 20 of 20 calls left an ML Scoring Runs row; 0 of 500 written scores (calls report 500) join to their run and model with the artifact hash and as-of date` — `firstGap: run hash null ≠ model hash 69b39219…4e6e`
 **Mutation output G5.4:** (`valuesParams`: `EffectiveAsOf: new Date()`; m510/m54.log) `✗ ps-gate-c1-s7-4.G5.4: 0 of 6673 score rows of the C1 run (6673 written of 6673 on PS Truth: C1DuesPeriod) carry the four lineage fields and resolve` — `firstGap: EffectiveAsOf … 19:22:39 ≠ AsOfDate … 19:00:00 (EST)`
 **Mutation output G5.5:** (`RunChecksAfterAssembly` returns `ScoringChecks.FeatureSchema(model, assembled)` only; m510/m55.log) `✗ ps-gate-w1-s7-5-3.G5.5: an all-null IncomeK column injected into the scoring input of 200 W1 rows: the run ended completed (), its stored row completed with Written 0, 0 Feature Values, 200 predictions: 0 of 1`
 **Mutation output G3.9:** the plan's mutation (`ModelValueRows.output`: `classOrder = [...c.ClassOrder].sort()`, m510/m39a.log) stays **green** `✓ … 20 of 20` — W9's artifact class order `Attended, Cancelled, NoShow` is already name-sorted, so indexing by sorted name is the same index. Variant run (`[...c.ClassOrder].sort().reverse()`, "class order not the artifact's", m510/m39b.log): `✗ ps-gate-w9-s9-5.G3.9: 2 of 20 sampled W9 rows show the artifact's predict_proba column for the named class (artifact class order Attended, Cancelled, NoShow)` — `firstMiss: c4a8ca6a-… NoShow: shown 0.685348414557037 vs artifact 0.1928157946874542`.
+
+### 2026-11-19 — Claude (Opus 5.5) — M5
+
+Exit pass on `a0e30d4fb0` + the parked batch (`m5-exit-report.md`). Logs in the exit agent's scratchpad `m5-exit/`.
+`origin/next` at the pass: `908cf66db4` (not merged: the M5-start merge brought `320f991c9f`). The exit tests ran once
+(D4-87/D-084), after the batch, on `MJ_PS_PR4_claude`; load average 17–33 throughout (14 cores).
+
+- **Parked batch (D-086):** R1 (a case with no independent instances: `MaxConcurrentBatches` 1 → 4 after Preflight;
+  mutation-proved); `sync` blocks stripped from the two M1.5 JSONType files; the operation's `ScoreRecordSetScope` cast
+  removed; stale `createScheduledModelScoring`/`upsertScoringBinding`/`cadenceToCron` names (Engine README, barrel,
+  guide, action description, test titles); `ParseCopySource` without a cast + a test; `FeatureValueKeyRow`;
+  `ParityGroup`; plan vocabulary out of the delete-policy fixture; `??` → `||` (G3.2's detail). Not changed, for a
+  ruling: the recorder on the typed `…Object` setters (the unit fake returns field bags), the action's untyped `Scope`
+  cast, `ServingModelResolver` → a public static, the IT fixture's authorization, `Upsert` on an untrained entity (M5.10 m3).
+- **Package suites (0 failed each; stderr lines):** Engine 114 files / 1768 (0); Core 39 / 533 (0); TruthSuite 25 / 161
+  (0); FeaturePipelines 15 / 312 (0; 315 at M5.3 − 3 cases deleted with `mlModelID`/`valueText` in M5.11); RSP engine
+  10 / 182 (0); RSP base 4 / 31 (0); CodeGenLib 171 + 6 skipped / 2583 + 66 skipped (494, untouched files);
+  MJCoreEntitiesServer 111 / 1611 (37, untouched); dashboards 257 / 3142 (1, next's), PS filter 25 / 260 (0);
+  core-entity-forms 81 / 683 (60, untouched); integration-test-suite 74 / 1085 (11, untouched) + `tsc -p
+  tsconfig.rigs.json` 0; React runtime 14 / 151 (0); Sidecar `test:python` 516 passed; TruthSuite `test:python` 24
+  passed + mypy "no issues found in 53 source files".
+- **Gate suites (`MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`):** Scoring **6 / 0** (`E7E72793-…`, 215,608 ms: R1→S7.3
+  14,232, W1→S7.3 #2 44,773, R1→S7.4 12,325, C1→S7.4 106,817, W1→S7.5 #3 26,035, W9→S9.5 10,961); Registry and Gate
+  **9 / 0** (`371988CF-…`, 352,637 ms); Containment first run **11 / 1** (`F3DD3165-…`) — G0.4 W1→S9.4 "0 of 0 Auto
+  Renew top-driver rows … 653 expected": since D4-153 the harness's `ScoreViaRecordProcess` runs a bound process whose
+  Process Run Details carry `MLBoundRecordPayload` (no drivers; they live in the Feature Value). Fix round **D4-167**
+  (the probe reads a bound run's drivers from its scoring runs' `Champion` `Model` Feature Values; red-first unit test);
+  re-run **12 / 0** (`FC493E21-…`, 1,839,291 ms), G0.4 "653 of 653 … (394 of 394 auto-renewing rows "Lowers Risk", 259 of 259
+  others "Raises Risk")"; G0.2 {published 0/60 (≤6), consistent 60}, G0.3 {published 0/2, leakageDecided 2} (first
+  run); IT166 **2 / 0 / 0**. Feature Pipelines gates 0/5 environment-blocked
+  (D3-78), not run.
+- **TruthSuite DB lane** `pnpm run test:db` (MJAPI stopped): **9 files / 97 passed**, 335 s, noise 0 (automated-publishing
+  9, lifecycle-gate 15, scoring-service 14, governance 17, scoring-service-writes 4, isolation 2, serving-schema 21,
+  dataset-loader 2, artifact-registry 13); census equal except Record Changes +2,072 (M5.12 M4). A first run with MJAPI
+  up timed out automated-publishing (f) at 600 s (8.8 s alone with MJAPI stopped) — not counted.
+- **Runtime, F-L3-4 with a challenger (D4-159/D4-160):** the host never reached load ≤ 8 in 30 min of polls; run at
+  load 17–28. W1-signal s42 bound Record Process, 16,776 rows, BatchSize 100: **with** a `ChallengerConfiguration`
+  SampleRate 0.25 → RunNow over HTTP **127.5 s** `Completed` 16,776/16,776; 16,776 Champion and 4,113 Challenger
+  `Model` rows (0.245, the production draw's exact records), 168 run rows per role, 0 Pipeline rows, **2.25 Record
+  Changes per scored record**; **without** → **108.2 s** `Completed`, 16,776 Champion, 168 runs, **2.00** per scored
+  record. Cleaned up by run ID; the window's 142,663 Record Changes deleted; census equal (the scheduler's 3 Steward
+  runs aside).
+- **Deterministic (PR-lane, D-086 #5):** 128 passed / 2 failed / 26 skipped of 156 (`ABB1841A-…`, 921 s) — IT128
+  PB7/PB18 (OF4-36) and IT132 ABV3 (OF4-8), the known exceptions; keep-list G0.1 ✓, G0.7 ✓ (Containment run).
+- **Repo gates:** `check:guards` 0; `check:standards` "No errors" (14,786 warnings); `check:ui` 0 (no CSS changed);
+  `check:codegen-tail` OK; `check:claude-md` 0; EntityField-sequence 0; `check:changeset` 0. **A-6180-DELETE-PROC:**
+  vs `V202611101901` 5 `<` lines, vs next's newest `V202611120915` 3 — the widened `@Handled` line
+  (`MLScoringRun.ScopeEntityID`), the `MLModelID` UPDATE moved after the `Source = N'Model'` DELETE (`:313` < `:314`),
+  and the binding DELETE re-keyed from the dropped `MLModelID` to `MLTrainingPipelineID` (M5.1); the snapshot step at
+  `:327-328`. **A-078:** grep 87 ≥ 1 + 19; one virtual entity `MJ: Latest Feature Values | vwLatestFeatureValues | 0 |
+  1 | 0 | 0 | 0`; 19 EntityFields = 19 view columns; PK `ID`.
+- **Mutation outputs:** the six `**Mutation output G5.1:**` … `**Mutation output G3.9:**` lines are in the Task M5.10
+  entry above (G3.9's plan mutation stays green — W9's class order is already name-sorted; the reversed-order variant
+  fails 2 of 20).
+- **Task M5.12 harness (reviewer, D-071):** 8 cases over 7 coverage-table cells (lane 18 with M5.1's 6 and
+  scoring-service-writes' 4; 14 in `scoring-service` today); 3 claims broken at Step 1 (the unauthorized caller, D4-61
+  through a binding and through its Record Process), 0 after Step 4 (D4-165, D4-166); 30 guards flipped, 27 caught by a
+  test, 1 by `tsc` only (E06), 2 survived (E05, E10) — the fix round added the three tests (check 4's truncated read,
+  the assembly-refusal pass-through, the missing prediction), each mutation-proved.
+- **A-FV outcomes (D4-151):** A-FV-BINDINGS 0 on the agent database, the seeded scratch copy's 4 bindings as specified;
+  A-FV-AUTHZ 0 mismatches (480 + 840 pairs); A-FV-VOLUME panel 1–9 ms, as-of 0–1 ms, outcome join 101–104 ms (seek,
+  `IX_FeatureValue_Binding_AsOf`), population-wide 403–545 ms (scan, D-078's residual), warning 1945 on
+  `UQ_FeatureValue_ModelRow`.
+- **Self-audit:** 9,786 added TS lines; one `??` fixed; net-new `unknown` for config-named column values accepted with a
+  one-line reason at each of the 12 sites (controller ruling); SQL text: two `ExtraFilter` subqueries and the pstruth
+  copy refill accepted, PSD1's direct-SQL teardown recorded as OF4-41.
+- **Recorded, not changed (controller rulings):** OF4-37 (the recorder on typed `…Object` setters), OF4-38 (the
+  action's `Scope` cast), OF4-39 (the IT fixture's authorization), OF4-40 (`ParityCheck.Sample` without
+  `CheckCallerHoldsBinding`, M6's), OF4-41 (PSD1's teardown). `ScoringBindings.Upsert` on an untrained entity (M5.10
+  m3): owner ruling D4-168 (below).
+- **Fix-round re-runs (D4-87):** TruthSuite 25 / 163, Engine 114 / 1768 (its unit fake gained `RunViews`),
+  integration-test-suite 74 / 1085, the Containment suite; nothing else touched.
+- **D4-168 (owner ruling, after the exit pass):** a binding on an entity its pipeline's models do not score is refused at
+  save (`MJMLModelScoringBindingEntityServer.ValidateAsync`; 4 rule tests red first → 11/11); G5.1 reworked to both
+  doors (binding refused at save; no-binding call refused `scope-entity-mismatch`), its mutation red 0 of 1 (above).
+  Re-runs: MJCoreEntitiesServer 1615, Engine 1768, TruthSuite 163, integration-test-suite 1085, root build 351/351 +
+  322/322, Scoring **6 / 0**, IT166 2/0/0, DB lane `scoring-service` 18/18 (MJAPI stopped), `check:guards`/`check:naming`
+  clean (`task-M5-binding-entity-report.md`).
 
 ## 12. Refresh log (append-only)
 

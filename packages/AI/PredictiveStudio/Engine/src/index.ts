@@ -62,7 +62,7 @@ PredictiveStudioEvidenceGuard.Register();
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
 export * from './scoring';
 
-// Scheduling — createScheduledModelScoring: bind a trained model to write its
+// Scheduling — CreateScheduledModelScoring: bind a trained model to write its
 // prediction into a target entity column on a recurring schedule, by assembling a
 // single scheduled MJ: Record Processes row (the north-star enabler, PS2-6).
 export * from './scheduling';

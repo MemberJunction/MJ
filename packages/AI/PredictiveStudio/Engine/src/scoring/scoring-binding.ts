@@ -201,7 +201,7 @@ export class ScoringBindings {
   }
 
   /** The value `source` (a `$` reference) resolves to in `scored`. Pure. */
-  public static ResolveCopySource(source: string, scored: ScoredValueObject): unknown {
+  public static ResolveCopySource(source: string, scored: ScoredValueObject): unknown { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     return ResolveMappingRef(source.trim(), { $: scored });
   }
 
@@ -209,7 +209,7 @@ export class ScoringBindings {
    * True when a column's current value is the value the binding copied: numbers equal within {@link NUMERIC_TOLERANCE}
    * (relative), anything else by its text. A null on either side is never a match. Pure.
    */
-  public static IsCopiedValue(current: unknown, copied: unknown): boolean {
+  public static IsCopiedValue(current: unknown, copied: unknown): boolean { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     if (current === null || current === undefined || copied === null || copied === undefined) return false;
     const a = Number(current);
     const b = Number(copied);
@@ -245,7 +245,7 @@ export class ScoringBindings {
    * `numeric` to their `Scale`, `money` to 4 places, the integer types to 0), as SQL Server stores it; any other value
    * unchanged. So a copy and withdrawal's comparison see the value the column holds. Pure.
    */
-  public static ColumnValue(value: unknown, field: Pick<EntityFieldInfo, 'Type' | 'Scale'> | undefined): unknown {
+  public static ColumnValue(value: unknown, field: Pick<EntityFieldInfo, 'Type' | 'Scale'> | undefined): unknown { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     if (typeof value !== 'number' || !Number.isFinite(value) || !field) return value;
     const scale = SCALED_TYPES.get(field.Type.trim().toLowerCase());
     if (scale === undefined) return value;
@@ -302,7 +302,7 @@ export class ScoringBindings {
   }
 
   /** Per record (lower-cased ID), the value the binding's newest `Champion` `Model` row resolves to through `source`. */
-  private static async copiedValues(binding: MJMLModelScoringBindingEntity, source: string, ctx: RegistryContext): Promise<Map<string, unknown>> {
+  private static async copiedValues(binding: MJMLModelScoringBindingEntity, source: string, ctx: RegistryContext): Promise<Map<string, unknown>> { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     const read = await StoredRowReads.Run<ModelRowColumns>({
       EntityName: 'MJ: Feature Values',
       ExtraFilter: `MLModelScoringBindingID='${EscapeSQLString(binding.ID)}' AND Source='Model' AND Role='Champion'`,

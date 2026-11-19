@@ -999,7 +999,7 @@
       "references": "MLTrainingRun",
       "nullable": true,
       "action": "null",
-      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared on a record that has a ModelID, which keeps CK_MLModelPublishRecord_Subject satisfied (R2, D4-73). A run-level refusal (ModelID NULL) is deleted first instead, since clearing its run would break that CHECK."
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared on a record that has a ModelID, which keeps CK_MLModelPublishRecord_Subject satisfied. A run-level refusal (ModelID NULL) is deleted first instead, since clearing its run would break that CHECK."
     },
     {
       "table": "MLModel",
@@ -1023,7 +1023,7 @@
       "references": "MLModel",
       "nullable": true,
       "action": "null",
-      "reason": "Nullable reference to a MLModel row this proc deletes; cleared, after the model's own Source = 'Model' rows are deleted (D4-32)."
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared, after the model's own Source = 'Model' rows are deleted."
     },
     {
       "table": "FeatureValue",

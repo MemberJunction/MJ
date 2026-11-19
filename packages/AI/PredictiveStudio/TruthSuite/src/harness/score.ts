@@ -81,7 +81,7 @@ export class HarnessScoring {
    * Creates a test scoring binding of `modelId`'s pipeline through `ScoringBindings.Upsert` (the binding editor's
    * writer): feature `featureName`, the seeded default view authorization (`ScoringBindings.ResolveViewAuthorizationID`,
    * which the harness user holds, D4-153), no Record Process, no column, `OnDemand`. Its target entity is
-   * `options.EntityName` when given (G5.1 binds a copy entity the model was not trained on), else the entity a Score
+   * `options.EntityName` when given (G5.1 tries a copy entity, which the binding's save refuses: D4-168), else the entity a Score
    * Record Set call of the model reads its records from ({@link BindingEntityName}). The binding is deleted with its
    * pipeline by `RunFixtures.CleanupRun`. Returns the binding's ID.
    *

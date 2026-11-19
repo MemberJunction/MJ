@@ -91,6 +91,14 @@ function scoresMemberships(model: WorldModelRef): void {
   Object.assign(world.Store.Row('MJ: ML Training Pipelines', model.PipelineID) || {}, { TargetEntityID: MEMBERSHIPS_ID, TargetEntity: MEMBERSHIPS });
 }
 
+/** The scoring processor of a bound Record Process, on the world's seams. */
+function boundProcessor(binding: MJMLModelScoringBindingEntity, model: WorldModelRef): MLModelInferenceProcessor {
+  return new MLModelInferenceProcessor({
+    modelId: model.ID, deps: { modelLoader: { loadModel: async () => null }, sidecar: world.Sidecar, artifactLoader: world.Artifacts },
+    recordProcessId: binding.RecordProcessID || undefined, scoringSeams: world.Ctx().Seams,
+  });
+}
+
 /** Runs a bound Record Process over the records through Record Set Processing, `BATCH` records per batch. */
 async function runBoundProcess(binding: MJMLModelScoringBindingEntity, model: WorldModelRef, ids: readonly string[]): Promise<{ Status: string; ID: string }> {
   const tracker = await runBoundProcessTracked(binding, model, ids);
@@ -99,10 +107,7 @@ async function runBoundProcess(binding: MJMLModelScoringBindingEntity, model: Wo
 
 /** The same run, returning its tracker (the run summary and every record result). */
 async function runBoundProcessTracked(binding: MJMLModelScoringBindingEntity, model: WorldModelRef, ids: readonly string[]): Promise<RecordingTracker> {
-  const processor = new MLModelInferenceProcessor({
-    modelId: model.ID, deps: { modelLoader: { loadModel: async () => null }, sidecar: world.Sidecar, artifactLoader: world.Artifacts },
-    recordProcessId: binding.RecordProcessID || undefined, scoringSeams: world.Ctx().Seams,
-  });
+  const processor = boundProcessor(binding, model);
   const tracker = new RecordingTracker();
   const records: RecordRef[] = ids.map((id) => ({ EntityID: MEMBERSHIPS_ID, RecordID: id }));
   await RecordSetProcessor.Instance.Process({
@@ -245,6 +250,19 @@ describe('Score Record Set on ScoringService', () => {
     };
     const run = await runBoundProcess(binding, published, Array.from({ length: 6 * BATCH }, (_, i) => `m${i + 1}`));
     expect([run.Status, world.Runs().length, peak]).toEqual(['Completed', 6, 1]);
+  });
+
+  it('after Preflight a bound processor allows BOUND_SCORING_BATCH_CONCURRENCY batches at once only on a provider that makes independent instances', async () => {
+    const published = world.Model();
+    const binding = await world.Binding(published, { RecordProcessID: RECORD_PROCESS_ID });
+    const preflighted = async (): Promise<number> => {
+      const processor = boundProcessor(binding, published);
+      await processor.Preflight({ ContextUser: ScoringServiceWorld.User, Provider: world.Provider, RecordProcessID: RECORD_PROCESS_ID });
+      return processor.MaxConcurrentBatches;
+    };
+    const shared = await preflighted();
+    allowIndependentInstances();
+    expect([shared, await preflighted()]).toEqual([1, BOUND_SCORING_BATCH_CONCURRENCY]);
   });
 
   it('a bound Record Process prepares its model once for the whole run, not once per batch', async () => {

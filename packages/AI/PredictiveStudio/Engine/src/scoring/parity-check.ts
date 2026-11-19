@@ -75,6 +75,13 @@ interface StoredRowFields {
   readonly ValueNumeric: number;
 }
 
+/** The sampled rows of one model and as-of date: one recomputation call. */
+interface ParityGroup {
+  readonly ModelID: string;
+  readonly AsOf: Date;
+  readonly RecordIDs: string[];
+}
+
 /** A stored row with its seeded rank. */
 interface RankedRow {
   readonly Rank: number;
@@ -224,8 +231,8 @@ export class ParityCheck {
   }
 
   /** The sample's rows grouped by model and as-of date, in date order (then model). Pure. */
-  private static groups(rows: readonly StoredPrediction[]): { readonly ModelID: string; readonly AsOf: Date; readonly RecordIDs: string[] }[] {
-    const groups = new Map<string, { readonly ModelID: string; readonly AsOf: Date; readonly RecordIDs: string[] }>();
+  private static groups(rows: readonly StoredPrediction[]): ParityGroup[] {
+    const groups = new Map<string, ParityGroup>();
     for (const row of rows) {
       const key = `${row.EffectiveAsOf.toISOString()}|${NormalizeUUID(row.ModelID)}`;
       const group = groups.get(key) || { ModelID: row.ModelID, AsOf: row.EffectiveAsOf, RecordIDs: [] };

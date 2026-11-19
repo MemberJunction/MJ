@@ -55,7 +55,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
     context: RemoteOpServerContext,
   ): Promise<PredictiveStudioScoreRecordSetOutput> {
     if (!input?.modelId) throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'modelId', 'is required');
-    const scope = input.scope as ScoreRecordSetScope | undefined;
+    const scope: ScoreRecordSetScope | undefined = input.scope;
     if (!scope || PredictiveStudioScoreRecordSetAction.CountScopeSelectors(scope) !== 1) {
       throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'scope', 'must populate exactly one of: records, viewId, listId, filter, single');
     }

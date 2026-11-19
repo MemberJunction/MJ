@@ -57,9 +57,9 @@ export interface ColumnChangePreview {
   readonly RecordID: string;
   readonly Column: string | null;
   /** The column's value now (`unknown`: the column is config-named, as `HumanValueQuestion.CurrentValue` is). */
-  readonly From: unknown;
+  readonly From: unknown; // unknown: a config-named column holds heterogeneous stored values; narrowed at use
   /** The value the copy would write (the scored value, for a binding with no column). */
-  readonly To: unknown;
+  readonly To: unknown; // unknown: a config-named column holds heterogeneous stored values; narrowed at use
 }
 
 /** A model resolved for a call and how it is admitted. */
@@ -103,8 +103,8 @@ interface AssembledBatch {
 interface PlannedCopy {
   readonly Record: BaseEntity;
   readonly RecordID: string;
-  readonly From: unknown;
-  readonly To: unknown;
+  readonly From: unknown; // unknown: a config-named column holds heterogeneous stored values; narrowed at use
+  readonly To: unknown; // unknown: a config-named column holds heterogeneous stored values; narrowed at use
 }
 
 /** A failure of one batch, with the records it names. */
@@ -487,7 +487,7 @@ export class ScoringService {
   }
 
   /** Whether the copy writes the record: the value changes and, when the column holds one, it is not a person's to keep. */
-  private async copyAllowed(binding: MJMLModelScoringBindingEntity, snapshot: BindingGuardSnapshot, record: BaseEntity, recordId: string, column: string, from: unknown, to: unknown, field: EntityFieldInfo | undefined, persist: boolean): Promise<boolean> {
+  private async copyAllowed(binding: MJMLModelScoringBindingEntity, snapshot: BindingGuardSnapshot, record: BaseEntity, recordId: string, column: string, from: unknown, to: unknown, field: EntityFieldInfo | undefined, persist: boolean): Promise<boolean> { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     if (from === null || from === undefined || from === '') return to !== null && to !== undefined;
     if (ScoringBindings.IsCopiedValue(from, to)) return false;
     const guard = new BindingHumanValueGuard(binding, { EntityID: binding.TargetEntityID || '', RecordID: recordId, Record: record }, this.ctx, snapshot);

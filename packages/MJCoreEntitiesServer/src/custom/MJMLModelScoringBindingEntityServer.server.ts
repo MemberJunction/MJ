@@ -1,9 +1,9 @@
 import { BaseEntity, RunView, type EntityDeleteOptions, type EntityInfo, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
-  MJMLModelScoringBindingEntity, type MJMLModelEntity, type MJMLTrainingPipelineEntity, type MJRecordProcessEntity,
+  MJMLModelScoringBindingEntity, type MJFeatureValueEntity, type MJMLModelEntity, type MJMLTrainingPipelineEntity, type MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
-import { JsonParse, RegistrySchemas, TaskTypeRules, type TaskType } from '@memberjunction/predictive-studio-core';
+import { JsonParse, PredictionUnit, RegistrySchemas, TaskTypeRules, type PredictionUnitColumns, type TaskType } from '@memberjunction/predictive-studio-core';
 import { FormScopeRefusalResult } from './FormScopeGuard';
 import { VersionedRowGuard } from './MJMLPredictionUnitEntityServer.server';
 
@@ -27,8 +27,19 @@ interface OutputKind {
 type PublishedModelRow = Pick<MJMLModelEntity, 'ID' | 'OutputSemantics' | 'ProblemType'>;
 /** The pipeline columns the copy-source check reads when the pipeline has no Published model. */
 type PipelineRow = Pick<MJMLTrainingPipelineEntity, 'ID' | 'ProblemType'>;
+/** The pipeline columns the scoring-entity check reads. */
+type ScoringPipelineRow = Pick<MJMLTrainingPipelineEntity, 'ID' | 'Name' | 'TargetEntityID' | 'PredictionUnitID'>;
+/** The Prediction Unit columns the scoring-entity check parses. */
+const PREDICTION_UNIT_FIELDS: readonly (keyof PredictionUnitColumns & string)[] = [
+  'ID', 'LineageRootID', 'Version', 'Name', 'UnitRows', 'LabelRule', 'LabelWindowDays', 'LabelGapDays', 'TaskType', 'LabelVersion',
+  'Censoring', 'ChangeHistoryPolicy', 'GroupKey', 'TemporalSpec', 'DecisionSpec', 'IncumbentHeuristic', 'AuthoredBy',
+];
+/** The entity a pipeline's models score, or why it could not be told (the reason already recorded on the result). */
+type ScoringEntity = { readonly ID: string; readonly Name: string } | null;
 /** The binding columns the uniqueness check reads. */
 type BindingKeyRow = Pick<MJMLModelScoringBindingEntity, 'ID'>;
+/** A Feature Value row's key, for the delete guard's existence read. */
+type FeatureValueKeyRow = Pick<MJFeatureValueEntity, 'ID'>;
 /** The Record Process columns the Feature Pipeline name check reads. */
 type FeaturePipelineRow = Pick<MJRecordProcessEntity, 'ID' | 'Name' | 'Configuration'>;
 
@@ -41,7 +52,9 @@ const FEATURE_PIPELINE_WORK_TYPE = 'Infer';
  * entity or view authorization is missing; when the feature name is already used on the target entity by another binding
  * or by a Feature Pipeline's output (the long-format Feature Value key would mix them); when the target column is not an
  * updatable field of the target entity; and when the column has no copy source, or a source that does not parse or that
- * the pipeline's model output cannot give. A delete is refused unless the binding is withdrawn and no Feature Value names
+ * the pipeline's model output cannot give; and when the target entity is not the entity the pipeline's models score
+ * (its Prediction Unit's row entity, else its target entity: D4-168), since every scoring run of such a binding would
+ * be refused `scope-entity-mismatch`. A delete is refused unless the binding is withdrawn and no Feature Value names
  * it. Every read goes through the entity's own provider.
  */
 @RegisterClass(BaseEntity, 'MJ: ML Model Scoring Bindings')
@@ -56,6 +69,7 @@ export class MJMLModelScoringBindingEntityServer extends MJMLModelScoringBinding
       return result;
     }
     if (this.TargetEntityID && this.FeatureName) await this.checkFeatureName(result, provider);
+    if (this.TargetEntityID && this.MLTrainingPipelineID) await this.checkScoringEntity(result, provider);
     const target = this.TargetEntityID ? provider.Entities.find((e) => UUIDsEqual(e.ID, this.TargetEntityID)) : undefined;
     if (this.TargetColumn) {
       this.checkTargetColumn(result, target);
@@ -81,7 +95,9 @@ export class MJMLModelScoringBindingEntityServer extends MJMLModelScoringBinding
    */
   public static ParseCopySource(text: string): CopySourceRef | null {
     const t = text.trim();
-    if (t === '$.Value' || t === '$.Class' || t === '$.AdverseProbability') return { Member: t.substring(2) as 'Value' | 'Class' | 'AdverseProbability' };
+    if (t === '$.Value') return { Member: 'Value' };
+    if (t === '$.Class') return { Member: 'Class' };
+    if (t === '$.AdverseProbability') return { Member: 'AdverseProbability' };
     const prefix = '$.Probabilities.';
     if (t.startsWith(prefix) && t.length > prefix.length) return { Member: 'Probabilities', ClassName: t.substring(prefix.length) };
     return null;
@@ -128,6 +144,50 @@ export class MJMLModelScoringBindingEntityServer extends MJMLModelScoringBinding
     }
     const clash = pipelines.Rows.find((p) => MJMLModelScoringBindingEntityServer.OutputNames(p.Configuration).some((n) => n.toLowerCase() === this.FeatureName.toLowerCase()));
     if (clash) VersionedRowGuard.Fail(result, 'FeatureName', `Feature name "${this.FeatureName}" is an output of Feature Pipeline "${clash.Name}" on the same target entity`);
+  }
+
+  /**
+   * The target entity is the entity the pipeline's models score: the row entity of its Prediction Unit when it names
+   * one, else its `TargetEntityID` (D4-168). Compared by entity ID.
+   */
+  private async checkScoringEntity(result: ValidationResult, provider: IMetadataProvider): Promise<void> {
+    const pipeline = await VersionedRowGuard.ReadOneRow<ScoringPipelineRow>(provider, 'MJ: ML Training Pipelines', `ID='${EscapeSQLString(this.MLTrainingPipelineID)}'`, // pk-filter-ok: MJ: ML Training Pipelines is an MJ core entity keyed by ID
+      this.ActiveUser, ['ID', 'Name', 'TargetEntityID', 'PredictionUnitID']);
+    if (pipeline.Error !== null || pipeline.Row === null) {
+      VersionedRowGuard.Fail(result, 'MLTrainingPipelineID', pipeline.Error !== null ? `Reading ML Training Pipeline ${this.MLTrainingPipelineID} failed: ${pipeline.Error}` : `ML Training Pipeline ${this.MLTrainingPipelineID} does not exist`);
+      return;
+    }
+    const label = `${pipeline.Row.Name} (${pipeline.Row.ID})`;
+    const scoring = await MJMLModelScoringBindingEntityServer.scoringEntity(result, provider, pipeline.Row, label, this.ActiveUser);
+    if (scoring === null || UUIDsEqual(scoring.ID, this.TargetEntityID)) return;
+    const target = provider.Entities.find((e) => UUIDsEqual(e.ID, this.TargetEntityID))?.Name || this.TargetEntityID;
+    VersionedRowGuard.Fail(result, 'TargetEntityID',
+      `${target} is not the entity pipeline ${label}'s models score (${scoring.Name}): every scoring run of this binding would be refused scope-entity-mismatch`);
+  }
+
+  /** The entity `pipeline`'s models score; null when it cannot be told, the reason recorded on `result`. */
+  private static async scoringEntity(result: ValidationResult, provider: IMetadataProvider, pipeline: ScoringPipelineRow, label: string, user: UserInfo | undefined): Promise<ScoringEntity> {
+    if (!pipeline.PredictionUnitID) {
+      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID));
+      return { ID: pipeline.TargetEntityID, Name: entity?.Name || pipeline.TargetEntityID };
+    }
+    const unit = await VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: ML Prediction Units', `ID='${EscapeSQLString(pipeline.PredictionUnitID)}'`, user, PREDICTION_UNIT_FIELDS); // pk-filter-ok: MJ: ML Prediction Units is an MJ core entity keyed by ID
+    if (unit.Error !== null || unit.Row === null) {
+      VersionedRowGuard.Fail(result, 'MLTrainingPipelineID', unit.Error !== null ? `Reading Prediction Unit ${pipeline.PredictionUnitID} of pipeline ${label} failed: ${unit.Error}` : `Prediction Unit ${pipeline.PredictionUnitID} of pipeline ${label} does not exist`);
+      return null;
+    }
+    const parsed = PredictionUnit.ParsePredictionUnitRow(unit.Row);
+    if (parsed.Ok === false) {
+      VersionedRowGuard.Fail(result, 'MLTrainingPipelineID', `Prediction Unit ${pipeline.PredictionUnitID} of pipeline ${label} does not parse: ${parsed.Errors.join('; ')}`);
+      return null;
+    }
+    const name = PredictionUnit.UnitRowEntityName(parsed.Value.rows);
+    const entity = provider.EntityByName(name);
+    if (!entity) {
+      VersionedRowGuard.Fail(result, 'MLTrainingPipelineID', `The row entity ${name} of Prediction Unit ${pipeline.PredictionUnitID} (pipeline ${label}) is not in the provider's metadata`);
+      return null;
+    }
+    return { ID: entity.ID, Name: entity.Name };
   }
 
   /**
@@ -216,10 +276,11 @@ export class MJMLModelScoringBindingEntityServer extends MJMLModelScoringBinding
     if (!VersionedRowGuard.IsMetadataProvider(provider)) {
       return "Withdraw the binding first: the entity's provider is not a metadata provider, so the binding's Feature Values cannot be counted";
     }
-    const rows = await VersionedRowGuard.ReadOneRow<{ ID: string }>(provider, 'MJ: Feature Values', `MLModelScoringBindingID='${EscapeSQLString(this.ID)}'`, this.ActiveUser, ['ID']);
+    const rows = await VersionedRowGuard.ReadOneRow<FeatureValueKeyRow>(provider, 'MJ: Feature Values', `MLModelScoringBindingID='${EscapeSQLString(this.ID)}'`, this.ActiveUser, ['ID']);
     if (rows.Error !== null) return `Withdraw the binding first: reading the binding's Feature Values failed: ${rows.Error}`;
     return rows.Row === null ? null : 'Withdraw the binding first and delete its Feature Values: Feature Value rows still name this binding';
   }
+
   /** Every row of `entityName` matching `filter`, as plain rows; a failed read is returned as its error. */
   private static async readRows<TRow>(provider: IMetadataProvider, entityName: string, filter: string, user: UserInfo | undefined, fields: readonly (keyof TRow & string)[], orderBy?: string): Promise<{ readonly Rows: TRow[]; readonly Error: string | null }> {
     const r = await RunView.FromMetadataProvider(provider).RunView<TRow>({ EntityName: entityName, ExtraFilter: filter, Fields: [...fields], ...(orderBy ? { OrderBy: orderBy } : {}), ResultType: 'simple' }, user);

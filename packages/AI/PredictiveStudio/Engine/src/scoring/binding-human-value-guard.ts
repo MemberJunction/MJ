@@ -83,7 +83,7 @@ export class BindingHumanValueGuard implements HumanValueGuard {
   }
 
   /** Writes the preserved value as a `Human` row of the binding's feature (the service never calls it on a dry run). */
-  public async RecordPreserved(fieldName: string, currentValue: unknown, provider: IMetadataProvider): Promise<void> {
+  public async RecordPreserved(fieldName: string, currentValue: unknown, provider: IMetadataProvider): Promise<void> { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     if (!this.isBoundColumn(fieldName)) return;
     await this.values().RecordHumanValue({ ...this.ref(provider), Value: currentValue, ProcessRunID: this.ctx.ProcessRunID });
   }
@@ -123,7 +123,7 @@ export class BindingHumanValueGuard implements HumanValueGuard {
   }
 
   /** The value the binding's newest `Champion` `Model` row of the record resolves to; undefined when it has none. */
-  private async newestCopiedValue(provider: IMetadataProvider): Promise<unknown> {
+  private async newestCopiedValue(provider: IMetadataProvider): Promise<unknown> { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     if (this.snapshot !== null) return this.resolveNewest(this.snapshot.Champion.get(this.record.RecordID.toLowerCase()) || []);
     const read = await StoredRowReads.Run<CopiedRowColumns>({
       EntityName: 'MJ: Feature Values',
@@ -135,7 +135,7 @@ export class BindingHumanValueGuard implements HumanValueGuard {
   }
 
   /** The value the newest of `rows` resolves to through `TargetColumnSource`; undefined for none. */
-  private resolveNewest(rows: readonly CopiedRowColumns[]): unknown {
+  private resolveNewest(rows: readonly CopiedRowColumns[]): unknown { // unknown: a config-named column holds heterogeneous stored values; narrowed at use
     const newest = ScoringBindings.Newest(rows);
     if (newest === null || !this.binding.TargetColumnSource) return undefined;
     return ScoringBindings.ResolveCopySource(this.binding.TargetColumnSource, ScoringBindings.ScoredValue(newest));
