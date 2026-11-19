@@ -2801,11 +2801,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
     DockerRenderDriver,
-    LocalWorkerRenderDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    LocalWorkerRenderDriver,
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
@@ -2847,7 +2847,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1224;
+export const CLASS_REGISTRATIONS_COUNT = 1225;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
