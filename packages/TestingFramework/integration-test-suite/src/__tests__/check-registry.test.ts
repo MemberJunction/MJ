@@ -277,7 +277,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['archive-paging', ArchivePagingChecks, 2], // ARP1-ARP2 one archive run strips every row past the cutoff page by page; a second run loads nothing (IT180)
+        ['archive-paging', ArchivePagingChecks, 3], // ARP1-ARP3 one archive run strips (ARP1) or deletes (ARP3) every row past the cutoff page by page; a second run loads nothing (IT180)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -359,7 +359,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 11,
-        'archive-paging': 2,
+        'archive-paging': 3,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
@@ -571,6 +571,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'app-behavioral.AB2',
         'archive-paging.ARP1',
         'archive-paging.ARP2',
+        'archive-paging.ARP3',
         'binary-fields.BF4',
         'binary-fields.BF6',
         'cache-architecture.CA10',

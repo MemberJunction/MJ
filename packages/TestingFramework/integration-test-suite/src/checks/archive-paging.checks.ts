@@ -9,15 +9,20 @@
  *          skipped (a row already stripped is never loaded), leaves the recent rows and every
  *          non-stripped column alone.
  *   - ARP2 A second run of the same configuration loads nothing: stripped rows no longer match.
+ *   - ARP3 A Purge + HardDelete run over throwaway `MJ: Entity Document Runs` rows deletes every row
+ *          older than the cutoff across several pages and keeps the recent rows. A deleted entity
+ *          object clears its own key, so this fails if paging reads the cursor after processing.
  *
- * The fixture is one archive configuration (with its entity row) and the log rows, all tagged with
- * a per-run ResultCode and deleted in Teardown together with the configuration's archive runs.
+ * The fixture is two archive configurations (each with its entity row), the log rows tagged with a
+ * per-run ResultCode, and the document-run rows tagged with a per-run EndedAt, all deleted in
+ * Teardown together with the configurations' archive runs.
  */
 import { RunView } from '@memberjunction/core';
 import {
     MJActionExecutionLogEntity,
     MJArchiveConfigurationEntity,
     MJArchiveConfigurationEntityEntity,
+    MJEntityDocumentRunEntity,
 } from '@memberjunction/core-entities';
 import { ArchiveEngine, ArchiveRunResult } from '@memberjunction/archiving-engine';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
@@ -26,6 +31,8 @@ import { MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 
 const BUNDLE = 'archive-paging';
 const LOG_ENTITY = 'MJ: Action Execution Logs';
+/** Hard-delete target: no dependents, no Record Changes, and the test user may delete it. */
+const DOCUMENT_RUN_ENTITY = 'MJ: Entity Document Runs';
 const CONFIG_ENTITY = 'MJ: Archive Configurations';
 const CONFIG_ENTITY_ENTITY = 'MJ: Archive Configuration Entities';
 const RUN_ENTITY = 'MJ: Archive Runs';
@@ -39,11 +46,19 @@ const RECENT_ROWS = 5;
 const BATCH_SIZE = 10;
 const RETENTION_DAYS = 30;
 const STRIP_FIELDS = ['Params', 'ResultParams', 'Message'] as const;
+/** Document runs older than the cutoff, for the HardDelete run; more than two pages. */
+const OLD_DOCUMENT_RUNS = 25;
+const RECENT_DOCUMENT_RUNS = 3;
 
 interface ArchivePagingFixture {
     Prefix: string;
     ConfigID: string;
     ConfigEntityID: string;
+    DeleteConfigID: string;
+    /** Every fixture document run carries this EndedAt, so the filter and teardown find only them. */
+    MarkerIso: string;
+    OldDocumentRunIDs: string[];
+    RecentDocumentRunIDs: string[];
     OldLogIDs: string[];
     RecentLogIDs: string[];
     /** An old row whose strip fields are already empty. */
@@ -101,7 +116,7 @@ async function createLog(ctx: IntegrationCheckContext, prefix: string, actionId:
 async function createConfiguration(ctx: IntegrationCheckContext, f: ArchivePagingFixture): Promise<void> {
     const config = await ctx.Provider.GetEntityObject<MJArchiveConfigurationEntity>(CONFIG_ENTITY, ctx.User);
     config.NewRecord();
-    config.Name = `${f.Prefix} ${FIXTURE_TAG}`;
+    config.Name = `${f.Prefix} strip ${FIXTURE_TAG}`;
     config.RootPath = '';
     config.IsActive = true;
     config.DefaultRetentionDays = RETENTION_DAYS;
@@ -129,6 +144,70 @@ async function createConfiguration(ctx: IntegrationCheckContext, f: ArchivePagin
     f.ConfigEntityID = configEntity.ID;
 }
 
+async function firstEntityDocumentId(ctx: IntegrationCheckContext): Promise<string> {
+    const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>({
+        EntityName: 'MJ: Entity Documents', Fields: ['ID'], MaxRows: 1, ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success && result.Results.length > 0, 'no MJ: Entity Documents row is seeded');
+    return result.Results[0].ID;
+}
+
+/** Creates one document run; `daysAgo` sets StartedAt, the date the HardDelete configuration ages on. */
+async function createDocumentRun(ctx: IntegrationCheckContext, f: ArchivePagingFixture, documentId: string, daysAgo: number): Promise<string> {
+    const run = await ctx.Provider.GetEntityObject<MJEntityDocumentRunEntity>(DOCUMENT_RUN_ENTITY, ctx.User);
+    run.NewRecord();
+    run.EntityDocumentID = documentId;
+    run.StartedAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+    run.EndedAt = new Date(f.MarkerIso);
+    Assert(await run.Save(), `creating fixture document run failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return run.ID;
+}
+
+/** A Purge + HardDelete configuration over the fixture document runs, aged on StartedAt. */
+async function createDeleteConfiguration(ctx: IntegrationCheckContext, f: ArchivePagingFixture): Promise<void> {
+    const config = await ctx.Provider.GetEntityObject<MJArchiveConfigurationEntity>(CONFIG_ENTITY, ctx.User);
+    config.NewRecord();
+    config.Name = `${f.Prefix} delete ${FIXTURE_TAG}`;
+    config.RootPath = '';
+    config.IsActive = true;
+    config.DefaultRetentionDays = RETENTION_DAYS;
+    config.DefaultMode = 'HardDelete';
+    config.DefaultBatchSize = BATCH_SIZE;
+    config.StorageMode = 'Purge';
+    config.Status = 'Idle';
+    config.CreatedByUserID = ctx.User.ID;
+    Assert(await config.Save(), `creating the HardDelete configuration failed: ${config.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    f.DeleteConfigID = config.ID;
+
+    const entityId = ctx.Provider.EntityByName(DOCUMENT_RUN_ENTITY)?.ID;
+    Assert(!!entityId, `could not resolve the entity ID for '${DOCUMENT_RUN_ENTITY}'`);
+    const configEntity = await ctx.Provider.GetEntityObject<MJArchiveConfigurationEntityEntity>(CONFIG_ENTITY_ENTITY, ctx.User);
+    configEntity.NewRecord();
+    configEntity.ArchiveConfigurationID = config.ID;
+    configEntity.EntityID = entityId!;
+    configEntity.Mode = 'HardDelete';
+    configEntity.DateField = 'StartedAt';
+    configEntity.FilterExpression = `EndedAt = '${f.MarkerIso}'`;
+    configEntity.BatchSize = BATCH_SIZE;
+    configEntity.FieldConfiguration = JSON.stringify({ Fields: [], ArchiveFullRecord: true });
+    configEntity.IsActive = true;
+    Assert(await configEntity.Save(), `creating the HardDelete configuration entity failed: ${configEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+}
+
+/** IDs (upper-cased) of the fixture document runs that still exist. */
+async function remainingDocumentRunIds(ctx: IntegrationCheckContext): Promise<Set<string>> {
+    const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>({
+        EntityName: DOCUMENT_RUN_ENTITY,
+        ExtraFilter: `EndedAt = '${fx().MarkerIso}'`,
+        Fields: ['ID'],
+        IgnoreMaxRows: true,
+        BypassCache: true,
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success, `reading the fixture document runs failed: ${result.ErrorMessage}`);
+    return new Set(result.Results.map(row => row.ID.toUpperCase()));
+}
+
 async function fixtureLogs(ctx: IntegrationCheckContext): Promise<Map<string, LogRow>> {
     const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<LogRow>({
         EntityName: LOG_ENTITY,
@@ -142,8 +221,8 @@ async function fixtureLogs(ctx: IntegrationCheckContext): Promise<Map<string, Lo
     return new Map(result.Results.map(row => [row.ID.toUpperCase(), row]));
 }
 
-async function runArchive(ctx: IntegrationCheckContext): Promise<ArchiveRunResult> {
-    const result = await ArchiveEngine.Instance.RunArchive(fx().ConfigID, ctx.User);
+async function runArchive(ctx: IntegrationCheckContext, configId: string = fx().ConfigID): Promise<ArchiveRunResult> {
+    const result = await ArchiveEngine.Instance.RunArchive(configId, ctx.User);
     Assert(result.Success, `the archive run failed: ${result.ErrorMessage ?? `${result.FailedRecords} failed records`}`);
     return result;
 }
@@ -182,6 +261,20 @@ async function checkArp2SecondRunLoadsNothing(ctx: IntegrationCheckContext): Pro
     console.log('      → the second run loaded no rows');
 }
 
+async function checkArp3HardDeletePagesPastDeletedRows(ctx: IntegrationCheckContext): Promise<void> {
+    const f = fx();
+    const result = await runArchive(ctx, f.DeleteConfigID);
+    AssertEqual(result.ArchivedRecords, OLD_DOCUMENT_RUNS, 'ARP3: rows deleted in one run');
+
+    const remaining = await remainingDocumentRunIds(ctx);
+    const survivors = f.OldDocumentRunIDs.filter(id => remaining.has(id.toUpperCase()));
+    AssertEqual(survivors.length, 0, 'ARP3: old document runs left after the run');
+    for (const id of f.RecentDocumentRunIDs) {
+        Assert(remaining.has(id.toUpperCase()), `ARP3: recent document run ${id} was deleted`);
+    }
+    console.log(`      → ${OLD_DOCUMENT_RUNS} old rows deleted in pages of ${BATCH_SIZE}; ${RECENT_DOCUMENT_RUNS} recent rows kept`);
+}
+
 async function deleteRows(ctx: IntegrationCheckContext, entityName: string, filter: string): Promise<void> {
     const result = await RunView.FromMetadataProvider(ctx.Provider).RunView({
         EntityName: entityName, ExtraFilter: filter, IgnoreMaxRows: true, BypassCache: true, ResultType: 'entity_object',
@@ -189,6 +282,19 @@ async function deleteRows(ctx: IntegrationCheckContext, entityName: string, filt
     for (const row of result.Success ? result.Results : []) {
         await row.Delete().catch(() => undefined);
     }
+}
+
+/** Deletes a fixture configuration with its runs, run details and entity rows. */
+async function deleteConfiguration(ctx: IntegrationCheckContext, configId: string): Promise<void> {
+    const runs = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>({
+        EntityName: RUN_ENTITY, ExtraFilter: `ArchiveConfigurationID = '${configId}'`, Fields: ['ID'], BypassCache: true, ResultType: 'simple',
+    }, ctx.User);
+    for (const run of runs.Success ? runs.Results : []) {
+        await deleteRows(ctx, RUN_DETAIL_ENTITY, `ArchiveRunID = '${run.ID}'`);
+    }
+    await deleteRows(ctx, RUN_ENTITY, `ArchiveConfigurationID = '${configId}'`);
+    await deleteRows(ctx, CONFIG_ENTITY_ENTITY, `ArchiveConfigurationID = '${configId}'`);
+    await deleteRows(ctx, CONFIG_ENTITY, `ID = '${configId}'`);
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
@@ -199,7 +305,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             return;
         }
         const f: ArchivePagingFixture = {
-            Prefix: `it180-${Date.now()}`, ConfigID: '', ConfigEntityID: '', OldLogIDs: [], RecentLogIDs: [], StrippedLogID: '',
+            Prefix: `it180-${Date.now()}`, ConfigID: '', ConfigEntityID: '', DeleteConfigID: '',
+            // A whole-second instant in 2001 that no other row carries, so equality on it is exact.
+            MarkerIso: new Date(Date.UTC(2001, 0, 1) + (Date.now() % 31_536_000) * 1000).toISOString(),
+            OldDocumentRunIDs: [], RecentDocumentRunIDs: [], OldLogIDs: [], RecentLogIDs: [], StrippedLogID: '',
         };
         fixture = f;
         const actionId = await firstActionId(ctx);
@@ -211,6 +320,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         }
         f.StrippedLogID = await createLog(ctx, f.Prefix, actionId, RETENTION_DAYS + 5, false);
         await createConfiguration(ctx, f);
+        const documentId = await firstEntityDocumentId(ctx);
+        for (let i = 0; i < OLD_DOCUMENT_RUNS; i++) {
+            f.OldDocumentRunIDs.push(await createDocumentRun(ctx, f, documentId, RETENTION_DAYS + 10 + i));
+        }
+        for (let i = 0; i < RECENT_DOCUMENT_RUNS; i++) {
+            f.RecentDocumentRunIDs.push(await createDocumentRun(ctx, f, documentId, i));
+        }
+        await createDeleteConfiguration(ctx, f);
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = fixture;
@@ -219,24 +336,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         if (!f) {
             return;
         }
-        if (f.ConfigID) {
-            const runs = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>({
-                EntityName: RUN_ENTITY, ExtraFilter: `ArchiveConfigurationID = '${f.ConfigID}'`, Fields: ['ID'], BypassCache: true, ResultType: 'simple',
-            }, ctx.User);
-            for (const run of runs.Success ? runs.Results : []) {
-                await deleteRows(ctx, RUN_DETAIL_ENTITY, `ArchiveRunID = '${run.ID}'`);
-            }
-            await deleteRows(ctx, RUN_ENTITY, `ArchiveConfigurationID = '${f.ConfigID}'`);
-            await deleteRows(ctx, CONFIG_ENTITY_ENTITY, `ArchiveConfigurationID = '${f.ConfigID}'`);
-            await deleteRows(ctx, CONFIG_ENTITY, `ID = '${f.ConfigID}'`);
+        for (const configId of [f.ConfigID, f.DeleteConfigID].filter(id => !!id)) {
+            await deleteConfiguration(ctx, configId);
         }
         await deleteRows(ctx, LOG_ENTITY, `ResultCode = '${f.Prefix}'`);
+        await deleteRows(ctx, DOCUMENT_RUN_ENTITY, `EndedAt = '${f.MarkerIso}'`);
     },
 });
 
 export const ArchivePagingChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.ARP1`, Name: 'ARP1: one archive run strips every row past the cutoff, page by page', Fn: checkArp1OneRunStripsEveryOldRow, RequiresMutation: true },
     { Id: `${BUNDLE}.ARP2`, Name: 'ARP2: a second run loads no already-stripped row', Fn: checkArp2SecondRunLoadsNothing, RequiresMutation: true },
+    { Id: `${BUNDLE}.ARP3`, Name: 'ARP3: a HardDelete run deletes every row past the cutoff, page by page', Fn: checkArp3HardDeletePagesPastDeletedRows, RequiresMutation: true },
 ];
 
 for (const check of ArchivePagingChecks) {
