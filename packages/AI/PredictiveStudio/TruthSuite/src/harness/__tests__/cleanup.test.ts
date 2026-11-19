@@ -198,9 +198,12 @@ class FakeStore implements CleanupStore {
   }
   public async EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]> {
     this.Filters.push(`MJ: ML Evaluation Protocols | ${filter}`);
-    const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const ids = [...new Set([...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]))];
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
-    return ids.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
+    // EP2 is EP1's version 2: a lineage filter on EP1 finds it even when it was never recorded (a monitoring challenger's re-carve).
+    const lineage = /LineageRootID IN \([^)]*'([^']+)'/.exec(filter);
+    const withLineage = lineage !== null && lineage[1] === EP1 && !ids.includes(EP2) ? [...ids, EP2] : ids;
+    return withLineage.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
   }
   /** The bindings withdrawn so far: a read after the withdrawal says `Withdrawn`, a copy read before still says `Active`. */
   private readonly withdrawn = new Set<string>();
@@ -561,7 +564,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordEvaluationProtocol(EP1);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}')`);
+    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}') OR LineageRootID IN ('${EP1}')`);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
     expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: ML Evaluation Protocols:${EP1}`));
     expect(at(`MJ: ML Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: ML Prediction Units:${U1}`));
@@ -576,6 +579,14 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
     expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
+  });
+
+  it('deletes every version of a recorded protocol lineage, including a later version it never recorded (P-F2 re-carve)', async () => {
+    const records = new RunRecords();
+    records.RecordEvaluationProtocol(EP1);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
   });
 
   it('reports every failed delete and keeps its ID recorded', async () => {
