@@ -46,6 +46,7 @@ import {
   PreGateMigrationContexts,
   PreGateModelMigration,
   PredictiveStudioScoringStartup,
+  ScoringBindings,
   ScoringService,
   type PreChangeStepDetails,
 } from '@memberjunction/predictive-studio';
@@ -171,9 +172,23 @@ async function RawStatusWrite(request: () => sql.Request, modelId: string, statu
     .query(`UPDATE ${tableOf('MJ: ML Models')} SET Status = @Status WHERE ID = @ID`);
 }
 
+/** The SQL state a pre-change row is given after its entity save (applied later, on the case's transaction). */
+interface PreChangeState {
+  readonly ModelID: string;
+  readonly Status: string;
+  readonly CreatedAt: string;
+  readonly Delivery: string | null;
+}
+
+/** The pre-change states the world's rows are given, in creation order (see {@link ApplyPreChangeStates}). */
+let pendingStates: PreChangeState[] = [];
+
 /**
- * A pre-change model row: saved through the entity (Draft, no artifact: the data section reads no artifact), then its
- * status, creation time and (for a gate-produced row) its Delivery by SQL, as a pre-change database holds them.
+ * A pre-change model row: saved through the entity (Draft, no artifact: the data section reads no artifact); its
+ * status, creation time and (for a gate-produced row) its Delivery are queued for {@link ApplyPreChangeStates}, which
+ * writes them by SQL as a pre-change database holds them. A pre-change database may hold two Published rows of one
+ * pipeline, which `UX_MLModel_OnePublishedPerPipeline` refuses, so the states are written only after the index is
+ * dropped, on the transaction that then runs the data section.
  */
 async function PreChangeModel(pipelineId: string, algorithmId: string, version: number, status: string, o: { readonly CreatedAt: string; readonly Delivery?: string }): Promise<string> {
   const model = await createRow<MJMLModelEntity>('MJ: ML Models', (m) => {
@@ -184,12 +199,21 @@ async function PreChangeModel(pipelineId: string, algorithmId: string, version: 
     m.TargetVariable = 'Probe';
     m.ProblemType = 'classification';
   });
-  await pool.request()
-    .input('ID', sql.UniqueIdentifier, model.ID).input('Status', sql.NVarChar(20), status).input('CreatedAt', sql.DateTimeOffset, new Date(o.CreatedAt))
-    .input('Delivery', sql.NVarChar(sql.MAX), o.Delivery || null)
-    .query(`UPDATE ${tableOf('MJ: ML Models')} SET Status = @Status, __mj_CreatedAt = @CreatedAt, Delivery = @Delivery,
-              ArtifactStatus = N'unverified', ServingWhileUnevaluated = 0, StatusReason = NULL, TrainingRunID = NULL WHERE ID = @ID`);
+  pendingStates.push({ ModelID: model.ID, Status: status, CreatedAt: o.CreatedAt, Delivery: o.Delivery || null });
   return model.ID;
+}
+
+/** Drops the one-Published index on `request` and writes every queued pre-change state (then clears the queue). */
+async function ApplyPreChangeStates(request: () => sql.Request): Promise<void> {
+  await request().batch(dropIndexStatement());
+  for (const st of pendingStates) {
+    await request()
+      .input('ID', sql.UniqueIdentifier, st.ModelID).input('Status', sql.NVarChar(20), st.Status).input('CreatedAt', sql.DateTimeOffset, new Date(st.CreatedAt))
+      .input('Delivery', sql.NVarChar(sql.MAX), st.Delivery)
+      .query(`UPDATE ${tableOf('MJ: ML Models')} SET Status = @Status, __mj_CreatedAt = @CreatedAt, Delivery = @Delivery,
+                ArtifactStatus = N'unverified', ServingWhileUnevaluated = 0, StatusReason = NULL, TrainingRunID = NULL WHERE ID = @ID`);
+  }
+  pendingStates = [];
 }
 
 /** A training run of the pipeline whose stored results name `modelId` as its model and hold a gate record. */
@@ -296,12 +320,16 @@ describe('the pre-change data section (in one transaction, rolled back)', () => 
     legacy = await createLegacyWorld();
     tx = new sql.Transaction(pool);
     await tx.begin();
+    await ApplyPreChangeStates(inTx);
     await runDataSection(inTx);
   }, CASE_TIMEOUT_MS);
 
   afterAll(async () => {
     if (tx) await tx.rollback();
-    if (legacy) await deletePipelines(legacy.PipelineIDs);
+    // by the file's tag, so a setup that stopped part-way leaves none of its pipelines behind
+    const mine = await pool.request().input('Tag', sql.NVarChar(200), `${TAG} %`)
+      .query<{ ID: string }>(`SELECT ID FROM ${tableOf('MJ: ML Training Pipelines')} WHERE Name LIKE @Tag`);
+    await deletePipelines(mine.recordset.map((r) => r.ID));
   }, CASE_TIMEOUT_MS);
 
   it('demotes every legacy Draft, Validated and Published row to Unevaluated with the fixed reason', async () => {
@@ -377,6 +405,10 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
   let h: HarnessWorld;
   let jobRunId: string;
   let firstRun: PreChangeStepDetails | null;
+  /** The column process, kept apart from `h` so teardown removes it (and the schedule its save created) even when setup stops early. */
+  let columnProcessId: string | null = null;
+  /** One record of the W1 entity the cases score (its key is a UUID). */
+  let w1RecordId: string;
 
   /**
    * A W1 pipeline bound to version 2 of its protocol with `autoPublishKeepBaseline` (W1 s42's stored decision keeps the
@@ -459,6 +491,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
       b.TargetEntityID = w1.Entity.ID;
       b.Status = status;
       b.Mode = 'OnDemand';
+      b.ViewAuthorizationID = ScoringBindings.ResolveViewAuthorizationID(null, server.Provider);
     });
   }
 
@@ -474,6 +507,9 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
     await PredictiveStudioScoringStartup.Instance.HandleStartup(server.User, server.Provider);
     algorithms = await HarnessPipelines.LoadAlgorithms(server.Provider, server.User);
     w1 = await DatasetLoader.Load({ Provider: server.Provider, User: server.User, Pool: pool }, { Kind: 'world', ID: 'W1-signal', Seed: 42 });
+    const first = await pool.request().query<{ ID: string }>(`SELECT TOP 1 ID FROM [${w1.Entity.SchemaName}].[${w1.Entity.BaseTable}] ORDER BY ID`);
+    if (!first.recordset[0]) throw new Error(`the W1 entity ${w1.Entity.Name} has no rows`);
+    w1RecordId = first.recordset[0].ID;
     const demoted = await demotedW1Pipeline('demoted');
     const concurrent = await demotedW1Pipeline('concurrent');
     const active = await binding(demoted.PipelineID, 'active', 'Active');
@@ -489,12 +525,14 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
       x.ScheduleEnabled = true;
       x.CronExpression = '0 3 * * *';
     });
+    columnProcessId = rp.ID;
     const human = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (v) => {
       v.EntityID = w1.Entity.ID;
       v.RecordID = 'pre-change-human-1';
       v.FeatureName = active.FeatureName;
       v.Source = 'Human';
       v.RecordProcessID = null;
+      v.MLModelScoringBindingID = active.ID;
       v.ValueJSON = JSON.stringify(0.5);
     });
     h = { Demoted: demoted, ActiveBinding: active, WithdrawnBinding: withdrawn, ColumnProcessID: rp.ID, HumanValueID: human.ID, Concurrent: concurrent };
@@ -508,10 +546,18 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
 
   afterAll(async () => {
     if (h) {
-      await pool.request().input('RP', sql.UniqueIdentifier, h.ColumnProcessID).input('FV', sql.UniqueIdentifier, h.HumanValueID)
+      await pool.request().input('FV', sql.UniqueIdentifier, h.HumanValueID)
         .input('B1', sql.UniqueIdentifier, h.ActiveBinding.ID).input('B2', sql.UniqueIdentifier, h.WithdrawnBinding.ID)
         .query(`DELETE FROM ${tableOf('MJ: Feature Values')} WHERE ID = @FV OR MLModelScoringBindingID IN (@B1, @B2);
-                DELETE FROM ${tableOf('MJ: ML Model Scoring Bindings')} WHERE ID IN (@B1, @B2);
+                DELETE FROM ${tableOf('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (@B1, @B2);
+                DELETE FROM ${tableOf('MJ: ML Model Scoring Bindings')} WHERE ID IN (@B1, @B2);`);
+    }
+    if (columnProcessId) {
+      // a scheduled Record Process's save creates its Scheduled Job (Configuration names the process); remove both
+      const named = `%${EscapeSQLString(columnProcessId)}%`;
+      await pool.request().input('RP', sql.UniqueIdentifier, columnProcessId).input('Named', sql.NVarChar(200), named)
+        .query(`DELETE FROM ${tableOf('MJ: Scheduled Job Runs')} WHERE ScheduledJobID IN (SELECT ID FROM ${tableOf('MJ: Scheduled Jobs')} WHERE Configuration LIKE @Named);
+                DELETE FROM ${tableOf('MJ: Scheduled Jobs')} WHERE Configuration LIKE @Named;
                 DELETE FROM ${tableOf('MJ: Record Processes')} WHERE ID = @RP;`);
     }
     if (jobRunId) await pool.request().input('R', sql.UniqueIdentifier, jobRunId).query(`DELETE FROM ${tableOf('MJ: Scheduled Job Runs')} WHERE ID = @R`);
@@ -524,7 +570,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
     if (!demotedModel) throw new Error('the concurrent pipeline has no demoted model');
     const svc = new ScoringService({ ContextUser: server.User, Provider: server.Provider, Path: 'score-record-set', OverwriteHumanValues: false, ProcessRunID: null, ScheduledJobRunID: null });
     const predicted = await svc.Predict({
-      ScoringRunID: '', ModelID: demotedModel.ID, Scope: { kind: 'record-ids', entity: w1.Entity.Name, ids: ['1'] }, EntityMapping: null,
+      ScoringRunID: '', ModelID: demotedModel.ID, Scope: { kind: 'record-ids', entity: w1.Entity.Name, ids: [w1RecordId] }, EntityMapping: null,
       AsOfDate: new Date().toISOString(), Read: { mode: 'complete' }, DryRun: true, RequestedBy: { kind: 'human', userId: server.User.ID },
     });
     expect(predicted.Result).toMatchObject({ Status: 'refused', Reason: { kind: 'model-not-published' } });
@@ -546,7 +592,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
     const published = (await modelsOf(h.Demoted.PipelineID)).find((m) => m.Status === 'Published');
     expect(firstRun?.ReEvaluation.Findings).toContainEqual(expect.objectContaining({ PipelineID: h.Demoted.PipelineID, Kind: 'published' }));
     const svc = new ScoringService({ ContextUser: server.User, Provider: server.Provider, Path: 'score-record-set', OverwriteHumanValues: false, ProcessRunID: null, ScheduledJobRunID: null });
-    const r = await svc.Score(h.ActiveBinding, { kind: 'record-ids', entity: w1.Entity.Name, ids: ['1'] }, new Date(), true);
+    const r = await svc.Score(h.ActiveBinding, { kind: 'record-ids', entity: w1.Entity.Name, ids: [w1RecordId] }, new Date(), true);
     expect([published === undefined, r.Status, r.ModelID]).toEqual([false, 'completed', published?.ID]);
   }, CASE_TIMEOUT_MS);
 

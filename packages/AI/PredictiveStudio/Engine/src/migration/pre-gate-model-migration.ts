@@ -327,7 +327,7 @@ export class PreGateModelMigration {
     const disabled: string[] = [];
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
     for (const rp of await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)) {
-      const config = PreGateModelMigration.ConfigurationOf(rp);
+      const config = PreGateModelMigration.configurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
       if (config['autoTrain'] !== undefined || modelId === null || !demotedIds.Has(modelId)) continue;
       rp.ScheduleEnabled = false;
@@ -406,7 +406,7 @@ export class PreGateModelMigration {
     const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
     const schedules = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
-      const config = PreGateModelMigration.ConfigurationOf(rp);
+      const config = PreGateModelMigration.configurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
       return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
     });
@@ -512,7 +512,7 @@ export class PreGateModelMigration {
    * and so is the rollback it caused.
    */
   protected static async AdoptOne(modelId: string, result: ReverifyResult, ctx: PreGateMigrationContext): Promise<void> {
-    const initiator = PreGateModelMigration.InitiatorOf(ctx);
+    const initiator = PreGateModelMigration.initiatorOf(ctx);
     const outcome: AdoptOutcome = await ctx.Seams.Gate.AdoptPublished(modelId, initiator, ctx, { BackFill: (m) => PreGateModelMigration.BackFillFromStoredRun(m, ctx) });
     switch (outcome.Kind) {
       case 'adopted':
@@ -553,7 +553,7 @@ export class PreGateModelMigration {
       result.Evaluated.push({ ModelID: modelId, Outcome: 'refused' });
       return;
     }
-    const outcome = await ctx.Seams.Gate.Evaluate({ modelId }, PreGateModelMigration.InitiatorOf(ctx), ctx);
+    const outcome = await ctx.Seams.Gate.Evaluate({ modelId }, PreGateModelMigration.initiatorOf(ctx), ctx);
     result.Evaluated.push({ ModelID: modelId, Outcome: outcome.Kind });
   }
 
@@ -584,7 +584,7 @@ export class PreGateModelMigration {
       if (error instanceof TrainingInFlightError) return { PipelineID: pipelineId, Kind: 'training-in-flight', InFlightRunID: error.InFlightRunID };
       return { PipelineID: pipelineId, Kind: 'training-failed', Reason: error instanceof Error ? error.message : String(error) };
     }
-    const outcome = await ctx.Seams.Publisher.EvaluateAndPublish(run.TrainingRunID, PreGateModelMigration.InitiatorOf(ctx), ctx);
+    const outcome = await ctx.Seams.Publisher.EvaluateAndPublish(run.TrainingRunID, PreGateModelMigration.initiatorOf(ctx), ctx);
     if (outcome.Kind === 'published' || outcome.Kind === 'already-published') {
       const reEnabled = await PreGateModelMigration.ReEnableProcesses(pipelineId, outcome.ModelID, disabledThisRun, ctx);
       return { PipelineID: pipelineId, Kind: 'published', TrainingRunID: run.TrainingRunID, ModelID: outcome.ModelID, ReEnabled: reEnabled };
@@ -605,7 +605,7 @@ export class PreGateModelMigration {
     if (listed.length === 0) return [];
     const ids = listed.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
     const processes = await PreGateModelMigration.ReadScoringProcesses(`ID IN (${ids}) AND ScheduleEnabled=0`, ctx);
-    const configured = processes.map((rp) => ({ Process: rp, ModelID: JsonParse.JsonString(PreGateModelMigration.ConfigurationOf(rp), 'modelId') }));
+    const configured = processes.map((rp) => ({ Process: rp, ModelID: JsonParse.JsonString(PreGateModelMigration.configurationOf(rp), 'modelId') }));
     const modelIds = configured.map((c) => c.ModelID).filter((id): id is string => id !== null && IsValidUUID(id));
     const models = modelIds.length === 0 ? [] : await PreGateModelMigration.ReadModelColumns(`ID IN (${modelIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`, ctx);
     const modelsById = IndexByUUID(models);
@@ -722,7 +722,7 @@ export class PreGateModelMigration {
   protected static async AutoTrainedPipelines(ctx: RegistryContext): Promise<string[]> {
     const pipelines: string[] = [];
     for (const rp of await PreGateModelMigration.ReadScoringProcesses('', ctx)) {
-      const autoTrain = PreGateModelMigration.ConfigurationOf(rp)['autoTrain'];
+      const autoTrain = PreGateModelMigration.configurationOf(rp)['autoTrain'];
       const pipelineId = JsonParse.IsJsonObject(autoTrain) ? JsonParse.JsonString(autoTrain, 'pipelineId') : null;
       if (pipelineId !== null) pipelines.push(pipelineId);
     }
@@ -821,12 +821,12 @@ export class PreGateModelMigration {
   // ================================================================================================ private ==
 
   /** The job run as the initiator of every gate call. */
-  private static InitiatorOf(ctx: PreGateMigrationContext): Actor {
+  private static initiatorOf(ctx: PreGateMigrationContext): Actor {
     return { kind: 'scheduled-job', scheduledJobRunId: ctx.ScheduledJobRunID };
   }
 
   /** A Record Process `Configuration` as an object ({} when it is empty, not JSON, or not an object). */
-  private static ConfigurationOf(rp: Pick<MJRecordProcessEntity, 'Configuration'>): JsonObject {
+  private static configurationOf(rp: Pick<MJRecordProcessEntity, 'Configuration'>): JsonObject {
     const parsed = JsonParse.ParseJsonText(rp.Configuration, 'Configuration');
     return parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : {};
   }
