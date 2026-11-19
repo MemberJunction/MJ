@@ -277,6 +277,13 @@ describe('Graph access policies', () => {
             expect(edges.map((e) => e.Target.RecordID)).toEqual(['acc-1']);
             expect(new Set(RelatedToEdgePolicy.Principals)).toEqual(new Set([analyst.ID, executive.ID]));
         });
+
+        it('finds an edge policy whatever the spacing or case of the edge type name, so no edge skips its policy', () => {
+            for (const name of ['Related To', 'RelatedTo', 'related to', ' RELATEDTO ']) {
+                expect(GraphAccessPolicyRegistry.GetEdgePolicy(name)).toBeInstanceOf(RelatedToEdgePolicy);
+            }
+            expect(GraphAccessPolicyRegistry.GetEdgePolicy('Related')).toBeNull();
+        });
     });
 
     describe('provenance policies', () => {

@@ -225,8 +225,14 @@ regardless (decision §9.2). The separate `Contradicts` edge policy was dropped:
 built from migrations: indexing, chunk and concept creation, link reconciliation, artifact-ACL
 agreement for items and chunks, retraction and teardown leaving no rows behind.
 
-**Known loose ends**
-- `RecordLinkEdgeProvider` defaults its link type to `'Related To'` while the seeded edge type is
-  `RelatedTo`; the seeded "Document Links" provider sets `LinkTypes` explicitly, so it is unaffected.
-- `IsCanonGraph` still falls back to the graph type's name when `IsCanon` is not loaded.
+**Loose ends, closed after the first review**
+- Edge type names are now compared ignoring case and whitespace everywhere the graph reads them
+  (`NormalizeGraphEdgeTypeName`): edge-type filters, edge access policy lookup and
+  `LoadRecordRelations`. The content pipeline already resolved names this way when it writes edges,
+  so `'Related To'` and `'RelatedTo'` are one edge type on both sides. Edge policy lookup mattered
+  most: an edge whose name was spaced differently from its policy's registration used to skip the
+  policy. Providers that name no edge type fall back to `GRAPH_DEFAULT_EDGE_TYPE` (`RelatedTo`, the
+  seeded row) instead of three separate `'Related To'` literals.
+- `IsCanonGraph` no longer treats a graph named "MJ Canon" as Canon: only `MJ: Graph Types.IsCanon`
+  decides. The seeded "MJ Canon" graph is of the `Canon` type, so nothing changes for it.
 

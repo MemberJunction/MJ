@@ -27,7 +27,7 @@
 
 import { LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import type { GraphDataProvider, GraphEdgeView, GraphNodeRef, GraphNodeView } from './BaseGraphEdgeProvider';
+import { NormalizeGraphEdgeTypeName, type GraphDataProvider, type GraphEdgeView, type GraphNodeRef, type GraphNodeView } from './BaseGraphEdgeProvider';
 
 /** What a node policy decides for one node. */
 export type GraphNodeAccessDecision = 'Visible' | 'Redacted' | 'Hidden';
@@ -137,13 +137,31 @@ export class GraphAccessPolicyRegistry {
         );
     }
 
-    /** The edge policy registered for an edge type, or `null` when none is. */
+    /**
+     * The edge policy registered for an edge type, or `null` when none is. The type name is matched
+     * ignoring case and whitespace ({@link NormalizeGraphEdgeTypeName}), the same way edges match an
+     * edge-type filter: a policy registered as `'RelatedTo'` governs edges named `'Related To'`, and
+     * an edge cannot skip its policy because of how the name is spaced.
+     */
     public static GetEdgePolicy(edgeTypeName: string): BaseGraphEdgeAccessPolicy | null {
         return GraphAccessPolicyRegistry.resolve<BaseGraphEdgeAccessPolicy>(
             BaseGraphEdgeAccessPolicy,
-            edgeTypeName,
+            GraphAccessPolicyRegistry.registeredEdgePolicyKey(edgeTypeName),
             () => new FailClosedEdgePolicy(),
         );
+    }
+
+    /** The key an edge policy is registered under for this type name, or the name itself when none matches. */
+    private static registeredEdgePolicyKey(edgeTypeName: string): string {
+        const factory = MJGlobal.Instance.ClassFactory;
+        if (factory.GetRegistration(BaseGraphEdgeAccessPolicy, edgeTypeName?.trim())) {
+            return edgeTypeName;
+        }
+        const target = NormalizeGraphEdgeTypeName(edgeTypeName);
+        const match = factory
+            .GetAllRegistrations(BaseGraphEdgeAccessPolicy)
+            .find((r) => r.Key != null && NormalizeGraphEdgeTypeName(r.Key) === target);
+        return match?.Key ?? edgeTypeName;
     }
 
     private static resolve<T>(baseClass: unknown, key: string, failClosed: () => T): T | null {

@@ -13,7 +13,7 @@
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { UUIDSet } from '@memberjunction/global';
-import type { GraphEdgeView, GraphNodeRef, GraphNodeView } from './BaseGraphEdgeProvider';
+import { NormalizeGraphEdgeTypeName, type GraphEdgeView, type GraphNodeRef, type GraphNodeView } from './BaseGraphEdgeProvider';
 import type { GraphEngine } from './GraphEngine';
 
 /** Edge type for a `[[Name]]` link from one document to another record. */
@@ -104,9 +104,10 @@ function classify(engine: GraphEngine, edges: GraphEdgeView[], selfKey: string, 
         if (!node) {
             continue; // the viewer may not see it
         }
-        if (edge.TypeName === GRAPH_SHARES_CONCEPT_EDGE_TYPE) {
+        const typeName = NormalizeGraphEdgeTypeName(edge.TypeName);
+        if (typeName === NormalizeGraphEdgeTypeName(GRAPH_SHARES_CONCEPT_EDGE_TYPE)) {
             keepStrongest(related, node.Key, { Node: node, GraphName: edge.GraphName, SharedConceptCount: sharedConceptCount(edge) });
-        } else if (edge.TypeName === GRAPH_LINKS_TO_EDGE_TYPE) {
+        } else if (typeName === NormalizeGraphEdgeTypeName(GRAPH_LINKS_TO_EDGE_TYPE)) {
             const target = outgoing ? links : backlinks;
             if (!target.has(node.Key)) {
                 target.set(node.Key, { Node: node, GraphName: edge.GraphName, SharedConceptCount: 0 });

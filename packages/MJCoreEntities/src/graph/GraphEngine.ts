@@ -47,6 +47,7 @@ import {
     type GraphNodeView,
     type GraphSubgraph,
     type GraphTraversalOptions,
+    GRAPH_DEFAULT_EDGE_TYPE,
 } from './BaseGraphEdgeProvider';
 
 /** Depth used when the caller gives none. */
@@ -90,14 +91,16 @@ const GRAPH_EDGES_ENTITY = 'MJ: Graph Edges';
 const GRAPHS_ENTITY = 'MJ: Graphs';
 const GRAPH_TYPES_ENTITY = 'MJ: Graph Types';
 const GRAPH_CONCEPTS_ENTITY = 'MJ: Graph Concepts';
-const CANON_PRIMARY_GRAPH_NAME_LOWER = 'mj canon';
 
 type GraphProbeRow = Pick<MJGraphEntityType, 'ID' | 'Name' | 'GraphTypeID' | 'Status'>;
 type GraphTypeProbeRow = Pick<MJGraphTypeEntityType, 'ID' | 'IsCanon'>;
 
-/** True when a graph belongs to a Canon graph type or carries the primary Canon graph name. */
-export function IsCanonGraph(graph: Pick<MJGraphEntityType, 'Name' | 'GraphTypeID'>, canonTypeIds: UUIDSet): boolean {
-    return canonTypeIds.Has(graph.GraphTypeID) || graph.Name.trim().toLowerCase() === CANON_PRIMARY_GRAPH_NAME_LOWER;
+/**
+ * True when a graph belongs to a graph type with `IsCanon = 1`. Whether a graph is Canon is metadata:
+ * neither the graph's name nor its type's name decides it.
+ */
+export function IsCanonGraph(graph: Pick<MJGraphEntityType, 'GraphTypeID'>, canonTypeIds: UUIDSet): boolean {
+    return canonTypeIds.Has(graph.GraphTypeID);
 }
 
 /** The stored-edge columns traversal reads. */
@@ -319,23 +322,19 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const activeGraphs = (graphsRes.Results ?? []).filter((g) => g.Status === 'Active');
         let hasActive = false;
         if (activeGraphs.length > 0) {
-            if (activeGraphs.some((g) => IsCanonGraph(g, new UUIDSet()))) {
-                hasActive = true;
-            } else {
-                const typesRes = await rv.RunView<GraphTypeProbeRow>(
-                    {
-                        EntityName: GRAPH_TYPES_ENTITY,
-                        Fields: ['ID', 'IsCanon'],
-                        ResultType: 'simple',
-                    },
-                    contextUser,
-                );
-                if (!typesRes.Success) {
-                    return true;
-                }
-                const canonTypeIds = new UUIDSet((typesRes.Results ?? []).filter((gt) => Boolean(gt.IsCanon)).map((gt) => gt.ID));
-                hasActive = activeGraphs.some((g) => IsCanonGraph(g, canonTypeIds));
+            const typesRes = await rv.RunView<GraphTypeProbeRow>(
+                {
+                    EntityName: GRAPH_TYPES_ENTITY,
+                    Fields: ['ID', 'IsCanon'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!typesRes.Success) {
+                return true;
             }
+            const canonTypeIds = new UUIDSet((typesRes.Results ?? []).filter((gt) => Boolean(gt.IsCanon)).map((gt) => gt.ID));
+            hasActive = activeGraphs.some((g) => IsCanonGraph(g, canonTypeIds));
         }
 
         const rlsExempt = !contextUser || graphsMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read);
@@ -937,7 +936,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             return null;
         }
         const edgeType = edgeTypesById.Get(row.EdgeTypeID);
-        const typeName = edgeType?.Name ?? row.EdgeType ?? 'Related To';
+        const typeName = edgeType?.Name ?? row.EdgeType ?? GRAPH_DEFAULT_EDGE_TYPE;
         const weight = typeof row.Weight === 'number' ? row.Weight : (edgeType?.DefaultWeight ?? 1.0);
         if (!MatchesEdgeTypeFilter(typeName, options.EdgeTypes) || weight < (options.MinWeight ?? 0)) {
             return null;
