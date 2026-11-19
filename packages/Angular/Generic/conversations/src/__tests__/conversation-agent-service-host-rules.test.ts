@@ -189,26 +189,43 @@ describe('ConversationAgentService — host rules on the wire', () => {
             expect(h.runViewParams[0].ExtraFilter).not.toContain('__mj_CreatedAt');
         });
 
-        it('reads the versions by the IDs of the replies, with no subquery over conversation messages', async () => {
-            const h = buildService({ 'MJ: Conversation Details': [{ ID: 'reply-1' }, { ID: 'reply-2' }] });
+        it('reads the versions by the IDs of the replies and their output links, with no base-view subquery', async () => {
+            const h = buildService({
+                'MJ: Conversation Details': [{ ID: 'reply-1' }, { ID: 'reply-2' }],
+                'MJ: Conversation Detail Artifacts': [{ ArtifactVersionID: 'ver-1' }, { ArtifactVersionID: 'ver-2' }],
+            });
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
 
-            expect(h.runViewParams.map(p => p.EntityName)).toEqual(['MJ: Conversation Details', 'MJ: Artifact Versions']);
-            expect(h.runViewParams[1].ExtraFilter).toContain(`ConversationDetailID IN ('reply-1','reply-2')`);
-            expect(h.runViewParams.map(p => p.ExtraFilter ?? '').join(' ')).not.toContain('vwConversationDetails');
+            expect(h.runViewParams.map(p => p.EntityName)).toEqual([
+                'MJ: Conversation Details',
+                'MJ: Conversation Detail Artifacts',
+                'MJ: Artifact Versions',
+            ]);
+            expect(h.runViewParams[1].ExtraFilter).toBe(`Direction='Output' AND ConversationDetailID IN ('reply-1','reply-2')`);
+            expect(h.runViewParams[2].ExtraFilter).toBe(`ID IN ('ver-1','ver-2')`);
+            for (const p of h.runViewParams) {
+                expect(p.ExtraFilter ?? '').not.toMatch(/\bSELECT\b|vwConversationDetails|vwConversationDetailArtifacts/i);
+            }
         });
 
         it('reads the replies again on every lookup, so a newer reply counts', async () => {
-            const rows: Record<string, object[]> = { 'MJ: Conversation Details': [{ ID: 'reply-1' }] };
+            const rows: Record<string, object[]> = {
+                'MJ: Conversation Details': [{ ID: 'reply-1' }],
+                'MJ: Conversation Detail Artifacts': [{ ArtifactVersionID: 'ver-1' }],
+            };
             const h = buildService(rows);
 
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
             rows['MJ: Conversation Details'] = [{ ID: 'reply-1' }, { ID: 'reply-2' }];
+            rows['MJ: Conversation Detail Artifacts'] = [{ ArtifactVersionID: 'ver-1' }, { ArtifactVersionID: 'ver-2' }];
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
 
+            const linkFilters = h.runViewParams.filter(p => p.EntityName === 'MJ: Conversation Detail Artifacts').map(p => p.ExtraFilter ?? '');
+            expect(linkFilters).toHaveLength(2);
+            expect(linkFilters[1]).toBe(`Direction='Output' AND ConversationDetailID IN ('reply-1','reply-2')`);
             const versionFilters = h.runViewParams.filter(p => p.EntityName === 'MJ: Artifact Versions').map(p => p.ExtraFilter ?? '');
             expect(versionFilters).toHaveLength(2);
-            expect(versionFilters[1]).toContain(`ConversationDetailID IN ('reply-1','reply-2')`);
+            expect(versionFilters[1]).toBe(`ID IN ('ver-1','ver-2')`);
         });
 
         it('reads no versions when the agent has no reply in the conversation', async () => {
@@ -216,6 +233,16 @@ describe('ConversationAgentService — host rules on the wire', () => {
 
             await expect(h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID)).resolves.toBeNull();
             expect(h.runViewParams.map(p => p.EntityName)).toEqual(['MJ: Conversation Details']);
+        });
+
+        it('reads no versions when the agent replies produced no output artifact links', async () => {
+            const h = buildService({ 'MJ: Conversation Details': [{ ID: 'reply-1' }] });
+
+            await expect(h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID)).resolves.toBeNull();
+            expect(h.runViewParams.map(p => p.EntityName)).toEqual([
+                'MJ: Conversation Details',
+                'MJ: Conversation Detail Artifacts',
+            ]);
         });
 
         it('considers only replies no rerun replaced', async () => {
@@ -229,10 +256,13 @@ describe('ConversationAgentService — host rules on the wire', () => {
 
     describe('branch path', () => {
         const PATH = `[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2))`;
-        /** One reply by the agent, so the artifact-version read runs. */
-        const REPLIES: Record<string, object[]> = { 'MJ: Conversation Details': [{ ID: 'reply-1' }] };
+        /** One reply by the agent and one output link, so the artifact-version read runs. */
+        const REPLIES: Record<string, object[]> = {
+            'MJ: Conversation Details': [{ ID: 'reply-1' }],
+            'MJ: Conversation Detail Artifacts': [{ ArtifactVersionID: 'ver-1' }],
+        };
         const IN_REPLIES = `ConversationDetailID IN ('reply-1')`;
-        // The reply read carries the path predicate; the artifact-version read carries only the reply ids.
+        // The reply read carries the path predicate; the link read carries only the reply ids.
         const TRUNK_REPLIES = `[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL AND AgentID='${RESEARCH.ID}'`;
 
         /** The filter of the reply read a harness ran. */
@@ -240,16 +270,19 @@ describe('ConversationAgentService — host rules on the wire', () => {
             return h.runViewParams.find(p => p.EntityName === 'MJ: Conversation Details')?.ExtraFilter;
         }
 
-        /** The filter of the artifact-version read a harness ran. */
-        function artifactQuery(h: ServiceHarness): string | undefined {
-            return h.runViewParams.find(p => p.ExtraFilter?.includes('vwConversationDetailArtifacts'))?.ExtraFilter;
+        /** The filter of the conversation-detail-artifact link read a harness ran. */
+        function artifactLinkQuery(h: ServiceHarness): string | undefined {
+            return h.runViewParams.find(p => p.EntityName === 'MJ: Conversation Detail Artifacts')?.ExtraFilter;
         }
 
         it('scopes the latest output version to the branch path', async () => {
             const h = buildService(REPLIES);
             await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID, null, 'B');
             expect(replyQuery(h)).toContain(PATH);
-            expect(artifactQuery(h)).toContain(IN_REPLIES);
+            expect(artifactLinkQuery(h)).toContain(IN_REPLIES);
+            for (const p of h.runViewParams) {
+                expect(p.ExtraFilter ?? '').not.toMatch(/\bSELECT\b|vwConversationDetailArtifacts/i);
+            }
         });
         it('scopes the configuration preset lookup to the branch path', async () => {
             const h = buildService();
@@ -277,18 +310,20 @@ describe('ConversationAgentService — host rules on the wire', () => {
             const onBranch = buildService(REPLIES);
             await onBranch.service.FindAgentArtifacts('conv-1', RESEARCH.ID, null, 'B');
             expect(replyQuery(onBranch)).toContain(PATH);
-            expect(artifactQuery(onBranch)).toContain(IN_REPLIES);
+            expect(artifactLinkQuery(onBranch)).toContain(IN_REPLIES);
 
             const onTrunk = buildService(REPLIES);
             await onTrunk.service.FindAgentArtifacts('conv-1', RESEARCH.ID);
             expect(onTrunk.runViewParams[0].ExtraFilter).toContain(TRUNK_REPLIES);
         });
 
-        it('scopes the continuity intent check to the branch path, and to the trunk without one', async () => {
+        it('scopes the continuity intent check to the branch path via FindAgentArtifacts, and to the trunk without one', async () => {
             const onBranch = enableIntentCheck(buildService(REPLIES));
+            const findSpy = vi.spyOn(onBranch.service, 'FindAgentArtifacts');
             await onBranch.service.CheckAgentContinuityIntent('conv-1', RESEARCH.ID, 'change it', [], 'B');
+            expect(findSpy).toHaveBeenCalledWith('conv-1', RESEARCH.ID, undefined, 'B');
             expect(replyQuery(onBranch)).toContain(PATH);
-            expect(artifactQuery(onBranch)).toContain(IN_REPLIES);
+            expect(artifactLinkQuery(onBranch)).toContain(IN_REPLIES);
 
             const onTrunk = enableIntentCheck(buildService(REPLIES));
             await onTrunk.service.CheckAgentContinuityIntent('conv-1', RESEARCH.ID, 'change it', []);

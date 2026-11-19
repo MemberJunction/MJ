@@ -262,7 +262,7 @@ Note: `check:ui-layers` enforces TypeScript import and `package.json` `"mjUILaye
 
 `@memberjunction/ng-ui-components` moves from a single barrel + `copy-assets` flat `.scss` copies to structured `package.json` `"exports"`:
 
-1. **Root barrel (`.`) and transitional `dist/*` passthrough**: Keeps `.` (`./dist/public-api.js`) plus `"./dist/*": "./dist/*"` during Waves 1 to 4 so existing deep SCSS/JS imports do not break before callers migrate.
+1. **Root barrel (`.`) and transitional `dist/*` passthrough**: Keeps `.` (`./dist/public-api.js`) plus `"./dist/*": "./dist/*"` during Waves 1 to 4 so existing deep SCSS/JS imports do not break before callers migrate. `@memberjunction/ng-shared-generic` gets the same pair when it gains its `exports` map in item 3, because `explorer-app`'s `styles.scss` and `styles/main.scss` import `@memberjunction/ng-shared-generic/dist/lib/tokens` and `build-global-styles.mjs` reads `dist/lib/_tokens.scss` today. Its `.` entry stays a plain path, which every export condition matches, so the realtime widget's `require.resolve('@memberjunction/ng-shared-generic')` keeps working.
 2. **Secondary entry points per primitive family**:
    - `@memberjunction/ng-ui-components/surface`
    - `@memberjunction/ng-ui-components/layer`
@@ -290,7 +290,7 @@ These changes are intentional and must be called out in PR descriptions and veri
 
 ## 11. Gate Criteria (Step 6 Prototype Gate & Step 7 Exit Check)
 
-The Wave 0 prototype builds `mj-surface`, `mj-layer`, and `mj-row` in a private, unpublished workspace package compiled as Angular Elements and loaded onto the MJ Elements Phase 0 test page (PR #5916), verified under `e2e/ui-primitives/`. The Step 6 Prototype Gate passes only when **all seven** prototype criteria pass:
+The Wave 0 prototype builds `mj-surface`, `mj-layer`, and `mj-row` in a private, unpublished workspace package compiled as Angular Elements and loaded onto the MJ Elements Phase 0 test page (PR #5916), verified under `e2e/ui-primitives/` with that folder's own Playwright config from PR #6673 (it sits outside the root config's `testDir`, `e2e/specs`). The Step 6 Prototype Gate passes only when **all seven** prototype criteria pass:
 
 1. **Same markup, three looks**: Identical template markup renders in (a) MJ default, (b) LXP, and (c) a dense, flat, square-cornered serif look, with **0 lines of component CSS differing** between them.
 2. **Parts**: Removing or reordering any named part (`mjSurfaceHeader`, `mjRowLeading`, `mjLayerFooter`, etc.) in the host template breaks neither layout nor behavior.

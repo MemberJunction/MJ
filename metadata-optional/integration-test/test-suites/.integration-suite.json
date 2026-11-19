@@ -494,6 +494,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT180 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT181 - Task Graph Durable Retry",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBEF0C4-628A-4310-AFDF-EE86D80AF6D1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT75 - Entity Actions",
             "Sequence": 41,
             "Status": "Active"
@@ -1748,7 +1770,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT180 - Archive Runs Page Through Every Eligible Row",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
             "Sequence": 49,
             "Status": "Active"
           },

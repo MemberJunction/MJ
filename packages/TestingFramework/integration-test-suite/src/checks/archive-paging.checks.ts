@@ -1,5 +1,5 @@
 /**
- * Archive runs page through every eligible record (IT180, server transport, mutating).
+ * Archive runs page through every eligible record (IT182, server transport, mutating).
  *
  * A Purge + StripFields archive configuration over throwaway `MJ: Action Execution Logs` rows,
  * run with a batch size smaller than the number of eligible rows, so the engine pages with the
@@ -305,7 +305,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             return;
         }
         const f: ArchivePagingFixture = {
-            Prefix: `it180-${Date.now()}`, ConfigID: '', ConfigEntityID: '', DeleteConfigID: '',
+            Prefix: `it182-${Date.now()}`, ConfigID: '', ConfigEntityID: '', DeleteConfigID: '',
             // A whole-second instant in 2001 that no other row carries, so equality on it is exact.
             MarkerIso: new Date(Date.UTC(2001, 0, 1) + (Date.now() % 31_536_000) * 1000).toISOString(),
             OldDocumentRunIDs: [], RecentDocumentRunIDs: [], OldLogIDs: [], RecentLogIDs: [], StrippedLogID: '',

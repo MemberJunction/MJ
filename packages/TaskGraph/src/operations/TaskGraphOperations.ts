@@ -40,6 +40,7 @@ import { ComputeParentRollup, type TaskGraphInvocationEnvelope, type TaskGraphNo
 import { ClampReinvokeDepth, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 import { LoadTaskGraphDebugOperations, AuthorizeGraphControl, GraphOfTask } from './TaskGraphDebugOperations';
+import { LoadTaskGraphWaitingStepOperations } from './TaskGraphWaitingStepOperations';
 
 /**
  * The columns `GetStatus` reads. `Status` is pinned to the algorithm's own node-status union rather
@@ -341,4 +342,5 @@ export function LoadTaskGraphOperations(): void {
     // the same reason — a host with the dispatcher but no debug verbs would accept a console's
     // pause request and route it to the throwing base.
     LoadTaskGraphDebugOperations();
+    LoadTaskGraphWaitingStepOperations();
 }
