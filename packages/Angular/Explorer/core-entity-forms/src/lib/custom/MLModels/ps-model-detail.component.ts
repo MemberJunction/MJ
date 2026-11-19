@@ -17,7 +17,7 @@ import {
   PredictiveStudioPromoteModelOperation,
   PredictiveStudioModelTransition,
 } from '@memberjunction/core-entities';
-import { ImportanceDisplay, StatusWriteRules } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, StatusWriteRules, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 
 import {
   PSFeatureBar,
@@ -34,13 +34,35 @@ import {
   PrimaryModelScore,
   TrainScoreIsInnerCv,
 } from './ml-model-view-models';
+import { PSLifecycleChipComponent } from './ps-lifecycle-chip.component';
+import { PSPublishHistoryComponent } from './ps-publish-history.component';
+import { PSSignOffPanelComponent } from './ps-sign-off-panel.component';
+import { PSScoringRunsComponent } from './ps-scoring-runs.component';
+import { PSModelMonitoringComponent } from './ps-model-monitoring.component';
+import { PSOutputBindingsEditorComponent } from './ps-output-bindings-editor.component';
+import type { PSOpenRecordRequest } from './ps-model-detail-events';
+
+/** The transitions the detail's action bar offers; a publish goes through the sign-off panel (D4-49). */
+type DetailTransition = Exclude<PredictiveStudioModelTransition, 'publish'>;
 
 /** A pending lifecycle transition awaiting user confirmation. */
 interface PendingTransition {
   ModelID: string;
   ModelName: string;
-  Transition: PredictiveStudioModelTransition;
+  Transition: DetailTransition;
 }
+
+/** The detail's tabs. */
+export type PSModelDetailTab = 'overview' | 'history' | 'scoring' | 'monitoring' | 'bindings';
+
+/** Each tab's key and label, in the order shown. */
+const DETAIL_TABS: readonly { readonly Key: PSModelDetailTab; readonly Label: string }[] = [
+  { Key: 'overview', Label: 'Overview' },
+  { Key: 'history', Label: 'Publish history' },
+  { Key: 'scoring', Label: 'Scoring runs' },
+  { Key: 'monitoring', Label: 'Monitoring' },
+  { Key: 'bindings', Label: 'Output bindings' },
+];
 
 /** How each lifecycle transition is offered: its button, its confirm dialog, and whether it needs a reason. */
 interface TransitionPresentation {
@@ -51,15 +73,14 @@ interface TransitionPresentation {
   readonly ReasonRequired: boolean;
 }
 
-const TRANSITION_PRESENTATION: Readonly<Record<PredictiveStudioModelTransition, TransitionPresentation>> = {
+const TRANSITION_PRESENTATION: Readonly<Record<DetailTransition, TransitionPresentation>> = {
   evaluate: { Label: 'Evaluate', Icon: 'fa-solid fa-circle-check', TestID: 'ps-registry-validate', Primary: false, ReasonRequired: false },
-  publish: { Label: 'Publish', Icon: 'fa-solid fa-arrow-up', TestID: 'ps-registry-promote', Primary: true, ReasonRequired: false },
   archive: { Label: 'Archive', Icon: 'fa-solid fa-box-archive', TestID: 'ps-registry-archive', Primary: false, ReasonRequired: true },
   rollback: { Label: 'Roll back to this model', Icon: 'fa-solid fa-clock-rotate-left', TestID: 'ps-registry-rollback', Primary: false, ReasonRequired: true },
 };
 
-/** The transitions in the order the form offers them. */
-const TRANSITION_ORDER: readonly PredictiveStudioModelTransition[] = ['evaluate', 'publish', 'rollback', 'archive'];
+/** The transitions in the order the action bar offers them. */
+const TRANSITION_ORDER: readonly DetailTransition[] = ['evaluate', 'rollback', 'archive'];
 
 /**
  * **PSModelDetailComponent** — Unified enterprise component for inspecting, evaluating,
@@ -68,20 +89,35 @@ const TRANSITION_ORDER: readonly PredictiveStudioModelTransition[] = ['evaluate'
  *   2. **Custom Entity Form for `MJ: ML Models`** (`MLModelFormComponentExtended`)
  *
  * Renders:
- *   - Identity & immutable snapshot badge
+ *   - Identity, immutable snapshot badge and the lifecycle chip (`KeepBaseline`, `Unevaluated` serving or not, with the
+ *     stored `StatusReason`)
  *   - Progressive 4-stage lifecycle stepper (Draft → Validated → Published → Archived)
  *   - Train (inner-CV estimate, or in-sample for older models) vs out-of-sample holdout performance cards and overfit gap check
  *   - Key feature importance rankings with single-feature dominance warnings
  *   - Target leakage gate verification
- *   - The lifecycle transitions the §5.1 table allows from the model's status (evaluate, publish, archive, rollback),
- *     each applied by the lifecycle gate through the `PredictiveStudio.PromoteModel` Remote Operation
+ *   - The lifecycle transitions the §5.1 table allows from the model's status (evaluate, archive, rollback), each
+ *     applied by the lifecycle gate through the `PredictiveStudio.PromoteModel` Remote Operation; a publish goes through
+ *     the optional publish and sign-off flow ({@link PSSignOffPanelComponent}) on the stored evidence
+ *   - Tabs for the publish history, the scoring runs, the monitoring periods and the output-bindings label editor
+ *
+ * Never routes: a record a tab links to is the {@link OpenRecord} request, which the host turns into navigation.
  */
 @Component({
   standalone: true,
   selector: 'ps-model-detail',
   templateUrl: './ps-model-detail.component.html',
   styleUrls: ['./ps-model-detail.component.css'],
-  imports: [CommonModule, FormsModule, MJButtonDirective],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MJButtonDirective,
+    PSLifecycleChipComponent,
+    PSPublishHistoryComponent,
+    PSSignOffPanelComponent,
+    PSScoringRunsComponent,
+    PSModelMonitoringComponent,
+    PSOutputBindingsEditorComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSModelDetailComponent {
@@ -94,6 +130,15 @@ export class PSModelDetailComponent {
   @Input() ShowActions = true;
 
   @Output() StatusChanged = new EventEmitter<{ modelId: string; newStatus: string }>();
+
+  /** A request to open a record a tab links to (an initiator, a publish record); the host navigates. */
+  @Output() OpenRecord = new EventEmitter<PSOpenRecordRequest>();
+
+  /** The tabs, in the order shown. */
+  public readonly Tabs = DETAIL_TABS;
+
+  /** The tab shown; the other tabs are not rendered, so each loads its rows only when opened. */
+  public ActiveTab: PSModelDetailTab = 'overview';
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly notifications = inject(MJNotificationService);
@@ -117,21 +162,6 @@ export class PSModelDetailComponent {
   }
 
   // ── Badges & Lifecycle Stepper ──
-
-  public StatusBadgeClass(status: string | null | undefined): string {
-    switch ((status ?? '').toLowerCase()) {
-      case 'published':
-        return 'green';
-      case 'validated':
-        return 'blue';
-      case 'draft':
-        return 'amber';
-      case 'archived':
-        return 'gray';
-      default:
-        return 'gray';
-    }
-  }
 
   public StepState(step: string): 'done' | 'curr' | 'todo' {
     const order = ['Draft', 'Validated', 'Published', 'Archived'];
@@ -273,8 +303,8 @@ export class PSModelDetailComponent {
 
   // ── Lifecycle transitions ──
 
-  /** The transitions the §5.1 lifecycle table allows from the model's status, in the order the form offers them. */
-  public get AvailableTransitions(): PredictiveStudioModelTransition[] {
+  /** The transitions the §5.1 lifecycle table allows from the model's status, in the order the action bar offers them. */
+  public get AvailableTransitions(): DetailTransition[] {
     const status = this.Model?.Status;
     if (!status) return [];
     return TRANSITION_ORDER.filter((t) => PSModelDetailComponent.IsAllowedFrom(status, t));
@@ -296,14 +326,45 @@ export class PSModelDetailComponent {
     }
   }
 
-  /** True when the form offers `transition` for the model's status (one of {@link AvailableTransitions}). */
-  public Offers(transition: PredictiveStudioModelTransition): boolean {
+  /** True when the action bar offers `transition` for the model's status (one of {@link AvailableTransitions}). */
+  public Offers(transition: DetailTransition): boolean {
     return this.AvailableTransitions.includes(transition);
   }
 
   /** How `transition` is offered (label, icon, test id). */
-  public Presentation(transition: PredictiveStudioModelTransition): TransitionPresentation {
+  public Presentation(transition: DetailTransition): TransitionPresentation {
     return TRANSITION_PRESENTATION[transition];
+  }
+
+  /** True when the publish and sign-off panel is shown: actions are on and the lifecycle table allows a publish. */
+  public get ShowsSignOff(): boolean {
+    return this.ShowActions && !!this.Model && PSModelDetailComponent.IsAllowedFrom(this.Model.Status, 'publish');
+  }
+
+  /** Shows tab `tab`. */
+  public SelectTab(tab: PSModelDetailTab): void {
+    this.ActiveTab = tab;
+    this.cdr.markForCheck();
+  }
+
+  /** Forwards a tab's request to open a record to the host. */
+  public OnOpenRecord(request: PSOpenRecordRequest): void {
+    this.OpenRecord.emit(request);
+  }
+
+  /** Forwards the monitoring tab's request to open a publish record to the host. */
+  public OnOpenPublishRecord(recordId: string): void {
+    this.OpenRecord.emit({ EntityName: 'MJ: ML Model Publish Records', RecordID: recordId });
+  }
+
+  /** After the sign-off panel's applied publish: re-reads the model and tells the host the status the gate wrote. */
+  public async OnPublished(status: MJMLModelEntity['Status']): Promise<void> {
+    if (!this.Model) return;
+    const name = `${this.ModelDisplayName} v${this.Model.Version}`;
+    await this.reloadModel();
+    this.notifications.CreateSimpleNotification(`${name} → ${status}`, 'success', 3500);
+    this.StatusChanged.emit({ modelId: this.Model.ID, newStatus: this.Model.Status });
+    this.cdr.markForCheck();
   }
 
   public get ActionHint(): string {
@@ -312,7 +373,7 @@ export class PSModelDetailComponent {
         return 'Evaluate records the training run\'s stored gate decision; it moves the model to Validated or KeepBaseline.';
       case 'Validated':
       case 'KeepBaseline':
-        return 'Publishing re-checks the stored evidence; a flagged model is withheld until it is signed off.';
+        return 'Publish from the panel above: the lifecycle gate re-checks the stored evidence; a flagged model needs a sign-off.';
       case 'Published':
         return 'Active in production serving. Archiving will detach live predictions.';
       case 'Archived':
@@ -323,7 +384,7 @@ export class PSModelDetailComponent {
   }
 
   /** Opens the confirm dialog for `transition`. */
-  public RequestTransition(transition: PredictiveStudioModelTransition): void {
+  public RequestTransition(transition: DetailTransition): void {
     if (!this.Model) return;
     this.PendingReason = '';
     this.Pending = { ModelID: this.Model.ID, ModelName: `${this.ModelDisplayName} v${this.Model.Version}`, Transition: transition };
@@ -352,8 +413,6 @@ export class PSModelDetailComponent {
     switch (this.Pending.Transition) {
       case 'evaluate':
         return `Evaluate <strong>${name}</strong>? Its training run's stored gate decision moves it to Validated or KeepBaseline.`;
-      case 'publish':
-        return `Publish <strong>${name}</strong>? The lifecycle gate re-checks its stored evidence and archives the model it replaces. The trained weights never change.`;
       case 'archive':
         return `Archive <strong>${name}</strong>? This removes it from production scoring. The model artifact remains immutable and recoverable.`;
       case 'rollback':
@@ -389,8 +448,8 @@ export class PSModelDetailComponent {
         this.Pending = null;
         this.PendingReason = '';
       } else if (result.Success && result.Output) {
-        const refusal = result.Output.refusal?.kind || 'refused';
-        this.notifications.CreateSimpleNotification(`${ModelName}: the lifecycle gate refused the ${Transition} (${refusal}); it stays ${result.Output.status}.`, 'error', 6000);
+        const refusal = result.Output.refusal ? TransitionRefusalText.For(result.Output.refusal) : 'The lifecycle gate refused it.';
+        this.notifications.CreateSimpleNotification(`${ModelName} stays ${result.Output.status}: ${refusal}`, 'error', 6000);
       } else {
         this.notifications.CreateSimpleNotification(result.ErrorMessage || `Could not ${Transition} ${ModelName}.`, 'error', 5000);
       }

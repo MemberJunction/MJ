@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import type { RunViewParams } from '@memberjunction/core';
+import { CompositeKey, type RunViewParams } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, FormChromeContext, FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { MJMLModelFormComponent } from '../../generated/Entities/MJMLModel/mjmlmodel.form.component';
+import type { PSOpenRecordRequest } from './ps-model-detail-events';
 
 /**
  * Custom form override for `MJ: ML Models` (priority 100).
@@ -40,6 +41,11 @@ export class MLModelFormComponentExtended extends MJMLModelFormComponent impleme
 
     /** A new binding created from the section binds this model's training pipeline (set on init). */
     public PipelineBindingNewValues: Record<string, unknown> = {};
+
+    /** Opens the record a model-detail tab links to (an initiator, a publish record) through the form's navigation. */
+    public OnOpenModelRecord(request: PSOpenRecordRequest): void {
+        this.OnFormNavigate({ Kind: 'record', EntityName: request.EntityName, PrimaryKey: CompositeKey.FromID(request.RecordID), OpenInNewTab: true });
+    }
 
     /** The bindings section's grid parameters and new-record values for the record's pipeline. */
     private initPipelineBindings(): void {

@@ -2,10 +2,17 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import { PredictiveStudioPromoteModelOperation, type MJMLModelEntity, type PredictiveStudioPromoteModelInput, type PredictiveStudioPromoteModelOutput } from '@memberjunction/core-entities';
+import {
+  PredictiveStudioGetModelEvidenceOperation,
+  PredictiveStudioPromoteModelOperation,
+  type MJMLModelEntity,
+  type PredictiveStudioGetModelEvidenceOutput,
+  type PredictiveStudioPromoteModelInput,
+  type PredictiveStudioPromoteModelOutput,
+} from '@memberjunction/core-entities';
 import type { RemoteOpResult } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSModelDetailComponent } from './ps-model-detail.component';
 
 try {
@@ -24,6 +31,7 @@ try {
 type ModelDouble = Pick<
   MJMLModelEntity,
   'ID' | 'Version' | 'Status' | 'Algorithm' | 'Pipeline' | 'TargetVariable' | 'Metrics' | 'HoldoutMetrics' | 'FeatureImportance' | 'Lineage'
+  | 'StatusReason' | 'ServingWhileUnevaluated' | 'EvaluationProtocolID'
 >;
 
 const TREE_LINEAGE = JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } });
@@ -40,6 +48,9 @@ const makeModel = (over: Partial<ModelDouble>): ModelDouble => ({
   HoldoutMetrics: '{"AUC":0.85}',
   FeatureImportance: JSON.stringify({ MemberSinceDays: 0.72, AutoRenew: 0.2 }),
   Lineage: TREE_LINEAGE,
+  StatusReason: null,
+  ServingWhileUnevaluated: false,
+  EvaluationProtocolID: null,
   ...over,
 });
 
@@ -145,36 +156,51 @@ describe('PSModelDetailComponent (DOM) — lifecycle transitions through Predict
     await settle(f);
   };
 
-  it('the publish button sends transition publish', async () => {
-    const stored = { Status: 'Published' as MJMLModelEntity['Status'], Loads: 0 };
-    const model = transitionModel('Validated', stored);
-    const sentOperations = recordOperations({ applied: true, status: 'Published' });
-    vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
-    const fixture = render(model);
-    await click(fixture, '[data-action="publish"]');
-    await click(fixture, '[data-testid="ps-transition-confirm"]');
-    expect(sentOperations[0]).toMatchObject({ modelId: model.ID, transition: 'publish' });
+  /** Answers GetModelEvidence with no evidence (the sign-off panel's read), so a publishable model renders offline. */
+  const stubEvidence = (): void => {
+    vi.spyOn(PredictiveStudioGetModelEvidenceOperation.prototype, 'Execute').mockImplementation(async (): Promise<RemoteOpResult<PredictiveStudioGetModelEvidenceOutput>> => ({ Success: false, ResultCode: 'NOT_FOUND', ErrorMessage: 'no evidence in this test' }));
+  };
+
+  it('a Validated model is published through the sign-off panel, not the action bar', () => {
+    stubEvidence();
+    const fixture = render(transitionModel('Validated', { Status: 'Validated', Loads: 0 }));
+    expect([query(fixture, '[data-testid="ps-sign-off-panel"]') !== null, query(fixture, '[data-action="publish"]')]).toEqual([true, null]);
   });
 
   it('reloads the model through its provider after an applied transition and shows the status the gate wrote', async () => {
-    const stored = { Status: 'Published' as MJMLModelEntity['Status'], Loads: 0 };
-    const model = transitionModel('Validated', stored);
-    recordOperations({ applied: true, status: 'Published' });
+    const stored = { Status: 'Validated' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Draft', stored);
+    const sentOperations = recordOperations({ applied: true, status: 'Validated' });
     const notes = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    stubEvidence();
     const fixture = render(model);
     const emitted: string[] = [];
     fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
-    await click(fixture, '[data-action="publish"]');
+    await click(fixture, '[data-action="evaluate"]');
     await click(fixture, '[data-testid="ps-transition-confirm"]');
-    expect([stored.Loads, model.Status, emitted, query(fixture, '[data-testid="ps-confirm-modal"]')]).toEqual([1, 'Published', ['Published'], null]);
+    expect(sentOperations[0]).toMatchObject({ modelId: model.ID, transition: 'evaluate' });
+    expect([stored.Loads, model.Status, emitted, query(fixture, '[data-testid="ps-confirm-modal"]')]).toEqual([1, 'Validated', ['Validated'], null]);
     expect(notes.mock.calls[0]?.[1]).toBe('success');
+  });
+
+  it('after the sign-off panel publishes, re-reads the model and emits the status the gate wrote', async () => {
+    const stored = { Status: 'Published' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Validated', stored);
+    vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    stubEvidence();
+    const fixture = render(model);
+    const emitted: string[] = [];
+    fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
+    await fixture.componentInstance.OnPublished('Published');
+    expect([stored.Loads, emitted]).toEqual([1, ['Published']]);
   });
 
   it('offers exactly the transitions the lifecycle table allows from each status', () => {
     const offered = (status: MJMLModelEntity['Status']) =>
       queryAll(render(transitionModel(status, { Status: status, Loads: 0 })), '[data-action]').map((b) => b.getAttribute('data-action'));
+    stubEvidence();
     expect([offered('Draft'), offered('Validated'), offered('KeepBaseline'), offered('Published'), offered('Archived'), offered('Unevaluated')]).toEqual([
-      ['evaluate'], ['publish', 'archive'], ['publish', 'archive'], ['archive'], ['rollback'], ['archive'],
+      ['evaluate'], ['archive'], ['archive'], ['archive'], ['rollback'], ['archive'],
     ]);
   });
 
@@ -191,17 +217,47 @@ describe('PSModelDetailComponent (DOM) — lifecycle transitions through Predict
     expect(sentOperations).toEqual([{ modelId: model.ID, transition: 'archive', reason: 'superseded' }]);
   });
 
-  it("a refusal is shown with the gate's refusal kind; the model is not reloaded and nothing is emitted", async () => {
-    const stored = { Status: 'Validated' as MJMLModelEntity['Status'], Loads: 0 };
-    const model = transitionModel('Validated', stored);
-    recordOperations({ applied: false, status: 'Validated', refusal: { kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc'] } });
+  it("a refusal is shown in the gate's plain words; the model is not reloaded and nothing is emitted", async () => {
+    const stored = { Status: 'Draft' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Draft', stored);
+    const refusal = { kind: 'gate-no-signal', reason: 'no candidate beat the flat guess' } as const;
+    recordOperations({ applied: false, status: 'Draft', refusal });
     const notes = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
     const fixture = render(model);
     const emitted: string[] = [];
     fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
-    await click(fixture, '[data-action="publish"]');
+    await click(fixture, '[data-action="evaluate"]');
     await click(fixture, '[data-testid="ps-transition-confirm"]');
-    expect([stored.Loads, model.Status, emitted]).toEqual([0, 'Validated', []]);
-    expect([notes.mock.calls[0]?.[0], notes.mock.calls[0]?.[1]]).toEqual([expect.stringContaining('unacknowledged-leakage-flags'), 'error']);
+    expect([stored.Loads, model.Status, emitted]).toEqual([0, 'Draft', []]);
+    expect([notes.mock.calls[0]?.[0], notes.mock.calls[0]?.[1]]).toEqual([expect.stringContaining(TransitionRefusalText.For(refusal)), 'error']);
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — lifecycle chip and tabs', () => {
+  const PRE_CHANGE_REASON =
+    'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.';
+
+  it('an Unevaluated model shows its chip, the serving note and the stored reason in the header', () => {
+    const fixture = render(makeModel({ Status: 'Unevaluated', StatusReason: PRE_CHANGE_REASON, ServingWhileUnevaluated: true }));
+    expect([
+      query(fixture, '[data-testid="ps-lifecycle-chip"]')?.textContent,
+      query(fixture, '[data-testid="ps-lifecycle-serving"]')?.textContent?.trim(),
+      query(fixture, '[data-testid="ps-lifecycle-reason"]')?.textContent,
+    ]).toEqual([expect.stringContaining('retrain to publish'), expect.stringContaining('Still serving'), PRE_CHANGE_REASON]);
+  });
+
+  it('opens each tab on click and renders only the open one', async () => {
+    const fixture = render(makeModel({ Status: 'Published' }));
+    const opened = (tab: string, selector: string): boolean => {
+      (query(fixture, `[data-testid="ps-detail-tab-${tab}"]`) as HTMLButtonElement).click();
+      fixture.detectChanges();
+      return query(fixture, selector) !== null && query(fixture, '[data-testid="ps-leakage-gate"]') === null;
+    };
+    expect([
+      opened('history', '[data-testid="ps-publish-history"]'),
+      opened('scoring', '[data-testid="ps-scoring-runs"]'),
+      opened('monitoring', '[data-testid="ps-model-monitoring"]'),
+      opened('bindings', '[data-testid="ps-output-bindings-editor"]'),
+    ]).toEqual([true, true, true, true]);
   });
 });
