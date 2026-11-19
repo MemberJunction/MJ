@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT180 - Task Graph Durable Retry",
+    "Name": "IT181 - Task Graph Durable Retry",
     "Description": "Durable retry of workflow steps on the live dispatcher, bundle 'task-graph-durable-retry', DR1-DR3. A retryable failure goes back to Pending with Task.AttemptCount incremented and Task.NextAttemptAt set on the database clock, and claiming waits for that moment, so a retry survives a restart instead of being lost with the process that slept on it. DR1: one dispatcher fails a Prompt step (policy.retryCount 2) and stops; the row is Pending, unclaimed, with the error and the next attempt on it; a second dispatcher instance runs the retry exactly once, not before it is due, and the graph completes. DR2: a step whose retries are spent fails for good after one run plus its one allowed retry. DR3: an Agent step is never retried whatever its policy says, because its run may have called actions that must not run twice. Stub prompt and agent runners stand in for the model, so no model calls are made. Mutation-class throughout: creates Tasks, Task Dependencies and (if absent) a Task Type, and deletes all of them.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

@@ -1311,7 +1311,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (192 classes)
+// @memberjunction/core-actions (193 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1343,6 +1343,7 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2622,6 +2623,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,

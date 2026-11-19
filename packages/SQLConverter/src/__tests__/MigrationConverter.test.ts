@@ -48,18 +48,18 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
   });
 
-  it('does NOT flag a legitimate reseed/regen marker (classifier found nothing translatable)', async () => {
-    // A pure mj-sync metadata file legitimately produces an empty marker — trust the
-    // classifier, do not second-guess it at the reconciliation layer.
+  it('converts a pure mj-sync file inline and does not flag it (issue #5543)', async () => {
+    // An mj-sync log is no longer an empty "re-seeded" marker: it converts inline through the
+    // legacy EXEC/DML block conversion, and the reconciliation layer does not flag it.
     const sql = [
       '-- MetadataSync push operation',
       "DECLARE @Name_da319a9d NVARCHAR(100) = N'X';",
       "INSERT INTO [__mj].[AIModel] ([ID],[Name]) VALUES ('aaaa', @Name_da319a9d);",
     ].join('\n');
     const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
+    expect(r.status).toBe('converted');
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
-    expect(r.reconciliation.emittedStatements).toBe(0);
+    expect(r.pgSQL).toContain('INSERT INTO __mj."AIModel"');
   });
 
   it('promotes a FULLY GAPPED conversion to needs-hand-authoring (issue #3840)', async () => {
@@ -135,10 +135,16 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     // NOT regenerate it) can be routed to an empty marker by the classifier. Returning a clean
     // reseed/regen marker there is exactly the RC1 silent-drop class — the marker path must
     // reconcile source statements against what was kept/reported before trusting the emptiness.
+    // A baseline keeps the name-based view rule, so the view still reaches the empty marker there.
     const sql = 'CREATE VIEW [__mj].[CustomerSummary] AS SELECT [ID], [Total] FROM [__mj].[Orders];';
-    const r = await ConvertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'B1__CustomerSummary.sql', { transpiler: passthrough });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+    // In a feature migration with no CodeGen banner the view is the author's own and is
+    // transpiled instead (issue #5551).
+    const feature = await ConvertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
+    expect(feature.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(feature.pgSQL).toContain('CustomerSummary');
   });
 
   it('substitutes ${mjSchema} independently of ${flyway:defaultSchema} (issue #3838)', async () => {
@@ -399,7 +405,7 @@ describe('convertMigration', () => {
     expect(r.pgSQL).toContain('CREATE TABLE');
   });
 
-  it('treats a pure mj-sync Metadata_Sync file as reseed-or-regen-only (no DDL emitted)', async () => {
+  it('reports an mj-sync save the inline conversion cannot read, never a reseed marker (issue #5543)', async () => {
     const sql = [
       '-- SQL Logging Session',
       '-- Description: MetadataSync push operation',
@@ -408,16 +414,17 @@ describe('convertMigration', () => {
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
     const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).toContain('mj sync push');
-    // No spCreate call carried into the PG output — it is re-seeded, not transpiled.
-    expect(r.pgSQL).not.toContain('spCreateAIModel');
+    // A one-line SET + unbracketed EXEC is not the shape mj-sync writes; the legacy rule skips it
+    // and the skip is a reported gap rather than a silent marker.
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.pgSQL).not.toContain('mj sync push');
+    expect(r.unhandled.length).toBeGreaterThan(0);
   });
 
-  it('keeps an mj-sync file as reseed even when it contains incidental data DML (not schema DDL)', async () => {
-    // Regression: a 964k-line Metadata_Sync file was mis-routed to "converted"
-    // because an INSERT/UPDATE matched the DDL regex. Data DML in an mj-sync file
-    // is the metadata seed itself — reproduced by `mj sync push`, never transpiled.
+  it('never sends an mj-sync file with incidental data DML to the AST transpiler', async () => {
+    // Regression: a 964k-line Metadata_Sync file was mis-routed to the transpiler because an
+    // INSERT/UPDATE matched the DDL regex. Data DML in an mj-sync file is the metadata seed itself;
+    // it converts inline (issue #5543) or is reported, never transpiled as DDL.
     const sql = [
       '-- SQL Logging Session',
       '-- Description: MetadataSync push operation',
@@ -425,12 +432,14 @@ describe('convertMigration', () => {
       'UPDATE __mj.AIModel SET Name = @Name_da319a9d WHERE ID = 1;',
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = await ConvertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).not.toContain('spCreateAIModel');
+    const transpiled: string[] = [];
+    const recording: TSQLToPGTranspiler = { async transpile(tsql: string) { transpiled.push(tsql); return { sql: [tsql], unhandled: [] }; } };
+    const r = await ConvertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: recording });
+    expect(transpiled).toEqual([]);
+    expect(r.status).not.toBe('reseed-or-regen-only');
   });
 
-  it('keeps an mj-sync file as reseed when a multi-line string literal contains DDL-looking text', async () => {
+  it('never transpiles an mj-sync file whose multi-line string literal contains DDL-looking text', async () => {
     // Regression: stripCommentsPreservingLines reset its in-string state per line, so a
     // prompt-template literal spanning lines whose content mentions "ALTER TABLE" was
     // scanned as code → schema-ddl finding → the whole metadata seed was mis-routed to
@@ -443,9 +452,13 @@ describe('convertMigration', () => {
       "End of template';",
       'EXEC __mj.spUpdateAIPrompt @Description = @Description_da319a9d;',
     ].join('\n');
-    const r = await ConvertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).not.toContain('spUpdateAIPrompt');
+    const transpiled: string[] = [];
+    const recording: TSQLToPGTranspiler = { async transpile(tsql: string) { transpiled.push(tsql); return { sql: [tsql], unhandled: [] }; } };
+    const r = await ConvertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: recording });
+    expect(transpiled).toEqual([]);
+    // The fragment is not a save block, so it is reported instead of passed through as converted.
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.unhandled.some((u) => u.kind.startsWith('SYNC-LOG'))).toBe(true);
   });
 
   it('transpiles a Backfill_* data migration (data DML, no mj-sync fingerprints)', async () => {
@@ -510,6 +523,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     const sql = snapshot(
       'CREATE TABLE [__mj].[T] ([ID] INT);',
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];', // codegen-object → triggers statement mode
+      'CREATE PROCEDURE [__mj].[spCreateT] AS BEGIN SELECT 1 END;', // CodeGen CRUD: a pasted snapshot
       "EXEC sp_rename '__mj.T.Old', 'New', 'COLUMN';", // unknown
     );
     const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
@@ -532,6 +546,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     const sql = snapshot(
       'CREATE TABLE [__mj].[T] ([ID] INT);',
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE PROCEDURE [__mj].[spCreateT] AS BEGIN SELECT 1 END;',
       'CREATE VIEW [__mj].[vwEntitiesWithExternalChangeTracking] AS SELECT 1 AS X;',
     );
     const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
@@ -543,6 +558,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     const sql = snapshot(
       'CREATE TABLE [__mj].[T] ([ID] INT);',
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE PROCEDURE [__mj].[spCreateT] AS BEGIN SELECT 1 END;',
       'CREATE PROCEDURE [__mj].[GetWeirdStuff] AS BEGIN SELECT 1 END;',
     );
     const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
@@ -555,11 +571,14 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     const sql = snapshot(
       'CREATE TABLE [__mj].[T] ([ID] INT);',
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE PROCEDURE [__mj].[spCreateT] AS BEGIN SELECT 1 END;',
       "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
     );
     const kept = ExtractKeptTSQL(sql, 'V_Old_Unbannered_Snapshot.sql');
     expect(kept.notes[0]).toMatch(/1 metadata DML/);
     expect(kept.tsql).not.toContain('INSERT INTO [__mj].[Entity]');
+    // …and, outside an mj-sync log, as a named gap: nothing re-seeds an Open App's rows (#5551).
+    expect(kept.classificationGaps.map((g) => g.kind)).toEqual(['METADATA-DML-DROPPED']);
   });
 
   it('BASELINES keep their metadata DML (the point-in-time seed codegen boots from)', () => {
@@ -792,5 +811,109 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
     ].join('\n');
     const kept = ExtractKeptTSQL(noBanner, 'V_Gadgets_Feature.sql');
     expect(kept.tsql).toContain("'MJ: Gadgets'");
+  });
+});
+
+describe('extractKeptTSQL — Open App CodeGen block recovery (issue #5550)', () => {
+  // An Open App's CodeGen writes MJ core tables as ${mjSchema}; its own schema is the default.
+  const appBaseline = [
+    'CREATE TABLE [${flyway:defaultSchema}].[Contract] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+    'GO',
+    '-- CODE GEN RUN',
+    '/* Set field properties */',
+    "UPDATE [${mjSchema}].[EntityField] SET [DefaultInView] = 1 WHERE [ID] = 'aaaa';",
+    'GO',
+    '/* entity icon */',
+    "UPDATE [${mjSchema}].[Entity] SET [Icon] = 'fa fa-file' WHERE [ID] = 'bbbb';",
+    'GO',
+    '/* application entity */',
+    "UPDATE [${mjSchema}].[ApplicationEntity] SET [Sequence] = 1 WHERE [ID] = 'cccc';",
+    'GO',
+    '/* settings */',
+    "INSERT INTO [${mjSchema}].[EntitySetting] ([ID],[EntityID],[Name],[Value]) VALUES ('dddd','bbbb','FieldCategoryInfo','{}');",
+    'GO',
+    '/* validator */',
+    "INSERT INTO [${mjSchema}].[GeneratedCode] ([ID],[Name]) VALUES ('eeee','ValidateDates');",
+    'GO',
+    '/* app seed row — not a registration table, stays dropped */',
+    "INSERT INTO [${flyway:defaultSchema}].[Contract] ([ID]) VALUES ('ffff');",
+  ].join('\n');
+
+  it('recovers ${mjSchema} UPDATEs and EntitySetting / GeneratedCode INSERTs', () => {
+    const kept = ExtractKeptTSQL(appBaseline, 'V1__Contracts.sql');
+    expect(kept.tsql).toContain('[${mjSchema}].[EntityField] SET [DefaultInView]');
+    expect(kept.tsql).toContain('[${mjSchema}].[Entity] SET [Icon]');
+    expect(kept.tsql).toContain('[${mjSchema}].[ApplicationEntity]');
+    expect(kept.tsql).toContain('[${mjSchema}].[EntitySetting]');
+    expect(kept.tsql).toContain('[${mjSchema}].[GeneratedCode]');
+  });
+
+  it('does not recover an app-table INSERT from the CodeGen block', () => {
+    const kept = ExtractKeptTSQL(appBaseline, 'V1__Contracts.sql');
+    expect(kept.tsql).not.toMatch(/INSERT INTO \[\$\{flyway:defaultSchema\}\]\.\[Contract\]/);
+  });
+});
+
+describe('extractKeptTSQL — app-owned views in an unbannered file (issue #5551)', () => {
+  const wrapper = [
+    "CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwContracts] AS SELECT g.*, 1 AS [IsOpen] FROM [${flyway:defaultSchema}].[vwContractsGenerated] g;",
+    'GO',
+    'GRANT SELECT ON [${flyway:defaultSchema}].[vwContracts] TO [cdp_UI];',
+    'GO',
+  ].join('\n');
+
+  it('keeps a vw… view in a non-baseline file with no CodeGen banner (banner mode, transpiled)', async () => {
+    const kept = ExtractKeptTSQL(wrapper, 'V2__Layered_views.sql');
+    expect(kept.status).toBe('converted');
+    expect(kept.droppedObjects).toEqual([]);
+    expect(kept.tsql).toContain('CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwContracts]');
+    const r = await ConvertMigration(wrapper, 'V2__Layered_views.sql', { transpiler: passthrough });
+    expect(r.unhandled).toEqual([]);
+  });
+
+  it('keeps the name-based rule for a baseline and for a file carrying CodeGen CRUD routines', () => {
+    const withCrud = [
+      wrapper,
+      'CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContract] AS BEGIN SELECT 1 END;',
+      'GO',
+    ].join('\n');
+    expect(ExtractKeptTSQL(withCrud, 'V3__Snapshot.sql').droppedObjects).toContain('VIEW vwContracts');
+    expect(ExtractKeptTSQL(withCrud, 'B1__Baseline.sql').droppedObjects).toContain('VIEW vwContracts');
+  });
+
+  it('reports metadata DML that statement mode drops outside an mj-sync log as a named gap', async () => {
+    const snapshot = [
+      'CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMeeting] AS BEGIN SELECT 1 END;',
+      'GO',
+      "UPDATE [${mjSchema}].[Entity] SET [BaseViewGenerated] = 0 WHERE [Name] = 'Meetings';",
+      'GO',
+    ].join('\n');
+    const r = await ConvertMigration(snapshot, 'V4__Meetings.sql', { transpiler: passthrough });
+    expect(r.unhandled.map((u) => u.kind)).toEqual(['METADATA-DML-DROPPED']);
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.pgSQL).toContain('METADATA-DML-DROPPED');
+    const sync = await ConvertMigration(snapshot, 'V4__Metadata_Sync.sql', { transpiler: passthrough });
+    expect(sync.unhandled).toEqual([]);
+  });
+});
+
+describe('convertMigration — sp_refreshview warnings (issue #5649)', () => {
+  it('names each sp_refreshview, hand region or CodeGen block, without failing the file', async () => {
+    const sql = [
+      'ALTER TABLE [${flyway:defaultSchema}].[Widget] ADD [Size] INT NULL;',
+      'GO',
+      "EXEC sp_refreshview '${flyway:defaultSchema}.vwWidgets';",
+      'GO',
+      '-- CODE GEN RUN',
+      '/* refresh */',
+      "EXEC sp_refreshview '${flyway:defaultSchema}.vwGadgets';",
+      '-- EXEC sp_refreshview \'commented.out\'',
+    ].join('\n');
+    const r = await ConvertMigration(sql, 'V5__Size.sql', { transpiler: passthrough });
+    expect(r.status).toBe('converted');
+    expect(r.warnings).toEqual([
+      "V5__Size.sql: sp_refreshview '${flyway:defaultSchema}.vwWidgets' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns",
+      "V5__Size.sql: sp_refreshview '${flyway:defaultSchema}.vwGadgets' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns",
+    ]);
   });
 });
