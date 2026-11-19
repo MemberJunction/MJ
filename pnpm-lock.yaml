@@ -1520,10 +1520,10 @@ importers:
         specifier: 6.3.0-edge.1
         version: link:../../../RecordSetProcessor/base
       '@memberjunction/scheduling-base-types':
-        specifier: 6.3.0-edge.0
+        specifier: 6.3.0-edge.1
         version: link:../../../Scheduling/base-types
       '@memberjunction/scheduling-engine':
-        specifier: 6.3.0-edge.0
+        specifier: 6.3.0-edge.1
         version: link:../../../Scheduling/engine
       '@memberjunction/storage':
         specifier: 6.3.0-edge.1
