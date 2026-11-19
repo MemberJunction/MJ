@@ -17,10 +17,14 @@
             "JSONTypeDefinition": "@file:JSONType-interfaces/IArtifactVersionConfiguration.ts"
           },
           "_comments": [
-            "ArtifactVersion.Configuration \u2014 preview snapshot, thumbnail data URL, connected drive link metadata, and legacy guest share link entries"
+            "ArtifactVersion.Configuration — preview snapshot, thumbnail data URL, connected drive link metadata, and legacy guest share link entries"
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.057Z",
+            "checksum": "097db7889d2fc9f4bcba8b1ab4d8f871ee4404fb5b429aa0d3f50ed216644f87"
           }
         }
       ]
@@ -47,10 +51,14 @@
             "JSONTypeDefinition": "@file:JSONType-interfaces/CommentTypeAllowedAnchorType.ts"
           },
           "_comments": [
-            "CommentType.AllowedAnchorTypes \u2014 optional JSON array of permitted Conversation.AnchorType values"
+            "CommentType.AllowedAnchorTypes — optional JSON array of permitted Conversation.AnchorType values"
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Comment Types&Name=AllowedAnchorTypes"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.080Z",
+            "checksum": "8cc1f49290b28db967007825b9c033b4fa91b1f31988efe76578dcb39c340267"
           }
         }
       ]

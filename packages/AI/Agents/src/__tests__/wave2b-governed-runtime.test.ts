@@ -399,7 +399,7 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
         const editCall = await manager.ExecuteSingleToolCall({
             artifactId: 'A',
             tool: 'replace_block',
-            input: { blockId: blocks[0].blockId, content: 'Agent update.' },
+            input: { blockId: blocks[0].blockId, markdown: 'Agent update.' },
         });
 
         expect(persistSpy).toHaveBeenCalledTimes(2);

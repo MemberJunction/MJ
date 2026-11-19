@@ -1882,7 +1882,7 @@ export class AgentRunner {
         if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
             for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
                 const step = agentRun.Steps[i];
-                if (step.StepType === 'Sub-Agent' && step.Success) {
+                if (step.StepType === 'Sub-Agent' && step.Success && !AgentRunner.isRelatedSubAgentStep(step)) {
                     const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
                     const delegatedAgent = subAgentId
                         ? agentsById.Get(subAgentId)
@@ -2088,7 +2088,8 @@ export class AgentRunner {
                         creationMode,
                         directive,
                         payload as AgentRunnerJsonValue | object,
-                        forkCommentNote
+                        forkCommentNote,
+                        agentResult.payloadArtifactTypeID
                     );
                     artifactId = artifact.ID;
                     artifactTypeId = artifact.TypeID;
@@ -2705,6 +2706,23 @@ export class AgentRunner {
         }
     }
 
+    private static isRelatedSubAgentStep(step: { StepName?: string | null; InputData?: string | null }): boolean {
+        if (typeof step.StepName === 'string' && step.StepName.startsWith('Execute Related Sub-Agent:')) {
+            return true;
+        }
+        if (typeof step.InputData === 'string' && step.InputData.includes('relationshipType')) {
+            try {
+                const parsed = JSON.parse(step.InputData) as { relationshipType?: unknown };
+                if (parsed?.relationshipType === 'related') {
+                    return true;
+                }
+            } catch {
+                // Ignore malformed InputData JSON
+            }
+        }
+        return false;
+    }
+
     /**
      * Creates the artifact header row. Name and description come from the agent's directive when
      * it supplied them (e.g. Skip's artifactRequest); otherwise the historical placeholder.
@@ -2716,7 +2734,8 @@ export class AgentRunner {
         creationMode: string | undefined,
         directive: ArtifactDirective | undefined,
         payload?: AgentRunnerJsonValue | object,
-        comments?: string
+        comments?: string,
+        payloadArtifactTypeID?: string
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -2729,8 +2748,10 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
-        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        // Prefer a delegated sub-agent's payloadArtifactTypeID over the parent agent's
+        // DefaultArtifactTypeID so router agents (e.g. Skip -> Data Answerer) don't overwrite
+        // a specialist child's artifact type; otherwise infer Research Content when the payload
+        // carries a non-empty report.html string.
         const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
             ? (payload as AgentRunnerJsonObject)
             : undefined;
@@ -2738,7 +2759,8 @@ export class AgentRunner {
             ? (payloadObj.report as AgentRunnerJsonObject)
             : undefined;
         const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
-        artifact.TypeID = agent?.DefaultArtifactTypeID
+        artifact.TypeID = payloadArtifactTypeID
+            || agent?.DefaultArtifactTypeID
             || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;

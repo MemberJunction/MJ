@@ -16,6 +16,7 @@ import {
     DefaultPipelineTuning,
     ExtractRequest,
     ExtractResult,
+    TransientStageError,
 } from '@memberjunction/content-pipeline-base';
 
 /** The registered key. */
@@ -45,7 +46,7 @@ export class ArchiveExtractor extends BaseContentExtractor {
         const blocks: ContentBlock[] = [];
         for (const member of members) {
             if (request.Signal.aborted) {
-                break;
+                throw new TransientStageError('archive extraction stopped before unpacking all members');
             }
             const extension = path.posix.extname(member.Path);
             blocks.push({

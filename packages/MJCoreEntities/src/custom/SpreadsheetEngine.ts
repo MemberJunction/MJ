@@ -3,9 +3,9 @@ import {
     IMetadataProvider,
     IRunQueryProvider,
     LogError,
+    LogWarning,
     Metadata,
     ProjectEntityValueRowsForUser,
-    QueryInfo,
     RunQuery,
     RunView,
     RunViewParams,
@@ -13,6 +13,7 @@ import {
     UserInfo
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { QueryEngine } from '../engines/QueryEngine';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 import {
     ArtifactAiFormulaCellRequest,
@@ -8689,6 +8690,37 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 return finiteOrNumError(normalizeCompareFloat15(total));
             }
+            case 'SPARKLINE': {
+                if (args.length === 0) return '#VALUE!';
+                const firstArg = args[0];
+                const points: number[] = [];
+                if (isDirectRangeOrRef(firstArg)) {
+                    for (const v of resolveNonBlankRangeValues(firstArg)) {
+                        if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                        if (typeof v === 'number' && Number.isFinite(v)) points.push(v);
+                    }
+                } else if (nodeContainsArray(firstArg)) {
+                    const matrix = this.evalAstMatrix(firstArg, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                    for (const row of matrix) {
+                        for (const v of row) {
+                            if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                            if (typeof v === 'number' && Number.isFinite(v)) points.push(v);
+                        }
+                    }
+                } else {
+                    const scalar = evalScalar(firstArg);
+                    if (typeof scalar === 'string' && this.isErrorValue(scalar)) return scalar;
+                    if (typeof scalar === 'number' && Number.isFinite(scalar)) points.push(scalar);
+                }
+                if (points.length === 0) return '#N/A';
+                let chartType: 'line' | 'bar' | 'winloss' = 'line';
+                if (isArgProvided(1)) {
+                    const rawType = String(evalScalar(args[1]) ?? '').trim().toLowerCase();
+                    if (rawType === 'bar' || rawType === 'column') chartType = 'bar';
+                    else if (rawType === 'winloss') chartType = 'winloss';
+                }
+                return BuildSparklineValue(points, chartType);
+            }
             case 'ROUND':
             case 'ROUNDUP':
             case 'ROUNDDOWN': {
@@ -11196,6 +11228,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (value === null || value === undefined) return '';
         if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
         if (typeof value === 'string' && this.isErrorValue(value)) return value;
+        const spark = ParseSparklineValue(value);
+        if (spark) {
+            return `Sparkline (${spark.Values.length} pts)`;
+        }
 
         const formatType = style?.FormatType ?? this.InferFormatTypeFromPattern(style?.NumberFormatPattern);
         if (typeof value === 'number') {
@@ -12288,14 +12324,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (parsed.Kind === 'QUERY') {
             // Map positional args to non-server-set query parameters if the query metadata is available
             const params: Record<string, SpreadsheetCellValue> = { ...parsed.NamedParameters };
-            const queries: QueryInfo[] = provider?.Queries ?? [];
-            const matchedQuery = queries.find(
-                (q) =>
-                    UUIDsEqual(q.ID, parsed.PrimaryTarget) ||
-                    q.Name.toLowerCase() === parsed.PrimaryTarget.toLowerCase()
-            );
+            const queryEngine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+            await queryEngine.Config(false, contextUser, provider);
+            if (!queryEngine.Loaded) {
+                LogWarning(`SpreadsheetEngine: saved queries could not be loaded; =MJ.QUERY("${parsed.PrimaryTarget}") falls back to positional parameter names`);
+            }
+            const matchedQuery = queryEngine.FindQueryByID(parsed.PrimaryTarget) ?? queryEngine.FindQueryByName(parsed.PrimaryTarget);
             if (matchedQuery && parsed.Arguments.length > 0) {
-                const clientParams = (matchedQuery.Parameters ?? []).filter((p) => !p.IsServerSet);
+                const clientParams = matchedQuery.QueryParameters.filter((p) => !p.IsServerSet);
                 for (let idx = 0; idx < parsed.Arguments.length && idx < clientParams.length; idx++) {
                     const paramName = clientParams[idx].Name;
                     if (params[paramName] === undefined) {
@@ -19927,6 +19963,42 @@ function computeStableAiInputHash(input: string): string {
         h2 = Math.imul(h2, 0x01000193);
     }
     return `ai-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+export const SPARKLINE_VALUE_PREFIX = '__MJ_SPARKLINE__:';
+
+export interface ParsedSparklineValue {
+    Type: 'line' | 'bar' | 'winloss';
+    Values: number[];
+}
+
+export function BuildSparklineValue(
+    values: ReadonlyArray<number>,
+    chartType: 'line' | 'bar' | 'winloss' = 'line'
+): string {
+    const clamped = values
+        .filter((v) => typeof v === 'number' && Number.isFinite(v))
+        .slice(0, 64)
+        .map((v) => Number(v.toFixed(4)));
+    return `${SPARKLINE_VALUE_PREFIX}${chartType}:${clamped.join(',')}`;
+}
+
+export function ParseSparklineValue(raw: SpreadsheetCellValue | undefined): ParsedSparklineValue | null {
+    if (typeof raw !== 'string' || !raw.startsWith(SPARKLINE_VALUE_PREFIX)) {
+        return null;
+    }
+    const rest = raw.slice(SPARKLINE_VALUE_PREFIX.length);
+    const colonIdx = rest.indexOf(':');
+    if (colonIdx < 0) return null;
+    const rawType = rest.slice(0, colonIdx);
+    const type: 'line' | 'bar' | 'winloss' =
+        rawType === 'bar' ? 'bar' : rawType === 'winloss' ? 'winloss' : 'line';
+    const values = rest
+        .slice(colonIdx + 1)
+        .split(',')
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n));
+    return values.length > 0 ? { Type: type, Values: values } : null;
 }
 
 LoadSpreadsheetEngine();

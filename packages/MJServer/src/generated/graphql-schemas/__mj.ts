@@ -37407,6 +37407,12 @@ export class MJContentItemChunk_ {
     @Field({nullable: true, description: "Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk."}) 
     Decorator?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
@@ -37513,6 +37519,12 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     Decorator: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37594,6 +37606,12 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     Decorator?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38236,6 +38254,12 @@ export class MJContentItem_ {
     @MaxLength(36)
     FileID?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -38381,6 +38405,12 @@ export class CreateMJContentItemInput {
     @Field({ nullable: true })
     FileID: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -38477,6 +38507,12 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     FileID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39871,6 +39907,9 @@ export class MJContentSource_ {
     @MaxLength(36)
     GraphID?: string;
         
+    @Field({nullable: true, description: "Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress."}) 
+    DiscoverState?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentType?: string;
@@ -39974,6 +40013,9 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     GraphID: string | null;
 
+    @Field({ nullable: true })
+    DiscoverState: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -40040,6 +40082,9 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     GraphID?: string | null;
+
+    @Field({ nullable: true })
+    DiscoverState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -98526,6 +98571,16 @@ export class MJTask_ {
     @MaxLength(36)
     CompensatesTaskID?: string;
         
+    @Field({nullable: true, description: "For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step."}) 
+    @MaxLength(400)
+    CorrelationKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it."}) 
+    AttemptCount?: number;
+        
+    @Field({nullable: true, description: "For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free."}) 
+    NextAttemptAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -98677,6 +98732,15 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     CompensatesTaskID: string | null;
 
+    @Field({ nullable: true })
+    CorrelationKey: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -98767,6 +98831,15 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     CompensatesTaskID?: string | null;
+
+    @Field({ nullable: true })
+    CorrelationKey?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -10989,17 +10989,19 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Possible Values 
     *   * Action
     *   * Decision
+    *   * External
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
+    *   * Wait
     *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
-    get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -45437,6 +45439,33 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk.
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: RetryAfter
+    * * Display Name: Retry After
+    * * SQL Data Type: datetimeoffset
+    * * Description: The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait.
+    */
+    get RetryAfter(): Date | null {
+        return this.Get('RetryAfter');
+    }
+    set RetryAfter(value: Date | null) {
+        this.Set('RetryAfter', value);
+    }
+
+    /**
     * * Field Name: ContentItem
     * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
@@ -46360,6 +46389,33 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
     set FileID(value: string | null) {
         this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes.
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: RetryAfter
+    * * Display Name: Retry After
+    * * SQL Data Type: datetimeoffset
+    * * Description: The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait.
+    */
+    get RetryAfter(): Date | null {
+        return this.Get('RetryAfter');
+    }
+    set RetryAfter(value: Date | null) {
+        this.Set('RetryAfter', value);
     }
 
     /**
@@ -47438,6 +47494,33 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
  * the user needs to provide when configuring a source of that type.
  */
 export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
+    /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
+
+    /**
+     * The entity items of every source of this type are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Used when the source names none; overrides the content type's and the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
     /** Fields required when creating a content source of this type */
     RequiredFields?: MJContentSourceTypeEntity_IContentSourceTypeField[];
     /** Whether this source type requires a Content Type selection. Default true. Entity sources set this to false. */
@@ -47635,6 +47718,16 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
  */
 export interface MJContentSourceEntity_IContentSourceConfiguration {
     /**
+     * The entity this source's items are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Overrides the source type's, the content type's and the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
+    /**
      * Options passed to the segmentation strategy named by SegmenterKey.
      *
      * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
@@ -47777,6 +47870,23 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+
+    /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
     /**
      * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
      * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
@@ -47889,6 +47999,12 @@ export interface MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig {
      * SQL numeric column types store as numbers automatically without setting this.
      */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**
@@ -47924,6 +48040,20 @@ export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+    /**
+     * Seed the crawl from the site's sitemaps: those in {@link SitemapURLs}, else the ones robots.txt
+     * names, else `/sitemap.xml`. Each in-scope page a sitemap lists is found (unless its `lastmod` is
+     * older than the walk's `Since`) and its links are followed like any other page's. Default false.
+     */
+    UseSitemaps?: boolean;
+    /** Sitemaps to read instead of looking in robots.txt. A sitemap index is followed. */
+    SitemapURLs?: string[];
+    /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
+    CrawlDelayMs?: number;
+    /** The most pages whose links one walk reads (across all its parts). Unset: no limit. */
+    MaxPages?: number;
+    /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
+    RenderTimeoutMs?: number;
 }
 
 /**
@@ -47981,6 +48111,27 @@ export interface MJContentSourceEntity_IContentCleaningOptions {
     ReplaceDefaultExcludes?: boolean;
     /** Html cleaner: keep `alt` text from images as content. */
     IncludeImageAltText?: boolean;
+}
+
+/**
+ * Where an unfinished Discover or Sync walk of a content source stopped (`ContentSource.DiscoverState`).
+ *
+ * Written by the content pipeline's Discover stage when a source's driver returns a resume token (the walk
+ * ran past `Options.Tuning.DiscoverWalkBudgetMs`), read by the next walk, which carries on from it, and
+ * cleared when a walk finishes. Not configuration: nothing but the pipeline should write it.
+ */
+export interface MJContentSourceEntity_IContentSourceDiscoverState {
+    /** The driver's token: where the walk stopped. Opaque to everything but the driver that wrote it. */
+    ResumeToken: string;
+    /**
+     * When the walk's first part started (ISO 8601). `LastDiscoveredAt` (or `LastSyncedAt`) takes it once the
+     * walk finishes, so a page changed while the walk was in progress is still seen as changed by the next walk.
+     */
+    WalkStartedAt: string;
+    /** The mode the walk was started in. A walk resumes only in that mode; a walk of the other mode starts afresh. */
+    Mode: 'Discover' | 'Sync';
+    /** Items the walk's earlier parts found. */
+    ItemsFound: number;
 }
 
 /**
@@ -48303,6 +48454,35 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: DiscoverState
+    * * Display Name: Discover State
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentSourceEntity_IContentSourceDiscoverState
+    * * Description: Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress.
+    */
+    get DiscoverState(): string | null {
+        return this.Get('DiscoverState');
+    }
+    set DiscoverState(value: string | null) {
+        this.Set('DiscoverState', value);
+    }
+
+    /**
+    * Typed accessor for DiscoverState — a live view of the parsed JSON as MJContentSourceEntity_IContentSourceDiscoverState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DiscoverState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DiscoverStateObject(): MJContentSourceEntity_IContentSourceDiscoverState | null {
+        return this.GetJSONFieldObject<MJContentSourceEntity_IContentSourceDiscoverState>('DiscoverState');
+    }
+    set DiscoverStateObject(value: MJContentSourceEntity_IContentSourceDiscoverState | null) {
+        this.SetJSONFieldObject<MJContentSourceEntity_IContentSourceDiscoverState>('DiscoverState', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -48510,6 +48690,16 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
  */
 export interface MJContentTypeEntity_IContentTypeConfiguration {
     /**
+     * The entity items of every source producing this content type are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Used when neither the source nor its source type names one; overrides the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
+    /**
      * Options passed to the segmentation strategy named by SegmenterKey.
      *
      * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
@@ -48584,6 +48774,12 @@ export interface MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig {
     TruncationLimit?: number;
     /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**
@@ -93169,13 +93365,28 @@ export interface MJRecordChangeEntity_IRecordChangeCloneContext {
     Reason?: string;
 }
 
+export interface MJRecordChangeEntity_IRecordChangeSyncContext {
+    /** `MJ_DEPLOYMENT_ID` of the origin deployment where the change originated. */
+    OriginDeploymentID: string;
+    /** Deterministic pairing ID between the local and peer deployments. */
+    PairingID: string;
+    /** `MJ: Company Integration Runs` ID that applied this sync change. */
+    RunID: string;
+    /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
+    OriginChangeIDs: string[];
+    /** Email address of the user who authored the latest change on the origin deployment (optional for service accounts). */
+    OriginUserEmail?: string;
+}
+
 export interface MJRecordChangeEntity_IRecordChangeContext {
     /** Shape version. */
     Version: 1;
     /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
-    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
+    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Sync' | 'Other';
     /** Populated when Kind === 'Clone'. */
     Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
+    /** Populated when Kind === 'Sync'. */
+    Sync?: MJRecordChangeEntity_IRecordChangeSyncContext;
     /** Free-form tags for future kinds; never values. */
     Tags?: string[];
 }
@@ -93293,12 +93504,13 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     *   * External
     *   * Internal
     *   * Restore
+    *   * Sync
     * * Description: Internal or External
     */
-    get Source(): 'Clone' | 'External' | 'Internal' | 'Restore' {
+    get Source(): 'Clone' | 'External' | 'Internal' | 'Restore' | 'Sync' {
         return this.Get('Source');
     }
-    set Source(value: 'Clone' | 'External' | 'Internal' | 'Restore') {
+    set Source(value: 'Clone' | 'External' | 'Internal' | 'Restore' | 'Sync') {
         this.Set('Source', value);
     }
 
@@ -108583,6 +108795,9 @@ export interface MJTaskEntity_ITaskStepConfiguration {
     /** Settings for a step completed by a system outside MemberJunction. */
     external?: MJTaskEntity_ITaskExternalConfiguration;
 
+    /** Settings for a step that waits for a moment in time before the workflow continues. */
+    wait?: MJTaskEntity_ITaskWaitConfiguration;
+
     /**
      * How this step's inputs are built from the workflow payload, as a JSON object mapping the
      * step's parameter names to payload paths.
@@ -108928,6 +109143,24 @@ export interface MJTaskEntity_ITaskHumanConfiguration {
      * its author never chose would be worse than one that waits.
      */
     expiresInHours?: number;
+
+    /**
+     * Which human-task provider raises and tracks this step, as its ClassFactory key
+     * (`@RegisterClass(BaseHumanTaskProvider, '<key>')`).
+     *
+     * Omitted, or `'AgentRequest'`, means MJ's built-in provider: an `MJ: AI Agent Requests` row in the
+     * person's inbox, settled when they answer it. Any other key hands the step to that provider — an
+     * Open App's approval system, a ticketing integration — which completes it through
+     * `TaskGraphWaitingSteps.CompleteWaitingStep` when its own record is decided. Core never names
+     * those providers; they register themselves.
+     */
+    provider?: string;
+
+    /**
+     * Provider-specific settings, passed to the provider untouched when the step is raised: a task
+     * type code, an assignee role, a priority. Each provider documents its own keys.
+     */
+    providerConfiguration?: Record<string, unknown>;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */
@@ -108936,6 +109169,41 @@ export interface MJTaskEntity_ITaskExternalConfiguration {
     domain: string;
     /** That system's own identifier for the work, for correlation. */
     ref?: string;
+
+    /**
+     * The key an outside caller signals this step by, when it does not hold the task's ID.
+     *
+     * A literal (`'sprint-close'`) or a payload path resolved when the step is reached
+     * (`'payload.sprintKey'`). The resolved value is written to `Task.CorrelationKey`, which is
+     * indexed; `TaskGraph.CompleteWaitingStep` with a correlation key completes every reached step
+     * waiting on it, so one signal can release many workflows. A signal that arrives before the step
+     * is reached is held on the step and applied the moment it is.
+     */
+    correlationKey?: string;
+
+    /**
+     * How long to wait for the signal before the step fails, in hours. Omitted means no deadline —
+     * a step that silently timed out on a deadline nobody chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
+}
+
+/**
+ * A step that waits for a moment in time. Exactly one of `until` / `durationSeconds` is set.
+ *
+ * This is what replaces chains of cron jobs offset by fifteen minutes and nightly sweeps that check
+ * whether a cooling-off period has passed: the wait is part of the workflow, durable across restarts,
+ * and visible on the run.
+ */
+export interface MJTaskEntity_ITaskWaitConfiguration {
+    /**
+     * When to continue: an ISO-8601 timestamp, or a payload path resolved when the step is reached
+     * (`'payload.renewal.chargeOn'`). A moment already in the past continues immediately.
+     */
+    until?: string;
+
+    /** How long to wait from the moment the step is reached, in seconds. */
+    durationSeconds?: number;
 }
 
 /** What the dispatcher does about time and failure for a single step. */
@@ -109378,13 +109646,14 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * ForEach
     *   * Human
     *   * Prompt
+    *   * Wait
     *   * While
     * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
     */
-    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Wait' | 'While' | null {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Wait' | 'While' | null) {
         this.Set('StepType', value);
     }
 
@@ -109455,6 +109724,46 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
     set CompensatesTaskID(value: string | null) {
         this.Set('CompensatesTaskID', value);
+    }
+
+    /**
+    * * Field Name: CorrelationKey
+    * * Display Name: Correlation Key
+    * * SQL Data Type: nvarchar(400)
+    * * Description: For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step.
+    */
+    get CorrelationKey(): string | null {
+        return this.Get('CorrelationKey');
+    }
+    set CorrelationKey(value: string | null) {
+        this.Set('CorrelationKey', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it.
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: NextAttemptAt
+    * * Display Name: Next Attempt At
+    * * SQL Data Type: datetimeoffset
+    * * Description: For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free.
+    */
+    get NextAttemptAt(): Date | null {
+        return this.Get('NextAttemptAt');
+    }
+    set NextAttemptAt(value: Date | null) {
+        this.Set('NextAttemptAt', value);
     }
 
     /**

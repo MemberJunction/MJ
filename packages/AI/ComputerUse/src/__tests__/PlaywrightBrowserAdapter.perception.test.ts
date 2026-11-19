@@ -49,6 +49,8 @@ interface MockPage {
     close: ReturnType<typeof vi.fn>;
     setDefaultNavigationTimeout: ReturnType<typeof vi.fn>;
     setDefaultTimeout: ReturnType<typeof vi.fn>;
+    setViewportSize: ReturnType<typeof vi.fn>;
+    screenshot: ReturnType<typeof vi.fn>;
     route: ReturnType<typeof vi.fn>;
     url: ReturnType<typeof vi.fn>;
     title: ReturnType<typeof vi.fn>;
@@ -115,6 +117,8 @@ beforeEach(() => {
         close: vi.fn().mockResolvedValue(undefined),
         setDefaultNavigationTimeout: vi.fn(),
         setDefaultTimeout: vi.fn(),
+        setViewportSize: vi.fn().mockResolvedValue(undefined),
+        screenshot: vi.fn().mockResolvedValue(Buffer.from('SNAP')),
         route: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('about:blank'),
         title: vi.fn().mockResolvedValue('Page Title'),
@@ -449,3 +453,46 @@ describe('PlaywrightBrowserAdapter — interactivity probe bound', () => {
         expect(Date.now() - started).toBeLessThan(2000);
     }, 3000);
 });
+
+// ─── SetViewportSize ───────────────────────────────────────────
+describe('PlaywrightBrowserAdapter.SetViewportSize', () => {
+    it('resizes the live Playwright page in place and stamps the new dimensions on subsequent screencast frames', async () => {
+        const adapter = await launchedAdapter();
+        const frames: ScreencastFrame[] = [];
+        await adapter.StartScreencast(f => frames.push(f));
+
+        await adapter.SetViewportSize(540.4, 720.8);
+
+        expect(adapter.ViewportWidth).toBe(540);
+        expect(adapter.ViewportHeight).toBe(721);
+        expect(page.setViewportSize).toHaveBeenCalledTimes(1);
+        expect(page.setViewportSize).toHaveBeenCalledWith({ width: 540, height: 721 });
+
+        await adapter.CaptureScreencastFrame();
+        expect(frames).toHaveLength(1);
+        expect(frames[0].Width).toBe(540);
+        expect(frames[0].Height).toBe(721);
+    });
+
+    it('ignores non-positive or non-finite dimensions without touching the page', async () => {
+        const adapter = await launchedAdapter();
+
+        await adapter.SetViewportSize(0, 600);
+        await adapter.SetViewportSize(800, -1);
+        await adapter.SetViewportSize(Number.NaN, 600);
+
+        expect(page.setViewportSize).not.toHaveBeenCalled();
+        expect(adapter.ViewportWidth).toBe(1280);
+        expect(adapter.ViewportHeight).toBe(720);
+    });
+
+    it('updates the configured viewport size without throwing before Launch()', async () => {
+        const adapter = new PlaywrightBrowserAdapter();
+
+        await expect(adapter.SetViewportSize(640, 480)).resolves.toBeUndefined();
+        expect(adapter.ViewportWidth).toBe(640);
+        expect(adapter.ViewportHeight).toBe(480);
+        expect(page.setViewportSize).not.toHaveBeenCalled();
+    });
+});
+

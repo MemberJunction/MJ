@@ -1,7 +1,7 @@
 import { Subject } from 'rxjs';
 import type { TemplateRef } from '@angular/core';
 import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
-import { ChannelTabColor } from './realtime-surface-tab-style';
+import { ChannelTabColor, ChannelTabSortOrder } from './realtime-surface-tab-style';
 
 /**
  * The kind of a surface-panel tab:
@@ -213,7 +213,17 @@ export class RealtimeSurfaceTabsModel {
       next[idx] = tab;
       this.channelTabs = next;
     } else {
-      this.channelTabs = [...this.channelTabs, tab];
+      const rank = ChannelTabSortOrder(tab.Key);
+      const insertAt = this.channelTabs.findIndex(t => ChannelTabSortOrder(t.Key) > rank);
+      if (insertAt < 0) {
+        this.channelTabs = [...this.channelTabs, tab];
+      } else {
+        this.channelTabs = [
+          ...this.channelTabs.slice(0, insertAt),
+          tab,
+          ...this.channelTabs.slice(insertAt),
+        ];
+      }
     }
     if (registration.Focus) {
       this.ActiveKey = tab.Key;
@@ -283,25 +293,30 @@ export class RealtimeSurfaceTabsModel {
 }
 
 /**
+ * Pure decision helper for the REVIEW→LIVE continuation edge: should the overlay REMOVE a
+ * review-registered (template-based, read-only) channel tab?
+ */
+export function ShouldRemoveReviewChannelTab(
+  liveSessionActive: boolean,
+  reviewTabRegistered: boolean,
+  channelKey: string,
+  liveChannels: ReadonlyArray<{ ChannelName: string }>
+): boolean {
+  if (!liveSessionActive || !reviewTabRegistered) {
+    return false;
+  }
+  const target = channelKey.trim().toLowerCase();
+  return !liveChannels.some(c => c.ChannelName?.trim().toLowerCase() === target);
+}
+
+/**
  * Pure decision helper for the REVIEW→LIVE continuation edge: should the overlay REMOVE the
  * review-registered (template-based, read-only) Whiteboard tab?
- *
- * Yes only when ALL hold:
- *  - a live session is active (the channel set emission belongs to a real session start, not
- *    the initial/teardown `[]` replay);
- *  - review mode actually registered a whiteboard tab (otherwise there is nothing stale);
- *  - the live session's resolved channel set has NO Whiteboard channel — when it HAS one, the
- *    live plugin re-registers the same tab key and upgrades the pane in place instead.
- *
- * Kept framework-free (like the model) so the rule is unit-testable in isolation.
  */
 export function ShouldRemoveReviewWhiteboardTab(
   liveSessionActive: boolean,
   reviewWhiteboardTabRegistered: boolean,
   liveChannels: ReadonlyArray<{ ChannelName: string }>
 ): boolean {
-  if (!liveSessionActive || !reviewWhiteboardTabRegistered) {
-    return false;
-  }
-  return !liveChannels.some(c => c.ChannelName?.trim().toLowerCase() === 'whiteboard');
+  return ShouldRemoveReviewChannelTab(liveSessionActive, reviewWhiteboardTabRegistered, 'Whiteboard', liveChannels);
 }

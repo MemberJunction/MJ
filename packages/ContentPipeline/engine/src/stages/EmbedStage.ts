@@ -234,7 +234,8 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
             },
             tags,
             this.storageConfig(route.Item),
-            context.Provider.EntityByName('MJ: Content Items'),
+            // The item's own entity: an IS-A extension's fields are then metadata fields too.
+            route.Item.EntityInfo ?? context.Provider.EntityByName('MJ: Content Items'),
         );
     }
 

@@ -1408,7 +1408,7 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (20 classes)
+// @memberjunction/content-pipeline (23 classes)
 import {
     ArchiveExtractor,
     CredentialAccessDriver,
@@ -1420,13 +1420,16 @@ import {
     EmbedStage,
     ExtractStage,
     GraphStage,
+    HeadlessPageRenderer,
     HtmlExtractor,
     ManagedPromptClassifier,
     ManagedPromptConceptSynthesizer,
+    ManifestExtractor,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
+    SettleItemEmbeddingStage,
     SpreadsheetExtractor,
     TagStage,
     WordExtractor,
@@ -1454,10 +1457,11 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (16 classes)
+// @memberjunction/task-graph (17 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -1661,7 +1665,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (192 classes)
+// @memberjunction/core-actions (193 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1693,6 +1697,7 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2913,13 +2918,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EmbedStage,
     ExtractStage,
     GraphStage,
+    HeadlessPageRenderer,
     HtmlExtractor,
     ManagedPromptClassifier,
     ManagedPromptConceptSynthesizer,
+    ManifestExtractor,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
+    SettleItemEmbeddingStage,
     SpreadsheetExtractor,
     TagStage,
     WordExtractor,
@@ -2943,17 +2951,18 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
-    TaskGraphPauseServerOperation,
-    TaskGraphResumeServerOperation,
-    TaskGraphRetryTaskServerOperation,
-    TaskGraphSetBreakpointsServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
+    TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
@@ -3134,6 +3143,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -3150,14 +3160,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DeleteDirectoryAction,
     DeleteObjectAction,
     DeleteRecordAction,
-    DirectoryExistsAction,
-    DownloadSignedDocumentAction,
-    ExcelReaderAction,
-    ExecuteAIPromptAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DirectoryExistsAction,
+    DownloadSignedDocumentAction,
+    ExcelReaderAction,
+    ExecuteAIPromptAction,
     ExecuteAgentAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
@@ -3361,7 +3371,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1386;
+export const CLASS_REGISTRATIONS_COUNT = 1390;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

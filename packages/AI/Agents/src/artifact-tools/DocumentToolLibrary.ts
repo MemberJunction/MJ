@@ -869,7 +869,12 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         return blocks;
     }
 
-    private handleGetOutline(content: string): ArtifactToolResult {
+    private buildOutlineData(content: string): {
+        revisionHash: string;
+        totalBlocks: number;
+        outline: DocumentOutlineNode[];
+        parsedBlocks: ParsedMarkdownLogicalBlock[];
+    } {
         const blocks = this.ParseLogicalBlocks(content);
         const headings = blocks.filter((b) => b.kind === 'heading');
         const outline: DocumentOutlineNode[] = [];
@@ -910,10 +915,52 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         return {
+            revisionHash: this.ComputeRevisionHash(content),
+            totalBlocks: blocks.length,
+            outline,
+            parsedBlocks: blocks
+        };
+    }
+
+    /**
+     * Returns an error result enriched with the current document outline and compact block list
+     * whenever a document tool fails due to a missing or unknown block/section ID, sparing the
+     * caller an extra `get_outline` / `get_blocks` round trip.
+     */
+    private buildMissingBlockWithOutlineResult(
+        content: string,
+        message: string,
+        missingBlockId?: string
+    ): ArtifactToolResult {
+        const { revisionHash, totalBlocks, outline, parsedBlocks } = this.buildOutlineData(content);
+        const blocks = parsedBlocks.map((b) => ({
+            blockId: b.blockId,
+            kind: b.kind,
+            ...(b.headingText ? { headingText: b.headingText } : {}),
+            startLine: b.startLine,
+            endLine: b.endLine,
+            preview: b.rawMarkdown.replace(/\s+/g, ' ').slice(0, 80)
+        }));
+        return {
+            success: false,
+            data: {
+                ...(missingBlockId ? { missingBlockId } : {}),
+                revisionHash,
+                totalBlocks,
+                outline,
+                blocks
+            },
+            errorMessage: `${message} Current document outline and block IDs are included in data.outline and data.blocks.`
+        };
+    }
+
+    private handleGetOutline(content: string): ArtifactToolResult {
+        const { revisionHash, totalBlocks, outline } = this.buildOutlineData(content);
+        return {
             success: true,
             data: {
-                revisionHash: this.ComputeRevisionHash(content),
-                totalBlocks: blocks.length,
+                revisionHash,
+                totalBlocks,
                 outline
             }
         };
@@ -932,11 +979,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         );
 
         if (headingIdx < 0) {
-            return {
-                success: false,
-                data: null,
-                errorMessage: `Section heading '${targetBlockId || headingQuery}' not found.`
-            };
+            return this.buildMissingBlockWithOutlineResult(
+                content,
+                `Section heading '${targetBlockId || headingQuery}' not found.`,
+                targetBlockId || undefined
+            );
         }
 
         const startHeading = blocks[headingIdx];
@@ -1297,11 +1344,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         } else {
             const idx = blocks.findIndex((b) => b.blockId === afterBlockId);
             if (idx < 0) {
-                return {
-                    success: false,
-                    data: null,
-                    errorMessage: `Target afterBlockId '${afterBlockId}' was not found.`
-                };
+                return this.buildMissingBlockWithOutlineResult(
+                    content,
+                    `Target afterBlockId '${afterBlockId}' was not found.`,
+                    afterBlockId
+                );
             }
             const newBlockEntry: ParsedMarkdownLogicalBlock = {
                 blockId: mintedBlockId,
@@ -1338,7 +1385,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const blockId = String(input.blockId ?? '').trim();
         const rawInputMarkdown = String(input.markdown ?? '').trim();
         if (!blockId) {
-            return { success: false, data: null, errorMessage: 'replace_block requires blockId.' };
+            return this.buildMissingBlockWithOutlineResult(content, 'replace_block requires blockId.');
         }
         const normalized = await this.normalizeArtifactBlocksInMarkdown(rawInputMarkdown, context);
         if (!normalized.ok) {
@@ -1349,7 +1396,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const blocks = this.ParseLogicalBlocks(content);
         const idx = blocks.findIndex((b) => b.blockId === blockId);
         if (idx < 0) {
-            return { success: false, data: null, errorMessage: `Block '${blockId}' was not found.` };
+            return this.buildMissingBlockWithOutlineResult(content, `Block '${blockId}' was not found.`, blockId);
         }
 
         const leadingComment = /^<!--\s*mj-block-id:\s*([A-Za-z0-9_-]+)\s*-->\s*\r?\n([\s\S]*)$/.exec(rawReplacement);
@@ -1381,10 +1428,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const blockId = String(input.blockId ?? '').trim();
+        if (!blockId) {
+            return this.buildMissingBlockWithOutlineResult(content, 'delete_block requires blockId.');
+        }
         const blocks = this.ParseLogicalBlocks(content);
         const idx = blocks.findIndex((b) => b.blockId === blockId);
         if (idx < 0) {
-            return { success: false, data: null, errorMessage: `Block '${blockId}' was not found.` };
+            return this.buildMissingBlockWithOutlineResult(content, `Block '${blockId}' was not found.`, blockId);
         }
 
         blocks.splice(idx, 1);
@@ -1661,7 +1711,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
         const blockId = String(input.blockId ?? '').trim();
         if (!blockId) {
-            return { success: false, data: null, errorMessage: 'move_block requires blockId.' };
+            return this.buildMissingBlockWithOutlineResult(content, 'move_block requires blockId.');
         }
         const afterBlockId = typeof input.afterBlockId === 'string' ? input.afterBlockId.trim() : '';
         if (afterBlockId && afterBlockId === blockId) {
@@ -1671,7 +1721,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const blocks = this.ParseLogicalBlocks(content);
         const srcIdx = blocks.findIndex((b) => b.blockId === blockId);
         if (srcIdx < 0) {
-            return { success: false, data: null, errorMessage: `Block '${blockId}' was not found.` };
+            return this.buildMissingBlockWithOutlineResult(content, `Block '${blockId}' was not found.`, blockId);
         }
 
         let insertMode: 'start' | 'end' | 'after' = 'end';
@@ -1679,7 +1729,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             insertMode = 'start';
         } else if (afterBlockId) {
             if (!blocks.some((b) => b.blockId === afterBlockId)) {
-                return { success: false, data: null, errorMessage: `Target afterBlockId '${afterBlockId}' was not found.` };
+                return this.buildMissingBlockWithOutlineResult(
+                    content,
+                    `Target afterBlockId '${afterBlockId}' was not found.`,
+                    afterBlockId
+                );
             }
             insertMode = 'after';
         }
@@ -1714,13 +1768,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
         const sourceBlockId = String(input.blockId ?? '').trim();
         if (!sourceBlockId) {
-            return { success: false, data: null, errorMessage: 'duplicate_block requires blockId.' };
+            return this.buildMissingBlockWithOutlineResult(content, 'duplicate_block requires blockId.');
         }
 
         const blocks = this.ParseLogicalBlocks(content);
         const srcIdx = blocks.findIndex((b) => b.blockId === sourceBlockId);
         if (srcIdx < 0) {
-            return { success: false, data: null, errorMessage: `Block '${sourceBlockId}' was not found.` };
+            return this.buildMissingBlockWithOutlineResult(content, `Block '${sourceBlockId}' was not found.`, sourceBlockId);
         }
         const sourceBlock = blocks[srcIdx];
         const existingIds = new Set(blocks.map((b) => b.blockId));
@@ -1762,7 +1816,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         } else if (afterBlockId) {
             const targetIdx = blocks.findIndex((b) => b.blockId === afterBlockId);
             if (targetIdx < 0) {
-                return { success: false, data: null, errorMessage: `Target afterBlockId '${afterBlockId}' was not found.` };
+                return this.buildMissingBlockWithOutlineResult(
+                    content,
+                    `Target afterBlockId '${afterBlockId}' was not found.`,
+                    afterBlockId
+                );
             }
             blocks.splice(targetIdx + 1, 0, duplicatedBlock);
         } else {
@@ -1793,13 +1851,21 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const blockId = typeof input.blockId === 'string' ? input.blockId.trim() : '';
         const operation = typeof input.operation === 'string' ? input.operation.trim() : '';
         if (!blockId || !operation) {
-            return { success: false, data: null, errorMessage: 'mutate_markdown_table requires blockId and operation.' };
+            return this.buildMissingBlockWithOutlineResult(
+                content,
+                'mutate_markdown_table requires blockId and operation.',
+                blockId || undefined
+            );
         }
 
         const blocks = this.ParseLogicalBlocks(content);
         const target = blocks.find((b) => b.blockId === blockId);
         if (!target || target.kind !== 'table') {
-            return { success: false, data: null, errorMessage: `Markdown table block '${blockId}' was not found.` };
+            return this.buildMissingBlockWithOutlineResult(
+                content,
+                `Markdown table block '${blockId}' was not found.`,
+                blockId
+            );
         }
 
         const tableLines = target.rawMarkdown
@@ -1973,11 +2039,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             }
         }
         if (lineNum <= 0) {
-            return {
-                success: false,
-                data: null,
-                errorMessage: 'set_lock / release_lock requires headingLineNumber, heading, or a heading blockId.'
-            };
+            return this.buildMissingBlockWithOutlineResult(
+                content,
+                'set_lock / release_lock requires headingLineNumber, heading, or a heading blockId.',
+                typeof input.blockId === 'string' && input.blockId.trim() ? input.blockId.trim() : undefined
+            );
         }
 
         const actorUserId = context?.actorUserId ?? context?.contextUser?.ID ?? 'system';

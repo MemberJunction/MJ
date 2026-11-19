@@ -196,3 +196,18 @@ export type { CatalogSource } from './CatalogSource.js';
 export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
 export type { CatalogWriter } from './CatalogWriter.js';
 export * from './ResourcePressure.js';
+
+// ── Three-Way Field Merge & Match Strategy (spec §10 / §11 / §19) ──
+export { ComputeThreeWayFieldMerge, ValuesEqual } from './ThreeWayMerge.js';
+export type {
+    ThreeWayFieldMapping,
+    ThreeWayMergeOptions,
+    ThreeWayMergeResult,
+} from './ThreeWayMerge.js';
+export { ParseMatchStrategy } from './MatchEngine.js';
+export type { MatchStrategyConfig } from './MatchEngine.js';
+export type { ConnectorPipelineContext } from './BaseIntegrationConnector.js';
+
+// ── MJ Peer Sync Connector & Protocol Modules ──
+export * from './peer-sync/index.js';
+

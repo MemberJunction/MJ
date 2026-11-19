@@ -73,6 +73,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 import type { IMetadataProvider } from '@memberjunction/core';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionScheduledJobDriver } from '../drivers/ActionScheduledJobDriver';
 
 describe('ActionScheduledJobDriver', () => {
@@ -252,7 +253,6 @@ describe('ActionScheduledJobDriver', () => {
 
 describe('ActionScheduledJobDriver.Execute — run ID and heartbeat reach the action (#5938)', () => {
     it('passes Context { ScheduledJobRunID, Heartbeat } to RunAction', async () => {
-        const { ActionEngineServer } = await import('@memberjunction/actions');
         const engine = ActionEngineServer.Instance as unknown as { Actions: Array<Record<string, unknown>>; RunAction: ReturnType<typeof vi.fn> };
         engine.Actions = [{ ID: 'act-1', Name: 'Steward Feature Pipeline Version' }];
         // Set the result here: restoreMocks (vitest.shared.ts) can clear the factory's resolved value
@@ -273,6 +273,68 @@ describe('ActionScheduledJobDriver.Execute — run ID and heartbeat reach the ac
         heartbeat.mockClear();
         call.Context.Heartbeat();
         expect(heartbeat).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves schedule OwnerUserID and executes under the owner UserInfo instead of daemon ContextUser', async () => {
+        Object.assign(ActionEngineServer.Instance, {
+            Actions: [{ ID: 'act-lr', Name: 'Refresh and Snapshot Artifact' }] as typeof ActionEngineServer.Instance.Actions,
+        });
+        const runActionMock = vi.mocked(ActionEngineServer.Instance.RunAction);
+        runActionMock.mockResolvedValue({ Success: true, Message: 'Done', Result: { ResultCode: 'SUCCESS' }, Params: [] });
+
+        const ownerUser = { ID: 'owner-user-1', Name: 'Alice Owner', IsActive: true };
+        const daemonUser = { ID: 'system-daemon', Name: 'System', IsActive: true };
+        const prevCache = (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache;
+        (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache = {
+            FindUser: vi.fn().mockResolvedValue(ownerUser),
+        };
+        try {
+            const driver = new ActionScheduledJobDriver();
+            await driver.Execute({
+                Schedule: {
+                    ID: 'job-lr-1',
+                    Name: 'Hourly Brief',
+                    OwnerUserID: 'owner-user-1',
+                    Configuration: JSON.stringify({ ActionID: 'act-lr', Params: [] }),
+                },
+                Run: { ID: 'run-lr-1' },
+                ContextUser: daemonUser,
+            } as Parameters<ActionScheduledJobDriver['Execute']>[0]);
+
+            const lastCall = runActionMock.mock.calls[runActionMock.mock.calls.length - 1][0] as {
+                ContextUser: { ID: string };
+            };
+            expect(lastCall.ContextUser.ID).toBe('owner-user-1');
+        } finally {
+            (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache = prevCache;
+        }
+    });
+
+    it('fails closed without running action when schedule OwnerUserID is inactive', async () => {
+        const runActionMock = vi.mocked(ActionEngineServer.Instance.RunAction);
+        runActionMock.mockClear();
+        const prevCache = (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache;
+        (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache = {
+            FindUser: vi.fn().mockResolvedValue({ ID: 'owner-inactive', IsActive: false }),
+        };
+        try {
+            const driver = new ActionScheduledJobDriver();
+            await expect(
+                driver.Execute({
+                    Schedule: {
+                        ID: 'job-lr-2',
+                        Name: 'Disabled Owner Brief',
+                        OwnerUserID: 'owner-inactive',
+                        Configuration: JSON.stringify({ ActionID: 'act-lr', Params: [] }),
+                    },
+                    Run: { ID: 'run-lr-2' },
+                    ContextUser: { ID: 'system-daemon', IsActive: true },
+                } as Parameters<ActionScheduledJobDriver['Execute']>[0]),
+            ).rejects.toThrow(/inactive/i);
+            expect(runActionMock).not.toHaveBeenCalled();
+        } finally {
+            (globalThis as { ___SINGLETON__UserCache?: object }).___SINGLETON__UserCache = prevCache;
+        }
     });
 });
 
