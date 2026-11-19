@@ -9,10 +9,23 @@ import {
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
-import { MJAfterEvent, MJBeforeEvent, dispatchMJElementEvent } from '../types/events';
+import {
+  MJAfterEvent,
+  MJBeforeEvent,
+  dispatchMJElementEvent,
+  sanitizeAxisSlug,
+} from '../types/events';
 
 export type MJRowItemRole = 'button' | 'option' | 'menuitem' | 'menuitemradio';
+
+function optionalBooleanAttribute(value: unknown): boolean | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return booleanAttribute(value);
+}
 
 @Directive({
   selector: '[mjRowLeading]',
@@ -51,10 +64,10 @@ export class MJRowTrailingDirective {}
     class: 'mj-row',
     '[attr.data-density]': 'Density()',
     '[attr.data-interactive]': 'Interactive()',
-    '[attr.data-selected]': 'Selected()',
+    '[attr.data-selected]': 'isHighlighted()',
     '[attr.data-disabled]': 'Disabled()',
-    '[attr.data-tone]': 'Tone()',
-    '[attr.data-role]': 'VisualRole()',
+    '[attr.data-tone]': 'safeTone()',
+    '[attr.data-role]': 'safeRole()',
     '[style.--_mj-tone-text]': 'toneTextVar()',
     '[style.--_mj-tone-border]': 'toneBorderVar()',
     '[style.--_mj-tone-bg]': 'toneBgVar()',
@@ -72,14 +85,19 @@ export class MJRowTrailingDirective {}
     '[attr.aria-disabled]': 'Interactive() && Disabled() ? true : null',
     '(click)': 'onActivate($event)',
     '(keydown)': 'onKeyDown($event)',
+    '(focusout)': 'onFocusOut()',
   },
 })
 export class MJRowComponent {
   private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly fallbackTabStop = signal(false);
 
   public readonly Density = input<string>('md');
   public readonly Interactive = input(false, { transform: booleanAttribute });
   public readonly Selected = input(false, { transform: booleanAttribute });
+  public readonly Pressed = input<boolean | null, unknown>(null, {
+    transform: optionalBooleanAttribute,
+  });
   public readonly Disabled = input(false, { transform: booleanAttribute });
   public readonly Tone = input<string>('neutral');
   public readonly VisualRole = input<string>('row');
@@ -87,6 +105,12 @@ export class MJRowComponent {
 
   public readonly BeforeSelect = output<MJBeforeEvent<'user'>>();
   public readonly AfterSelect = output<MJAfterEvent<'user'>>();
+
+  protected readonly safeTone = computed(() => sanitizeAxisSlug(this.Tone(), 'neutral'));
+  protected readonly safeRole = computed(() => sanitizeAxisSlug(this.VisualRole(), 'row'));
+  protected readonly isHighlighted = computed(
+    () => this.Selected() || this.Pressed() === true
+  );
 
   protected readonly ariaRole = computed(() =>
     this.Interactive() ? this.ItemRole() : null
@@ -98,7 +122,7 @@ export class MJRowComponent {
     }
     const role = this.ItemRole();
     if (role === 'option' || role === 'menuitemradio' || role === 'menuitem') {
-      return this.Selected() ? 0 : -1;
+      return this.Selected() || this.fallbackTabStop() ? 0 : -1;
     }
     return 0;
   });
@@ -111,53 +135,59 @@ export class MJRowComponent {
     this.Interactive() && this.ItemRole() === 'menuitemradio' ? String(this.Selected()) : null
   );
 
-  protected readonly ariaPressed = computed(() =>
-    this.Interactive() && this.ItemRole() === 'button' ? String(this.Selected()) : null
-  );
+  protected readonly ariaPressed = computed(() => {
+    if (!this.Interactive() || this.ItemRole() !== 'button') {
+      return null;
+    }
+    const pressed = this.Pressed();
+    return pressed === null ? null : String(pressed);
+  });
 
   protected readonly toneTextVar = computed(() =>
-    this.Tone() === 'neutral'
+    this.safeTone() === 'neutral'
       ? null
-      : `var(--mj-tone-${this.Tone()}-text, var(--mj-row-text, var(--mj-text-primary)))`
+      : `var(--mj-tone-${this.safeTone()}-text, var(--mj-row-text, var(--mj-text-primary)))`
   );
   protected readonly toneBorderVar = computed(() =>
-    this.Tone() === 'neutral'
+    this.safeTone() === 'neutral'
       ? null
-      : `var(--mj-tone-${this.Tone()}-border, var(--mj-row-border, transparent))`
+      : `var(--mj-tone-${this.safeTone()}-border, var(--mj-row-border, transparent))`
   );
   protected readonly toneBgVar = computed(() =>
-    this.Tone() === 'neutral' ? null : `var(--mj-tone-${this.Tone()}-bg, var(--mj-row-bg, transparent))`
+    this.safeTone() === 'neutral'
+      ? null
+      : `var(--mj-tone-${this.safeTone()}-bg, var(--mj-row-bg, transparent))`
   );
   protected readonly toneBgSelectedVar = computed(() =>
-    this.Tone() === 'neutral'
+    this.safeTone() === 'neutral'
       ? null
-      : `var(--mj-tone-${this.Tone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
+      : `var(--mj-tone-${this.safeTone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
   );
 
   protected readonly roleBgVar = computed(() =>
-    this.VisualRole() === 'row'
+    this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.VisualRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
+      : `var(--mj-role-${this.safeRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
   );
   protected readonly roleBorderVar = computed(() =>
-    this.VisualRole() === 'row'
+    this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.VisualRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
+      : `var(--mj-role-${this.safeRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
   );
   protected readonly roleRadiusVar = computed(() =>
-    this.VisualRole() === 'row'
+    this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.VisualRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
+      : `var(--mj-role-${this.safeRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
   );
   protected readonly rolePaddingBlockVar = computed(() =>
-    this.VisualRole() === 'row'
+    this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.VisualRole()}-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))`
+      : `var(--mj-role-${this.safeRole()}-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))`
   );
   protected readonly rolePaddingInlineVar = computed(() =>
-    this.VisualRole() === 'row'
+    this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.VisualRole()}-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))`
+      : `var(--mj-role-${this.safeRole()}-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))`
   );
 
   constructor() {
@@ -172,23 +202,45 @@ export class MJRowComponent {
           '[mj-row] WCAG 4.1.2 violation: interactive mj-row must not contain nested interactive controls.'
         );
       }
-      if (this.ItemRole() === 'option') {
+      const role = this.ItemRole();
+      if (role === 'option') {
         const listbox = el.closest<HTMLElement>('[role="listbox"]');
         if (!listbox) {
           console.error(
             '[mj-row] WCAG 4.1.2 violation: ItemRole="option" requires an ancestor [role="listbox"].'
           );
-        } else if (!listbox.querySelector('[role="option"][tabindex="0"]')) {
-          // Ensure at least the first enabled option is a Tab stop when none starts selected.
+        } else if (!listbox.querySelector('[role="option"][data-selected="true"]')) {
           const firstOption = listbox.querySelector<HTMLElement>(
             '[role="option"]:not([aria-disabled="true"])'
           );
           if (firstOption === el) {
-            el.setAttribute('tabindex', '0');
+            this.fallbackTabStop.set(true);
+          }
+        }
+      } else if (role === 'menuitem' || role === 'menuitemradio') {
+        const menu = el.closest<HTMLElement>('[role="menu"], [role="menubar"]');
+        if (menu && !menu.querySelector('[data-selected="true"]')) {
+          const firstItem = menu.querySelector<HTMLElement>(
+            '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
+          );
+          if (firstItem === el) {
+            this.fallbackTabStop.set(true);
           }
         }
       }
     });
+  }
+
+  protected onFocusOut(): void {
+    if (!this.fallbackTabStop()) {
+      return;
+    }
+    const el = this.hostEl.nativeElement;
+    const container = el.closest<HTMLElement>('[role="listbox"], [role="menu"], [role="menubar"]');
+    const selectedSibling = container?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (selectedSibling && selectedSibling !== el) {
+      this.fallbackTabStop.set(false);
+    }
   }
 
   protected onKeyDown(event: KeyboardEvent): void {

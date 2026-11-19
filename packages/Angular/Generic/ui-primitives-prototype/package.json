@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ui-primitives-prototype",
-  "version": "0.0.0",
+  "version": "6.3.0-edge.1",
   "private": true,
   "description": "Private Wave 0 prototype for Project Lego (surface, layer, row) compiled as Angular Elements for the Phase 0 gate.",
   "main": "./dist/public-api.js",
@@ -21,7 +21,7 @@
     "@angular/elements": "21.2.22",
     "@angular/platform-browser": "21.2.22",
     "@babel/core": "^7.29.0",
-    "@memberjunction/ng-test-utils": "6.2.0",
+    "@memberjunction/ng-test-utils": "workspace:*",
     "esbuild": "^0.28.1",
     "jsdom": "^26.1.0",
     "sass": "^1.97.3",
@@ -36,7 +36,7 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/ng-shared-generic": "6.2.0",
+    "@memberjunction/ng-shared-generic": "workspace:*",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

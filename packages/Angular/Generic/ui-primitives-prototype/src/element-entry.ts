@@ -75,9 +75,10 @@ function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T
     const baseObserved: string[] = Array.isArray(ctor.observedAttributes)
       ? ctor.observedAttributes
       : [];
+    const mergedObserved = Array.from(new Set([...baseObserved, ...extraAttrs]));
     Object.defineProperty(ctor, 'observedAttributes', {
       configurable: true,
-      get: () => [...baseObserved, ...extraAttrs],
+      get: () => mergedObserved,
     });
 
     const proto = ctor.prototype as HTMLElement & {
@@ -108,8 +109,8 @@ function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T
       newValue: string | null,
       namespace?: string | null
     ): void {
-      if (name in kebabToProp && newValue !== null) {
-        Reflect.set(this, kebabToProp[name], newValue);
+      if (name in kebabToProp) {
+        Reflect.set(this, kebabToProp[name], newValue === null ? undefined : newValue);
         return;
       }
       origAttrChanged?.call(this, name, oldValue, newValue, namespace);

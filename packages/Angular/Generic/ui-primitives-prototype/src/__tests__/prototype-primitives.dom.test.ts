@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   MJSurfaceComponent,
   MJSurfaceHeaderDirective,
@@ -74,10 +74,29 @@ import { MJBeforeEvent } from '../lib/types/events';
       <span mjRowContent>Standalone Button Row</span>
     </mj-row>
 
+    <mj-row class="toggle-interactive-row" [Interactive]="true" [Pressed]="toggled()">
+      <span mjRowContent>Toggle Row</span>
+    </mj-row>
+
     <mj-row class="layout-only-row">
       <span mjRowContent><button type="button">Primary</button></span>
       <span mjRowTrailing><button type="button">Secondary</button></span>
     </mj-row>
+
+    <mj-layer
+      [Open]="parentModalOpen()"
+      [Kind]="'sheet'"
+      [Modal]="true"
+      [Closeable]="true"
+      (AfterClose)="parentModalOpen.set(false)"
+    >
+      <div mjLayerHeader>
+        <h2 mjLayerTitle>Parent Sheet</h2>
+      </div>
+      <div mjLayerBody>
+        <button type="button">Sheet Action</button>
+      </div>
+    </mj-layer>
 
     <mj-layer
       [Open]="layerOpen()"
@@ -104,6 +123,8 @@ class TestHostComponent {
   tone = signal('plum');
   role = signal('callout');
   selectedIdx = signal(0);
+  toggled = signal(false);
+  parentModalOpen = signal(false);
   layerOpen = signal(false);
   cancelNextSelect = false;
   cancelNextClose = false;
@@ -141,15 +162,30 @@ describe('Wave 0 prototype primitives', () => {
     expect(surface.getAttribute('data-role')).toBe('callout');
     expect(surface.style.getPropertyValue('--_mj-tone-text')).toContain('--mj-tone-plum-text');
     expect(surface.style.getPropertyValue('--_mj-role-bg')).toContain('--mj-role-callout-bg');
+
+    // Malformed axis names fall back cleanly to defaults instead of emitting invalid CSS var() syntax
+    fixture.componentInstance.tone.set('bad value!');
+    fixture.detectChanges();
+    expect(surface.getAttribute('data-tone')).toBe('neutral');
+    expect(surface.style.getPropertyValue('--_mj-tone-text')).toBe('');
   });
 
-  it('defaults standalone interactive mj-row to role="button", keeps layout rows non-focusable, and navigates listbox options with roving tabindex + ArrowDown', () => {
+  it('defaults standalone interactive mj-row to action role="button" (no aria-pressed), supports explicit [Pressed], and navigates listbox options with roving tabindex', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
     const standalone = fixture.nativeElement.querySelector('mj-row.standalone-interactive-row') as HTMLElement;
     expect(standalone.getAttribute('role')).toBe('button');
     expect(standalone.getAttribute('tabindex')).toBe('0');
+    expect(standalone.getAttribute('aria-pressed')).toBeNull();
+
+    const toggleRow = fixture.nativeElement.querySelector('mj-row.toggle-interactive-row') as HTMLElement;
+    expect(toggleRow.getAttribute('role')).toBe('button');
+    expect(toggleRow.getAttribute('aria-pressed')).toBe('false');
+    fixture.componentInstance.toggled.set(true);
+    fixture.detectChanges();
+    expect(toggleRow.getAttribute('aria-pressed')).toBe('true');
+    expect(toggleRow.getAttribute('data-selected')).toBe('true');
 
     const layoutRow = fixture.nativeElement.querySelector('mj-row.layout-only-row') as HTMLElement;
     expect(layoutRow.getAttribute('role')).toBeNull();
@@ -184,8 +220,15 @@ describe('Wave 0 prototype primitives', () => {
     fixture.detectChanges();
 
     expect(layerService.ActiveCount).toBe(1);
-    const dialog = document.body.querySelector('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
+    const dialog = document.body.querySelector(
+      '.cdk-overlay-container [role="dialog"][aria-modal="true"]'
+    ) as HTMLElement | null;
     expect(dialog).toBeTruthy();
+
+    // Auto-wires aria-labelledby to [mjLayerTitle] when [Label] is omitted
+    const titleEl = dialog?.querySelector('[mjLayerTitle]') as HTMLElement | null;
+    expect(titleEl?.id).toBeTruthy();
+    expect(dialog?.getAttribute('aria-labelledby')).toBe(titleEl?.id);
 
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
@@ -215,5 +258,43 @@ describe('Wave 0 prototype primitives', () => {
     fixture.detectChanges();
     expect(layerService.ActiveCount).toBe(0);
     expect(fixture.componentInstance.layerOpen()).toBe(false);
+  });
+
+  it('keeps modal scroll lock active when an underlying modal closes out of LIFO order', () => {
+    // Make document scrollable in jsdom so CDK BlockScrollStrategy._canBeEnabled() activates
+    window.scroll = vi.fn();
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      value: 2000,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    });
+
+    const fixture = TestBed.createComponent(TestHostComponent);
+    const layerService = TestBed.inject(MJLayerService);
+
+    fixture.componentInstance.parentModalOpen.set(true);
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(1);
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBe(true);
+
+    fixture.componentInstance.layerOpen.set(true);
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(2);
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBe(true);
+
+    // Close the bottom modal first (out of LIFO order); scroll lock must remain while top modal stays open
+    fixture.componentInstance.parentModalOpen.set(false);
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(1);
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBe(true);
+
+    // Closing the remaining modal releases scroll lock
+    fixture.componentInstance.layerOpen.set(false);
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(0);
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -23,7 +23,10 @@ const server = createServer((req, res) => {
     rel.startsWith('dist/') || rel.startsWith('sample/') ? rel : join('sample', rel)
   );
 
-  if (!target.startsWith(packageRoot) || !existsSync(target)) {
+  if (
+    !target.startsWith(packageRoot + sep) ||
+    !statSync(target, { throwIfNoEntry: false })?.isFile()
+  ) {
     res.writeHead(404);
     res.end('Not found');
     return;

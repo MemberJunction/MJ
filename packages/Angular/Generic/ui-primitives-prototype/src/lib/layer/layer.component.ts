@@ -4,8 +4,10 @@ import {
   ElementRef,
   OnDestroy,
   ViewEncapsulation,
+  afterNextRender,
   booleanAttribute,
   computed,
+  contentChild,
   effect,
   inject,
   input,
@@ -19,6 +21,7 @@ import { MJAnnouncerService } from '../services/announcer.service';
 import { MJAfterEvent, MJBeforeEvent, dispatchMJElementEvent } from '../types/events';
 
 let nextLayerId = 0;
+let nextLayerTitleId = 0;
 
 @Directive({
   selector: '[mjLayerHeader]',
@@ -30,9 +33,16 @@ export class MJLayerHeaderDirective {}
 @Directive({
   selector: '[mjLayerTitle]',
   standalone: true,
-  host: { class: 'mj-layer-title' },
+  host: {
+    class: 'mj-layer-title',
+    '[attr.id]': 'TitleId',
+  },
 })
-export class MJLayerTitleDirective {}
+export class MJLayerTitleDirective {
+  private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
+  public readonly TitleId =
+    this.el.nativeElement.getAttribute('id') || `mj-layer-title-${++nextLayerTitleId}`;
+}
 
 @Directive({
   selector: '[mjLayerBody]',
@@ -66,6 +76,7 @@ export class MJLayerFooterDirective {}
         [attr.role]="ariaRole()"
         [attr.aria-modal]="ariaModal()"
         [attr.aria-label]="Label() || null"
+        [attr.aria-labelledby]="ariaLabelledBy()"
         [attr.data-kind]="Kind()"
         [attr.data-placement]="Placement()"
         [attr.data-size]="Size()"
@@ -83,6 +94,8 @@ export class MJLayerComponent implements OnDestroy {
   private readonly layerId = `mj-layer-${++nextLayerId}`;
 
   private readonly layerPanel = viewChild<ElementRef<HTMLElement>>('layerPanel');
+  private readonly titleDirective = contentChild(MJLayerTitleDirective);
+  private readonly lightDomTitleId = signal<string | null>(null);
 
   public readonly Kind = input<string>('dialog');
   public readonly Placement = input<string>('center');
@@ -123,7 +136,21 @@ export class MJLayerComponent implements OnDestroy {
     return this.Modal() ? 'true' : null;
   });
 
+  protected readonly ariaLabelledBy = computed(() => {
+    if (this.Label()) {
+      return null;
+    }
+    return this.titleDirective()?.TitleId ?? this.lightDomTitleId();
+  });
+
   constructor() {
+    afterNextRender(() => {
+      const panelEl = this.layerPanel()?.nativeElement;
+      if (panelEl) {
+        this.syncLightDomTitleId(panelEl);
+      }
+    });
+
     effect(() => {
       this.isOpenState.set(this.Open());
     });
@@ -135,6 +162,7 @@ export class MJLayerComponent implements OnDestroy {
       if (shouldBeOpen && panelEl && !this.isCurrentlyOpen) {
         this.isCurrentlyOpen = true;
         untracked(() => {
+          this.syncLightDomTitleId(panelEl);
           this.layerService.Open({
             Id: this.layerId,
             PanelElement: panelEl,
@@ -185,5 +213,17 @@ export class MJLayerComponent implements OnDestroy {
   ngOnDestroy(): void {
     this.isCurrentlyOpen = false;
     this.layerService.Close(this.layerId);
+  }
+
+  private syncLightDomTitleId(panelEl: HTMLElement): void {
+    const titleEl = panelEl.querySelector<HTMLElement>('.mj-layer-title');
+    if (titleEl) {
+      if (!titleEl.id) {
+        titleEl.id = `${this.layerId}-title`;
+      }
+      this.lightDomTitleId.set(titleEl.id);
+    } else {
+      this.lightDomTitleId.set(null);
+    }
   }
 }

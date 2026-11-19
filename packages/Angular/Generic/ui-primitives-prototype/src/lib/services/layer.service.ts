@@ -1,5 +1,11 @@
 import { Injectable, inject, DOCUMENT } from '@angular/core';
-import { Overlay, OverlayConfig, OverlayRef, PositionStrategy } from '@angular/cdk/overlay';
+import {
+  BlockScrollStrategy,
+  Overlay,
+  OverlayConfig,
+  OverlayRef,
+  PositionStrategy,
+} from '@angular/cdk/overlay';
 import { DomPortal } from '@angular/cdk/portal';
 import { ConfigurableFocusTrap, ConfigurableFocusTrapFactory } from '@angular/cdk/a11y';
 import { Subscription } from 'rxjs';
@@ -18,6 +24,7 @@ export interface MJLayerOpenRequest {
 
 interface ActiveOverlayEntry {
   Id: string;
+  Modal: boolean;
   OverlayRef: OverlayRef;
   Portal: DomPortal<HTMLElement>;
   FocusTrap: ConfigurableFocusTrap | null;
@@ -38,6 +45,7 @@ export class MJLayerService {
   private readonly focusTrapFactory = inject(ConfigurableFocusTrapFactory);
 
   private readonly stack: ActiveOverlayEntry[] = [];
+  private modalScrollLock: BlockScrollStrategy | null = null;
 
   /** Opens a layer via CDK Overlay + DomPortal and registers it on top of the LIFO stack. */
   public Open(request: MJLayerOpenRequest): OverlayRef {
@@ -108,6 +116,7 @@ export class MJLayerService {
 
     this.stack.push({
       Id: request.Id,
+      Modal: request.Modal,
       OverlayRef: overlayRef,
       Portal: portal,
       FocusTrap: focusTrap,
@@ -115,6 +124,7 @@ export class MJLayerService {
       AnchorElement: anchorEl,
       Subscriptions: subs,
     });
+    this.syncModalScrollLock();
 
     return overlayRef;
   }
@@ -127,6 +137,7 @@ export class MJLayerService {
     }
 
     const [removed] = this.stack.splice(index, 1);
+    this.syncModalScrollLock();
     removed.Subscriptions.unsubscribe();
     if (removed.FocusTrap) {
       removed.FocusTrap.destroy();
@@ -139,7 +150,11 @@ export class MJLayerService {
     }
     removed.OverlayRef.dispose();
 
-    if (removed.PreviousFocus && removed.PreviousFocus.isConnected) {
+    if (
+      removed.PreviousFocus &&
+      removed.PreviousFocus.isConnected &&
+      this.stack.length === 0
+    ) {
       removed.PreviousFocus.focus();
     }
   }
@@ -201,10 +216,22 @@ export class MJLayerService {
       panelClass: panelClasses,
       positionStrategy,
       scrollStrategy: request.Modal
-        ? this.overlay.scrollStrategies.block()
+        ? this.overlay.scrollStrategies.noop()
         : this.overlay.scrollStrategies.reposition(),
       disposeOnNavigation: true,
     });
+  }
+
+  private syncModalScrollLock(): void {
+    const hasOpenModal = this.stack.some((entry) => entry.Modal);
+    if (hasOpenModal) {
+      if (!this.modalScrollLock) {
+        this.modalScrollLock = this.overlay.scrollStrategies.block();
+      }
+      this.modalScrollLock.enable();
+    } else if (this.modalScrollLock) {
+      this.modalScrollLock.disable();
+    }
   }
 
   private resolveAnchor(anchor: string | HTMLElement | null): HTMLElement | null {

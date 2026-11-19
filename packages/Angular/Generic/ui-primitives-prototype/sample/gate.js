@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const wireLayer = (openBtnId, layerEl, closeBtnId, toggle = false) => {
     document.getElementById(openBtnId)?.addEventListener('click', () => {
       if (!layerEl) return;
-      if (toggle && layerEl.getAttribute('open') === 'true') {
-        layerEl.setAttribute('open', 'false');
+      if (toggle && layerEl.hasAttribute('open') && layerEl.getAttribute('open') !== 'false') {
+        layerEl.removeAttribute('open');
       } else {
         layerEl.setAttribute('open', 'true');
       }
@@ -40,16 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (event) => {
       if (!(event.target instanceof Element)) return;
       if (closeBtnId && event.target.closest(`#${closeBtnId}`)) {
-        layerEl?.setAttribute('open', 'false');
+        layerEl?.removeAttribute('open');
       }
       const closeTarget = event.target.closest('[data-close-layer]');
       if (closeTarget && layerEl && closeTarget.getAttribute('data-close-layer') === layerEl.id) {
-        layerEl?.setAttribute('open', 'false');
+        layerEl?.removeAttribute('open');
       }
     });
 
     layerEl?.addEventListener('mj-after-close', () => {
-      layerEl.setAttribute('open', 'false');
+      layerEl.removeAttribute('open');
     });
   };
 
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('click', (event) => {
     if (event.target instanceof Element && event.target.closest('#cancel-dialog')) {
-      dialog?.setAttribute('open', 'false');
+      dialog?.removeAttribute('open');
     }
   });
 
@@ -72,10 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Toggle button row ("Include archived submissions")
-  document.querySelectorAll('mj-row[item-role="button"]').forEach((row) => {
+  document.querySelectorAll('mj-row[item-role="button"][pressed]').forEach((row) => {
     row.addEventListener('mj-after-select', () => {
-      const current = row.getAttribute('selected') === 'true';
-      row.setAttribute('selected', current ? 'false' : 'true');
+      const current = row.getAttribute('pressed') === 'true';
+      row.setAttribute('pressed', current ? 'false' : 'true');
     });
   });
 
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     item.addEventListener('mj-after-select', () => {
       const look = item.getAttribute('data-popover-action') || 'mj';
       applyLook(look);
-      popover?.setAttribute('open', 'false');
+      popover?.removeAttribute('open');
     });
   });
 });

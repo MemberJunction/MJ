@@ -286,6 +286,18 @@ body {
   border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-strong));
 }
 
+/* Open-axis custom tone and role defaults (declared before [data-look] overrides so equal-specificity looks win) */
+:root {
+  --mj-tone-plum-text: #701a75;
+  --mj-tone-plum-bg-selected: #fae8ff;
+  --mj-role-nav-item-padding-inline: var(--mj-space-4);
+}
+
+[data-theme='dark'] {
+  --mj-tone-plum-text: #f0abfc;
+  --mj-tone-plum-bg-selected: #4a044e;
+}
+
 /* Look 1: MJ Default — enterprise slate SaaS, 8px/12px radii, crisp 1px borders */
 [data-look='mj'] {
   --mj-brand-primary: #0076b6;
@@ -389,12 +401,12 @@ body {
   --mj-radius-overlay: 0px;
   --mj-radius-pill: 0px;
 
-  --mj-shadow-sm: none;
-  --mj-shadow-md: none;
-  --mj-shadow-lg: none;
-  --mj-shadow-xl: none;
-  --mj-surface-elevated-shadow: none;
-  --mj-surface-overlay-shadow: none;
+  --mj-shadow-sm: 0 0 transparent;
+  --mj-shadow-md: 0 0 transparent;
+  --mj-shadow-lg: 0 0 transparent;
+  --mj-shadow-xl: 0 0 transparent;
+  --mj-surface-elevated-shadow: 0 0 transparent;
+  --mj-surface-overlay-shadow: 0 0 transparent;
 
   --mj-surface-padding: var(--mj-space-3);
   --mj-surface-gap: var(--mj-space-3);
@@ -424,16 +436,4 @@ body {
   --mj-surface-elevated-border: #e4e4e7;
   --mj-surface-sunken-bg: #0b0b0c;
   --mj-surface-sunken-border: #71717a;
-}
-
-/* Open-axis custom tone and role tokens defined purely as CSS custom properties */
-:root {
-  --mj-tone-plum-text: #701a75;
-  --mj-tone-plum-bg-selected: #fae8ff;
-  --mj-role-nav-item-padding-inline: var(--mj-space-4);
-}
-
-[data-theme='dark'] {
-  --mj-tone-plum-text: #f0abfc;
-  --mj-tone-plum-bg-selected: #4a044e;
 }

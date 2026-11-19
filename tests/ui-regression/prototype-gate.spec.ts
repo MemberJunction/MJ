@@ -50,10 +50,20 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(listboxOptions.nth(0)).toHaveAttribute('aria-selected', 'true');
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
-    // Hostile @layer reset rules must not break primitives
+    // Hostile @layer reset rules must not break primitives, and [Elevation="sm"] renders a real shadow on base surface
     const firstSurface = page.locator('mj-surface').first();
     await expect(firstSurface).toHaveCSS('box-sizing', 'border-box');
     await expect(firstSurface).toHaveCSS('border-radius', '12px');
+    const baseSmShadow = await firstSurface.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(baseSmShadow).not.toBe('none');
+    expect(baseSmShadow).not.toContain('rgba(0, 0, 0, 0) 0px 0px');
+
+    // Custom Element removeAttribute reactivity (standard HTML boolean attribute removal)
+    const thirdOption = listboxOptions.nth(2);
+    await thirdOption.evaluate((el) => el.setAttribute('selected', ''));
+    await expect(thirdOption).toHaveAttribute('data-selected', 'true');
+    await thirdOption.evaluate((el) => el.removeAttribute('selected'));
+    await expect(thirdOption).toHaveAttribute('data-selected', 'false');
 
     // Unlayered host rule wins without !important
     const overrideSurface = page.locator('.host-override-surface');
@@ -76,12 +86,13 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
       fullPage: false,
     });
 
-    // Look 2: Sidecar LXP (Avenir Next, 24px radius, 24px padding, warm oatmeal sunken well, sage selection)
+    // Look 2: Sidecar LXP (Avenir Next, 24px radius, 24px padding, warm oatmeal sunken well, terracotta custom tone)
     await page.getByRole('button', { name: 'Look: LXP' }).click();
     await expect(firstSurface).toHaveCSS('border-radius', '24px');
     await expect(firstSurface).toHaveCSS('padding-top', '24px');
     await expect(firstSurface).toHaveCSS('font-family', /Avenir Next/);
     await expect(firstSurface).toHaveCSS('background-color', 'rgb(255, 252, 246)');
+    await expect(plumRow).toHaveCSS('color', 'rgb(140, 59, 31)');
 
     // Sunken well in right card must be warm oatmeal (#efe6d5 -> rgb(239, 230, 213)), not cool MJ slate (#f1f5f9)
     const sunkenSurface = overrideSurface.locator('mj-surface[level="sunken"]');
@@ -116,9 +127,9 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     expect(errors).toEqual([]);
   });
 
-  test('CDK overlay handles dialog, sheet, keyboard-accessible menu popover (aria-expanded + ArrowDown + Enter), and open-layer axe', async ({
+  test('CDK overlay handles dialog, Tab trap, phone bottom-sheet collapse, ref-counted scroll lock, sheet, menu popover, and open-layer axe', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.goto('/');
     await page.waitForSelector('mj-surface.mj-surface');
 
@@ -128,6 +139,32 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     const dialog = page.locator('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
     await expect(dialog).toBeVisible();
     await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
+
+    // Dialog auto-wires aria-labelledby to .mj-layer-title without requiring a duplicate label attribute
+    const titleId = await dialog.locator('.mj-layer-title').getAttribute('id');
+    expect(titleId).toBeTruthy();
+    await expect(dialog).toHaveAttribute('aria-labelledby', titleId!);
+
+    // Phone viewport collapses Kind="dialog" to a full-width bottom sheet (wait for slide-up animation to settle)
+    if (testInfo.project.name === 'phone-chromium') {
+      await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const dialogBox = await dialog.boundingBox();
+      expect(dialogBox).not.toBeNull();
+      expect(Math.round(dialogBox!.width)).toBe(390);
+      expect(Math.abs(dialogBox!.y + dialogBox!.height - 844)).toBeLessThanOrEqual(1);
+    }
+
+    // Focus starts on [data-autofocus] (Confirm) and Tab / Shift+Tab stays trapped inside the modal
+    const confirmBtn = dialog.getByRole('button', { name: 'Confirm' });
+    const cancelBtn = dialog.getByRole('button', { name: 'Cancel' });
+    const closeIconBtn = dialog.getByRole('button', { name: 'Close dialog' });
+    await expect(confirmBtn).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(cancelBtn).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(closeIconBtn).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(cancelBtn).toBeFocused();
 
     await page.waitForTimeout(200);
     const openDialogAxe = await new AxeBuilder({ page })
@@ -140,13 +177,24 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
     await expect(openDialogBtn).toBeFocused();
 
-    // Sheet opens on the same CDK Overlay base
+    // Stacked modals + out-of-order close: closing underlying sheet keeps scroll lock until top dialog closes
     const openSheetBtn = page.getByRole('button', { name: 'Open Sheet' });
     await openSheetBtn.click();
-    const sheet = page.locator('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
-    await expect(sheet).toBeVisible();
-    await page.getByRole('button', { name: 'Done' }).click();
-    await expect(sheet).toBeHidden();
+    const overlays = page.locator('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
+    await expect(overlays).toHaveCount(1);
+    await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
+
+    await page.evaluate(() => document.getElementById('proto-dialog')?.setAttribute('open', 'true'));
+    await expect(overlays).toHaveCount(2);
+    await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
+
+    await page.evaluate(() => document.getElementById('proto-sheet')?.removeAttribute('open'));
+    await expect(overlays).toHaveCount(1);
+    await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
+
+    await page.evaluate(() => document.getElementById('proto-dialog')?.removeAttribute('open'));
+    await expect(overlays).toHaveCount(0);
+    await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
 
     // Menu popover: aria-expanded syncs, focus enters checked menuitemradio, ArrowDown + Enter selects LXP and returns focus
     const openPopoverBtn = page.locator('#open-popover');
@@ -184,6 +232,8 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await page.waitForSelector('mj-surface.mj-surface');
 
     const compactRow = page.locator('mj-row[density="sm"][interactive="true"]').first();
+    const elevatedSurface = page.locator('mj-surface[level="elevated"]').first();
+    await elevatedSurface.evaluate((el) => el.setAttribute('tabindex', '0'));
 
     await page.keyboard.press('Tab');
     for (const lookName of ['Look: MJ Default', 'Look: LXP', 'Look: Editorial']) {
@@ -192,6 +242,16 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
       await compactRow.focus();
       const boxShadow = await compactRow.evaluate((el) => getComputedStyle(el).boxShadow);
       expect(boxShadow, `focus ring missing on ${lookName}`).not.toBe('none');
+
+      await elevatedSurface.focus();
+      const surfaceFocusShadow = await elevatedSurface.evaluate(
+        (el) => getComputedStyle(el).boxShadow
+      );
+      expect(surfaceFocusShadow, `surface focus ring missing on ${lookName}`).not.toBe('none');
+      if (lookName !== 'Look: Editorial') {
+        // Resting --mj-shadow-md (2 layers) + 2-layer --mj-focus-ring = 4 shadow layers (never drops flat)
+        expect(surfaceFocusShadow.split(/px,\s*/).length).toBeGreaterThanOrEqual(3);
+      }
     }
 
     if (testInfo.project.name === 'phone-chromium') {
