@@ -44,9 +44,9 @@ The spec has to start from measured facts, the same way the README did. To measu
 - What token tiers exist now against the three in [NAMING.md](NAMING.md): scale, role, component
 - What the package exports. Today it is one barrel with no `exports` map, and the realtime widget reaches into `dist` by file path for tokens and button styles
 - Which CDK pieces are already used, and where the four overlays duplicate each other
-- What `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`) sets globally
+- What Explorer's live global stylesheet (`explorer-app/src/lib/styles.scss`, which MJExplorer loads through `@use "@memberjunction/ng-explorer-app/dist/styles.scss"`) sets globally, and whether any downstream host still imports the alternate `dist/styles/main.scss` entry
 
-One finding already, from reading `_common.scss` and `_shared-patterns.scss` for this plan: they define global `.mj-card*`, `.mj-empty-state`, `.mj-toolbar*`, `.mj-breadcrumb*`, `.mj-modal-*`, `.mj-grid*`, `.mj-header*`, `.mj-loading*`, `.mj-search*`, `.mj-page-container`, `.mj-badge*`, `.mj-panel*`, `.mj-table`, `.mj-btn` and `.mj-input`. With encapsulation off, primitives use a class prefix, and `.mj-` is the obvious one. Wave 0 (`surface`, `layer`, `row`) has no collisions with that list; Waves 1 and 2 retire or rename each colliding global in the PR that converts its primitive.
+One finding already, from reading the stylesheets for this plan: `_common.scss`, which Explorer loads, defines global `.mj-card*`, `.mj-empty-state`, `.mj-toolbar*`, `.mj-breadcrumb*`, `.mj-modal-*`, `.mj-grid*`, `.mj-header*`, `.mj-container*`, `.mj-content-container`, `.mj-page-container`, `.mj-loading` and `.mj-search*`. `_shared-patterns.scss` adds `.mj-badge*`, `.mj-panel*`, `.mj-table`, `.mj-dashboard-header` and a duplicate `.mj-input` rule, but only the alternate `styles/main.scss` entry imports it, and nothing in this repo loads that entry. With encapsulation off, primitives use a class prefix, and `.mj-` is the obvious one. Wave 0 (`surface`, `layer`, `row`) has no collisions with either list; Waves 1 and 2 retire or rename each colliding `_common.scss` global in the PR that converts its primitive. `.mj-btn*` and `.mj-input` are the library's own classes, not collisions, and are never renamed.
 
 ## Steps 2 and 3: the spec
 
@@ -98,7 +98,7 @@ PR #5916 is still open. The prototype either stacks on it or waits for it to mer
 
 ## Step 7: layer order in code
 
-This is the only step that touches shipped code. It declares `@layer reset, foundation, primitives;` and moves the unlayered element and legacy globals in `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`) into `@layer reset`. Colin's WS4 contract fixes land in the same package. Step 7's exit check is **Explorer unaffected**: zero unexpected visual diffs against the Step 4 Explorer baseline screenshots.
+This is the only step that touches shipped code. It declares `@layer reset, foundation, primitives;` and moves the unlayered element and legacy globals in Explorer's live entry (`_typography.scss` and `_common.scss`) into `@layer reset`. The alternate `styles/main.scss` entry and its `_shared-patterns.scss` are deleted if Step 1 finds no downstream host importing `dist/styles/main.scss`; spec section 4.3 covers the other case and which sheets stay unlayered. Colin's WS4 contract fixes land in the same package. Step 7's exit check is **Explorer unaffected**: zero unexpected visual diffs against the Step 4 Explorer baseline screenshots.
 
 Merge order, agreed at the UI/UX Check-In: Colin's #6609 (WS6b tokens) and #6610 (WS4 contract fixes) merge first. The wave 0 prototype (#6673) merges after them and re-layers so the variables win. Colin's `.mj-surface-*` classes are unlayered and paint background, border and shadow; wave 0 treats them as variables, with the primitive doing the painting inside `@layer primitives`. Unlayered rules beat every layer, so without the re-layer those classes would override the primitives. Step 7 is wave 0 work too, so it also lands after both of Colin's PRs.
 
@@ -115,7 +115,7 @@ Merge order, agreed at the UI/UX Check-In: Colin's #6609 (WS6b tokens) and #6610
 | 1 | Where the prototype lives | Private workspace package, loaded on the Elements test page |
 | 2 | What the third look is | Something dense and flat with square corners and a serif face, so it shares nothing with MJ or LXP |
 | 3 | Spec scope | Full wave 0 at contract level; prototype builds surface, layer, row only |
-| 4 | Class prefix, given the `_common.scss` collisions | **Decided:** `.mj-` prefix kept; Wave 0 (`surface`, `layer`, `row`) has zero collisions, and Wave 1/2 PRs retire or rename colliding globals in `_common.scss` / `_shared-patterns.scss` per component |
+| 4 | Class prefix, given the `_common.scss` collisions | **Decided:** `.mj-` prefix kept; Wave 0 (`surface`, `layer`, `row`) has zero collisions, and Wave 1/2 PRs retire or rename colliding `_common.scss` globals per component. `.mj-btn*` and `.mj-input` are the library's own classes, not collisions |
 | 5 | Harness tooling and where it runs | `toHaveScreenshot` inside existing `e2e/` (`e2e/ui-primitives/` + `e2e/specs/`), Explorer baselines opt-in locally first |
 | 6 | Who implements the control-height and radius role tokens | Colin declares, Matt's component PRs adopt |
 | 7 | Branch and file | `WAVE_0_SPEC.md` in this folder, on a new docs branch off `next` |
