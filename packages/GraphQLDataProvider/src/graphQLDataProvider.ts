@@ -3329,6 +3329,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // the message), so it states it on the wire and we repeat it — never inferred here. Without
             // the statement CompleteMessage keeps today's behaviour (the text may read twice).
             result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
+            // A field-level concurrency refusal (ResolverBase throws it with this code) is reported the
+            // way a server-side save reports it, so a caller can tell "the row changed since it was
+            // loaded" from any other failure and reload the row before saving again.
+            if (extensions?.code === 'CONCURRENT_MODIFICATION_CONFLICT') {
+                const fields: unknown = extensions.conflictingFields;
+                result.ConcurrencyConflict = {
+                    ConflictingFields: Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : [],
+                };
+            }
             LogError(e);
             return null;
         }
