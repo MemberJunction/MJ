@@ -83,7 +83,7 @@ export const GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION = 'ContentPipeline.Del
  * How deeply access policies may nest (a concept's visibility following its chunks', a chunk's
  * following its document's). Past this depth every node is hidden, so a cycle cannot recurse forever.
  */
-const MAX_POLICY_DEPTH = 3;
+const MAX_POLICY_DEPTH = 6;
 /** Per-hop decay applied to best-first path scores, so near nodes outrank far ones. */
 const HOP_DECAY = 0.85;
 
@@ -1209,7 +1209,12 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const active = this.EdgeProviders.filter((ep) => ep.IsActive && UUIDsEqual(ep.GraphID, graph.ID)).sort(
             (a, b) => a.Sequence - b.Sequence || compareStrings(a.ID, b.ID),
         );
-        const request: GraphEdgeRequest = { Nodes: frontier, Direction: options.Direction ?? 'Both', EdgeTypes: options.EdgeTypes };
+        const request: GraphEdgeRequest = {
+            Nodes: frontier,
+            Direction: options.Direction ?? 'Both',
+            EdgeTypes: options.EdgeTypes,
+            IncludeProposed: options.IncludeProposed === true,
+        };
         const edges: GraphEdgeView[] = [];
         for (const row of active) {
             const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseGraphEdgeProvider>(BaseGraphEdgeProvider, row.DriverClass);
@@ -1244,9 +1249,12 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const perPrincipal = await Promise.all(principals.map((p) => this.resolveNodesForPrincipal(normalized, p, provider, includeProposed)));
         const visible = perPrincipal[0];
         for (const other of perPrincipal.slice(1)) {
-            for (const key of Array.from(visible.keys())) {
-                if (!other.has(key)) {
+            for (const [key, view] of Array.from(visible)) {
+                const otherView = other.get(key);
+                if (!otherView) {
                     visible.delete(key);
+                } else {
+                    visible.set(key, sharedNodeText(view, otherView));
                 }
             }
         }
@@ -1459,7 +1467,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     /** `true` when `graphID` is an active graph whose graph type has `IsCanon = 1`. */
     private isCanonGraphID(graphID: string): boolean {
         const graph = this.Graphs.find((g) => UUIDsEqual(g.ID, graphID));
-        if (!graph) {
+        if (!graph || graph.Status !== 'Active') {
             return false;
         }
         const graphType = this.GraphTypes.find((t) => UUIDsEqual(t.ID, graph.GraphTypeID));
@@ -1654,6 +1662,17 @@ function sharedEdgeText(edge: GraphEdgeView, others: readonly GraphEdgeView[]): 
         attributes = Object.keys(kept).length > 0 ? kept : null;
     }
     return { ...edge, Description: description, Attributes: attributes };
+}
+
+/**
+ * The text two principals may both see on one node. A node an access policy redacted for one of them
+ * comes back with the neutral label and no description, so any difference means one reader may not
+ * see the other's text: the label falls back to the neutral label and the description to none.
+ */
+function sharedNodeText(view: GraphNodeView, other: GraphNodeView): GraphNodeView {
+    const label = view.Label === other.Label ? view.Label : NeutralGraphNodeLabel(view.EntityName, view.RecordID);
+    const description = view.Description === other.Description ? view.Description : null;
+    return label === view.Label && description === view.Description ? view : { ...view, Label: label, Description: description };
 }
 
 function isConceptEntity(entity: EntityInfo): boolean {

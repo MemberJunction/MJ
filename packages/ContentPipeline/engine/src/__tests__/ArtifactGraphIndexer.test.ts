@@ -12,8 +12,10 @@ import { ContentUploadIngestor } from '../ContentUploadIngestor.js';
 
 const ARTIFACTS_ENTITY_ID = 'a0000000-0000-4000-8000-0000000000e1';
 const user = { ID: 'u0000000-0000-4000-8000-000000000001', Name: 'System', UserRoles: [] } as unknown as UserInfo;
+const owner = { ID: 'owner', Name: 'Owner', UserRoles: [] } as unknown as UserInfo;
 
-interface ArtifactRow { ID: string; Name: string; Description: string | null; Type: string; EnvironmentID: string; UserID: string }
+/** `ReadableBy` stands in for the artifact read hooks: when set, only those user IDs see the row. */
+interface ArtifactRow { ID: string; Name: string; Description: string | null; Type: string; EnvironmentID: string; UserID: string; ReadableBy?: string[] }
 interface LinkRow { ID: string; SourceEntityID: string; SourceRecordID: string; TargetEntityID: string; TargetRecordID: string; LinkType: string }
 
 function sources(config: Record<string, unknown> | null) {
@@ -29,7 +31,9 @@ function mockEngine(config: Record<string, unknown> | null): void {
     vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'ContentSources', 'get').mockReturnValue(sources(config) as never);
 }
 
-function makeWorld() {
+/** `ownerUser` is what the user cache returns for the artifact's owner; `null` means the cache does not hold them. */
+function makeWorld(ownerUser: UserInfo | null = owner) {
+    vi.spyOn(ArtifactGraphIndexer.Instance as unknown as { ResolveOwner: (id: string) => Promise<UserInfo | null> }, 'ResolveOwner').mockResolvedValue(ownerUser);
     const artifacts: ArtifactRow[] = [
         { ID: 'art-1', Name: 'Pricing Policy', Description: 'How we price', Type: 'Markdown Document', EnvironmentID: 'env', UserID: 'owner' },
         { ID: 'art-2', Name: 'Discount Rules', Description: null, Type: 'Markdown Document', EnvironmentID: 'env', UserID: 'owner' },
@@ -47,20 +51,29 @@ function makeWorld() {
     ];
     const created: LinkRow[] = [];
     const deleted: string[] = [];
-    const runView = async (params: RunViewParams) => {
+    const nameReaders: string[] = [];
+    const runView = async (params: RunViewParams, reader?: UserInfo) => {
         const filter = String(params.ExtraFilter ?? '');
         let rows: object[] = [];
         if (params.EntityName === 'MJ: Artifacts') {
             const id = /\[ID\] = '([^']+)'/.exec(filter)?.[1];
-            const names = Array.from(/\[Name\] IN \(([^)]*)\)/.exec(filter)?.[1].matchAll(/'([^']*)'/g) ?? []).map((m) => m[1].toLowerCase());
-            rows = artifacts.filter((a) => (id ? a.ID === id : names.includes(a.Name.toLowerCase())));
+            // Like a case-sensitive collation: `[Name] IN` matches exactly, `LOWER([Name]) IN` ignores case.
+            const lowered = filter.includes('LOWER([Name]) IN');
+            const names = Array.from(/\[Name\]\)? IN \(([^)]*)\)/.exec(filter)?.[1].matchAll(/'([^']*)'/g) ?? []).map((m) => m[1]);
+            if (!id) {
+                nameReaders.push(reader?.ID ?? '');
+            }
+            rows = artifacts
+                .filter((a) => (id ? a.ID === id : names.includes(lowered ? a.Name.toLowerCase() : a.Name)))
+                .filter((a) => !a.ReadableBy || a.ReadableBy.includes(reader?.ID ?? ''));
         } else if (params.EntityName === 'MJ: Artifact Versions') {
             const id = /\[ArtifactID\] = '([^']+)'/.exec(filter)?.[1] ?? '';
             rows = id in versions ? [{ ID: `${id}-v1`, Content: versions[id], VersionNumber: 1 }] : [];
         } else if (params.EntityName === 'MJ: Record Links') {
             const src = /\[SourceRecordID\] = '([^']+)'/.exec(filter)?.[1];
+            const tgt = /\[TargetRecordID\] = '([^']+)'/.exec(filter)?.[1];
             rows = links
-                .filter((l) => l.SourceRecordID === src && l.LinkType === 'LinksTo')
+                .filter((l) => (l.SourceRecordID === src || (tgt !== undefined && l.TargetRecordID === tgt)) && l.LinkType === 'LinksTo')
                 .map((l) => ({ ...l, LatestResult: { CompleteMessage: '' }, Delete: async () => (deleted.push(l.ID), links.splice(links.indexOf(l), 1), true) }));
         }
         return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
@@ -78,7 +91,7 @@ function makeWorld() {
         RunView: runView,
         RunViews: async (list: RunViewParams[]) => Promise.all(list.map((p) => runView(p))),
     } as unknown as IMetadataProvider;
-    return { artifacts, versions, links, created, deleted, provider };
+    return { artifacts, versions, links, created, deleted, nameReaders, provider };
 }
 
 function saveEvent(entityName: string, fields: Record<string, string>, type: 'save' | 'delete' = 'save'): MJEvent {
@@ -131,6 +144,53 @@ describe('ArtifactGraphIndexer.IndexArtifact', () => {
         expect(w.deleted).toEqual(['link-old']);
         expect(w.created).toHaveLength(1);
         expect(w.created[0]).toMatchObject({ SourceRecordID: 'art-1', TargetRecordID: 'art-2', LinkType: 'LinksTo', SourceEntityID: ARTIFACTS_ENTITY_ID, TargetEntityID: ARTIFACTS_ENTITY_ID });
+    });
+
+    it('resolves [[...]] targets as the owner, so an artifact the owner cannot open is never linked', async () => {
+        mockEngine({ ArtifactTypes: ['Markdown Document'] });
+        const w = makeWorld();
+        // Readable by the indexing (system) user, but not by the owner of the linking document.
+        w.artifacts[1].ReadableBy = [user.ID];
+        vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
+        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+        expect(w.nameReaders).toEqual(['owner']);
+        expect(result.Links).toEqual({ Created: 0, Removed: 1, Unresolved: ['Discount Rules', 'Missing Doc'] });
+        expect(w.created).toHaveLength(0);
+    });
+
+    it('leaves the links alone when the owner is not in the user cache', async () => {
+        mockEngine({ ArtifactTypes: ['Markdown Document'] });
+        const w = makeWorld(null);
+        vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
+        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+        expect(result.Links).toBeNull();
+        expect(w.deleted).toEqual([]);
+        expect(w.created).toHaveLength(0);
+        expect(w.nameReaders).toEqual([]);
+    });
+
+    it('matches names case-insensitively even on a case-sensitive collation', async () => {
+        mockEngine({ ArtifactTypes: ['Markdown Document'] });
+        const w = makeWorld();
+        w.versions['art-1'] = 'See [[discount RULES]].';
+        vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
+        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+        expect(result.Links?.Unresolved).toEqual([]);
+        expect(w.created.map((l) => l.TargetRecordID)).toEqual(['art-2']);
+    });
+
+    it('deletes the links to and from a deleted artifact, and no others', async () => {
+        mockEngine({ ArtifactTypes: ['Markdown Document'] });
+        const w = makeWorld();
+        w.links.push(
+            { ID: 'link-out', SourceEntityID: ARTIFACTS_ENTITY_ID, SourceRecordID: 'art-gone', TargetEntityID: ARTIFACTS_ENTITY_ID, TargetRecordID: 'art-2', LinkType: 'LinksTo' },
+            { ID: 'link-in', SourceEntityID: ARTIFACTS_ENTITY_ID, SourceRecordID: 'art-2', TargetEntityID: ARTIFACTS_ENTITY_ID, TargetRecordID: 'art-gone', LinkType: 'LinksTo' },
+        );
+        vi.spyOn(ContentUploadIngestor, 'RemoveText').mockResolvedValue(null);
+        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-gone', w.provider, user);
+        expect(result.Links).toEqual({ Created: 0, Removed: 2, Unresolved: [] });
+        expect(w.deleted.sort()).toEqual(['link-in', 'link-out']);
+        expect(w.links.map((l) => l.ID)).toEqual(['link-old']);
     });
 
     it('removes the item when the artifact is gone, its text is empty, or its type is not configured', async () => {

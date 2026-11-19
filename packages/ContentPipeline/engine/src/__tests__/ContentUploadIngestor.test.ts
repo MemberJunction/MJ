@@ -1709,6 +1709,23 @@ describe('ContentUploadIngestor', () => {
             expect(env.erds).toHaveLength(1);
         });
 
+        it('keeps the item for identical text but updates its name and description when the record was renamed', async () => {
+            const env = createFakeEnvironment();
+            const removeSpy = vi.spyOn(ContentUploadIngestor.prototype, 'Remove');
+            const first = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'Old title', Description: 'old', Text: 'same text',
+                ContextUser: env.contextUser, Provider: env.provider,
+            });
+            const renamed = await ContentUploadIngestor.IngestText({
+                ContentSourceID: 'SRC-UPLOAD-1', Origin: origin, Name: 'New title', Text: 'same text',
+                ContextUser: env.contextUser, Provider: env.provider,
+            });
+            expect(renamed).toMatchObject({ Unchanged: true, ContentItemID: first.ContentItemID });
+            expect(env.items).toHaveLength(1);
+            expect(env.items[0]).toMatchObject({ Name: 'New title', Description: null });
+            expect(removeSpy).not.toHaveBeenCalled();
+        });
+
         it('replaces the earlier item when the text changes, removing it with its chunks', async () => {
             const env = createFakeEnvironment();
             const removeSpy = vi.spyOn(ContentUploadIngestor.prototype, 'Remove').mockResolvedValue({ ContentItemIDs: [], DependentsMarked: 0 });

@@ -111,6 +111,11 @@ export interface GraphEdgeRequest {
     Nodes: GraphNodeRef[];
     Direction: 'Out' | 'In' | 'Both';
     EdgeTypes?: string[];
+    /**
+     * Whether the caller accepts `Proposed` content. A provider that derives edges from stored edges
+     * or concepts uses only `Approved` ones unless this is `true`, and never `Rejected` ones.
+     */
+    IncludeProposed?: boolean;
 }
 
 /**

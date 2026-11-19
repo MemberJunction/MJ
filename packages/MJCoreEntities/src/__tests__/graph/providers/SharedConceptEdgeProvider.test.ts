@@ -50,13 +50,26 @@ function rows(): Record<string, Row[]> {
             sourced('k2', 'ch-c1'),
             sourced('k1', 'ch-t1'),
             sourced('k1', 'ch-d1'),
-            { ID: 'mention', EdgeType: 'Mentions', SourceEntityID: E.Chunks, SourceRecordID: 'ch-c1', TargetEntityID: E.Concepts, TargetRecordID: 'k1' },
+            { ID: 'mention', EdgeType: 'Mentions', GraphID: 'g', Status: 'Approved', SourceEntityID: E.Chunks, SourceRecordID: 'ch-c1', TargetEntityID: E.Concepts, TargetRecordID: 'k1' },
+        ],
+        'MJ: Graph Concepts': [
+            { ID: 'k1', GraphID: 'g', Status: 'Approved' },
+            { ID: 'k2', GraphID: 'g', Status: 'Approved' },
         ],
     };
 }
 
-function sourced(concept: string, chunk: string): Row {
-    return { ID: `sf-${concept}-${chunk}`, EdgeType: 'SourcedFrom', SourceEntityID: E.Concepts, SourceRecordID: concept, TargetEntityID: E.Chunks, TargetRecordID: chunk };
+function sourced(concept: string, chunk: string, graphID = 'g', status = 'Approved'): Row {
+    return {
+        ID: `sf-${concept}-${chunk}-${graphID}-${status}`,
+        EdgeType: 'SourcedFrom',
+        GraphID: graphID,
+        Status: status,
+        SourceEntityID: E.Concepts,
+        SourceRecordID: concept,
+        TargetEntityID: E.Chunks,
+        TargetRecordID: chunk,
+    };
 }
 
 /** Evaluates the filter shapes the provider emits: ANDs of `=`, `IN`, `IS [NOT] NULL`, plus the per-entity OR groups. */
@@ -80,15 +93,16 @@ function values(list: string): string[] {
     return Array.from(list.matchAll(/'([^']*)'/g)).map((m) => m[1]);
 }
 
-function ctx(data: Record<string, Row[]>, config: SharedConceptEdgeProviderConfig = {}, unreadable: string[] = []) {
+function ctx(data: Record<string, Row[]>, config: SharedConceptEdgeProviderConfig = {}, unreadable: string[] = [], noReadPermission: string[] = []) {
     const reads: Array<{ EntityName: string; UserID?: string }> = [];
     const names: Record<string, string> = { [E.Artifacts]: 'MJ: Artifacts', [E.Tasks]: 'MJ: Tasks', [E.Concepts]: 'MJ: Graph Concepts', [E.Chunks]: 'MJ: Content Item Chunks' };
+    const entity = (id: string) => ({ ID: id, Name: names[id], GetUserPermisions: () => ({ CanRead: !noReadPermission.includes(names[id]) }) });
     const provider = {
         EntityByName: (name: string) => {
             const id = Object.keys(names).find((k) => names[k].toLowerCase() === name.toLowerCase());
-            return id ? { ID: id, Name: names[id] } : undefined;
+            return id ? entity(id) : undefined;
         },
-        EntityByID: (id: string) => (names[id] ? { ID: id, Name: names[id] } : undefined),
+        EntityByID: (id: string) => (names[id] ? entity(id) : undefined),
         RunView: async (params: RunViewParams, user?: UserInfo) => {
             const entity = params.EntityName ?? '';
             reads.push({ EntityName: entity, UserID: user?.ID });
@@ -147,6 +161,42 @@ describe('SharedConceptEdgeProvider', () => {
         expect(await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both' }, context)).toEqual([]);
         expect(reads.length).toBeGreaterThan(0);
         expect(reads.every((r) => r.UserID === caller.ID)).toBe(true);
+    });
+
+    it('derives only from this graph\'s Approved SourcedFrom edges, never Rejected ones or another graph\'s', async () => {
+        const data = rows();
+        // doc-c's only link is k2; replace it with a Rejected edge and one from another graph.
+        data['MJ: Graph Edges'] = data['MJ: Graph Edges'].filter((r) => r.ID !== 'sf-k2-ch-c1-g-Approved');
+        data['MJ: Graph Edges'].push(sourced('k2', 'ch-c1', 'g', 'Rejected'), sourced('k2', 'ch-c1', 'other-graph'));
+        const { context } = ctx(data);
+        const edges = await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both' }, context);
+        expect(edges.map((e) => e.Target.RecordID).sort()).toEqual(['doc-b', 'task-1']);
+    });
+
+    it('connects through a Proposed concept or edge only when the caller includes proposed content', async () => {
+        const data = rows();
+        data['MJ: Graph Concepts'] = [{ ID: 'k1', GraphID: 'g', Status: 'Approved' }, { ID: 'k2', GraphID: 'g', Status: 'Proposed' }];
+        const { context } = ctx(data);
+        const approvedOnly = await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both' }, context);
+        expect(approvedOnly.map((e) => e.Target.RecordID).sort()).toEqual(['doc-b', 'task-1']);
+        expect(approvedOnly.find((e) => e.Target.RecordID === 'doc-b')?.Attributes).toEqual({ SharedConceptIDs: ['k1'] });
+
+        const withProposed = await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both', IncludeProposed: true }, context);
+        expect(withProposed.map((e) => e.Target.RecordID).sort()).toEqual(['doc-b', 'doc-c', 'task-1']);
+    });
+
+    it('ignores concepts from another graph', async () => {
+        const data = rows();
+        data['MJ: Graph Concepts'] = [{ ID: 'k1', GraphID: 'g', Status: 'Approved' }, { ID: 'k2', GraphID: 'other-graph', Status: 'Approved' }];
+        const { context } = ctx(data);
+        const edges = await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both' }, context);
+        expect(edges.map((e) => e.Target.RecordID).sort()).toEqual(['doc-b', 'task-1']);
+    });
+
+    it('gives a viewer who cannot read concepts no edges, since the edge carries concept IDs', async () => {
+        const { context, reads } = ctx(rows(), {}, [], ['MJ: Graph Concepts']);
+        expect(await new SharedConceptEdgeProvider().GetEdges({ Nodes: [docA], Direction: 'Both' }, context)).toEqual([]);
+        expect(reads).toHaveLength(0);
     });
 
     it('does nothing when the edge type is filtered out', async () => {

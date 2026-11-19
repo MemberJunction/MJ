@@ -201,6 +201,21 @@ class BrokenPolicy extends BaseGraphNodeAccessPolicy {
 }
 MJGlobal.Instance.ClassFactory.Register(BaseGraphNodeAccessPolicy, BrokenPolicy, 'AccountContacts');
 
+/** When on, a document is visible only while contact ct-1 is: one more level of policy nesting. */
+let documentsDelegate = false;
+
+class DocumentsDelegatingPolicy extends BaseGraphNodeAccessPolicy {
+    public async FilterNodes(nodes: readonly GraphPolicyNode[], ctx: GraphAccessPolicyContext): Promise<Map<string, GraphNodeAccessDecision>> {
+        if (!documentsDelegate) {
+            return new Map(nodes.map((n) => [n.Key, 'Visible' as const]));
+        }
+        const contact = { EntityName: 'Contacts', RecordID: 'ct-1' };
+        const contactVisible = (await ctx.ResolveVisibleKeys([contact])).has(ctx.NodeKey(contact));
+        return new Map(nodes.map((n) => [n.Key, contactVisible ? ('Visible' as const) : ('Hidden' as const)]));
+    }
+}
+MJGlobal.Instance.ClassFactory.Register(BaseGraphNodeAccessPolicy, DocumentsDelegatingPolicy, 'Documents');
+
 /** Hides every `Related To` edge whose weight is below 0.6. */
 class RelatedToEdgePolicy extends BaseGraphEdgeAccessPolicy {
     public async FilterEdges(edges: readonly GraphEdgeView[], ctx: GraphAccessPolicyContext): Promise<Set<string>> {
@@ -217,6 +232,7 @@ describe('Graph access policies', () => {
         vi.spyOn(QueryEngine.Instance, 'FindQueryByID').mockReturnValue(undefined);
         contactDecisions.clear();
         contactsPolicyThrows = false;
+        documentsDelegate = false;
         RelatedToEdgePolicy.Principals = [];
     });
 
@@ -284,6 +300,14 @@ describe('Graph access policies', () => {
             }
             expect(GraphAccessPolicyRegistry.GetEdgePolicy('Related')).toBeNull();
         });
+
+        it('picks the highest-priority edge policy across spellings of the edge type name', () => {
+            class OverrideRelatedToPolicy extends RelatedToEdgePolicy {}
+            MJGlobal.Instance.ClassFactory.Register(BaseGraphEdgeAccessPolicy, OverrideRelatedToPolicy, 'RelatedTo', 1000);
+            for (const name of ['Related To', 'RelatedTo']) {
+                expect(GraphAccessPolicyRegistry.GetEdgePolicy(name)).toBeInstanceOf(OverrideRelatedToPolicy);
+            }
+        });
     });
 
     describe('provenance policies', () => {
@@ -336,6 +360,40 @@ describe('Graph access policies', () => {
             const { engine } = await engineWith(provenanceRows());
             const visible = await engine.FilterNodesForUser([conceptRef(P.ConceptPrivate)], executive, [analyst]);
             expect(visible.size).toBe(0);
+        });
+
+        it('applies the audience intersection to redaction: a reader who sees a concept redacted keeps its text from the caller', async () => {
+            const { engine } = await engineWith(provenanceRows());
+            const visible = Array.from((await engine.FilterNodesForUser([conceptRef(P.ConceptMixed)], executive, [analyst])).values());
+            expect(visible.map((v) => v.RecordID)).toEqual([P.ConceptMixed]);
+            expect(visible[0].Label).not.toBe('Shared Pricing');
+            expect(visible[0].Description).toBeNull();
+        });
+
+        it('does not exempt an Approved concept in a Canon graph that is not Active', async () => {
+            const rows = provenanceRows();
+            rows['MJ: Graphs'] = rows['MJ: Graphs'].map((g) => (g.ID === IDS.GraphCanon ? { ...g, Status: 'Disabled' } : g));
+            const { engine } = await engineWith(rows);
+            expect(await visibleRecordIds(engine, [conceptRef(P.ConceptCanonPrivate)], analyst)).toEqual([]);
+        });
+
+        it('counts a source whose entity is not in metadata as unseen, so it cannot make a concept more visible', async () => {
+            const rows = provenanceRows();
+            const unknownTarget = { EntityID: 'f0000000-0000-4000-8000-0000000000ff', EntityName: 'Unknown', RecordID: 'x-1' };
+            rows['MJ: Graph Edges'] = [
+                ...rows['MJ: Graph Edges'].filter((e) => !(e.SourceRecordID === P.ConceptMixed && e.TargetRecordID === P.ChunkPrivate)),
+                StoredEdge(P.GraphKnowledge, P.EdgeTypeSourcedFrom, 'SourcedFrom', { EntityID: IDS.ConceptMeta, EntityName: 'MJ: Graph Concepts', RecordID: P.ConceptMixed }, unknownTarget, 0.8),
+            ];
+            const { engine } = await engineWith(rows);
+            const visible = Array.from((await engine.FilterNodesForUser([conceptRef(P.ConceptMixed)], executive)).values());
+            expect(visible.map((v) => v.RecordID)).toEqual([P.ConceptMixed]);
+            expect(visible[0].Label).not.toBe('Shared Pricing');
+        });
+
+        it('follows a source document whose own policy nests one level further, without hitting the depth limit', async () => {
+            documentsDelegate = true;
+            const { engine } = await engineWith(provenanceRows());
+            expect(await visibleRecordIds(engine, [conceptRef(P.ConceptPrivate)], executive)).toEqual([P.ConceptPrivate]);
         });
 
         it('reads provenance as the viewer, in batches, never once per node', async () => {

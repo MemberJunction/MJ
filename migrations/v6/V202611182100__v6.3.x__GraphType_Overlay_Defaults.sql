@@ -299,12 +299,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-/* SQL text to sync entity unique keys (4 added, 0 updated, 0 removed) */
-INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('c577278e-3214-43d1-b031-b262e98b687b', '1AE4FED7-B3EC-425B-BD9A-26F17A6F7222', 'UQ_ArtifactGuestShareLink_MagicLinkInviteID', 'MagicLinkInviteID', NULL);
-INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('3e71c681-9dfc-47cb-9a62-71ce3900c011', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'UQ_MLEvaluationProtocol_Lineage_Version', 'LineageRootID,Version', NULL);
-INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('3833d2a8-9990-4872-9d80-025d27f2e3db', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'UQ_MLPredictionUnit_Lineage_Version', 'LineageRootID,Version', NULL);
-INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('a04f2c5e-480c-4aad-977f-3be725d8a458', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'UQ_MLTrainingSnapshot_ContentHash', 'ContentHash', NULL);
-
 /* SQL text to sync 3 entity field value row(s) for entity field ID CE98C0E2-6255-4712-AB9B-20261BE7136F */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])

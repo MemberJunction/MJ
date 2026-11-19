@@ -7,7 +7,7 @@
  * person picked; the host decides how to open it. Every relation comes from {@link LoadRecordRelations},
  * which applies the graph's per-viewer checks, so nothing the viewer cannot open is listed.
  */
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { LogError } from '@memberjunction/core';
 import { GraphEngine, LoadRecordRelations, type RecordRelations, type RelatedRecord } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -87,17 +87,19 @@ interface RelationSection {
         `,
     ],
 })
-export class ArtifactRelatedPanelComponent extends BaseAngularComponent {
+export class ArtifactRelatedPanelComponent extends BaseAngularComponent implements OnInit {
     private readonly cdr = inject(ChangeDetectorRef);
     private _artifactId: string | null = null;
     private loadToken = 0;
+    /** Set in `ngOnInit`, once every input (`Provider` included) is bound, whatever their order. */
+    private initialized = false;
 
-    /** The artifact whose relations are shown. Changing it reloads. */
+    /** The artifact whose relations are shown. Changing it after init reloads. */
     @Input()
     set ArtifactId(value: string | null) {
         const changed = value !== this._artifactId;
         this._artifactId = value;
-        if (changed) {
+        if (changed && this.initialized) {
             void this.load();
         }
     }
@@ -114,6 +116,11 @@ export class ArtifactRelatedPanelComponent extends BaseAngularComponent {
     public IsLoading = false;
     public ErrorMessage: string | null = null;
     public Sections: RelationSection[] = [];
+
+    public ngOnInit(): void {
+        this.initialized = true;
+        void this.load();
+    }
 
     public get IsEmpty(): boolean {
         return this.Sections.every((s) => s.Items.length === 0);

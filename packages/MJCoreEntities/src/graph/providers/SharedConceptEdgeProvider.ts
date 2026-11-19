@@ -11,6 +11,7 @@ import {
     type GraphProviderContext,
 } from '../BaseGraphEdgeProvider';
 import { GRAPH_SHARES_CONCEPT_EDGE_TYPE } from '../RecordRelations';
+import type { MJGraphConceptEntityType, MJGraphEdgeEntityType } from '../../generated/entities/__mj';
 
 /** Configuration for {@link SharedConceptEdgeProvider}. */
 export interface SharedConceptEdgeProviderConfig {
@@ -30,18 +31,42 @@ type RecordDocRow = { ID: string; EntityID: string; RecordID: string };
 type ItemRow = { ID: string; EntityRecordDocumentID: string };
 type ChunkRow = { ID: string; ContentItemID: string };
 type SourcedFromRow = { ID: string; SourceRecordID: string; TargetRecordID: string };
+type ConceptRow = { ID: string };
 
-/** IDs of the pipeline entities the walk filters on, resolved once per step. */
+/** Edge statuses a step may derive from: `Approved`, plus `Proposed` when the caller asks; never `Rejected`. */
+function edgeStatuses(includeProposed: boolean): MJGraphEdgeEntityType['Status'][] {
+    return includeProposed ? ['Approved', 'Proposed'] : ['Approved'];
+}
+
+/** Concept statuses a step may connect through, matching what the engine shows for the same flag. */
+function conceptStatuses(includeProposed: boolean): MJGraphConceptEntityType['Status'][] {
+    return includeProposed ? ['Approved', 'Proposed'] : ['Approved'];
+}
+
+/** What the walk filters on, resolved once per step. */
 interface PipelineEntityIDs {
     Concepts: string;
     Chunks: string;
+    /** `SourcedFrom` edges of this graph, in a status the caller may see. */
+    SourcedFromFilter: string;
 }
 
-/** The pipeline entity IDs from the step's provider, or `null` (no edges) when one is missing. */
-function resolveEntityIDs(ctx: GraphProviderContext<SharedConceptEdgeProviderConfig>): PipelineEntityIDs | null {
+/**
+ * The pipeline entity IDs and `SourcedFrom` filter for this step, or `null` (no edges) when an entity
+ * is missing or the viewer may not read concepts: the edge carries concept IDs, so a viewer who
+ * cannot read concepts gets none of these edges.
+ */
+function resolveEntityIDs(ctx: GraphProviderContext<SharedConceptEdgeProviderConfig>, includeProposed: boolean): PipelineEntityIDs | null {
     const concepts = ctx.Provider.EntityByName('MJ: Graph Concepts');
     const chunks = ctx.Provider.EntityByName('MJ: Content Item Chunks');
-    return concepts && chunks ? { Concepts: concepts.ID, Chunks: chunks.ID } : null;
+    if (!concepts || !chunks || !concepts.GetUserPermisions(ctx.User).CanRead) {
+        return null;
+    }
+    const statuses = edgeStatuses(includeProposed).map((st) => `'${st}'`).join(', ');
+    const sourcedFromFilter =
+        `[EdgeType] = '${SOURCED_FROM}' AND [GraphID] = '${EscapeSQLString(ctx.Graph.ID)}' AND [Status] IN (${statuses}) ` +
+        `AND [SourceEntityID] = '${EscapeSQLString(concepts.ID)}' AND [TargetEntityID] = '${EscapeSQLString(chunks.ID)}'`;
+    return { Concepts: concepts.ID, Chunks: chunks.ID, SourcedFromFilter: sourcedFromFilter };
 }
 
 /** A frontier record, keyed the way the engine keys nodes. */
@@ -61,6 +86,9 @@ interface IndexedRecord {
  *          → SourcedFrom (concept → chunk) → concepts → their other chunks
  *          → Content Items → Entity Record Documents → other records
  *
+ * Only this graph's `SourcedFrom` edges and concepts count, `Approved` ones unless the caller asks
+ * for `Proposed` too, and never `Rejected` edges. A viewer who cannot read concepts gets no edges.
+ *
  * Every read runs under the viewer's permissions and row-level security, and the engine then
  * filters both endpoints through the node access policies, so the edge exists only between
  * records the viewer can see. A read that fails or hits its cap ends the walk with what was found
@@ -77,7 +105,8 @@ export class SharedConceptEdgeProvider extends BaseGraphEdgeProvider<SharedConce
         if (request.Nodes.length === 0 || !MatchesEdgeTypeFilter(edgeType, request.EdgeTypes)) {
             return [];
         }
-        const ids = resolveEntityIDs(ctx);
+        const includeProposed = request.IncludeProposed === true;
+        const ids = resolveEntityIDs(ctx, includeProposed);
         if (!ids) {
             return [];
         }
@@ -87,12 +116,36 @@ export class SharedConceptEdgeProvider extends BaseGraphEdgeProvider<SharedConce
             return [];
         }
         const conceptsByFrontierKey = await this.conceptsOfRecords(frontier, reader, ids);
-        const allConcepts = new UUIDSet(Array.from(conceptsByFrontierKey.values()).flatMap((s) => Array.from(s)));
+        const candidates = new UUIDSet(Array.from(conceptsByFrontierKey.values()).flatMap((s) => Array.from(s)));
+        const allConcepts = await this.visibleConcepts(candidates, reader, ctx, includeProposed);
         if (allConcepts.Size === 0) {
             return [];
         }
+        for (const [key, set] of conceptsByFrontierKey) {
+            conceptsByFrontierKey.set(key, new UUIDSet(Array.from(set).filter((id) => allConcepts.Has(id))));
+        }
         const recordsByConcept = await this.recordsOfConcepts(allConcepts, reader, ids);
         return this.buildEdges(frontier, conceptsByFrontierKey, recordsByConcept, edgeType, config, ctx);
+    }
+
+    /**
+     * The candidate concepts the viewer can read, in this graph and in a status the caller may see. A
+     * concept the viewer cannot read, a `Draft` or `Deprecated` one, or one from another graph never
+     * connects two records.
+     */
+    private async visibleConcepts(
+        candidates: UUIDSet,
+        reader: StepReader,
+        ctx: GraphProviderContext<SharedConceptEdgeProviderConfig>,
+        includeProposed: boolean,
+    ): Promise<UUIDSet> {
+        if (candidates.Size === 0) {
+            return candidates;
+        }
+        const statuses = conceptStatuses(includeProposed).map((st) => `'${st}'`).join(', ');
+        const rows = await reader.Read<ConceptRow>('MJ: Graph Concepts', ['ID'],
+            `${inFilter('ID', Array.from(candidates))} AND [GraphID] = '${EscapeSQLString(ctx.Graph.ID)}' AND [Status] IN (${statuses})`);
+        return new UUIDSet(rows.map((r) => r.ID));
     }
 
     /** Logs a capped read on behalf of the step reader (`LogTruncation` is protected). */
@@ -123,7 +176,7 @@ export class SharedConceptEdgeProvider extends BaseGraphEdgeProvider<SharedConce
         const sourced = chunks.Rows.length === 0
             ? []
             : await reader.Read<SourcedFromRow>('MJ: Graph Edges', ['ID', 'SourceRecordID', 'TargetRecordID'],
-                  `[EdgeType] = '${SOURCED_FROM}' AND [SourceEntityID] = '${EscapeSQLString(ids.Concepts)}' AND [TargetEntityID] = '${EscapeSQLString(ids.Chunks)}' AND ${inFilter('TargetRecordID', chunks.Rows.map((c) => c.ID))}`);
+                  `${ids.SourcedFromFilter} AND ${inFilter('TargetRecordID', chunks.Rows.map((c) => c.ID))}`);
         const docKeyByID = new UUIDMap<string>(docs.map((d) => [d.ID, FormatGraphNodeKey(d.EntityID, d.RecordID)]));
         for (const edge of sourced) {
             const docID = chunks.DocByChunk.Get(edge.TargetRecordID);
@@ -141,7 +194,7 @@ export class SharedConceptEdgeProvider extends BaseGraphEdgeProvider<SharedConce
     /** Every record each concept was synthesized from. */
     private async recordsOfConcepts(concepts: UUIDSet, reader: StepReader, ids: PipelineEntityIDs): Promise<UUIDMap<GraphNodeRef[]>> {
         const sourced = await reader.Read<SourcedFromRow>('MJ: Graph Edges', ['ID', 'SourceRecordID', 'TargetRecordID'],
-            `[EdgeType] = '${SOURCED_FROM}' AND [SourceEntityID] = '${EscapeSQLString(ids.Concepts)}' AND [TargetEntityID] = '${EscapeSQLString(ids.Chunks)}' AND ${inFilter('SourceRecordID', Array.from(concepts))}`);
+            `${ids.SourcedFromFilter} AND ${inFilter('SourceRecordID', Array.from(concepts))}`);
         const chunks = await reader.Read<ChunkRow>('MJ: Content Item Chunks', ['ID', 'ContentItemID'], inFilter('ID', sourced.map((e) => e.TargetRecordID)));
         const items = await reader.Read<ItemRow>('MJ: Content Items', ['ID', 'EntityRecordDocumentID'],
             `${inFilter('ID', chunks.map((c) => c.ContentItemID))} AND [EntityRecordDocumentID] IS NOT NULL AND [DeleteStatus] IS NULL`);

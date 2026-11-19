@@ -14,14 +14,17 @@
  * - Saves are debounced per artifact (collaborative editing compacts versions often), and one
  *   artifact is never indexed twice at once.
  * - `[[Name]]` in the text becomes an `MJ: Record Links` row (`LinkType = 'LinksTo'`) to the artifact
- *   of that name, which the Record Link edge provider projects into the graph. Links are reconciled
- *   on every index: a removed `[[...]]` removes its link.
+ *   of that name, which the Record Link edge provider projects into the graph. Names are resolved as
+ *   the artifact's owner, so a link only ever points at an artifact its author can open. Links are
+ *   reconciled on every index: a removed `[[...]]` removes its link.
  * - A deleted artifact, or one whose latest version has no text, is taken out of the index; the
- *   Delete stage retracts what the Graph stage inferred from it.
+ *   Delete stage retracts what the Graph stage inferred from it. A deleted artifact's links, to it
+ *   and from it, are deleted too.
  *
  * Runs only in the process where the save happened (entity events are local), so several API
  * servers never index the same save twice. Indexing runs as the system user: it writes on behalf of
  * the platform, and who may READ the results is decided later, per viewer, by the access policies.
+ * The one read done as someone else is link resolution, done as the owner (above).
  *
  * @module @memberjunction/content-pipeline
  */
@@ -38,6 +41,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJArtifactEntity, MJArtifactVersionEntity, MJRecordLinkEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { BaseSingleton, EscapeSQLString, ExcludeByUUIDs, MJEvent, MJEventType, MJGlobal, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ContentUploadIngestor } from './ContentUploadIngestor.js';
 
@@ -71,8 +75,19 @@ export interface ArtifactIndexOutcome {
 export interface ArtifactIndexResult {
     ArtifactID: string;
     Outcomes: ArtifactIndexOutcome[];
-    /** `[[...]]` links created and removed; `null` when the artifact is not indexed anywhere. */
-    Links: { Created: number; Removed: number; Unresolved: string[] } | null;
+    /**
+     * `[[...]]` links created and removed; `null` when the artifact is not indexed anywhere, or its
+     * owner is unknown so its links were left alone. For a deleted artifact, the links to and from it
+     * that were removed.
+     */
+    Links: ArtifactLinkResult | null;
+}
+
+/** What reconciling one artifact's `[[...]]` links changed. */
+export interface ArtifactLinkResult {
+    Created: number;
+    Removed: number;
+    Unresolved: string[];
 }
 
 type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type' | 'EnvironmentID' | 'UserID'>;
@@ -158,10 +173,31 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
             const wanted = doc && target.ArtifactTypes.has(typeName) ? doc : null;
             result.Outcomes.push(await this.indexInSource(target, artifactID, wanted, provider, user));
         }
-        if (artifact && targets.some((t) => t.ArtifactTypes.has(typeName))) {
-            result.Links = await this.reconcileLinks(artifact, text ?? '', provider, user);
+        if (!artifact) {
+            result.Links = await this.removeAllLinks(artifactID, provider, user);
+        } else if (targets.some((t) => t.ArtifactTypes.has(typeName))) {
+            result.Links = await this.reconcileLinksAsOwner(artifact, text ?? '', provider, user);
         }
         return result;
+    }
+
+    /**
+     * The artifact's owner, from the server's user cache, or `null` when the cache does not hold them.
+     * `[[Name]]` targets are resolved as this user, so a link can only point at an artifact the
+     * author could open. Protected so a host with its own user source can override it.
+     */
+    protected async ResolveOwner(ownerID: string): Promise<UserInfo | null> {
+        return UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, ownerID)) ?? null;
+    }
+
+    /** Reconcile links with the owner as the reader of candidate targets; without a known owner, change nothing. */
+    private async reconcileLinksAsOwner(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo): Promise<ArtifactLinkResult | null> {
+        const owner = artifact.UserID ? await this.ResolveOwner(artifact.UserID) : null;
+        if (!owner) {
+            LogError(`ArtifactGraphIndexer: owner ${artifact.UserID} of artifact ${artifact.ID} is not in the user cache; its [[...]] links were left as they were`);
+            return null;
+        }
+        return this.reconcileLinks(artifact, text, provider, user, owner);
     }
 
     /** Content Sources whose configuration indexes artifacts. */
@@ -312,11 +348,13 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
      * Make the artifact's `LinksTo` record links match the `[[...]]` references in its text. A name
      * resolves to an artifact in the same environment with exactly that name (case-insensitive); when
      * several match, one owned by the same user wins; still ambiguous or missing, it stays unresolved.
+     * Candidates are read as the owner, so only artifacts the owner can open are ever linked; the
+     * links themselves are written as the indexing user.
      */
-    private async reconcileLinks(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo): Promise<{ Created: number; Removed: number; Unresolved: string[] }> {
+    private async reconcileLinks(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo, owner: UserInfo): Promise<ArtifactLinkResult> {
         const names = ParseArtifactLinks(text);
-        const resolved = await this.resolveLinkTargets(artifact, names, provider, user);
-        const existing = await this.loadExistingLinks(artifact.ID, provider, user);
+        const resolved = await this.resolveLinkTargets(artifact, names, provider, owner);
+        const existing = await this.loadLinks(artifact.ID, 'outgoing', provider, user);
         const artifactEntity = provider.EntityByName(ARTIFACTS_ENTITY);
         if (!artifactEntity) {
             throw new Error(`entity '${ARTIFACTS_ENTITY}' is not in metadata`);
@@ -348,17 +386,18 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
         artifact: ArtifactRow,
         names: string[],
         provider: IMetadataProvider,
-        user: UserInfo,
+        reader: UserInfo,
     ): Promise<{ Targets: UUIDSet; Ordered: Array<[string, string]>; Unresolved: string[] }> {
         const out = { Targets: new UUIDSet(), Ordered: [] as Array<[string, string]>, Unresolved: [] as string[] };
         if (names.length === 0) {
             return out;
         }
         const envFilter = artifact.EnvironmentID ? `[EnvironmentID] = '${EscapeSQLString(artifact.EnvironmentID)}' AND ` : '';
-        const nameList = names.map((n) => `'${EscapeSQLString(n)}'`).join(', ');
+        // LOWER on both sides: the match is case-insensitive even on a case-sensitive collation.
+        const nameList = names.map((n) => `'${EscapeSQLString(n.toLowerCase())}'`).join(', ');
         const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJArtifactEntity, 'ID' | 'Name' | 'UserID'>>(
-            { EntityName: ARTIFACTS_ENTITY, Fields: ['ID', 'Name', 'UserID'], ExtraFilter: `${envFilter}[Name] IN (${nameList})`, ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
-            user,
+            { EntityName: ARTIFACTS_ENTITY, Fields: ['ID', 'Name', 'UserID'], ExtraFilter: `${envFilter}LOWER([Name]) IN (${nameList})`, ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
+            reader,
         );
         if (!result.Success) {
             throw new Error(`could not resolve [[...]] links of artifact ${artifact.ID}: ${result.ErrorMessage}`);
@@ -385,12 +424,28 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
         return out;
     }
 
-    private async loadExistingLinks(artifactID: string, provider: IMetadataProvider, user: UserInfo): Promise<MJRecordLinkEntity[]> {
-        const artifactEntity = provider.EntityByName(ARTIFACTS_ENTITY);
+    /** A deleted artifact takes its `LinksTo` rows with it, both the ones it made and the ones pointing at it. */
+    private async removeAllLinks(artifactID: string, provider: IMetadataProvider, user: UserInfo): Promise<ArtifactLinkResult> {
+        let removed = 0;
+        for (const link of await this.loadLinks(artifactID, 'both', provider, user)) {
+            if (!(await link.Delete())) {
+                throw new Error(`could not remove record link ${link.ID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            removed++;
+        }
+        return { Created: 0, Removed: removed, Unresolved: [] };
+    }
+
+    /** The artifact's `LinksTo` record links: the ones it makes, or those plus the ones pointing at it. */
+    private async loadLinks(artifactID: string, direction: 'outgoing' | 'both', provider: IMetadataProvider, user: UserInfo): Promise<MJRecordLinkEntity[]> {
+        const entityID = EscapeSQLString(provider.EntityByName(ARTIFACTS_ENTITY)?.ID ?? '');
+        const id = EscapeSQLString(artifactID);
+        const outgoing = `[SourceEntityID] = '${entityID}' AND [SourceRecordID] = '${id}'`;
+        const ends = direction === 'outgoing' ? outgoing : `((${outgoing}) OR ([TargetEntityID] = '${entityID}' AND [TargetRecordID] = '${id}'))`;
         const result = await RunView.FromMetadataProvider(provider).RunView<MJRecordLinkEntity>(
             {
                 EntityName: RECORD_LINKS_ENTITY,
-                ExtraFilter: `[SourceEntityID] = '${EscapeSQLString(artifactEntity?.ID ?? '')}' AND [SourceRecordID] = '${EscapeSQLString(artifactID)}' AND [LinkType] = '${ARTIFACT_LINK_TYPE}'`,
+                ExtraFilter: `${ends} AND [LinkType] = '${ARTIFACT_LINK_TYPE}'`,
                 ResultType: 'entity_object',
                 IgnoreMaxRows: true,
                 BypassCache: true,

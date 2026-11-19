@@ -4,7 +4,7 @@
 
 - **Packages**:
   - [`@memberjunction/core-entities`](../packages/MJCoreEntities/package.json) — Generated entity classes for `MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
-  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `GraphAuthorityTierDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
+  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `GraphAuthorityTierDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `GetAuthorityTierRank`
   - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `GraphStage` (`@RegisterClass(BasePipelineStage, 'Graph')`), `EntityGraphOverlayStore`, and `DeterministicConceptSynthesizer`
   - [`@memberjunction/ai-core-plus`](../packages/AI/CorePlus/README.md) — Deterministic `TaskGraph` DAG fingerprinting, Weisfeiler-Lehman similarity, clustering, promotion discovery (`dag-similarity.ts`), and saved-workflow health telemetry (`workflow-telemetry.ts`)
 - **Companion Guides**:
@@ -131,7 +131,7 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
      - Normalized leaf section headings (`ExtractLeafTopicFromHeading`, stripping section numbers like `Article IV > §4.2.1` and boilerplate headers like `Overview` or `Introduction`).
      - Governed `TagStage` tags (`MJ: Content Item Tags`).
      - Stemmed lexical + synonym similarity (`ScoreConceptNameSimilarity`) against existing `MJ: Graph Concepts` in the target `GraphID`.
-   - Within each `ConceptSeedCluster`, chunks are sorted by **`AuthorityTierPrecedence`** (`Bylaws` [100] > `BoardPolicy` [80] > `ExecutiveSOP` [60] > `DepartmentPractice` [40] > `Reference` [20] > `Inferred` [10]) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in Bylaws vs. `"90 days"` in a staff desk manual, or `"$500"` vs. `"$1,000"`).
+   - Within each `ConceptSeedCluster`, chunks are sorted by their source's authority tier, using the `Rank` of its `MJ: Graph Authority Tiers` row (`GetAuthorityTierRank`; higher wins, a missing tier ranks 0) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in Bylaws vs. `"90 days"` in a staff desk manual, or `"$500"` vs. `"$1,000"`).
 3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `ManagedPromptConceptSynthesizer`)**:
    - Synthesizes one `SynthesizedGraphConcept` per cluster (preserving existing `Description`/`Specification` when enriching an existing concept, and extracting `ParentConceptName` from multi-level heading breadcrumbs).
    - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`BroaderThan` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges between conflicting chunks.

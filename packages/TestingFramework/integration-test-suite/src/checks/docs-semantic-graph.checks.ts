@@ -313,7 +313,7 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
             const b = await indexedItem(ctx, f.B.ID);
             const concept = await conceptSourcedFrom(ctx, `__IT180 Shared ${randomUUID().slice(0, 8)}`, [a.Chunks[0], b.Chunks[0]]);
             const engine = await configuredGraphEngine(ctx);
-            const edges = await engine.GetEdges(GRAPH, ref(ARTIFACTS, f.A.ID), { Direction: 'Both', EdgeTypes: ['SharesConceptWith'] }, ctx.User);
+            const edges = await engine.GetEdges(GRAPH, ref(ARTIFACTS, f.A.ID), { Direction: 'Both', EdgeTypes: ['SharesConceptWith'], IncludeProposed: true }, ctx.User);
             const shared = edges.find((e) => e.TypeName === 'SharesConceptWith' && (UUIDsEqual(e.Target.RecordID, f.B.ID) || UUIDsEqual(e.Source.RecordID, f.B.ID)));
             Assert(shared != null, 'the owner sees a SharesConceptWith edge between A and B');
             Assert(JSON.stringify(shared!.Attributes ?? {}).toLowerCase().includes(concept.ID.toLowerCase()), 'the edge names the concept behind it');
@@ -325,7 +325,7 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
                 const view = [...forPeer.values()][0];
                 Assert(view != null && view.Label !== concept.Name && view.Description == null, 'the peer, who can read only B, sees the concept redacted');
             }
-            const peerEdges = await engine.GetEdges(GRAPH, ref(ARTIFACTS, f.B.ID), { Direction: 'Both', EdgeTypes: ['SharesConceptWith'] }, f.Peer);
+            const peerEdges = await engine.GetEdges(GRAPH, ref(ARTIFACTS, f.B.ID), { Direction: 'Both', EdgeTypes: ['SharesConceptWith'], IncludeProposed: true }, f.Peer);
             Assert(!peerEdges.some((e) => UUIDsEqual(e.Source.RecordID, f.A.ID) || UUIDsEqual(e.Target.RecordID, f.A.ID)), 'the peer never sees an edge to A, which it cannot read');
         },
     },

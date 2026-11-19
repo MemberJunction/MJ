@@ -183,6 +183,23 @@ describe('GraphEvidenceRetractor', () => {
         expect(result).toEqual({ EdgesRemoved: 2, ConceptsRemoved: 0 });
     });
 
+    it('does not query graph types with an empty list when the concepts\' graphs are gone', async () => {
+        const w = world();
+        const provider = makeProvider(w);
+        const original = provider.RunView.bind(provider);
+        const queried: string[] = [];
+        (provider as unknown as { RunView: typeof original }).RunView = async (params, u) => {
+            queried.push(params.EntityName ?? '');
+            const result = await original(params, u);
+            return params.EntityName === 'MJ: Graphs' ? { ...result, Results: [], RowCount: 0, TotalRowCount: 0 } : result;
+        };
+        await new GraphEvidenceRetractor(provider, user).RetractChunks(['c1']);
+        expect(queried).toContain('MJ: Graphs');
+        expect(queried).not.toContain('MJ: Graph Types');
+        // With no graph to say otherwise, k4 is not Canon, so the orphan goes too.
+        expect([...w.deletedConcepts].sort()).toEqual(['k1', 'k4', 'k8']);
+    });
+
     it('is idempotent: a second retraction of the same chunk finds nothing', async () => {
         const w = world();
         const retractor = new GraphEvidenceRetractor(makeProvider(w), user);

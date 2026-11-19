@@ -55,6 +55,7 @@ describe('ArtifactRelatedPanelComponent', () => {
         loadRecordRelations.mockResolvedValue(relations);
         const comp = create();
         comp.ArtifactId = 'a';
+        comp.ngOnInit();
         await settle();
 
         expect(engineConfig).toHaveBeenCalledWith(false, { ID: 'u1' }, comp.Provider);
@@ -62,6 +63,22 @@ describe('ArtifactRelatedPanelComponent', () => {
         expect(comp.IsLoading).toBe(false);
         expect(comp.IsEmpty).toBe(false);
         expect(comp.Sections.map((s) => [s.Key, s.Items.length])).toEqual([['links', 1], ['backlinks', 0], ['related', 1]]);
+    });
+
+    it('waits for ngOnInit, so the provider is used whatever order the inputs are bound in', async () => {
+        loadRecordRelations.mockResolvedValue({ Links: [], Backlinks: [], Related: [] });
+        const injector = Injector.create({ providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: vi.fn(), detectChanges: vi.fn() } }] });
+        const comp = runInInjectionContext(injector, () => new ArtifactRelatedPanelComponent());
+        comp.ArtifactId = 'a';
+        const provider = { CurrentUser: { ID: 'u2' } } as unknown as IMetadataProvider;
+        comp.Provider = provider;
+        await settle();
+        expect(engineConfig).not.toHaveBeenCalled();
+
+        comp.ngOnInit();
+        await settle();
+        expect(engineConfig).toHaveBeenCalledTimes(1);
+        expect(engineConfig).toHaveBeenCalledWith(false, { ID: 'u2' }, provider);
     });
 
     it('emits OpenArtifact for an artifact and OpenRecord for any other record', () => {
@@ -82,6 +99,7 @@ describe('ArtifactRelatedPanelComponent', () => {
         loadRecordRelations.mockRejectedValue(new Error('graph offline'));
         const comp = create();
         comp.ArtifactId = 'a';
+        comp.ngOnInit();
         await settle();
 
         expect(comp.ErrorMessage).toBe('graph offline');
@@ -94,6 +112,7 @@ describe('ArtifactRelatedPanelComponent', () => {
             .mockImplementationOnce(() => new Promise<RecordRelations>((resolve) => (resolveFirst = resolve)))
             .mockResolvedValueOnce({ Links: [], Backlinks: [related('MJ: Artifacts', 'd', 'Doc D')], Related: [] });
         const comp = create();
+        comp.ngOnInit();
         comp.ArtifactId = 'a';
         comp.ArtifactId = 'z';
         await settle();

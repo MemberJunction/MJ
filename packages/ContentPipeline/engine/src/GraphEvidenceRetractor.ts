@@ -199,7 +199,10 @@ export class GraphEvidenceRetractor {
         if (!graphs.Success) {
             throw new Error(`GraphEvidenceRetractor: reading graphs failed: ${graphs.ErrorMessage}`);
         }
-        const typeIDs = graphs.Results.map((g) => g.GraphTypeID);
+        const typeIDs = graphs.Results.map((g) => g.GraphTypeID).filter((id): id is string => !!id);
+        if (typeIDs.length === 0) {
+            return canon; // The graphs are gone or untyped; `IN ()` is not valid SQL.
+        }
         const types = await rv.RunView<{ ID: string; IsCanon: boolean }>(
             { EntityName: 'MJ: Graph Types', Fields: ['ID', 'IsCanon'], ExtraFilter: `[ID] IN (${inList(typeIDs)})`, ResultType: 'simple', IgnoreMaxRows: true },
             this.contextUser,

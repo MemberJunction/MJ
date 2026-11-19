@@ -11474,6 +11474,9 @@ importers:
       '@memberjunction/document-parsing':
         specifier: 6.3.0-edge.1
         version: link:../../DocumentParsing
+      '@memberjunction/generic-database-provider':
+        specifier: 6.3.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal

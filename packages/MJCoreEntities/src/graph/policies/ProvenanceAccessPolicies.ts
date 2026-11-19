@@ -47,6 +47,12 @@ type ChunkRow = WithID & Pick<MJContentItemChunkEntityType, 'ContentItemID'>;
 type ItemRow = WithID & Pick<MJContentItemEntityType, 'EntityRecordDocumentID'>;
 type RecordDocRow = WithID & Pick<MJEntityRecordDocumentEntityType, 'EntityID' | 'RecordID'>;
 type ConceptRow = WithID & Pick<MJGraphConceptEntityType, 'GraphID' | 'Status' | 'Origin'>;
+/** A concept's recorded sources: the ones metadata can resolve, and how many it cannot. */
+interface ConceptSources {
+    Refs: GraphNodeRef[];
+    Unresolved: number;
+}
+
 type SourcedFromRow = WithID & Pick<MJGraphEdgeEntityType, 'SourceRecordID' | 'TargetEntityID' | 'TargetRecordID'>;
 
 /**
@@ -159,15 +165,15 @@ export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
         if (!concepts || !sources) {
             return new Map();
         }
-        const allChunkRefs = Array.from(sources.Values()).flat();
+        const allChunkRefs = Array.from(sources.Values()).flatMap((s) => s.Refs);
         const visibleChunks = await ctx.ResolveVisibleKeys(allChunkRefs);
         const conceptsById = IndexByUUID(concepts);
         const decisions = new Map<string, GraphNodeAccessDecision>();
         for (const node of nodes) {
             const concept = conceptsById.Get(node.Ref.RecordID);
             if (concept) {
-                const chunkRefs = sources.Get(concept.ID) ?? [];
-                decisions.set(node.Key, this.decide(concept, chunkRefs, visibleChunks, ctx));
+                const conceptSources = sources.Get(concept.ID) ?? { Refs: [], Unresolved: 0 };
+                decisions.set(node.Key, this.decide(concept, conceptSources, visibleChunks, ctx));
             }
         }
         return decisions;
@@ -175,25 +181,29 @@ export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
 
     private decide(
         concept: ConceptRow,
-        chunkRefs: GraphNodeRef[],
+        sources: ConceptSources,
         visibleChunks: Set<string>,
         ctx: GraphAccessPolicyContext,
     ): GraphNodeAccessDecision {
         if (concept.Status === 'Approved' && ctx.IsCanonGraph(concept.GraphID)) {
             return 'Visible';
         }
-        if (chunkRefs.length === 0) {
+        const total = sources.Refs.length + sources.Unresolved;
+        if (total === 0) {
             return concept.Origin === 'Inferred' ? 'Hidden' : 'Visible';
         }
-        const seen = chunkRefs.filter((ref) => visibleChunks.has(ctx.NodeKey(ref))).length;
-        if (seen === chunkRefs.length) {
+        const seen = sources.Refs.filter((ref) => visibleChunks.has(ctx.NodeKey(ref))).length;
+        if (seen === total) {
             return 'Visible';
         }
         return seen > 0 ? 'Redacted' : 'Hidden';
     }
 
-    /** Chunks each concept was synthesized from, keyed by concept ID; `null` on a failed read. */
-    private async readSourceChunks(conceptIds: string[], ctx: GraphAccessPolicyContext): Promise<UUIDMap<GraphNodeRef[]> | null> {
+    /**
+     * Chunks each concept was synthesized from, keyed by concept ID; `null` on a failed read. A source
+     * whose entity is not in metadata is counted as unseen, so it can only make a concept stricter.
+     */
+    private async readSourceChunks(conceptIds: string[], ctx: GraphAccessPolicyContext): Promise<UUIDMap<ConceptSources> | null> {
         const conceptsEntity = ctx.Provider.EntityByName(GRAPH_CONCEPTS_ENTITY);
         if (!conceptsEntity) {
             return null;
@@ -205,15 +215,16 @@ export class GraphConceptProvenancePolicy extends BaseGraphNodeAccessPolicy {
         if (!rows) {
             return null;
         }
-        const byConcept = new UUIDMap<GraphNodeRef[]>();
+        const byConcept = new UUIDMap<ConceptSources>();
         for (const row of rows) {
+            const sources = byConcept.Get(row.SourceRecordID) ?? { Refs: [], Unresolved: 0 };
             const entity = ctx.Provider.EntityByID(row.TargetEntityID);
-            if (!entity) {
-                continue;
+            if (entity) {
+                sources.Refs.push({ EntityName: entity.Name, EntityID: entity.ID, RecordID: row.TargetRecordID });
+            } else {
+                sources.Unresolved++;
             }
-            const list = byConcept.Get(row.SourceRecordID) ?? [];
-            list.push({ EntityName: entity.Name, EntityID: entity.ID, RecordID: row.TargetRecordID });
-            byConcept.Set(row.SourceRecordID, list);
+            byConcept.Set(row.SourceRecordID, sources);
         }
         return byConcept;
     }

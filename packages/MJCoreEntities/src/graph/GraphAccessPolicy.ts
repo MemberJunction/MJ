@@ -151,17 +151,20 @@ export class GraphAccessPolicyRegistry {
         );
     }
 
-    /** The key an edge policy is registered under for this type name, or the name itself when none matches. */
+    /**
+     * The key of the highest-priority edge policy registered for this type name under any spelling,
+     * or the name itself when none matches. Priority ties go to the later registration, as in the
+     * ClassFactory.
+     */
     private static registeredEdgePolicyKey(edgeTypeName: string): string {
-        const factory = MJGlobal.Instance.ClassFactory;
-        if (factory.GetRegistration(BaseGraphEdgeAccessPolicy, edgeTypeName?.trim())) {
-            return edgeTypeName;
-        }
         const target = NormalizeGraphEdgeTypeName(edgeTypeName);
-        const match = factory
-            .GetAllRegistrations(BaseGraphEdgeAccessPolicy)
-            .find((r) => r.Key != null && NormalizeGraphEdgeTypeName(r.Key) === target);
-        return match?.Key ?? edgeTypeName;
+        let best: { Key: string; Priority: number } | null = null;
+        for (const r of MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseGraphEdgeAccessPolicy)) {
+            if (r.Key != null && NormalizeGraphEdgeTypeName(r.Key) === target && (!best || r.Priority >= best.Priority)) {
+                best = { Key: r.Key, Priority: r.Priority };
+            }
+        }
+        return best?.Key ?? edgeTypeName;
     }
 
     private static resolve<T>(baseClass: unknown, key: string, failClosed: () => T): T | null {

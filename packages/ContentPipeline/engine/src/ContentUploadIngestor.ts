@@ -169,6 +169,9 @@ export interface ContentUploadRemoveResult {
     FailedChunkIDs?: string[];
 }
 
+/** The live Content Item holding a record's text: enough to tell whether the text or its title changed. */
+type TextItemRow = Pick<MJContentItemEntity, 'ID' | 'Checksum' | 'Name' | 'Description'>;
+
 interface ContentSourceSummary {
     ID: string;
     ContentTypeID: string;
@@ -293,6 +296,7 @@ export class ContentUploadIngestor {
         const existing = await this.queryContentItemByURL(source.ID, url, provider, contextUser);
         const entityRecordDocumentID = await this.findOrCreateEntityRecordDocument(source, request.Origin, provider, contextUser);
         if (existing && existing.Checksum === checksum) {
+            await this.refreshTextItemTitle(existing, request, provider, contextUser);
             return { ContentItemID: existing.ID, Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: entityRecordDocumentID };
         }
         if (existing) {
@@ -344,13 +348,13 @@ export class ContentUploadIngestor {
         url: string,
         provider: IMetadataProvider,
         contextUser: UserInfo,
-    ): Promise<{ ID: string; Checksum: string | null } | null> {
+    ): Promise<TextItemRow | null> {
         const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<{ ID: string; Checksum: string | null }>(
+        const result = await rv.RunView<TextItemRow>(
             {
                 EntityName: 'MJ: Content Items',
                 ExtraFilter: WhereEqual({ ContentSourceID: contentSourceID, URL: url, DeleteStatus: null }),
-                Fields: ['ID', 'Checksum'],
+                Fields: ['ID', 'Checksum', 'Name', 'Description'],
                 MaxRows: 1,
                 ResultType: 'simple',
                 BypassCache: true,
@@ -361,6 +365,31 @@ export class ContentUploadIngestor {
             throw new Error(`Could not query existing Content Items at '${url}': ${result.ErrorMessage}`);
         }
         return result.Results[0] ?? null;
+    }
+
+    /**
+     * Identical text keeps its item and chunks, but the record may have been renamed or re-described:
+     * bring the item's Name and Description up to date without re-running any stage.
+     */
+    private async refreshTextItemTitle(
+        existing: TextItemRow,
+        request: ContentTextIngestRequest,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        const description = request.Description ?? null;
+        if (existing.Name === request.Name && (existing.Description ?? null) === description) {
+            return;
+        }
+        const item = await provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+        if (!(await item.InnerLoad(CompositeKey.FromID(existing.ID)))) { // first-pk-ok: MJ core content entity, single-column ID
+            throw new Error(`Could not load Content Item '${existing.ID}' to update its name`);
+        }
+        item.Name = request.Name;
+        item.Description = description;
+        if (!(await item.Save())) {
+            throw new Error(`Failed to update the name of Content Item '${existing.ID}': ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
     }
 
     /** A Content Item whose text is already extracted, so the run starts at Segment. */
