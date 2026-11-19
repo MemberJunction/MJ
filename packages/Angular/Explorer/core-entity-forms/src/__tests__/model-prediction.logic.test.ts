@@ -68,25 +68,7 @@ describe('ModelPredictionLogic — number formatting', () => {
     });
 });
 
-describe('ModelPredictionLogic.PanelQueries — the one batch the panel sends (G5.6 replays it)', () => {
-    it('reads the Active bindings, the latest binding values, the Champion Model history and the record\'s pipeline values', () => {
-        const q = ModelPredictionLogic.PanelQueries('E1', "R'1", []);
-        expect(q.map((p) => p.EntityName)).toEqual(['MJ: ML Model Scoring Bindings', 'MJ: Latest Feature Values', 'MJ: Feature Values', 'MJ: Feature Values']);
-        expect(q[0].ExtraFilter).toBe("TargetEntityID='E1' AND Status='Active'");
-        expect(q[1].ExtraFilter).toBe("EntityID='E1' AND RecordID='R''1' AND MLModelScoringBindingID IS NOT NULL");
-        expect(q[2].ExtraFilter).toBe("EntityID='E1' AND RecordID='R''1' AND MLModelScoringBindingID IS NOT NULL AND Source='Model' AND Role='Champion'");
-        expect(q[3].ExtraFilter).toBe("EntityID='E1' AND RecordID='R''1' AND RecordProcessID IS NOT NULL AND Role='Champion'");
-        expect(q.map((p) => p.ResultType)).toEqual(['simple', 'simple', 'simple', 'simple']);
-    });
-    it('reads the live values past the server cache: the virtual entity has no save event to invalidate it', () => {
-        const q = ModelPredictionLogic.PanelQueries('E1', 'R1', []);
-        expect(q.map((p) => p.BypassCache === true)).toEqual([false, true, true, false]);
-    });
-    it('narrows the value reads to the named features', () => {
-        const q = ModelPredictionLogic.PanelQueries('E1', 'R1', ['Renewal risk', "Tier's"]);
-        expect(q[1].ExtraFilter).toContain("AND FeatureName IN ('Renewal risk','Tier''s')");
-        expect(q[2].ExtraFilter).toContain("AND FeatureName IN ('Renewal risk','Tier''s')");
-    });
+describe('ModelPredictionLogic.LineageQueries — the lineage batch of the shown values', () => {
     it('LineageQueries reads the scoring models\' record-panel output bindings and the runs, skipping an empty list', () => {
         const q = ModelPredictionLogic.LineageQueries(['M1', 'M2'], ['RUN1']);
         expect(q.map((p) => [p.EntityName, p.ExtraFilter])).toEqual([

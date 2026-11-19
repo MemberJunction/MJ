@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClassEx, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { LogError, RunView, type IMetadataProvider, type RunViewResult } from '@memberjunction/core';
+import { PredictionPanelQueries } from '@memberjunction/predictive-studio-core';
 import { FeatureValuesPanelModel, type FeatureValueCard, type FeatureValueRow } from '../feature-values/feature-values.logic';
 import {
     ModelPredictionLogic,
@@ -79,7 +80,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     }
 
     /**
-     * Reads the record's predictions: the panel batch ({@link ModelPredictionLogic.PanelQueries}), then — only when an
+     * Reads the record's predictions: the panel batch (`PredictionPanelQueries.For`, the one G5.6 replays), then — only when an
      * authorized binding has a value — the lineage batch ({@link ModelPredictionLogic.LineageQueries}). A failed read
      * renders nothing and is logged.
      */
@@ -94,7 +95,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         }
         try {
             const [bindingRes, latestRes, historyRes, derivedRes] = await RunView.FromMetadataProvider(provider).RunViews<PanelRow>(
-                ModelPredictionLogic.PanelQueries(entityId, recordId, []),
+                PredictionPanelQueries.For(entityId, recordId, []),
                 provider.CurrentUser,
             );
             for (const r of [bindingRes, latestRes, historyRes, derivedRes]) {

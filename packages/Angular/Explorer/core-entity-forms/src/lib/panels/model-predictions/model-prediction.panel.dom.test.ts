@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AuthorizationInfo, UserInfo, type BaseEntity, type CompositeKey, type EntityInfo, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import type { FormContext } from '@memberjunction/ng-base-forms';
 import { CreateFakeProvider, Query, QueryAll } from '@memberjunction/ng-test-utils';
+import { PredictionPanelQueries } from '@memberjunction/predictive-studio-core';
 import { ModelPredictionPanel } from './model-prediction.panel';
 import type { PanelBindingRow, PanelOutputBindingRow, PanelRunRow, PanelValueRow } from './model-prediction.logic';
 import type { FeatureValueRow } from '../feature-values/feature-values.logic';
@@ -148,8 +149,9 @@ describe('ModelPredictionPanel (DOM) — predictions from Feature Values', () =>
         expect(Text(f, 'ps-derived-values')).toContain('v3');
     });
 
-    it('reads the panel batch first and the lineage batch only for the values it shows, never the column or Process Run Details', async () => {
+    it('sends the Core panel batch G5.6 replays first and the lineage batch only for the values it shows, never the column or Process Run Details', async () => {
         await RenderPanel({ bindings: [binding], latest: [Latest(0.72, DAY3)], user: developer });
+        expect(reads.slice(0, 4)).toEqual(PredictionPanelQueries.For('E1', 'R1', []));
         expect(reads.map((p) => p.EntityName)).toEqual([
             'MJ: ML Model Scoring Bindings', 'MJ: Latest Feature Values', 'MJ: Feature Values', 'MJ: Feature Values',
             'MJ: ML Output Bindings', 'MJ: ML Scoring Runs',

@@ -17,7 +17,6 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AtRiskRules, JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
-import type { FeatureValueRow } from '../feature-values/feature-values.logic';
 
 /** The neutral tercile a 0–1 value falls into: position on the value axis only, no moral direction. */
 export type PredictionBand = 'low' | 'mid' | 'high';
@@ -27,12 +26,6 @@ export type PredictionValueKind = 'probability' | 'numeric';
 
 /** Maximum number of per-record drivers shown per card. */
 export const MAX_DRIVERS = 5;
-
-/** Maximum number of history rows the panel reads for a record. */
-export const MAX_HISTORY_ROWS = 500;
-
-/** Maximum number of pipeline Feature Value rows the panel reads for a record. */
-export const MAX_DERIVED_ROWS = 500;
 
 /** The `MJ: ML Model Scoring Bindings` fields the panel reads. */
 export type PanelBindingRow = Pick<
@@ -53,15 +46,6 @@ export type PanelRunRow = Pick<MJMLScoringRunEntity, 'ID' | 'ModelID' | 'ModelVe
 /** The `MJ: ML Output Bindings` fields the card reads (the scoring model's `record-panel` row). */
 export type PanelOutputBindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
 
-const BINDING_FIELDS = ['ID', 'FeatureName', 'MLTrainingPipelineID', 'MLTrainingPipeline', 'TargetEntityID', 'ViewAuthorizationID', 'Status', 'LastScoredAt'] as const satisfies readonly (keyof PanelBindingRow)[];
-const VALUE_FIELDS = [
-    'ID', 'EntityID', 'RecordID', 'FeatureName', 'Source', 'EffectiveAsOf', 'ComputedAt', 'MLModelScoringBindingID', 'MLModelID',
-    'MLScoringRunID', 'InTraining', 'ValueText', 'ValueNumeric', 'ValueJSON', 'Confidence',
-] as const satisfies readonly (keyof PanelValueRow)[];
-const DERIVED_FIELDS = [
-    'ID', 'RecordProcessID', 'RecordProcess', 'FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON',
-    'Source', 'Confidence', 'PipelineVersion', 'ComputedAt', 'Reasoning', 'ProcessRunID',
-] as const satisfies readonly (keyof FeatureValueRow)[];
 const RUN_FIELDS = ['ID', 'ModelID', 'ModelVersion', 'StartedAt'] as const satisfies readonly (keyof PanelRunRow)[];
 const OUTPUT_BINDING_FIELDS = ['ID', 'ModelID', 'Surface', 'SortsBy', 'DriverDirectionRelativeTo', 'Label'] as const satisfies readonly (keyof PanelOutputBindingRow)[];
 
@@ -179,53 +163,6 @@ export class ModelPredictionLogic {
         const d = value instanceof Date ? value : new Date(value);
         if (isNaN(d.getTime())) return null;
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-
-    /**
-     * The panel's one batched read for a record (the G5.6 gate replays it on each identity's provider):
-     * [0] the entity's `Active` scoring bindings; [1] the latest value of every binding feature of the record from
-     * `MJ: Latest Feature Values`; [2] the bindings' `Champion` `Model` history from `MJ: Feature Values`; [3] the record's
-     * pipeline values (`Pipeline` and `Human` rows of a Record Process). `featureNames` narrows [1] and [2] to those
-     * features; empty reads every binding feature of the record (the row-level security filter removes `Model` rows of
-     * bindings the reader does not hold, and {@link AuthorizedBindings} drops the rest). The value reads go past MJAPI's
-     * RunView cache: `MJ: Latest Feature Values` is a view with no save event to invalidate a cached read.
-     */
-    public static PanelQueries(entityId: string, recordId: string, featureNames: readonly string[]): RunViewParams[] {
-        const record = `EntityID='${EscapeSQLString(entityId)}' AND RecordID='${EscapeSQLString(recordId)}'`;
-        const features = featureNames.length > 0 ? ` AND FeatureName IN (${ModelPredictionLogic.inList(featureNames)})` : '';
-        return [
-            {
-                EntityName: 'MJ: ML Model Scoring Bindings',
-                ExtraFilter: `TargetEntityID='${EscapeSQLString(entityId)}' AND Status='Active'`,
-                Fields: [...BINDING_FIELDS],
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'simple',
-            },
-            {
-                EntityName: 'MJ: Latest Feature Values',
-                ExtraFilter: `${record} AND MLModelScoringBindingID IS NOT NULL${features}`,
-                Fields: [...VALUE_FIELDS],
-                ResultType: 'simple',
-                BypassCache: true,
-            },
-            {
-                EntityName: 'MJ: Feature Values',
-                ExtraFilter: `${record} AND MLModelScoringBindingID IS NOT NULL AND Source='Model' AND Role='Champion'${features}`,
-                Fields: [...VALUE_FIELDS],
-                OrderBy: 'EffectiveAsOf DESC, ComputedAt DESC',
-                MaxRows: MAX_HISTORY_ROWS,
-                ResultType: 'simple',
-                BypassCache: true,
-            },
-            {
-                EntityName: 'MJ: Feature Values',
-                ExtraFilter: `${record} AND RecordProcessID IS NOT NULL AND Role='Champion'`,
-                Fields: [...DERIVED_FIELDS],
-                OrderBy: 'ComputedAt DESC',
-                MaxRows: MAX_DERIVED_ROWS,
-                ResultType: 'simple',
-            },
-        ];
     }
 
     /**
