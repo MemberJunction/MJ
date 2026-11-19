@@ -57,3 +57,4 @@ export * from './semantics-rules';
 export * from './scoring-contracts';
 export * from './monitoring-contracts';
 export * from './monitoring-job-specs';
+export * from './prediction-panel-queries';
