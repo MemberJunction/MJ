@@ -1,5 +1,48 @@
 # @memberjunction/ai-llamacpp
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-openai@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

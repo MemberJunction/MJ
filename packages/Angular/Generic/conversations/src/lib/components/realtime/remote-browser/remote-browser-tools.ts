@@ -191,7 +191,8 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
 export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.OpenUrl,
-    Description: 'Navigate the shared browser to a URL. The user watches the live page in the Browser tab.',
+    Description:
+      'Navigate the shared browser to a URL. The user watches the live page in the Browser tab. If the user names a form, application, or page without pasting a URL, check retrieved content for the URL before opening it.',
     ParametersSchema: {
       type: 'object',
       properties: {
@@ -216,7 +217,7 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
         values: {
           type: 'object',
           description:
-            'Object mapping each field ref or label to its value, e.g. {"f1": "Ada Lovelace", "f2": "ada@example.com"}. Use true or false for a checkbox and the option text for a select.',
+            'Object mapping each field ref or label to its value, e.g. {"f1": "Ada Lovelace", "f2": "ada@example.com"}. Use true or false for a checkbox, option text (or comma-separated options) for a checkbox or radio group, and the option text for a select.',
         },
       },
       required: ['values'],

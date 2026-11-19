@@ -1571,4 +1571,44 @@ describe('C4 re-audit: abort during the StartSession await is not lost', () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(gated.Session.Closed).toBe(true); // post-attach recheck caught the already-fired abort
     });
+
+    it('passes accumulated conversationMemory transcript turns as InitialContext into StartSession on transport reconnect', async () => {
+        const capturedParams: RealtimeSessionParams[] = [];
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+                capturedParams.push(params);
+                const s = new MockRealtimeSession();
+                this.Sessions.push(s);
+                return s;
+            }
+        })();
+        const h = buildHarness({
+            Model: model,
+            SessionParams: {
+                Model: 'mock-realtime',
+                SystemPrompt: 'You are Sage.',
+                InitialContext: 'Initial caller profile: Jane.',
+            },
+        });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+
+        model.Sessions[0].fireTranscript({ Role: 'user', Text: 'We need a Q3 forecast.', IsFinal: true });
+        model.Sessions[0].fireTranscript({ Role: 'assistant', Text: 'I will prepare the Q3 forecast.', IsFinal: true });
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Fatal drop triggers transport reconnect:
+        model.Sessions[0].fireError({ Message: 'socket dropped', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(capturedParams).toHaveLength(2);
+        expect(capturedParams[1].InitialContext).toContain('Initial caller profile: Jane.');
+        expect(capturedParams[1].InitialContext).toContain('[Connection resumed. Transcript so far, for continuity.');
+        expect(capturedParams[1].InitialContext).toContain('User: We need a Q3 forecast.');
+        expect(capturedParams[1].InitialContext).toContain('Assistant: I will prepare the Q3 forecast.');
+        await runner.Stop();
+    });
 });
+

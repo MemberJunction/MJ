@@ -46,7 +46,7 @@
 // import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
 // pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
-import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
+import { ExtractRealtimeTimingConfig, NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
@@ -239,6 +239,18 @@ export interface RealtimeModeratorConfig {
      * hand-off pays ~zero added latency. A human barge-in discards the pre-staged decision.
      */
     prestageOnAgentSpeech?: boolean;
+    /**
+     * How a decision model takes part in the moderator's call (`RunDecisionUse` in
+     * `@memberjunction/ai-prompts`): `'Prompt'` runs only the moderator prompt; `'Shadow'` (default) runs
+     * the prompt and asks one Likelihood per roster agent beside it, recording the agreement for a
+     * calibration fit; `'Decision'` lets the calibrated decision pick the speakers and falls back to the
+     * prompt when the answering model has no `realtime-turn-moderator` calibration or the call fails. The
+     * shadow decision runs in parallel and never adds latency; `'Decision'` stays inside
+     * {@link RealtimeModeratorConfig.timeoutMs}.
+     */
+    decisionMode?: 'Prompt' | 'Shadow' | 'Decision';
+    /** The decision prompt the moderator's decision asks, by name. Default `'Default Decision'`. */
+    decisionPromptName?: string;
 }
 
 /** Default moderator settings, applied per-field when a {@link RealtimeModeratorConfig} omits a value. */
@@ -249,6 +261,8 @@ export const REALTIME_MODERATOR_DEFAULTS = {
     timeoutMs: 800,
     onError: 'silent' as 'silent' | 'addressed-only',
     prestageOnAgentSpeech: true,
+    decisionMode: 'Shadow' as 'Prompt' | 'Shadow' | 'Decision',
+    decisionPromptName: 'Default Decision',
 } as const;
 
 /**
@@ -474,17 +488,34 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
     const bag: JSONObjectLike = {};
-    const turnDetection = config?.Realtime?.TurnDetection;
+    const rt = config?.Realtime;
+    const turnDetection = rt?.TurnDetection;
     if (isPlainObject(turnDetection)) {
         bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    const reasoning = config?.Realtime?.Reasoning;
+    const reasoning = rt?.Reasoning;
     if (isPlainObject(reasoning)) {
         bag['reasoning'] = { ...reasoning } as JSONObjectLike;
     }
-    const tooling = config?.Realtime?.Tooling;
+    const tooling = rt?.Tooling;
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    const timing = ExtractRealtimeTimingConfig(rt ? (rt as Record<string, unknown>) : undefined);
+    if (timing.ConnectionMaxSeconds !== undefined) {
+        bag['connectionMaxSeconds'] = timing.ConnectionMaxSeconds;
+    }
+    if (timing.SessionMaxSeconds !== undefined) {
+        bag['sessionMaxSeconds'] = timing.SessionMaxSeconds;
+    }
+    if (timing.ReconnectBufferSeconds !== undefined) {
+        bag['reconnectBufferSeconds'] = timing.ReconnectBufferSeconds;
+    }
+    if (timing.TrustNativeResumption !== undefined) {
+        bag['trustNativeResumption'] = timing.TrustNativeResumption;
+    }
+    if (config?.Privacy?.ZeroDataRetention === true) {
+        bag['zeroDataRetention'] = true;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }
@@ -594,9 +625,10 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
  * (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with;
  * it wins over the co-agent's defaults but yields to an explicit per-session runtime override.
  *
- * One key is the agents' alone: the runtime override can't turn `realtime.video.enabled` on (it can turn it off), so a
- * picked avatar (`realtime.video.avatarId`) shows only when the layers below it already have video on. A picked
- * avatar's billed video is the agent's call, not the caller's.
+ * Authorized per-session runtime overrides (gated behind `Realtime: Advanced Session Controls`
+ * on `StartRealtimeClientSession`) win over lower layers — including enabling `realtime.video`
+ * (`enabled: true`) when an authorized user explicitly selects an avatar-enabled voice in the
+ * picker, while default calls leave the agent's own `realtime.video.enabled` untouched.
  *
  * @param typeDefaultJson The agent TYPE's `DefaultConfiguration` JSON (base layer).
  * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
@@ -624,7 +656,7 @@ export function ResolveEffectiveRealtimeConfig(
     const agentLayer = ParseRealtimeTypeConfiguration(agentJson);
     const targetLayer = ParseRealtimeTypeConfiguration(targetAgentJson);
     const appLayer = ParseRealtimeTypeConfiguration(appSettingsJson);
-    const overrideLayer = withoutVideoTurnedOn(ParseRealtimeTypeConfiguration(overridesJson));
+    const overrideLayer = ParseRealtimeTypeConfiguration(overridesJson);
 
     // Scalar fields: merge order = precedence (later wins):
     //   type-default < co-agent < target < app < runtime-override.
@@ -653,20 +685,6 @@ export function ResolveEffectiveRealtimeConfig(
     }
 
     return config;
-}
-
-/**
- * A runtime-override layer without a `realtime.video.enabled: true`, which only the layers below it may set (see
- * {@link ResolveEffectiveRealtimeConfig}). The layer is copied, never changed; any other value of the key stays.
- */
-function withoutVideoTurnedOn(layer: JSONObjectLike | null): JSONObjectLike | null {
-    const realtime = realtimeSectionOf(layer);
-    const video = realtime?.['video'];
-    if (!layer || !realtime || !isPlainObject(video) || video['enabled'] !== true) {
-        return layer;
-    }
-    const { enabled: _ignored, ...rest } = video;
-    return { ...layer, realtime: { ...realtime, video: rest } };
 }
 
 /** The raw `realtime` section of a parsed layer, or `undefined` when the layer has none. */
@@ -1191,6 +1209,12 @@ function normalizeModerator(raw: unknown): RealtimeModeratorConfig | null {
     if (typeof raw['prestageOnAgentSpeech'] === 'boolean') {
         m.prestageOnAgentSpeech = raw['prestageOnAgentSpeech'];
     }
+    if (raw['decisionMode'] === 'Prompt' || raw['decisionMode'] === 'Shadow' || raw['decisionMode'] === 'Decision') {
+        m.decisionMode = raw['decisionMode'];
+    }
+    if (typeof raw['decisionPromptName'] === 'string' && raw['decisionPromptName'].trim().length > 0) {
+        m.decisionPromptName = raw['decisionPromptName'].trim();
+    }
 
     return Object.keys(m).length > 0 ? m : null;
 }
@@ -1221,6 +1245,8 @@ export function GetEffectiveModeratorConfig(
         timeoutMs: m.timeoutMs ?? REALTIME_MODERATOR_DEFAULTS.timeoutMs,
         onError: m.onError ?? REALTIME_MODERATOR_DEFAULTS.onError,
         prestageOnAgentSpeech: m.prestageOnAgentSpeech ?? REALTIME_MODERATOR_DEFAULTS.prestageOnAgentSpeech,
+        decisionMode: m.decisionMode ?? REALTIME_MODERATOR_DEFAULTS.decisionMode,
+        decisionPromptName: m.decisionPromptName ?? REALTIME_MODERATOR_DEFAULTS.decisionPromptName,
     };
 }
 
@@ -1508,16 +1534,16 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"avatarId":"<a>"}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
- * A picked avatar leaves video to the agent: it shows only when the voiced agent's own video setting is on (a runtime
- * override can't turn it on), and only when it names a Video binding on the resolved vendor. With the setting off the
- * call says why (reason `video-off`).
+ * Picking an avatar-enabled voice sets `video.enabled: true` alongside `avatarId` so the avatar shows by
+ * default for authorized callers even when the agent keeps video off on ordinary audio calls (while
+ * leaving `video` absent when an audio-only voice is picked).
  *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
@@ -1535,7 +1561,7 @@ export function BuildRealtimeOverridesJson(
     if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: boolean; avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
@@ -1543,7 +1569,7 @@ export function BuildRealtimeOverridesJson(
         realtime.voice = { default: { voice: v } };
     }
     if (a.length > 0) {
-        realtime.video = { avatarId: a };
+        realtime.video = { enabled: true, avatarId: a };
     }
     return JSON.stringify({ realtime });
 }

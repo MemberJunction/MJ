@@ -1,5 +1,146 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 0aff9f9: Loading a record (including its relationships), checking record dependencies, and the row-level security check on a record now refuse a value for a numeric primary key that is not a number, with a clear error, instead of failing later in the database. Cleaning up geocodes after a delete and loading relationships now handle a key containing a quote, and numeric SET values in SQL Server save statements are validated as decimal/scientific number literals.
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- cd8e5e5: A tracked save's Record Change `FullRecordJSON` is now built in the save's own statement from the row the save returned (`@ResultTable` on SQL Server, `save_result` on PostgreSQL), not serialized from the entity in memory before the save. It costs no extra round trip.
+  - The snapshot holds what the database stored: a column another server changed after this object was loaded, the new `__mj_UpdatedAt`, server-set defaults and IDs on a create, and current joined display values. Restoring a version no longer reverts another writer's change.
+  - Encrypted columns are recorded as their stored ciphertext. Before, the decrypted value was written to the audit table.
+  - PostgreSQL no longer stores `'` as `''` in `FullRecordJSON`.
+  - Values are written as a loaded entity serializes them: date-times as UTC ISO-8601 with milliseconds and `Z` (including `datetime`/`datetime2`, which have no offset), `bigint` as a string, binary as base64, JSON columns as text, and SQL Server spatial and `hierarchyid` columns as text.
+  - Entities whose save procedure returns datestamps only keep the in-memory snapshot, as do SQL Server entities with a `.` in a column name.
+  - A restricted user's update reads stored values only for the fields it wrote without being able to read them; it no longer reads the rest of the row to widen the snapshot.
+
+- 0af123e: Check `TransactionGroup` updates for concurrent changes, as single-record saves already are. An update queued with `ConcurrencyCheck` of `'log'` or `'enforce'` (per save, or the provider-wide setting) now gets a locked read of its row inside the group's transaction, before any of the group's statements run; in `'enforce'` mode a conflict rolls back the whole group, `Submit()` returns `false`, and the conflicting entity's `LatestResult.ConcurrencyConflict` names the fields. Groups with checking off do no extra work, and batched submits stay batched. Grouped saves from the browser now send each update's old values, and `ExecuteTransactionGroup` checks them the way the single-record update mutation does, so a form that saves child records alongside its main record no longer silently overwrites another user's change. Adds integration test IT173.
+- 7ad8b8a: Wave 6A server and core density improvements:
+  - **Preserve `FrozenRowSerializationCache` hits across `Fields` projections (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/server`)**: Add `ProjectRowsToFieldsOptions.PreserveFrozen` and `CanonicalFieldsKey` in `ProviderBase` so read-only server wire paths (`GenericDatabaseProvider.RunViewsWithCacheCheck`) keep full-coverage frozen L1/CoW arrays untouched without cloning and memoize frozen subset-projected rows across equivalent field lists (`WeakMap`). `RunViewResolver.processRawData` indexes `FrozenRowSerializationCache` by `${entityId}|${canonicalFieldsKey}` when `Fields` is present, restoring serialization cache hits on narrow `Fields` queries while keeping default `ProjectRowsToFields` mutable for in-process callers.
+  - **Uncap PostgreSQL application read-only pool & isolate ad-hoc SQL (`@memberjunction/server`)**: Separate `PostgreSQLPoolPurpose` into `'read-only'` (application `RunView*` reads sized up to `connectionPool.readOnlyMax ?? apiMax`) and `'adhoc-read-only'` (untrusted caller-supplied SQL in `AdhocQueryResolver`, `TestQuerySQLResolver`, and `GetDataContextDataResolver`, bounded at `ADHOC_READ_ONLY_MAX_CONNECTIONS = 10`), backed by separate `PostgreSQLReadOnlyPool.Pool` and `PostgreSQLReadOnlyPool.AdhocPool` handles and `GetReadOnlyProvider(..., { purpose: 'adhoc' })`.
+  - **Lazy per-request `PostgreSQLDataProvider` configuration (`@memberjunction/postgresql-dataprovider`, `@memberjunction/server`)**: Add `PostgreSQLDataProvider.CanConfigureFromGlobalSync()` and `ConfigureFromGlobalSync()` mirroring `SQLServerDataProvider`, and enable `tryBuildLazyPostgresProviders()` in `context.ts` so cache/AI requests no longer eagerly construct unused RW/RO/Adhoc providers.
+  - **`BGEReRanker` worker-thread isolation (`@memberjunction/search-engine`)**: Move `@huggingface/transformers` text-classification loading and ONNX inference off the main Node.js event loop into a reusable `worker_threads` worker (`BGERerankerWorkerHost`, `BGERerankerWorker`, `BGERerankerWorkerHandler`, `bgeRuntime`), with bounded candidate capping (`DEFAULT_BGE_MAX_CANDIDATES = 100`), mini-batch chunking (`DEFAULT_BGE_BATCH_SIZE = 32`), and a per-call timeout budget (`DEFAULT_BGE_RERANKER_TIMEOUT_MS = 30_000`) with automatic worker recycling and top-N fallback.
+  - **Server density & streaming coalescing quick wins (`@memberjunction/server`)**: Replace the O(U) `UserCache.Instance.Users.find(...)` scan on API-key auth in `context.ts` with O(1) `UserCache.Instance.UserByID(...)`, key `AuthCache` by SHA-256 hex digest via `HashAuthToken()` in `cache.ts` instead of raw multi-KB JWT strings, and add leading-edge 25ms coalescing (`DEFAULT_STREAMING_COALESCE_MS = 25`) with ordered concatenation, `runSummary` memoization, and synchronous flush on completion/step change/progress/`Dispose` in `AgentRunStatusPublisher`.
+
+- 64cc6f4: Wave 4.3a runtime SQL and `TransactionGroup` optimizations: release database locks (`CommitGroupTransaction` / `RollbackGroupTransaction`) before `TransactionNotifications$` and `LocalCacheManager.EndEntityEventBatch`, defer transactional `GeoCodeSyncService` HTTP I/O via `RunAfterCommit`, skip redundant post-hook `CheckCreateRLS` when `BeforeSave` leaves field state unchanged, quote `UserViewID` / `UserViewRunID` GUID filters, rewrite eligible `COUNT(*)` queries to `BaseTable`, extend bound-parameter RLS to `Load` and `CheckCreateRLS` / `CheckUpdateRLSPostImage`, chunk `SQLServerTransactionGroup.BatchedSubmit` under SQL Server's 2,100-parameter ceiling, and implement `ExecuteSQLBatch` + `UNION ALL` `getBatchedServerCacheStatus` on `PostgreSQLDataProvider`.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [2d938cf]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/query-processor@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+
+### Patch Changes
+
+- 87ac205: Add parameterized `RunView` support via `RunViewParams.Parameters`:
+  - `@memberjunction/core`: Add `RunViewParameterScalar`, `RunViewParameterValue`, `RunViewParameters`, `RunViewParametersKey`, and `RunViewParams.Parameters`. Include canonicalized parameters in `RunViewParams.Equals` and `LocalCacheManager.GenerateRunViewFingerprint` (`prm:` segment when non-empty). Teach `FieldSecuritySQLGate` to recognize `@paramName` parameter tokens on both SQL Server and PostgreSQL dialects.
+  - `@memberjunction/generic-database-provider`: Add `BindExtraFilterParameters` using `SqlTokens.Lex` and `EditSet` to rewrite `@paramName` tokens in `ExtraFilter` to dialect-native bound placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and `NamedQueryParameter` bindings (with array expansion for `IN (@list)`). Thread bound parameters through `executeRunViewCore`, `RunViewsWithCacheCheck`, `getBatchedServerCacheStatus`, `getUpdatedRowsSince`, and `IsCoalescibleCountBatch`.
+  - `@memberjunction/sqlserver-dataprovider`: Support `NamedQueryParameter` and `TypedQueryParameter` lists in `ExecuteSQLBatch` and `ExecuteSQLBatchStatic` with parameter deduplication across shared `mssql.Request` batches, and forward `queryParameters` in `executeSQLForUserViewRunLogging` and `getBatchedServerCacheStatus`.
+  - `@memberjunction/postgresql-dataprovider`: Exclude `@paramName` and `$1` parameter tokens from column auto-quoting in `quoteFieldNamesInToken`.
+  - `@memberjunction/server`: Accept and validate `Parameters` (`GraphQLJSONObject`) on `RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`, and `RunViewsWithCacheCheck`.
+  - `@memberjunction/graphql-dataprovider`: Forward `RunViewParams.Parameters` in `InternalRunView`, `InternalRunViews`, and `RunViewsWithCacheCheck`.
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/query-processor@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -324,6 +324,9 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
   const beforeMjTs = existsSync('packages/MJCoreEntities/src/generated/entities/__mj.ts')
     ? readFileSync('packages/MJCoreEntities/src/generated/entities/__mj.ts', 'utf8')
     : '';
+  const beforeSchemasMjTs = existsSync('packages/MJCoreEntities/src/generated/schemas/__mj.ts')
+    ? readFileSync('packages/MJCoreEntities/src/generated/schemas/__mj.ts', 'utf8')
+    : '';
 
   try {
     // 1. Add probe column and refresh base view
@@ -365,6 +368,7 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
 
     const allowListRegexes = [
       /^packages\/MJCoreEntities\/src\/generated\/entities\/__mj\.ts$/,
+      /^packages\/MJCoreEntities\/src\/generated\/schemas\/__mj\.ts$/,
       /^packages\/MJCoreEntities\/src\/generated\/.*entity.*\.ts$/,
       /^packages\/MJCoreEntities\/src\/generated\/.*entity.*\.json$/,
       /^packages\/MJServer\/src\/generated\/generated\.ts$/,
@@ -392,15 +396,20 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
       throw new Error(`Stage single-column failed: changed files outside allow-list.`);
     }
 
-    // 4. Assert diff inside __mj.ts touches only IdempotencyProbe
-    const currentMjTs = readFileSync('packages/MJCoreEntities/src/generated/entities/__mj.ts', 'utf8');
-    const beforeLines = new Set(beforeMjTs.split('\n').map((l) => l.trim()));
-    for (const line of currentMjTs.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed && !beforeLines.has(trimmed)) {
-        if (!trimmed.includes(probeColumn) && trimmed !== '}' && trimmed !== '{' && trimmed !== '/**' && trimmed !== '*/' && !trimmed.startsWith('*')) {
-          logError(`__mj.ts diff contains unexpected modification: ${trimmed}`);
-          throw new Error('Stage single-column failed: __mj.ts modified outside probe property.');
+    // 4. Assert diff inside __mj.ts (and split schemas/__mj.ts) touches only IdempotencyProbe
+    for (const [label, filePath, beforeContent] of [
+      ['entities/__mj.ts', 'packages/MJCoreEntities/src/generated/entities/__mj.ts', beforeMjTs],
+      ['schemas/__mj.ts', 'packages/MJCoreEntities/src/generated/schemas/__mj.ts', beforeSchemasMjTs],
+    ]) {
+      const currentContent = readFileSync(filePath, 'utf8');
+      const beforeLines = new Set(beforeContent.split('\n').map((l) => l.trim()));
+      for (const line of currentContent.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !beforeLines.has(trimmed)) {
+          if (!trimmed.includes(probeColumn) && trimmed !== '}' && trimmed !== '{' && trimmed !== '/**' && trimmed !== '*/' && !trimmed.startsWith('*') && !trimmed.endsWith('`')) {
+            logError(`${label} diff contains unexpected modification: ${trimmed}`);
+            throw new Error(`Stage single-column failed: ${label} modified outside probe property.`);
+          }
         }
       }
     }

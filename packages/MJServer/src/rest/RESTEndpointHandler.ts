@@ -51,8 +51,19 @@ export class RESTEndpointHandler {
 
     constructor(options: RESTEndpointHandlerOptions = {}) {
         this.router = express.Router();
-        this.options = options;
+        // Normalize every list to lowercase once, so the exact-name comparisons in
+        // isEntityAllowed match whatever casing the caller configured.
+        this.options = {
+            IncludeEntities: RESTEndpointHandler.lowercaseList(options.IncludeEntities),
+            ExcludeEntities: RESTEndpointHandler.lowercaseList(options.ExcludeEntities),
+            IncludeSchemas: RESTEndpointHandler.lowercaseList(options.IncludeSchemas),
+            ExcludeSchemas: RESTEndpointHandler.lowercaseList(options.ExcludeSchemas),
+        };
         this.setupRoutes();
+    }
+
+    private static lowercaseList(list: string[] | undefined): string[] | undefined {
+        return list?.map(item => item.toLowerCase());
     }
 
     /**

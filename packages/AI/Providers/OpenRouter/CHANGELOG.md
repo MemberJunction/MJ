@@ -1,5 +1,52 @@
 # @memberjunction/ai-openrouter
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- c51c6f3: Add `GeminiDecision`, a `BaseDecision` driver for Google's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`), and the `Gemini Decision 1` model (type Decision, `PowerRank` 61, $0.10 per million input tokens, no output charge; up to 1,000 questions, 255 Choice options and 255 Score levels per call, 262,144 input tokens) with two Inference Provider routes: Google direct (`GeminiDecision`, `gemini-decision-1`, preferred) and OpenRouter (`OpenRouterDecision`, pinned `google/gemini-decision-1-20261111`). Gemini's questions and answers use the System One shape, so `GeminiDecision` extends `BaseHostedSystemOneDecision` and adapts the `x-goog-api-key` header, `input` in place of `state`, `total_input_tokens`/`total_output_tokens` usage, and `prompt_feedback.block_reason` input-filter blocks (which fail with the block reason as a failover-eligible `ModelError`). Google's `400` (`INVALID_ARGUMENT` and `invalid_request`) and `403 PERMISSION_DENIED` responses are pinned to failover-eligible `ModelError`, keeping `Default Decision`'s failover loop running while leaving `401` a fatal `Authentication` error. MJ sends text only. `Gemini Decision 1` is not bound to `Default Decision` (which selects `Jev` or `LLM Decision` first), but as an active `Decision` model it joins `Default Decision`'s power-matched fallback list on hosts with a `Google` or `OpenRouter` vendor credential (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`); set `Status = 'Inactive'` on the corresponding model-vendor row to keep `Default Decision` off it.
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-openai@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -11,7 +11,7 @@ export interface TestResult {
 
 /**
  * @deprecated Use TestHarnessWindowManagerService instead.
- * This service previously used Kendo WindowService to open test harness windows.
+ * This service opens test harness windows.
  * It is retained only because the TestResult interface is exported from here
  * and consumed by other services.
  */

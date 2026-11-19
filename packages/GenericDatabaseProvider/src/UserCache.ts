@@ -2,7 +2,7 @@ import {
     BaseEntity, CacheCategory, CacheChangedEvent, LocalCacheManager, LogError, LogStatusEx, LogWarning, UserInfo,
     type BaseEntityEvent, type DatabaseProviderBase,
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, GroupByUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GroupByUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IsSystemUser, SystemUserID } from './systemUser.js';
 
 /**
@@ -107,6 +107,15 @@ export class UserCache extends BaseSingleton<UserCache> {
     /** Lookups that missed both the cache and the database recently, so a retry storm cannot form. */
     private readonly _recentMisses = new Map<string, number>();
 
+    /** O(1) lookup indices built lazily and invalidated whenever `_users` changes. */
+    private static readonly _emptyUsers: readonly UserInfo[] = Object.freeze([]);
+    private _usersByEmail = new Map<string, UserInfo[]>();
+    private _usersById = new Map<string, UserInfo>();
+    private _blankEmailUserIds: string[] = [];
+    private _indexedUsersRef: UserInfo[] | null = null;
+    private _indexedUsersLength: number = -1;
+    private _indexDirty: boolean = true;
+
     /** How long a burst of user changes is collected before one reload runs. */
     public static ChangeDebounceMs: number = 250;
 
@@ -152,7 +161,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * explicit assertion where the old one silently inferred the same lie.
      */
     public GetSystemUser(): UserInfo {
-      return this.Users.find((u) => u.ID.toLowerCase() === UserCache.Instance.SYSTEM_USER_ID.toLowerCase()) as UserInfo;
+      return this.UserByID(UserCache.Instance.SYSTEM_USER_ID) as UserInfo;
     }
 
     /**
@@ -174,6 +183,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         const users = await this.LoadUsers(provider);
         if (users) {
           this._users = users;
+          this._indexDirty = true;
           this._recentMisses.clear();
           this._lastStamp = await this.readDatabaseStamp(provider);
 
@@ -208,6 +218,22 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public SetUsers(users: UserInfo[]): void {
       this._users = users;
+      this._indexDirty = true;
+      this._recentMisses.clear();
+    }
+
+    /**
+     * Inserts or replaces a single `UserInfo` in the cache while preserving the `Users` array
+     * reference and marking the O(1) email/ID indices dirty.
+     */
+    public AddOrUpdateUser(user: UserInfo): void {
+      const index = this._users.findIndex(u => UUIDsEqual(u.ID, user.ID));
+      if (index >= 0) {
+        this._users[index] = user;
+      } else {
+        this._users.push(user);
+      }
+      this._indexDirty = true;
       this._recentMisses.clear();
     }
 
@@ -304,6 +330,96 @@ export class UserCache extends BaseSingleton<UserCache> {
       });
     }
 
+    /**
+     * Returns all cached users matching `email` (case-insensitively, trimmed) in O(1),
+     * deterministically pre-sorted by `ID` (`a.ID.localeCompare(b.ID)`) so duplicate-email
+     * tie-breaking never depends on database row order.
+     */
+    public UsersByEmail(email: string): readonly UserInfo[] {
+      const normalized = email?.trim().toLowerCase();
+      if (!normalized) {
+        return UserCache._emptyUsers;
+      }
+      this.ensureIndexes();
+      return this._usersByEmail.get(normalized) ?? UserCache._emptyUsers;
+    }
+
+    /**
+     * Returns the primary cached user matching `email` (case-insensitively, trimmed) in O(1).
+     */
+    public UserByEmail(email: string): UserInfo | undefined {
+      return this.UsersByEmail(email)[0];
+    }
+
+    /**
+     * Returns the cached user matching `id` (UUID-normalized) in O(1).
+     */
+    public UserByID(id: string): UserInfo | undefined {
+      const normalized = id ? NormalizeUUID(id.trim()) : '';
+      if (!normalized) {
+        return undefined;
+      }
+      this.ensureIndexes();
+      return this._usersById.get(normalized);
+    }
+
+    /**
+     * IDs of any cached user rows that have a null/blank `Email` column.
+     */
+    public get BlankEmailUserIDs(): readonly string[] {
+      this.ensureIndexes();
+      return this._blankEmailUserIds;
+    }
+
+    private ensureIndexes(): void {
+      if (
+        !this._indexDirty &&
+        this._indexedUsersRef === this._users &&
+        this._indexedUsersLength === this._users.length
+      ) {
+        return;
+      }
+
+      const byEmail = new Map<string, UserInfo[]>();
+      const byId = new Map<string, UserInfo>();
+      const blankEmailIds: string[] = [];
+
+      for (const user of this._users) {
+        if (!user) {
+          continue;
+        }
+        if (user.ID) {
+          byId.set(NormalizeUUID(user.ID.trim()), user);
+        }
+        const trimmedEmail = user.Email?.trim() ?? '';
+        if (!trimmedEmail) {
+          blankEmailIds.push(user.ID);
+          continue;
+        }
+        const emailKey = trimmedEmail.toLowerCase();
+        let bucket = byEmail.get(emailKey);
+        if (!bucket) {
+          bucket = [user];
+          byEmail.set(emailKey, bucket);
+        } else {
+          bucket.push(user);
+        }
+      }
+
+      for (const bucket of byEmail.values()) {
+        if (bucket.length > 1) {
+          bucket.sort((a, b) => a.ID.localeCompare(b.ID));
+        }
+      }
+
+      this._usersByEmail = byEmail;
+      this._usersById = byId;
+      this._blankEmailUserIds = blankEmailIds;
+      this._indexedUsersRef = this._users;
+      this._indexedUsersLength = this._users.length;
+      this._indexDirty = false;
+    }
+
     // ────────────────────────────────────────────────────────────────────────────────────────────
     // Finding a user: a miss is a question for the database, not an answer
     // ────────────────────────────────────────────────────────────────────────────────────────────
@@ -342,12 +458,7 @@ export class UserCache extends BaseSingleton<UserCache> {
           return undefined;
         }
         // Keep the array instance: callers (MJServer auth) hold and push to it.
-        const index = this._users.findIndex(u => UUIDsEqual(u.ID, user.ID));
-        if (index >= 0) {
-          this._users[index] = user;
-        } else {
-          this._users.push(user);
-        }
+        this.AddOrUpdateUser(user);
         LogStatusEx({ message: `UserCache: loaded user ${user.ID} on demand — it was created after this process last refreshed`, verboseOnly: true });
         return user;
       } catch (e) {
@@ -381,10 +492,9 @@ export class UserCache extends BaseSingleton<UserCache> {
     /** The cached answer for {@link FindUser}'s criteria, without touching the database. */
     private findCached(criteria: { ID?: string; Email?: string }): UserInfo | undefined {
       if (criteria.ID) {
-        return this._users.find(u => UUIDsEqual(u.ID, criteria.ID as string));
+        return this.UserByID(criteria.ID);
       }
-      const email = criteria.Email?.trim().toLowerCase();
-      return email ? this._users.find(u => u.Email?.trim().toLowerCase() === email) : undefined;
+      return criteria.Email ? this.UserByEmail(criteria.Email) : undefined;
     }
 
     private missKey(criteria: { ID?: string; Email?: string }): string | null {
@@ -554,6 +664,7 @@ export class UserCache extends BaseSingleton<UserCache> {
           const users = await this.LoadUsers(provider);
           if (users) {
             this._users = users;
+            this._indexDirty = true;
             this._recentMisses.clear();
             this._lastStamp = await this.readDatabaseStamp(provider);
           }

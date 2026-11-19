@@ -3,7 +3,7 @@ import { ContentBlock, MessageCreateParams, MessageParam, RedactedThinkingBlockP
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
+    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, NormalizeFinishReason } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { BuildAnthropicThinking, ResolveSamplingParams, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
@@ -68,6 +68,8 @@ export class AnthropicLLM extends BaseLLM {
         outputTokens: number;
         cacheReadTokens: number;
         cacheWriteTokens: number;
+        /** The `stop_reason` from the stream's `message_delta` event, when one arrived. */
+        stopReason: string | null;
     } = {
         accumulatedThinking: '',
         inThinkingBlock: false,
@@ -76,7 +78,8 @@ export class AnthropicLLM extends BaseLLM {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadTokens: 0,
-        cacheWriteTokens: 0
+        cacheWriteTokens: 0,
+        stopReason: null
     };
 
     constructor(apiKey: string) {
@@ -952,10 +955,7 @@ export class AnthropicLLM extends BaseLLM {
                                 toolCalls: toolCalls,
                                 ...(reasoning ? { reasoning } : {})
                             },
-                            // Only the tool-call case gets a normalized reason; everything else keeps
-                            // this driver's long-standing "completed" so existing consumers are
-                            // untouched.
-                            finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : "completed",
+                            finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : NormalizeFinishReason(result.stop_reason),
                             index: 0
                         }
                     ],
@@ -1038,7 +1038,8 @@ export class AnthropicLLM extends BaseLLM {
             inputTokens: 0,
             outputTokens: 0,
             cacheReadTokens: 0,
-            cacheWriteTokens: 0
+            cacheWriteTokens: 0,
+            stopReason: null
         };
     }
 
@@ -1159,6 +1160,9 @@ export class AnthropicLLM extends BaseLLM {
         }
         if (chunk && chunk.type === 'message_delta' && chunk.usage?.output_tokens != null) {
             this._streamingState.outputTokens = chunk.usage.output_tokens;
+        }
+        if (chunk && chunk.type === 'message_delta' && typeof chunk.delta?.stop_reason === 'string') {
+            this._streamingState.stopReason = chunk.delta.stop_reason;
         }
 
         // Check for thinking_delta event (Anthropic specific)
@@ -1318,7 +1322,7 @@ export class AnthropicLLM extends BaseLLM {
                     content: content,
                     thinking: thinkingContent || undefined
                 },
-                finish_reason: 'stop',
+                finish_reason: NormalizeFinishReason(this._streamingState.stopReason),
                 index: 0
             }],
             usage: modelUsage

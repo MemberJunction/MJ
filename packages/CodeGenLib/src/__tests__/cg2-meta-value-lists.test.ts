@@ -80,9 +80,9 @@ describe('EntityFieldValue.Code is not overflowed (#2577)', () => {
 
    it('inserts a long value with Code NULL and a short one with Code = Value', async () => {
       expect(await new TestableValueLists().Sync(['Active', long])).toBe(true);
-      expect(executed.statements).toHaveLength(2);
+      expect(executed.statements).toHaveLength(1); // one batch per field
       expect(executed.statements[0]).toMatch(/'Active', 'Active',/);
-      expect(executed.statements[1]).toContain(`'${long}', NULL,`);
+      expect(executed.statements[0]).toContain(`'${long}', NULL,`);
    });
 
    it('escapes a quote in a value (soft value lists can carry one)', async () => {

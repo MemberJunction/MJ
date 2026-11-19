@@ -5,8 +5,9 @@
  * - `/oauth/callback` finishes an MCP OAuth sign-in.
  * - `/office/connect` is the Excel add-in's sign-in window. It runs inside an Office dialog, so it
  *   must not load the shell, and it offers its own Sign in button.
+ * - `/guest/artifact` renders a frozen read-only shared artifact snapshot for external guests without login.
  */
-export const STANDALONE_ROUTE_PATHS: readonly string[] = ['/oauth/callback', '/office/connect'];
+export const STANDALONE_ROUTE_PATHS: readonly string[] = ['/oauth/callback', '/office/connect', '/guest/artifact'];
 
 /**
  * True when `url` is one of {@link STANDALONE_ROUTE_PATHS} or below one. Accepts a router URL or a

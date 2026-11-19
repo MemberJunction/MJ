@@ -617,5 +617,43 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
             }),
         );
     });
-});
 
+    it('sends the pronunciation-normalized text to TTS but keeps display words in WordTimings and captions', async () => {
+        const spec = makeBaseSpec();
+        spec.Audio.Narration!.Script = [{ Key: 'line-1', BeatKey: 'beat-1', Text: 'Our A.I. runs on MemberJunction today.' }];
+        const spoken = 'Our AI runs on Member Junction today.';
+        const chars = spoken.split('');
+        mockRunTextToSpeech.mockResolvedValueOnce({
+            Success: true,
+            PromptRunID: 'pr-pron-1',
+            SpeechResult: {
+                success: true,
+                content: '',
+                data: Buffer.alloc(16_000),
+                Alignment: {
+                    Characters: chars,
+                    StartSeconds: chars.map((_c, i) => Number((i * 0.05).toFixed(3))),
+                    EndSeconds: chars.map((_c, i) => Number(((i + 1) * 0.05).toFixed(3))),
+                },
+            } satisfies SpeechResult,
+        });
+
+        const result = await RunNarrationPipeline(spec, {
+            ContextUser: fakeUser,
+            ModelID: 'model-eleven-v4',
+            PronunciationNotes: 'MemberJunction => Member Junction\nSay Skip with a short i.',
+        });
+
+        expect(mockRunTextToSpeech).toHaveBeenCalledWith(expect.objectContaining({ text: spoken }));
+        const line = result.Spec.Audio.Narration!.Script[0];
+        expect(line.Text).toBe('Our A.I. runs on MemberJunction today.');
+        expect(line.SpokenText).toBe(spoken);
+        expect(line.WordTimings?.map((w) => w.Word)).toEqual(['Our', 'A.I.', 'runs', 'on', 'MemberJunction', 'today.']);
+        const memberJunction = line.WordTimings![4];
+        // "Member Junction" spans characters 15..29 of the spoken text (0.05 s per character), shifted by the lead-in.
+        expect(memberJunction.EndSeconds - memberJunction.StartSeconds).toBeCloseTo(15 * 0.05, 3);
+        expect(result.CaptionsVtt).toContain('A.I.');
+        expect(result.CaptionsVtt).toContain('MemberJunction');
+        expect(result.CaptionsVtt).not.toContain('Member Junction');
+    });
+});

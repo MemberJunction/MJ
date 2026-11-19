@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { BaseEntity, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BaseEntity, IMetadataProvider, IRunViewProvider, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     MJAIAgentUserPolicyEntity,
@@ -442,5 +442,298 @@ describe('AgentUserPolicyEngine — the cache follows entity saves', () => {
         raise('save', other);
         raise('remote-invalidate', null, 'MJ: AI Agent Requests');
         expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')?.EmailChannelMode).toBe('DraftOnly');
+    });
+});
+
+describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPolicyWidening', () => {
+    const engine = AgentUserPolicyEngine.Instance;
+
+    beforeEach(() => {
+        engine.ClearCache();
+        vi.restoreAllMocks();
+    });
+
+    it('distinguishes found, none, and error in ResolvePolicyForAgentAndUser', async () => {
+        const policy = buildPolicy();
+        const runViewFn = vi
+            .fn()
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            })
+            .mockResolvedValueOnce({
+                Success: false,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: 'DB connection lost',
+                UserViewRunID: '',
+            })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policy],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            });
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+
+        const provider = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+
+        const noneRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(noneRes).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+
+        // Cached 'none' result avoids a second RunView query until forceRefresh is requested
+        const cachedNoneRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(cachedNoneRes).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+
+        const errRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider,
+            forceRefresh: true,
+        });
+        expect(errRes.status).toBe('error');
+        if (errRes.status === 'error') {
+            expect(errRes.errorMessage).toContain('DB connection lost');
+        }
+
+        const foundRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider,
+            forceRefresh: true,
+        });
+        expect(foundRes).toEqual({ status: 'found', policy });
+    });
+
+    it('blocks agent-initiated policy widening across all privilege axes while allowing tightening and display updates', () => {
+        const baseline = engine.SnapshotPolicy(
+            buildPolicy({
+                Status: 'Paused',
+                CoordinationMode: 'Coordinator',
+                DefaultDataAccessMode: 'ReadOnly',
+                EmailChannelMode: 'DraftOnly',
+                CalendarChannelMode: 'ProposeWithApproval',
+                PhoneChannelMode: 'Disabled',
+                MessagingChannelMode: 'DraftOnly',
+                AllowInterAgentCoordination: false,
+                RequireApprovalForExternalComms: true,
+                RequireApprovalForFinancials: true,
+                RequireApprovalForDestructiveActions: true,
+                AutoApproveAmountThreshold: 250,
+            })
+        );
+
+        // Tightening + non-security fields are permitted
+        const tightened = buildPolicy({
+            Status: 'Paused',
+            CoordinationMode: 'Observer',
+            DefaultDataAccessMode: 'AllowListOnly',
+            EmailChannelMode: 'Disabled',
+            CalendarChannelMode: 'ReadOnly',
+            PhoneChannelMode: 'Disabled',
+            MessagingChannelMode: 'Disabled',
+            AllowInterAgentCoordination: false,
+            RequireApprovalForExternalComms: true,
+            RequireApprovalForFinancials: true,
+            RequireApprovalForDestructiveActions: true,
+            AutoApproveAmountThreshold: 100,
+            DisplayNameOverride: 'Maya v2',
+            InstructionsOverride: 'Tighter instructions',
+        });
+        expect(engine.DetectAgentPolicyWidening(baseline, tightened)).toEqual([]);
+
+        // Unpausing itself is blocked
+        expect(
+            engine.DetectAgentPolicyWidening(baseline, buildPolicy({ Status: 'Active' })).join('; ')
+        ).toMatch(/Status/);
+
+        // Widening DefaultDataAccessMode is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ DefaultDataAccessMode: 'ReadOnly' })),
+                    buildPolicy({ DefaultDataAccessMode: 'UserCeiling' })
+                )
+                .join('; ')
+        ).toMatch(/DefaultDataAccessMode/);
+
+        // Widening EmailChannelMode or disabling RequireApprovalForFinancials or raising AutoApproveAmountThreshold is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' })),
+                    buildPolicy({ EmailChannelMode: 'SendAsUser' })
+                )
+                .join('; ')
+        ).toMatch(/EmailChannelMode/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ RequireApprovalForFinancials: true })),
+                    buildPolicy({ RequireApprovalForFinancials: false })
+                )
+                .join('; ')
+        ).toMatch(/RequireApprovalForFinancials/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ AutoApproveAmountThreshold: 250 })),
+                    buildPolicy({ AutoApproveAmountThreshold: 1000 })
+                )
+                .join('; ')
+        ).toMatch(/AutoApproveAmountThreshold/);
+
+        // Widening EntityAccessRules or dropping Deny ActionPolicyRules from an agent call is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'AllowListOnly',
+                            EntityAccessRulesObject: [{ entityPattern: 'Tasks', access: 'ReadOnly' }],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'AllowListOnly',
+                        EntityAccessRulesObject: [{ entityPattern: 'Tasks', access: 'ReadWrite' }],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/Tasks/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            ActionPolicyRulesObject: [{ actionPattern: '*Delete*', policy: 'Deny' }],
+                        })
+                    ),
+                    buildPolicy({ ActionPolicyRulesObject: [] })
+                )
+                .join('; ')
+        ).toMatch(/Delete/);
+
+        // Adding a new non-Deny rule under ReadOnly baseline is blocked (prevents lifting ReadOnly default via {entityPattern: '*', access: 'ReadWrite'})
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'ReadOnly',
+                            EntityAccessRulesObject: [],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'ReadOnly',
+                        EntityAccessRulesObject: [{ entityPattern: '*', access: 'ReadWrite' }],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/Cannot add non-Deny EntityAccessRule '\*' while DefaultDataAccessMode is ReadOnly/);
+
+        // Adding a new rule under UserCeiling that is broader than an overlapping baseline rule is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'UserCeiling',
+                            EntityAccessRulesObject: [{ entityPattern: 'Finance*', access: 'ReadOnly' }],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'UserCeiling',
+                        EntityAccessRulesObject: [
+                            { entityPattern: 'Finance*', access: 'ReadOnly' },
+                            { entityPattern: 'Finance: Invoices', access: 'ReadWrite' },
+                        ],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/broader than existing rule/);
+    });
+
+    it('isolates cached policies across distinct provider instances while preserving default cache fallback', () => {
+        const providerA = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const providerB = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const policyA = buildPolicy({ ID: 'pol-provider-a', EmailChannelMode: 'Disabled' });
+        const policyB = buildPolicy({ ID: 'pol-provider-b', EmailChannelMode: 'DraftOnly' });
+
+        engine.SetCachedPolicy(policyA, providerA);
+        engine.SetCachedPolicy(policyB, providerB);
+
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)?.ID).toBe('pol-provider-a');
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-provider-b');
+
+        engine.ClearCache('agent-cos', 'user-alice-1', providerA);
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-provider-b');
+
+        // Saving a policy evicts stale provider-scoped entries across all providers
+        const savedPolicy = buildPolicy({ ID: 'pol-saved-fresh', EmailChannelMode: 'Disabled' });
+        engine.SetCachedPolicy(savedPolicy);
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
+    });
+
+    it('never leaks a cached "none" across providers and expires negative cache entries after TTL', async () => {
+        const policyOnProviderB = buildPolicy({ ID: 'pol-b-only', DefaultDataAccessMode: 'ReadOnly' });
+        const runViewFn = vi
+            .fn()
+            .mockResolvedValueOnce({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1 })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policyOnProviderB],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+            })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policyOnProviderB],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+            });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(runViewFn);
+
+        // 1. Default provider caches 'none' (null)
+        const defaultNone = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser);
+        expect(defaultNone).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+
+        // 2. Custom providerB MUST NOT fall back to the default provider's cached 'none'; it queries providerB and finds policyOnProviderB
+        const providerB = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+        const bFound = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: providerB,
+        });
+        expect(bFound).toEqual({ status: 'found', policy: policyOnProviderB });
+        expect(runViewFn).toHaveBeenCalledTimes(2);
+
+        // 3. After TTL expires, the default provider's negative cache entry expires and re-queries RunView
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31_000);
+        try {
+            const refreshedAfterTtl = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser);
+            expect(refreshedAfterTtl).toEqual({ status: 'found', policy: policyOnProviderB });
+            expect(runViewFn).toHaveBeenCalledTimes(3);
+        } finally {
+            nowSpy.mockRestore();
+        }
     });
 });

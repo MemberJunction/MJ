@@ -369,7 +369,7 @@ describe('AvatarPublisher — failures', () => {
         expect(t.statuses).toEqual([]);
     });
 
-    it(`takes the avatar down after ${3} video decoder failures within the window: unpublished, attribute set, voice kept`, async () => {
+    it(`takes the avatar down after ${3} video decoder failures within the window: unpublished, status reported (the bot sets no attribute), voice kept`, async () => {
         const t = setup();
         await Settle();
         feed(t, 6);
@@ -381,7 +381,6 @@ describe('AvatarPublisher — failures', () => {
         }
         await Settle();
         expect(t.statuses).toEqual([{ state: 'on' }, { state: 'audio-only', reason: 'decoder-failed' }]);
-        expect(t.outlet.Attributes).toEqual([{ 'mj.agentAvatar': 'audio-only:decoder-failed' }]);
         expect(t.outlet.Unpublished).toBe(1);
         expect(t.publisher.IsAudioOnly).toBe(true);
         expect(t.decoders.audio.Disposed).toBe(false);
@@ -424,7 +423,6 @@ describe('AvatarPublisher — failures', () => {
         decodeAll(t);
         await playTo(t, 1);
         expect(t.statuses).toEqual([{ state: 'audio-only', reason: 'publish-failed' }]);
-        expect(t.outlet.Attributes).toEqual([{ 'mj.agentAvatar': 'audio-only:publish-failed' }]);
         expect(t.outlet.Unpublished).toBe(0);
     });
 

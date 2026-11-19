@@ -235,13 +235,13 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
     }
 
     /**
-     * The records the backfill re-derives: those whose latest Pipeline Feature Value (by `ComputedAt`) was written
+     * The records the backfill re-derives: those whose latest Champion Pipeline Feature Value (by `ComputedAt`) was written
      * under another version, or under none. One read of three columns, proportional to the pipeline's value rows.
      */
     public async BackfillRecordIDs(recordProcessID: string, version: number, contextUser: UserInfo, provider: IMetadataProvider): Promise<string[]> {
         const res = await RunView.FromMetadataProvider(provider).RunView<PipelineValueStamp>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND Source = 'Pipeline'`,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND Source = 'Pipeline' AND Role = 'Champion'`,
             Fields: ['RecordID', 'PipelineVersion', 'ComputedAt'],
             IgnoreMaxRows: true,
         }, contextUser);
@@ -318,11 +318,11 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
         return { Kind: 'evaluate', Version: row.Version, GoldenSetTestID: activation.GoldenSetTestID, Since: since };
     }
 
-    /** Whether the pipeline has Pipeline Feature Values written before any version was registered (`PipelineVersion` NULL). */
+    /** Whether the pipeline has Champion Pipeline Feature Values written before any version was registered (`PipelineVersion` NULL). */
     protected async HasUnversionedPipelineValues(recordProcessID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(provider).RunView({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND Source = 'Pipeline' AND PipelineVersion IS NULL`,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND Source = 'Pipeline' AND Role = 'Champion' AND PipelineVersion IS NULL`,
             ResultType: 'count_only',
         }, contextUser);
         if (!res.Success) {

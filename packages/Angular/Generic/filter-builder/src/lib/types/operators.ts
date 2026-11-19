@@ -2,7 +2,8 @@
  * Operator Definitions - Maps field types to available operators
  */
 
-import { FilterOperator, FilterFieldType } from './filter.types';
+import type { FilterOperator } from '@memberjunction/core';
+import { FilterFieldType } from './filter.types';
 
 /**
  * Operator metadata for display in the UI

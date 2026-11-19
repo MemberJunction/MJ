@@ -44,6 +44,21 @@ export function FieldsLackingStoredValue(entity: BaseEntity, user: UserInfo | nu
 }
 
 /**
+ * The fields in `lacking` that the saving object has written: their old values in the object are
+ * construction artifacts, so the diff needs their stored values. A lacking field the object never
+ * wrote does not appear in either snapshot, so the diff never sees it.
+ */
+export function FieldsWrittenWithoutStoredValue(entity: BaseEntity, lacking: ReadonlySet<string>): Set<string> {
+    const written = new Set<string>();
+    for (const name of lacking) {
+        if (entity.GetFieldByName(name)?.GetState().WrittenAfterNotLoaded === true) {
+            written.add(name);
+        }
+    }
+    return written;
+}
+
+/**
  * The snapshots for a create. A field the INSERT omits because the user may not supply it
  * (`CreateSuppressed`) is left out of the new-values snapshot: the value the object holds is one
  * the record never received, and the column's database default is not known until the insert
@@ -103,4 +118,89 @@ export function WidenDeleteSnapshot(
     lacking: ReadonlySet<string>,
 ): Record<string, unknown> {
     return WidenUpdateSnapshots(entity, { NewData: narrow, OldData: narrow }, storedRow, lacking).OldData ?? narrow;
+}
+
+/**
+ * How a column is rendered when a save builds its Record Change's `FullRecordJSON` in SQL from
+ * the row the save returned. Each kind is written the way the same value serializes from a
+ * loaded entity, so snapshots built in SQL read like the ones built from an entity:
+ *
+ * - `utc-datetime` / `offset-datetime`: UTC ISO-8601 with milliseconds and `Z`. MJ stores date-times
+ *   without an offset as UTC; written without the `Z`, a reader would parse them as local time.
+ * - `date`: midnight UTC (`YYYY-MM-DDT00:00:00.000Z`); `time`: a time on 1970-01-01 UTC.
+ * - `bigint`: a string, as the drivers return it, so values above 2^53 keep every digit.
+ * - `binary`: base64; `json`: the JSON text as a string, not a nested object.
+ * - `clr`: SQL Server CLR types (spatial, `hierarchyid`), which `FOR JSON` refuses to serialize.
+ * - `text`: any type not listed here, cast to text so an unknown type can never fail the save.
+ * - `native`: strings, numbers, booleans and UUIDs, written as the database's JSON renders them.
+ */
+export type RecordChangeSnapshotColumnKind =
+    | 'utc-datetime'
+    | 'offset-datetime'
+    | 'date'
+    | 'time'
+    | 'bigint'
+    | 'binary'
+    | 'json'
+    | 'clr'
+    | 'text'
+    | 'native';
+
+/** The database platforms that build `FullRecordJSON` in SQL. */
+export type RecordChangeSnapshotPlatform = 'sqlserver' | 'postgresql';
+
+const NATIVE_SNAPSHOT_TYPES = new Set([
+    'char', 'varchar', 'nchar', 'nvarchar', 'text', 'ntext', 'character', 'character varying', 'citext',
+    'uniqueidentifier', 'uuid', 'bit', 'boolean', 'bool',
+    'tinyint', 'smallint', 'int', 'integer', 'int2', 'int4',
+    'decimal', 'numeric', 'money', 'smallmoney', 'float', 'real', 'double precision', 'float4', 'float8',
+]);
+
+const SHARED_SNAPSHOT_KINDS: ReadonlyMap<string, RecordChangeSnapshotColumnKind> = new Map<string, RecordChangeSnapshotColumnKind>([
+    ['datetime', 'utc-datetime'],
+    ['datetime2', 'utc-datetime'],
+    ['smalldatetime', 'utc-datetime'],
+    ['datetimeoffset', 'offset-datetime'],
+    ['timestamptz', 'offset-datetime'],
+    ['timestamp with time zone', 'offset-datetime'],
+    ['timestamp without time zone', 'utc-datetime'],
+    ['date', 'date'],
+    ['time', 'time'],
+    ['time without time zone', 'time'],
+    ['bigint', 'bigint'],
+    ['int8', 'bigint'],
+    ['varbinary', 'binary'],
+    ['binary', 'binary'],
+    ['image', 'binary'],
+    ['bytea', 'binary'],
+    ['json', 'json'],
+    ['jsonb', 'json'],
+]);
+
+/** SQL Server's `timestamp` is `rowversion` (binary); PostgreSQL's is a date-time without an offset. */
+const PLATFORM_SNAPSHOT_KINDS: Record<RecordChangeSnapshotPlatform, ReadonlyMap<string, RecordChangeSnapshotColumnKind>> = {
+    sqlserver: new Map<string, RecordChangeSnapshotColumnKind>([
+        ['timestamp', 'binary'],
+        ['rowversion', 'binary'],
+        ['geography', 'clr'],
+        ['geometry', 'clr'],
+        ['hierarchyid', 'clr'],
+    ]),
+    postgresql: new Map<string, RecordChangeSnapshotColumnKind>([['timestamp', 'utc-datetime']]),
+};
+
+/**
+ * The {@link RecordChangeSnapshotColumnKind} of a column with SQL type `sqlType` (an
+ * `EntityField.Type`, in either SQL Server or PostgreSQL vocabulary, with or without a length).
+ */
+export function RecordChangeSnapshotColumnKindOf(sqlType: string, platform: RecordChangeSnapshotPlatform): RecordChangeSnapshotColumnKind {
+    // Drop a length/precision suffix such as `(7)` or `(18,4)`.
+    const lower = sqlType.toLowerCase();
+    const paren = lower.indexOf('(');
+    const name = (paren >= 0 ? lower.slice(0, paren) : lower).trim();
+    const kind = PLATFORM_SNAPSHOT_KINDS[platform].get(name) ?? SHARED_SNAPSHOT_KINDS.get(name);
+    if (kind) {
+        return kind;
+    }
+    return NATIVE_SNAPSHOT_TYPES.has(name) ? 'native' : 'text';
 }

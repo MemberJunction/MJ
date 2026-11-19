@@ -29,6 +29,21 @@
         </ng-container>
 
         <ng-container toolbar>
+            @if (AvailableAgents.length > 0) {
+                <div class="cos-agent-picker">
+                    <span class="cos-agent-picker__label">
+                        <i class="fa-solid fa-robot"></i> Agent
+                    </span>
+                    <mj-dropdown
+                        [Data]="AvailableAgents"
+                        TextField="Name"
+                        ValueField="ID"
+                        [ValuePrimitive]="true"
+                        [(ngModel)]="SelectedAgentID"
+                        (ValueChange)="OnSelectedAgentSelectionChanged()">
+                    </mj-dropdown>
+                </div>
+            }
             <mj-refresh-button
                 [Loading]="IsLoading"
                 [ShowLabel]="true"
@@ -207,7 +222,7 @@
                                     <i class="fa-solid fa-clock-rotate-left"></i> Autonomous Wake Schedule
                                 </h3>
                                 <p class="cos-panel__subtitle">
-                                    Proactive AgentWake routines for your Chief of Staff
+                                    Proactive AgentWake routines for {{ SelectedAgentDisplayName }}
                                 </p>
                             </div>
                             <button mjButton variant="outline" size="sm" (click)="OpenPage('approvals-wakes')">

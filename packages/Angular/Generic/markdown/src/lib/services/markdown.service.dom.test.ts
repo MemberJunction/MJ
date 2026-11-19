@@ -115,6 +115,31 @@ describe('MarkdownService (DOM)', () => {
       expect(service.getConfig().enableHtml).toBe(false);
     });
 
+    it('caches Marked configuration and skips redundant engine reconfiguration when config has not changed', () => {
+      const engine = service['engine'];
+      const spy = vi.spyOn(engine, 'configureMarked');
+
+      // Call with default config when already configured
+      service.configureMarked({});
+      expect(spy).not.toHaveBeenCalled();
+
+      // Call with new config option
+      service.configureMarked({ enableHtml: true });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Call again with the exact same config option
+      service.configureMarked({ enableHtml: true });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Reset to defaults
+      service.resetConfig();
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // Second reset to defaults
+      service.resetConfig();
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
     it('isLanguageSupported reflects Prism registration', () => {
       // typescript is imported by the service; a made-up language is not.
       expect(service.isLanguageSupported('typescript')).toBe(true);
@@ -178,6 +203,31 @@ describe('MarkdownService (DOM)', () => {
 
       expect(result).toBe(false);
       expect(loads).toBe(0);
+    });
+
+    it('S11: configures securityLevel="strict" and sanitizes SVG output with DOMPurify before DOM insertion', async () => {
+      let capturedConfig: Record<string, string | boolean | undefined> | undefined;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: (cfg) => {
+          capturedConfig = cfg as Record<string, string | boolean | undefined>;
+        },
+        render: async () => ({
+          svg: '<svg onload="alert(1)"><script>alert(2)</script><a href="javascript:alert(3)"><text>OK</text></a></svg>',
+          diagramType: 'flowchart',
+        }),
+      };
+      stubLoader(async () => fakeMermaid as Mermaid);
+      const container = containerWith('<pre><code class="language-mermaid">graph TD; A-->B;</code></pre>');
+
+      const result = await service.renderMermaid(container);
+
+      expect(result).toBe(true);
+      expect(capturedConfig?.['securityLevel']).toBe('strict');
+      const renderedHtml = container.innerHTML;
+      expect(renderedHtml).not.toContain('<script');
+      expect(renderedHtml).not.toContain('onload');
+      expect(renderedHtml).not.toContain('javascript:');
+      expect(renderedHtml).toContain('OK');
     });
   });
 

@@ -364,4 +364,5 @@ export function GetOperator(name: string): PipelineOperator | undefined {
 }
 
 /** Reserved verbs that are NOT operators (control constructs + capability stages). */
-export const CONTROL_VERBS: ReadonlySet<string> = new Set(['tool', 'map', 'let']);
+export const CONTROL_VERBS: ReadonlySet<string> = new Set(['tool', 'map', 'let', 'graphExpand', 'stageType']);
+

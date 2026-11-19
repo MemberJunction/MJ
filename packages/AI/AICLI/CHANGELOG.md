@@ -1,5 +1,194 @@
 # @memberjunction/ai-cli
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [1be3915]
+- Updated dependencies [ae69eec]
+- Updated dependencies [2b07be4]
+- Updated dependencies [019fd49]
+- Updated dependencies [8e41e43]
+- Updated dependencies [1618217]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [367a259]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [f064047]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [c17c7be]
+- Updated dependencies [442014c]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [31c2439]
+- Updated dependencies [687393c]
+  - @memberjunction/actions@6.3.0-edge.1
+  - @memberjunction/core-entities-server@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/ai-agents@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/core-actions@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-anthropic@6.3.0-edge.1
+  - @memberjunction/ai-mistral@6.3.0-edge.1
+  - @memberjunction/ai-groq@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/ai-betty@6.3.0-edge.1
+  - @memberjunction/ai-betty-bot@6.3.0-edge.1
+  - @memberjunction/ai-cerebras@6.3.0-edge.1
+  - @memberjunction/dynamic-packages@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 2bf6237: Polish Citizen Agent Builder Docker runtime, audit CLI, and inactive credential decryption:
+  - Fix `mj ai audit agent-run --list` (`FormatRunList`) to handle plain objects returned by `ResultType: 'simple'` when formatting as JSON, and safely normalize `Date | string` step timestamps in `AgentAuditService`.
+  - Pass `-w /workspace` in `citizen-builder/scripts/query-run-history.sh` and `citizen-builder/scripts/sync-metadata.sh` so container CLI commands always resolve `/workspace/mj.config.cjs`.
+  - Pass `API_PORT` and `EXPLORER_PORT` into the `mj` container, sync `GRAPHQL_URI` and `GRAPHQL_WS_URI` in MJExplorer's environment files when `API_PORT` is non-default, and display actual host ports in the container startup banner.
+  - Cap SQL Server container memory (`MSSQL_MEMORY_LIMIT_MB`, default `3072`), run `mjapi` and `mjexplorer` directly under PM2 in `apps/MJAPI` and `apps/MJExplorer` so OOM exits are not masked by `turbo`, and add `globalPassThroughEnv` to `distribution.turbo.json`.
+  - Suppress false-alarm `LogError` messages when decrypting fields on explicitly inactive rows (`IsActive === false` or `0`) in `GenericDatabaseProvider`.
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [5850233]
+- Updated dependencies [a0079ce]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [2aa1c10]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+- Updated dependencies [36ddd08]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/core-actions@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/core-entities-server@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-openai@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-anthropic@6.3.0-edge.0
+  - @memberjunction/ai-betty@6.3.0-edge.0
+  - @memberjunction/ai-betty-bot@6.3.0-edge.0
+  - @memberjunction/ai-cerebras@6.3.0-edge.0
+  - @memberjunction/ai-groq@6.3.0-edge.0
+  - @memberjunction/ai-mistral@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -177,13 +177,28 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
    * Returns the read-only provider if one is configured. Otherwise returns the first (read-write)
    * provider ONLY when `options.allowFallbackToReadWrite` is true, and `null` when it is omitted.
    *
+   * When `options.purpose` is `'adhoc'` (untrusted caller-supplied SQL such as `ExecuteAdhocQuery`
+   * or `TestQuerySQL`), prefers the bounded `'Adhoc-Read-Only'` provider when present before
+   * falling back to `'Read-Only'`, keeping ad-hoc SQL isolated from the application `RunView*`
+   * read-only pool.
+   *
    * The read-only pool exists only when `dbReadOnlyUsername`/`dbReadOnlyPassword` are set, which
    * most deployments leave unset — so a caller that omits the flag gets `null` on those servers.
    * Pass it for any pure read.
    */
-  export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase {
-    if (!providers || providers.length === 0) 
+  export function GetReadOnlyProvider(
+    providers: Array<ProviderInfo>,
+    options?: { allowFallbackToReadWrite?: boolean; purpose?: 'app' | 'adhoc' }
+  ): DatabaseProviderBase {
+    if (!providers || providers.length === 0)
       return null; // no providers available
+
+    if (options?.purpose === 'adhoc') {
+      const adhocProvider = providers.find((p) => p.type === 'Adhoc-Read-Only');
+      if (adhocProvider) {
+        return adhocProvider.provider;
+      }
+    }
 
     const readOnlyProvider = providers.find((p) => p.type === 'Read-Only');
     if (readOnlyProvider) {

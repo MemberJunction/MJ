@@ -358,6 +358,7 @@ export class WakeGateEvaluator {
             watermarks,
             deltas: watermarks,
             totalChangedCount,
+            TotalChangedRecords: totalChangedCount,
             minutesSinceLastRun,
             elapsedMinutes: minutesSinceLastRun ?? minutesSinceLastCheck ?? 0,
             minutesSinceLastCheck,

@@ -1093,3 +1093,10 @@
         width: 100%;
     }
 }
+
+/* Source & refresh card and source-change review sit above the overview cards. */
+.overview-source-refresh,
+.overview-source-review {
+  display: block;
+  margin-bottom: 16px;
+}

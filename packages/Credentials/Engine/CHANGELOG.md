@@ -1,5 +1,131 @@
 # @memberjunction/credentials
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- fa811cc: A peer server's cache event no longer leaves an engine holding encrypted field values. Server caches store encrypted fields as ciphertext and only the cache-read path decrypts them, but `BaseEngine` applied a peer's `set` or `row_delta` rows without decrypting whenever they carried a newer version than the engine held. With two or more servers on one Redis, `CredentialEngine` then held `Values` as `$ENC$…` and `GetCredential` returned empty values as a success, until that server's next save of the credential. An engine now reloads instead of applying a payload that carries ciphertext on an encrypted field; the reload reads the same slot and decrypts it. In a three-process reproduction on MJ 6.2.1, 20 of 20 targeted trials, 3 of 20 runs of a two-saves-then-read pattern and 8 of 20 key rotations left a server holding ciphertext; with the fix, none did. `CredentialEngine` also stops reading unparseable `Values` as `{}`: it throws `CredentialValuesUnreadableError` (with `StillEncrypted` set for ciphertext), and its message no longer quotes the start of the stored value.
+- c75494d: `CredentialEngine` saves `LastUsedAt` and `LastValidatedAt` at most once per credential per minute from each process (`TimestampTouchIntervalMs`, default 60000; 0 restores a save on every use), as `APIKeyEngine` already does for API keys. Each touch is a full-row save, so a server reading a credential per request wrote a full row and a Record Change per request, and while a touch ran it could revert a change another server committed to the same row (issue #4339). In a multi-process reproduction with two MJAPIs, a key rotated through one MJAPI was reverted by another server's touch in 13 of 20 trials; with the throttle, 0 of 20. The throttle narrows that window but does not close it. A touch that fails to save no longer holds its slot, so the next read retries it.
+
+### Patch Changes
+
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 3f95ef5: Add first-class GitHub integration across Actions, AgentHarness CLI sandboxes, MCPClient, and Credentials, along with large-scale AI Skill semantic discovery and hybrid catalog prioritization:
+  - **GitHub Credential Types & Resolver (`@memberjunction/credentials`, `@memberjunction/core-actions`)**:
+    - Add `GitHub App` (`GitHubAppCredentialValues`) and `GitHub Personal Access Token` (`GitHubPATCredentialValues`) credential schemas and TypeScript interfaces.
+    - Add `GitHubCredentialResolver`, `GitHubAppAuth` (zero-dependency RS256 JWT signing and repo-scoped installation token exchange), and resilient `GitHubClient` with retry/backoff, repository allowlists, protected-branch enforcement, and App-Token-Never-Merges guardrails.
+    - Support 4-tier credential resolution: explicit `CredentialID`/`CredentialName`, per-user 3LO OAuth (`UserOAuth3LO:GitHub:<userId>` when `UseUserDelegatedAuth=true`), default `GitHub App` / `GitHub Personal Access Token` credential, and environment variable fallback.
+  - **14 Native GitHub Actions & Portable Skill (`@memberjunction/core-actions`, `metadata/`)**:
+    - Add 6 read-only discovery actions (`GitHub: Get Repository Context`, `GitHub: Search Code`, `GitHub: Read File Content`, `GitHub: List Issues and PRs`, `GitHub: Get Issue or PR Details`, `GitHub: Get Workflow Runs and Logs`) and 8 governed write actions (`GitHub: Create or Update Issue`, `GitHub: Add Issue or PR Comment`, `GitHub: Commit Files and Create PR`, `GitHub: Commit Files to Branch`, `GitHub: Submit PR Review`, `GitHub: Merge Pull Request`, `GitHub: Trigger Workflow Dispatch`, `GitHub: Re-run Failed Workflow`).
+    - Seed the `GitHub Engineering & Repository Steward` skill (`MJ: AI Skills`) and grant read-only GitHub discovery actions to `Research Agent`, `ActionSmith`, and `SkillSmith`.
+  - **Agent Harness CLI & MCP GitHub Auth (`@memberjunction/ai-agent-harness`, `@memberjunction/ai-mcp-client`)**:
+    - Add `HarnessCredentialResolver` routing sandbox credential lookups through `CredentialEngine.Instance.getCredential()` (preserving audit logs, `LastUsedAt`, and expiry checks), extracting scalar tokens from encrypted JSON values, minting short-lived installation tokens for `GitHub App` credentials without exposing private keys in containers, mirroring `GH_TOKEN`/`GITHUB_TOKEN`, and enforcing per-user 3LO isolation (`GH_TOKEN_USER_3LO`) with `GIT_AUTHOR_*`/`GIT_COMMITTER_*` attribution.
+    - Update `MCPClientManager` to mint short-lived installation tokens when an MCP server connection uses a `GitHub App` credential.
+  - **AI Skill Semantic Discovery & Hybrid Prioritization (`@memberjunction/core-actions`, `@memberjunction/ai-agents`, `metadata/`)**:
+    - Add the `"AI Skills Search"` `MJ: Entity Documents` Nunjucks template for vector indexing `MJ: AI Skills`.
+    - Add `Find Candidate Skills`, `Find Best Skill`, and `Get Skill Details` actions for hybrid vector + lexical skill discovery and progressive-disclosure inspection.
+    - Add `maxSkillsInPrompt` and `maxSkillDecisionCandidates` to `LoopAgentPromptParams` and implement two-stage hybrid skill catalog narrowing (`RankSkillsByHybridRelevance` + `PreFilterSkillCandidatesForDecision` + `NarrowSkillsWithDecision`) combining query relevance (`0.55`), agent/global run-step usage frequency (`0.25`), and 7-day exponential recency decay (`0.20`), while pinning active/requested skills and surfacing discovery guidance in `BuildCatalogNarrowingNote`.
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

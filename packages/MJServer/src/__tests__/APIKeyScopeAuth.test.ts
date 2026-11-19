@@ -337,17 +337,33 @@ describe('CheckAPIKeyScopeAndLog', () => {
         expect(mockLogDenied).not.toHaveBeenCalled();
     });
 
-    it('SECURITY DIVERGENCE: unlike CheckAPIKeyScope, the logging variant does NOT enforce the application-active ceiling', async () => {
-        // CheckAPIKeyScope denies when app.IsActive is false; CheckAPIKeyScopeAndLog has
-        // no IsActive branch, so a request through a deactivated application still reaches
-        // the evaluator and can be ALLOWED. Deactivating an application therefore does not
-        // cut off callers routed through this function. Pinned so a fix flips this test.
+    it('enforces the application-active ceiling like CheckAPIKeyScope and logs the denial', async () => {
         appLookup = { Success: true, Results: [{ ID: APP_ID, Name: 'MJAPI', IsActive: false }] };
 
-        const result = await CheckAPIKeyScopeAndLog(KEY_ID, 'view:run', makeUser(), USAGE_DETAILS);
+        await expect(CheckAPIKeyScopeAndLog(KEY_ID, 'view:run', makeUser(), USAGE_DETAILS))
+            .rejects.toThrow('Application is not active: MJAPI');
 
-        expect(result.Allowed).toBe(true);
-        expect(mockEvaluateAccess).toHaveBeenCalledTimes(1);
+        expect(mockEvaluateAccess).not.toHaveBeenCalled();
+        expect(mockLogSuccess).not.toHaveBeenCalled();
+        expect(mockLogDenied).toHaveBeenCalledTimes(1);
+        const args = mockLogDenied.mock.calls[0];
+        expect(args[0]).toBe(KEY_ID);
+        expect(args[1]).toBe(APP_ID);
+        expect(args[5]).toBe(403);
+        expect(args[9]).toBe('Application is not active: MJAPI');
+    });
+
+    it('returns the inactive-application denial with its LogId when throwOnDenied is false', async () => {
+        appLookup = { Success: true, Results: [{ ID: APP_ID, Name: 'MJAPI', IsActive: false }] };
+
+        const result = await CheckAPIKeyScopeAndLog(KEY_ID, 'view:run', makeUser(), USAGE_DETAILS, { throwOnDenied: false });
+
+        expect(result).toEqual({
+            Allowed: false,
+            Checked: true,
+            Reason: 'Application is not active: MJAPI',
+            LogId: 'log-denied-1',
+        });
     });
 
     it('logs an allowed request via LogSuccess with default status 200 and returns the LogId', async () => {

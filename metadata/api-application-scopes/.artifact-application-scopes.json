@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=artifact:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "6285A702-E7FE-414A-A406-E64B8A37DF77"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.046Z",
+      "checksum": "088a61b3458717a8dcb8f06943ba2f06d3898fcd1c4a5818a7d7c0e89379e38c"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=artifact:edit",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "FECA0997-9563-41DA-BB9A-862C08E29724"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.069Z",
+      "checksum": "af874f29b0d6794e12750043ece261c64da9e54e537a49821b4640973c1ace25"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=artifact:comment",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "99DC1AD1-5A6F-483A-B078-4BCE6B0EF98E"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.092Z",
+      "checksum": "36f1fc565921af3e1db2239d1c87909760a6f3f98d1e2b92c90af356527d0beb"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=artifact:share",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "F9E20008-F17E-4F70-840E-2F9FE6C6D635"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:25.115Z",
+      "checksum": "f5200160d607db415a4473340c19292991dce8dd57f4f80913961159877c65af"
+    }
+  }
+]

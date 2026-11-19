@@ -8,6 +8,7 @@
  *   4. Pin every entity within those apps (UserApplicationEntity)
  *   5. Seed dynamic example data:
  *      - 5 members → "VIP Members" list
+ *      - 6 members (3 shared with VIP) → "Recent Sign-ups" list
  *      - 3 events → "Spring Events" list
  *      - 5 members + 3 events → favorites
  *
@@ -135,7 +136,47 @@ const { sql, connect } = require('./lib/db.cjs');
         `);
     console.log(`  Added ${vipResult.recordset[0].inserted} members to VIP list`);
 
-    // 5b. Add 3 Event records to the metadata-seeded "Spring Events" list.
+    // 5b. Fill the metadata-seeded "Recent Sign-ups" list so it overlaps "VIP Members":
+    // 3 of VIP's members plus 3 others. Reads VIP's rows, so the overlap holds whichever
+    // members 5a picked.
+    const signupsResult = await pool.request()
+        .input('userId', sql.UniqueIdentifier, userId)
+        .query(`
+            DECLARE @vipId UNIQUEIDENTIFIER = (
+                SELECT TOP 1 ID FROM __mj.List WHERE UserID = @userId AND Name = 'VIP Members'
+            );
+            DECLARE @listId UNIQUEIDENTIFIER = (
+                SELECT TOP 1 ID FROM __mj.List WHERE UserID = @userId AND Name = 'Recent Sign-ups'
+            );
+            IF @vipId IS NULL OR @listId IS NULL BEGIN SELECT 0 AS inserted; RETURN; END;
+
+            INSERT INTO __mj.ListDetail (ListID, RecordID, Sequence, Status)
+            SELECT @listId, src.RecordID, ROW_NUMBER() OVER (ORDER BY src.RecordID), 'Active'
+            FROM (
+                SELECT RecordID FROM (
+                    SELECT TOP 3 ld.RecordID FROM __mj.ListDetail ld
+                    WHERE ld.ListID = @vipId
+                    ORDER BY ld.Sequence, ld.RecordID
+                ) shared
+                UNION ALL
+                SELECT RecordID FROM (
+                    SELECT TOP 3 CAST(m.ID AS NVARCHAR(255)) AS RecordID FROM AssociationDemo.Member m
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM __mj.ListDetail v
+                        WHERE v.ListID = @vipId AND v.RecordID = CAST(m.ID AS NVARCHAR(255))
+                    )
+                    ORDER BY m.ID
+                ) extra
+            ) src
+            WHERE NOT EXISTS (
+                SELECT 1 FROM __mj.ListDetail ld
+                WHERE ld.ListID = @listId AND ld.RecordID = src.RecordID
+            );
+            SELECT @@ROWCOUNT AS inserted;
+        `);
+    console.log(`  Added ${signupsResult.recordset[0].inserted} members to Recent Sign-ups list`);
+
+    // 5c. Add 3 Event records to the metadata-seeded "Spring Events" list.
     const eventsResult = await pool.request()
         .input('userId', sql.UniqueIdentifier, userId)
         .query(`
@@ -155,7 +196,7 @@ const { sql, connect } = require('./lib/db.cjs');
         `);
     console.log(`  Added ${eventsResult.recordset[0].inserted} events to Spring Events list`);
 
-    // 5c. Mark some records as favorites so the star icon has a "filled" state.
+    // 5d. Mark some records as favorites so the star icon has a "filled" state.
     const favResult = await pool.request()
         .input('userId', sql.UniqueIdentifier, userId)
         .query(`

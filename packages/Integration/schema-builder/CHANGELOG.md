@@ -1,5 +1,115 @@
 # @memberjunction/integration-schema-builder
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- d4350c0: Integration engine fixes, with two migrations (minor).
+  - Connection Configuration `batchSize`, `maxBatchesPerMap` and `watermarkLookbackSeconds`. Reaching the page cap fails the run with `BATCH_CAP_REACHED`; any Critical error fails the run; stale CRUD procedures stop the object after one error (`SchemaNotGeneratedError.Reason = 'Stale'`); monotonic timestamp watermarks re-read a short overlap (300 s for external-data-source connectors).
+  - SoftDelete on an entity without tombstone columns is refused with `SOFT_DELETE_UNSUPPORTED` instead of counting a delete that never happened. Entity-map `sourceDeleteField` / `sourceDeleteValue` follow `DeleteBehavior` for sources that flag deletions. New `CompanyIntegrationRecordMap.Origin` (`Created` / `Adopted`); neither the orphan sweep nor a source delete flag under HardDelete hard-deletes an adopted row. A flagged row under HardDelete prunes its record map once deleted, and a matched row already gone counts as skipped, not errored.
+  - New index `IX_CompanyIntegrationRun_CompanyIntegrationID_StartedAt`; `vwCompanyIntegrations` finds the latest run with `OUTER APPLY`.
+  - Staging columns keep declared integer, decimal, float, boolean and date types for new columns; CodeGen re-selects a created row NULL-safely on nullable key columns.
+  - The Integration Connections Create Tables panel shows a listing failure with Retry.
+
+### Patch Changes
+
+- ed13b2e: A schema refresh now adds a key column that is missing from an existing integration table. When a connector upgrade adds a field to an object's key (for example `id` to `id + newsletter_id`), the column is added as nullable, because the rows already stored have no value for it. A sync cannot match those rows, so the refresh warns that the object's rows and record maps must be cleared and the object fully re-synced (6.2 and later do this automatically). Before, the refresh skipped the column with no warning but still wrote the new key to `additionalSchemaInfo`, so the key named a column that did not exist and the sync wrote the values to `__mj_integration_CustomOverflow`. A type change on an existing key column is still only a warning, and that check now compares only the SQL type, so a key column added as nullable is not reported as changed on every later refresh.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [2d938cf]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [c5a5197]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/integration-engine@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/schema-engine@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 5d88ccb: A `json` integration source column is created as `TEXT` on PostgreSQL instead of `JSONB` (it stays `NVARCHAR(MAX)` on SQL Server). MJ metadata reads the column as nvarchar, so CodeGen's CRUD functions take and write text, and PostgreSQL rejects text into a `JSONB` column.
+- 6c6f0dc: PostgreSQL string columns wider than `VARCHAR` allows are created as `TEXT`. The integration schema builder treats a declared length at or past nvarchar(max) (1073741823) as unbounded instead of padding it, and the PostgreSQL dialect renders any `VARCHAR` width over 10485760 as `TEXT`, as SQL Server falls back to `NVARCHAR(MAX)` above 4000. A netFORUM source that reports nvarchar(max) as 2147483646 previously produced `VARCHAR(2147483946)`, and the migration failed at its first statement.
+- 66fcfde: Preserve native SQL column types (`INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `DECIMAL(p,s)`, `FLOAT`, `BIT`/`BOOLEAN`, `DATE`, `DATETIMEOFFSET`/`TIMESTAMPTZ`, `TIME`, `UNIQUEIDENTIFIER`/`UUID`) and `Precision`/`Scale` across `IntegrationSchemaSync` and `TypeMapper` instead of falling back to `NVARCHAR`/`NVARCHAR(MAX)`, while warning and skipping cross-family `ALTER COLUMN` conversions (such as `NVARCHAR` to `INT` or `DECIMAL`) on existing columns in `SchemaEvolution.DiffSchema` to prevent conversion failures or precision loss on existing data. Add idempotent non-unique auto-indexing for Soft PKs (`IX_*_PK`), Soft FKs (`IX_*_FK_*`), and Organic Keys (`IX_*_OK_*`) across runtime `CREATE TABLE` and `SchemaEvolution` `ALTER TABLE` with SQL Server key-width capping (`<= 450` chars) and `sys.index_columns` key-tuple deduplication.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/schema-engine@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

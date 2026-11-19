@@ -72,6 +72,17 @@ on:
       # matches it, but that job only runs if the workflow starts at all — so without this entry
       # a script-only PR never reaches the filter and the gate cannot catch its own regressions.
       - 'scripts/codegen-idempotency-check.mjs'
+      # Scripts the deterministic lane runs (and the one that decides whether it runs). A PR that
+      # changes one must run the lane; the tier selection treats any path outside packages/ that
+      # matched this filter as "run".
+      - '.github/scripts/wait-for-mjapi.sh'
+      - '.github/scripts/check-fls-wire-bundles-ran.mjs'
+      - '.github/scripts/select-integration-tier.mjs'
+      # Root install inputs: the pnpm version pin (packageManager), the workspace globs and the
+      # registry settings decide what the lane installs and builds.
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
   # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
@@ -110,13 +121,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
+# The package graph the deterministic lane builds (and therefore all it can execute). One
+# definition, read by the build steps and by the `changes` job's tier selection — the selection
+# is only sound while it describes exactly what the lane builds.
+env:
+  INTEGRATION_BUILD_FILTERS: --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+
 jobs:
   changes:
     name: Detect PR changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # actions: read lets the tier selection verify a pass record against the recorded run.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       codegen: ${{ steps.filter.outputs.codegen }}
+      cachestack: ${{ steps.filter.outputs.cachestack }}
+      integration: ${{ steps.tier.outputs.integration }}
+      fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -129,7 +153,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
-            CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+            # --no-renames: a file moved out of a watched directory must list its old path too.
+            CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
             # scripts/codegen-idempotency-check.mjs IS the gate: a change to it must run the gate,
             # or the gate cannot catch its own regressions. #4386's probe-cleanup hole sat cosmetic
             # and then went fatal under 6805744ae4 without a single run of the gate on the change
@@ -139,9 +164,64 @@ jobs:
             else
               echo "codegen=false" >> "$GITHUB_OUTPUT"
             fi
+            # The shared-cache stack and the server bootstrap that loads metadata through it. A defect
+            # here can pass every single-process lane (none runs with Redis) and leave a server that
+            # boots with no metadata; the cross-server rig is the lane that runs MJAPI on Redis.
+            if echo "$CHANGED" | grep -qE '^(packages/RedisProvider/|packages/MJCore/src/generic/localCacheManager\.ts|packages/MJServer/src/(sharedCache|index|startupGate|startupState|metadataReadiness)\.ts|packages/ServerBootstrap/src/|\.github/scripts/wait-for-mjapi\.sh)'; then
+              echo "cachestack=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "cachestack=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "codegen=true" >> "$GITHUB_OUTPUT"
+            # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
+            echo "cachestack=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # The deterministic lane is skipped on a PR when either
+      #   - every watched change sits in packages the lane never builds (UI-only PRs, in
+      #     practice): no test can load them; or
+      #   - these exact PR changes already passed it (a catch-up merge of the base branch that
+      #     leaves the PR's files, migrations, metadata and test definitions alone — measured at
+      #     ~16% of this job's PR minutes): see "Record that these PR changes passed" at the end
+      #     of integration-sqlserver.
+      # The rules, and why every doubt resolves to "run", are in the script's header. Merges,
+      # the nightly and dispatches always run the lane, so a wrong skip is caught by the next
+      # merge's backstop.
+      - name: Fingerprint the PR changes
+        id: fingerprint
+        if: github.event_name == 'pull_request'
+        run: node .github/scripts/select-integration-tier.mjs fingerprint
+
+      # The cache is only an index from fingerprint to run URL. The selection step verifies the
+      # recorded run through the API before trusting it, since any workflow a PR runs can write
+      # a cache entry under this PR's scope.
+      - name: Look up an earlier passing run of these changes
+        if: steps.fingerprint.outputs.fingerprint != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: .integration-pass
+          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ steps.fingerprint.outputs.fingerprint }}
+
+      # No install here: turbo is fetched at the lockfile's exact version and reads the
+      # workspace graph from the lockfile and package.json files alone.
+      - name: Select integration tier
+        id: tier
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "integration=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TURBO_VERSION="$(sed -n 's/^  turbo@\([0-9][0-9.]*\):$/\1/p' pnpm-lock.yaml | head -n 1)"
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          # A failed dry run leaves the graph file empty; the script then fails open and runs the tier.
+          npx --yes "turbo@${TURBO_VERSION:-2}" run build --dry=json "${FILTERS[@]}" > "$RUNNER_TEMP/build-graph.json" || true
+          node .github/scripts/select-integration-tier.mjs --build-graph="$RUNNER_TEMP/build-graph.json" \
+            --passed-marker=.integration-pass/run.txt --fingerprint="$FINGERPRINT" --pr="$PR_NUMBER"
 
   # Lockfile preflight (MJ#4650). Every heavy job below installs for itself, so a lockfile that
   # does not resolve used to fail ALL of them — each after minutes, each under a name implying the
@@ -182,11 +262,17 @@ jobs:
 
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
-    needs: [preflight]
+    needs: [changes, preflight]
     # Runs on PRs, merges, dispatch, and the NIGHTLY cron (with the mutation tier armed).
     # The weekly Sunday cron is the live-model lane's trigger — the deterministic suite
     # already ran that morning's nightly, so skip it there.
-    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    # On a PR, `changes` may select it out (see "Select integration tier"). Only an explicit
+    # 'false' skips: if `changes` itself failed, its output is empty and the lane still runs —
+    # hence `!cancelled()` plus the explicit preflight check instead of the implicit success().
+    if: |
+      !cancelled() && needs.preflight.result == 'success' &&
+      (github.event_name != 'schedule' || github.event.schedule == '0 6 * * *') &&
+      needs.changes.outputs.integration != 'false'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # Both the committed mj.config.cjs and the aggregator's own config layer read DB creds
@@ -294,7 +380,9 @@ jobs:
       # of the monorepo this lane never touches. Built once; every step below reuses it.
       - name: Build integration graph + CLI + MJAPI
         # mj_api added so the lane can BOOT MJAPI for the client-transport members.
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
       # ── Provisioned-DB snapshot cache ──────────────────────────────────────────────────
       # Migrate + the two sync pushes rebuild a byte-identical database on every run: ~6.1 of
@@ -303,15 +391,23 @@ jobs:
       # so most runs can restore that database instead of rebuilding it.
       #
       # SCOPING — why the save is backstop-only. An Actions cache is readable from the run's own
-      # branch and from the default branch; one PR cannot read another's. PRs are therefore
-      # restore-only and the save runs on push/schedule, which is the same split test.yml uses
-      # for the turbo cache and for the same reason.
+      # branch, its PR's base branch and the default branch; one PR cannot read another's. PRs
+      # are therefore restore-only and the save runs on push/schedule, which is the same split
+      # test.yml uses for the turbo cache and for the same reason.
+      #
+      # SCOPED BY RELEASE LINE. Keys and the prefix fallback carry the line: the PR's base branch,
+      # or the branch itself on push/schedule/dispatch (`next`, `lts-6.2`, ...). Unscoped, a PR into
+      # `lts/6.2` fell back to `next`'s newest snapshot, which holds migrations `lts/6.2` never
+      # has; `mj migrate` only applies what is missing, so the tier ran `next`'s schema under the
+      # line's generated code and failed on CodeGen drift (IT50, IT141, IT144) that the PR did not
+      # cause. Each line now seeds only from its own push runs.
       #
       # THE SNAPSHOT IS A SEED, NEVER A SOURCE OF TRUTH. `mj migrate` runs on every path, warm
       # or cold. Flyway reads __mj.flyway_schema_history out of the restored database, so an
-      # exact-key restore is a no-op and a prefix-key restore (an older `next` snapshot) applies
-      # only the delta — including a migration this PR adds. Every failure path below falls back
-      # to cold provisioning rather than failing the job, so the worst case is today's runtime.
+      # exact-key restore is a no-op and a prefix-key restore (an older snapshot of the same line)
+      # applies only the delta — including a migration this PR adds. Every failure path below
+      # falls back to cold provisioning rather than failing the job, so the worst case is
+      # today's runtime.
       #
       # The nightly cron deliberately skips the restore (see its `if:`) so that one run a day
       # provisions from scratch and re-seeds the lineage, bounding how far a chain of
@@ -330,9 +426,18 @@ jobs:
           done
           # v2: every v1 entry saved after a restore holds the OLDER snapshot it restored (see
           # "Save the snapshot" below), so none of them may be read again.
-          KEY="mj-ci-db-v2-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          # v3: keys carry the release line (see SCOPING above). No v2 entry may be read again:
+          # they are unscoped, and every one of them is a `next` database.
+          LINE=$(printf '%s' "${BASE_REF:-$REF_NAME}" | tr -c 'A-Za-z0-9._-' '-')
+          PREFIX="mj-ci-db-v3-${LINE}-"
+          KEY="${PREFIX}$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
           echo "Snapshot key: ${KEY}"
+        env:
+          # Set only on pull_request events; push, schedule and dispatch use the branch itself.
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
 
       - name: Restore the provisioned-DB snapshot
         id: dbcache
@@ -342,10 +447,10 @@ jobs:
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
-          # Prefix fallback to the newest `next` snapshot. `cache-hit` is 'true' ONLY on an
-          # exact key match, which is what gates the sync-push skip below; a prefix match
-          # leaves it 'false', so the full metadata reconcile still runs.
-          restore-keys: mj-ci-db-v2-
+          # Prefix fallback to the newest snapshot of the same release line. `cache-hit` is 'true'
+          # ONLY on an exact key match, which is what gates the sync-push skip below; a prefix
+          # match leaves it 'false', so the full metadata reconcile still runs.
+          restore-keys: ${{ steps.dbkey.outputs.prefix }}
 
       - name: Load the snapshot into SQL Server
         id: dbload
@@ -528,8 +633,12 @@ jobs:
       # in-process). Without one the save is refused and those bundles can only skip. A per-run
       # throwaway is enough — the database was provisioned for this run, so there is no earlier
       # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
-      - name: Generate a throwaway encryption key for this run
-        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
 
       # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
       # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
@@ -565,19 +674,12 @@ jobs:
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
           # REST is off by default; the REST members (IT134 CW7/CW8) skip without it.
           MJ_REST_API_ENABLED: 'true'
+          # Opt this integration MJAPI into Frozen artifact guest sharing so IT171 DSLC5/DSLC6 exercise it (while DSLC13 asserts default-off refusal).
+          MJ_ARTIFACT_GUEST_SHARING_ENABLED: 'true'
+        # Without a ready MJAPI the 19 client-transport members would skip, so a failed boot fails here.
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          echo "Waiting for MJAPI /healthcheck..."
-          for i in $(seq 1 36); do
-            if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
-              echo "MJAPI is up (attempt $i)."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot within 3 minutes — the 19 client-transport members would skip. Log tail:"
-          tail -200 /tmp/mjapi.log
-          exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       # The deterministic tier via the single entry path: `mj test suite` loads the private
       # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
@@ -794,8 +896,23 @@ jobs:
               );
             }
             lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            const benchMdPath = "packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md";
+            if (fs.existsSync(benchMdPath)) {
+              lines.push("", "---", "", fs.readFileSync(benchMdPath, "utf8"));
+            }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           '
+
+      - name: Upload IT128 performance benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: it128-performance-benchmark-${{ github.run_attempt }}
+          path: |
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.json
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Dump MJAPI log on failure
         if: failure()
@@ -813,6 +930,22 @@ jobs:
           path: /tmp/mjapi.log
           if-no-files-found: ignore
           retention-days: 14
+
+      # Last, so only a fully green job records a pass. A later run of this PR with the same
+      # change fingerprint (see the `changes` job) skips the lane. A failure to save only costs
+      # that later skip, so it must not fail the job.
+      - name: Record that these PR changes passed
+        if: success() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != ''
+        run: |
+          mkdir -p .integration-pass
+          echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > .integration-pass/run.txt
+      - name: Save the pass record
+        if: success() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != ''
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .integration-pass
+          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ needs.changes.outputs.fingerprint }}
 
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
@@ -936,7 +1069,9 @@ jobs:
 
       - name: Build integration graph + CLI + MJAPI
         if: steps.prereq.outputs.READY == 'true'
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
       - name: Migrate + sync push (main and integration metadata)
         if: steps.prereq.outputs.READY == 'true'
@@ -956,6 +1091,11 @@ jobs:
           # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
           # land there or the server process never sees them (IT63's agent runs server-side).
           printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
+          COLLAB_SECRET="$(openssl rand -hex 32)"
+          FROZEN_SECRET="$(openssl rand -hex 32)"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$COLLAB_SECRET" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$FROZEN_SECRET" >> "$GITHUB_ENV"
+          printf 'MJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\nMJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$COLLAB_SECRET" "$FROZEN_SECRET" >> packages/MJAPI/.env
 
       - name: Boot MJAPI (wire-callback members)
         if: steps.prereq.outputs.READY == 'true'
@@ -963,12 +1103,8 @@ jobs:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          for i in $(seq 1 36); do
-            curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1 && { echo "MJAPI is up."; exit 0; }
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot"; tail -200 /tmp/mjapi.log; exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       - name: Run Live Model suite
         if: steps.prereq.outputs.READY == 'true'
@@ -1000,11 +1136,15 @@ jobs:
   # remote-invalidate). The July-2026 fingerprint bugs (31f38be52, d4947ed73) showed this
   # can be 100% broken while every unit test and the whole single-process integration tier
   # stay green — the failure only manifests when a second server's lookup misses.
+  #
+  # It is also the only lane that boots MJAPI with REDIS_URL set, so it runs on pull requests that
+  # change the shared-cache stack or the server bootstrap (`changes.outputs.cachestack`), not only
+  # nightly: a server that loads no metadata through the Redis-backed cache passes every other lane.
   cross-server-invalidation:
-    name: Cross-server invalidation rig (nightly)
-    needs: [preflight]
+    name: Cross-server invalidation rig (nightly + cache-stack PRs)
+    needs: [preflight, changes]
     # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.cachestack == 'true')
     timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
@@ -1099,7 +1239,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build integration graph + CLI + MJAPI
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
       - name: Migrate + sync push
         env:
@@ -1112,22 +1254,15 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+        # Ready means the server loaded entity metadata: a start that loaded none fails, and
+        # /healthcheck then answers 503 with the failed phase, which the wait script stops on.
         run: |
-          (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
-          (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)
-          for PORT in 4000 4001; do
-            UP=0
-            for i in $(seq 1 36); do
-              curl -fsS "http://localhost:${PORT}/healthcheck" >/dev/null 2>&1 && { UP=1; break; }
-              sleep 5
-            done
-            if [ "$UP" != "1" ]; then
-              echo "::error::MJAPI on port ${PORT} failed to boot"
-              tail -200 "/tmp/mjapi-$([ "$PORT" = "4000" ] && echo a || echo b).log"
-              exit 1
-            fi
-            echo "MJAPI on ${PORT} is up."
-          done
+          (cd packages/MJAPI && GRAPHQL_PORT=4000 exec node dist/index.js > /tmp/mjapi-a.log 2>&1) &
+          PID_A=$!
+          (cd packages/MJAPI && GRAPHQL_PORT=4001 exec node dist/index.js > /tmp/mjapi-b.log 2>&1) &
+          PID_B=$!
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-a.log 36 5 "$PID_A"
+          .github/scripts/wait-for-mjapi.sh http://localhost:4001 /tmp/mjapi-b.log 36 5 "$PID_B"
 
       # ANTI-VACUITY. Every assertion in the rig presupposes that both processes actually
       # swapped LocalCacheManager to RedisLocalStorageProvider — that is the only thing that
@@ -1135,6 +1270,10 @@ jobs:
       # both would silently fall back to the in-memory cache, no cross-server event would be
       # emitted, and XS1–XS7 would all PASS while testing nothing. A green lane asserting
       # nothing is worse than a red one.
+      #
+      # Both servers reaching ready (previous step) already proves each loaded entity metadata:
+      # MJServer fails a start that loaded none. What it does not prove is that they loaded it
+      # through Redis.
       #
       # MJServer logs the swap only at `verbose` (index.ts: startupLog.LogIf('verbose', …)),
       # so the log is not a dependable signal. Assert against Redis itself: two servers that
@@ -1158,7 +1297,7 @@ jobs:
                 process.exit(0);
               })
               .catch(e => { console.log('::error::Could not reach Redis: ' + e.message); process.exit(1); });
-          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; exit 1; }
+          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; echo '--- mjapi-b ---'; tail -100 /tmp/mjapi-b.log || true; exit 1; }
 
       - name: Run cross-server invalidation rig
         env:
@@ -1617,21 +1756,26 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
-  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
-  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
-  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
-  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
-  # by concurrency, so a cancel means a timeout or a manual stop.
+  # Backstop alarm: neither `push` runs on `next` nor the `schedule` runs (`0 6 * * *` nightly,
+  # `30 6 * * 0` weekly) gate PR merges, so a red run used to be visible only to whoever opened the
+  # Actions tab. Each lane uses its own `--workflow` name (and therefore its own rolling issue label):
+  #   * push to `next`        -> "Integration Tier"
+  #   * nightly (`0 6 * * *`) -> "Integration Tier (Nightly)"
+  #   * weekly (`30 6 * * 0`) -> "Integration Tier (Weekly)"
+  # Isolating the three labels ensures a green daytime push (where mutation/cross-server/schema-rig
+  # lanes skip) can never auto-close an open nightly or weekly alarm. Logic and tests:
+  # .github/scripts/backstop-alarm.mjs.
   backstop-alarm:
     name: Backstop alarm
-    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, codegen-drift-ai]
-    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       issues: write
+    env:
+      ALARM_WORKFLOW: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 6 * * *' && 'Integration Tier (Nightly)' || 'Integration Tier (Weekly)') || 'Integration Tier' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1644,7 +1788,7 @@ jobs:
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/scripts/backstop-alarm.mjs red --workflow "Integration Tier"
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "$ALARM_WORKFLOW"
 
       # A cleanup failure must never turn a green run red (that would file an alarm about the
       # alarm), so this step alone is continue-on-error; the script still logs ::error::.
@@ -1653,4 +1797,4 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/scripts/backstop-alarm.mjs green --workflow "Integration Tier"
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "$ALARM_WORKFLOW"

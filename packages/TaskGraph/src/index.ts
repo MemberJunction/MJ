@@ -14,6 +14,8 @@ export * from './TaskClaimStore';
 export * from './settlement-rescue';
 export * from './condition-gate';
 export * from './decision-node';
+export * from './saga-compensation';
+export * from './task-security';
 export * from './AIDecisionTaskRunner';
 export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';

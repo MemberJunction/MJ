@@ -47,7 +47,11 @@ export {
     type StartRealtimeClientSessionResult,
     type RealtimeSessionRunOptions,
     type RecordingTerminalOptions,
+    type PageHideSignalOptions,
 } from './session/RealtimeSessionRuntime';
+
+// The keepalive CloseAgentSession a terminal `pagehide` sends (`RealtimeSessionRuntime.SendPageHideSignals`).
+export { type ISessionCloseBeacon } from './session/SessionCloseBeacon';
 
 // Why a connected call shows no avatar its agent asked for (`RealtimeSessionRuntime.AvatarNotice$`).
 export { ResolveAvatarNotice, type RealtimeAvatarNotice } from './session/avatar-notice';

@@ -1,5 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
-import type { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
+import type { AIAPIKey, AIAPIKeyResolver, AICredentialScope } from '@memberjunction/ai';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import type { ExecutionStatus, CancellationReason, ModelInfo, AIModelSelectionInfo } from './prompt.types';
 
@@ -117,8 +117,10 @@ export class AIModelRunParams {
    * rejects with a typed `AIPromptTimeoutError` (classified as a retriable NetworkError), so it
    * flows into the normal failover/retry machinery instead of hanging forever.
    *
-   * When omitted (and the runner declares no `DefaultPromptTimeoutMS`), the model call is bounded
-   * ONLY by `cancellationToken` — i.e. unbounded if no token is supplied.
+   * Precedence: this value, then the prompt's own `AIPrompt.TimeoutMS`, then the runner's
+   * `DefaultPromptTimeoutMS`. The first one set wins; passing `0` opts this call out of any bound.
+   * When none is set, the model call is bounded ONLY by `cancellationToken` — i.e. unbounded if no
+   * token is supplied.
    */
   timeoutMS?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
@@ -139,6 +141,20 @@ export class AIModelRunParams {
    * ```
    */
   apiKeys?: AIAPIKey[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Resolves the key for ONE driver class when {@link apiKeys} has none for it — the seam for a
+   * caller that was handed a run's key-resolution capability rather than the run's key list (an
+   * action inside an agent run gets `RunActionParams.RuntimeAPIKeyResolver`, never the keys).
+   *
+   * Consulted in the legacy tier only, after {@link apiKeys} and before the environment keys:
+   * MJ Credentials (a per-request `credentialId`, then bindings and the vendor default, as the
+   * {@link CredentialScope} allows) still come first, and an explicit `apiKeys` entry for the driver
+   * class wins over the resolver. Its answer counts as a runtime credential, so it applies under a
+   * `'RuntimeOnly'` scope; `undefined` falls through to the environment key when the scope allows it.
+   * Internal prompts started on a run's behalf inherit it with the rest of the execution scope.
+   */
+  APIKeyResolver?: AIAPIKeyResolver;
 
   /**
    * Which credentials this execution may spend. Omitted means `'Any'`: the run's own credentials,

@@ -24,6 +24,8 @@ This directory contains Docker configurations for MemberJunction. When working w
 - The `test-metadata/` subdirectory holds Docker-only metadata (e.g., the `computeruse@bluecypress.io` test user with UI + Integration roles) — kept separate from repo-level `metadata/` so it's never pushed to a developer's local DB
 - **All non-trivial JavaScript lives in [`docker/regression/scripts/`](regression/scripts/)** — DB ops, metadata patches, screenshot extraction, report generators. Entrypoint scripts (`db-setup-entrypoint.sh`, `test-runner-entrypoint.sh`, `form-gen-entrypoint.sh`) are thin bash orchestrators that invoke `node scripts/<name>.cjs`. The shared mssql config lives in [`scripts/lib/db.cjs`](regression/scripts/lib/db.cjs).
 
+**Do not run the suite for a PR.** A run starts only when a developer invokes `/author-regression-test` or `/regression-replay-pr`.
+
 **Common commands** (run from repo root):
 ```bash
 mj test regression build                              # Build all images

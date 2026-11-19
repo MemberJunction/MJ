@@ -15,7 +15,6 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 // MJ
 import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -29,10 +28,8 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
-import { CoreDashboardsModule } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import { DashboardEditorModule } from '@memberjunction/ng-dashboards/dashboard-editor.module';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
-import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -60,32 +57,25 @@ import {SingleListDetailComponent} from './lib/single-list-detail/single-list-de
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
 import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
+import { LibraryResource, LibraryDriveResource } from './lib/resource-wrappers/library-resource.component';
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { PublicArtifactGuestComponent } from './lib/public-guest/public-artifact-guest.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
-import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
-import { HumanHandoffConsoleResource } from './lib/resource-wrappers/human-handoff-console-resource.component';
-import { MeetingsResource } from './lib/resource-wrappers/meetings-resource.component';
-import { MJConversationOffersComponent } from '@memberjunction/ng-conversation-offers';
-import {
-  MJLiveKitRoomComponent,
-  MJMeetingListComponent,
-  MJMeetingScheduleFormComponent,
-  MJMeetingLobbyComponent,
-} from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
     OAuthCallbackComponent,
     ClaimRedeemComponent,
     OfficeConnectComponent,
+    PublicArtifactGuestComponent,
     ResourceContainerComponent,
     DashboardResource,
     DashboardAddToMenuComponent,
@@ -106,14 +96,13 @@ import {
     ListDetailResource,
     ChatConversationsResource,
     ChatCollectionsResource,
+    LibraryResource,
+    LibraryDriveResource,
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    LiveKitRoomResource,
-    HumanHandoffConsoleResource,
-    MeetingsResource,
   ],
   imports: [
     MarkdownModule,
@@ -129,18 +118,15 @@ import {
     QueryViewerModule,
     MemberJunctionSharedModule,
     ConversationsModule,
-    CoreDashboardsModule,
+    DashboardEditorModule,
     DashboardViewerModule,
     AngularSplitModule,
-    ExplorerSettingsModule,
-    FileStorageModule,
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
     MJProgressBarComponent,
     DragDropModule,
-    AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule,
@@ -156,11 +142,6 @@ import {
     MJWindowComponent,
     MJWindowTitlebarComponent,
     PaginationComponent,
-    MJLiveKitRoomComponent,
-    MJMeetingListComponent,
-    MJMeetingScheduleFormComponent,
-    MJMeetingLobbyComponent,
-    MJConversationOffersComponent,
     MJEmptyStateComponent,
     MJAlertComponent
   ],
@@ -181,7 +162,10 @@ import {
     ListDetailResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    MeetingsResource
+    LibraryResource,
+    LibraryDriveResource,
+    ChatCollectionsResource,
+    PublicArtifactGuestComponent
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

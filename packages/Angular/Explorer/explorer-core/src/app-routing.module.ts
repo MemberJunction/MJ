@@ -8,10 +8,11 @@ import {
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { PublicArtifactGuestComponent } from './lib/public-guest/public-artifact-guest.component';
 import { OFFICE_CONNECT_ROUTE_PATH } from '@memberjunction/excel-addin';
-import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
+import { CHAT_COLLECTIONS_ROUTE, CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams, FindMovedNavItem } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -510,10 +511,40 @@ export class ResourceResolver implements Resolve<void> {
         }
       }
 
-      // Find the nav item by label (case-insensitive)
-      const navItem = navItems.find(item =>
+      // Find the nav item by label (case-insensitive), consulting MOVED_NAV_ITEMS if renamed/moved
+      let targetApp = app;
+      let targetAppName = appName;
+      let navItem = navItems.find(item =>
         item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
       );
+
+      if (!navItem) {
+        const moved = FindMovedNavItem(app.Name, navItemName);
+        if (moved) {
+          const movedApp = applications.find(a =>
+            a.Name.trim().toLowerCase() === moved.ToApplication.trim().toLowerCase() ||
+            a.Path.trim().toLowerCase() === moved.ToApplication.trim().toLowerCase()
+          );
+          if (movedApp && this.appManager.CheckAppAccess(movedApp.Name).status === 'accessible') {
+            let movedNavItems: typeof navItems = [];
+            if (movedApp.DefaultNavItems) {
+              try {
+                movedNavItems = JSON.parse(movedApp.DefaultNavItems);
+              } catch {
+                movedNavItems = [];
+              }
+            }
+            const movedCandidate = movedNavItems.find(item =>
+              item.Label?.trim().toLowerCase() === moved.ToNavItem.trim().toLowerCase()
+            );
+            if (movedCandidate) {
+              targetApp = movedApp;
+              targetAppName = movedApp.Name;
+              navItem = movedCandidate;
+            }
+          }
+        }
+      }
 
       if (!navItem) {
         LogError(`Nav item ${navItemName} not found in app ${appName}`);
@@ -535,8 +566,8 @@ export class ResourceResolver implements Resolve<void> {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
         recordId: navItem.RecordID,
-        appName: appName,
-        appId: app.ID,
+        appName: targetAppName,
+        appId: targetApp.ID,
         navItemName: navItem.Label,
         ...(navItem.Configuration || {}),
         queryParams: route.queryParams
@@ -548,7 +579,7 @@ export class ResourceResolver implements Resolve<void> {
       }
 
       this.tabService.OpenTab({
-        ApplicationId: app.ID,
+        ApplicationId: targetApp.ID,
         Title: navItem.Label,
         Configuration: config,
         IsPinned: false
@@ -763,6 +794,13 @@ const routes: Routes = [
     component: OfficeConnectComponent
   },
 
+  // External guest artifact share route (NW-1) — standalone route activated via Magic Link
+  // `#token=<jwt>` redemption redirect; resolves the Frozen snapshot via ResolveGuestArtifactSnapshot.
+  {
+    path: 'guest/artifact',
+    component: PublicArtifactGuestComponent
+  },
+
   // App-scoped resource routes (new pattern)
   // These must come BEFORE app/:appName/:navItemName to be matched first
   {
@@ -789,6 +827,8 @@ const routes: Routes = [
   // when Data Explorer no longer has that nav item and the user has the Dashboards app (NavigationService applies
   // the same rule to pins and saved tabs)
   DATA_EXPLORER_DASHBOARDS_ROUTE,
+  CHAT_TASKS_ROUTE,
+  CHAT_COLLECTIONS_ROUTE,
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',

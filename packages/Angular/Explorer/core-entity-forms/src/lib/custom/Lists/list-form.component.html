@@ -87,6 +87,32 @@
     <!-- Overview Section -->
     @if (activeSection === 'overview') {
       <section class="section overview-section">
+        @if (ShowSourceReview) {
+          <mj-list-source-review
+            class="overview-source-review"
+            [Provider]="ProviderToUse"
+            [ListID]="record.ID"
+            [IsOwner]="isCurrentUserOwner()"
+            (Approved)="OnSourceApproved()"
+            (KeepPaused)="CloseSourceReview()"
+            (Unlinked)="OnSourceUnlinked()"
+            (OpenSource)="OnOpenListSource($event)">
+          </mj-list-source-review>
+        } @else {
+          <mj-list-source-refresh-panel
+            class="overview-source-refresh"
+            [Provider]="ProviderToUse"
+            [ListID]="record.ID"
+            [IsOwner]="isCurrentUserOwner()"
+            [CanEdit]="UserCanEdit"
+            [ReloadToken]="RefreshReloadToken"
+            (ChangeSource)="ShowLinkSourceDialog = true"
+            (ReviewSourceChange)="OpenSourceReview()"
+            (OpenRoutine)="OnOpenRefreshRoutine($event)"
+            (OpenSource)="OnOpenListSource($event)"
+            (Changed)="OnRefreshStateChanged()">
+          </mj-list-source-refresh-panel>
+        }
         <div class="overview-grid">
           <!-- Description Card -->
           <div class="overview-card description-card">
@@ -339,6 +365,20 @@
       </section>
     }
 
+    <!-- Refresh History Section -->
+    @if (activeSection === 'refresh') {
+      <section class="section refresh-section">
+        <div class="section-header">
+          <h2>Refresh history</h2>
+        </div>
+        <mj-list-refresh-history
+          [Provider]="ProviderToUse"
+          [ListID]="record.ID"
+          [ReloadToken]="RefreshReloadToken">
+        </mj-list-refresh-history>
+      </section>
+    }
+
     <!-- Sharing Section -->
     @if (activeSection === 'sharing') {
       <section class="section sharing-section">
@@ -517,6 +557,15 @@
     }
   </main>
 </div>
+
+<!-- Link Source Dialog -->
+<mj-list-link-source-dialog
+  [Provider]="ProviderToUse"
+  [Visible]="ShowLinkSourceDialog"
+  [ListID]="record?.ID ?? null"
+  (Linked)="OnSourceLinked()"
+  (Cancel)="ShowLinkSourceDialog = false">
+</mj-list-link-source-dialog>
 
 <!-- Add Records Dialog -->
 @if (showAddRecordsDialog) {

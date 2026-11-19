@@ -9,7 +9,7 @@
  *
  * @module @memberjunction/server
  */
-import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer, LoadMediaChannelServer, LoadClientContextChannelServer, LoadClientOnlyChannelServer, LoadIdentityVerificationChannelServer, LoadInteractiveComponentChannelServer } from '@memberjunction/ai-agents';
+import { LoadArtifactWorkspaceChannelServer, LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer, LoadMediaChannelServer, LoadClientContextChannelServer, LoadClientOnlyChannelServer, LoadIdentityVerificationChannelServer, LoadInteractiveComponentChannelServer } from '@memberjunction/ai-agents';
 import { LoadRemoteBrowserChannel } from '@memberjunction/remote-browser-server';
 import { LoadSelfHostRemoteBrowser } from '@memberjunction/remote-browser-selfhost';
 import { BindRemoteBrowserGoalEngine } from './remoteBrowserGoalEngine.js';
@@ -17,6 +17,7 @@ import { BindRemoteBrowserGoalEngine } from './remoteBrowserGoalEngine.js';
 // Tree-shaking prevention: force the server-side channel plugin registrations
 // (`@RegisterClass(BaseRealtimeChannelServer, ...)`) to execute on any static path that touches
 // the session lifecycle — `SessionManager.CreateSession` resolves them via the ClassFactory.
+LoadArtifactWorkspaceChannelServer();
 LoadWhiteboardChannelServer();
 LoadMeetingControlsChannelServer();
 LoadMediaChannelServer();

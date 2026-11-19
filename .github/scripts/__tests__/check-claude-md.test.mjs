@@ -377,4 +377,118 @@ describe('check-claude-md', () => {
             expect(err).toMatch(/not indexed/i);
         });
     });
+
+    describe('multi-agent parity — AGENTS.md, GEMINI.md, and .agents/skills.json', () => {
+        function enableMultiAgentFixture() {
+            put('CLAUDE.md', [
+                '# Guide',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- .claude/rules/scoped.md',
+                '- [a guide](guides/README.md)',
+                '',
+            ].join('\n'));
+            put('AGENTS.md', [
+                '# Guide',
+                '',
+                '## Routing',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- .claude/rules/scoped.md',
+                '- [a guide](guides/README.md)',
+                '',
+            ].join('\n'));
+            put('GEMINI.md', '# Gemini\n\nSee [AGENTS.md](AGENTS.md).\n\n@./AGENTS.md\n');
+            put('.claude/skills/sample/SKILL.md', '---\nname: sample\ndescription: sample\n---\n# Sample\n');
+            put('.agents/skills.json', JSON.stringify({ entries: [{ path: '.claude/skills' }] }, null, 2));
+            put('.claude/claude-md-manifest.json', JSON.stringify({
+                baseline: { file: 'CLAUDE.md', lines: 2000, bytes: 100000 },
+                budget: { maxLines: 100, maxBytes: 10000 },
+                agentsMd: { maxLines: 100, maxBytes: 10000, maxGeminiMdBytes: 500, requireRuleRouting: true },
+                sections: [
+                    { title: 'Kept', destinations: ['root'] },
+                    { title: 'Moved', destinations: ['nested:packages/Thing/CLAUDE.md'] },
+                    { title: 'Scoped', destinations: ['rule:.claude/rules/scoped.md'] },
+                ],
+            }, null, 2));
+        }
+
+        it('passes when AGENTS.md, GEMINI.md, and .agents/skills.json are aligned', () => {
+            enableMultiAgentFixture();
+            const { code, out } = run();
+            expect(code).toBe(0);
+            expect(out).toContain('agents-md:');
+        });
+
+        it('fails when AGENTS.md exceeds its byte ceiling (protecting Antigravity 24 KB cap)', () => {
+            enableMultiAgentFixture();
+            put('AGENTS.md', '# Guide\n' + 'x'.repeat(11000));
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('agents-md');
+            expect(err).toMatch(/byte ceiling/i);
+        });
+
+        it('fails when a nested CLAUDE.md or .claude/rules/*.md is missing from AGENTS.md', () => {
+            enableMultiAgentFixture();
+            put('AGENTS.md', '# Guide\n\n- packages/Thing/CLAUDE.md\n');
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('routing');
+            expect(err).toContain('.claude/rules/scoped.md');
+        });
+
+        it('fails when GEMINI.md is missing, omits @./AGENTS.md, or exceeds its byte cap', () => {
+            enableMultiAgentFixture();
+            rmSync(join(root, 'GEMINI.md'));
+            let res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('GEMINI.md is missing');
+
+            put('GEMINI.md', '# Gemini without import directive\n');
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('@./AGENTS.md');
+
+            put('GEMINI.md', '# Gemini\n@./AGENTS.md\n' + 'x'.repeat(600));
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toMatch(/GEMINI\.md.*byte ceiling/i);
+        });
+
+        it('fails when .agents/skills.json is missing, invalid JSON, or omits .claude/skills', () => {
+            enableMultiAgentFixture();
+            rmSync(join(root, '.agents/skills.json'));
+            let res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('.agents/skills.json is missing');
+
+            put('.agents/skills.json', '{ not json');
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('not valid JSON');
+
+            put('.agents/skills.json', JSON.stringify({ entries: [] }));
+            res = run();
+            expect(res.code).toBe(1);
+            expect(res.err).toContain('must include { "path": ".claude/skills" }');
+        });
+
+        it('fails when .agents/skills/<name> shadows .claude/skills/<name>', () => {
+            enableMultiAgentFixture();
+            put('.agents/skills/sample/SKILL.md', '---\nname: sample\ndescription: stale copy\n---\n# Stale\n');
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('shadows .claude/skills/sample');
+        });
+
+        it('fails on dead inbound anchors targeting AGENTS.md', () => {
+            enableMultiAgentFixture();
+            put('plans/some-plan.md', '# Plan\n\nSee [agents](../AGENTS.md#missing-section).\n');
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('inbound-refs');
+            expect(err).toContain('missing-section');
+        });
+    });
 });

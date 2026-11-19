@@ -194,6 +194,27 @@ When configured, the server acts as both an OAuth resource server and an OAuth p
 
 The OAuth proxy handles the authorization flow for MCP clients that don't natively support OAuth, proxying between the client and your identity provider.
 
+#### Rate limit and reverse proxies
+
+The OAuth proxy router limits requests per client IP: 60 per minute by default. It is mounted at the app root, so `/mcp` traffic counts against the limit too, not only the `/oauth/*` routes. Size the limit with `auth.proxy.rateLimit`.
+
+Behind CloudFront, a load balancer or another reverse proxy, also set `trustProxy`. It is passed to Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Without it, Express sees the proxy as every request's client, so all users share one limit.
+
+```javascript
+mcpServerSettings: {
+  trustProxy: 1,                // proxy hops to trust; or true, or 'loopback, 10.0.0.0/8'
+  auth: {
+    mode: 'oauth',
+    proxy: {
+      enabled: true,
+      rateLimit: { windowMs: 60_000, limit: 300 },   // per client IP; omitted fields keep the defaults
+    },
+  },
+},
+```
+
+Only set `trustProxy: true` when nothing can reach the server except through the proxy, because a client could otherwise choose its own `X-Forwarded-For`.
+
 ## Tool Filtering
 
 Filter which tools are exposed using glob-style patterns:
