@@ -84,6 +84,18 @@ describe('compareWithKnownFailures', () => {
         expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.A1']);
     });
 
+    it('never gates on a flaky check, whether it fails or passes', () => {
+        const result = compareWithKnownFailures(
+            [{ Key: 'a.F1', Outcome: 'failed', Message: 'slow' }, { Key: 'a.F2', Outcome: 'passed', Message: '' }],
+            {},
+            { 'a.F1': 'timing', 'a.F2': 'timing' },
+        );
+        expect(result.NewFailures).toEqual([]);
+        expect(result.Fixed).toEqual([]);
+        expect(result.FlakyFailed).toEqual(['a.F1']);
+        expect(report(result, () => {})).toBe(0);
+    });
+
     it('lets a pass in one shard outrank a skip in another', () => {
         const result = compareWithKnownFailures(
             [{ Key: 'a.A1', Outcome: 'skipped', Message: '' }, { Key: 'a.A1', Outcome: 'passed', Message: '' }],
@@ -122,6 +134,12 @@ describe('CLI', () => {
 
     it('exits 1 when a shard result is missing, since the run cannot be judged', () => {
         expect(spawnSync(process.execPath, [SCRIPT, listPath, join(dir, 'missing.json')]).status).toBe(1);
+    });
+
+    it('exits 2 when a check is on both lists', () => {
+        const both = join(dir, 'both.json');
+        writeFileSync(both, JSON.stringify({ KnownFailures: { 'a.A1': 'r' }, Flaky: { 'a.A1': 'r' } }));
+        expect(spawnSync(process.execPath, [SCRIPT, both, shardPath]).status).toBe(2);
     });
 
     it('exits 2 without arguments', () => {

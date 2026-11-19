@@ -12,7 +12,10 @@
  * - a check on the list that now PASSES also fails the job, so the list is shortened in the same
  *   pull request that fixed it and can only shrink;
  * - a listed check that did not run (skipped, or its bundle was filtered out) is reported, not
- *   failed: absence is not evidence either way.
+ *   failed: absence is not evidence either way;
+ * - a check on the separate `Flaky` list (one whose outcome follows runner speed, such as a timing
+ *   ratio or a bundle that runs near its time budget) is reported but never fails the job in either
+ *   direction, so the ratchet stays stable without hiding it in the backlog.
  *
  * A skip the suite's own skip gate does not allow (`details.SkipAllowed === false`) counts as a
  * failure, as it does for that gate.
@@ -62,7 +65,7 @@ export function collectOutcomes(resultFile) {
  * Compares a run with the known-failures list. A key that fails in any shard counts as failed; one
  * that passes in some shard and fails in none counts as passed.
  */
-export function compareWithKnownFailures(outcomes, knownFailures) {
+export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}) {
     const byKey = new Map();
     for (const o of outcomes) {
         const prev = byKey.get(o.Key);
@@ -71,10 +74,16 @@ export function compareWithKnownFailures(outcomes, knownFailures) {
         }
     }
     const known = new Set(Object.keys(knownFailures));
+    const flakyKeys = new Set(Object.keys(flaky));
     const newFailures = [];
     const fixed = [];
     const notRun = [];
+    const flakyFailed = [];
     for (const [key, o] of byKey) {
+        if (flakyKeys.has(key)) {
+            if (o.Outcome === 'failed') flakyFailed.push(key);
+            continue;
+        }
         if (o.Outcome === 'failed' && !known.has(key)) newFailures.push(o);
         if (o.Outcome === 'passed' && known.has(key)) fixed.push(key);
     }
@@ -83,12 +92,16 @@ export function compareWithKnownFailures(outcomes, knownFailures) {
         if (!o || o.Outcome === 'skipped') notRun.push(key);
     }
     const stillFailing = [...known].filter((k) => byKey.get(k)?.Outcome === 'failed');
-    return { NewFailures: newFailures, Fixed: fixed, NotRun: notRun, StillFailing: stillFailing, Checked: byKey.size };
+    return { NewFailures: newFailures, Fixed: fixed, NotRun: notRun, StillFailing: stillFailing, FlakyFailed: flakyFailed, Checked: byKey.size };
 }
 
 /** Human-readable report; returns the process exit code. */
 export function report(result, log = console.log) {
     log(`Checked ${result.Checked} results: ${result.StillFailing.length} known failures still failing, ${result.NewFailures.length} new, ${result.Fixed.length} fixed.`);
+    if ((result.FlakyFailed ?? []).length > 0) {
+        log(`\n${result.FlakyFailed.length} check(s) on the flaky list failed this time (not gating):`);
+        for (const key of result.FlakyFailed) log(`  ~ ${key}`);
+    }
     if (result.NotRun.length > 0) {
         log(`\n${result.NotRun.length} known failure(s) did not run this time (skipped or not selected):`);
         for (const key of result.NotRun) log(`  - ${key}`);
@@ -110,7 +123,14 @@ function main(argv) {
         console.error('Usage: check-integration-known-failures.mjs <known-failures.json> <shard.json>...');
         return 2;
     }
-    const knownFailures = JSON.parse(readFileSync(listPath, 'utf8')).KnownFailures ?? {};
+    const list = JSON.parse(readFileSync(listPath, 'utf8'));
+    const knownFailures = list.KnownFailures ?? {};
+    const flaky = list.Flaky ?? {};
+    const overlap = Object.keys(flaky).filter((k) => k in knownFailures);
+    if (overlap.length > 0) {
+        console.error(`These checks are on both the KnownFailures and Flaky lists; keep each on one: ${overlap.join(', ')}`);
+        return 2;
+    }
     const outcomes = [];
     for (const path of shardPaths) {
         if (!existsSync(path)) {
@@ -119,7 +139,7 @@ function main(argv) {
         }
         outcomes.push(...collectOutcomes(JSON.parse(readFileSync(path, 'utf8'))));
     }
-    return report(compareWithKnownFailures(outcomes, knownFailures));
+    return report(compareWithKnownFailures(outcomes, knownFailures, flaky));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
