@@ -9,6 +9,9 @@ import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
 import { QueryVersionDiffComponent } from '../version-diff/query-version-diff.component';
 import { SaveQueryResult } from './save-query-dialog.component';
+import type { SaveAsListKeyColumn, SaveAsListRequest } from './save-as-list-dialog.component';
+import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateDataSnapshot, BuildMultiTableSql } from '../../snapshot-helpers';
 
 /**
@@ -39,6 +42,9 @@ interface DataArtifactSpec {
   savedQueryName?: string;
   savedAtVersionNumber?: number;
 }
+
+/** The column set of a result with no columns, shared so cached lookups keyed on it stay stable. */
+const NO_COLUMNS: MJColumnDescriptor[] = [];
 
 /**
  * Describes the relationship between the current artifact version's SQL
@@ -125,6 +131,101 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** The currently active table */
   public get ActiveTable(): DataTable | null {
     return this.ResolvedTables[this.ActiveTableIndex] ?? null;
+  }
+
+  // ─── Save as list ───
+
+  public ShowSaveAsList = false;
+  public SavingAsList = false;
+  public SaveAsListError: string | null = null;
+
+  /**
+   * The result columns that hold a record's primary key (a single-column key of the entity the
+   * column traces to), so the rows can become a list of those records. Empty for results that are
+   * not records, such as counts and totals.
+   */
+  public get ListKeyColumns(): SaveAsListKeyColumn[] {
+    const columns: MJColumnDescriptor[] = this.ActiveTable?.columns ?? this.spec?.columns ?? NO_COLUMNS;
+    // Cached per column set: a template binding must see the same array until the columns change.
+    if (this.listKeyColumnsCache?.Source !== columns) {
+      this.listKeyColumnsCache = { Source: columns, Keys: this.findListKeyColumns(columns) };
+    }
+    return this.listKeyColumnsCache.Keys;
+  }
+  private listKeyColumnsCache: { Source: MJColumnDescriptor[]; Keys: SaveAsListKeyColumn[] } | null = null;
+
+  private findListKeyColumns(columns: MJColumnDescriptor[]): SaveAsListKeyColumn[] {
+    const keys: SaveAsListKeyColumn[] = [];
+    for (const column of columns) {
+      if (!column.sourceEntity || !column.sourceFieldName || column.isComputed || column.isSummary) continue;
+      const entity = this.ProviderToUse?.EntityByName(column.sourceEntity);
+      if (!entity || entity.PrimaryKeys.length !== 1) continue;
+      const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: a list made from a query needs a single-column key, checked above
+      if (pkName.toLowerCase() === column.sourceFieldName.toLowerCase()) {
+        keys.push({ Column: column.field, EntityName: entity.Name, EntityDisplayName: entity.DisplayNameOrName });
+      }
+    }
+    return keys;
+  }
+
+  /** Save as list is offered for the latest version of a single-table result whose rows are records. */
+  public get CanSaveAsList(): boolean {
+    return !this.IsMultiTable && !!this.spec?.metadata?.sql && this.IsLatestVersion && this.ListKeyColumns.length > 0;
+  }
+
+  /** The saved query the list will link to: only when this version's SQL is the saved query's. */
+  public get SaveAsListQueryName(): string | null {
+    return this.QuerySyncState === 'synced' ? this.SavedQueryDisplayName : null;
+  }
+
+  public OnShowSaveAsList(): void {
+    this.SaveAsListError = null;
+    this.ShowSaveAsList = true;
+    this.ShowUpdateDropdown = false;
+  }
+
+  /**
+   * Creates the list on the server. A saved query that matches this version is linked as is;
+   * otherwise the SQL is saved Pending in the user's User Lists. Calls the operation directly,
+   * never through an agent turn.
+   */
+  public async OnSaveAsList(request: SaveAsListRequest): Promise<void> {
+    const sql = this.spec?.metadata?.sql;
+    if (!sql) return;
+    this.SavingAsList = true;
+    this.SaveAsListError = null;
+    this.cdr.detectChanges();
+    try {
+      const linkSaved = this.QuerySyncState === 'synced' && !!this.spec?.savedQueryId;
+      const client = new GraphQLListsClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      const result = await client.CreateListFromQuery({
+        ListName: request.ListName,
+        QueryID: linkSaved ? this.spec!.savedQueryId : undefined,
+        SQL: linkSaved ? undefined : sql,
+        EntityName: request.KeyColumn.EntityName,
+        KeyField: request.KeyColumn.Column,
+        RefreshMode: request.RefreshMode,
+        AutoRefresh: request.AutoRefresh,
+      });
+      if (!result.CreatedListId) {
+        this.SaveAsListError = result.Message;
+        return;
+      }
+      this.ShowSaveAsList = false;
+      MJNotificationService.Instance.CreateSimpleNotification(this.describeSavedList(request.ListName, result), result.Success ? 'success' : 'warning', 6000);
+    } catch (error) {
+      this.SaveAsListError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.SavingAsList = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private describeSavedList(listName: string, result: { Counts?: { Added: number; Failed: number }; Refreshes: boolean; StaticReason?: string }): string {
+    const added = result.Counts?.Added ?? 0;
+    const failed = result.Counts?.Failed ? `, ${result.Counts.Failed} could not be added` : '';
+    const refresh = result.Refreshes ? '' : ` It won't refresh: ${result.StaticReason ?? 'it has no source'}.`;
+    return `List "${listName}" created with ${added} record(s)${failed}.${refresh}`;
   }
 
   /** Query sync state — drives the toolbar UI for saved query actions */

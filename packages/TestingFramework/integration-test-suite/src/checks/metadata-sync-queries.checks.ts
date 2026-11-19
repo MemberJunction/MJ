@@ -1,5 +1,5 @@
 /**
- * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ10), deterministic
+ * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ11), deterministic
  * tier (IT140).
  *
  * `mj sync push`, through `PushService`, of scratch `MJ: Queries` trees, and the child rows that
@@ -24,6 +24,9 @@
  *  - MSQ10: `mj sync pull`, through `PullService`, of a query whose rows all came from extraction
  *    writes them under `collections` with their IDs, and pushing the pulled file back writes no row.
  *
+ *  - MSQ11: a dialect variant pushed under `relatedEntities`, which the push writes after its query,
+ *    still counts in the query's stored `DefinitionFingerprint`.
+ *
  * MSQ7 is also the fresh-install no-op: a fresh install's first push is the same push of the
  * shipped tree onto rows the release migrations wrote, so a separate case would repeat it.
  *
@@ -36,7 +39,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { BaseEngineRegistry, BaseEntity } from '@memberjunction/core';
 import type { DatabasePlatform, UserInfo } from '@memberjunction/core';
-import { QueryEngine } from '@memberjunction/core-entities';
+import { ComputeQueryFingerprintAsync, QueryEngine } from '@memberjunction/core-entities';
+import type { QueryDefinitionFields, QueryDefinitionRows } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { PullService, PushService, SyncEngine } from '@memberjunction/metadata-sync';
@@ -574,6 +578,42 @@ async function checkMsq10PullAfterAutoExtraction(ctx: IntegrationCheckContext): 
     Assert(before === after, `MSQ10: pushing the pulled file back wrote rows: ${SnapshotDifference(before, after)}`);
 }
 
+// ─── MSQ11: the fingerprint counts dialect rows written after the query ─────
+
+/** The query's definition as stored now: its own fields and its dialect and parameter rows, bypassing every cache. */
+async function storedDefinition(ctx: IntegrationCheckContext, queryID: string): Promise<{ Stored: string | null; Query: QueryDefinitionFields; Rows: QueryDefinitionRows }> {
+    type QueryRow = QueryDefinitionFields & { DefinitionFingerprint: string | null };
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    const filter = `QueryID='${queryID}'`;
+    const [query, sqls, parameters] = await provider.RunViews([
+        { EntityName: 'MJ: Queries', ExtraFilter: `ID='${queryID}'`, Fields: ['SQL', 'UsesTemplate', 'ExternalDataSourceID', 'DefinitionFingerprint'], ResultType: 'simple', BypassCache: true },
+        { EntityName: 'MJ: Query SQLs', ExtraFilter: filter, Fields: ['SQLDialectID', 'SQL'], ResultType: 'simple', BypassCache: true },
+        { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, Fields: ['Name', 'Type', 'IsRequired', 'ValidationFilters', 'IsServerSet'], ResultType: 'simple', BypassCache: true },
+    ], ctx.User);
+    if (!query?.Success || !sqls?.Success || !parameters?.Success) {
+        throw new Error(`MSQ11: could not read the query's definition: ${query?.ErrorMessage || sqls?.ErrorMessage || parameters?.ErrorMessage}`);
+    }
+    const row = query.Results[0] as QueryRow | undefined;
+    if (!row) throw new Error(`MSQ11: query ${queryID} was not stored`);
+    return { Stored: row.DefinitionFingerprint, Query: row, Rows: { SQLs: sqls.Results as QueryDefinitionRows['SQLs'], Parameters: parameters.Results as QueryDefinitionRows['Parameters'] } };
+}
+
+async function checkMsq11FingerprintCountsRelatedDialectRows(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const [queryID, variantID] = ids(2);
+    const otherPlatform: DatabasePlatform = f.Platform === 'postgresql' ? 'sqlserver' : 'postgresql';
+    const variant: ChildRecord = {
+        primaryKey: { ID: variantID },
+        fields: { QueryID: '@parent:ID', SQLDialectID: await dialectIDFor(ctx, otherPlatform), SQL: vendorSQL(otherPlatform, '', '') },
+    };
+    const record = queryRecord(f, { ID: queryID, Name: 'MSQ11 variant', SQL: vendorSQL(f.Platform, '', ''), RelatedEntities: { 'MJ: Query SQLs': [variant] } });
+    await pushQueries(ctx, 'msq11', [record], queryID);
+
+    const stored = await storedDefinition(ctx, queryID);
+    AssertEqual(stored.Rows.SQLs.length, 1, 'MSQ11: the pushed dialect variant is stored');
+    AssertEqual(stored.Stored, await ComputeQueryFingerprintAsync(stored.Query, stored.Rows), "MSQ11: the stored DefinitionFingerprint is the fingerprint of the query's stored definition, dialect variant included");
+}
+
 export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ1`, Name: 'MSQ1: declared collections are stored as declared on a new query and updated in place', Fn: checkMsq1DeclaredCollections },
     { Id: `${BUNDLE}.MSQ2`, Name: 'MSQ2: the legacy relatedEntities format is promoted, so each declared row is stored once under its own ID', Fn: checkMsq2LegacyRelatedEntitiesPromoted },
@@ -585,6 +625,7 @@ export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ8`, Name: 'MSQ8: one push creates a reusable query and a query composing it', Fn: checkMsq8ComposedInSamePush },
     { Id: `${BUNDLE}.MSQ9`, Name: 'MSQ9: a declared field with only its name and annotations gets its facts from extraction', Fn: checkMsq9FactlessDeclaredFieldGetsFacts },
     { Id: `${BUNDLE}.MSQ10`, Name: 'MSQ10: a pull after auto extraction writes the child rows as collections, and pushing it back writes nothing', Fn: checkMsq10PullAfterAutoExtraction },
+    { Id: `${BUNDLE}.MSQ11`, Name: "MSQ11: a dialect variant pushed under relatedEntities, after its query, counts in the query's stored fingerprint", Fn: checkMsq11FingerprintCountsRelatedDialectRows },
 ];
 
 for (const check of MetadataSyncQueriesChecks) {

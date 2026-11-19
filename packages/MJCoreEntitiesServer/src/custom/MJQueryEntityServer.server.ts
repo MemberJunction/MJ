@@ -24,7 +24,7 @@ import {
     QueryDefinitionRows,
     QueryEngine,
 } from "@memberjunction/core-entities";
-import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
 import { CompositionFullPath } from "@memberjunction/sql-parser";
 import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
@@ -66,6 +66,13 @@ function IsExtractionProvider(provider: unknown): provider is ExtractionProvider
     if (provider === null || typeof provider !== 'object') return false;
     return typeof Reflect.get(provider, 'RunView') === 'function' && typeof Reflect.get(provider, 'GetEntityObject') === 'function';
 }
+
+/**
+ * Queries whose save is running in this process, by ID, counting nested saves (a re-extraction can
+ * run inside another save). A dialect row written during its query's save leaves the fingerprint to
+ * that save, which stamps last; see {@link MJQueryEntityServer.IsSaveInProgress}.
+ */
+const savesInProgress = new UUIDMap<number>();
 
 /** Whether and how a save extracts. */
 interface ExtractionPlan {
@@ -202,6 +209,37 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         // the save reaches applies the approval rules and extracts; doing it here too would write the
         // child rows twice, the second time from the client.
         if (this.savesOverNetwork) return super.Save(options);
+        const id = this.ID;
+        savesInProgress.Set(id, (savesInProgress.Get(id) ?? 0) + 1);
+        try {
+            return await this.saveOnServerAsync(options);
+        } finally {
+            const remaining = (savesInProgress.Get(id) ?? 1) - 1;
+            if (remaining > 0) savesInProgress.Set(id, remaining);
+            else savesInProgress.Delete(id);
+        }
+    }
+
+    /**
+     * Whether a save of this query is running in this process. Its dialect and parameter rows are
+     * written during that save, before it stamps the fingerprints, so a row saved then needs no
+     * stamp of its own.
+     */
+    public static IsSaveInProgress(queryID: string): boolean {
+        return savesInProgress.Has(queryID);
+    }
+
+    /**
+     * Re-stamps `DefinitionFingerprint` from the definition as now stored. For a dialect row saved
+     * or deleted on its own, after this query's save: a metadata push writes a query's
+     * `relatedEntities` rows after the query, so the save's own stamp did not see them. Approval is
+     * untouched; only a save can approve.
+     */
+    public async RestampDefinitionFingerprintAsync(): Promise<void> {
+        await this.stampFingerprintsAsync(undefined, false);
+    }
+
+    private async saveOnServerAsync(options: EntitySaveOptions | undefined): Promise<boolean> {
         let approving: boolean;
         try {
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
