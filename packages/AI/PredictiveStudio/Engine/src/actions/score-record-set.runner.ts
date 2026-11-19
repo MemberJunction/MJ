@@ -2,7 +2,7 @@
  * @module actions/score-record-set.runner
  *
  * Production implementation of the {@link IScoreRecordSetRunner} seam the Score Record Set action and operation (and
- * the query enricher and the maintenance rescore) share. It resolves the request's wire scope into the scoring scope
+ * the query enricher) share. It resolves the request's wire scope into the scoring scope
  * of C6 (`record-ids`, `view` or `filter` over a named entity) and calls `ScoringService`: `Score` through the binding
  * when the request names one (the only path that writes), else `Predict` (writes nothing). A run that does not
  * complete throws {@link ScoringRefusedError} carrying the result, so the refusal reaches the caller whole.
