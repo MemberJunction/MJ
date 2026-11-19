@@ -27,6 +27,9 @@
  *  10. vwUserHeldAuthorizations, the authorizations each user holds (MJ's authorization rule in SQL)
  *  11. vwLatestFeatureValues re-created with the prediction lineage columns
  *  12. spDeleteEntityWithCoreDependencies, re-created to clear the serving tables' rows when an entity is removed
+ *  13. MLModel               models registered before the lifecycle gate: re-checked from their stored gate record,
+ *                              or Unevaluated (the newest formerly Published one of a pipeline still serving it); then
+ *                              at most one Published model per pipeline
  **************************************************************************************************/
 
 -- ============================================================================
@@ -1074,6 +1077,92 @@ BEGIN CATCH
     THROW;
 END CATCH
 END
+GO
+
+-- ============================================================================
+-- 13. MLModel: models trained before the lifecycle gate, then one Published model per pipeline
+-- ============================================================================
+-- A model with no Delivery was registered before the lifecycle gate. One whose training run stored the gate record
+-- (ValidationResults.gate.decision.outcome, the newest such run whose ResultingModelID is the model) carries its own
+-- evidence: it takes that run as its TrainingRunID, its artifact is re-checked (ArtifactStatus 'unverified'), a
+-- Validated one returns to Draft (it is evaluated again from the stored record), a Published one stays Published until
+-- it is re-verified on that record, and of several such Published models of one pipeline all but the newest are
+-- archived. Every other Draft, Validated or Published model without a Delivery becomes Unevaluated with its artifact
+-- unverified; the newest formerly Published one of each pipeline that keeps no Published model goes on serving it,
+-- flagged ServingWhileUnevaluated, until a model published through the gate replaces it. Archived models stay as they
+-- are. The ValidationResults test reads JSON only when ISJSON says it is JSON, so one malformed value cannot abort the
+-- migration.
+DECLARE @Evidence TABLE ([ModelID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, [TrainingRunID] UNIQUEIDENTIFIER NOT NULL);
+DECLARE @Serving TABLE ([ModelID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY);
+
+INSERT INTO @Evidence ([ModelID], [TrainingRunID])
+SELECT m.[ID], run.[ID]
+FROM [${flyway:defaultSchema}].[MLModel] m
+CROSS APPLY (
+    SELECT TOP 1 r.[ID]
+    FROM [${flyway:defaultSchema}].[MLTrainingRun] r
+    WHERE r.[ResultingModelID] = m.[ID]
+      AND (CASE WHEN ISJSON(r.[ValidationResults]) = 1
+                THEN JSON_VALUE(r.[ValidationResults], '$.gate.decision.outcome') END) IS NOT NULL
+    ORDER BY r.[__mj_CreatedAt] DESC, r.[ID] DESC
+) AS run
+WHERE m.[Delivery] IS NULL
+  AND m.[Status] IN (N'Draft', N'Validated', N'Published');
+
+UPDATE m
+   SET [TrainingRunID]  = e.[TrainingRunID],
+       [ArtifactStatus] = N'unverified',
+       [Status]         = CASE WHEN m.[Status] = N'Validated' THEN N'Draft' ELSE m.[Status] END
+FROM [${flyway:defaultSchema}].[MLModel] m
+JOIN @Evidence e ON e.[ModelID] = m.[ID];
+
+WITH [RankedEvidence] AS (
+    SELECT m.[ID],
+           ROW_NUMBER() OVER (PARTITION BY m.[PipelineID] ORDER BY m.[__mj_CreatedAt] DESC, m.[Version] DESC, m.[ID] DESC) AS [NewestRank]
+    FROM [${flyway:defaultSchema}].[MLModel] m
+    JOIN @Evidence e ON e.[ModelID] = m.[ID]
+    WHERE m.[Status] = N'Published'
+)
+UPDATE m
+   SET [Status]       = N'Archived',
+       [StatusReason] = N'Superseded: more than one Published model of the pipeline before the lifecycle gate'
+FROM [${flyway:defaultSchema}].[MLModel] m
+JOIN [RankedEvidence] ranked ON ranked.[ID] = m.[ID]
+WHERE ranked.[NewestRank] > 1;
+
+WITH [RankedLegacy] AS (
+    SELECT m.[ID],
+           ROW_NUMBER() OVER (PARTITION BY m.[PipelineID] ORDER BY m.[__mj_CreatedAt] DESC, m.[Version] DESC, m.[ID] DESC) AS [NewestRank]
+    FROM [${flyway:defaultSchema}].[MLModel] m
+    WHERE m.[Status] = N'Published'
+      AND m.[Delivery] IS NULL
+      AND NOT EXISTS (SELECT 1 FROM @Evidence e WHERE e.[ModelID] = m.[ID])
+      AND NOT EXISTS (SELECT 1
+                      FROM [${flyway:defaultSchema}].[MLModel] kept
+                      JOIN @Evidence ke ON ke.[ModelID] = kept.[ID]
+                      WHERE kept.[PipelineID] = m.[PipelineID] AND kept.[Status] = N'Published')
+)
+INSERT INTO @Serving ([ModelID])
+SELECT [ID] FROM [RankedLegacy] WHERE [NewestRank] = 1;
+
+UPDATE m
+   SET [Status]                  = N'Unevaluated',
+       [ArtifactStatus]          = N'unverified',
+       [ServingWhileUnevaluated] = CASE WHEN s.[ModelID] IS NULL THEN 0 ELSE 1 END,
+       [StatusReason]            = CASE WHEN s.[ModelID] IS NULL
+           THEN N'Trained before the Predictive Studio lifecycle gate; never evaluated under an Evaluation Protocol; the pipeline is retrained under its protocol automatically.'
+           ELSE N'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.' END
+FROM [${flyway:defaultSchema}].[MLModel] m
+LEFT JOIN @Serving s ON s.[ModelID] = m.[ID]
+WHERE m.[Status] IN (N'Draft', N'Validated', N'Published')
+  AND m.[Delivery] IS NULL
+  AND NOT EXISTS (SELECT 1 FROM @Evidence e WHERE e.[ModelID] = m.[ID]);
+GO
+-- At most one Published model per pipeline. Created after the statuses above, so a pipeline that would still hold two
+-- fails the migration here instead of serving from either.
+CREATE UNIQUE NONCLUSTERED INDEX [UX_MLModel_OnePublishedPerPipeline]
+    ON [${flyway:defaultSchema}].[MLModel] ([PipelineID])
+    WHERE [Status] = N'Published';
 GO
 
 
