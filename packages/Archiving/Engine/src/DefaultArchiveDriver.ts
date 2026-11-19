@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import type { FileStorageBase } from '@memberjunction/storage';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
@@ -9,6 +9,7 @@ import {
     RestoreRecordResult,
     ArchiveDocument,
     ArchiveFieldConfiguration,
+    EligibilityFilterContext,
     IsPurgeStorageMode,
 } from './types';
 
@@ -27,9 +28,10 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
 
     /**
      * Determines whether the record should be archived by checking if at least
-     * one of the configured fields (or SkipIfAllNullFields) holds a value. A field holds
-     * no value when it is null, or when it is a NOT NULL column holding an empty string,
-     * which is what StripFields writes to such a column.
+     * one of the configured fields (or SkipIfAllNullFields) holds a value. A null field
+     * holds no value. In StripFields mode an empty string in a NOT NULL column holds no
+     * value either, because that is what StripFields writes to such a column; in the other
+     * modes it is a value like any other.
      * If no specific fields are configured but ArchiveFullRecord is true,
      * always archives — the intent is a full record snapshot, not field stripping.
      */
@@ -42,24 +44,30 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
             return context.FieldConfig.ArchiveFullRecord === true;
         }
 
-        return fieldsToCheck.some(fieldName => this.fieldHoldsValue(context.Record, fieldName));
+        const stripFields = this.resolveMode(context.ConfigEntity, context.Config) === 'StripFields';
+        return fieldsToCheck.some(fieldName => this.fieldHoldsValue(context.Record, fieldName, stripFields));
     }
 
     /**
      * Returns the SQL form of {@link ShouldArchiveRecord}: an OR over the checked fields of
-     * `<field> IS NOT NULL` for nullable columns and `<field> <> ''` for NOT NULL string
-     * columns. Returns null when there are no checked fields, or when a checked field is
-     * missing from the entity or is a NOT NULL column of another type, because then the
-     * rule cannot be written in SQL.
+     * `[field] IS NOT NULL` for nullable columns and, in StripFields mode, `[field] LIKE '_%'`
+     * for NOT NULL string columns. `LIKE '_%'` matches any non-empty string, whitespace
+     * included, on SQL Server and PostgreSQL alike (unlike `<> ''`, which SQL Server
+     * evaluates ignoring trailing spaces), and also works on text/ntext columns.
+     * Returns null when there are no checked fields, or when one cannot be tested: it is
+     * missing from the entity, its name contains a bracket, or it is a NOT NULL column that
+     * always holds a value under the mode (any NOT NULL column outside StripFields, or a
+     * NOT NULL non-string column), which makes the whole OR always true.
      */
-    public override BuildEligibilityFilter(fieldConfig: ArchiveFieldConfiguration, entityInfo: EntityInfo): string | null {
-        const fieldsToCheck = this.getFieldsToCheck(fieldConfig);
+    public override BuildEligibilityFilter(context: EligibilityFilterContext): string | null {
+        const fieldsToCheck = this.getFieldsToCheck(context.FieldConfig);
         if (fieldsToCheck.length === 0) {
             return null;
         }
+        const stripFields = this.resolveMode(context.ConfigEntity, context.Config) === 'StripFields';
         const conditions: string[] = [];
         for (const fieldName of fieldsToCheck) {
-            const condition = this.holdsValueCondition(entityInfo.FieldByName(fieldName));
+            const condition = this.holdsValueCondition(context.EntityInfo.FieldByName(fieldName), stripFields);
             if (!condition) {
                 return null;
             }
@@ -183,31 +191,35 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     }
 
     /**
-     * True when the field holds a value: not null, and not the empty string that
-     * StripFields writes to a NOT NULL column.
+     * True when the field holds a value: not null and, in StripFields mode, not the empty
+     * string that StripFields writes to a NOT NULL column.
      */
-    private fieldHoldsValue(record: BaseEntity, fieldName: string): boolean {
+    private fieldHoldsValue(record: BaseEntity, fieldName: string, stripFields: boolean): boolean {
         const value = record.Get(fieldName);
         if (value == null) {
             return false;
         }
+        if (!stripFields || value !== '') {
+            return true;
+        }
         const fieldInfo = record.EntityInfo.FieldByName(fieldName);
-        return !(fieldInfo && !fieldInfo.AllowsNull && value === '');
+        return !fieldInfo || fieldInfo.AllowsNull;
     }
 
     /**
-     * The SQL condition for "this field holds a value", or null when it cannot be written.
-     * Uses the metadata field name, never the configured string.
+     * The SQL condition for "this field holds a value", or null when it cannot be written
+     * or is always true. Uses the metadata field name in square brackets, never the
+     * configured string.
      */
-    private holdsValueCondition(fieldInfo: EntityFieldInfo | undefined): string | null {
-        if (!fieldInfo) {
+    private holdsValueCondition(fieldInfo: EntityFieldInfo | undefined, stripFields: boolean): string | null {
+        if (!fieldInfo || /[[\]]/.test(fieldInfo.Name)) {
             return null;
         }
         if (fieldInfo.AllowsNull) {
-            return `${fieldInfo.Name} IS NOT NULL`;
+            return `[${fieldInfo.Name}] IS NOT NULL`;
         }
-        if (fieldInfo.TSType === EntityFieldTSType.String) {
-            return `${fieldInfo.Name} <> ''`;
+        if (stripFields && fieldInfo.TSType === EntityFieldTSType.String) {
+            return `[${fieldInfo.Name}] LIKE '_%'`;
         }
         return null;
     }
@@ -256,11 +268,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     // ========================================
 
     /**
-     * Resolves the effective archive mode from the entity config or parent config.
+     * Resolves the effective archive mode: the entity configuration's Mode, else the
+     * configuration's DefaultMode, else StripFields.
      */
-    private resolveMode(context: ArchiveRecordContext): string {
-        return (context.ConfigEntity.Get('Mode') as string | null)
-            ?? (context.Config.Get('DefaultMode') as string)
+    private resolveMode(configEntity: BaseEntity, config: BaseEntity): string {
+        return (configEntity.Get('Mode') as string | null)
+            ?? (config.Get('DefaultMode') as string | null)
             ?? 'StripFields';
     }
 
@@ -270,7 +283,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     private async applyPostArchiveAction(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
-        const mode = this.resolveMode(context);
+        const mode = this.resolveMode(context.ConfigEntity, context.Config);
 
         switch (mode) {
             case 'StripFields':
