@@ -10989,17 +10989,19 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Possible Values 
     *   * Action
     *   * Decision
+    *   * External
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
+    *   * Wait
     *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
-    get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -108793,6 +108795,9 @@ export interface MJTaskEntity_ITaskStepConfiguration {
     /** Settings for a step completed by a system outside MemberJunction. */
     external?: MJTaskEntity_ITaskExternalConfiguration;
 
+    /** Settings for a step that waits for a moment in time before the workflow continues. */
+    wait?: MJTaskEntity_ITaskWaitConfiguration;
+
     /**
      * How this step's inputs are built from the workflow payload, as a JSON object mapping the
      * step's parameter names to payload paths.
@@ -109138,6 +109143,24 @@ export interface MJTaskEntity_ITaskHumanConfiguration {
      * its author never chose would be worse than one that waits.
      */
     expiresInHours?: number;
+
+    /**
+     * Which human-task provider raises and tracks this step, as its ClassFactory key
+     * (`@RegisterClass(BaseHumanTaskProvider, '<key>')`).
+     *
+     * Omitted, or `'AgentRequest'`, means MJ's built-in provider: an `MJ: AI Agent Requests` row in the
+     * person's inbox, settled when they answer it. Any other key hands the step to that provider — an
+     * Open App's approval system, a ticketing integration — which completes it through
+     * `TaskGraphWaitingSteps.CompleteWaitingStep` when its own record is decided. Core never names
+     * those providers; they register themselves.
+     */
+    provider?: string;
+
+    /**
+     * Provider-specific settings, passed to the provider untouched when the step is raised: a task
+     * type code, an assignee role, a priority. Each provider documents its own keys.
+     */
+    providerConfiguration?: Record<string, unknown>;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */
@@ -109146,6 +109169,41 @@ export interface MJTaskEntity_ITaskExternalConfiguration {
     domain: string;
     /** That system's own identifier for the work, for correlation. */
     ref?: string;
+
+    /**
+     * The key an outside caller signals this step by, when it does not hold the task's ID.
+     *
+     * A literal (`'sprint-close'`) or a payload path resolved when the step is reached
+     * (`'payload.sprintKey'`). The resolved value is written to `Task.CorrelationKey`, which is
+     * indexed; `TaskGraph.CompleteWaitingStep` with a correlation key completes every reached step
+     * waiting on it, so one signal can release many workflows. A signal that arrives before the step
+     * is reached is held on the step and applied the moment it is.
+     */
+    correlationKey?: string;
+
+    /**
+     * How long to wait for the signal before the step fails, in hours. Omitted means no deadline —
+     * a step that silently timed out on a deadline nobody chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
+}
+
+/**
+ * A step that waits for a moment in time. Exactly one of `until` / `durationSeconds` is set.
+ *
+ * This is what replaces chains of cron jobs offset by fifteen minutes and nightly sweeps that check
+ * whether a cooling-off period has passed: the wait is part of the workflow, durable across restarts,
+ * and visible on the run.
+ */
+export interface MJTaskEntity_ITaskWaitConfiguration {
+    /**
+     * When to continue: an ISO-8601 timestamp, or a payload path resolved when the step is reached
+     * (`'payload.renewal.chargeOn'`). A moment already in the past continues immediately.
+     */
+    until?: string;
+
+    /** How long to wait from the moment the step is reached, in seconds. */
+    durationSeconds?: number;
 }
 
 /** What the dispatcher does about time and failure for a single step. */
@@ -109588,13 +109646,14 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * ForEach
     *   * Human
     *   * Prompt
+    *   * Wait
     *   * While
     * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
     */
-    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Wait' | 'While' | null {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Wait' | 'While' | null) {
         this.Set('StepType', value);
     }
 
@@ -109665,6 +109724,46 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
     set CompensatesTaskID(value: string | null) {
         this.Set('CompensatesTaskID', value);
+    }
+
+    /**
+    * * Field Name: CorrelationKey
+    * * Display Name: Correlation Key
+    * * SQL Data Type: nvarchar(400)
+    * * Description: For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step.
+    */
+    get CorrelationKey(): string | null {
+        return this.Get('CorrelationKey');
+    }
+    set CorrelationKey(value: string | null) {
+        this.Set('CorrelationKey', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it.
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: NextAttemptAt
+    * * Display Name: Next Attempt At
+    * * SQL Data Type: datetimeoffset
+    * * Description: For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free.
+    */
+    get NextAttemptAt(): Date | null {
+        return this.Get('NextAttemptAt');
+    }
+    set NextAttemptAt(value: Date | null) {
+        this.Set('NextAttemptAt', value);
     }
 
     /**

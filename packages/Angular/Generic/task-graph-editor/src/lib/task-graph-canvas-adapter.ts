@@ -47,7 +47,7 @@ export type TaskGraphNodeType = 'AgentTask' | 'ActionTask' | 'HumanTask';
  * person builds one, and a run view, where one that already ran is shown. The second must be able
  * to depict every kind the dispatcher can execute, whether or not the palette offers it.
  */
-export type TaskGraphRenderType = TaskGraphNodeType | 'PromptTask' | 'ForEachTask' | 'WhileTask' | 'ExternalTask';
+export type TaskGraphRenderType = TaskGraphNodeType | 'PromptTask' | 'ForEachTask' | 'WhileTask' | 'ExternalTask' | 'WaitTask';
 
 /** A palette entry, pinned to one of the three authorable shapes. */
 export type TaskGraphNodeTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphNodeType };
@@ -137,6 +137,7 @@ export const TASK_GRAPH_RENDER_TYPES: readonly TaskGraphRenderTypeConfig[] = [
     { Type: 'ForEachTask',  Label: 'For Each Step', Icon: 'fa-repeat',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
     { Type: 'WhileTask',    Label: 'While Step',    Icon: 'fa-rotate',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
     { Type: 'ExternalTask', Label: 'External Step', Icon: 'fa-arrow-up-right-from-square', Color: '#0891B2', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'WaitTask',     Label: 'Wait Step',     Icon: 'fa-hourglass-half', Color: '#64748B', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
 ];
 
 /**
@@ -216,6 +217,7 @@ export function GetTaskNodeType(node: TaskGraphSpecNode): TaskGraphRenderType {
         case 'ForEach':  return 'ForEachTask';
         case 'While':    return 'WhileTask';
         case 'External': return 'ExternalTask';
+        case 'Wait':     return 'WaitTask';
         // An unassigned node — just added, nothing picked — reads as an agent step: the commonest
         // intent, and the validator is already saying in words that it needs an assignee.
         default:         return 'AgentTask';
@@ -401,11 +403,30 @@ export function TaskSubtitle(task: TaskGraphSpecNode, type: TaskGraphRenderType 
         case 'ForEachTask':  return LoopBodyLabel(ConfigOf(task, 'ForEach')) ?? 'Repeats for each item';
         case 'WhileTask':    return LoopBodyLabel(ConfigOf(task, 'While')) ?? 'Repeats until its condition is false';
         case 'ExternalTask': return ConfigOf(task, 'External')?.domain || 'Completed by an outside system';
+        case 'WaitTask':     return WaitLabel(ConfigOf(task, 'Wait'));
         // Only a genuinely unassigned node reaches this now. It used to catch Prompt, ForEach,
         // While and External too — so a fully-configured loop displayed "No agent chosen yet",
         // which reads as a broken step rather than an unrecognised one.
         default:             return ConfigOf(task, 'Agent')?.agentName || 'No agent chosen yet';
     }
+}
+
+/** What a Wait step waits for, in words. */
+function WaitLabel(wait: { until?: string; durationSeconds?: number } | null | undefined): string {
+    if (typeof wait?.durationSeconds === 'number') return `Waits ${DurationLabel(wait.durationSeconds)}`;
+    if (wait?.until) return `Waits until ${wait.until}`;
+    return 'Waits for a moment in time';
+}
+
+function DurationLabel(seconds: number): string {
+    const units: [number, string][] = [[86400, 'day'], [3600, 'hour'], [60, 'minute']];
+    for (const [size, name] of units) {
+        if (seconds >= size && seconds % size === 0) {
+            const n = seconds / size;
+            return `${n} ${name}${n === 1 ? '' : 's'}`;
+        }
+    }
+    return `${seconds} second${seconds === 1 ? '' : 's'}`;
 }
 
 /** What a loop repeats, when it says. */
