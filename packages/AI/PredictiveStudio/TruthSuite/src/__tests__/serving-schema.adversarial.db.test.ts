@@ -394,11 +394,17 @@ describe('ML model publish records refuse inconsistent rows', () => {
   });
 
   it('refuses a status outside the widened CHECK', async () => {
-    // each of the six persisted values is saved and read back; KeepBaseline last, so the model ends there
+    // each of the six persisted values is saved and read back; KeepBaseline last, so the model ends there. The
+    // pipeline's Published fixture is set aside meanwhile: UX_MLModel_OnePublishedPerPipeline allows one Published row.
     const accepted = [...Object.keys(CORE_STATUSES).filter((v) => v !== 'KeepBaseline'), 'KeepBaseline'];
-    for (const status of accepted) {
-      await expect(RawStatusWrite(pool, fixtures.Model.ID, status)).resolves.toBeUndefined();
-      expect(await StoredModelColumn(pool, fixtures.Model.ID, 'Status')).toEqual([status]);
+    await RawStatusWrite(pool, fixtures.PublishedModel.ID, 'Archived');
+    try {
+      for (const status of accepted) {
+        await expect(RawStatusWrite(pool, fixtures.Model.ID, status)).resolves.toBeUndefined();
+        expect(await StoredModelColumn(pool, fixtures.Model.ID, 'Status')).toEqual([status]);
+      }
+    } finally {
+      await RawStatusWrite(pool, fixtures.PublishedModel.ID, 'Published');
     }
     await expect(RawStatusWrite(pool, fixtures.Model.ID, 'Shipped')).rejects.toThrow('CK_MLModel_Status');
     await expect(RawStatusWrite(pool, fixtures.Model.ID, 'NoSignal')).rejects.toThrow('CK_MLModel_Status');
@@ -932,7 +938,7 @@ describe('spDeleteEntityWithCoreDependencies removes an entity with its serving 
 // ── the hand-written blocks that must apply twice ─────────────────────────────────────────────────────────────────
 
 /** The migration whose hand-written Entity insert the run-twice case re-applies, from the repository root. */
-const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611170733__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
+const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611180024__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
 /**
  * The entities the census looks up: MJ: Feature Values and MJ: ML Models are existing core entities, and the
  * virtual entity's ID is this migration's literal. FeatureValue's Role and MLModelID, with their metadata rows, are
