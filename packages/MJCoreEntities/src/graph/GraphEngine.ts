@@ -37,6 +37,7 @@ import {
     type GraphEdgeView,
     type GraphNodeRef,
     type GraphNodeView,
+    type GraphPath,
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from './BaseGraphEdgeProvider';
@@ -158,6 +159,24 @@ interface CandidateHop {
     Neighbor: GraphNodeRef;
     NeighborKey: string;
     Score: number;
+}
+
+/** Limits for one {@link GraphEngine.traverse} run, already clamped. */
+interface TraversalLimits {
+    MaxDepth: number;
+    MaxNodes: number;
+    /** Stop expanding as soon as this node key is admitted (path search). */
+    StopAtKey?: string;
+}
+
+/** What one {@link GraphEngine.traverse} run reached. */
+interface TraversalRun {
+    discovered: Map<string, DiscoveredNode>;
+    visibleByKey: Map<string, GraphNodeView>;
+    capped: boolean;
+    maxNodes: number;
+    principals: UserInfo[];
+    dataProvider: GraphDataProvider;
 }
 
 /** Data-scale nodes of one entity awaiting a batched visibility read. */
@@ -543,26 +562,14 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             return { Nodes: [], Edges: [], Message: `Graph "${graphName}" was not found or is not active.` };
         }
 
-        const dataProvider = this.graphProvider(provider);
-        const principals = this.principals(user, options.AudienceReaders);
-        const maxDepth = ClampGraphDepth(options.Depth ?? options.MaxDepth);
-        const maxNodes = ClampGraphMaxNodes(options.MaxNodes);
-        const minWeight = options.MinWeight ?? 0;
-
-        const includeProposed = options.IncludeProposed === true;
-        const discovered = new Map<string, DiscoveredNode>();
-        const visibleByKey = new Map<string, GraphNodeView>();
-        let frontier = await this.admitSeeds(seeds, principals, maxNodes, dataProvider, includeProposed, discovered, visibleByKey);
-        let capped = false;
-
-        for (let hop = 1; hop <= maxDepth && frontier.length > 0; hop++) {
-            const stepEdges = await this.getEdgesForFrontier(graph, frontier.map((f) => f.Node), options, principals, dataProvider);
-            const candidates = this.rankCandidates(stepEdges, frontier, discovered, minWeight, hop, dataProvider);
-            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, dataProvider, includeProposed);
-            const admitted = this.admitCandidates(candidates, visible, maxNodes, hop, discovered, visibleByKey);
-            capped = capped || admitted.Capped;
-            frontier = admitted.Next;
-        }
+        const { discovered, visibleByKey, capped, maxNodes, principals, dataProvider } = await this.traverse(
+            graph,
+            seeds,
+            options,
+            { MaxDepth: ClampGraphDepth(options.Depth ?? options.MaxDepth), MaxNodes: ClampGraphMaxNodes(options.MaxNodes) },
+            user,
+            provider,
+        );
 
         const edges = new Map((await this.collectEdgesBetween(graph, discovered, options, principals, dataProvider)).map((e) => [e.ID, e]));
         const nodes: GraphNodeView[] = [];
@@ -593,6 +600,120 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         provider?: IMetadataProvider,
     ): Promise<GraphSubgraph> {
         return this.Subgraph(graphName, seeds, options, user, provider);
+    }
+
+    /**
+     * The fewest-hop path from `from` to `to` in `graphName` that the caller (and every
+     * `options.AudienceReaders`) may see, with the best path weight among paths of that length.
+     *
+     * The search is the same best-first, permission-checked expansion as {@link Subgraph}, started at
+     * `from` and stopped the moment `to` is admitted, so a path never runs through a node some
+     * principal cannot see. `Depth` defaults to the maximum (4) and `MaxNodes` to the cap (200),
+     * because a path search usually needs the reach that a neighborhood read does not.
+     *
+     * A node the caller cannot see (either endpoint included) and a node that is not connected give
+     * the same answer, `Found: false` with a `Message`, so the result never reveals that a record exists.
+     */
+    public async FindPath(
+        graphName: string,
+        from: GraphNodeRef,
+        to: GraphNodeRef,
+        options: GraphTraversalOptions,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GraphPath> {
+        const graph = this.GetGraph(graphName);
+        if (!graph) {
+            return notFoundPath(`Graph "${graphName}" was not found or is not active.`);
+        }
+        if (!user || !from || !to) {
+            return notFoundPath('Both a start node and an end node are required.');
+        }
+        const maxDepth = ClampGraphDepth(options.Depth ?? options.MaxDepth ?? GRAPH_MAX_DEPTH);
+        const maxNodes = ClampGraphMaxNodes(options.MaxNodes, GRAPH_MAX_NODES);
+        const stopAtKey = this.nodeKey(this.normalizeNodeRef(to, this.graphProvider(provider)), this.graphProvider(provider));
+        const run = await this.traverse(graph, [from], options, { MaxDepth: maxDepth, MaxNodes: maxNodes, StopAtKey: stopAtKey }, user, provider);
+        if (!run.discovered.has(stopAtKey)) {
+            const limit = run.capped ? ` (the search stopped at the ${maxNodes}-node limit)` : '';
+            return notFoundPath(`No path found within ${maxDepth} hop${maxDepth === 1 ? '' : 's'}${limit}.`);
+        }
+        return this.buildPath(stopAtKey, run);
+    }
+
+    /**
+     * Render a {@link GraphPath} as one Markdown line per hop for LLM prompt injection. Each edge is
+     * shown in its own direction, so a hop taken against an edge reads `<--`.
+     */
+    public DescribePathForPrompt(path: GraphPath, provider?: IMetadataProvider): string {
+        if (!path.Found || path.Nodes.length === 0) {
+            return path.Message ? `No graph path found. ${path.Message}` : 'No graph path found.';
+        }
+        const resolvedProvider = this.graphProvider(provider);
+        const lines: string[] = [`### Graph Path (${path.Edges.length} hop${path.Edges.length === 1 ? '' : 's'}, weight ${path.PathWeight.toFixed(2)})`];
+        lines.push(`- **[${path.Nodes[0].EntityName}] ${path.Nodes[0].Label}**`);
+        for (let i = 0; i < path.Edges.length; i++) {
+            const edge = path.Edges[i];
+            const next = path.Nodes[i + 1];
+            const forward = this.nodeKey(edge.Source, resolvedProvider) === path.Nodes[i].Key;
+            const arrow = !edge.IsDirected ? '<-->' : forward ? '-->' : '<--';
+            const desc = edge.Description ? ` (${edge.Description})` : '';
+            lines.push(`  ${arrow} [${edge.TypeName} (${edge.Weight.toFixed(2)})]${desc} **[${next.EntityName}] ${next.Label}**`);
+        }
+        return lines.join('\n');
+    }
+
+    /**
+     * Best-first bounded expansion shared by {@link Subgraph} and {@link FindPath}: admit the visible
+     * seeds, then expand hop by hop, checking every candidate's visibility for every principal before
+     * admitting it, until the depth or node limit is reached or `limits.StopAtKey` is admitted.
+     */
+    private async traverse(
+        graph: MJGraphEntity,
+        seeds: GraphNodeRef[],
+        options: GraphTraversalOptions,
+        limits: TraversalLimits,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<TraversalRun> {
+        const dataProvider = this.graphProvider(provider);
+        const principals = this.principals(user, options.AudienceReaders);
+        const minWeight = options.MinWeight ?? 0;
+        const includeProposed = options.IncludeProposed === true;
+        const discovered = new Map<string, DiscoveredNode>();
+        const visibleByKey = new Map<string, GraphNodeView>();
+        const maxNodes = limits.MaxNodes;
+        let frontier = await this.admitSeeds(seeds, principals, maxNodes, dataProvider, includeProposed, discovered, visibleByKey);
+        let capped = false;
+        const reachedStop = (): boolean => limits.StopAtKey != null && discovered.has(limits.StopAtKey);
+
+        for (let hop = 1; hop <= limits.MaxDepth && frontier.length > 0 && !reachedStop(); hop++) {
+            const stepEdges = await this.getEdgesForFrontier(graph, frontier.map((f) => f.Node), options, principals, dataProvider);
+            const candidates = this.rankCandidates(stepEdges, frontier, discovered, minWeight, hop, dataProvider);
+            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, dataProvider, includeProposed);
+            const admitted = this.admitCandidates(candidates, visible, maxNodes, hop, discovered, visibleByKey);
+            capped = capped || admitted.Capped;
+            frontier = admitted.Next;
+        }
+        return { discovered, visibleByKey, capped, maxNodes, principals, dataProvider };
+    }
+
+    /** Walk back from `targetKey` through each node's parent to the seed, and return the path in order. */
+    private buildPath(targetKey: string, run: TraversalRun): GraphPath {
+        const nodes: GraphNodeView[] = [];
+        const edges: GraphEdgeView[] = [];
+        let current = run.discovered.get(targetKey);
+        const pathWeight = current?.PathWeight ?? 0;
+        while (current) {
+            const view = run.visibleByKey.get(current.Key);
+            if (view) {
+                nodes.push({ ...view, Hop: current.Hop, PathWeight: current.PathWeight, ParentKey: current.ParentKey, ViaEdgeID: current.ViaEdge?.ID ?? null });
+            }
+            if (current.ViaEdge) {
+                edges.push(current.ViaEdge);
+            }
+            current = current.ParentKey ? run.discovered.get(current.ParentKey) : undefined;
+        }
+        return { Found: true, Nodes: nodes.reverse(), Edges: edges.reverse(), PathWeight: pathWeight };
     }
 
     /**
@@ -1504,6 +1625,11 @@ export function ClampGraphDepth(requested: number | undefined): number {
 export function ClampGraphMaxNodes(requested: number | undefined, fallback: number = GRAPH_DEFAULT_MAX_NODES): number {
     const value = requested != null && Number.isFinite(requested) ? Math.floor(requested) : fallback;
     return Math.max(1, Math.min(GRAPH_MAX_NODES, value));
+}
+
+/** A {@link GraphPath} that found nothing, with the reason. */
+function notFoundPath(message: string): GraphPath {
+    return { Found: false, Nodes: [], Edges: [], PathWeight: 0, Message: message };
 }
 
 function compareStrings(a: string, b: string): number {

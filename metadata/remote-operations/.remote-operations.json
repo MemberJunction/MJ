@@ -978,5 +978,27 @@
       "lastModified": "2026-10-28T22:16:26.900Z",
       "checksum": "ebfe9939568442b97b8a3fdffd2a2dccca91ca127b62320275813cb8c5f41d9e"
     }
+  },
+  {
+    "fields": {
+      "Name": "Find Graph Path",
+      "OperationKey": "Graph.FindPath",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Semantic Graph",
+      "Description": "Find the fewest-hop path between two nodes of a semantic graph (default MJ Canon) that the caller may see. Each endpoint is a record or a concept name, synonym or ID; an endpoint that fits several concepts comes back AmbiguousEndpoint with the candidates. Read-only. Implemented by GraphFindPathServerOperation in @memberjunction/core-entities-server over GraphEngine.FindPath.",
+      "InputTypeName": "GraphFindPathInput",
+      "InputTypeDefinition": "@file:types/graph-find-path.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "GraphFindPathOutput",
+      "OutputTypeDefinition": "@file:types/graph-find-path.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AD37D3E6-0FAD-49F8-8FEB-572BE22CCF1D"
+    }
   }
 ]

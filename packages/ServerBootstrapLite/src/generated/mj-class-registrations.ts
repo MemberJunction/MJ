@@ -1215,9 +1215,10 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (91 classes)
+// @memberjunction/core-entities-server (92 classes)
 import {
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1310,7 +1311,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (193 classes)
+// @memberjunction/core-actions (195 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1376,6 +1377,7 @@ import {
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindGraphPathAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1452,6 +1454,7 @@ import {
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
@@ -2497,6 +2500,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -2595,11 +2599,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
-    AssignUserRolesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
@@ -2655,6 +2659,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindGraphPathAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2731,6 +2736,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
@@ -2797,13 +2803,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
-    StewardFeaturePipelineVersionAction,
-    DockerRenderDriver,
-    LocalWorkerRenderDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    StewardFeaturePipelineVersionAction,
+    DockerRenderDriver,
+    LocalWorkerRenderDriver,
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
@@ -2845,7 +2851,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1224;
+export const CLASS_REGISTRATIONS_COUNT = 1227;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

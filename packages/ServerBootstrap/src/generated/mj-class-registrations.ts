@@ -1408,7 +1408,7 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (23 classes)
+// @memberjunction/content-pipeline (20 classes)
 import {
     ArchiveExtractor,
     CredentialAccessDriver,
@@ -1420,16 +1420,13 @@ import {
     EmbedStage,
     ExtractStage,
     GraphStage,
-    HeadlessPageRenderer,
     HtmlExtractor,
     ManagedPromptClassifier,
     ManagedPromptConceptSynthesizer,
-    ManifestExtractor,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
-    SettleItemEmbeddingStage,
     SpreadsheetExtractor,
     TagStage,
     WordExtractor,
@@ -1498,9 +1495,10 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (91 classes)
+// @memberjunction/core-entities-server (92 classes)
 import {
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1664,7 +1662,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (193 classes)
+// @memberjunction/core-actions (195 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1730,6 +1728,7 @@ import {
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindGraphPathAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1806,6 +1805,7 @@ import {
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
@@ -2917,16 +2917,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EmbedStage,
     ExtractStage,
     GraphStage,
-    HeadlessPageRenderer,
     HtmlExtractor,
     ManagedPromptClassifier,
     ManagedPromptConceptSynthesizer,
-    ManifestExtractor,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
-    SettleItemEmbeddingStage,
     SpreadsheetExtractor,
     TagStage,
     WordExtractor,
@@ -2954,13 +2951,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
+    TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
-    TaskGraphResumeServerOperation,
-    TaskGraphRetryTaskServerOperation,
-    TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
@@ -2982,6 +2979,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -3158,12 +3156,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DeleteDirectoryAction,
     DeleteObjectAction,
     DeleteRecordAction,
+    DirectoryExistsAction,
+    DownloadSignedDocumentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
-    DirectoryExistsAction,
-    DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
@@ -3179,6 +3177,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindGraphPathAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -3255,6 +3254,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
