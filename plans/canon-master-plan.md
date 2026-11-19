@@ -226,5 +226,5 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-17 | Workstream 4 handed from `MS-BC` to `ct-bc`. |
 | 2026-11-17 | `ct-bc` and `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstreams 4 and 5. |
 | 2026-11-18 | `cmbrock-BC` opened MJ 6731 for workstream 5a and filed issues 6723, 6724 and 6725 for 5b to 5d. Watched MJ 6583 merged. |
-| 2026-11-19 | The sponsor added MJ 6762 (MJ Docs in the semantic graph), assigned to `cmbrock-BC`. Its provenance access policies cover most of 5c. |
 | 2026-11-18 | MJ 6688 (the non-Canon part of 6404) merged. `cmbrock-BC` filed MJ 6757 (authority per concept), added to the backlog. The sponsor closed design input: decisions 1 to 7 stand, and `rkihm-BC` leads development. |
+| 2026-11-19 | The sponsor added MJ 6762 (MJ Docs in the semantic graph), assigned to `cmbrock-BC`. Its provenance access policies cover most of 5c. |
