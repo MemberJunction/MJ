@@ -13431,9 +13431,6 @@ importers:
       '@foblex/utils':
         specifier: 1.1.1
         version: 1.1.1
-      '@fortawesome/fontawesome-free':
-        specifier: 6.7.2
-        version: 6.7.2
       '@google/genai':
         specifier: ^2.16.0
         version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))

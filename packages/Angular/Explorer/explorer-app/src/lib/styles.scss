@@ -23,8 +23,10 @@
 @import './styles/variables';
 @import './styles/typography';
 
-// Import Font Awesome Free 6.7.2 icons from npm
-@import '@fortawesome/fontawesome-free/css/all.min.css';
+// Import Font Awesome Free 6.7.2 icons bundled from explorer-app's npm dependency
+// (omitting the .css extension lets Sass inline the stylesheet and Angular CLI rebase
+// ../webfonts/* relative to dist/styles/fontawesome/css/ without any MJExplorer package.json edit)
+@import './styles/fontawesome/css/all.min';
 
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';

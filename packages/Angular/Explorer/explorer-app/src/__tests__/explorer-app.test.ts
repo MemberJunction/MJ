@@ -266,9 +266,16 @@ describe('first-paint brand overlay restore', () => {
 describe('global stylesheet and typography contract (WS4)', () => {
   const stylesScss = readFileSync(fileURLToPath(new URL('../lib/styles.scss', import.meta.url)), 'utf8');
   const typographyScss = readFileSync(fileURLToPath(new URL('../lib/styles/_typography.scss', import.meta.url)), 'utf8');
+  const pkgJson = JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as {
+    dependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
+  };
 
-  it('imports Font Awesome Free 6.7.2 from npm in styles.scss', () => {
-    expect(stylesScss).toContain("@import '@fortawesome/fontawesome-free/css/all.min.css';");
+  it('bundles Font Awesome Free 6.7.2 from explorer-app without requiring host package.json edits', () => {
+    expect(pkgJson.dependencies?.['@fortawesome/fontawesome-free']).toBe('6.7.2');
+    expect(pkgJson.scripts?.['copy-assets']).toContain('node_modules/@fortawesome/fontawesome-free/css/all.min.css');
+    expect(pkgJson.scripts?.['copy-assets']).toContain('node_modules/@fortawesome/fontawesome-free/webfonts/*');
+    expect(stylesScss).toContain("@import './styles/fontawesome/css/all.min';");
   });
 
   it('imports card-grid styles alongside the other ng-ui-components primitives', () => {

@@ -114,6 +114,13 @@ describe('derived extras', () => {
     expect(custom.overlayVars['--mj-font-family-display']).toBe("'Space Grotesk', 'Montserrat', sans-serif");
   });
 
+  it('follows custom fontFamily for headings when fontFamilyDisplay is unset and merged with MJ_DEFAULT_SEEDS', () => {
+    const georgia = "'Georgia', 'Times New Roman', serif";
+    const derived = derive({ ...MJ_DEFAULT_SEEDS, fontFamily: georgia });
+    expect(derived.overlayVars['--mj-font-family']).toBe(georgia);
+    expect(derived.overlayVars['--mj-font-family-display']).toBe(georgia);
+  });
+
   it('respects the shape (radius) seed', () => {
     const rounded = derive({ ...MJ_DEFAULT_SEEDS, radius: 12 });
     expect(rounded.overlayVars['--mj-radius-md']).toBe('12px');

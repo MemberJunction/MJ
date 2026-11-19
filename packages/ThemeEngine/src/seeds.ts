@@ -71,6 +71,12 @@ function normalizeDefaultFont(fontStack: string | undefined): string | undefined
 /**
  * Seeds that, when derived, reproduce MJ's own default theme within tolerance.
  * Used as the fixture for the reproduction test and as the fallback theme.
+ *
+ * `fontFamilyDisplay` is intentionally omitted here so `{ ...MJ_DEFAULT_SEEDS, ...saved }`
+ * never stamps Montserrat onto existing saved themes that only set a custom `fontFamily`:
+ * `ResolveSeeds` falls back to `fontFamily`, so new themes using `MJ_DEFAULT_SEEDS` still
+ * resolve both body and display fonts to Montserrat, while saved themes without an explicit
+ * display font continue to match their body font across every load/save path.
  */
 export const MJ_DEFAULT_SEEDS: ThemeSeeds = {
   primary: '#0076b6',
@@ -81,7 +87,6 @@ export const MJ_DEFAULT_SEEDS: ThemeSeeds = {
   radius: 8,
   depth: 1,
   fontFamily: MJ_FONT,
-  fontFamilyDisplay: MJ_FONT,
   fontFamilyMono: MJ_FONT_MONO,
 };
 

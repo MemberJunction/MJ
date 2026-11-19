@@ -30,7 +30,7 @@ describe('SanitizeThemeSeeds', () => {
       fontFamilyDisplay: MJ_LEGACY_INTER_FONT,
     });
     expect(sanitized?.fontFamily).toBe(MJ_DEFAULT_SEEDS.fontFamily);
-    expect(sanitized?.fontFamilyDisplay).toBe(MJ_DEFAULT_SEEDS.fontFamilyDisplay);
+    expect(sanitized?.fontFamilyDisplay).toBe(MJ_DEFAULT_SEEDS.fontFamily);
 
     const resolved = ResolveSeeds({ primary: '#0076b6', fontFamily: MJ_LEGACY_INTER_FONT });
     expect(resolved.fontFamily).toBe(MJ_DEFAULT_SEEDS.fontFamily);
@@ -39,5 +39,15 @@ describe('SanitizeThemeSeeds', () => {
     const doubleQuotedInter = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     const resolvedDbl = ResolveSeeds({ primary: '#0076b6', fontFamily: doubleQuotedInter });
     expect(resolvedDbl.fontFamily).toBe(MJ_DEFAULT_SEEDS.fontFamily);
+  });
+
+  it('preserves unset fontFamilyDisplay when merging a custom-font saved theme with MJ_DEFAULT_SEEDS', () => {
+    const georgia = "'Georgia', 'Times New Roman', serif";
+    const merged = { ...MJ_DEFAULT_SEEDS, primary: '#1e3a8a', fontFamily: georgia };
+    expect(merged.fontFamilyDisplay).toBeUndefined();
+
+    const resolved = ResolveSeeds(merged);
+    expect(resolved.fontFamily).toBe(georgia);
+    expect(resolved.fontFamilyDisplay).toBe(georgia);
   });
 });

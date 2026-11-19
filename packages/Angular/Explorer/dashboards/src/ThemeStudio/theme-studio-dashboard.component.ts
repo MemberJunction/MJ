@@ -139,9 +139,19 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     { label: 'System UI', value: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
   ];
 
+  public readonly HeadingFontOptions: { label: string; value: string }[] = [
+    { label: 'Match body font', value: '' },
+    ...this.FontOptions,
+  ];
+
   /** @deprecated Use {@link FontOptions}. */
   public get fontOptions(): { label: string; value: string }[] {
     return this.FontOptions;
+  }
+
+  public OnHeadingFontChanged(value: string): void {
+    this.Seeds.fontFamilyDisplay = value || undefined;
+    this.OnSeedsChanged();
   }
 
   /** Height %s + labels for the demo bar chart. */
