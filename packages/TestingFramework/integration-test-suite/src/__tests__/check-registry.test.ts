@@ -307,7 +307,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
-        ['archive-paging', ArchivePagingChecks, 2], // ARP1-ARP2 one archive run strips every row past the cutoff page by page; a second run loads nothing (IT180)
+        ['archive-paging', ArchivePagingChecks, 3], // ARP1-ARP3 one archive run strips (ARP1) or deletes (ARP3) every row past the cutoff page by page; a second run loads nothing (IT180)
         ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
         ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
@@ -394,7 +394,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 11,
-        'archive-paging': 2,
+        'archive-paging': 3,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
@@ -676,6 +676,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'app-behavioral.AB2',
         'archive-paging.ARP1',
         'archive-paging.ARP2',
+        'archive-paging.ARP3',
         'binary-fields.BF4',
         'binary-fields.BF6',
         'cache-architecture.CA10',
