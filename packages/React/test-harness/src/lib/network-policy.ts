@@ -8,24 +8,37 @@
  * component cannot send the rows it was given to an outside host, nor reach hosts on the network
  * the harness runs in.
  *
- * Request routing sees HTTP requests and WebSockets only. WebRTC bypasses it, so every filtered
- * page has the WebRTC constructors removed ({@link DISABLE_WEBRTC_SCRIPT}). DNS prefetching bypasses
- * it too, so a browser the harness launches has it turned off ({@link BROWSER_LAUNCH_ARGS}); a
- * browser the harness attaches to keeps whatever flags it was started with. An allowed CDN origin is
- * allowed as a whole, and a redirect from it is not re-checked: this is a first layer, not a
- * sandbox.
+ * Two layers enforce it. Request routing sees the page's HTTP requests and WebSockets, and records
+ * what it blocks for the page that made it. Some traffic never reaches routing: Speculation Rules
+ * prefetches, and WebRTC's connections to STUN and TURN servers. So every context the harness
+ * creates also sends its traffic through an allowlisting proxy (`AllowlistProxy`), and a browser
+ * the harness launches gets flags ({@link BROWSER_LAUNCH_ARGS}) that send WebRTC's TCP through that
+ * proxy and turn off its UDP. WebRTC is also removed from every frame
+ * ({@link DISABLE_WEBRTC_SCRIPT}), but only as a first line: a script can be raced.
+ *
+ * What is not covered: a browser the harness attaches to keeps its own launch flags, so WebRTC
+ * over UDP is not stopped there; a reused external context gets neither the proxy nor the
+ * context-wide route; an allowed origin is allowed as a whole; a redirect from an allowed origin
+ * is not re-checked by routing (the proxy does check it). This is a first layer, not a sandbox.
  */
 
 /**
- * Chromium flags for a browser the harness launches with the filter on. A DNS prefetch of
- * `<data>.attacker.example` carries data in the lookup itself, and never passes through routing.
+ * Chromium flags for a browser the harness launches with the filter on.
+ * - WebRTC may use only the proxy: its TCP goes through the proxy, which refuses hosts the
+ *   allowlist does not allow, and its UDP, which no HTTP proxy can carry, is turned off.
+ * - DNS prefetching is off: a lookup of `<data>.attacker.example` carries data on its own.
  */
-export const BROWSER_LAUNCH_ARGS: readonly string[] = ['--dns-prefetch-disable'];
+export const BROWSER_LAUNCH_ARGS: readonly string[] = [
+  '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+  '--webrtc-ip-handling-policy=disable_non_proxied_udp',
+  '--dns-prefetch-disable',
+];
 
 /**
- * Init script for every filtered page, run in each of its frames. WebRTC's ICE traffic goes to any
- * STUN or TURN server the page names, over UDP or TCP, without passing through request routing,
- * and no Chromium flag stops TURN over TCP. Components have no use for WebRTC, so it is removed.
+ * Init script for every filtered context (or page, in a reused context), run in each frame.
+ * Components have no use for WebRTC, so its constructors are removed. This is a first line only:
+ * Chrome can hand a sandboxed iframe a fresh `RTCPeerConnection` before the script runs, which
+ * is why the proxy and {@link BROWSER_LAUNCH_ARGS} back it at the network level.
  */
 export const DISABLE_WEBRTC_SCRIPT = `for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel', 'RTCIceCandidate', 'RTCSessionDescription', 'RTCRtpSender', 'RTCRtpReceiver', 'RTCRtpTransceiver']) {
   try { delete globalThis[name]; } catch { /* not configurable in this browser: leave it */ }

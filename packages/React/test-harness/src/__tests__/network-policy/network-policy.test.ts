@@ -23,6 +23,7 @@ describe('NetworkAllowlist', () => {
     ['an outside host', 'https://attacker.example/collect?rows=secret'],
     ['a subdomain of an allowed host', 'https://evil.unpkg.com/x.js'],
     ['an allowed origin over another scheme', 'http://unpkg.com/x.js'],
+    ['an allowed origin over another scheme on the same port', 'http://unpkg.com:443/x.js'],
     ['an allowed origin on another port', 'https://unpkg.com:8443/x.js'],
     ['a look-alike host', 'https://unpkg.com.attacker.example/x.js'],
     ['a cloud metadata address', 'http://169.254.169.254/latest/meta-data/'],

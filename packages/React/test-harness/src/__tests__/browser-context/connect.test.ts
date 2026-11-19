@@ -15,14 +15,15 @@ vi.mock('playwright', () => ({
 
 import type { Page } from 'playwright';
 import { BrowserManager, ClassifyConnectEndpoint } from '../../lib/browser-context';
-import { DISABLE_WEBRTC_SCRIPT } from '../../lib/network-policy';
+import { connect as netConnect } from 'net';
+import { BROWSER_LAUNCH_ARGS, DISABLE_WEBRTC_SCRIPT } from '../../lib/network-policy';
 
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
 const REUSE_CONTEXT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_REUSE_CONTEXT';
 
 type Spy = ReturnType<typeof vi.fn>;
 type FakePage = { close: Spy; route: Spy; routeWebSocket: Spy; addInitScript: Spy; unrouteAll: Spy; goto: Spy };
-type FakeContext = { newPage: Spy; close: Spy; route: Spy; routeWebSocket: Spy };
+type FakeContext = { newPage: Spy; close: Spy; route: Spy; routeWebSocket: Spy; addInitScript: Spy };
 type FakeBrowser = { newContext: Spy; contexts: Spy; close: Spy };
 
 /** A fake browser whose contexts all open the same page; launch and both connects return it. */
@@ -40,6 +41,7 @@ function installFakeBrowser(): { page: FakePage; context: FakeContext; existingC
     close: vi.fn().mockResolvedValue(undefined),
     route: vi.fn().mockResolvedValue(undefined),
     routeWebSocket: vi.fn().mockResolvedValue(undefined),
+    addInitScript: vi.fn().mockResolvedValue(undefined),
   });
   const context = fakeContext();
   const browser: FakeBrowser = {
@@ -105,7 +107,7 @@ describe('BrowserManager attach behavior', () => {
     await mgr.initialize();
 
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(launch).toHaveBeenCalledWith({ headless: true, args: ['--dns-prefetch-disable'] });
+    expect(launch).toHaveBeenCalledWith({ headless: true, args: [...BROWSER_LAUNCH_ARGS] });
     expect(connect).not.toHaveBeenCalled();
     expect(connectOverCDP).not.toHaveBeenCalled();
     expect(browser.newContext).toHaveBeenCalledTimes(1);
@@ -258,8 +260,29 @@ describe('BrowserManager network allowlist', () => {
     expect(context.routeWebSocket).toHaveBeenCalledTimes(1);
     expect(page.route).toHaveBeenCalledWith('**/*', expect.any(Function));
     expect(page.routeWebSocket).toHaveBeenCalledTimes(1);
-    expect(page.addInitScript).toHaveBeenCalledWith(DISABLE_WEBRTC_SCRIPT);
-    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ args: ['--dns-prefetch-disable'] }));
+    // On the context, so popups the page opens get it too; the page needs no copy of its own.
+    expect(context.addInitScript).toHaveBeenCalledWith(DISABLE_WEBRTC_SCRIPT);
+    expect(page.addInitScript).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.arrayContaining(['--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--dns-prefetch-disable']),
+    }));
+    expect(browser.newContext).toHaveBeenCalledWith(expect.objectContaining({
+      proxy: { server: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/), bypass: '<-loopback>' },
+    }));
+    await mgr.Close();
+  });
+
+  it('stops its proxy when closed', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    const proxyPort = Number(new URL(browser.newContext.mock.calls[0][0].proxy.server).port);
+    await mgr.Close();
+
+    const refused = await new Promise<boolean>(resolve => {
+      const socket = netConnect(proxyPort, '127.0.0.1', () => { socket.destroy(); resolve(false); });
+      socket.on('error', () => resolve(true));
+    });
+    expect(refused).toBe(true);
   });
 
   it("guards only its own pages in a reused context, never the user's other tabs", async () => {
@@ -270,7 +293,9 @@ describe('BrowserManager network allowlist', () => {
 
     expect(existingContext.route).not.toHaveBeenCalled();
     expect(existingContext.routeWebSocket).not.toHaveBeenCalled();
+    expect(existingContext.addInitScript).not.toHaveBeenCalled();
     expect(page.route).toHaveBeenCalledTimes(2);
+    expect(page.addInitScript).toHaveBeenCalledWith(DISABLE_WEBRTC_SCRIPT);
   });
 
   it("routes nothing in 'unrestricted' mode", async () => {
@@ -282,6 +307,8 @@ describe('BrowserManager network allowlist', () => {
     expect(context.route).not.toHaveBeenCalled();
     expect(page.route).not.toHaveBeenCalled();
     expect(page.addInitScript).not.toHaveBeenCalled();
+    expect(context.addInitScript).not.toHaveBeenCalled();
+    expect(browser.newContext.mock.calls[0][0]).not.toHaveProperty('proxy');
     expect(launch).toHaveBeenCalledWith(expect.objectContaining({ args: [] }));
   });
 

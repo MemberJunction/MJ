@@ -684,6 +684,14 @@ export interface ComponentExecutionResult {
    * string is dropped). Empty when nothing was blocked or the filter is off.
    */
   blockedNetworkRequests?: string[];
+
+  /**
+   * Requests the allowlisting proxy refused while this run was in progress, as distinct origin + path.
+   * They bypassed request routing (a Speculation Rules prefetch, a WebRTC TURN connection), so
+   * the page that made them is not known: another page running at the same time, or the
+   * browser's own background traffic, can appear here too. They raise no warning.
+   */
+  proxyBlockedNetworkRequests?: string[];
 }
 
 /**
@@ -932,6 +940,7 @@ export class ComponentRunner {
 
     // Get a fresh page for this test execution
     const page = await this.browserManager.getPage();
+    const proxyBlockedBefore = this.browserManager.GetProxyBlockedRequests().length;
     
     // Set default timeout for all page operations (Recommendation #2)
     page.setDefaultTimeout(globalTimeout);
@@ -2037,6 +2046,7 @@ export class ComponentRunner {
         }));
 
       const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
+      const proxyBlockedNetworkRequests = [...new Set(this.browserManager.GetProxyBlockedRequests().slice(proxyBlockedBefore))];
       const result: ComponentExecutionResult = {
         success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
@@ -2061,6 +2071,7 @@ export class ComponentRunner {
         codeExecutionSuccess,
         dataAccess,
         blockedNetworkRequests,
+        proxyBlockedNetworkRequests,
         sourceMaps: (this as any)._lastSourceMaps,
       };
 
@@ -2128,6 +2139,7 @@ export class ComponentRunner {
       FinalizePendingDataAccess(dataAccess);
 
       const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
+      const proxyBlockedNetworkRequests = [...new Set(this.browserManager.GetProxyBlockedRequests().slice(proxyBlockedBefore))];
       const result: ComponentExecutionResult = {
         success: false,
         html: '',
@@ -2151,6 +2163,7 @@ export class ComponentRunner {
         // Data calls made before the failure still describe what the component reached for.
         dataAccess,
         blockedNetworkRequests,
+        proxyBlockedNetworkRequests,
       };
 
       if (debug) {

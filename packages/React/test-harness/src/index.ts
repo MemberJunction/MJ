@@ -1,6 +1,7 @@
 export { ReactTestHarness, TestHarnessOptions } from './lib/test-harness';
 export { BrowserManager, BrowserContextOptions, ClassifyConnectEndpoint } from './lib/browser-context';
 export { NetworkAllowlist, NetworkAccessMode, HostOfUrl, RedactUrl, BROWSER_LAUNCH_ARGS, DISABLE_WEBRTC_SCRIPT } from './lib/network-policy';
+export { AllowlistProxy } from './lib/network-proxy';
 // Export the component runner that uses the real React runtime UMD bundle
 export {
   ComponentRunner,

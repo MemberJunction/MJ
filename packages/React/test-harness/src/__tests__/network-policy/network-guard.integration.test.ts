@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, Server } from 'http';
 import { AddressInfo } from 'net';
 import { createHash } from 'crypto';
+import { createSocket, Socket as UdpSocket } from 'dgram';
+import { createServer as createNetServer, Server as NetServer } from 'net';
+import { chromium } from 'playwright';
 import { BrowserManager } from '../../lib/browser-context';
+import { AllowlistProxy } from '../../lib/network-proxy';
+import { BROWSER_LAUNCH_ARGS, NetworkAllowlist } from '../../lib/network-policy';
 
 /**
  * Real-browser test of the page's network allowlist. Skipped by default (needs Playwright
@@ -162,18 +167,85 @@ describe.skipIf(!RUN)('BrowserManager network allowlist (integration)', () => {
     }
   }, 60000);
 
-  it('removes WebRTC from the page and from frames it creates', async () => {
+  it('removes WebRTC from the page, from frames it creates, and from popups it opens', async () => {
     const { manager, page } = await guardedPage();
     try {
-      const types = await page.evaluate(() => {
+      const types = await page.evaluate(() => new Promise<Record<string, string>>(resolve => {
+        type WithRtc = Window & typeof globalThis;
         const frame = document.createElement('iframe');
         document.body.appendChild(frame);
-        const frameWindow = frame.contentWindow as (Window & typeof globalThis) | null;
-        return { page: typeof RTCPeerConnection, frame: typeof frameWindow?.RTCPeerConnection };
-      });
-      expect(types).toEqual({ page: 'undefined', frame: 'undefined' });
+        const popup = window.open('') as WithRtc | null;
+        const loaded = document.createElement('iframe');
+        loaded.srcdoc = '<p>loaded</p>';
+        loaded.onload = () => resolve({
+          page: typeof RTCPeerConnection,
+          frame: typeof (frame.contentWindow as WithRtc | null)?.RTCPeerConnection,
+          loadedFrame: typeof (loaded.contentWindow as WithRtc | null)?.RTCPeerConnection,
+          popup: typeof popup?.RTCPeerConnection,
+        });
+        document.body.appendChild(loaded);
+      }));
+      expect(types).toEqual({ page: 'undefined', frame: 'undefined', loadedFrame: 'undefined', popup: 'undefined' });
     } finally {
       await manager.Close();
+    }
+  }, 60000);
+
+  it('stops a Speculation Rules prefetch, which request routing never sees, at the proxy', async () => {
+    received.length = 0;
+    const { manager, page } = await guardedPage();
+    try {
+      await page.evaluate(url => {
+        const rules = document.createElement('script');
+        rules.type = 'speculationrules';
+        rules.textContent = JSON.stringify({ prefetch: [{ source: 'list', urls: [url] }] });
+        document.head.appendChild(rules);
+      }, `${outsideOrigin()}/prefetch?rows=secret`);
+      await page.waitForTimeout(2500);
+      expect(sentToOutside()).toEqual([]);
+    } finally {
+      await manager.Close();
+    }
+  }, 60000);
+
+  it('keeps WebRTC off the network even where the script did not remove it (proxy + launch flags)', async () => {
+    // WebRTC is still present here: the context has the harness's proxy and launch flags but not its
+    // init script, as a frame the script lost a race in would be. A STUN/TURN server that is not
+    // allowed must still receive nothing, over UDP or TCP.
+    let udpPackets = 0;
+    let tcpConnections = 0;
+    const udp: UdpSocket = createSocket('udp4');
+    udp.on('message', () => udpPackets++);
+    await new Promise<void>(resolve => udp.bind(0, '127.0.0.1', () => resolve()));
+    const tcp: NetServer = createNetServer(socket => { tcpConnections++; socket.destroy(); });
+    await new Promise<void>(resolve => tcp.listen(0, '127.0.0.1', () => resolve()));
+    const proxy = new AllowlistProxy(url => new NetworkAllowlist().IsAllowed(url));
+    await proxy.Start();
+    const browser = await chromium.launch({ headless: true, args: [...BROWSER_LAUNCH_ARGS] });
+    try {
+      const context = await browser.newContext({ proxy: { server: proxy.Server, bypass: '<-loopback>' } });
+      const page = await context.newPage();
+      await page.goto('about:blank');
+      const ports = { udp: udp.address().port, tcp: (tcp.address() as AddressInfo).port };
+      const created = await page.evaluate(async p => {
+        const pc = new RTCPeerConnection({ iceServers: [
+          { urls: `stun:127.0.0.1:${p.udp}` },
+          { urls: `turn:127.0.0.1:${p.udp}?transport=udp`, username: 'u', credential: 'c' },
+          { urls: `turn:127.0.0.1:${p.tcp}?transport=tcp`, username: 'u', credential: 'c' },
+        ] });
+        pc.createDataChannel('x');
+        await pc.setLocalDescription(await pc.createOffer());
+        return true;
+      }, ports);
+      await page.waitForTimeout(3000);
+      expect(created).toBe(true);
+      expect({ udpPackets, tcpConnections }).toEqual({ udpPackets: 0, tcpConnections: 0 });
+      expect(proxy.BlockedRequests).toContain(`https://127.0.0.1:${ports.tcp}/`);
+    } finally {
+      await browser.close();
+      await proxy.Stop();
+      udp.close();
+      await new Promise<void>(resolve => tcp.close(() => resolve()));
     }
   }, 60000);
 
