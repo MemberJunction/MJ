@@ -32,6 +32,7 @@ import {
     ValidateArtifactContentMutationAgainstLocks
 } from '../custom/ArtifactLockValidation';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
+import { QueryEngine } from '../engines/QueryEngine';
 import {
     ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
@@ -183,24 +184,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const allowedUser = createMockUser('u-allowed', 'Alice Admin', true);
         const deniedUser = createMockUser('u-denied', 'Bob Restricted', false);
 
+        // The query comes from the provider's QueryEngine; the deprecated provider query list stays empty.
+        const duesQuery = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            Name: 'Regional Dues Query',
+            Status: 'Approved',
+            QueryFields: [
+                { Name: 'Region', Sequence: 1, SQLBaseType: 'nvarchar' },
+                { Name: 'Amount', Sequence: 2, SQLBaseType: 'decimal' }
+            ],
+            QueryParameters: [
+                { Name: 'Year', IsServerSet: false, IsRequired: false },
+                { Name: 'TenantID', IsServerSet: true, IsRequired: false }
+            ],
+            QueryEntities: [],
+            UserCanRun: (u: UserInfo) => ({ canRun: u.ID === allowedUser.ID, deniedEntities: [] })
+        };
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Queries: [duesQuery]
+        } as unknown as QueryEngine);
+
         const mockProvider = {
             Entities: [],
-            Queries: [
-                {
-                    ID: '11111111-2222-3333-4444-555555555555',
-                    Name: 'Regional Dues Query',
-                    Status: 'Approved',
-                    Fields: [
-                        { Name: 'Region', Sequence: 1, SQLBaseType: 'nvarchar' },
-                        { Name: 'Amount', Sequence: 2, SQLBaseType: 'decimal' }
-                    ],
-                    Parameters: [
-                        { Name: 'Year', IsServerSet: false, IsRequired: false },
-                        { Name: 'TenantID', IsServerSet: true, IsRequired: false }
-                    ],
-                    UserCanRun: (u: UserInfo) => u.ID === allowedUser.ID
-                }
-            ],
+            Queries: [],
             RunQuery: async () => ({
                 Success: true,
                 Results: [
@@ -245,6 +252,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         );
         expect(frozen.Mode).toBe('Frozen');
         expect(frozen.FrozenSnapshot?.FrozenByUserID).toBe(allowedUser.ID);
+        vi.restoreAllMocks();
     });
 
     it('§ 6.3 & § 7.2: evaluates =MJ.QUERY and =MJ.VIEW custom functions with viewer scoping, 60s cache, and #MJ_ACCESS_DENIED!', async () => {
@@ -271,18 +279,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const allowedUser = createMockUser('u-1', 'Alice', true);
         const deniedUser = createMockUser('u-2', 'Bob', false);
 
+        // The query comes from the provider's QueryEngine; the deprecated provider query list stays empty.
+        const renewals = {
+            ID: '99999999-8888-7777-6666-555555555555',
+            Name: 'Renewals by Month',
+            Status: 'Approved',
+            QueryFields: [{ Name: 'TotalRenewals', Sequence: 1, SQLBaseType: 'decimal' }],
+            QueryParameters: [{ Name: 'Year', IsServerSet: false, IsRequired: false }],
+            QueryEntities: [],
+            UserCanRun: (u: UserInfo) => ({ canRun: u.ID === allowedUser.ID, deniedEntities: [] })
+        };
+        const sameQuery = (target: string) =>
+            target.trim().toLowerCase() === renewals.ID.toLowerCase() || target.trim().toLowerCase() === renewals.Name.toLowerCase()
+                ? renewals
+                : undefined;
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Queries: [renewals],
+            FindQueryByID: sameQuery,
+            FindQueryByName: sameQuery
+        } as unknown as QueryEngine);
+
         const mockProvider = {
             Entities: [],
-            Queries: [
-                {
-                    ID: '99999999-8888-7777-6666-555555555555',
-                    Name: 'Renewals by Month',
-                    Status: 'Approved',
-                    Fields: [{ Name: 'TotalRenewals', Sequence: 1, SQLBaseType: 'decimal' }],
-                    Parameters: [{ Name: 'Year', IsServerSet: false, IsRequired: false }],
-                    UserCanRun: (u: UserInfo) => u.ID === allowedUser.ID
-                }
-            ],
+            Queries: [],
             RunQuery: async () => {
                 queryCallCount++;
                 return {
@@ -313,6 +333,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         await engine.EvaluateMjCustomFunctions(wb, deniedUser, mockProvider);
         expect(sheet.Cells['B2'].AccessDenied).toBe(true);
         expect(sheet.Cells['B2'].ComputedValue).toBe('#MJ_ACCESS_DENIED!');
+        vi.restoreAllMocks();
     });
 
     it('Accept #4: round-trips multi-sheet workbooks with formulas, formats, and column widths through .xlsx OpenXML bytes', () => {
@@ -4836,5 +4857,26 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         } finally {
             SetSpreadsheetWorkerIsolationRequired(false);
         }
+    });
+
+    it('evaluates SPARKLINE formulas into typed sparkline payloads for line, bar, winloss, and empty ranges', () => {
+        const wb = engine.CreateEmptyWorkbook('SparklineWB', ['Sheet1'], 5, 6);
+        const sheet = wb.Worksheets[0];
+        engine.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'B1', { Value: 25 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'C1', { Value: 18 }, false);
+        engine.SetCell(wb, sheet.SheetID, 'D1', { Value: 42 }, false);
+
+        const lineRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A1:D1)');
+        expect(typeof lineRes).toBe('string');
+        expect(String(lineRes)).toContain('__MJ_SPARKLINE__:line:10,25,18,42');
+
+        const barRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A1:D1, "bar")');
+        expect(String(barRes)).toContain('__MJ_SPARKLINE__:bar:10,25,18,42');
+
+        const emptyRes = engine.EvaluateFormulaExpression(wb, sheet.SheetID, '=SPARKLINE(A5:D5)');
+        expect(emptyRes).toBe('#N/A');
+
+        expect(engine.FormatCellValue(lineRes)).toBe('Sparkline (4 pts)');
     });
 });

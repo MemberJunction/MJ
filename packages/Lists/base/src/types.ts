@@ -151,6 +151,61 @@ export interface MaterializeOptions {
 }
 
 /**
+ * Options for `MaterializeFromQuery`, which creates a new list from a saved query's rows, linked to
+ * that query so it can refresh.
+ *
+ * `EntityName` and `KeyField` say which entity the list holds and which query column holds that
+ * entity's primary key. Either can be left out when the query's field metadata identifies it: a
+ * query column traced to the primary key of a single-key entity. When both are left out, exactly
+ * one such column must exist.
+ */
+export interface MaterializeFromQueryOptions {
+  ListName: string;
+  CategoryId?: string;
+  Description?: string;
+  /** Values for the query's parameters, stored on the list and reused by every refresh. */
+  Parameters?: Record<string, unknown>;
+  EntityName?: string;
+  KeyField?: string;
+  RefreshMode: ListRefreshMode;
+  /** Turns on Refresh automatically, which creates the list's refresh routine. Default off. */
+  AutoRefresh?: boolean;
+}
+
+/**
+ * A request to create a list from a saved query (`QueryID`) or from SQL written in a conversation
+ * (`SQL`, with `EntityName`), linked to the query so it can refresh. SQL is saved as a Pending query
+ * in the caller's User Lists. Exactly one of `QueryID` and `SQL` is given.
+ */
+export interface CreateListFromQueryRequest {
+  ListName: string;
+  Description?: string;
+  CategoryID?: string;
+  QueryID?: string;
+  SQL?: string;
+  EntityName?: string;
+  KeyField?: string;
+  /** For a saved query: values for its parameters. */
+  Parameters?: Record<string, unknown>;
+  RefreshMode: ListRefreshMode;
+  AutoRefresh: boolean;
+}
+
+/** The outcome of {@link CreateListFromQueryRequest}: the list result plus what it refreshes from. */
+export interface CreateListFromQueryResult extends Omit<ApplyResult, 'ResultCode'> {
+  /** An `ApplyResultCode`, or a refusal such as `INVALID_PARAMETER` or `PERMISSION_DENIED`. */
+  ResultCode: string;
+  SourceQueryID?: string;
+  SourceQueryName?: string;
+  /** True when the SQL was saved by this call, as a Pending query. */
+  SavedNewQuery: boolean;
+  /** True when the list is linked to a query and can refresh. */
+  Refreshes: boolean;
+  /** Why the list won't refresh, when it won't. */
+  StaticReason?: string;
+}
+
+/**
  * Result codes returned by `ApplyDelta` and the high-level convenience
  * operations. Every non-`SUCCESS` code maps to a user-visible failure mode
  * the UI must handle explicitly.

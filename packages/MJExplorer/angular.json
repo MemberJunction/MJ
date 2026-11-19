@@ -41,7 +41,7 @@
           "configurations": {
             "production": {
               "optimization": {
-                "scripts": false,
+                "scripts": true,
                 "styles": true,
                 "fonts": true
               },
@@ -61,7 +61,7 @@
             },
             "staging": {
               "optimization": {
-                "scripts": false,
+                "scripts": true,
                 "styles": true,
                 "fonts": true
               },
