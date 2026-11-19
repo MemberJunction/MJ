@@ -9,6 +9,7 @@
  *
  * | Step | Finding | Action |
  * |---|---|---|
+ * | {@link MigratePreChangeModels} (g), first | a model the serving migration's data section marked (`Delivery IS NULL`) | §5.6 steps 2–5 ({@link PreGateModelMigration.RunRegistryStep}); what it did is the run's `Details` under {@link PreGateModelMigration.DetailsKey} |
  * | {@link ArchiveOutsideGatePublishes} (a) | a Published model with no publish record; surplus Published models of a pipeline | archived (`status-written-outside-gate`; of two with records the newest stays), then the rollback rule |
  * | {@link RestoreOutsideGateDemotions} (b) | a model moved off Published outside the gate while holding a publish record | restored by the gate (R1's restore); refused → archived, then the rollback rule |
  * | {@link RemediateArtifactHealth} (c) | a Published model whose stored artifact is `missing` or `hash-mismatch` | archived, the rollback rule, then one training run through `AutomatedPublisher` |
@@ -20,8 +21,8 @@
  *
  * The rollback rule ((a), §5.7 R7): when the pipeline is left with no Published model, the newest `Archived` model with
  * a publish record, a `Delivery` and a verified artifact is published back (`purpose: 'rollback'`); with none, the
- * pipeline serves nothing and scoring refuses `model-not-published`. Pre-change models (`Delivery IS NULL`) are the
- * pre-change migration's (M7) and are not findings of (a)–(c).
+ * pipeline serves nothing and scoring refuses `model-not-published`. Pre-change models (`Delivery IS NULL`) are step
+ * (g)'s and are not findings of (a)–(c); (g) runs first, so a model it back-fills is seen by (a)–(c) as migrated.
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import type { MJEntityPermissionEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity, MJRowLevelSecurityFilterEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
@@ -29,6 +30,8 @@ import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/glob
 import type { NotificationContent, ScheduledJobResult } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, type ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 import { EvaluationProtocol, JsonParse, type Actor, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
+
+import { PreGateMigrationContexts, PreGateModelMigration, type PreChangeMigrationConfig, type PreChangeStepDetails, type PreGateMigrationSeams } from '../migration/pre-gate-model-migration';
 
 import { ModelScoringActionGenerator } from '../actions/model-scoring-action-generator';
 import { ArtifactRegistry } from '../registry/artifact-registry';
@@ -62,12 +65,14 @@ export const VIEW_GATED_ENTITIES = ['MJ: Feature Values', 'MJ: Latest Feature Va
 export interface RegistryCheckConfiguration {
   /** Hours a scoring run may stay `running` before (e) fails it. */
   readonly StaleScoringRunHours: number;
+  /** Step (g)'s limits, from `Configuration.migration` (`{ batchSize, retrainPerRun }`, D4-22). */
+  readonly Migration: PreChangeMigrationConfig;
 }
 
 /** One finding and what the job did about it. */
 export interface RegistryFinding {
   /** The R7 finding letter. */
-  readonly Finding: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'h' | 'i';
+  readonly Finding: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i';
   /** The model (or the scoring run, permission or record) the finding is about. */
   readonly SubjectID: string | null;
   readonly Detail: string;
@@ -90,6 +95,15 @@ export interface RegistryCheckSeams {
   readonly ScoringActions: IRegistryScoringActions;
   readonly Notifier: IMonitoringNotifier;
   readonly Clock: { Now(): Date };
+  /** Replacements for step (g)'s migration seams; each one left out is the migration's production default. */
+  readonly Migration: Partial<PreGateMigrationSeams>;
+}
+
+/** What step (g) did in one run: the migration's record (null when no pre-change work remained) and its findings. */
+export interface PreChangeStepOutcome {
+  readonly Details: PreChangeStepDetails | null;
+  /** One `retry` finding when the step threw; otherwise none (the record is in `Details`). */
+  readonly Findings: RegistryFinding[];
 }
 
 /** The production scoring-Action seam: the per-model Action generator, its lookup exposed. */
@@ -128,24 +142,28 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       ScoringActions: seams.ScoringActions || new GeneratorRegistryScoringActions(),
       Notifier: seams.Notifier || new UserNotificationMonitoringNotifier(),
       Clock: seams.Clock || { Now: () => new Date() },
+      Migration: seams.Migration || {},
     };
   }
 
   /**
-   * Every step, in the table's order, as the job's user on the job's provider. A step that throws is recorded as one
-   * `retry` finding naming the error; the other steps still run. The run fails only when a step threw.
+   * Every step, in the table's order, as the job's user on the job's provider: step (g) first, then (a)–(i). A step that
+   * throws is recorded as one `retry` finding naming the error; the other steps still run. The run fails only when a
+   * step threw. Step (g)'s record, when it ran, is the run's `Details` under {@link PreGateModelMigration.DetailsKey}
+   * (later runs read the Record Processes it disabled back from there, D4-14).
    */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
     const config = PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(context.Schedule.Configuration);
     const ctx = GateContexts.ForRequest({ ContextUser: context.ContextUser, Provider: context.Provider });
     const initiator: Actor = { kind: 'scheduled-job', scheduledJobRunId: context.Run.ID };
-    const findings = await this.RunChecks(config, initiator, ctx);
+    const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx);
+    const findings = [...migration.Findings, ...(await this.RunChecks(config, initiator, ctx))];
     await this.notify(context.Schedule.OwnerUserID, findings, ctx);
     const failed = findings.filter((f) => f.Outcome === 'retry' && f.Action.startsWith('the step failed'));
     return {
       Success: failed.length === 0,
       ErrorMessage: failed.length === 0 ? undefined : failed.map((f) => f.Detail).join('; '),
-      Details: { Findings: findings },
+      Details: migration.Details === null ? { Findings: findings } : { Findings: findings, [PreGateModelMigration.DetailsKey]: migration.Details },
     };
   }
 
@@ -176,8 +194,12 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   /** The job's `Configuration` with its defaults (an absent or unreadable member reads as its default). Pure. */
   public static ReadConfiguration(text: string | null): RegistryCheckConfiguration {
     const json = JsonParse.ParseJsonText(text || '{}', 'Configuration');
-    const hours = json.Ok && JsonParse.IsJsonObject(json.Value) ? JsonParse.JsonNumber(json.Value, 'StaleScoringRunHours') : null;
-    return { StaleScoringRunHours: hours !== null && hours > 0 ? hours : PredictiveStudioRegistryCheckJobDriver.DEFAULT_STALE_HOURS };
+    const root = json.Ok && JsonParse.IsJsonObject(json.Value) ? json.Value : null;
+    const hours = root === null ? null : JsonParse.JsonNumber(root, 'StaleScoringRunHours');
+    return {
+      StaleScoringRunHours: hours !== null && hours > 0 ? hours : PredictiveStudioRegistryCheckJobDriver.DEFAULT_STALE_HOURS,
+      Migration: PreGateModelMigration.ConfigFrom(root === null ? null : JsonParse.JsonObjectField(root, 'migration')),
+    };
   }
 
   /** Every step in order; a step that throws becomes one `retry` finding. */
@@ -204,6 +226,20 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   // ----- the steps -------------------------------------------------------------------------------------------------
+
+  /**
+   * (g) The pre-change model migration (§5.6 steps 2–5, D4-22): nothing once no pre-change work remains; otherwise one
+   * bounded pass as this job run ({@link PreGateModelMigration.RunRegistryStep}), whose record the run's `Details`
+   * carries. It runs before (a)–(c), which skip `Delivery IS NULL` rows. A pass that throws is one `retry` finding.
+   */
+  protected async MigratePreChangeModels(config: RegistryCheckConfiguration, scheduledJobRunId: string, ctx: GateContext): Promise<PreChangeStepOutcome> {
+    try {
+      const migrationCtx = PreGateMigrationContexts.ForJobRun({ ContextUser: ctx.ContextUser, Provider: ctx.Provider }, scheduledJobRunId, this.resolved.Migration);
+      return { Details: await PreGateModelMigration.RunRegistryStep(config.Migration, migrationCtx), Findings: [] };
+    } catch (e) {
+      return { Details: null, Findings: [{ Finding: 'g', SubjectID: null, Detail: `step (g): ${e instanceof Error ? e.message : String(e)}`, Action: 'the step failed; it runs again next hour', Outcome: 'retry' }] };
+    }
+  }
 
   /**
    * (a) A Published model with no publish record is archived `status-written-outside-gate`; of a pipeline's surplus
