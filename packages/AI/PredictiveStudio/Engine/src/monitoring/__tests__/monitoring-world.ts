@@ -100,7 +100,15 @@ export class WorldStore implements IMonitoringStore {
   public async BindingOf(): Promise<MonitoredBinding | null> {
     return this.Binding;
   }
+  /** Whether the job's user holds the binding's view authorization (D4-157); true unless a case says otherwise. */
+  public HoldsView = true;
+  /** How many times the binding's stored rows were read. */
+  public ModelRowReads = 0;
+  public async HoldsBindingView(): Promise<boolean> {
+    return this.HoldsView;
+  }
   public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod): Promise<ModelPrediction[]> {
+    this.ModelRowReads++;
     const rows = this.Values.filter((v) => NormalizeUUID(v.ModelID) === NormalizeUUID(modelId) && v.Role === role && v.EffectiveAsOf >= period.Start && v.EffectiveAsOf < period.End);
     const latest = new Map<string, ModelPrediction>();
     for (const r of [...rows].sort((a, b) => a.EffectiveAsOf.getTime() - b.EffectiveAsOf.getTime())) latest.set(r.RecordID.toLowerCase(), r);

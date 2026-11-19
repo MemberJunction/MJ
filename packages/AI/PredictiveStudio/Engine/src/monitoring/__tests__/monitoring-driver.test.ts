@@ -57,6 +57,16 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(row.Calibration).toMatchObject({ method: 'platt', slope: expect.any(Number), intercept: expect.any(Number) });
   });
 
+  it('a job owner without the binding\'s view authorization gets a failed period naming it, and the run fails (D4-157)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.HoldsView = false;
+    const r = await driver.Execute(await Context(NOW));
+    expect(r.Success).toBe(false);
+    expect(r.ErrorMessage).toContain(`does not hold the view authorization of scoring binding ${MonitoringWorld.BINDING.ID}`);
+    expect(world.Store.Last()).toMatchObject({ State: 'failed', JoinedRows: 0, ScoredRows: 0 });
+    expect(world.Store.ModelRowReads).toBe(0);
+  });
+
   it('a period whose label window is open is stored window-open with 0 joined rows', async () => {
     PeriodRows(JUNE, 50, 0.3, 15);
     await driver.Execute(await Context(NOW_INSIDE_WINDOW));

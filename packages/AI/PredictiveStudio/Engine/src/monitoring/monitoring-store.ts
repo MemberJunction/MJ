@@ -43,6 +43,7 @@ import { LifecycleGate } from '../registry/lifecycle-gate';
 import { RecordNotificationLinks } from '../registry/record-notification-links';
 import type { RegistryContext } from '../registry/registry-context';
 import { StoredRowReads } from '../registry/stored-row-reads';
+import { ScoringBindings } from '../scoring/scoring-binding';
 import { PipelineAutoTrainer } from '../scoring/auto-train';
 import { ParityCheck } from '../scoring/parity-check';
 import type { ScoringContext } from '../scoring/scoring-context';
@@ -106,7 +107,11 @@ export class RunViewMonitoringStore implements IMonitoringStore {
     return { ID: row.ID, Spec: parsed.Value, LabelWindowDays: row.LabelWindowDays, LabelGapDays: row.LabelGapDays, RowEntity: PredictionUnit.UnitRowEntityName(parsed.Value.rows) };
   }
 
-  /** @inheritdoc — the oldest `Active` binding when the pipeline has several; else the newest `Withdrawn` one with rows in the period. */
+  /**
+   * @inheritdoc — the oldest `Active` binding when the pipeline has several; else the newest `Withdrawn` one with rows in
+   * the period. A withdrawn binding whose view authorization the job's user does not hold is returned without probing its
+   * rows (that user cannot see whether it scored the period), so the join records the missing authorization (D4-157).
+   */
   public async BindingOf(pipelineId: string, modelId: string, period: MonitoringPeriod, ctx: RegistryContext): Promise<MonitoredBinding | null> {
     const r = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'Status'>>({
       EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLTrainingPipelineID='${EscapeSQLString(pipelineId)}'`,
@@ -116,9 +121,21 @@ export class RunViewMonitoringStore implements IMonitoringStore {
     const active = r.Results.find((b) => b.Status === 'Active');
     if (active) return { ID: active.ID, MLTrainingPipelineID: active.MLTrainingPipelineID };
     for (const withdrawn of r.Results.filter((b) => b.Status === 'Withdrawn').reverse()) {
+      if (!(await this.HoldsBindingView(withdrawn.ID, ctx))) return { ID: withdrawn.ID, MLTrainingPipelineID: withdrawn.MLTrainingPipelineID };
       if ((await this.ModelRows(modelId, withdrawn.ID, 'Champion', period, ctx)).length > 0) return { ID: withdrawn.ID, MLTrainingPipelineID: withdrawn.MLTrainingPipelineID };
     }
     return null;
+  }
+
+  /** @inheritdoc — the binding's `ViewAuthorizationID` read, then `ScoringBindings.CallerHoldsBinding` as the context user. */
+  public async HoldsBindingView(bindingId: string, ctx: RegistryContext): Promise<boolean> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'ID' | 'ViewAuthorizationID'>>({
+      EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `ID='${EscapeSQLString(bindingId)}'`, // pk-filter-ok: MJ core entity keyed by ID
+      Fields: ['ID', 'ViewAuthorizationID'], MaxRows: 1, ResultType: 'simple',
+    }, ctx);
+    if (!r.Success) throw new Error(`Monitoring: reading scoring binding ${bindingId} failed: ${r.ErrorMessage}`);
+    const binding = r.Results[0];
+    return binding !== undefined && ScoringBindings.CallerHoldsBinding(binding, ctx);
   }
 
   /** @inheritdoc — of several rows of one record in the period, the one with the latest `EffectiveAsOf`. */

@@ -7,12 +7,13 @@
 // D1c scenario (periods 0–2, then scored through a binding as of each of periods 3–5) and on W9-multiclass. The
 // adversary's writes are labelled where they happen: a model deleted by direct SQL (the delete procedure's model step);
 // `Human` Feature Values written by SQL beside the binding's `Model` rows; a binding withdrawn after period 4; a
-// rollback and a publish of one pipeline started from two `Promise.all` scopes; a job run as a restricted user. Only the
+// rollback and a publish of one pipeline started from two `Promise.all` scopes; a job owned by a user without, then with,
+// the binding's view authorization (stored `MJ: Roles` / `MJ: Authorization Roles` / `MJ: User Roles` rows). Only the
 // clock and the job context are replaced; no seam drops an input. Teardown deletes what the file created and requires
 // the starting census.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sql from 'mssql';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, RunView, UserInfo, UserRoleInfo, type BaseEntity, type IMetadataProvider } from '@memberjunction/core';
 import {
   PredictiveStudioTrainModelOperation,
   type MJMLAlgorithmEntity,
@@ -20,6 +21,10 @@ import {
   type MJMLModelScoringBindingEntity,
   type MJMLMonitoringResultEntity,
   type MJMLTrainingPipelineEntity,
+  type MJAuthorizationRoleEntity,
+  type MJRoleEntity,
+  type MJUserEntity,
+  type MJUserRoleEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
@@ -32,7 +37,7 @@ import {
   EvaluationProtocol, EvaluationProtocolRules, JsonParse, MonitoringResultSchemas, PredictionUnit, UtcDay,
   type Actor, type MonitoringJobReadSpec, type PredictionUnitSpec, type RetrainTrigger, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
-import { BootstrapIntegrationServer, SEEDED_NOGRANT_EMAIL, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
+import { BootstrapIntegrationServer, SEED_FIXTURES_COMMAND, SEEDED_NOGRANT_EMAIL, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
 import { DatasetLoader } from '../db/dataset-loader';
 import { DatasetSeeds } from '../data/seeds';
@@ -53,6 +58,8 @@ let pool: sql.ConnectionPool;
 let startedAt: Date;
 let startCensus: Census;
 const records = new RunRecords();
+/** The restricted owner's principal rows (`MJ: Roles`, `MJ: Authorization Roles`, `MJ: User Roles`), deleted children first. */
+const principalRows: { EntityName: string; ID: string }[] = [];
 
 /** The D1c fixture: the pipeline, its predecessor (v1, Archived) and current (v2, Published) models, the binding. */
 interface D1cFixture {
@@ -65,7 +72,7 @@ interface D1cFixture {
 let d1c: D1cFixture;
 
 /** The tables the file writes, counted at start and after teardown. */
-interface Census { readonly Models: number; readonly Results: number; readonly FeatureValues: number; readonly Bindings: number; readonly Jobs: number }
+interface Census { readonly Models: number; readonly Results: number; readonly FeatureValues: number; readonly Bindings: number; readonly Jobs: number; readonly Roles: number; readonly UserRoles: number; readonly AuthorizationRoles: number }
 
 /** `[schema].[table]` of an entity. */
 function t(entityName: string): string {
@@ -204,13 +211,70 @@ async function createD1c(): Promise<D1cFixture> {
   return f;
 }
 
+// ------------------------------------------------------------------------------------------ the restricted owner ----
+
+async function createRow<T extends BaseEntity>(entityName: string, fill: (row: T) => void): Promise<T> {
+  const row = await server.Provider.GetEntityObject<T>(entityName, server.User);
+  row.NewRecord();
+  fill(row);
+  if (!(await row.Save())) throw new Error(`fixture ${entityName} did not save: ${row.LatestResult?.CompleteMessage}`);
+  return row;
+}
+
+/** The restricted owner: the seeded no-grant user, its stored roles (none at first) and the file's role. */
+interface RestrictedOwner {
+  readonly User: UserInfo;
+  readonly RoleID: string;
+}
+
+/**
+ * The suite's restricted user (`it-nogrant@integration.test`) as a monitoring job's owner: in process it carries the
+ * `Integration` role (read and write on every monitoring entity), but it holds no stored role, so
+ * `vwUserHeldAuthorizations` (which reads the stored roles) gives it no authorization — not the binding's
+ * "View Model Predictions". The file's own role (`MJ: Roles`) is created here and given to it in process; the grant
+ * that makes the authorization held is stored later by {@link grantViewAuthorization}.
+ */
+async function restrictedOwner(): Promise<RestrictedOwner> {
+  const [seeded] = await rows<Pick<MJUserEntity, 'ID' | 'Name' | 'Email' | 'Type' | 'IsActive'>>('MJ: Users', `Email='${EscapeSQLString(SEEDED_NOGRANT_EMAIL)}'`, ['ID', 'Name', 'Email', 'Type', 'IsActive']);
+  if (!seeded) throw new Error(`the user ${SEEDED_NOGRANT_EMAIL} is not seeded: run ${SEED_FIXTURES_COMMAND}`);
+  const [integration] = await rows<Pick<MJRoleEntity, 'ID'>>('MJ: Roles', `Name='Integration'`, ['ID']);
+  if (!integration) throw new Error('the Integration role is not in MJ: Roles');
+  const role = await createRow<MJRoleEntity>('MJ: Roles', (r) => { r.Name = `${TAG} prediction viewers`; r.Description = 'Predictive Studio truth suite (safe to delete)'; });
+  principalRows.push({ EntityName: 'MJ: Roles', ID: role.ID });
+  const user = new UserInfo(server.Provider, {
+    ID: seeded.ID, Name: seeded.Name, Email: seeded.Email, Type: seeded.Type, IsActive: seeded.IsActive,
+    UserRoles: [new UserRoleInfo({ UserID: seeded.ID, RoleID: integration.ID }), new UserRoleInfo({ UserID: seeded.ID, RoleID: role.ID })],
+  });
+  return { User: user, RoleID: role.ID };
+}
+
+/** Stores the binding's view authorization for the owner: the file's role granted it (`Allow`), and the role given to the user. */
+async function grantViewAuthorization(owner: RestrictedOwner): Promise<void> {
+  const allow = await createRow<MJAuthorizationRoleEntity>('MJ: Authorization Roles', (a) => { a.AuthorizationID = ScoringBindings.ResolveViewAuthorizationID(null, server.Provider); a.RoleID = owner.RoleID; a.Type = 'Allow'; });
+  principalRows.push({ EntityName: 'MJ: Authorization Roles', ID: allow.ID });
+  const member = await createRow<MJUserRoleEntity>('MJ: User Roles', (u) => { u.UserID = owner.User.ID; u.RoleID = owner.RoleID; });
+  principalRows.push({ EntityName: 'MJ: User Roles', ID: member.ID });
+}
+
+/** Deletes the restricted owner's principal rows through the entity layer, children first; one line per failure. */
+async function deletePrincipalRows(): Promise<string[]> {
+  const failures: string[] = [];
+  for (const row of principalRows.splice(0).reverse()) {
+    const e = await server.Provider.GetEntityObject<BaseEntity>(row.EntityName, server.User);
+    if (!(await e.InnerLoad(CompositeKey.FromID(row.ID)))) { failures.push(`${row.EntityName} ${row.ID}: not found`); continue; }
+    if (!(await e.Delete())) failures.push(`${row.EntityName} ${row.ID}: ${e.LatestResult?.CompleteMessage || 'Delete() returned false'}`);
+  }
+  return failures;
+}
+
 // ---------------------------------------------------------------------------------------------- census, teardown ----
 
 async function census(): Promise<Census> {
   const c = (await pool.request().query<Census>(`SELECT
     (SELECT COUNT(*) FROM ${t('MJ: ML Models')}) AS Models, (SELECT COUNT(*) FROM ${t('MJ: ML Monitoring Results')}) AS Results,
     (SELECT COUNT(*) FROM ${t('MJ: Feature Values')}) AS FeatureValues, (SELECT COUNT(*) FROM ${t('MJ: ML Model Scoring Bindings')}) AS Bindings,
-    (SELECT COUNT(*) FROM ${t('MJ: Scheduled Jobs')}) AS Jobs`)).recordset[0];
+    (SELECT COUNT(*) FROM ${t('MJ: Scheduled Jobs')}) AS Jobs, (SELECT COUNT(*) FROM ${t('MJ: Roles')}) AS Roles,
+    (SELECT COUNT(*) FROM ${t('MJ: User Roles')}) AS UserRoles, (SELECT COUNT(*) FROM ${t('MJ: Authorization Roles')}) AS AuthorizationRoles`)).recordset[0];
   return c;
 }
 
@@ -229,7 +293,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     if (server && pool) {
-      const failures = await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(server.Provider, server.User), records);
+      const failures = [...await deletePrincipalRows(), ...await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(server.Provider, server.User), records)];
       await pool.request().input('Since', sql.DateTimeOffset, startedAt).query(`DELETE FROM ${t('MJ: Record Changes')} WHERE ChangedAt >= @Since`);
       expect(failures).toEqual([]);
       expect(await census()).toEqual(startCensus);
@@ -322,12 +386,19 @@ describe('M6.9 harness', () => {
 
   // ----------------------------------------------------------------------------------------- unauthorized user ----
 
-  describe('unauthorized user — a job owned by a restricted user', () => {
-    it('the monitoring job reads Model rows as the steward whatever its owner holds', async () => {
-      const restricted = UserCache.Users.find((u) => u.Email === SEEDED_NOGRANT_EMAIL);
-      if (!restricted) throw new Error(`the seeded restricted user ${SEEDED_NOGRANT_EMAIL} is missing (run the seed-fixtures command)`);
-      const { Driver, Ctx } = monitoringCtx(new Date(Date.UTC(2026, 0, 1)), restricted);
-      await Driver.MonitorPeriods(await specOf(d1c.Current.ID), [periodOf(3)], Ctx);
+  describe('unauthorized user — a job owned by a user without the binding\'s view authorization', () => {
+    it('monitoring reads as the job owner: an owner without the binding\'s view authorization gets that as the period\'s finding, and nothing is read around it (D4-157)', async () => {
+      const owner = await restrictedOwner();
+      const { Driver, Ctx } = monitoringCtx(new Date(Date.UTC(2026, 0, 1)), owner.User);
+      const spec = await specOf(d1c.Current.ID);
+      const outcome = await Driver.MonitorPeriods(spec, [periodOf(3)], Ctx);
+      expect(outcome.Periods.map((p) => [p.State, p.JoinedRows])).toEqual([['failed', 0]]);
+      expect(outcome.Periods[0].ErrorMessage).toContain(`does not hold the view authorization of scoring binding ${d1c.Binding.ID}`);
+      const [refused] = await periodRows(d1c.Current.ID, periodOf(3));
+      expect([refused.State, refused.ScoredRows, refused.JoinedRows]).toEqual(['failed', 0, 0]);
+      // The same owner, once it holds the binding's view authorization, reads the binding's rows as itself.
+      await grantViewAuthorization(owner);
+      await Driver.MonitorPeriods(spec, [periodOf(3)], Ctx);
       const [row] = await periodRows(d1c.Current.ID, periodOf(3));
       expect(row).toMatchObject({ State: 'evaluated' });
       expect(row.JoinedRows).toBeGreaterThan(0);

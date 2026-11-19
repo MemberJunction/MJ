@@ -176,6 +176,11 @@ export interface IMonitoringStore {
    * of the period, never a later one), including `InTraining` rows (the caller counts and excludes them).
    */
   ModelRows(modelId: string, bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod, ctx: RegistryContext): Promise<ModelPrediction[]>;
+  /**
+   * True when the context user (the job's owner) holds the binding's view authorization (D4-157): monitoring reads the
+   * binding's rows as that user, so one who does not hold it is the period's finding, never read around.
+   */
+  HoldsBindingView(bindingId: string, ctx: RegistryContext): Promise<boolean>;
   /** The unit's rows whose decision date falls in the period, read as of `now`. */
   UnitRowsInPeriod(unit: MonitoredUnit, period: MonitoringPeriod, now: Date, ctx: RegistryContext): Promise<UnitRowInPeriod[]>;
   /** The realised outcomes of `recordIds` (a record the unit's reader excludes, or whose label is unknown, is absent), read as of `now`. */

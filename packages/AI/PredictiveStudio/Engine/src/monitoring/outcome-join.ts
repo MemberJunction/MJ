@@ -57,11 +57,16 @@ export class OutcomeJoin {
    * The period's join: the binding path when the model's pipeline has an `Active` binding, else the shadow path; then
    * the training rows counted and excluded, and each remaining prediction joined to its realised outcome by record key.
    *
-   * @throws OutcomeJoinFailedError when the shadow run is refused or fails
+   * @throws OutcomeJoinFailedError when the job's user does not hold the binding's view authorization, or the shadow run is refused or fails
    */
   public static async Join(model: MonitoredModel, unit: MonitoredUnit, period: MonitoringPeriod, ctx: MonitoringContext): Promise<OutcomeJoinResult> {
     const now = ctx.Seams.Clock.Now();
     const binding = await ctx.Seams.Store.BindingOf(model.PipelineID, model.ID, period, ctx);
+    if (binding !== null && !(await ctx.Seams.Store.HoldsBindingView(binding.ID, ctx))) {
+      throw new OutcomeJoinFailedError(
+        `the job owner ${ctx.ContextUser.Email || ctx.ContextUser.ID} does not hold the view authorization of scoring binding ${binding.ID}, so monitoring `
+        + 'cannot read its predictions (D4-157); grant the owner that authorization or give the job an owner who holds it', null);
+    }
     const found = binding !== null
       ? { Predictions: await ctx.Seams.Store.ModelRows(model.ID, binding.ID, 'Champion', period, ctx), ShadowScoringRunID: null }
       : await OutcomeJoin.shadow(model, unit, period, now, ctx);

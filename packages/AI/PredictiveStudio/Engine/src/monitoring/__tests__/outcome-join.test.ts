@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { OutcomeJoin } from '../outcome-join';
+import { OutcomeJoin, OutcomeJoinFailedError } from '../outcome-join';
 import { CURRENT, D, MonitoringWorld, Month } from './monitoring-world';
 
 /** Task M6.3 — the outcome join: the prediction as of each period, never the latest, training rows excluded. */
@@ -37,6 +37,14 @@ describe('OutcomeJoin', () => {
   it('counts the training rows it excluded and the predictions it found', async () => {
     const join = await OutcomeJoin.Join(world.Current(), world.Store.Unit, PERIOD_2, world.Ctx());
     expect([join.Path, join.ScoredRows, join.ExcludedInTrainingRows, join.Rows.length]).toEqual(['binding', 3, 1, 2]);
+  });
+
+  it('a job user without the binding\'s view authorization is refused with that finding, and the binding\'s rows are never read (D4-157)', async () => {
+    world.Store.HoldsView = false;
+    await expect(OutcomeJoin.Join(world.Current(), world.Store.Unit, PERIOD_2, world.Ctx())).rejects.toThrow(OutcomeJoinFailedError);
+    await expect(OutcomeJoin.Join(world.Current(), world.Store.Unit, PERIOD_2, world.Ctx())).rejects.toThrow(`does not hold the view authorization of scoring binding ${MonitoringWorld.BINDING.ID}`);
+    expect(world.Store.ModelRowReads).toBe(0);
+    expect(world.Scorer.Calls).toEqual([]);
   });
 
   it('a closed-window record with no realised outcome joins with Outcome null', async () => {
