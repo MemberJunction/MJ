@@ -532,6 +532,76 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
+     * Evaluates an unsaved record's field values against an active `MJ: Entity Documents`
+     * vector index and returns readable `PotentialDuplicate` candidates sorted by descending
+     * probability score (spec §11.4 / §19.8).
+     *
+     * Unlike {@link CheckRecordValues}, this method does not require an LLM reasoning mode to be
+     * enabled on the EntityDocument — it performs template rendering, embedding, vector similarity
+     * search, and read-permission filtering directly so sync engines (such as MJ Peer Sync's
+     * pre-save identity gate) can evaluate threshold bands (`DuplicateThreshold` vs
+     * `PotentialMatchThreshold`) deterministically.
+     */
+    public async FindCandidatesForValues(
+        entityName: string,
+        values: Record<string, unknown>,
+        contextUser: UserInfo,
+        options?: {
+            EntityDocumentID?: string | null;
+            TopK?: number;
+            PotentialMatchThreshold?: number;
+        },
+    ): Promise<PotentialDuplicate[]> {
+        if (!contextUser) {
+            throw new Error('DuplicateRecordDetector.FindCandidatesForValues: contextUser is required');
+        }
+        this.CurrentUser = contextUser;
+
+        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        let entityDocument: MJEntityDocumentEntity | null = null;
+        if (options?.EntityDocumentID) {
+            entityDocument = await this.ValidateEntityDocument(options.EntityDocumentID);
+        } else {
+            const docs = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName)
+                .filter((d) => d.Status === 'Active');
+            entityDocument = docs.sort(compareOldestFirst)[0] ?? null;
+        }
+        if (!entityDocument) {
+            return [];
+        }
+
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            return [];
+        }
+
+        await this.InitializeProviders(entityDocument);
+        const record = await this.BuildUnsavedRecord(entityInfo, values, contextUser);
+        const query = await this.QueryCandidatesForRecord(
+            record,
+            entityDocument,
+            {
+                TopK: options?.TopK ?? DEFAULT_TOP_K,
+            },
+            contextUser,
+        );
+        if (!query || query.Duplicates.Duplicates.length === 0) {
+            return [];
+        }
+
+        const readableNames = await this.LoadReadableCandidateNames(
+            query.Duplicates.Duplicates,
+            entityInfo,
+            contextUser,
+        );
+        const minScore = options?.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold ?? 0;
+
+        return query.Duplicates.Duplicates
+            .filter((d) => readableNames.has(NormalizeUUID(d.ToCompactURLSegment())) && (d.ProbabilityScore ?? 0) >= minScore)
+            .sort((a, b) => (b.ProbabilityScore ?? 0) - (a.ProbabilityScore ?? 0));
+    }
+
+    /**
      * Render one record with the entity document's template, embed it, and query the vector index
      * for its candidates. Shared by {@link CheckSingleRecord} (a saved record) and
      * {@link CheckRecordValues} (an unsaved one).

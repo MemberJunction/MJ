@@ -64,6 +64,12 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
         isOutputTainted?: boolean;
         /**
+         * Whether the payload a waiting step (External, Wait, provider-Human) was reached with was
+         * tainted, recorded when it is reached. Its output taint is decided from this when it
+         * completes; absent reads as tainted.
+         */
+        isInputTainted?: boolean;
+        /**
          * The parameters an Action step's action was actually given: its input mapping resolved over
          * the upstream outputs, with the envelope's bound parameters restored. `InputPayload` holds only
          * the authored input, so this is what a compensation's `input.*` mapping reads.

@@ -1349,6 +1349,24 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for TaskGraph.CompleteWaitingStep. Exactly one of taskID / correlationKey. */
+export interface TaskGraphCompleteWaitingStepInput {
+    taskID?: string;
+    correlationKey?: string;
+    status?: 'Complete' | 'Failed';
+    payload?: Record<string, unknown> | null;
+    errorMessage?: string | null;
+}
+
+/** Output of TaskGraph.CompleteWaitingStep. */
+export interface TaskGraphCompleteWaitingStepOutput {
+    success: boolean;
+    completed: string[];
+    buffered: string[];
+    refused: Array<{ taskID: string; reason: string }>;
+    errorMessage?: string;
+}
+
 /** Input for the step-scoped intervention verbs. */
 export interface TaskGraphTaskInterventionInput {
     taskID: string;
@@ -1438,15 +1456,16 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1848,15 +1867,16 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1887,15 +1907,16 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
-                    | { assignToUserID?: string; instructions?: string }
+                    | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                     | { promptName: string; templateParameters?: Record<string, string> }
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
-                    | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                    | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
                 /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -2580,6 +2601,23 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.CompleteWaitingStep — Complete Waiting Workflow Step
+// ============================================================
+/**
+ * Complete Waiting Workflow Step
+ * Complete (or fail) a waiting External or provider-Human workflow step, by task ID or by correlation key. The supplied payload is merged into the workflow payload, so downstream paths can branch on it. A signal for a step that has not been reached yet is held on the step and applied when it is. Wait steps (they complete on their own clock) and built-in inbox Human steps (they complete through their request) are refused. The caller must own the workflow run or be an Owner-type user; matched steps the caller may not complete are reported, not skipped. Implemented by TaskGraphCompleteWaitingStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.CompleteWaitingStep'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphCompleteWaitingStepOperation extends BaseRemotableOperation<TaskGraphCompleteWaitingStepInput, TaskGraphCompleteWaitingStepOutput> {
+    public readonly OperationKey = "TaskGraph.CompleteWaitingStep";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ce2fbcd9c8ab5e26";
+}
+
+// ============================================================
 // TaskGraph.ForceCompleteTask — Force Complete Workflow Step
 // ============================================================
 /**
@@ -2746,7 +2784,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_08cd68d5cfacf880";
+    public readonly ContractFingerprint = "ro_fp_43ebe705e32e9165";
 }
 
 // ============================================================
@@ -2949,7 +2987,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_7a54f25b89c43fef";
+    public readonly ContractFingerprint = "ro_fp_2c3e6b17f9938bdc";
 }
 
 // ============================================================
@@ -2966,7 +3004,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_f8c19b5a79876f33";
+    public readonly ContractFingerprint = "ro_fp_8b17634c01c7ea11";
 }
 
 // ============================================================
@@ -2983,6 +3021,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
+    public readonly ContractFingerprint = "ro_fp_e2ffa4f3bcad4e72";
 }
 

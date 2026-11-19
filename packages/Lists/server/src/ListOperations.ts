@@ -32,6 +32,7 @@ import type {
   ListRefreshPreviewOptions,
   ListSource,
   ListSourceChange,
+  MaterializeFromQueryOptions,
   MaterializeOptions,
   ResolvedRecordSet,
   SetOpKind,
@@ -41,6 +42,18 @@ import type {
  *  Server-internal — not exposed on the public type surface because no
  *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
+
+/** Where a list being created comes from, so it can refresh. */
+type NewListLineage =
+  | { kind: 'view'; viewId: string; filterSnapshot: string | null; refreshMode: ListRefreshMode; useSnapshot: boolean }
+  | {
+      kind: 'query';
+      queryId: string;
+      parameters: Record<string, unknown> | undefined;
+      keyField: string;
+      refreshMode: ListRefreshMode;
+      autoRefresh: boolean;
+    };
 
 /**
  * A provider that screens client SQL clauses (GenericDatabaseProvider does, as
@@ -350,29 +363,79 @@ export class ListOperations {
     // 3. Create + save the list record.
     const listResult = await this.createListWithLineage({
       entityId: entityInfo.ID,
-      viewId: opts.RememberLineage ? viewId : null,
-      filterSnapshot,
       opts,
+      lineage: opts.RememberLineage
+        ? { kind: 'view', viewId, filterSnapshot, refreshMode: opts.RefreshMode, useSnapshot: opts.UseSnapshot }
+        : null,
     });
     if (!listResult.ok) return listResult.failure;
-    const listId = listResult.listId;
 
-    // 4. Bulk-insert the resolved members. Any per-record failure is
-    //    surfaced in the result rather than aborting the whole batch.
-    const insertResult = await this.insertListMembers(listId, resolved.RecordIds);
+    // 4. Bulk-insert the resolved members.
+    return this.fillNewList(listResult.listId, resolved.RecordIds);
+  }
 
-    return {
-      Success: insertResult.failed === 0,
-      ResultCode: insertResult.failed === 0 ? 'SUCCESS' : 'PARTIAL_SUCCESS',
-      Message:
-        insertResult.failed === 0
-          ? `Materialized list with ${insertResult.added} member(s)`
-          : `Materialized list with ${insertResult.added} added, ${insertResult.failed} failed`,
-      CreatedListId: listId,
-      TargetListId: listId,
-      Counts: { Added: insertResult.added, Removed: 0, Failed: insertResult.failed },
-      Errors: insertResult.errors.length > 0 ? insertResult.errors : undefined,
-    };
+  /**
+   * Create a new list from a saved query's rows, linked to the query so it can refresh from it.
+   *
+   * The query runs as the acting user with `opts.Parameters`. The list stores the query, its
+   * parameter values, the key column and the refresh mode, and takes the query's current definition
+   * fingerprint, so a later edit to the query stops refreshes until the owner approves it. With
+   * `AutoRefresh`, the list's refresh routine is created as it is saved.
+   *
+   * The entity and key column come from `opts` or, when left out, from the query's field metadata
+   * (see `MaterializeFromQueryOptions`). Never produces drops, so no delta token is involved.
+   */
+  public async MaterializeFromQuery(queryId: string, opts: MaterializeFromQueryOptions): Promise<ApplyResult> {
+    const key = await this.resolveQueryKey(queryId, opts);
+    if (!key.ok) return key.failure;
+
+    // Fingerprinted before the run, so an edit made in between is caught by the next refresh.
+    const definition = await this.refreshSource().QueryDefinitionAsync(queryId);
+    const resolved = await this.refreshSource().RunQueryRecordsAsync({
+      QueryID: queryId,
+      Parameters: opts.Parameters,
+      KeyField: key.keyField,
+      EntityInfo: key.entityInfo,
+      Label: `query "${definition.Name}"`,
+    });
+
+    const listResult = await this.createListWithLineage({
+      entityId: key.entityInfo.ID,
+      opts,
+      lineage: {
+        kind: 'query',
+        queryId,
+        parameters: opts.Parameters,
+        keyField: key.keyField,
+        refreshMode: opts.RefreshMode,
+        autoRefresh: opts.AutoRefresh ?? false,
+      },
+    });
+    if (!listResult.ok) return listResult.failure;
+
+    const result = await this.fillNewList(listResult.listId, resolved.RecordIds);
+    // Saving a new source clears the list's fingerprint; this fill is its first refresh.
+    await this.stampRefreshMetadata(listResult.listId, definition.Fingerprint);
+    return result;
+  }
+
+  /**
+   * Create a new list holding the given records, with no source: it never refreshes. For callers
+   * that resolved the records themselves and have nothing a list can be linked to (for example SQL
+   * that could not be saved as a query). `recordIds` are in `MJ: List Details.RecordID` form.
+   */
+  public async CreateListFromRecords(
+    entityName: string,
+    recordIds: readonly string[],
+    opts: Pick<MaterializeOptions, 'ListName' | 'Description' | 'CategoryId'>,
+  ): Promise<ApplyResult> {
+    const entityInfo = this.metadata().EntityByName(entityName);
+    if (!entityInfo) {
+      return this.failure('UNEXPECTED_ERROR', `Entity '${entityName}' not found in metadata`);
+    }
+    const listResult = await this.createListWithLineage({ entityId: entityInfo.ID, opts, lineage: null });
+    if (!listResult.ok) return listResult.failure;
+    return this.fillNewList(listResult.listId, [...new Set(recordIds)]);
   }
 
   /**
@@ -1236,15 +1299,13 @@ export class ListOperations {
   }
 
   /**
-   * Create + save the parent `MJ: List` record. Lineage fields are only
-   * populated when `RememberLineage = true` on `opts` — otherwise the new
-   * list is a plain one-shot copy with no upstream reference.
+   * Create + save the parent `MJ: List` record. With no `lineage` the new list is a plain one-shot
+   * copy with no upstream reference.
    */
   private async createListWithLineage(args: {
     entityId: string;
-    viewId: string | null;
-    filterSnapshot: string | null;
-    opts: MaterializeOptions;
+    opts: Pick<MaterializeOptions, 'ListName' | 'Description' | 'CategoryId'>;
+    lineage: NewListLineage | null;
   }): Promise<{ ok: true; listId: string } | { ok: false; failure: ApplyResult }> {
     const md = this.metadata();
     const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
@@ -1254,21 +1315,77 @@ export class ListOperations {
     list.UserID = this.contextUser.ID;
     if (args.opts.Description) list.Description = args.opts.Description;
     if (args.opts.CategoryId) list.CategoryID = args.opts.CategoryId;
-
-    if (args.viewId) {
-      list.SourceViewID = args.viewId;
-      list.RefreshMode = args.opts.RefreshMode;
-      list.UseSnapshot = args.opts.UseSnapshot;
-      if (args.filterSnapshot) list.SourceFilterSnapshot = args.filterSnapshot;
-    }
+    if (args.lineage) this.applyLineage(list, args.lineage);
 
     const saved = await list.Save();
     if (!saved) {
       const msg = list.LatestResult?.CompleteMessage ?? 'unknown error';
-      LogError(`MaterializeFromView: list save failed — ${msg}`);
+      LogError(`Materialize: list save failed — ${msg}`);
       return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Failed to create list: ${msg}`) };
     }
     return { ok: true, listId: list.ID };
+  }
+
+  /** Sets a new list's source fields from its lineage. */
+  private applyLineage(list: MJListEntity, lineage: NewListLineage): void {
+    list.RefreshMode = lineage.refreshMode;
+    if (lineage.kind === 'view') {
+      list.SourceViewID = lineage.viewId;
+      list.UseSnapshot = lineage.useSnapshot;
+      if (lineage.filterSnapshot) list.SourceFilterSnapshot = lineage.filterSnapshot;
+      return;
+    }
+    list.SourceQueryID = lineage.queryId;
+    list.SourceQueryKeyField = lineage.keyField;
+    list.SourceQueryParameters = lineage.parameters ? JSON.stringify(lineage.parameters) : null;
+    list.AutoRefresh = lineage.autoRefresh;
+  }
+
+  /**
+   * Adds the resolved records to a list just created and reports the result. A per-record failure
+   * is surfaced in the result rather than aborting the whole batch.
+   */
+  private async fillNewList(listId: string, recordIds: readonly string[]): Promise<ApplyResult> {
+    const insertResult = await this.insertListMembers(listId, recordIds);
+    const ok = insertResult.failed === 0;
+    return {
+      Success: ok,
+      ResultCode: ok ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+      Message: ok
+        ? `Materialized list with ${insertResult.added} member(s)`
+        : `Materialized list with ${insertResult.added} added, ${insertResult.failed} failed`,
+      CreatedListId: listId,
+      TargetListId: listId,
+      Counts: { Added: insertResult.added, Removed: 0, Failed: insertResult.failed },
+      Errors: insertResult.errors.length > 0 ? insertResult.errors : undefined,
+    };
+  }
+
+  /**
+   * The entity a query-sourced list holds and the query column with its key: as given when both are
+   * given, otherwise worked out from the query's field metadata.
+   */
+  private async resolveQueryKey(
+    queryId: string,
+    opts: Pick<MaterializeFromQueryOptions, 'EntityName' | 'KeyField'>,
+  ): Promise<{ ok: true; entityInfo: EntityInfo; keyField: string } | { ok: false; failure: ApplyResult }> {
+    const named = opts.EntityName ? this.metadata().EntityByName(opts.EntityName) : undefined;
+    if (opts.EntityName && !named) {
+      return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Entity '${opts.EntityName}' not found in metadata`) };
+    }
+    const keyField = opts.KeyField?.trim();
+    if (named && keyField) return { ok: true, entityInfo: named, keyField };
+
+    const inferred = await this.refreshSource().InferQueryKeyAsync(queryId, { EntityName: named?.Name, KeyField: keyField });
+    if (inferred) return { ok: true, entityInfo: inferred.EntityInfo, keyField: inferred.KeyField };
+    const forEntity = named ? ` for ${named.Name}` : '';
+    return {
+      ok: false,
+      failure: this.failure(
+        'UNEXPECTED_ERROR',
+        `Could not tell which column of the query holds the record key${forEntity}. Give both the entity and the key column.`,
+      ),
+    };
   }
 
   /**

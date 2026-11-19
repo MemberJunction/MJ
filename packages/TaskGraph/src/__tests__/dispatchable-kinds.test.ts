@@ -44,34 +44,34 @@ describe('FindUnrunnableKinds', () => {
             TaskNode.ForEach(base('d', 'ForEach Loop Demo'), { collectionPath: 'static:[1,2,3]' }),
             TaskNode.While(base('e', 'Retry until settled'), { condition: 'payload.done !== true' }),
             TaskNode.Prompt(base('f', 'Classify the request'), { promptName: 'Classifier' }),
+            TaskNode.External(base('g', 'Await payment'), { domain: 'stripe', correlationKey: 'payload.invoiceId' }),
+            TaskNode.Wait(base('h', 'Cool off'), { durationSeconds: 3600 }),
         ]));
         expect(result).toBeNull();
     });
 
-    it.each(['External'] as const)('refuses a %s step, which nothing can run yet', (kind) => {
-        // Both are legitimate parts of the spec — there is simply no runner. Persisting one would
-        // produce a task that waits forever, which reads as a workflow politely in progress.
-        const node = { ...base('x', 'Unsupported step'), kind, configuration: {} } as TaskGraphSpecNode;
-        const result = FindUnrunnableKinds(graph([node]));
+    // Every kind in the spec is dispatchable today (External and Wait joined with waiting steps).
+    // The refusal still guards a spec authored for a newer server — modelled here with a kind this
+    // build does not know — because that is exactly the graph that would otherwise persist and stall.
+    const unknownKind = (tempId: string, name: string) =>
+        ({ ...base(tempId, name), kind: 'Teleport', configuration: {} }) as unknown as TaskGraphSpecNode;
+
+    it('refuses a step of a kind this server cannot run, naming the step and the kind', () => {
+        const result = FindUnrunnableKinds(graph([unknownKind('x', 'Unsupported step')]));
         // Names the step, not just the kind: the author has to know WHICH one to change.
         expect(result).toContain('Unsupported step');
-        expect(result).toContain(kind);
+        expect(result).toContain('Teleport');
     });
 
     it('reports EVERY unrunnable step, not just the first', () => {
         // A one-at-a-time refusal makes fixing a workflow an N-round trip through the editor.
-        const nodes = [
-            { ...base('a', 'First external'), kind: 'External', configuration: {} },
-            { ...base('b', 'Second external'), kind: 'External', configuration: {} },
-        ] as TaskGraphSpecNode[];
-        const result = FindUnrunnableKinds(graph(nodes));
-        expect(result).toContain('First external');
-        expect(result).toContain('Second external');
+        const result = FindUnrunnableKinds(graph([unknownKind('a', 'First step'), unknownKind('b', 'Second step')]));
+        expect(result).toContain('First step');
+        expect(result).toContain('Second step');
     });
 
     it('names the workflow, so a refusal read from a log identifies its subject', () => {
-        const node = { ...base('a', 'Ask the model'), kind: 'External', configuration: {} } as TaskGraphSpecNode;
-        expect(FindUnrunnableKinds(graph([node]))).toContain('Demo Flow Agent');
+        expect(FindUnrunnableKinds(graph([unknownKind('a', 'Ask the model')]))).toContain('Demo Flow Agent');
     });
 });
 
