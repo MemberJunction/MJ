@@ -283,7 +283,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['video-studio-live-smoke', VideoStudioLiveSmokeChecks, 1], // VSLS1 live Draft 15s Social Short smoke test (IT152)
         ['query-extraction', QueryExtractionChecks, 15], // QE1-QE15 exact fields, entities, parameters, doc comments and dependencies a query save extracts, both platforms (IT138)
         ['query-refresh', QueryRefreshChecks, 16], // QR1-QR16 refresh and re-bind against a fixture schema the checks alter, dry run, order, drift, nullability, field deletes, authorization (IT139)
-        ['metadata-sync-queries', MetadataSyncQueriesChecks, 10], // MSQ1-MSQ10 declared query children through PushService, re-push, pull and shipped-tree no-ops (IT140)
+        ['metadata-sync-queries', MetadataSyncQueriesChecks, 11], // MSQ1-MSQ11 declared query children through PushService, re-push, pull, shipped-tree no-ops and the fingerprint after related dialect rows (IT140)
         ['query-api-lifecycle', QueryApiLifecycleChecks, 12], // QAL1-QAL12 create / edit / refresh through GraphQL, every column of every child row (IT141)
         ['query-security', QuerySecurityChecks, 10], // QS1-QS10 write gate, forbidden functions, injection into shipped queries, EDS screen, FLS on queries (IT142)
         ['sqlpipe-matrix', SqlPipeMatrixChecks, 2], // SPM1 all pairs over every scenario dimension, SPM5 extraction properties (IT143)
@@ -452,7 +452,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-payload-client': 3,
         'metadata-sync': 9,
         'metadata-sync-push': 12,
-        'metadata-sync-queries': 10,
+        'metadata-sync-queries': 11,
         'native-tool-calling-live': 4,
         'native-tool-loop': 14,
         'native-tool-loop-live': 3,
