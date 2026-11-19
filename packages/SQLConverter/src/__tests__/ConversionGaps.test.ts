@@ -125,13 +125,21 @@ describe('Metadata_Sync save accounting (issue #6097)', () => {
     expect(result.Stats.Gaps).toBe(1);
   });
 
-  it('counts a ${mjSchema} save the legacy path skips as missing (part of issue #5543)', () => {
-    // The legacy classifier does not read `[${mjSchema}].sp…` as a schema-qualified EXEC and
-    // skips the batch; the save count makes that visible instead of silent.
+  it('converts a ${mjSchema} core save and keeps the placeholder (issue #5543, decision pg.1 A)', () => {
+    // An Open App references core as `[${mjSchema}]`; the installer substitutes it at apply time.
     const sql = save('a1').replace('[__mj]', '[${mjSchema}]');
     const result = convertSQL(sql);
-    expect(result.OutputSQL).toContain(`${GAP_MARKER_MISSING_SAVES}: the source announces 1 save(s), the output holds 0`);
-    expect(result.Stats.Gaps).toBe(1);
+    expect(result.OutputSQL).toContain('${mjSchema}."spUpdateAIVendor"');
+    expect(result.OutputSQL).not.toContain('__mj_core_schema_placeholder__');
+    expect(result.OutputSQL).not.toContain(GAP_MARKER_MISSING_SAVES);
+    expect(result.Stats.Gaps).toBe(0);
+  });
+
+  it('converts the unbracketed ${mjSchema}.sp… form the same way', () => {
+    const sql = save('b2').replace('[__mj]', '${mjSchema}');
+    const result = convertSQL(sql);
+    expect(result.OutputSQL).toContain('${mjSchema}."spUpdateAIVendor"');
+    expect(result.Stats.Gaps).toBe(0);
   });
 
   it('does not expect output for a save with no field changes', () => {
