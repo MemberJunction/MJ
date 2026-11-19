@@ -86,6 +86,30 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
   }
 
   /** @inheritdoc */
+  public async LoadPipelineTargetEntity(
+    pipelineId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<string | null> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const result = await rv.RunView<{ TargetEntity: string | null }>(
+      {
+        EntityName: 'MJ: ML Training Pipelines',
+        ExtraFilter: `ID='${EscapeSQLString(pipelineId)}'`,
+        Fields: ['TargetEntity'],
+        ResultType: 'simple',
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+      },
+      contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) {
+      return null;
+    }
+    return result.Results[0].TargetEntity || null;
+  }
+
+  /** @inheritdoc */
   public async loadModel(
     modelId: string,
     contextUser: UserInfo | undefined,

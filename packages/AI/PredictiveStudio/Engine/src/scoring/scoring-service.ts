@@ -136,7 +136,7 @@ export class ScoringService {
     this.preview = [];
     this.scoredRows = [];
     const day = ScoringService.Normalize(asOf);
-    const early = await this.refusalBeforeModel(binding);
+    const early = await this.refusalBeforeModel(binding, dryRun);
     if (early !== null) return this.refuseWithoutModel(binding, scope, day, dryRun, early);
     const resolved = await this.ResolvePublishedModel(binding);
     if ('kind' in resolved) return this.refuseWithoutModel(binding, scope, day, dryRun, resolved);
@@ -158,7 +158,7 @@ export class ScoringService {
    */
   public async Admit(binding: MJMLModelScoringBindingEntity, scope: ScoringScope, asOf: Date, dryRun: boolean): Promise<ScoringResult | null> {
     const day = ScoringService.Normalize(asOf);
-    const early = await this.refusalBeforeModel(binding);
+    const early = await this.refusalBeforeModel(binding, dryRun);
     if (early !== null) return this.refuseWithoutModel(binding, scope, day, dryRun, early);
     const resolved = await this.ResolvePublishedModel(binding);
     if ('kind' in resolved) return this.refuseWithoutModel(binding, scope, day, dryRun, resolved);
@@ -214,6 +214,18 @@ export class ScoringService {
    */
   protected async CheckCallerHoldsBinding(binding: MJMLModelScoringBindingEntity): Promise<ScoringRefusal | null> {
     return (await ScoringBindings.CallerHoldsBinding(binding, this.ctx)) ? null : { kind: 'binding-not-authorized', bindingId: binding.ID };
+  }
+
+  /**
+   * Refuses a run that would write Feature Values when the caller may not write `MJ: Feature Values`
+   * (`feature-values-not-writable`, D4-165): it needs create (a new as-of date inserts) and update (a same-as-of re-run
+   * replaces its rows in place). A check of the provider's entity permissions, no read, so the run fails closed before
+   * its first batch instead of failing in it. An entity the provider does not describe refuses too.
+   */
+  protected CheckCallerWritesFeatureValues(): ScoringRefusal | null {
+    const permissions = this.ctx.Provider.EntityByName('MJ: Feature Values')?.GetUserPermisions(this.ctx.ContextUser);
+    if (permissions && permissions.CanCreate && permissions.CanUpdate) return null;
+    return { kind: 'feature-values-not-writable', userId: this.ctx.ContextUser.ID };
   }
 
   /** The pipeline's Published model (newest version), else its model kept serving while Unevaluated, else `no-published-model`. */
@@ -534,11 +546,17 @@ export class ScoringService {
 
   // ----- helpers ---------------------------------------------------------------------------------------------------
 
-  /** Refusals that need no model: a caller without the binding's authorization (before any read), a withdrawn binding. */
-  private async refusalBeforeModel(binding: MJMLModelScoringBindingEntity): Promise<ScoringRefusal | null> {
+  /**
+   * Refusals that need no model: a caller without the binding's authorization (it reads only the held
+   * authorizations), then a writing run's caller who may not create Feature Values (no read), then a withdrawn binding.
+   * All come before any record or Feature Value is read.
+   */
+  private async refusalBeforeModel(binding: MJMLModelScoringBindingEntity, dryRun: boolean): Promise<ScoringRefusal | null> {
     if (!binding.TargetEntityID || !binding.TargetEntity) throw new Error(`ScoringService: binding '${binding.ID}' has no target entity`);
     const authorization = await this.CheckCallerHoldsBinding(binding);
     if (authorization !== null) return authorization;
+    const writable = dryRun ? null : this.CheckCallerWritesFeatureValues();
+    if (writable !== null) return writable;
     return binding.Status === 'Withdrawn' ? { kind: 'binding-withdrawn', bindingId: binding.ID } : null;
   }
 

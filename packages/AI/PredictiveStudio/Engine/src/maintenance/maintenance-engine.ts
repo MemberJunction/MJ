@@ -186,7 +186,7 @@ export class MaintenanceEngine {
 
   /** Count the model's target population now (via the injected counter); undefined on read failure. */
   private async currentRowCount(model: MJMLModelEntity, deps: MaintenanceDeps): Promise<number | undefined> {
-    const targetEntityName = this.targetEntityName(model);
+    const targetEntityName = await this.targetEntityName(model, deps);
     if (!targetEntityName) {
       return undefined;
     }
@@ -218,7 +218,7 @@ export class MaintenanceEngine {
     if (binding.Mode !== 'Scheduled') {
       return null;
     }
-    const targetEntityName = this.targetEntityName(model);
+    const targetEntityName = await this.targetEntityName(model, deps);
     if (!targetEntityName) {
       throw new Error(`MaintenanceEngine: cannot re-score binding '${binding.ID}' — model '${model.ID}' has no resolvable target entity.`);
     }
@@ -519,15 +519,19 @@ export class MaintenanceEngine {
   /**
    * Resolve the model's target entity name from its frozen lineage (the
    * training-unit entity), matching how {@link MLModelInferenceProcessor} resolves
-   * it at score time. Falls back to the model's `Pipeline` name virtual when
-   * lineage is absent.
+   * it at score time. A Lineage that names none (a pre-change model, D4-61) falls back
+   * to its pipeline's `TargetEntity` — never the model's `Pipeline` virtual, which is
+   * the pipeline's name, not an entity. Empty when neither names one.
    */
-  private targetEntityName(model: MJMLModelEntity): string {
+  private async targetEntityName(model: MJMLModelEntity, deps: MaintenanceDeps): Promise<string> {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
     if (typeof lineage.targetEntityName === 'string' && lineage.targetEntityName.length > 0) {
       return lineage.targetEntityName;
     }
-    return model.Pipeline ?? '';
+    if (!model.PipelineID) {
+      return '';
+    }
+    return (await deps.loader.LoadPipelineTargetEntity(model.PipelineID, deps.contextUser, deps.provider)) || '';
   }
 
   /** Save a binding and throw with `LatestResult.CompleteMessage` on failure (CLAUDE.md). */

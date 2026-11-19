@@ -50,6 +50,7 @@ export class PredictiveStudioRefusals {
       case 'binding-not-authorized': return 'BINDING_NOT_AUTHORIZED';
       case 'as-of-unsupported': return 'AS_OF_UNSUPPORTED';
       case 'leakage-unknown': return 'LEAKAGE_UNKNOWN';
+      case 'feature-values-not-writable': return 'FEATURE_VALUES_NOT_WRITABLE';
       default: return PredictiveStudioRefusals.unknownScoringRefusal(reason);
     }
   }

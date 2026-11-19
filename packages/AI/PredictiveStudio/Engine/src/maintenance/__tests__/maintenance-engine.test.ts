@@ -135,6 +135,11 @@ class FakeLoader implements IMaintenanceLoader {
     const m = [...this.models.values()].find((x) => x.PipelineID === pipelineId);
     return m ? asModel(m) : null;
   }
+  /** Each pipeline's `TargetEntity`, by pipeline ID. */
+  public pipelineTargets = new Map<string, string>();
+  async LoadPipelineTargetEntity(pipelineId: string): Promise<string | null> {
+    return this.pipelineTargets.get(pipelineId) || null;
+  }
 }
 
 class FakeRowCounter implements IRowCounter {
@@ -368,6 +373,19 @@ describe('MaintenanceEngine.RescoreScheduledBinding', () => {
     // The runner targeted the model's lineage entity.
     expect(rescoreRunner.requests[0].targetEntityName).toBe('Members');
     expect(rescoreRunner.requests[0].modelId).toBe('m1');
+  });
+
+  it("re-scores a pre-change model whose Lineage names no target entity on its pipeline's TargetEntity, never the pipeline's name (D4-61)", async () => {
+    const { deps, loader, rescoreRunner } = buildDeps();
+    const binding = new FakeBinding('b1', 'm1');
+    binding.Mode = 'Scheduled';
+    const model = new FakeModel('m1');
+    model.Lineage = JSON.stringify({ featureSteps: { Steps: [] } });
+    loader.pipelineTargets.set(model.PipelineID, 'Members');
+
+    await engine.RescoreScheduledBinding(asBinding(binding), asModel(model), deps);
+
+    expect(rescoreRunner.requests.map((r) => r.targetEntityName)).toEqual(['Members']);
   });
 
   it('skips (returns null) for a non-Scheduled binding', async () => {

@@ -62,6 +62,8 @@ const REFUSAL_CODES = [
   'AS_OF_UNSUPPORTED',
   /** A pre-change model kept serving has no stored feature importance to test for dominance (`leakage-unknown`). */
   'LEAKAGE_UNKNOWN',
+  /** A writing run's caller may not create and update `MJ: Feature Values` (`feature-values-not-writable`, D4-165). */
+  'FEATURE_VALUES_NOT_WRITABLE',
   /** A scoring run stopped at a batch in which a record failed; the run row names the first errors. */
   'SCORING_RUN_FAILED',
 ] as const;

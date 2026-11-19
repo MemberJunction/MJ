@@ -220,6 +220,18 @@ export interface IMaintenanceLoader {
   ): Promise<MJMLModelEntity | null>;
 
   /**
+   * The `TargetEntity` of a training pipeline: the entity a model of that pipeline scores when its Lineage names none
+   * (a pre-change model, D4-61). Mutation-free read.
+   *
+   * @returns the entity name, or `null` when the pipeline is not found or names no target entity
+   */
+  LoadPipelineTargetEntity(
+    pipelineId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<string | null>;
+
+  /**
    * Load the model a binding scores with: the newest Published model of its training pipeline (mutation-free read).
    *
    * @returns the model, or `null` when the pipeline has no Published model

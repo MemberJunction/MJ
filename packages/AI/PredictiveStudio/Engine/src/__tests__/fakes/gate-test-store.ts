@@ -110,6 +110,8 @@ export class GateTestStore {
     'MJ: ML Training Runs': '6A1D2E3F-0000-4000-8000-0000000000E4',
     'MJ: ML Output Bindings': '6A1D2E3F-0000-4000-8000-0000000000E5',
     'MJ: Scheduled Jobs': '6A1D2E3F-0000-4000-8000-0000000000E6',
+    // The scoring service checks a writing run's caller may create Feature Values before any read (D4-165).
+    'MJ: Feature Values': '6A1D2E3F-0000-4000-8000-0000000000E7',
   };
   /**
    * The base view of each table a filter may name in a `Field IN (SELECT <col> FROM [__mj].[<view>] WHERE Col='v')`

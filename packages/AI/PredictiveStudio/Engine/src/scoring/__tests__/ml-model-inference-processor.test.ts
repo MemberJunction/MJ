@@ -317,6 +317,38 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
     expect(pipelineQueries).toEqual(["MJ: ML Training Pipelines|ID='pipe-members'"]);
   });
 
+  it('resolves the pipeline\'s TargetEntity for a Lineage without targetEntityName, never the pipeline\'s name (D4-61)', async () => {
+    const legacy = new FakeMLModel();
+    // The shape TrainingEngine.buildLineage wrote before 64f92aa3b9: no targetEntityName. `Pipeline` is the view's
+    // pipeline-name column, which names no entity.
+    legacy.Lineage = JSON.stringify({ pipelineId: 'pipe-members', pipelineVersion: 1, sourceBindings: [], asOfStrategy: { Mode: 'none' }, sidecarVersion: null, lockedHoldoutRowCount: 2, trainingRowCount: 8, assembledAt: '2026-05-01T00:00:00.000Z' });
+    legacy.Pipeline = 'Members renewal (pipeline)';
+    const { deps } = buildDeps(legacy);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
+    const pipelineQueries: string[] = [];
+    const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
+    const loaded = await proc.PrimeVerifiedModel(legacy as unknown as MJMLModelEntity, new TextEncoder().encode('fake-model-bytes'), { ...CTX, Provider: pipelineRowProvider([row], pipelineQueries) });
+    expect([loaded.targetEntityName, pipelineQueries]).toEqual(['Members', ["MJ: ML Training Pipelines|ID='pipe-members'"]]);
+  });
+
+  it('keeps a Lineage targetEntityName only when the provider knows that entity; otherwise the pipeline\'s TargetEntity', async () => {
+    const renamed = new FakeMLModel();
+    renamed.Lineage = JSON.stringify({ targetEntityName: 'Old Members', sourceBindings: [], asOfStrategy: { Mode: 'none' } });
+    const { deps } = buildDeps(renamed);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
+    const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
+    const known = (names: readonly string[]): IMetadataProvider => {
+      const reads: string[] = [];
+      const base = pipelineRowProvider([row], reads);
+      const slice = { EntityByID: base.EntityByID, RunView: base.RunView, EntityByName: (n: string) => (names.includes(n) ? { Name: n } : undefined) };
+      return slice as unknown as IMetadataProvider;
+    };
+    const bytes = new TextEncoder().encode('fake-model-bytes');
+    const stale = await proc.PrimeVerifiedModel(renamed as unknown as MJMLModelEntity, bytes, { ...CTX, Provider: known(['Members']) });
+    const real = await proc.PrimeVerifiedModel(renamed as unknown as MJMLModelEntity, bytes, { ...CTX, Provider: known(['Members', 'Old Members']) });
+    expect([stale.targetEntityName, real.targetEntityName]).toEqual(['Members', 'Old Members']);
+  });
+
   it('fails loudly for an unreadable Lineage on a unit-bound pipeline, and loads it as legacy on an unbound one', async () => {
     const errors = ConsoleCapture.Errors();
     const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

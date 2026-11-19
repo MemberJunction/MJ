@@ -97,7 +97,7 @@ describe('JSONType mirrors equal their Core types', () => {
 
   it('fails on exactly the drifted mirror (Scoring Runs: a ScoringRefusal kind dropped)', () => {
     const text = readFileSync(SCORING_RUN_MIRROR, 'utf8');
-    const drifted = text.replace("  | { readonly kind: 'artifact-unverified'; readonly modelId: string };", "  ;");
+    const drifted = text.replace("  | { readonly kind: 'feature-values-not-writable'; readonly userId: string };", "  ;");
     expect(drifted).not.toBe(text);
     expect(failingMirrors(compile(new Map([[SCORING_RUN_MIRROR, drifted]])))).toEqual(['MirrorScoringRefusal']);
   }, 120_000);

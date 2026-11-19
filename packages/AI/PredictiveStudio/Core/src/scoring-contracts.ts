@@ -4,8 +4,9 @@
  * C6 — the Scoring Service, ported from the target-design contracts (`reference/contracts/contracts.ts` L1335-L1433)
  * with PR 4's deltas (§5.2): `ScoringRefusal` gains the D-058 prediction-store refusals (`no-published-model`,
  * `binding-withdrawn`, `binding-not-authorized`, `as-of-unsupported`, `leakage-unknown`) and D4-45's
- * `artifact-unverified`, 14 kinds in all; `model-not-published` names the persisted status (D4-02, which adds
- * `KeepBaseline` and `Unevaluated`); `model-flagged` may name the dominance re-run's feature (D4-61); a refused run's
+ * `artifact-unverified` and D4-165's `feature-values-not-writable` (a deviation from the frozen contract), 15 kinds in
+ * all; `model-not-published` names the persisted status (D4-02, which adds `KeepBaseline` and `Unevaluated`);
+ * `model-flagged` may name the dominance re-run's feature (D4-61); a refused run's
  * `ModelID` is null when the call is refused before a model is resolved (a caller without the binding's authorization, a
  * withdrawn binding, a pipeline with no Published model; §5.1). A written `ScoredRow` is persisted as one
  * `MJ: Feature Values` row (D-058, §5.8.1).
@@ -100,7 +101,14 @@ export type ScoringRefusal =
   | { readonly kind: 'leakage-unknown'; readonly modelId: string }
   /** The model row has no registered `ArtifactSha256` to verify the artifact against (D4-45). */
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
-  | { readonly kind: 'artifact-unverified'; readonly modelId: string };
+  | { readonly kind: 'artifact-unverified'; readonly modelId: string }
+  /**
+   * A run that would write Feature Values (the binding path, not a dry run) whose caller may not create and update
+   * `MJ: Feature Values` (a same-as-of re-run updates its rows in place); refused before any read. A deviation from
+   * the frozen contract (D4-165), as D4-156's dominance is.
+   */
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
 
 /** One row's score: a calibrated class-probability vector with the adverse probability, or a value with an interval. */
 export type ScoreOutput =

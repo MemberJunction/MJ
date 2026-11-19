@@ -854,6 +854,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "FEATURE_VALUES_NOT_WRITABLE",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the caller may not create and update MJ: Feature Values, so a run that writes them is refused before any read (a dry run is not)."
+          },
+          "primaryKey": {
+            "ID": "03DA070A-6073-440A-8463-894E54A5A80D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "SCORING_RUN_FAILED",
             "IsSuccess": false,
             "Description": "The scoring run stopped at a batch in which a record failed; the batches before it stay. ScoringRunID names the run and its first errors."

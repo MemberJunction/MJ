@@ -87,6 +87,7 @@ describe('PredictiveStudioRefusals', () => {
       [{ kind: 'as-of-unsupported', modelId: 'm1', asOf: '2026-01-01T00:00:00.000Z' }, 'AS_OF_UNSUPPORTED'],
       [{ kind: 'leakage-unknown', modelId: 'm1' }, 'LEAKAGE_UNKNOWN'],
       [{ kind: 'artifact-unverified', modelId: 'm1' }, 'ARTIFACT_UNVERIFIED'],
+      [{ kind: 'feature-values-not-writable', userId: 'u1' }, 'FEATURE_VALUES_NOT_WRITABLE'],
     ];
     for (const [reason, code] of cases) {
       it(`${reason.kind} -> ${code}, and the message names the scoring run`, () => {
@@ -97,8 +98,8 @@ describe('PredictiveStudioRefusals', () => {
       });
     }
 
-    it('every refusal kind has a case above (14 kinds)', () => {
-      expect(new Set(cases.map(([r]) => r.kind)).size).toBe(14);
+    it('every refusal kind has a case above (15 kinds)', () => {
+      expect(new Set(cases.map(([r]) => r.kind)).size).toBe(15);
     });
 
     it('a failed run -> SCORING_RUN_FAILED, its counts and first error in the message', () => {

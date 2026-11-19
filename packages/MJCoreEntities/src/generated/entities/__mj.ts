@@ -84815,7 +84815,9 @@ export type MJMLScoringRunEntity_ScoringRefusal =
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'leakage-unknown'; readonly modelId: string }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
-  | { readonly kind: 'artifact-unverified'; readonly modelId: string };
+  | { readonly kind: 'artifact-unverified'; readonly modelId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
 
 /** One record that failed to score; `FirstErrors` stores an array of these (at most 20). */
 export interface MJMLScoringRunEntity_ScoringRowError {

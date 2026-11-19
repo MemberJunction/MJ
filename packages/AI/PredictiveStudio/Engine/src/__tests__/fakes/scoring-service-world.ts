@@ -11,7 +11,7 @@ import type { MJMLModelEntity, MJMLModelScoringBindingEntity } from '@memberjunc
 import type { FeatureValueRecordRef, RecordHumanValueParams, RecordModelValuesOutcome, RecordModelValuesParams } from '@memberjunction/feature-pipelines';
 import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import type { HumanValueQuestion } from '@memberjunction/record-set-processor';
-import type { FeatureSchemaEntry, PredictionUnitSpec, PredictRequest, PredictResponse, ScoringRequest, ScoringScope, UnitRows } from '@memberjunction/predictive-studio-core';
+import type { AssemblyRefusal, FeatureSchemaEntry, PredictionUnitSpec, PredictRequest, PredictResponse, ScoringRequest, ScoringScope, UnitRows } from '@memberjunction/predictive-studio-core';
 import { resolveOutcomeConfig } from '@memberjunction/predictive-studio-core';
 import { vi } from 'vitest';
 
@@ -97,6 +97,8 @@ class FakeMember {
 export class TargetTable {
   public readonly Rows = new Map<string, Record<string, Cell>>();
   public Writes = 0;
+  /** When set, a read reports this `TotalRowCount` (more rows matched than it returns: a short read). */
+  public ReportedTotal: number | null = null;
   /** A person sets the record's `Score`. */
   public SetByPerson(recordId: string, value: number, column = 'Score'): void {
     this.Rows.set(recordId, { ...(this.Rows.get(recordId) || { ID: recordId }), [column]: value });
@@ -109,7 +111,7 @@ export class TargetTable {
   public View(params: RunViewParams): { Success: boolean; Results: object[]; TotalRowCount: number; ErrorMessage: string } {
     const ids = [...String(params.ExtraFilter).matchAll(/'([^']*)'/g)].map((m) => m[1]);
     const results = ids.map((id) => new FakeMember(this, { ...(this.Rows.get(id) || { ID: id }) }));
-    return { Success: true, Results: results, TotalRowCount: results.length, ErrorMessage: '' };
+    return { Success: true, Results: results, TotalRowCount: this.ReportedTotal === null ? results.length : this.ReportedTotal, ErrorMessage: '' };
   }
 }
 
@@ -199,6 +201,8 @@ export class ValuesDouble implements ScoringValueStore {
 export class SidecarDouble implements ISidecarPredictor {
   private calls = 0;
   private failing: number | null = null;
+  /** When true, every answer leaves out its last row's prediction. */
+  public OmitLastPrediction = false;
   /** Makes the `n`th call from now fail (null: none). */
   public FailBatch(n: number | null): void {
     this.calls = 0;
@@ -208,13 +212,11 @@ export class SidecarDouble implements ISidecarPredictor {
   public async predict(req: PredictRequest): Promise<PredictResponse> {
     this.calls++;
     if (this.failing !== null && this.calls === this.failing) throw new Error(`sidecar: batch ${this.calls} failed`);
-    return {
-      classOrder: [...CLASS_ORDER],
-      predictions: req.rows.map((row) => {
-        const s = Number(row['Tenure']);
-        return { score: s, class: s >= 0.5 ? 'renewed' : 'lapsed', probabilities: [1 - s, s] };
-      }),
-    };
+    const predictions = req.rows.map((row) => {
+      const s = Number(row['Tenure']);
+      return { score: s, class: s >= 0.5 ? 'renewed' : 'lapsed', probabilities: [1 - s, s] };
+    });
+    return { classOrder: [...CLASS_ORDER], predictions: this.OmitLastPrediction ? predictions.slice(0, -1) : predictions };
   }
 }
 
@@ -223,6 +225,8 @@ export class RuntimeDouble implements IScoringModelRuntime {
   public readonly AsOfs: ('unit-rule' | Date)[] = [];
   public readonly Units = new Map<string, UnitRows['kind'] | null>();
   public readonly Renamed = new Map<string, { readonly From: string; readonly To: string }>();
+  /** Models whose assembly refuses, with the refusal. */
+  public readonly Refusals = new Map<string, AssemblyRefusal>();
   /** The provider each assembly read through (its caller's context), in call order. */
   public readonly AssemblyProviders: IMetadataProvider[] = [];
   /** Every assembly's as-of argument, in call order. */
@@ -239,7 +243,14 @@ export class RuntimeDouble implements IScoringModelRuntime {
       unit: unitKind === null ? null : { Spec: RuntimeDouble.unit(unitKind), Features: [], RowEntity: MEMBERSHIPS, CategoryLevels: new Map() },
     };
     const renamed = this.Renamed.get(model.ID);
-    return { Loaded: loaded, Assemble: async (ids, _key, asOf, _entity, ctx) => { this.AssemblyProviders.push(ctx.Provider); return this.assemble(loaded, renamed, ids, asOf); } };
+    const refusal = this.Refusals.get(model.ID);
+    return {
+      Loaded: loaded,
+      Assemble: async (ids, _key, asOf, _entity, ctx) => {
+        this.AssemblyProviders.push(ctx.Provider);
+        return refusal ? { Status: 'refused', Refusal: refusal } : this.assemble(loaded, renamed, ids, asOf);
+      },
+    };
   }
   private assemble(loaded: LoadedModel, renamed: { readonly From: string; readonly To: string } | undefined, ids: readonly string[], asOf: 'unit-rule' | Date): ScoringAssembly {
     this.AsOfs.push(asOf);
@@ -326,6 +337,28 @@ export class ScoringServiceWorld {
       Seams: { ArtifactLoader: this.Artifacts, Sidecar: this.Sidecar, Runtime: this.Runtime, Values: this.Values, Challengers: this.Challengers, BatchSize: BATCH, Clock: { Now: () => RUN_DATE } },
       ...over,
     };
+  }
+
+  /**
+   * A scorer who holds the view authorization and every grant of the world user's role except create on
+   * `MJ: Feature Values` (read only there).
+   */
+  public ScorerWithoutFeatureValueCreate(): UserInfo {
+    return this.scorerWithFeatureValueGrant({ CanRead: true });
+  }
+
+  /** A scorer who may create but not update `MJ: Feature Values` (a same-as-of re-run updates its rows in place). */
+  public ScorerWithoutFeatureValueUpdate(): UserInfo {
+    return this.scorerWithFeatureValueGrant({ CanRead: true, CanCreate: true });
+  }
+
+  /** A scorer holding the view authorization, every grant on the other entities and `grant` on `MJ: Feature Values`. */
+  private scorerWithFeatureValueGrant(grant: { readonly CanRead: boolean; readonly CanCreate?: boolean }): UserInfo {
+    const all = { CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true };
+    const grants = Object.fromEntries(Object.keys(GateTestStore.PermissionedEntities).map((name) => [name, name === 'MJ: Feature Values' ? grant : all]));
+    const user = this.Store.UserWithPermissions(grants);
+    this.Store.Insert('vwUserHeldAuthorizations', { UserID: user.ID, AuthorizationID: VIEW_AUTH_ID });
+    return user;
   }
 
   /** A user with no authorization at all. */

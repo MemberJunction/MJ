@@ -45,6 +45,15 @@ async function LegacyServedBinding(o: WorldModelOptions = {}): Promise<{ readonl
   return { Binding: await world.Binding(model, { FeatureName: `Legacy ${model.ID}` }), Model: model };
 }
 
+describe('ScoringService.Score — a sidecar that leaves a record out', () => {
+  it('fails the batch naming the record the sidecar returned no prediction for, and writes nothing of it', async () => {
+    world.Sidecar.OmitLastPrediction = true;
+    const r = await new ScoringService(ctx()).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'failed', ModelID: published.ID, Failed: 2, FirstErrors: [{ recordId: 'r2', message: 'the sidecar returned no prediction for the record' }] });
+    expect([world.Values.Calls(), world.Target.Writes]).toEqual([[], 0]);
+  });
+});
+
 describe('ScoringService.Score — refusals', () => {
   it('refuses a withdrawn binding with a refused run row and writes nothing', async () => {
     const r = await new ScoringService(ctx()).Score(await Withdrawn(binding), scope, asOf, false);
@@ -57,6 +66,44 @@ describe('ScoringService.Score — refusals', () => {
     expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized', bindingId: binding.ID } });
     expect([world.Values.Reads(), world.Values.Calls()]).toEqual([[], []]);
     expect(runs.Last()).toMatchObject({ Status: 'refused', ModelID: null, Written: 0 });
+  });
+
+  it('refuses a writing run whose caller cannot create MJ: Feature Values before any read, with a refused run row, and writes nothing (D4-165)', async () => {
+    const scorer = world.ScorerWithoutFeatureValueCreate();
+    const r = await new ScoringService({ ...ctx(), ContextUser: scorer }).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: null, Reason: { kind: 'feature-values-not-writable', userId: scorer.ID } });
+    expect([world.Values.Reads(), world.Values.Calls(), world.Target.Writes]).toEqual([[], [], 0]);
+    expect(runs.All()).toEqual([expect.objectContaining({ Status: 'refused', ModelID: null, Written: 0 })]);
+  });
+
+  it('admits a dry run of a caller who cannot create MJ: Feature Values (it writes none), and a bound Record Process\'s Admit refuses the writing run', async () => {
+    const scorer = world.ScorerWithoutFeatureValueCreate();
+    const dry = await new ScoringService({ ...ctx(), ContextUser: scorer }).Score(binding, scope, asOf, true);
+    expect(dry).toMatchObject({ Status: 'completed', DryRun: true, Written: 0 });
+    const admitted = await new ScoringService({ ...ctx(), ContextUser: scorer }).Admit(binding, scope, asOf, false);
+    expect(admitted).toMatchObject({ Status: 'refused', Reason: { kind: 'feature-values-not-writable', userId: scorer.ID } });
+  });
+
+  it('refuses a writing run whose caller may create but not update MJ: Feature Values (a same-as-of re-run updates in place, D4-165)', async () => {
+    const scorer = world.ScorerWithoutFeatureValueUpdate();
+    const r = await new ScoringService({ ...ctx(), ContextUser: scorer }).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: null, Reason: { kind: 'feature-values-not-writable', userId: scorer.ID } });
+    expect([world.Values.Reads(), world.Values.Calls()]).toEqual([[], []]);
+  });
+
+  it('refuses a scope read that returns fewer rows than it matched (check 4, truncated-read) with a refused run and writes nothing', async () => {
+    world.Target.ReportedTotal = 5;
+    const r = await new ScoringService(ctx()).Score(binding, { kind: 'filter', entity: 'Memberships', extraFilter: "ID IN ('r1','r2')" }, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: published.ID, Reason: { kind: 'assembly-refused', refusal: { kind: 'truncated-read', entity: 'Memberships', rowsExpected: 5, rowsRead: 2 } } });
+    expect([world.Values.Calls(), world.Target.Writes, runs.Statuses()]).toEqual([[], 0, ['refused']]);
+  });
+
+  it('carries an assembly refusal through as the run\'s refusal (check 4) and writes nothing', async () => {
+    const refusal = { kind: 'decision-date-before-change-history', entity: 'Memberships', field: 'Tenure', historyStart: null, rowsAffected: 2 } as const;
+    world.Runtime.Refusals.set(published.ID, refusal);
+    const r = await new ScoringService(ctx()).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: published.ID, Reason: { kind: 'assembly-refused', refusal } });
+    expect([world.Values.Calls(), world.Target.Writes, runs.Statuses()]).toEqual([[], 0, ['refused']]);
   });
 
   it('refuses a binding with no view authorization (fail closed)', async () => {

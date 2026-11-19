@@ -6844,7 +6844,7 @@ outside the allowlist; its `Source = 'Pipeline', Role = 'Challenger'` rows are w
 | concurrent publish | two runs of one binding and as-of date at once | `scoring-service.adversarial.db.test.ts › two concurrent runs of one as-of date leave one row per key` |
 | unauthorized user | a binding saved without a view authorization | `ml-model-scoring-binding.test.ts › requires the pipeline, feature name, target entity and view authorization` |
 | unauthorized user | a `Score` caller who does not hold the binding's view authorization | `scoring-service.test.ts › refuses a caller who does not hold the binding's view authorization before any read, with a refused run row` |
-| unauthorized user | a Score Record Set caller without create permission on `MJ: Feature Values` | `scoring-service.adversarial.db.test.ts › a caller who cannot create Feature Values gets a refused run, not a partial write` |
+| unauthorized user | a Score Record Set caller without create (or update) permission on `MJ: Feature Values` | `scoring-service.adversarial.db.test.ts › a caller who cannot create Feature Values gets a refused run, not a partial write`; `scoring-service.test.ts › refuses a writing run whose caller cannot create MJ: Feature Values …`, `› … may create but not update …`, `› admits a dry run …` (D4-165) |
 | human value, with Record Process | a Human row on the target written by a process | `binding-human-value-guard.test.ts › a Human row of the binding's feature makes the field human-owned, with and without a Record Process` |
 | human value, without Record Process | the binding's own earlier copy is not mistaken for a person's value | `binding-human-value-guard.test.ts › a value the binding's newest earlier Champion row copied is not human-owned (no Record Process)` |
 | human value, without Record Process | a person's value kept unless `OverwriteHumanValues` | `scoring-service.test.ts › keeps a person's value in the column unless OverwriteHumanValues` |
@@ -10318,6 +10318,25 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   })`) and scores 25 records: check 3 refuses `scope-entity-mismatch` naming the copy entity, the run `refused`, 0 rows
   and 0 Feature Values. The copy's rows persist between runs, like every pstruth dataset, refilled each run (entities
   509 → 510).
+- **D4-165 · A writing run refuses a caller who cannot write Feature Values** (owner ruling 2026-11-18, M5.12 Step 4;
+  the harness broke the claim: the run ended `failed` in its first batch; create-and-update by controller ruling at the
+  M5.12 review, M3). `ScoringService.Score` and `Admit`, when not a dry run, refuse before any record or Feature Value
+  is read with `ScoringRefusal` `{ kind: 'feature-values-not-writable', userId }` and a refused run row (`ModelID` null)
+  when the caller lacks `CanCreate` or `CanUpdate` on `MJ: Feature Values` (a new as-of date inserts; a same-as-of
+  re-run replaces its rows in place, an update; `EntityInfo.GetUserPermisions`; an entity the provider does not describe
+  refuses). Order: `binding-not-authorized` (reads only the held authorizations), then this check (no read), then
+  `binding-withdrawn`. A dry run and the model path (`Predict`, which writes no Feature Value) are not refused.
+  `REFUSAL_CODES` gains `FEATURE_VALUES_NOT_WRITABLE` and its Result Code row; the M5.9 mirror carries the kind. A
+  deviation from the frozen contract (D-028), as D4-156's dominance is.
+- **D4-166 · D4-61 addendum — a pre-change model's entity** (M5.12 Step 4 and controller). A pre-change model's entity
+  is its Lineage's `targetEntityName` when the provider knows that entity, else its pipeline row's `TargetEntity` —
+  never the model view's `Pipeline` virtual, which is the pipeline's NAME. The pre-change trainer's Lineage
+  (`45f18fdee6`) wrote no `targetEntityName`, so every such model resolved to its pipeline's name and check 3 refused
+  it. Fixed in `MLModelInferenceProcessor.resolvePipelineConfig`/`loadPipelineFallback` (escaped filter) and in
+  `MaintenanceEngine.targetEntityName` (the data-volume row count and the scheduled rescore) through the new
+  `IMaintenanceLoader.LoadPipelineTargetEntity`. M5.12's review added four ScoringService cases no test had covered: a
+  short scope read refused `truncated-read` (I1), an assembly refusal carried through check 4 (M1), the named "sidecar
+  returned no prediction" failure (M2), and a create-only caller refused (M3); each mutation-proved.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not

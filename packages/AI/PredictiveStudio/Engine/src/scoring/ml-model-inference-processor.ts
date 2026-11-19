@@ -699,7 +699,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       const res = await rv.RunView<PipelineViewRow>(
         {
           EntityName: 'MJ: ML Training Pipelines',
-          ExtraFilter: `ID='${pipelineId}'`,
+          ExtraFilter: `ID='${escapeSQL(pipelineId)}'`, // pk-filter-ok: MJ: ML Training Pipelines is an MJ core entity keyed by ID
           ResultType: 'simple',
           MaxRows: 1,
           SkipTotalRowCount: true,
@@ -714,8 +714,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           (row.TargetEntityID ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
+        // A Lineage's entity is kept only when the provider still knows it (an entity renamed since training is not).
+        const lineageEntity = existing.targetEntityName && context.Provider.EntityByName(existing.targetEntityName) ? existing.targetEntityName : '';
         return {
-          targetEntityName: existing.targetEntityName || targetEntity,
+          targetEntityName: lineageEntity || targetEntity,
           sourceBindings: existing.sourceBindings.length > 0 ? existing.sourceBindings : parseJson<SourceBinding[]>(row.SourceBindings, []),
           featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
           asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
@@ -739,8 +741,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
     const outcomeConfig = resolveOutcomeConfig(model);
     return {
-      // The target entity the model scores is the training-unit entity from lineage.
-      targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName : (model.Pipeline ?? ''),
+      // The target entity the model scores is the training-unit entity from lineage. A Lineage without one (every model
+      // the pre-change trainer wrote) leaves it empty so the pipeline row's TargetEntity is read: `model.Pipeline` is the
+      // pipeline's name, never an entity (D4-61).
+      targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName.trim() : '',
       sourceBindings: Array.isArray(lineage.sourceBindings) ? (lineage.sourceBindings as SourceBinding[]) : [],
       featureSteps: isFeatureStepGraph(lineage.featureSteps) ? lineage.featureSteps : { Steps: [] },
       asOf: isAsOfStrategy(lineage.asOfStrategy) ? lineage.asOfStrategy : { Mode: 'none' },
