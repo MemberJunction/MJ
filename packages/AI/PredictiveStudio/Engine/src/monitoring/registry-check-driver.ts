@@ -25,7 +25,7 @@
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import type { MJEntityPermissionEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity, MJRowLevelSecurityFilterEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import type { NotificationContent, ScheduledJobResult } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, type ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 import { EvaluationProtocol, JsonParse, type Actor, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
@@ -357,7 +357,7 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     }, ctx);
     if (!permissions.Success) throw new Error(`reading the prediction entities' permissions failed: ${permissions.ErrorMessage}`);
     const out: RegistryFinding[] = [];
-    for (const permission of permissions.Results.filter((p) => p.ReadRLSFilterID !== gate.ID)) {
+    for (const permission of permissions.Results.filter((p) => !UUIDsEqual(p.ReadRLSFilterID, gate.ID))) {
       permission.ReadRLSFilterID = gate.ID;
       const saved = await permission.Save();
       out.push({
