@@ -9,6 +9,7 @@
  * - Add View Results To List: Append a view's results to a list (additive only)
  * - Compose Lists: Set-op preview / commit across List + View inputs
  * - Create List: Create a new list with optional initial records
+ * - Create List From Query: Create a list from a saved query or conversation SQL, linked so it refreshes
  * - Get List Records: Retrieve records from a list with filtering
  * - Get Record List Membership: Find which lists contain a specific record
  * - Materialize List From View: Create a new list from a view's results, with optional lineage
@@ -22,6 +23,7 @@ export * from './add-view-results-to-list.action';
 export * from './bulk-update-list-item-status.action';
 export * from './compose-lists.action';
 export * from './create-list.action';
+export * from './create-list-from-query.action';
 export * from './get-list-records.action';
 export * from './get-record-list-membership.action';
 export * from './invite-to-list.action';
