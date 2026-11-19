@@ -14,24 +14,34 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const ACTION_PATH = resolve(__dirname, '../custom/data/run-adhoc-query.action.ts');
+/** The checks shared by every action that runs caller SQL, which hand back the read-only provider. */
+const GATE_PATH = resolve(__dirname, '../custom/data/adhoc-sql-gate.ts');
 
-/** The action's source with comments removed, so doc examples (`SELECT TOP 100 …`) do not count. */
-function actionCode(): string {
-    return readFileSync(ACTION_PATH, 'utf8')
+/** A source file with comments removed, so doc examples (`SELECT TOP 100 …`) do not count. */
+function codeOf(path: string): string {
+    return readFileSync(path, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');
+}
+
+function actionCode(): string {
+    return codeOf(ACTION_PATH);
 }
 
 describe('Run Ad-hoc Query dialect contract', () => {
     it('executes through the read-only provider\'s RunQuery, which renders for that provider\'s platform', () => {
         const code = actionCode();
-        expect(code).toContain('GetReadOnlyProvider()');
+        // The provider comes from the shared gate, which takes it from the read-only login.
+        expect(code).toContain('CheckAdhocSQL(');
+        expect(codeOf(GATE_PATH)).toContain('GetReadOnlyProvider()');
+        expect(code).toMatch(/Provider: readOnlyProvider/);
         expect(code).toMatch(/readOnlyProvider\.RunQuery\(/);
         expect(code).not.toMatch(/\.ExecuteSQL\(/);
+        expect(codeOf(GATE_PATH)).not.toMatch(/\.ExecuteSQL\(/);
     });
 
     it('names no platform of its own', () => {
-        const code = actionCode();
+        const code = actionCode() + codeOf(GATE_PATH);
         expect(code).not.toMatch(/'sqlserver'|"sqlserver"/);
         expect(code).not.toMatch(/'tsql'|"tsql"/);
         expect(code).not.toMatch(/\bTOP\s+\$\{/);
