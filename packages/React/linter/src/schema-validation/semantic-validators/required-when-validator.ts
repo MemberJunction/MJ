@@ -5,8 +5,11 @@
  * Used for conditional requirements like "valueField is required when aggregateMethod is 'sum'".
  *
  * Config:
- * - condition: JavaScript expression evaluated with siblingProp as the dependent property value
+ * - condition: boolean expression over `siblingProp` (the dependent property value).
+ *   It is evaluated by SafeExpressionEvaluator with `siblingProp` as the only name in scope.
  *   Example: "siblingProp === 'sum' || siblingProp === 'average'"
+ *   A condition the evaluator cannot accept is treated as not met and reported as
+ *   an 'unsupported-condition' violation.
  *
  * Example usage in spec JSON:
  * ```json
@@ -22,7 +25,7 @@
  */
 
 import { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, DefaultExpressionEvaluator } from '@memberjunction/global';
 import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
 
@@ -38,7 +41,7 @@ export class RequiredWhenValidator extends SemanticValidator {
   /**
    * Validate that a property is present when a condition is met
    *
-   * Evaluates a JavaScript condition expression with the dependent property value,
+   * Evaluates the condition safely with the dependent property value as `siblingProp`,
    * and checks if the current property has a value when the condition is true.
    *
    * @param context - Validation context containing property info and sibling props
@@ -65,17 +68,11 @@ export class RequiredWhenValidator extends SemanticValidator {
       return violations;
     }
 
-    // Evaluate the condition
-    let conditionMet = false;
-    try {
-      // Create a safe evaluation context
-      const siblingProp = dependentPropValue;
-      // eslint-disable-next-line no-eval
-      conditionMet = eval(condition);
-    } catch (error) {
-      console.error(`Error evaluating required-when condition "${condition}":`, error);
-      return violations;
+    const evaluation = DefaultExpressionEvaluator.Evaluate(condition, { siblingProp: dependentPropValue });
+    if (!evaluation.success) {
+      return [this.unsupportedConditionViolation(context, constraint, evaluation.error)];
     }
+    const conditionMet = evaluation.value === true;
 
     // If condition is met, check if the property has a value
     if (conditionMet) {
@@ -100,5 +97,21 @@ export class RequiredWhenValidator extends SemanticValidator {
     }
 
     return violations;
+  }
+
+  /**
+   * Builds the violation for a condition that the safe evaluator does not accept.
+   */
+  private unsupportedConditionViolation(
+    context: ValidationContext,
+    constraint: PropertyConstraint,
+    reason: string | undefined
+  ): ConstraintViolation {
+    return this.createViolation(
+      'unsupported-condition',
+      `required-when condition for ${context.propertyName} (depends on ${constraint.dependsOn}) is not supported and was not evaluated`,
+      'medium',
+      `Use a simple boolean expression over siblingProp, for example "siblingProp === 'sum' || siblingProp === 'max'".${reason ? ` Reason: ${reason}` : ''}`
+    );
   }
 }
