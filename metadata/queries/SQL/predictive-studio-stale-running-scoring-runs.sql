@@ -2,4 +2,4 @@
 -- threshold (the job's StaleScoringRunHours, default 6 h); the job fails each with the reason. SQL Server only (D-057).
 SELECT ID, StartedAt
 FROM [__mj].MLScoringRun
-WHERE Status = 'running' AND StartedAt < {{ StartedBefore | sqlString }}
+WHERE Status = 'running' AND StartedAt < {{ StartedBefore | sqlDate }}

@@ -83878,6 +83878,120 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
 
 /**
+ * JSON shapes for the `MJ: ML Monitoring Results` columns the monitoring job writes (PR 4 Task M6.3): `PrimaryScore`
+ * (`MJMLMonitoringResultEntity_MetricWithInterval`), `TrackedMetrics` (an array of `MJMLMonitoringResultEntity_TrackedMetric`), `Calibration` (`MJMLMonitoringResultEntity_CalibrationReport`),
+ * `DriftLook` and `DriftAlarms` (arrays of `MJMLMonitoringResultEntity_DriftLookEntry`), `Parity` (`MJMLMonitoringResultEntity_MonitoringParity`), `TriggersFired` (an array
+ * of `MJMLMonitoringResultEntity_MonitoringTriggerFired`), `ChallengerResult` (`MJMLMonitoringResultEntity_MonitoringChallengerResult`) and `RollbackCheck`
+ * (`MJMLMonitoringResultEntity_MonitoringRollbackCheck`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core`: `MJMLMonitoringResultEntity_Interval`, `MJMLMonitoringResultEntity_MetricWithInterval` and the metric keys in
+ * `evaluation-protocol.ts`; `MJMLMonitoringResultEntity_CalibrationReport` in `trainer-contract.ts`; the monitoring shapes in
+ * `monitoring-contracts.ts`. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails
+ * when they drift. The keys are camelCase because they are stored JSON.
+ */
+
+/** Every metric a run may report: the proper scores and the secondary metrics. */
+export type MJMLMonitoringResultEntity_MetricKey =
+  | 'log-loss' | 'brier' | 'multiclass-log-loss' | 'rmse' | 'mae' | 'poisson-deviance' | 'tweedie-deviance' | 'mase'
+  | 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+
+/** A confidence interval at `level` around an estimate. */
+export interface MJMLMonitoringResultEntity_Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+
+/** One metric's value on `n` rows, with its interval. */
+export interface MJMLMonitoringResultEntity_MetricWithInterval { readonly metric: MJMLMonitoringResultEntity_MetricKey; readonly value: number; readonly interval: MJMLMonitoringResultEntity_Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+
+/** A tracked metric of one period beside the primary score: a proper score, a label rate or the mean prediction. */
+export interface MJMLMonitoringResultEntity_TrackedMetric {
+  readonly metric: MJMLMonitoringResultEntity_MetricKey | 'positive-rate' | 'class-rate' | 'mean-prediction';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly className: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly value: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly interval: MJMLMonitoringResultEntity_Interval;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** A binary model's calibration over the period: the recalibration fit and the reliability bins. */
+export interface MJMLMonitoringResultEntity_CalibrationReport {
+  readonly method: 'platt' | 'isotonic' | 'auto' | 'not-applicable';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly intercept: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly slope: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reliability: readonly {  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly binLower: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly binUpper: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly meanPredicted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly observedRate: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  }[];
+}
+
+/** One input's procedure-M result at the period's look. */
+export interface MJMLMonitoringResultEntity_DriftLookEntry {
+  readonly input: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly kind: 'mean' | 'proportion' | 'series';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly z: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly p: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly pAdjusted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly q: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly look: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly flagged: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's scoring parity check. */
+export interface MJMLMonitoringResultEntity_MonitoringParity {
+  readonly sampled: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly maxAbsDifference: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly passed: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly tolerance: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly resampled: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly skipped: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** One retrain trigger that fired at the period. */
+export interface MJMLMonitoringResultEntity_MonitoringTriggerFired {
+  readonly kind: 'outcome-degradation' | 'calibration-drift';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The live challenger mirror's divergence over the period. */
+export interface MJMLMonitoringResultEntity_MonitoringMirror {
+  readonly challengerModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly paired: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly agreement: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly meanScoreDelta: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly failures: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's challenger outcome and the live mirror's divergence. */
+export interface MJMLMonitoringResultEntity_MonitoringChallengerResult {
+  readonly outcome: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly mirror: MJMLMonitoringResultEntity_MonitoringMirror | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's automated rollback check. */
+export type MJMLMonitoringResultEntity_MonitoringRollbackCheck =
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'off' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'no-predecessor' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'not-eligible'; readonly predecessorModelId: string; readonly reason: string }
+  | {
+      readonly kind: 'checked' | 'rolled-back' | 'rollback-withheld';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly predecessorModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly sharedRowIds: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly comparisons: readonly MJMLMonitoringResultEntity_Interval[];  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    };
+
+/**
  * MJ: ML Monitoring Results - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MLMonitoringResult
@@ -84043,6 +84157,7 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     * * Field Name: PrimaryScore
     * * Display Name: Primary Score
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MetricWithInterval
     * * Description: JSON MetricWithInterval: the protocol's primary metric over the joined rows.
     */
     get PrimaryScore(): string | null {
@@ -84050,6 +84165,21 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
     set PrimaryScore(value: string | null) {
         this.Set('PrimaryScore', value);
+    }
+
+    /**
+    * Typed accessor for PrimaryScore — a live view of the parsed JSON as MJMLMonitoringResultEntity_MetricWithInterval.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PrimaryScore field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PrimaryScoreObject(): MJMLMonitoringResultEntity_MetricWithInterval | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MetricWithInterval>('PrimaryScore');
+    }
+    set PrimaryScoreObject(value: MJMLMonitoringResultEntity_MetricWithInterval | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MetricWithInterval>('PrimaryScore', value);
     }
 
     /**
@@ -84095,6 +84225,7 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     * * Field Name: TrackedMetrics
     * * Display Name: Tracked Metrics
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLMonitoringResultEntity_TrackedMetric>
     * * Description: JSON array of MetricWithInterval: the other tracked metrics (positive rate, log loss, RMSE and so on).
     */
     get TrackedMetrics(): string | null {
@@ -84105,9 +84236,25 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for TrackedMetrics — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_TrackedMetric>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying TrackedMetrics field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get TrackedMetricsObject(): Array<MJMLMonitoringResultEntity_TrackedMetric> | null {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_TrackedMetric>>('TrackedMetrics');
+    }
+    set TrackedMetricsObject(value: Array<MJMLMonitoringResultEntity_TrackedMetric> | null) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_TrackedMetric>>('TrackedMetrics', value);
+    }
+
+    /**
     * * Field Name: Calibration
     * * Display Name: Calibration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_CalibrationReport
     * * Description: JSON CalibrationReport over the joined rows.
     */
     get Calibration(): string | null {
@@ -84118,9 +84265,25 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for Calibration — a live view of the parsed JSON as MJMLMonitoringResultEntity_CalibrationReport.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Calibration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CalibrationObject(): MJMLMonitoringResultEntity_CalibrationReport | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_CalibrationReport>('Calibration');
+    }
+    set CalibrationObject(value: MJMLMonitoringResultEntity_CalibrationReport | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_CalibrationReport>('Calibration', value);
+    }
+
+    /**
     * * Field Name: DriftLook
     * * Display Name: Drift Look
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
     * * Description: JSON per-input drift statistics of the period's look: z, empirical p, adjusted p, the look's threshold and index.
     */
     get DriftLook(): string | null {
@@ -84131,10 +84294,26 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for DriftLook — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_DriftLookEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DriftLook field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DriftLookObject(): Array<MJMLMonitoringResultEntity_DriftLookEntry> | null {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftLook');
+    }
+    set DriftLookObject(value: Array<MJMLMonitoringResultEntity_DriftLookEntry> | null) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftLook', value);
+    }
+
+    /**
     * * Field Name: DriftAlarms
     * * Display Name: Drift Alarms
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: []
+    * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
     * * Description: JSON array of the inputs whose drift alarm fired.
     */
     get DriftAlarms(): string {
@@ -84145,9 +84324,25 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for DriftAlarms — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_DriftLookEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DriftAlarms field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DriftAlarmsObject(): Array<MJMLMonitoringResultEntity_DriftLookEntry> {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftAlarms')!;
+    }
+    set DriftAlarmsObject(value: Array<MJMLMonitoringResultEntity_DriftLookEntry>) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftAlarms', value);
+    }
+
+    /**
     * * Field Name: Parity
     * * Display Name: Parity
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringParity
     * * Description: JSON {sampled, maxAbsDifference, passed}: the period's scoring parity check.
     */
     get Parity(): string | null {
@@ -84158,10 +84353,26 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for Parity — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringParity.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Parity field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ParityObject(): MJMLMonitoringResultEntity_MonitoringParity | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringParity>('Parity');
+    }
+    set ParityObject(value: MJMLMonitoringResultEntity_MonitoringParity | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringParity>('Parity', value);
+    }
+
+    /**
     * * Field Name: TriggersFired
     * * Display Name: Triggers Fired
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: []
+    * * JSON Type: Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>
     * * Description: JSON array of {kind, reason}: the retrain and rollback triggers that fired.
     */
     get TriggersFired(): string {
@@ -84169,6 +84380,21 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
     set TriggersFired(value: string) {
         this.Set('TriggersFired', value);
+    }
+
+    /**
+    * Typed accessor for TriggersFired — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying TriggersFired field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get TriggersFiredObject(): Array<MJMLMonitoringResultEntity_MonitoringTriggerFired> {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>>('TriggersFired')!;
+    }
+    set TriggersFiredObject(value: Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>>('TriggersFired', value);
     }
 
     /**
@@ -84189,6 +84415,7 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     * * Field Name: ChallengerResult
     * * Display Name: Challenger Result
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringChallengerResult
     * * Description: JSON {sharedRowIds, comparison, outcome, publishRecordId}: how the challenger compared and whether it was published or withheld.
     */
     get ChallengerResult(): string | null {
@@ -84199,9 +84426,25 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
+    * Typed accessor for ChallengerResult — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringChallengerResult.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChallengerResult field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ChallengerResultObject(): MJMLMonitoringResultEntity_MonitoringChallengerResult | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringChallengerResult>('ChallengerResult');
+    }
+    set ChallengerResultObject(value: MJMLMonitoringResultEntity_MonitoringChallengerResult | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringChallengerResult>('ChallengerResult', value);
+    }
+
+    /**
     * * Field Name: RollbackCheck
     * * Display Name: Rollback Check
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringRollbackCheck
     * * Description: JSON {previousModelId, sharedRowIds, comparison, consecutive, fired or not-eligible with the reason}: the automated rollback check.
     */
     get RollbackCheck(): string | null {
@@ -84209,6 +84452,21 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
     set RollbackCheck(value: string | null) {
         this.Set('RollbackCheck', value);
+    }
+
+    /**
+    * Typed accessor for RollbackCheck — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringRollbackCheck.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RollbackCheck field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RollbackCheckObject(): MJMLMonitoringResultEntity_MonitoringRollbackCheck | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringRollbackCheck>('RollbackCheck');
+    }
+    set RollbackCheckObject(value: MJMLMonitoringResultEntity_MonitoringRollbackCheck | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringRollbackCheck>('RollbackCheck', value);
     }
 
     /**

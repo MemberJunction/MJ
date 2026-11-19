@@ -11,6 +11,9 @@
     "fields": {
       "Name": "MJ: ML Monitoring Results"
     },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: ML Monitoring Results"
+    },
     "relatedEntities": {
       "MJ: Entity Fields": [
         {
