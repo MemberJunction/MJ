@@ -1311,7 +1311,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (194 classes)
+// @memberjunction/core-actions (195 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1343,6 +1343,7 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2624,6 +2625,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2801,11 +2803,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
-    StewardFeaturePipelineVersionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    StewardFeaturePipelineVersionAction,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
@@ -2849,7 +2851,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1226;
+export const CLASS_REGISTRATIONS_COUNT = 1227;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -16,9 +16,9 @@ const MODE_HELP: Record<MJListEntity['RefreshMode'], string> = {
 
 /**
  * The "Source & refresh" card of the List form (mockup board 3): which view or query the list
- * refreshes from and whether it still matches the approved version, the refresh mode, Refresh
- * automatically with the routine's schedule, and Refresh now (with a preview before anything
- * changes). Generic: it never navigates; the host handles the events that open other records.
+ * refreshes from and whether its definition is unchanged since it was approved for this list, the
+ * refresh mode, Refresh automatically with the routine's schedule, and Refresh now (with a preview
+ * before anything changes). Generic: it never navigates; the host handles the events that open other records.
  */
 @Component({
   standalone: false,

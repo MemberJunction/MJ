@@ -1714,6 +1714,20 @@ export class BaseAgent {
      * @private
      */
     private _lastSubAgentArtifactDirective: ArtifactDirective | undefined = undefined;
+    private _lastSubAgentPayloadArtifactTypeID: string | undefined = undefined;
+
+    private resolveChildPayloadArtifactTypeID<R>(
+        subAgentResult: ExecuteAgentResult<R>,
+        subAgentEntity?: MJAIAgentEntityExtended
+    ): string | undefined {
+        if (subAgentResult.payloadArtifactTypeID) {
+            return subAgentResult.payloadArtifactTypeID;
+        }
+        if (subAgentEntity?.ArtifactCreationMode === 'Never') {
+            return undefined;
+        }
+        return subAgentEntity?.DefaultArtifactTypeID || undefined;
+    }
 
     /**
      * The resolved FileStorageAccount ID for this agent run. Set during Execute()
@@ -3044,6 +3058,7 @@ export class BaseAgent {
             this._handoffResult = null;
             this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
+            this._lastSubAgentPayloadArtifactTypeID = undefined;
             this._taintedSources = [];
             this.seedTaintFromSecurityEnvelope(params);
             this.seedTaintFromParentRun(params);
@@ -17376,7 +17391,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
-    private async executeChildSubAgentStep<SC = any, SR = any>(
+    protected async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
@@ -17675,6 +17690,11 @@ The context is now within limits. Please retry your request with the recovered c
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
 
+            const childPayloadArtifactTypeID = this.resolveChildPayloadArtifactTypeID(
+                subAgentResult,
+                subAgentEntity
+            );
+
             // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
             // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
             // immediately with the sub-agent's workflow launch message so the parent orchestrator
@@ -17695,6 +17715,7 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
                     artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID ?? childPayloadArtifactTypeID,
                     handoff: undefined
                 };
             }
@@ -17717,14 +17738,22 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            if (previousDecision?.taskGraph?.folded === true && subAgentResult.artifactDirective) {
-                this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
+            if (previousDecision?.taskGraph?.folded === true) {
+                if (subAgentResult.artifactDirective) {
+                    this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
+                }
+                if (childPayloadArtifactTypeID) {
+                    this._lastSubAgentPayloadArtifactTypeID = childPayloadArtifactTypeID;
+                }
             } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                message: shouldTerminate
+                    ? (subAgentResult.agentRun?.Message ?? previousDecision?.message)
+                    : previousDecision?.message,
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 retryReason: subAgentResult.success
@@ -17733,11 +17762,14 @@ The context is now within limits. Please retry your request with the recovered c
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // Preserve the parent's own directive on this Sub-Agent step, or when the sub-agent
-                // terminates the parent run directly (shouldTerminate=true), carry the terminal
-                // sub-agent's directive if the parent did not specify one.
+                // Preserve an explicit directive on previousDecision when supplied; otherwise, when
+                // the child sub-agent terminates the parent run directly (shouldTerminate=true),
+                // propagate the child's directive and artifact type so it overrides the parent's
+                // DefaultArtifactTypeID in AgentRunner.createArtifactHeader.
                 artifactDirective: previousDecision?.artifactDirective
                     ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID
+                    ?? (shouldTerminate ? childPayloadArtifactTypeID : undefined),
                 handoff: undefined
             };            
         } catch (error) {
@@ -18661,6 +18693,7 @@ The context is now within limits. Please retry your request with the recovered c
                     previousPayload: previousDecision?.newPayload,
                     newPayload: mergedPayload,
                     artifactDirective: undefined,
+                    payloadArtifactTypeID: undefined,
                     handoff: undefined
                 };
             }
@@ -18674,6 +18707,12 @@ The context is now within limits. Please retry your request with the recovered c
             outputData
         );
 
+        // Propagate the sub-agent's artifact type only on non-relationship (ParentID / folded)
+        // delegations where the child's payload becomes the parent's payload; on AgentRelationships
+        // paths mergedPayload retains the parent's shape.
+        const childPayloadArtifactTypeID = relationship
+            ? undefined
+            : this.resolveChildPayloadArtifactTypeID(subAgentResult, subAgentEntity);
         const chatStep: BaseAgentNextStep<SR, SC> = {
             step: 'Chat',
             terminate: true,
@@ -18683,7 +18722,8 @@ The context is now within limits. Please retry your request with the recovered c
             responseForm: subAgentResult.responseForm,
             actionableCommands: subAgentResult.actionableCommands,
             automaticCommands: subAgentResult.automaticCommands,
-            artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+            artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+            payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID ?? childPayloadArtifactTypeID
         };
 
         const effectiveOption = this.effectiveSubAgentChatHandlingOption(params.agent, relationship, params);
@@ -18699,6 +18739,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (validatedStep.step === 'Chat' && effectiveOption === 'Consult' && this._depth === 0) {
             await this.raiseFeedbackRequest(params, stepEntity, chatStep);
         } else if (validatedStep.step === 'Retry') {
+            validatedStep.artifactDirective = previousDecision?.artifactDirective;
+            validatedStep.payloadArtifactTypeID = previousDecision?.payloadArtifactTypeID;
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
             this.pushSubAgentConversationMessage(
                 params,
@@ -18725,7 +18767,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
-    private async executeRelatedSubAgentStep<SC = any, SR = any>(
+    protected async executeRelatedSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: MJAIAgentEntityExtended,
@@ -18949,9 +18991,10 @@ The context is now within limits. Please retry your request with the recovered c
                 outputData
             );
 
-            // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
-            // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
-            // workflow launch message instead of continuing the parent loop.
+            // Note: on the AgentRelationships path, mergedPayload starts from the parent's payload
+            // (with optional SubAgentOutputMapping field copies), so the resulting payload retains
+            // the parent's shape. Explicitly preserve previousDecision?.payloadArtifactTypeID rather
+            // than spreading or stamping the related sub-agent's artifact type.
             if (subAgentParkedOnWorkflow) {
                 this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
                 if (this._agentRun) {
@@ -18968,6 +19011,7 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
                     artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
                     handoff: undefined
                 };
             }
@@ -18990,12 +19034,17 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
 
-            if (!previousDecision?.artifactDirective && !shouldTerminate) {
+            if (previousDecision?.taskGraph?.folded === true && subAgentResult.artifactDirective) {
+                this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
+            } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                message: shouldTerminate
+                    ? (subAgentResult.agentRun?.Message ?? previousDecision?.message)
+                    : previousDecision?.message,
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 retryReason: subAgentResult.success
@@ -19006,6 +19055,7 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: mergedPayload,
                 artifactDirective: previousDecision?.artifactDirective
                     ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
                 handoff: undefined
             };
         } catch (error) {
@@ -22256,6 +22306,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
+        const resolvedPayloadArtifactTypeID =
+            finalStep.payloadArtifactTypeID ?? this._lastSubAgentPayloadArtifactTypeID;
+
         // Return unified media outputs — all items are persisted by AgentRunner.
         // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         const touchedMap = new Map<string, GovernedRunArtifactSummary>();
@@ -22273,6 +22326,7 @@ The context is now within limits. Please retry your request with the recovered c
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload: resolvedPayload,
             agentRun: this._agentRun!,
+            payloadArtifactTypeID: resolvedPayloadArtifactTypeID,
             responseForm: finalStep.responseForm,
             actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
