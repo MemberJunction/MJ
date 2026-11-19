@@ -181,6 +181,14 @@ interface GeminiHeldMicChunk {
     readonly Speech: boolean;
 }
 
+/** A send deferred while a turn is in flight or the session moves to a new connection. */
+interface GeminiQueuedSend {
+    /** Sends it. */
+    readonly Run: () => void;
+    /** The call a tool-result send answers, so a blocking batch's results can be found in the queue. */
+    readonly ToolCallID?: string;
+}
+
 /** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
 interface GeminiOpenedConnection {
     Session: GeminiLiveClientSession;
@@ -278,6 +286,18 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   commit. {@link SendToolResult} therefore follows `sendToolResponse` with an empty-turn
  *   commit whenever a note left the turn open, so the model speaks the result immediately
  *   (the behavioral equivalent of the OpenAI driver's explicit `response.create`).
+ * - **Blocking tool-call batch** (`turnComplete` idle signal, blocking tooling): a BLOCKING Gemini
+ *   answers only once it has EVERY result of a `toolCall` frame. The first result marks the client
+ *   busy (the reply is next), so the batch's other results skip that wait and go out in order;
+ *   context notes and narrations still wait for the reply. The open-turn commit goes out after
+ *   the batch's last result. When the tool-batch barrier gives up, the batch expires: its queued
+ *   results go out first, then the held commit (once, last). Once the last result is out, a no-output
+ *   backstop ({@link BLOCKING_TOOL_REPLY_BACKSTOP_MS}) releases the turn if the model never answers.
+ *   The backstop covers a single blocking call too (a batch of one). A commit still held when the
+ *   session moves to a new connection goes out once the move completes and nothing is owed.
+ *   Known limit: a user turn that takes the floor before the batch's first result keeps it, so the
+ *   batch's results wait for that turn's reply, or for the tool-batch barrier (15 s) when a blocking
+ *   Gemini does not answer text while calls are pending.
  * - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
  *   triggers ({@link RequestSpokenUpdate}) are sent via `sendRealtimeInput({ text })` — the
  *   Live API's documented in-conversation text path. Native-audio Live models treat
@@ -295,6 +315,18 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
 @RegisterClass(BaseRealtimeClient, 'gemini')
 export class GeminiRealtimeClient extends BaseRealtimeClient {
     public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 15000;
+    /**
+     * Blocking tooling on the `turnComplete` idle signal: with no model output, `turnComplete`, new
+     * tool call or new user turn this long after the last tool result of a batch went out, the turn
+     * is released (see {@link handleIdleTerminal}) so later sends are not held until the connection moves.
+     * A single blocking call is a batch of one, so it gets this backstop too (#6753 point 3).
+     *
+     * Basis for 10 s: a downstream eval on Gemini 3.8 Live (blocking) measured the time from the last
+     * tool result to the model's next output at p50 1.17 s, p95 3.78 s and max 4.76 s over 85 waits,
+     * none at or over 10 s. A reply that takes longer than this to start is released early: a queued
+     * note or narration then goes out and interrupts it.
+     */
+    public static readonly BLOCKING_TOOL_REPLY_BACKSTOP_MS = 10000;
     public static readonly GEMINI_LIVE_CONNECTION_SECONDS = 600;
     public static readonly GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS = 120;
 
@@ -476,6 +508,25 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return !this.supportsBlocking;
     }
 
+    /**
+     * Whether tool-call frames are tracked as blocking batches: blocking tooling on the `turnComplete`
+     * idle signal. Gemini waits for every result of a frame before it answers, while one result marks
+     * the client busy for the reply.
+     */
+    private get tracksBlockingBatch(): boolean {
+        return !this.isNonBlocking && this.idleSignal === 'turnComplete';
+    }
+
+    // ── Blocking tool-call batch (see tracksBlockingBatch) ─────────────────────
+    /** Calls of the open batch whose results have not gone out. A second frame while results are owed joins the batch. */
+    private blockingBatchOwed = new Set<string>();
+    /** Calls of a batch the tool-batch barrier expired: a late result still skips the turn wait. */
+    private blockingBatchExpired = new Set<string>();
+    /** A result of the open batch went out, so the client waits for the reply and the batch's other results skip that wait. */
+    private blockingBatchStarted = false;
+    /** The commit of an open client turn was held for the batch's last result and has not gone out. */
+    private blockingBatchCommitHeld = false;
+
     // ── Response state machine ─────────────────────────────────────────────────
     /** Accumulates the in-flight assistant transcript across delta frames. */
     private pendingAssistantText = '';
@@ -490,7 +541,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /** The kind of the turn currently in flight; stamped at send time, reset on turnComplete. */
     private activeResponseKind: 'normal' | 'narration' = 'normal';
     /** Sends deferred while a turn is in flight; drained in order on turnComplete. */
-    private queuedSends: Array<() => void> = [];
+    private queuedSends: GeminiQueuedSend[] = [];
     /**
      * Maps each pending tool call's `CallID` to its function name: Gemini's `sendToolResponse`
      * requires the function name, which the {@link SendToolResult} contract does not carry.
@@ -594,6 +645,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.cameraStream = cameraStream ?? null;
         this.clearSafetyBackstop();
         this.toolBatchBarrier.Clear();
+        this.closeBlockingBatch();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
@@ -990,9 +1042,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return false;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
-        // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight. Both wait while
-        // the session moves to a new connection.
-        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking);
+        // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight, except the later
+        // results of a blocking batch (see tracksBlockingBatch). All wait while the session moves to a new connection.
+        const waitsForTurn = !this.isNonBlocking && !this.skipsTurnWaitInBatch(callID);
+        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), waitsForTurn, callID);
     }
 
     /**
@@ -1447,6 +1500,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.sendHeldMicAudio()) {
             this.noteUnansweredSpeech();
         }
+        this.releaseHeldBatchCommitAfterMove();
         this.flushQueuedSends();
         return true;
     }
@@ -1542,6 +1596,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             for (const callID of this.pendingToolCallNames.keys()) {
                 this.callsFromBeforeReseed.add(callID);
             }
+            // The new connection never asked for these calls: their late results each start a reply, so none skips the wait.
+            this.closeBlockingBatch();
         }
         if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
             if (target.Transport === 'relay') {
@@ -1654,6 +1710,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.connectionReady = true;
         this.setState('listening');
         this.sendHeldMicAudio();
+        this.releaseHeldBatchCommitAfterMove();
         this.flushQueuedSends();
     }
 
@@ -1707,8 +1764,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 this.scheduleSafetyBackstop();
             }
         } else if (status === 'IDLE') {
-            this.clearSafetyBackstop();
             if (this.idleSignal === 'interactionStatus') {
+                this.clearSafetyBackstop();
                 this.handleIdleTerminal();
             } else {
                 this.interactionInProgress = false;
@@ -1917,6 +1974,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         for (const part of modelTurn.parts) {
             if (part.thought && part.text) {
+                if (this.tracksBlockingBatch && this.assistantSafetyBackstopTimer) {
+                    // The model is working on the reply, not silent: the no-output backstop starts again.
+                    this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+                }
                 this.pendingThoughtText += part.text;
                 this.emitTranscript({
                     Role: 'Assistant',
@@ -1988,7 +2049,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
             }
-            this.responseActive = false;
+            // A frame that joins a started batch leaves the client busy: the reply is still next once the batch is
+            // complete, so a note must not go out between the batch's results.
+            if (!this.blockingBatchInProgress) {
+                this.responseActive = false;
+            }
+        }
+        if (this.tracksBlockingBatch) {
+            // Before any call is emitted: a host that answers synchronously finds the whole batch owed.
+            this.openBlockingBatch(functionCalls.map((call) => call.id ?? ''));
         }
         for (const call of functionCalls) {
             const callID = call.id ?? '';
@@ -2017,11 +2086,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.finalizeAssistantTranscript();
         this.finalizeThoughtTranscript();
         if (this.idleSignal === 'turnComplete') {
+            this.clearSafetyBackstop();
             // Before the drain: a queued send that starts a new turn opens it again.
             this.endTurnUnlessToolCallPending();
             this.responseActive = false;
             this.activeResponseKind = 'normal';
             this.openClientTurn = false; // the completed generation consumed any open client content
+            this.blockingBatchCommitHeld = false;
             this.flushQueuedSends();
             if (this.currentState === 'speaking') {
                 this.setState('listening');
@@ -2048,11 +2119,17 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.finalizeAssistantTranscript();
         this.activeResponseKind = 'normal';
         this.finalizeThoughtTranscript();
-        if (this.openClientTurn && this.toolResponseAwaitsCommit) {
-            this.session?.sendClientContent({ turnComplete: true });
+        // While the session moves to a new connection a held batch commit stays held, and the move's completion sends
+        // it (releaseHeldBatchCommitAfterMove). The NON_BLOCKING commit (toolResponseAwaitsCommit) keeps its behaviour.
+        const keepBatchCommitForMove = this.blockingBatchCommitHeld && this.openClientTurn && !this.connectionReady;
+        if (!keepBatchCommitForMove) {
+            if (this.openClientTurn && (this.toolResponseAwaitsCommit || this.blockingBatchCommitHeld)) {
+                this.session?.sendClientContent({ turnComplete: true });
+            }
+            this.openClientTurn = false;
+            this.toolResponseAwaitsCommit = false;
+            this.blockingBatchCommitHeld = false;
         }
-        this.openClientTurn = false;
-        this.toolResponseAwaitsCommit = false;
         this.flushQueuedSends();
         if (this.currentState === 'speaking' && !this.IsAudioPlaying) {
             this.setState('listening');
@@ -2070,6 +2147,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.idleSignal === 'interactionStatus') {
             this.interactionInProgress = true;
             this.scheduleSafetyBackstop();
+        } else {
+            this.clearSafetyBackstop(); // the reply to a blocking batch has started
         }
         if (this.currentState !== 'speaking') {
             this.setState('speaking');
@@ -2181,11 +2260,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      *
      * @param send The send.
      * @param waitsForTurn Whether the send waits for a turn in flight (`false` for a non-blocking
-     *   tool result, which goes out while the model talks).
+     *   tool result, which goes out while the model talks, and for a blocking batch's later results).
+     * @param toolCallID The call a tool-result send answers, so {@link drainBlockingBatchResults} can find it.
      */
-    private enqueueOrRun(send: () => void, waitsForTurn = true): void {
+    private enqueueOrRun(send: () => void, waitsForTurn = true, toolCallID?: string): void {
         if (!this.connectionReady || (waitsForTurn && this.responseActive)) {
-            this.queuedSends.push(send);
+            this.queuedSends.push({ Run: send, ToolCallID: toolCallID });
             return;
         }
         send();
@@ -2199,8 +2279,100 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private flushQueuedSends(): void {
         while (!this.responseActive && this.connectionReady && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
-            send?.();
+            send?.Run();
         }
+    }
+
+    // ── Blocking tool-call batch (see tracksBlockingBatch) ─────────────────────
+
+    /** A `toolCall` frame: open a batch, or join the open one while its results are still owed. */
+    private openBlockingBatch(callIDs: string[]): void {
+        this.clearSafetyBackstop();
+        this.blockingBatchExpired.clear();
+        if (this.blockingBatchOwed.size === 0) {
+            this.blockingBatchStarted = false;
+        }
+        for (const callID of callIDs) {
+            this.blockingBatchOwed.add(callID);
+        }
+    }
+
+    /**
+     * Whether a blocking result goes out without waiting for the turn in flight: once the batch's first result
+     * went out (and marked the client busy for the reply), the batch's other results do; so does a late result of
+     * a batch the barrier expired. Before the first result nothing skips, so a user turn that took the floor first
+     * keeps it. A call from before a re-seed never skips: its late result starts a reply of its own.
+     */
+    private skipsTurnWaitInBatch(callID: string): boolean {
+        if (!this.tracksBlockingBatch || this.callsFromBeforeReseed.has(callID)) {
+            return false;
+        }
+        return (this.blockingBatchStarted && this.blockingBatchOwed.has(callID)) || this.blockingBatchExpired.has(callID);
+    }
+
+    /**
+     * Whether the open batch still owes results other than this call's, so the reply is not next yet. Only OTHER
+     * owed calls count: a result the batch does not owe (a duplicate, or a stale result of an expired batch) does not
+     * complete it.
+     */
+    private batchOwesOtherResults(callID: string): boolean {
+        return this.blockingBatchOwed.size - (this.blockingBatchOwed.has(callID) ? 1 : 0) > 0;
+    }
+
+    /** A started batch still owes results: the reply comes after them, so the client stays busy for it. */
+    private get blockingBatchInProgress(): boolean {
+        return this.tracksBlockingBatch && this.blockingBatchStarted && this.blockingBatchOwed.size > 0;
+    }
+
+    /** A queued send is a batch result that skips the turn wait (see {@link drainBlockingBatchResults}). */
+    private isQueuedBatchResult(send: GeminiQueuedSend): boolean {
+        return send.ToolCallID !== undefined && this.skipsTurnWaitInBatch(send.ToolCallID);
+    }
+
+    /**
+     * Whether a batch result other than this call's is still queued and about to be drained (the barrier expired the
+     * batch, or results were queued while the session moved): the commit waits for the last of them.
+     */
+    private batchResultQueuedAfter(callID: string): boolean {
+        return this.queuedSends.some((send) => send.ToolCallID !== callID && this.isQueuedBatchResult(send));
+    }
+
+    /**
+     * A blocking result went out: when the batch still owes results, send the ones already queued (only those,
+     * in queue order); when it is complete, arm the no-output backstop for the reply.
+     */
+    private afterBlockingResult(callID: string): void {
+        if (!this.tracksBlockingBatch) {
+            return;
+        }
+        this.blockingBatchExpired.delete(callID);
+        if (this.blockingBatchOwed.delete(callID) && this.blockingBatchOwed.size > 0) {
+            this.blockingBatchStarted = true;
+        }
+        this.drainBlockingBatchResults();
+        if (this.blockingBatchOwed.size === 0 && this.responseActive) {
+            this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+        }
+    }
+
+    /** Sends the batch's queued results in queue order; every other queued send stays where it is. Re-entrant. */
+    private drainBlockingBatchResults(): void {
+        while (this.connectionReady) {
+            const index = this.queuedSends.findIndex((send) => this.isQueuedBatchResult(send));
+            if (index < 0) {
+                return;
+            }
+            const [send] = this.queuedSends.splice(index, 1);
+            send.Run();
+        }
+    }
+
+    /** No batch any more (connect, disconnect, re-seed). */
+    private closeBlockingBatch(): void {
+        this.blockingBatchOwed.clear();
+        this.blockingBatchExpired.clear();
+        this.blockingBatchStarted = false;
+        this.blockingBatchCommitHeld = false;
     }
 
     /**
@@ -2227,6 +2399,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.idleSignal === 'interactionStatus') {
             this.interactionInProgress = true;
             this.scheduleSafetyBackstop();
+        } else {
+            this.clearSafetyBackstop(); // a new user turn: its own turnComplete releases it
         }
         this.activeResponseKind = kind;
         if (emitSpeaking) {
@@ -2316,17 +2490,28 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             // The commit that releases this response's continuation waits for true IDLE (see above).
             this.toolResponseAwaitsCommit = this.toolResponseAwaitsCommit || this.openClientTurn;
         } else {
-            if (this.openClientTurn) {
+            // Committing while the batch still owes results, or before its queued results go out, would tell Gemini to
+            // answer early: commit after the last one.
+            const othersOwed = this.tracksBlockingBatch && this.batchOwesOtherResults(callID);
+            const batchResultsFollow = othersOwed || (this.tracksBlockingBatch && this.batchResultQueuedAfter(callID));
+            const holdCommit = this.openClientTurn && batchResultsFollow;
+            if (this.openClientTurn && !holdCommit) {
                 session.sendClientContent({ turnComplete: true });
                 this.openClientTurn = false;
             }
-            this.responseActive = true;
-            this.activeResponseKind = 'normal';
-            this.setState('speaking');
+            this.blockingBatchCommitHeld = holdCommit;
+            // A result the open batch does not owe, while it owes others, is not what Gemini answers: the client is not
+            // busy for a reply until the batch's own results are in.
+            if (!(othersOwed && !this.blockingBatchOwed.has(callID))) {
+                this.responseActive = true;
+                this.activeResponseKind = 'normal';
+                this.setState('speaking');
+            }
         }
 
         this.pendingToolCallNames.delete(callID);
         this.endTurnIfToolResultsIn(sched !== FunctionResponseScheduling.SILENT);
+        this.afterBlockingResult(callID);
     }
 
     /**
@@ -2367,9 +2552,65 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.handleIdleTerminal();
     }
 
+    /**
+     * The tool-batch barrier stopped waiting for a result. It records a result at SEND time, so the missing ones may
+     * be slow, never coming (a cancelled call), or queued behind another turn. A blocking batch expires: its queued
+     * results go out whatever {@link responseActive} is (a late one still skips the turn wait), a held commit goes
+     * out, and the backstop guards the reply.
+     */
     private handleToolBatchTimeout(): void {
+        if (this.tracksBlockingBatch) {
+            for (const callID of this.blockingBatchOwed) {
+                this.blockingBatchExpired.add(callID);
+            }
+            this.blockingBatchOwed.clear();
+            this.blockingBatchStarted = false;
+            this.drainBlockingBatchResults();
+            this.releaseHeldBatchCommit();
+        }
         if (this.idleSignal === 'turnComplete') {
             this.flushQueuedSends();
+        }
+        if (this.tracksBlockingBatch && this.responseActive) {
+            this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+        }
+    }
+
+    /**
+     * Sends a commit held for a batch that will not reach its last result; a turn that already ended needs none. The
+     * commit asks for the reply, so the client is busy for it and the no-output backstop guards it.
+     */
+    private releaseHeldBatchCommit(): void {
+        if (!this.blockingBatchCommitHeld) {
+            return;
+        }
+        if (!this.openClientTurn) {
+            this.blockingBatchCommitHeld = false;
+            return;
+        }
+        if (!this.connectionReady) {
+            return; // still held: the move's completion sends it (releaseHeldBatchCommitAfterMove), or the next result does
+        }
+        this.session?.sendClientContent({ turnComplete: true });
+        this.openClientTurn = false;
+        this.blockingBatchCommitHeld = false;
+        this.responseActive = true;
+        this.activeResponseKind = 'normal';
+        this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+    }
+
+    /**
+     * The session continues on a connection (a completed move, or the old one after a failed attempt). Batch results
+     * queued during the move go out first; a commit still held while the batch owes nothing then goes out, so it is
+     * not stranded. A re-seed closed the batch already, so this does nothing there.
+     */
+    private releaseHeldBatchCommitAfterMove(): void {
+        if (!this.tracksBlockingBatch) {
+            return;
+        }
+        this.drainBlockingBatchResults();
+        if (this.blockingBatchOwed.size === 0) {
+            this.releaseHeldBatchCommit();
         }
     }
 
@@ -2387,6 +2628,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
         this.toolBatchBarrier.Clear();
+        this.closeBlockingBatch();
         this.clearSafetyBackstop();
     }
 
