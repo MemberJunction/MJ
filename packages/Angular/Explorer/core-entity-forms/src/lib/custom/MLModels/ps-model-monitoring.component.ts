@@ -1,16 +1,37 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   PredictiveStudioRunModelMonitoringOperation,
   type MJMLModelEntity,
   type MJMLModelPublishRecordEntity,
   type MJMLMonitoringResultEntity,
+  type MJScheduledJobRunEntity,
 } from '@memberjunction/core-entities';
+import { JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { JsonParse, type JsonObject, type JsonValue } from '@memberjunction/predictive-studio-core';
+
+/** One registry check finding about the model and the action the job took (§5.7 R7), newest run first. */
+export interface RegistryFindingVM {
+  readonly RunID: string;
+  readonly At: Date;
+  /** The finding's letter: (a)–(i), (g) for the pre-change model migration. */
+  readonly Finding: string;
+  readonly Detail: string;
+  readonly Action: string;
+  /** `remediated`, `recorded` or `retry`. */
+  readonly Outcome: string;
+}
+
+/** The registry check job run columns the tab reads. */
+type RegistryRunRow = Pick<MJScheduledJobRunEntity, 'ID' | 'StartedAt' | 'Details'>;
+
+/** The Registry Check job (M6.4's metadata) whose runs' `Details` carry the findings. */
+const REGISTRY_CHECK_JOB = 'Predictive Studio Registry Check';
+/** How many of the job's newest runs that mention the model are read. */
+const REGISTRY_RUNS_READ = 20;
 
 /** A retrain trigger that fired in a period, with its reason. */
 export interface MonitoringTriggerVM {
@@ -157,6 +178,17 @@ const CHART_PAD = 16;
           </div>
         }
       }
+      @if (Findings.length > 0) {
+        <div class="ps-mon-findings" data-testid="ps-monitoring-findings">
+          <strong>Registry check</strong>
+          @for (f of Findings; track f.RunID + '-' + $index) {
+            <div class="ps-mon-detail" data-testid="ps-monitoring-finding">
+              ({{ f.Finding }}) {{ f.Detail }} — {{ f.Action }}
+              <span class="ps-mon-muted">{{ f.At | date: 'medium' }} · {{ f.Outcome }}</span>
+            </div>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -176,6 +208,7 @@ const CHART_PAD = 16;
     .ps-mon-state { font-size: 12px; color: var(--mj-text-secondary); }
     .ps-mon-mono { font-family: var(--mj-font-mono, monospace); }
     .ps-mon-drift, .ps-mon-trigger { font-size: 13px; color: var(--mj-status-warning-text); margin-top: 4px; }
+    .ps-mon-findings { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--mj-text-primary); border-top: 1px solid var(--mj-border-subtle); padding-top: 8px; }
     .ps-mon-detail { font-size: 13px; color: var(--mj-text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   `],
 })
@@ -188,6 +221,9 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
 
   /** The monitored periods, oldest first. */
   public Periods: readonly MonitoringPeriodVM[] = [];
+
+  /** The registry check's findings about the model, newest run first. */
+  public Findings: readonly RegistryFindingVM[] = [];
 
   /** The plotted points and the reference band. */
   public Chart: ChartVM = { Points: [], Band: null };
@@ -218,6 +254,7 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
   public async Reload(): Promise<void> {
     if (!this.Model) {
       this.Periods = [];
+      this.Findings = [];
       this.Chart = { Points: [], Band: null };
       return;
     }
@@ -225,11 +262,14 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
     this.ErrorMessage = null;
     this.cdr.markForCheck();
     try {
-      const { Rows, Band } = await this.LoadPeriods(this.Model.ID);
+      const { Rows, Band, RegistryRuns } = await this.LoadPeriods(this.Model.ID);
       this.Periods = Rows.map((r) => PSModelMonitoringComponent.ToPeriod(r));
       this.Chart = PSModelMonitoringComponent.BuildChart(this.Periods, Band);
+      const modelId = this.Model.ID;
+      this.Findings = RegistryRuns.flatMap((run) => PSModelMonitoringComponent.FindingsOf(run, modelId));
     } catch (e) {
       this.Periods = [];
+      this.Findings = [];
       this.Chart = { Points: [], Band: null };
       this.ErrorMessage = `The monitoring results could not be read: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
@@ -258,26 +298,71 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
   }
 
   /**
-   * The model's monitoring rows, oldest period first, and the reference band — the interval of the holdout score on the
-   * model's newest publish record — through the host's provider (one batched `RunViews`).
+   * The model's monitoring rows, oldest period first; the reference band — the interval of the holdout score on the
+   * model's newest publish record —; and the newest Registry Check job runs whose `Details` name the model, through the
+   * host's provider (one batched `RunViews`).
    */
-  protected async LoadPeriods(modelId: string): Promise<{ Rows: MJMLMonitoringResultEntity[]; Band: { Lower: number; Upper: number } | null }> {
+  protected async LoadPeriods(modelId: string): Promise<{ Rows: MJMLMonitoringResultEntity[]; Band: { Lower: number; Upper: number } | null; RegistryRuns: RegistryRunRow[] }> {
     const id = EscapeSQLString(modelId);
-    const [periods, publishes] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<MJMLMonitoringResultEntity | MJMLModelPublishRecordEntity>([
+    const [periods, publishes, registry] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<MJMLMonitoringResultEntity | MJMLModelPublishRecordEntity | RegistryRunRow>([
       { EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID='${id}'`, OrderBy: 'Period ASC', ResultType: 'entity_object' },
       { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${id}' AND Kind='publish'`, OrderBy: 'RecordedAt DESC', MaxRows: 1, ResultType: 'entity_object' },
+      {
+        EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ScheduledJob='${EscapeSQLString(REGISTRY_CHECK_JOB)}' AND Details LIKE '%${id}%'`,
+        OrderBy: 'StartedAt DESC', MaxRows: REGISTRY_RUNS_READ, Fields: ['ID', 'StartedAt', 'Details'], ResultType: 'simple',
+      },
     ]);
     if (!periods?.Success) throw new Error(periods?.ErrorMessage || 'the view returned no result');
     const rows: MJMLMonitoringResultEntity[] = [];
     for (const r of periods.Results) if ('Period' in r) rows.push(r);
     const publish = (publishes?.Results || []).find((r): r is MJMLModelPublishRecordEntity => 'EvidenceObject' in r);
     const interval = publish?.EvidenceObject?.holdoutPrimary.interval;
-    return { Rows: rows, Band: interval ? { Lower: interval.lower, Upper: interval.upper } : null };
+    const runs: RegistryRunRow[] = [];
+    for (const r of registry?.Results || []) if ('Details' in r && 'StartedAt' in r) runs.push({ ID: r.ID, StartedAt: r.StartedAt, Details: r.Details });
+    return { Rows: rows, Band: interval ? { Lower: interval.lower, Upper: interval.upper } : null, RegistryRuns: runs };
   }
 
-  /** One monitoring row as a period. */
+  /**
+   * The findings of one Registry Check job run about `modelId`: step (g)'s record (`Details.PreChangeModels`: the
+   * re-verification and the artifact check) first, then the `Details.Findings` whose subject is the model. Pure.
+   */
+  public static FindingsOf(run: RegistryRunRow, modelId: string): RegistryFindingVM[] {
+    const parsed = JsonParse.ParseJsonText(run.Details, 'Details');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return [];
+    const at = new Date(run.StartedAt);
+    const one = (Finding: string, Detail: string, Action: string, Outcome: string): RegistryFindingVM => ({ RunID: run.ID, At: at, Finding, Detail, Action, Outcome });
+    const out: RegistryFindingVM[] = [];
+    const migration = JsonParse.JsonObjectField(parsed.Value, 'PreChangeModels');
+    if (migration) out.push(...PSModelMonitoringComponent.migrationFindings(migration, modelId, one));
+    for (const f of JsonParse.JsonArrayField(parsed.Value, 'Findings') || []) {
+      if (!JsonParse.IsJsonObject(f) || !UUIDsEqual(JsonParse.JsonString(f, 'SubjectID'), modelId)) continue;
+      out.push(one(JsonParse.JsonString(f, 'Finding') || '?', JsonParse.JsonString(f, 'Detail') || '', JsonParse.JsonString(f, 'Action') || '', JsonParse.JsonString(f, 'Outcome') || ''));
+    }
+    return out;
+  }
+
+  /** Step (g)'s entries about the model: adopted, demoted (with the refusal) or its artifact's recorded state. */
+  private static migrationFindings(m: JsonObject, modelId: string, one: (finding: string, detail: string, action: string, outcome: string) => RegistryFindingVM): RegistryFindingVM[] {
+    const out: RegistryFindingVM[] = [];
+    const listed = (o: JsonObject | null, key: string): boolean => (o ? JsonParse.JsonStringArray(o, key) || [] : []).some((id) => UUIDsEqual(id, modelId));
+    const reverified = JsonParse.JsonObjectField(m, 'Reverified');
+    if (listed(reverified, 'Adopted')) out.push(one('g', 'trained before the lifecycle gate; re-verified on its stored gate record', 'kept Published with an adopt record', 'remediated'));
+    for (const d of (reverified ? JsonParse.JsonArrayField(reverified, 'Demoted') : null) || []) {
+      if (!JsonParse.IsJsonObject(d) || !UUIDsEqual(JsonParse.JsonString(d, 'ModelID'), modelId)) continue;
+      const refusal = JsonParse.JsonObjectField(d, 'Refusal');
+      out.push(one('g', 'trained before the lifecycle gate; its stored gate record did not re-verify', `demoted to Unevaluated (${(refusal && JsonParse.JsonString(refusal, 'kind')) || 'refused'})`, 'remediated'));
+    }
+    const artifacts = JsonParse.JsonObjectField(m, 'Artifacts');
+    const states: readonly (readonly [string, string])[] = [['Verified', 'verified'], ['LegacyLocal', 'legacy-local'], ['Missing', 'missing'], ['HashMismatch', 'hash-mismatch']];
+    for (const [key, state] of states) {
+      if (listed(artifacts, key)) out.push(one('g', 'trained before the lifecycle gate; its artifact was checked once', `artifact recorded ${state}`, 'recorded'));
+    }
+    return out;
+  }
+
+  /** One monitoring row as a period, its JSON columns read through their typed accessors. */
   public static ToPeriod(r: MJMLMonitoringResultEntity): MonitoringPeriodVM {
-    const calibration = PSModelMonitoringComponent.objectOf(r.Calibration);
+    const calibration = r.CalibrationObject;
     return {
       ID: r.ID,
       Period: r.Period,
@@ -286,12 +371,12 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
       PrimaryValue: r.PrimaryValue,
       PrimaryLower: r.PrimaryLower,
       PrimaryUpper: r.PrimaryUpper,
-      CalibrationSlope: calibration ? JsonParse.JsonNumber(calibration, 'slope') : null,
-      CalibrationIntercept: calibration ? JsonParse.JsonNumber(calibration, 'intercept') : null,
-      DriftAlarms: PSModelMonitoringComponent.objectsOf(r.DriftAlarms).map((a) => JsonParse.JsonString(a, 'input') || JsonParse.JsonString(a, 'feature') || 'an input'),
-      Triggers: PSModelMonitoringComponent.objectsOf(r.TriggersFired).map((t) => ({ Kind: JsonParse.JsonString(t, 'kind') || 'trigger', Reason: JsonParse.JsonString(t, 'reason') })),
-      Challenger: PSModelMonitoringComponent.challengerOf(r.ChallengerResult),
-      Rollback: PSModelMonitoringComponent.rollbackOf(r.RollbackCheck),
+      CalibrationSlope: calibration ? calibration.slope : null,
+      CalibrationIntercept: calibration ? calibration.intercept : null,
+      DriftAlarms: (r.DriftAlarmsObject || []).map((a) => a.input),
+      Triggers: (r.TriggersFiredObject || []).map((t) => ({ Kind: t.kind, Reason: t.reason })),
+      Challenger: PSModelMonitoringComponent.challengerOf(r.ChallengerResultObject),
+      Rollback: PSModelMonitoringComponent.rollbackOf(r.RollbackCheckObject),
       ErrorMessage: r.ErrorMessage,
     };
   }
@@ -323,61 +408,29 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
     return { Points: points, Band: band ? { Y: y(band.Upper), Height: Math.max(1, y(band.Lower) - y(band.Upper)) } : null };
   }
 
-  /** The challenger outcome of a period, or null when no trigger started one. */
-  private static challengerOf(text: string | null): MonitoringChallengerVM | null {
-    const o = PSModelMonitoringComponent.objectOf(text);
-    if (!o) return null;
+  /** The challenger outcome of a period, or null when no trigger started one and the binding mirrors none. */
+  private static challengerOf(c: MJMLMonitoringResultEntity['ChallengerResultObject']): MonitoringChallengerVM | null {
+    if (!c || (c.outcome === 'none' && c.mirror === null)) return null;
+    const mirror = c.mirror;
     return {
-      Outcome: JsonParse.JsonString(o, 'outcome') || 'recorded',
-      Reason: JsonParse.JsonString(o, 'reason'),
-      Comparison: PSModelMonitoringComponent.comparisonOf(o),
-      PublishRecordID: JsonParse.JsonString(o, 'publishRecordId'),
+      Outcome: c.outcome,
+      Reason: c.reason,
+      Comparison: mirror ? `live mirror: ${mirror.paired} paired rows, ${(mirror.agreement * 100).toFixed(1)}% agreement, mean score difference ${mirror.meanScoreDelta.toFixed(3)}` : null,
+      PublishRecordID: c.recordId,
     };
   }
 
-  /** The rollback check of a period, or null when none ran. */
-  private static rollbackOf(text: string | null): MonitoringRollbackVM | null {
-    const o = PSModelMonitoringComponent.objectOf(text);
-    if (!o) return null;
+  /** The rollback check of a period, or null when none ran or the protocol has no rollback rule. */
+  private static rollbackOf(c: MJMLMonitoringResultEntity['RollbackCheckObject']): MonitoringRollbackVM | null {
+    if (!c || c.kind === 'off') return null;
+    if (c.kind === 'no-predecessor') return { Kind: c.kind, Reason: 'no earlier published model to compare against', Comparison: null, PublishRecordID: null };
+    if (c.kind === 'not-eligible') return { Kind: c.kind, Reason: c.reason, Comparison: null, PublishRecordID: null };
+    const last = c.comparisons.length > 0 ? c.comparisons[c.comparisons.length - 1] : null;
     return {
-      Kind: JsonParse.JsonString(o, 'kind') || 'checked',
-      Reason: JsonParse.JsonString(o, 'reason'),
-      Comparison: PSModelMonitoringComponent.comparisonOf(o),
-      PublishRecordID: JsonParse.JsonString(o, 'publishRecordId'),
+      Kind: c.kind,
+      Reason: null,
+      Comparison: last ? `paired loss difference [${last.lower.toFixed(3)}, ${last.upper.toFixed(3)}] on ${c.sharedRowIds} shared rows` : null,
+      PublishRecordID: c.recordId,
     };
-  }
-
-  /** A stored paired comparison (`{value, ci: [lo, hi]}`) in words, or null. */
-  private static comparisonOf(o: JsonObject): string | null {
-    const c = JsonParse.JsonObjectField(o, 'comparison');
-    if (!c) return null;
-    const value = JsonParse.JsonNumber(c, 'value');
-    const ci = JsonParse.JsonArrayField(c, 'ci');
-    if (value === null) return null;
-    const lo = ci && typeof ci[0] === 'number' ? ci[0] : null;
-    const hi = ci && typeof ci[1] === 'number' ? ci[1] : null;
-    return lo !== null && hi !== null ? `paired difference ${value.toFixed(3)} [${lo.toFixed(3)}, ${hi.toFixed(3)}]` : `paired difference ${value.toFixed(3)}`;
-  }
-
-  /** A JSON column's object, or null when it is empty or not an object. */
-  private static objectOf(text: string | null): JsonObject | null {
-    const parsed = PSModelMonitoringComponent.parse(text);
-    return parsed !== null && JsonParse.IsJsonObject(parsed) ? parsed : null;
-  }
-
-  /** A JSON column's array of objects (entries that are not objects are skipped). */
-  private static objectsOf(text: string | null): JsonObject[] {
-    const parsed = PSModelMonitoringComponent.parse(text);
-    if (!Array.isArray(parsed)) return [];
-    const out: JsonObject[] = [];
-    for (const v of parsed) if (JsonParse.IsJsonObject(v)) out.push(v);
-    return out;
-  }
-
-  /** A JSON column's value, or null when it is empty or not JSON. */
-  private static parse(text: string | null): JsonValue | null {
-    if (!text) return null;
-    const r = JsonParse.ParseJsonText(text, 'monitoring result');
-    return r.Ok ? r.Value : null;
   }
 }

@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
+import { PredictiveStudioRunModelMonitoringOperation, type MJMLModelEntity, type MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
 import { PSModelMonitoringComponent } from './ps-model-monitoring.component';
 
 try {
@@ -11,18 +11,22 @@ try {
   // already initialized
 }
 
-/** The row members the tab reads (the JSON columns as stored text). */
+/** The row members the tab reads (the JSON columns through their typed accessors). */
 type PeriodDouble = Pick<
   MJMLMonitoringResultEntity,
-  'ID' | 'Period' | 'State' | 'JoinedRows' | 'PrimaryValue' | 'PrimaryLower' | 'PrimaryUpper' | 'Calibration' | 'DriftAlarms' | 'TriggersFired' | 'ChallengerResult' | 'RollbackCheck' | 'ErrorMessage'
+  'ID' | 'Period' | 'State' | 'JoinedRows' | 'PrimaryValue' | 'PrimaryLower' | 'PrimaryUpper' | 'CalibrationObject' | 'DriftAlarmsObject' | 'TriggersFiredObject' | 'ChallengerResultObject' | 'RollbackCheckObject' | 'ErrorMessage'
 >;
 
-/** Fixture overrides: the JSON columns as their values, stored as JSON text. */
+/** Fixture overrides: the JSON columns' values, as the monitoring job stores them. */
 interface PeriodOver {
-  TriggersFired?: { kind: string; reason: string }[];
-  RollbackCheck?: Record<string, string | number | boolean>;
-  DriftAlarms?: { input: string }[];
+  TriggersFired?: MJMLMonitoringResultEntity['TriggersFiredObject'];
+  RollbackCheck?: MJMLMonitoringResultEntity['RollbackCheckObject'];
+  ChallengerResult?: MJMLMonitoringResultEntity['ChallengerResultObject'];
+  DriftAlarms?: MJMLMonitoringResultEntity['DriftAlarmsObject'];
 }
+
+/** A drift alarm on `input` as procedure M stores it. */
+const Alarm = (input: string): MJMLMonitoringResultEntity['DriftAlarmsObject'][number] => ({ input, kind: 'mean', z: 3.2, p: 0.001, pAdjusted: 0.004, q: 0.01, look: 2 });
 
 /** The period `i` months after January 2026, evaluated, with a score and its bounds. */
 function P(i: number, over: PeriodOver = {}): PeriodDouble {
@@ -34,19 +38,26 @@ function P(i: number, over: PeriodOver = {}): PeriodDouble {
     PrimaryValue: 0.4 + i * 0.01,
     PrimaryLower: 0.38 + i * 0.01,
     PrimaryUpper: 0.42 + i * 0.01,
-    Calibration: JSON.stringify({ method: 'platt', slope: 0.98, intercept: 0.01, reliability: [] }),
-    DriftAlarms: JSON.stringify(over.DriftAlarms || []),
-    TriggersFired: JSON.stringify(over.TriggersFired || []),
-    ChallengerResult: null,
-    RollbackCheck: over.RollbackCheck ? JSON.stringify(over.RollbackCheck) : null,
+    CalibrationObject: { method: 'platt', slope: 0.98, intercept: 0.01, reliability: [] },
+    DriftAlarmsObject: over.DriftAlarms || [],
+    TriggersFiredObject: over.TriggersFired || [],
+    ChallengerResultObject: over.ChallengerResult || null,
+    RollbackCheckObject: over.RollbackCheck || null,
     ErrorMessage: null,
   };
 }
 const rollbackRecord = { ID: 'PR-ROLLBACK-1' };
-const Fired = (record: { ID: string }): Record<string, string | number | boolean> => ({ kind: 'fired', previousModelId: 'M-0', consecutive: 2, publishRecordId: record.ID });
+const RolledBack = (record: { ID: string }): MJMLMonitoringResultEntity['RollbackCheckObject'] => ({
+  kind: 'rolled-back', predecessorModelId: 'M-0', sharedRowIds: 180, comparisons: [{ level: 0.95, lower: 0.012, upper: 0.031 }, { level: 0.95, lower: 0.015, upper: 0.034 }], recordId: record.ID,
+});
 
-async function RenderMonitoring(opts: { periods: PeriodDouble[] }) {
-  const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : []) });
+/** A Registry Check job run whose `Details` records `findings` (and, optionally, step (g)'s record). */
+interface RegistryRunDouble { ID: string; StartedAt: Date; Details: string }
+
+async function RenderMonitoring(opts: { periods: PeriodDouble[]; registryRuns?: RegistryRunDouble[] }) {
+  const provider = CreateFakeProvider({
+    runViewResults: (p) => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : p.EntityName === 'MJ: Scheduled Job Runs' ? opts.registryRuns || [] : []),
+  });
   const f = renderComponentFixture(PSModelMonitoringComponent, { inputs: { Provider: provider } });
   f.componentInstance.Model = { ID: 'M-1' } as unknown as MJMLModelEntity;
   await f.componentInstance.Reload();
@@ -66,9 +77,27 @@ describe('PSModelMonitoringComponent (DOM)', () => {
     expect(queryAll(f, '[data-testid="ps-monitoring-point"]').map((p) => p.classList.contains('fired'))).toEqual([false, false, false, true]);
   });
 
-  it('a rollback the job made links its publish record', async () => {
-    const f = await RenderMonitoring({ periods: [P(5, { RollbackCheck: Fired(rollbackRecord) })] });
+  it('a rollback the job made links its publish record and shows the paired comparison', async () => {
+    const f = await RenderMonitoring({ periods: [P(5, { RollbackCheck: RolledBack(rollbackRecord) })] });
     expect(Link(f, 'ps-monitoring-rollback', 0)).toContain(rollbackRecord.ID);
+    expect(Text(f, 'ps-monitoring-rollback-check')).toContain('rolled-back');
+    expect(Text(f, 'ps-monitoring-rollback-check')).toContain('[0.015, 0.034]');
+  });
+
+  it('a predecessor that may not be restored says why, and a check with the rule off shows nothing', async () => {
+    const f = await RenderMonitoring({ periods: [P(5, { RollbackCheck: { kind: 'not-eligible', predecessorModelId: 'M-0', reason: 'the predecessor model has been deleted' } }), P(6, { RollbackCheck: { kind: 'off' } })] });
+    expect(Count(f, 'ps-monitoring-rollback-check')).toBe(1);
+    expect(Text(f, 'ps-monitoring-rollback-check')).toContain('the predecessor model has been deleted');
+  });
+
+  it('a challenger the gate published links its publish record; no challenger shows nothing', async () => {
+    const f = await RenderMonitoring({ periods: [
+      P(4, { ChallengerResult: { outcome: 'none', trainingRunId: null, recordId: null, reason: null, mirror: null } }),
+      P(5, { ChallengerResult: { outcome: 'published', trainingRunId: 'TR-9', recordId: 'PR-CH-1', reason: null, mirror: { challengerModelId: 'M-9', paired: 120, agreement: 0.91, meanScoreDelta: -0.02, failures: 0 } } }),
+    ] });
+    expect(Count(f, 'ps-monitoring-challenger')).toBe(1);
+    expect(Link(f, 'ps-monitoring-challenger-record', 0)).toBe('PR-CH-1');
+    expect(Text(f, 'ps-monitoring-challenger')).toContain('published');
   });
 
   it('a period whose label window is open is listed but not plotted', async () => {
@@ -78,7 +107,55 @@ describe('PSModelMonitoringComponent (DOM)', () => {
   });
 
   it('names the input of a drift alarm', async () => {
-    const f = await RenderMonitoring({ periods: [P(2, { DriftAlarms: [{ input: 'EngagementZ' }] })] });
+    const f = await RenderMonitoring({ periods: [P(2, { DriftAlarms: [Alarm('EngagementZ')] })] });
     expect(Text(f, 'ps-monitoring-drift')).toContain('EngagementZ');
+  });
+
+  it('lists the registry check\'s findings about the model with the action the job took, and step (g)\'s', async () => {
+    const run: RegistryRunDouble = {
+      ID: 'RUN-1', StartedAt: new Date(Date.UTC(2026, 10, 19, 12)),
+      Details: JSON.stringify({
+        Findings: [
+          { Finding: 'c', SubjectID: 'm-1', Detail: 'the stored artifact loads missing', Action: 'archived by the lifecycle gate', Outcome: 'remediated' },
+          { Finding: 'd', SubjectID: 'M-2', Detail: 'another model', Action: 'scoring Action re-synced', Outcome: 'remediated' },
+        ],
+        PreChangeModels: {
+          Reverified: { Visited: 1, Adopted: ['M-1'], Demoted: [], Evaluated: [], Retry: [] },
+          Artifacts: { Visited: 0, Changed: 0, Verified: [], LegacyLocal: [], Missing: [], HashMismatch: [], Retry: [] },
+          Schedules: { Disabled: [], ScoringActionsDisabled: [] }, ReEvaluation: { Trained: 0, Findings: [] }, DisabledProcessIDs: [],
+        },
+      }),
+    };
+    const f = await RenderMonitoring({ periods: [], registryRuns: [run] });
+    const texts = queryAll(f, '[data-testid="ps-monitoring-finding"]').map((e) => e.textContent || '');
+    expect(texts).toHaveLength(2);
+    expect(texts[0]).toContain('re-verified on its stored gate record');
+    expect(texts[0]).toContain('kept Published with an adopt record');
+    expect(texts[1]).toContain('the stored artifact loads missing');
+    expect(texts[1]).toContain('archived by the lifecycle gate');
+  });
+
+  describe('Check now', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('runs PredictiveStudio.RunModelMonitoring for the model and reloads on success', async () => {
+      const execute = vi.spyOn(PredictiveStudioRunModelMonitoringOperation.prototype, 'Execute').mockResolvedValue({ Success: true });
+      const f = await RenderMonitoring({ periods: [P(0)] });
+      const reload = vi.spyOn(f.componentInstance, 'Reload');
+      await f.componentInstance.CheckNow();
+      f.detectChanges();
+      expect(execute.mock.calls[0][0]).toEqual({ modelId: 'M-1' });
+      expect([reload.mock.calls.length, Count(f, 'ps-monitoring-check-error')]).toEqual([1, 0]);
+    });
+
+    it('a failed check shows why and does not reload', async () => {
+      vi.spyOn(PredictiveStudioRunModelMonitoringOperation.prototype, 'Execute').mockResolvedValue({ Success: false, ErrorMessage: 'the model has no open monitoring job' });
+      const f = await RenderMonitoring({ periods: [P(0)] });
+      const reload = vi.spyOn(f.componentInstance, 'Reload');
+      await f.componentInstance.CheckNow();
+      f.detectChanges();
+      expect(reload).not.toHaveBeenCalled();
+      expect(Text(f, 'ps-monitoring-check-error')).toContain('the model has no open monitoring job');
+    });
   });
 });
