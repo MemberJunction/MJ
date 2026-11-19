@@ -28,7 +28,7 @@ import type {
   MJRecordProcessEntity,
   MJScheduledJobRunEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ExcludeByUUIDs, GroupByUUID, IndexByUUID, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
   Delivery,
   JsonParse,
@@ -325,10 +325,11 @@ export class PreGateModelMigration {
       actions.push(model.ID);
     }
     const disabled: string[] = [];
+    const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
     for (const rp of await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)) {
       const config = PreGateModelMigration.ConfigurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
-      if (config['autoTrain'] !== undefined || modelId === null || !demoted.some((m) => UUIDsEqual(m.ID, modelId))) continue;
+      if (config['autoTrain'] !== undefined || modelId === null || !demotedIds.Has(modelId)) continue;
       rp.ScheduleEnabled = false;
       if (!(await rp.Save())) throw new Error(`Disabling the schedule of Record Process ${rp.ID} failed: ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
       disabled.push(rp.ID);
@@ -348,7 +349,7 @@ export class PreGateModelMigration {
    */
   public static async ReEvaluate(retrainPerRun: number, ctx: PreGateMigrationContext, disabledThisRun: readonly string[] = []): Promise<ReEvaluationResult> {
     const pipelines = await PreGateModelMigration.PipelinesToReEvaluate(ctx);
-    const covered = await PreGateModelMigration.AutoTrainedPipelines(ctx);
+    const covered = new UUIDSet(await PreGateModelMigration.AutoTrainedPipelines(ctx));
     const findings: ReEvaluationFinding[] = [];
     let trained = 0;
     for (const pipeline of pipelines) {
@@ -356,7 +357,7 @@ export class PreGateModelMigration {
         findings.push({ PipelineID: pipeline.ID, Kind: 'no-prediction-unit' });
         continue;
       }
-      if (covered.some((id) => UUIDsEqual(id, pipeline.ID))) {
+      if (covered.Has(pipeline.ID)) {
         findings.push({ PipelineID: pipeline.ID, Kind: 'covered-by-auto-train' });
         continue;
       }
@@ -403,10 +404,11 @@ export class PreGateModelMigration {
     const evidence = await PreGateModelMigration.ReadEvidenceBearing(Number.MAX_SAFE_INTEGER, ctx);
     const legacy = await PreGateModelMigration.ReadUnverifiedLegacy(Number.MAX_SAFE_INTEGER, ctx);
     const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
+    const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
     const schedules = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
       const config = PreGateModelMigration.ConfigurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
-      return config['autoTrain'] === undefined && modelId !== null && demoted.some((m) => UUIDsEqual(m.ID, modelId));
+      return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
     });
     const pipelines = await PreGateModelMigration.PipelinesToReEvaluate(ctx);
     return { EvidenceBearing: evidence.length, UnverifiedArtifacts: legacy.length, SchedulesToDisable: schedules.length, PipelinesToReEvaluate: pipelines.length };
@@ -606,9 +608,10 @@ export class PreGateModelMigration {
     const configured = processes.map((rp) => ({ Process: rp, ModelID: JsonParse.JsonString(PreGateModelMigration.ConfigurationOf(rp), 'modelId') }));
     const modelIds = configured.map((c) => c.ModelID).filter((id): id is string => id !== null && IsValidUUID(id));
     const models = modelIds.length === 0 ? [] : await PreGateModelMigration.ReadModelColumns(`ID IN (${modelIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`, ctx);
+    const modelsById = IndexByUUID(models);
     const reEnabled: string[] = [];
     for (const { Process: rp, ModelID: configuredModel } of configured) {
-      const model = configuredModel === null ? undefined : models.find((m) => UUIDsEqual(m.ID, configuredModel));
+      const model = configuredModel === null ? undefined : modelsById.Get(configuredModel);
       if (model === undefined || !UUIDsEqual(model.PipelineID, pipelineId)) continue;
       rp.Configuration = PipelineAutoTrainer.RepointedConfiguration(rp.Configuration, modelId);
       rp.ScheduleEnabled = true;
@@ -705,9 +708,9 @@ export class PreGateModelMigration {
       ctx,
     );
     if (!r.Success) throw new Error(`Reading the pipelines of Unevaluated models failed: ${r.ErrorMessage || 'unknown error'}`);
-    const demotedAt = (pipelineId: string): number => Math.min(...unevaluated.filter((m) => UUIDsEqual(m.PipelineID, pipelineId)).map((m) => (m.__mj_UpdatedAt ? new Date(m.__mj_UpdatedAt).getTime() : 0)));
-    return r.Results
-      .filter((p) => !published.some((m) => UUIDsEqual(m.PipelineID, p.ID)))
+    const byPipeline = GroupByUUID(unevaluated, (m) => m.PipelineID);
+    const demotedAt = (pipelineId: string): number => Math.min(...(byPipeline.Get(pipelineId) || []).map((m) => (m.__mj_UpdatedAt ? new Date(m.__mj_UpdatedAt).getTime() : 0)));
+    return ExcludeByUUIDs(r.Results, published.map((m) => m.PipelineID))
       .sort((a, b) => demotedAt(a.ID) - demotedAt(b.ID));
   }
 
@@ -750,7 +753,7 @@ export class PreGateModelMigration {
     const rest = legacy.length >= batch ? [] : await PreGateModelMigration.ReadModels(
       `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NOT NULL AND Status IN ('Unevaluated', 'Archived')`, ctx, batch - legacy.length,
     );
-    return [...legacy, ...rest.filter((m) => !legacy.some((l) => UUIDsEqual(l.ID, m.ID)))].slice(0, batch);
+    return [...legacy, ...ExcludeByUUIDs(rest, legacy.map((l) => l.ID))].slice(0, batch);
   }
 
   /** Model rows as entity objects (they are saved), oldest version first. */
