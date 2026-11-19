@@ -14,6 +14,7 @@ import {
   hexToOKLCH,
   MJ_DEFAULT_SEEDS,
   mixHex,
+  MixHexSRGB,
   oklchToHex,
   TERTIARY_SHAPE,
 } from '../index.js';
@@ -264,6 +265,33 @@ describe('contrast validation', () => {
     // Muted text promoted to secondary on selected surface clears 4.5:1 AA
     expect(contrastRatio(light['--mj-surface-text-muted-selected'], light['--mj-surface-base-bg-selected'])).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(dark['--mj-surface-text-muted-selected'], dark['--mj-surface-base-bg-selected'])).toBeGreaterThanOrEqual(4.5);
+
+    // Selected surface fills mix in sRGB (matching CSS color-mix(in srgb, ...)) rather than linear light
+    expect(MixHexSRGB('#ffffff', '#0076b6', 0.08)).toBe('#ebf4f9');
+    expect(light['--mj-surface-base-bg-selected']).toBe(MixHexSRGB(light['--mj-surface-base-bg'], light['--mj-brand-primary'], 0.08));
+    expect(dark['--mj-surface-base-bg-selected']).toBe(MixHexSRGB(dark['--mj-surface-base-bg'], dark['--mj-brand-primary'], 0.08));
+
+    // Sunken muted/link and selected muted pairs are included and pass WCAG AA in BuildContrastReport
+    for (const mode of ['light', 'dark'] as const) {
+      for (const pairName of [
+        'text-muted-on-sunken',
+        'link-on-sunken',
+        'link-on-sunken (hover)',
+        'text-muted-on-base (selected)',
+        'text-muted-on-elevated (selected)',
+      ]) {
+        const check = derivedVars.contrast[mode].find((c) => c.name === pairName);
+        expect(check, `${mode} ${pairName}`).toBeDefined();
+        expect(check?.passes, `${mode} ${pairName} (${check?.ratio}:1)`).toBe(true);
+        expect(check?.ratio).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+
+    // Scoped overlays re-declare radius role tokens so changing the radius seed updates role consumers
+    expect(derivedVars.overlayVars['--mj-radius-control']).toBe('var(--mj-radius-md)');
+    expect(derivedVars.overlayVars['--mj-radius-surface']).toBe('var(--mj-radius-lg)');
+    expect(derivedVars.overlayVars['--mj-radius-overlay']).toBe('var(--mj-radius-lg)');
+    expect(derivedVars.overlayVars['--mj-radius-pill']).toBe('var(--mj-radius-full)');
   });
 });
 

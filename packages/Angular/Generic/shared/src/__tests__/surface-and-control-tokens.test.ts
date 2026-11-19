@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 describe('design tokens: WS6b surface ramp, control heights, radius roles, and ambient defaults', () => {
   const tokens = readFileSync(resolve(__dirname, '../lib/_tokens.scss'), 'utf8');
   const rootStart = tokens.indexOf(':root {');
-  const darkStart = tokens.indexOf('[data-theme="dark"]');
+  const darkStart = tokens.indexOf('[data-theme="dark"] {');
   const coarseStart = tokens.indexOf('@media (pointer: coarse)');
   const rootBlock = tokens.slice(rootStart, darkStart);
   const darkBlock = tokens.slice(darkStart, coarseStart);
@@ -87,16 +87,40 @@ describe('design tokens: WS6b surface ramp, control heights, radius roles, and a
     expect(rootVars.get('--mj-surface-overlay-shadow')).toBe('var(--mj-shadow-xl)');
   });
 
-  it('re-declares dark text tiers on elevated and overlay surfaces while keeping base and sunken on standard dark text', () => {
-    expect(rootVars.get('--mj-surface-text-muted-selected')).toBe('var(--mj-text-secondary)');
-    expect(darkVars.get('--mj-surface-base-text-secondary')).toBe('var(--mj-text-secondary)');
-    expect(darkVars.get('--mj-surface-base-text-muted')).toBe('var(--mj-text-muted)');
+  it('re-declares dark text tiers on elevated/overlay, light text tiers on sunken, uses scale tokens for dark shadows, and avoids --mj-text-* cycles', () => {
+    expect(rootVars.get('--mj-surface-text-muted-selected')).toBe('var(--mj-color-neutral-600)');
+    expect(rootVars.get('--mj-surface-sunken-text-secondary')).toBe('var(--mj-color-neutral-700)');
+    expect(rootVars.get('--mj-surface-sunken-text-muted')).toBe('var(--mj-color-neutral-600)');
+    expect(rootVars.get('--mj-surface-sunken-text-link')).toBe('var(--mj-color-brand-600)');
+    expect(rootVars.get('--mj-surface-sunken-text-link-hover')).toBe('var(--mj-color-brand-700)');
+
+    expect(darkVars.get('--mj-surface-text-muted-selected')).toBe('var(--mj-color-neutral-300)');
+    expect(darkVars.get('--mj-surface-base-text-secondary')).toBe('var(--mj-color-neutral-300)');
+    expect(darkVars.get('--mj-surface-base-text-muted')).toBe('var(--mj-color-neutral-400)');
+    expect(darkVars.get('--mj-surface-base-text-link')).toBe('var(--mj-color-brand-300)');
+    expect(darkVars.get('--mj-surface-base-text-link-hover')).toBe('var(--mj-color-brand-200)');
     expect(darkVars.get('--mj-surface-elevated-text-secondary')).toBe('var(--mj-color-neutral-200)');
     expect(darkVars.get('--mj-surface-elevated-text-muted')).toBe('var(--mj-color-neutral-300)');
     expect(darkVars.get('--mj-surface-elevated-text-link')).toBe('var(--mj-color-brand-200)');
     expect(darkVars.get('--mj-surface-elevated-text-link-hover')).toBe('var(--mj-color-brand-100)');
     expect(darkVars.get('--mj-surface-overlay-text-secondary')).toBe('var(--mj-surface-elevated-text-secondary)');
     expect(darkVars.get('--mj-surface-overlay-text-muted')).toBe('var(--mj-surface-elevated-text-muted)');
+
+    // Dark surface shadows must point to scale tokens, never literals (NAMING.md)
+    expect(darkVars.get('--mj-surface-sunken-shadow')).toBe('var(--mj-shadow-none)');
+    expect(darkVars.get('--mj-surface-base-shadow')).toBe('var(--mj-shadow-none)');
+    expect(darkVars.get('--mj-surface-elevated-shadow')).toBe('var(--mj-shadow-md)');
+    expect(darkVars.get('--mj-surface-overlay-shadow')).toBe('var(--mj-shadow-xl)');
+
+    // No --mj-surface-*-text-* token may reference var(--mj-text-*) or a surface class on
+    // the same element as :root or [data-theme="dark"] will trigger a CSS variable cycle.
+    for (const [blockName, vars] of [[':root', rootVars], ['[data-theme="dark"]', darkVars]] as const) {
+      for (const [name, value] of vars) {
+        if (name.startsWith('--mj-surface-') && name.includes('-text-')) {
+          expect(value, `${blockName} ${name} must not cycle via --mj-text-*`).not.toContain('var(--mj-text-');
+        }
+      }
+    }
   });
 
   it('ships .mj-surface-{sunken,base,elevated,overlay} classes that re-point text tokens and use .is-hover / .is-selected state classes', () => {

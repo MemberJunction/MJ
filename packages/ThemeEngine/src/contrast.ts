@@ -127,6 +127,9 @@ export function BuildContrastReport(
       pairs.push(
         { name: 'text-primary-on-sunken', fg: t['--mj-text-primary'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
         { name: 'text-secondary-on-sunken', fg: t['--mj-surface-sunken-text-secondary'] ?? t['--mj-text-secondary'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'text-muted-on-sunken', fg: t['--mj-surface-sunken-text-muted'] ?? t['--mj-text-muted'] ?? t['--mj-text-secondary'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'link-on-sunken', fg: t['--mj-surface-sunken-text-link'] ?? t['--mj-text-link'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'link-on-sunken (hover)', fg: t['--mj-surface-sunken-text-link-hover'] ?? t['--mj-text-link-hover'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
       );
     }
     if (overlayBg && t['--mj-text-primary']) {
@@ -137,6 +140,24 @@ export function BuildContrastReport(
         { name: 'link-on-overlay', fg: t['--mj-surface-overlay-text-link'] ?? t['--mj-surface-elevated-text-link'] ?? t['--mj-text-link'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
         { name: 'link-on-overlay (hover)', fg: t['--mj-surface-overlay-text-link-hover'] ?? t['--mj-surface-elevated-text-link-hover'] ?? t['--mj-text-link-hover'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
       );
+    }
+    if (t['--mj-surface-base-bg-selected'] && t['--mj-surface-text-muted-selected']) {
+      pairs.push({
+        name: 'text-muted-on-base (selected)',
+        fg: t['--mj-surface-text-muted-selected'],
+        bg: t['--mj-surface-base-bg-selected'],
+        required: AA_TEXT,
+        clamp: 'fg',
+      });
+    }
+    if (t['--mj-surface-elevated-bg-selected'] && t['--mj-surface-text-muted-selected']) {
+      pairs.push({
+        name: 'text-muted-on-elevated (selected)',
+        fg: t['--mj-surface-text-muted-selected'],
+        bg: t['--mj-surface-elevated-bg-selected'],
+        required: AA_TEXT,
+        clamp: 'fg',
+      });
     }
 
     return pairs;
