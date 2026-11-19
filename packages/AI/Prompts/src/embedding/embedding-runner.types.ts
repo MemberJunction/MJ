@@ -1,6 +1,8 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { ModelInfo } from '@memberjunction/ai-core-plus';
-import type { EmbeddingInputType } from '@memberjunction/ai';
+import type { ChatMessageContent, ChatMessageContentBlock, EmbeddingInputType } from '@memberjunction/ai';
+
+export type { ChatMessageContent as EmbeddingContent, ChatMessageContentBlock as EmbeddingContentBlock };
 
 /**
  * Result of an embedding execution via AIEmbeddingRunner.
@@ -32,8 +34,17 @@ export interface EmbeddingRunResult {
  * Parameters for executing an embedding call via AIEmbeddingRunner.
  */
 export interface EmbeddingRunParams {
-  /** The texts to embed */
-  Texts: string[];
+  /**
+   * The texts to embed via `BaseEmbeddings.EmbedTexts`.
+   * Provide either `Texts` or `Contents` (not both).
+   */
+  Texts?: string[];
+  /**
+   * Multimodal content entries to embed via `BaseEmbeddings.EmbedContent` (each entry may be a
+   * string or an interleaved array of `text`, `image_url`, `video_url`, `audio_url`, `file_url`
+   * blocks fused into one vector). Provide either `Texts` or `Contents` (not both).
+   */
+  Contents?: ChatMessageContent[];
   /**
    * Optional: the AIPrompt (type Embedding) this call runs under. Its model configuration picks the
    * model when `ModelID` is not given, its failover and retry settings apply, and the run row is

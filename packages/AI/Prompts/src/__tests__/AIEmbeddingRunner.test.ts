@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
   BaseEmbeddings,
+  EmbedContentParams,
+  EmbedContentResult,
   EmbedTextsParams,
   EmbedTextsResult,
   EmbedTextParams,
@@ -218,8 +220,12 @@ interface DriverScript {
   ConstructedWith: string[];
   /** Every EmbedTexts call, in order. */
   Calls: EmbedTextsParams[];
+  /** Every EmbedContent call, in order. */
+  ContentCalls: EmbedContentParams[];
   /** Replaces the default answer: one 3-wide (or `dimensions`-wide) vector per text. */
   Answer?: (params: EmbedTextsParams) => Promise<EmbedTextsResult>;
+  /** Replaces the default EmbedContent answer. */
+  ContentAnswer?: (params: EmbedContentParams) => Promise<EmbedContentResult>;
 }
 
 const scripts = new Map<string, DriverScript>();
@@ -258,6 +264,21 @@ abstract class ScriptedEmbeddings extends BaseEmbeddings {
       model: params.model ?? '',
       ModelUsage: new ModelUsage(params.texts.length * 10, 0, 0.0002, 'USD'),
       vectors: params.texts.map(() => Array<number>(width).fill(0.1)),
+    };
+  }
+
+  public override async EmbedContent(params: EmbedContentParams): Promise<EmbedContentResult> {
+    const script = scriptFor(this.driverKey);
+    script.ContentCalls.push(params);
+    if (script.ContentAnswer) {
+      return script.ContentAnswer(params);
+    }
+    const width = params.dimensions ?? 3;
+    return {
+      object: 'object',
+      model: params.model ?? '',
+      ModelUsage: new ModelUsage(15, 0, 0.0005, 'USD'),
+      vector: Array<number>(width).fill(0.25),
     };
   }
 }
@@ -397,7 +418,7 @@ describe('AIEmbeddingRunner', () => {
     h.state.runs = [];
     h.state.failRunSaves = false;
     for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
-      scripts.set(key, { ConstructedWith: [], Calls: [] });
+      scripts.set(key, { ConstructedWith: [], Calls: [], ContentCalls: [] });
     }
     loadCatalog();
     runner = new AIEmbeddingRunner();
@@ -1022,5 +1043,80 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Vectors).toHaveLength(1);
     await legacyRunner.WaitForPendingPromptRunSaves();
     expect(lastRun()?.Status).toBe('Completed');
+  });
+
+  describe('multimodal Contents embedding', () => {
+    it('routes Contents entries through driver.EmbedContent with dimensions and aggregates usage in input order', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        const blocks = Array.isArray(params.content) ? params.content : [];
+        const marker = blocks.some(b => b.type === 'video_url') ? 0.9 : 0.4;
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(20, 0, 0.001, 'USD'),
+          vector: Array<number>(params.dimensions ?? 3).fill(marker),
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [
+            { type: 'text', content: 'Clip 1 overview' },
+            { type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' },
+          ],
+          [
+            { type: 'image_url', content: 'BBBB', mimeType: 'image/png' },
+          ],
+        ],
+        Dimensions: 768,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        Description: 'Multimodal video & image embed',
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(2);
+      expect(result.Vectors[0]).toHaveLength(768);
+      expect(result.Vectors[0][0]).toBe(0.9);
+      expect(result.Vectors[1][0]).toBe(0.4);
+      expect(result.TokensUsed).toBe(40);
+      expect(result.Cost).toBeCloseTo(0.002);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+      expect(scriptFor(DRIVER_1).ContentCalls).toHaveLength(2);
+      expect(scriptFor(DRIVER_1).ContentCalls[0].dimensions).toBe(768);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.Status).toBe('Completed');
+    });
+
+    it('rejects requests that provide both Texts and Contents', async () => {
+      const result = await runner.RunEmbedding({
+        Texts: ['hello'],
+        Contents: [[{ type: 'image_url', content: 'AAAA', mimeType: 'image/png' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('not both');
+    });
+
+    it('fails cleanly when EmbedContent returns an empty vector instead of succeeding with []', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(0, 0),
+        vector: [],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [[{ type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('No vectors returned');
+      expect(result.Vectors).toEqual([]);
+    });
   });
 });

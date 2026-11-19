@@ -3,9 +3,11 @@ import { BaseEntitySaveQueue, Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   BaseEmbeddings,
+  ChatMessageContent,
   EmbedTextsResult,
   BaseResult,
   ErrorAnalyzer,
+  ModelUsage,
 } from '@memberjunction/ai';
 import {
   MJAIPromptEntityExtended,
@@ -231,8 +233,13 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   }
 
   private validateParams(params: EmbeddingRunParams): string | undefined {
-    if (!params?.Texts || params.Texts.length === 0) {
-      return 'No texts provided for embedding';
+    const hasTexts = Array.isArray(params?.Texts) && params.Texts.length > 0;
+    const hasContents = Array.isArray(params?.Contents) && params.Contents.length > 0;
+    if (!hasTexts && !hasContents) {
+      return 'No texts or content provided for embedding';
+    }
+    if (hasTexts && hasContents) {
+      return 'Provide either Texts or Contents for embedding, not both';
     }
     if (!params?.ContextUser) {
       return 'ContextUser is required';
@@ -451,11 +458,17 @@ export class AIEmbeddingRunner extends BaseModelRunner {
             run.ParentID = params.ParentRunID;
           }
           if (params.Description) {
-            run.Messages = JSON.stringify({
-              description: params.Description,
-              textCount: params.Texts.length,
-              totalChars: params.Texts.reduce((sum, t) => sum + t.length, 0),
-            });
+            const payload = params.Contents && params.Contents.length > 0
+              ? {
+                  description: params.Description,
+                  contentCount: params.Contents.length,
+                }
+              : {
+                  description: params.Description,
+                  textCount: params.Texts?.length ?? 0,
+                  totalChars: (params.Texts ?? []).reduce((sum, t) => sum + t.length, 0),
+                };
+            run.Messages = JSON.stringify(payload);
           }
         }
       );
@@ -590,7 +603,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   ): Promise<EmbeddingInternalResult> {
     const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
-      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
+      if (params.Contents && params.Contents.length > 0) {
+        return await this.callDriverForContents(driver, candidate, prompt, params, bound, startTime);
+      }
+      const texts = params.Texts ?? [];
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, texts, params.InputType, candidate.vendorId);
       const embedResult = await this.RaceWithinBound(
         driver.EmbedTexts({
           texts: prepared.texts,
@@ -617,6 +634,104 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     } finally {
       bound.Dispose();
     }
+  }
+
+  /**
+   * Embeds multimodal `params.Contents` through `driver.EmbedContent` with bounded concurrency,
+   * preserving input order and failing cleanly if any entry returns an empty vector.
+   */
+  private async callDriverForContents(
+    driver: BaseEmbeddings,
+    candidate: ModelVendorCandidate,
+    prompt: MJAIPromptEntityExtended,
+    params: EmbeddingRunParams,
+    bound: ReturnType<AIEmbeddingRunner['createExecutionBound']>,
+    startTime: Date
+  ): Promise<EmbeddingInternalResult> {
+    const contents = params.Contents ?? [];
+    const vectors: number[][] = new Array(contents.length);
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCost = 0;
+    let costCurrency: string | undefined;
+    let nextIndex = 0;
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        if (bound.Signal?.aborted) {
+          throw new Error(`The ${this.RequiredModelType} call was cancelled`);
+        }
+        const idx = nextIndex++;
+        if (idx >= contents.length) {
+          return;
+        }
+        const preparedContent = this.prepareMultimodalContent(
+          contents[idx],
+          candidate,
+          params.InputType
+        );
+        const result = await this.RaceWithinBound(
+          driver.EmbedContent({
+            content: preparedContent,
+            model: candidate.apiName,
+            dimensions: params.Dimensions,
+            inputType: params.InputType,
+            CancellationToken: bound.Signal,
+          }),
+          bound,
+          prompt
+        );
+        if (!result || !result.vector || result.vector.length === 0) {
+          throw new Error(`No vectors returned from embedding model '${candidate.model.Name}'`);
+        }
+        vectors[idx] = result.vector;
+        if (result.ModelUsage) {
+          totalPromptTokens += result.ModelUsage.promptTokens ?? 0;
+          totalCompletionTokens += result.ModelUsage.completionTokens ?? 0;
+          totalCost += result.ModelUsage.cost ?? 0;
+          if (!costCurrency && result.ModelUsage.costCurrency) {
+            costCurrency = result.ModelUsage.costCurrency;
+          }
+        }
+      }
+    };
+
+    const concurrency = Math.min(4, contents.length);
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+    const usage = new ModelUsage(totalPromptTokens, totalCompletionTokens);
+    usage.cost = totalCost;
+    if (costCurrency) {
+      usage.costCurrency = costCurrency;
+    }
+    const aggregated: EmbedTextsResult = {
+      object: 'list',
+      model: candidate.apiName,
+      ModelUsage: usage,
+      vectors,
+    };
+    return this.callResultFrom(aggregated, candidate, startTime);
+  }
+
+  /** Applies the model's catalog embedding prefix (when configured) to string or leading text blocks. */
+  private prepareMultimodalContent(
+    content: ChatMessageContent,
+    candidate: ModelVendorCandidate,
+    inputType: EmbeddingRunParams['InputType']
+  ): ChatMessageContent {
+    if (typeof content === 'string') {
+      return AIEngine.Instance.PrepareEmbeddingInput(candidate.model, [content], inputType, candidate.vendorId).texts[0] ?? content;
+    }
+    const firstTextIndex = content.findIndex(b => b.type === 'text' && b.content.trim().length > 0);
+    if (firstTextIndex < 0) {
+      return content;
+    }
+    const original = content[firstTextIndex].content;
+    const prefixed = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, [original], inputType, candidate.vendorId).texts[0] ?? original;
+    if (prefixed === original) {
+      return content;
+    }
+    return content.map((block, i) => (i === firstTextIndex ? { ...block, content: prefixed } : block));
   }
 
   /** Wraps the driver's result for the failover loop; an empty result fails over as a model error. */

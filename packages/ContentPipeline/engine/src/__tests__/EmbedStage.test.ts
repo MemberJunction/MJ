@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { AIEmbeddingRunner, type EmbeddingContent, type EmbeddingContentBlock } from '@memberjunction/ai-prompts';
+import * as contentAutotagging from '@memberjunction/content-autotagging';
 import { EmbedContentItemStage, EmbedStage } from '../stages/EmbedStage.js';
+import type { VectorRoute } from '../VectorRouting.js';
 // Importing the barrel fires every stage's @RegisterClass, which is what a host does via
 // LoadContentPipelineStages().
 import '../stages/index.js';
@@ -189,5 +192,119 @@ describe('the batch hook', () => {
 
     it('is ABSENT when the last stage does not, so the run stays per-record', () => {
         expect(processor(['Tag']).ProcessBatch).toBeUndefined();
+    });
+});
+
+describe('multimodal EmbedStage hooks and mixed-batch routing', () => {
+    it('allows a textless video/image chunk through Run when Pipeline.embedContent carries media blocks', async () => {
+        const record = chunk('vid-1', null);
+        record.Propose('Modality', 'video', 6, 'Segment');
+        const mediaBlocks: EmbeddingContentBlock[] = [
+            { type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' },
+        ];
+        record.SetExtension('Pipeline', 'embedContent', mediaBlocks);
+
+        const outcome = await new EmbedStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+    });
+
+    it('partitions a mixed page into batched Texts and multimodal Contents and upserts both vectors', async () => {
+        const textChunk = chunk('txt-1', 'Quarterly membership policy summary.');
+        const videoChunk = chunk('vid-1', 'Walkthrough of the renewal dashboard');
+        videoChunk.Propose('Modality', 'video', 6, 'Segment');
+        videoChunk.SetExtension('Pipeline', 'embedContent', [
+            { type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' },
+        ]);
+        const imageChunk = chunk('img-1', null);
+        imageChunk.Propose('Modality', 'image', 6, 'Segment');
+        imageChunk.SetExtension('Pipeline', 'embedContent', [
+            { type: 'image_url', content: 'BBBB', mimeType: 'image/png' },
+        ]);
+
+        const runEmbeddingSpy = vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockImplementation(async (params) => {
+            if (params.Texts) {
+                return {
+                    Success: true,
+                    Vectors: params.Texts.map(() => [0.1, 0.2]),
+                    PromptRunID: null,
+                    TokensUsed: 5,
+                    Cost: 0,
+                    ErrorMessage: null,
+                    ExecutionTimeMs: 1,
+                    ModelID: 'M1',
+                };
+            }
+            return {
+                Success: true,
+                Vectors: (params.Contents ?? []).map((_, idx) => [0.8 + idx * 0.1, 0.9]),
+                PromptRunID: null,
+                TokensUsed: 20,
+                Cost: 0,
+                ErrorMessage: null,
+                ExecutionTimeMs: 2,
+                ModelID: 'M1',
+            };
+        });
+        const upsertSpy = vi.spyOn(contentAutotagging, 'UpsertVectorRecords').mockResolvedValue({ success: true } as never);
+
+        const stage = new EmbedStage();
+        const item = {
+            ID: 'I1',
+            ContentSourceID: 'S1',
+            ContentSourceTypeID: 'T1',
+            ContentTypeID: 'CT1',
+            Name: 'Media Item',
+            Description: null,
+            URL: 'https://example.test/video',
+            GetAll: () => ({ ID: 'I1', Name: 'Media Item' }),
+        };
+        const route: VectorRoute = {
+            GroupKey: 'M1::idx',
+            Item: item as never,
+            Infrastructure: {
+                embeddingModelID: 'M1',
+                dimensions: 2,
+                indexName: 'idx',
+                vectorDB: { IsReadOnly: false } as never,
+                providerConfig: {} as never,
+            } as never,
+        };
+        const ctx = { ...contextWith(), Provider: { EntityByName: () => undefined } as never };
+
+        const embedAndStore = (
+            stage as unknown as {
+                embedAndStore(
+                    group: Array<{ Record: WorkingRecord; Route: VectorRoute }>,
+                    tags: ReadonlyMap<string, string[]>,
+                    context: StageContext,
+                ): Promise<Array<{ Key: string; Outcome: { Status: string } }>>;
+            }
+        ).embedAndStore.bind(stage);
+
+        const results = await embedAndStore(
+            [
+                { Record: textChunk, Route: route },
+                { Record: videoChunk, Route: route },
+                { Record: imageChunk, Route: route },
+            ],
+            new Map(),
+            ctx,
+        );
+
+        expect(results.every((r) => r.Outcome.Status === 'Complete')).toBe(true);
+        expect(runEmbeddingSpy).toHaveBeenCalledTimes(2);
+        expect(runEmbeddingSpy.mock.calls[0][0].Texts).toEqual(['Quarterly membership policy summary.']);
+        const sentContents = runEmbeddingSpy.mock.calls[1][0].Contents as EmbeddingContent[];
+        expect(sentContents).toHaveLength(2);
+        // Video chunk fuses text + video_url; textless image chunk sends pure image_url block
+        expect(sentContents[0]).toEqual([
+            { type: 'text', content: 'Walkthrough of the renewal dashboard' },
+            { type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' },
+        ]);
+        expect(sentContents[1]).toEqual([
+            { type: 'image_url', content: 'BBBB', mimeType: 'image/png' },
+        ]);
+        expect(upsertSpy).toHaveBeenCalledTimes(1);
+        expect(upsertSpy.mock.calls[0][0]).toHaveLength(3);
     });
 });

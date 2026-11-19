@@ -11,7 +11,7 @@
 
 import { LogError } from '@memberjunction/core';
 import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
-import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, type EmbeddingContent, type EmbeddingContentBlock } from '@memberjunction/ai-prompts';
 import { RecordMetadataValue, VectorRecord } from '@memberjunction/ai-vectordb';
 import { KnowledgeHubMetadataEngine, MJContentItemEntity } from '@memberjunction/core-entities';
 import {
@@ -64,7 +64,7 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
         return {
             Reads: ['Text', 'Title', 'Modality', 'Decorator'],
             Writes: [],
-            ReadsExtensions: [],
+            ReadsExtensions: ['Pipeline.embedContent'],
             WritesExtensions: [`${EMBED_STAGE}.operation`],
         };
     }
@@ -75,8 +75,8 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
             return Outcome.Retry('cancelled before embedding started');
         }
         const operation = this.operationFor(record);
-        if (operation === 'Full' && this.textFor(record).trim().length === 0) {
-            // Embedding is text-in: an image with no text would get the vector of '', equally
+        if (operation === 'Full' && this.textFor(record).trim().length === 0 && !this.HasMediaInput(record)) {
+            // Without text or media blocks, an image/video would get the vector of '', equally
             // "similar" to every query.
             return Outcome.Skipped(
                 this.isNonTextModality(record)
@@ -136,27 +136,136 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
         return outcomes;
     }
 
-    /** Embed a group in one model call, then store it. */
+    /**
+     * Whether this record carries (or can resolve during {@link Finalize}) non-text media inputs
+     * for multimodal embedding via `AIEmbeddingRunner` `Contents`. Subclasses that load binary media
+     * lazily during `Finalize` override this alongside {@link ResolveEmbedContent}.
+     */
+    protected HasMediaInput(record: WorkingRecord): boolean {
+        const blocks = record.GetExtension<EmbeddingContentBlock[]>('Pipeline', 'embedContent');
+        return Array.isArray(blocks) && blocks.length > 0;
+    }
+
+    /**
+     * Resolves multimodal content blocks for a record (e.g., `video_url` / `image_url` / `audio_url`
+     * fused with optional text). Returns `null` when the record should take the standard batched
+     * text-only embedding path. Subclasses override this to load linked media files or sliced clips.
+     */
+    protected async ResolveEmbedContent(
+        record: WorkingRecord,
+        _route: VectorRoute,
+        _context: StageContext,
+    ): Promise<EmbeddingContent | null> {
+        const blocks = record.GetExtension<EmbeddingContentBlock[]>('Pipeline', 'embedContent');
+        if (!Array.isArray(blocks) || blocks.length === 0) {
+            return null;
+        }
+        const text = this.textFor(record).trim();
+        const hasTextBlock = blocks.some((b) => b.type === 'text' && b.content.trim().length > 0);
+        if (text.length > 0 && !hasTextBlock) {
+            return [{ type: 'text', content: text }, ...blocks];
+        }
+        return blocks;
+    }
+
+    /** Embed a group (batching plain text and routing multimodal records through EmbedContent), then store it. */
     private async embedAndStore(group: readonly RoutedRecord[], tags: ReadonlyMap<string, string[]>, context: StageContext): Promise<FinalizeResult[]> {
         const infra = group[0].Route.Infrastructure;
-        const embedding = await new AIEmbeddingRunner().RunEmbedding({
-            Texts: group.map((r) => this.textFor(r.Record)),
-            // Pinned: these vectors are compared against stored ones, so all must come from one model.
-            ModelID: infra.embeddingModelID,
-            Dimensions: infra.dimensions,
-            ContextUser: context.ContextUser,
-            Provider: context.Provider,
-            Description: 'Content pipeline Embed stage',
-        });
-        if (!embedding.Success) {
-            // The texts are unchanged, so retry rather than fail every record over one call.
-            return group.map((r) => ({ Key: r.Record.Identity.Key, Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'embedding failed') }));
+        const outcomes: FinalizeResult[] = [];
+        const textOnly: Array<{ Routed: RoutedRecord; Text: string }> = [];
+        const multimodal: Array<{ Routed: RoutedRecord; Content: EmbeddingContent }> = [];
+
+        for (const routed of group) {
+            let content: EmbeddingContent | null = null;
+            try {
+                content = await this.ResolveEmbedContent(routed.Record, routed.Route, context);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                outcomes.push({ Key: routed.Record.Identity.Key, Outcome: Outcome.Retry(`media content load failed: ${message}`) });
+                continue;
+            }
+            if (content !== null) {
+                multimodal.push({ Routed: routed, Content: content });
+                continue;
+            }
+            const text = this.textFor(routed.Record);
+            if (text.trim().length === 0) {
+                outcomes.push({
+                    Key: routed.Record.Identity.Key,
+                    Outcome: Outcome.Skipped(
+                        this.isNonTextModality(routed.Record)
+                            ? `'${String(routed.Record.Get('Modality'))}' content has no text or resolvable media`
+                            : 'no text to embed',
+                    ),
+                });
+                continue;
+            }
+            textOnly.push({ Routed: routed, Text: text });
         }
-        const payload: VectorRecord[] = group.map((r, i) => ({
-            id: this.vectorIdFor(r.Record, r.Route.Item),
-            values: embedding.Vectors[i],
-            metadata: this.BuildVectorMetadata(r.Record, r.Route, this.tagsOf(r, tags), context),
-            ...(r.Route.Directives ? { providerTemporaryDirectives: r.Route.Directives } : {}),
+
+        const readyToUpsert: Array<{ Routed: RoutedRecord; Vector: number[]; ModelID: string }> = [];
+
+        if (textOnly.length > 0) {
+            const embedding = await new AIEmbeddingRunner().RunEmbedding({
+                Texts: textOnly.map((t) => t.Text),
+                // Pinned: these vectors are compared against stored ones, so all must come from one model.
+                ModelID: infra.embeddingModelID,
+                Dimensions: infra.dimensions,
+                ContextUser: context.ContextUser,
+                Provider: context.Provider,
+                CancellationToken: context.Signal,
+                Description: 'Content pipeline Embed stage',
+            });
+            if (!embedding.Success) {
+                outcomes.push(
+                    ...textOnly.map((t) => ({
+                        Key: t.Routed.Record.Identity.Key,
+                        Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'embedding failed'),
+                    })),
+                );
+            } else {
+                const modelID = embedding.ModelID ?? infra.embeddingModelID;
+                for (let i = 0; i < textOnly.length; i++) {
+                    readyToUpsert.push({ Routed: textOnly[i].Routed, Vector: embedding.Vectors[i], ModelID: modelID });
+                }
+            }
+        }
+
+        if (multimodal.length > 0) {
+            const embedding = await new AIEmbeddingRunner().RunEmbedding({
+                Contents: multimodal.map((m) => m.Content),
+                // Pinned: multimodal vectors share the exact vector space/dimension of this index's model.
+                ModelID: infra.embeddingModelID,
+                Dimensions: infra.dimensions,
+                ContextUser: context.ContextUser,
+                Provider: context.Provider,
+                CancellationToken: context.Signal,
+                Description: 'Content pipeline Embed stage (multimodal)',
+            });
+            if (!embedding.Success) {
+                outcomes.push(
+                    ...multimodal.map((m) => ({
+                        Key: m.Routed.Record.Identity.Key,
+                        Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'multimodal embedding failed'),
+                    })),
+                );
+            } else {
+                const modelID = embedding.ModelID ?? infra.embeddingModelID;
+                for (let i = 0; i < multimodal.length; i++) {
+                    readyToUpsert.push({ Routed: multimodal[i].Routed, Vector: embedding.Vectors[i], ModelID: modelID });
+                }
+            }
+        }
+
+        if (readyToUpsert.length === 0) {
+            return outcomes;
+        }
+
+        const payload: VectorRecord[] = readyToUpsert.map((entry) => ({
+            id: this.vectorIdFor(entry.Routed.Record, entry.Routed.Route.Item),
+            values: entry.Vector,
+            metadata: this.BuildVectorMetadata(entry.Routed.Record, entry.Routed.Route, this.tagsOf(entry.Routed, tags), context),
+            ...(entry.Routed.Route.Directives ? { providerTemporaryDirectives: entry.Routed.Route.Directives } : {}),
         }));
         try {
             const response = await UpsertVectorRecords(payload, infra);
@@ -166,9 +275,23 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
         } catch (error) {
             // A failed bulk call says nothing about any one record, so the group fails together.
             const message = error instanceof Error ? error.message : String(error);
-            return group.map((r) => ({ Key: r.Record.Identity.Key, Outcome: Outcome.Retry(`vector write failed: ${message}`) }));
+            outcomes.push(
+                ...readyToUpsert.map((entry) => ({
+                    Key: entry.Routed.Record.Identity.Key,
+                    Outcome: Outcome.Retry(`vector write failed: ${message}`),
+                })),
+            );
+            return outcomes;
         }
-        return this.recordReceipts(group, payload, embedding.ModelID ?? infra.embeddingModelID, context);
+        outcomes.push(
+            ...this.recordReceipts(
+                readyToUpsert.map((entry) => entry.Routed),
+                payload,
+                readyToUpsert[0].ModelID,
+                context,
+            ),
+        );
+        return outcomes;
     }
 
     /**
