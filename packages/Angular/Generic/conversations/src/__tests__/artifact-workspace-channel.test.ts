@@ -952,6 +952,30 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
       };
       expect(afterClose.instances.map((i) => i.ArtifactID)).toEqual(['art-restored']);
 
+      // Read-only get_state / peek succeeds both with open tabs and with optional artifactId filter
+      const peekAll = await channel.ApplyVerb('get_state', {}, 'agent');
+      expect(peekAll.Success).toBe(true);
+      const allState = peekAll.Result as {
+        activeInstanceId: string | null;
+        artifacts: Record<string, { artifactId: string }>;
+      };
+      expect(Object.values(allState.artifacts).map((a) => a.artifactId)).toEqual(['art-restored']);
+
+      const peekFiltered = await channel.ApplyVerb('peek', { artifactId: 'art-restored' }, 'agent');
+      expect(peekFiltered.Success).toBe(true);
+      expect(
+        (peekFiltered.Result as { requestedArtifact?: { artifactId: string } | null }).requestedArtifact?.artifactId,
+      ).toBe('art-restored');
+
+      channel.Dispose();
+    });
+
+    it('supports read-only get_state even when no artifacts are open yet', async () => {
+      const channel = new ArtifactWorkspaceChannel();
+      await channel.Initialize(MakeContext({ Notes: [] }));
+      const emptyPeek = await channel.ApplyVerb('get_state', {}, 'agent');
+      expect(emptyPeek.Success).toBe(true);
+      expect(emptyPeek.Result).toEqual({ activeInstanceId: null, activeSelection: null, artifacts: {} });
       channel.Dispose();
     });
   });

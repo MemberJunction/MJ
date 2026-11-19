@@ -130,6 +130,24 @@ describe('RealtimeSurfaceTabsModel', () => {
 
       expect(model.Tabs.map(t => t.Key)).toEqual(['Whiteboard', 'Notes', 'activity']);
     });
+
+    it('keeps canonical channel order (Workspace, Whiteboard, Browser, Media, custom) even when registered out of order on resume', () => {
+      model.RegisterChannelTab({ Key: 'Media', Title: 'Media', Icon: 'fa-solid fa-images' });
+      model.RegisterChannelTab({ Key: 'Remote Browser', Title: 'Browser', Icon: 'fa-solid fa-globe' });
+      model.RegisterChannelTab({ Key: 'Notes', Title: 'Notes', Icon: 'fa-solid fa-note' });
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
+      model.RegisterChannelTab({ Key: 'ArtifactWorkspace', Title: 'Workspace', Icon: 'fa-solid fa-file-lines' });
+      model.SetShowActivityTab(true);
+
+      expect(model.Tabs.map(t => t.Key)).toEqual([
+        'ArtifactWorkspace',
+        'Whiteboard',
+        'Remote Browser',
+        'Media',
+        'Notes',
+        'activity',
+      ]);
+    });
   });
 
   describe('Focus / FlashTab / ClearFlash', () => {

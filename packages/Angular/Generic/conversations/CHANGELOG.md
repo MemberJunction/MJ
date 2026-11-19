@@ -1,5 +1,187 @@
 # @memberjunction/ng-conversations
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 44b885a: Harden governed artifacts, live collaboration, public guest sharing, and agent artifact tools (`NW-1` through `NW-6` plus adversarial security & correctness fixes):
+  - **Server & Database Read/Write Security**: Register `PostRunView`-protected artifact, collection, and anchored conversation entities at module load (`MJCoreEntitiesServer`, `MJServer`) and in `agent-data-policy-guard`; fail closed on non-system SQL `Aggregates` and smart-cache/differential/fast-path bypasses in `MJCore` (`ProviderBase`) & `GenericDatabaseProvider`; harden `MJCollectionEntityServer` reparenting (`CanDelete` + `oldParentId`/`newParentId` `CanEdit`), collection ancestry cascading, grantee self-delete ("Leave shared item"), owner-scoped `ListArtifactGuestShareLinks` query (with `artifact:read` API key scope enforcement), and `RealtimeClientSessionResolver` `AuthorizeSessionAccess` magic-link IDOR enforcement.
+  - **Public Guest Sharing & Viewer Sandboxing (`NW-1`)**: Add `MJArtifactGuestShareLink` migration (`V202611161958`) binding Frozen `ArtifactVersion` records to native anonymous `resource-share` `MagicLinkInvite` records (`MagicLinkService`, `POST /magic-link/redeem`, RS256 JWKS `#token=` + `ResolveGuestArtifactSnapshot`, with dormant `PublicLink` marked `@deprecated` via metadata), fail-closed HMAC frozen snapshot verification (`SnapshotVerified === true` required for `.pptx` export), `ComponentArtifactViewerPlugin` server + client fail-closed gates in `GuestSnapshotMode`, dual-field `EmbeddedArtifacts` inspection/scrubbing, nonce-scoped `PrintHtmlInSandboxedIframe` (`allow-modals allow-scripts` without `allow-same-origin`), raster image/whiteboard sandboxed print, URL scheme validation in `LibraryRemoteDrivePane`, and `[GuestSnapshotMode]` offline viewer isolation across Docs, Slides, and Sheets.
+  - **Agent Artifact Tools (`create_artifact` `InitialOperations` & `NW-3`–`NW-6`)**: Forward and atomically execute `initialOperations` / `InitialOperations` in `ArtifactToolManager.handleCreateArtifactTool` (both persisted and in-memory modes); enforce `ValidateEmbeddedArtifactAccess` when accepting document suggestions; wire production `RegisterServerArtifactFileBytesLoader` / `RegisterClientArtifactFileBytesLoader` and preserve `File`-mode `.xlsx` configuration metadata across suggestion/comment edits; enforce most-restrictive `ProtectedRanges` evaluation; and fix `NW-3` suggestion anchors/tabs and `NW-6` viewer initialization races (`ViewMode`, `NavigationAnchor`, Whiteboard selection/navigation).
+  - **CI, Standards, Documentation & Test Coverage**: Resolve all `check:guards`, `check:standards`, `check:dynamic-replace`, `check:codegen-tail`, `check:esm`, and `mj sync validate` checks; sync Docs/Slides/Sheets tool counts (`26 / 29 / 47`); and expand unit, HappyDOM, and live integration (`IT170`, `IT171`) coverage.
+
+- acd082e: Add collaborative MJ Documents, MJ Presentations (16:9 structured Slide Decks), MJ Spreadsheets (formulas, `=MJ.QUERY()` live governed tables, range charts, and round-trip `.xlsx` / `.csv` import & export), inline OLE Whiteboard editing, the Excel Office Add-in (`@memberjunction/excel-addin` + `@memberjunction/excel-addin-server`), and the unified **Library** application (`LibraryResource` + `<mj-library-workspace>`):
+  - **Real-time Collaboration & Governance (`@memberjunction/core-entities`, `@memberjunction/server`, `@memberjunction/ai-agents`)**: Yjs CRDT collaboration rooms over WebSocket (`ArtifactCollaborationServer`), viewer-scoped permission delegation (`ArtifactPermissionEngine` across ownership, host-entity delegates, direct grants, and cascaded collection grants), governed document blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `Artifact`, `InteractiveComponent`), `SlideDeckEngine`, and `SpreadsheetEngine`.
+  - **Collaborative Artifact Viewers (`@memberjunction/ng-artifacts`, `@memberjunction/ng-conversations`)**: Rich Markdown document editor with Suggesting mode and word-level tracked changes, `.docx` / `.pptx` / `.xlsx` import and export services, interactive 16:9 Slide Deck studio and presenter view, collaborative Spreadsheet studio, and explicit Save/Commit inline Whiteboard canvas editing.
+  - **Dedicated `Library` Application & Explorer Routing (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-application`, `@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`)**: Ships a dedicated header-pinned `Library` application (`DefaultForNewUser: true`) alongside an untouched `File Browser`, preserves `Collections` and user-scoped `Agent Activity` (with an authorized `All Users` scope toggle and `Tasks` -> `Agent Activity` nav migration via `MOVED_NAV_ITEMS`) in `Chat`, removes arbitrary row caps on shared items, queries exact per-artifact latest versions, bounds remote Connected Drive text previews to 100 KB, and adds version-aware + overwrite-safe Connected Drive exports.
+
+  **Upgrade & Environment Notes:**
+  - **Required Server HMAC Secrets**: Configure dedicated `>= 32`-character secrets on `MJAPI` for collaboration WebSocket tickets (`MJ_ARTIFACT_COLLAB_HMAC_SECRET`, e.g. `openssl rand -hex 32`) and frozen live-block snapshots (`MJ_FROZEN_BLOCK_HMAC_SECRET`, e.g. `openssl rand -hex 32`). Both endpoints fail closed if their secret is unset or shorter than 32 characters; `MJServer` logs a startup warning when either secret is missing, and collaborative viewers display a live-sync unavailable notice while remaining safely read-only.
+  - **Reverse-Proxy WebSocket URLs & Multi-Node Routing (`MJAPI_PUBLIC_URL`)**: `DocumentCollaborationService` derives the Yjs WebSocket endpoint directly from the browser's configured GraphQL URL unless `MJAPI_PUBLIC_URL` (`publicUrl`) is explicitly set on `MJAPI`, preventing `ws://localhost:4000` fallbacks behind reverse proxies. Multi-node `MJAPI` clusters should configure sticky WebSocket routing unless a distributed `ITicketReplayStore` is registered via `SetTicketReplayStore`.
+  - **Existing Users & `Library` App Visibility**: New users receive the `Library` application automatically via `DefaultForNewUser: true`. Existing users who already customized their `MJ: User Applications` rows retain their existing app selections; they can enable `Library` in the Explorer App Switcher / Settings, or administrators can provision `UserApplication` rows (`ApplicationID = 'DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A'`) for pre-existing active users as a one-time post-upgrade step.
+  - **Deployment / Rolling-Upgrade Note (`@memberjunction/server` + `@memberjunction/ng-artifacts`)**: `MJAPI` (`@memberjunction/server`) and `MJExplorer` (`@memberjunction/ng-artifacts`) require an **all-at-once coordinated deployment** rather than a mixed-version rolling upgrade. The collaboration protocol introduces incremental CRDT delta payloads on `version-saved` (`prevStateVectorB64` / `savedSnapshotB64`), the JSON `PayloadBase64` WebSocket relay envelope, and the `CollaborationTicketResult.ErrorCode` GraphQL field, which must be deployed together across server and web client bundles.
+
+  Application metadata (`metadata/applications`), authorization metadata (`metadata/authorizations`, `metadata/authorization-roles`), entity metadata (`metadata/entities`), and artifact type metadata (`metadata/artifact-types`) change, so the release requires a consolidated metadata sync migration.
+
+- 880a114: Chat search panel: debounce typed queries (250 ms), keep only the newest search's results, and look up artifact collections with two batched reads instead of one query per artifact.
+
+  Conversation export: every format now writes the output artifacts of each message (name, type, version, stored text content capped at 20,000 characters; MIME type for file-backed versions), with a deep link when the host supplies one. The export button is disabled when there is no conversation to export.
+
+  Conversations: only the server changes a saved conversation's owner (`UserID`); the owner is refused too, because messages with no `UserID` follow the owner.
+
+  Folders: the UI role can create, rename, move and delete its own folders (Private or Shared), bound to the new "UI: Own Projects" row-level filter (migration + entity-permission metadata). Deleting a folder moves its subfolders and conversations out as the system user in the delete's transaction. The folder dialog offers Public, and the sidebar offers Rename/Delete, only where the user's folder writes allow it.
+
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+- 09cdf29: Decision foundation:
+  - **Calibration is model metadata.** Platt fits move from four hard-coded tables (conversation routing, agent discovery, the memory note gate, duplicate detection) to `ModelConfiguration.Decision.Calibrations` on the `Jev` and `LLM Decision` AI models, keyed by use, question and exact resolved model, with identical values. `AIEngineBase` gains `GetDecisionCalibrations`, `FindDecisionCalibration({ Use, Question }, answeredBy)` and `CalibrateDecisionProbability(...)`, wrapped by the same names on `AIEngine`; they replace the table form. Breaking for direct callers: `InterpretRoutingAnswers` and `CalibratedContinuesProbability` take the resolved fit (`RoutingAnsweredBy(result)` names the model to look it up for); `CalibrateDiscoveryAnswers`, `DecisionDiscoveryFromResult` and `JudgeMemoryNotes` read the engine themselves; `ROUTING_CONTINUES_CALIBRATION`, `DECISION_DISCOVERY_CALIBRATION`, `MEMORY_NOTE_DECISION_CALIBRATION` and `DUPLICATE_DECISION_CALIBRATION` are replaced by key constants.
+  - **`AIDecisionRunner` fits requests to the model.** A request over `MaxQuestionsPerCall` is split into several calls and merged instead of failing over; `MaxStateTokens` is now enforced (estimated); every decision call has a default 60 s timeout (`DEFAULT_DECISION_TIMEOUT_MS`).
+  - **Multimodal decisions.** `DecisionParams.Media` / `AIDecisionParams.Media` carry images, audio, video and PDFs; drivers declare `SupportedMediaTypes`, and the runner skips with failover the models that cannot read a request's media. `GeminiDecision` reads all four.
+  - **`LLMDecision` reports the chat model that answered** after a failover inside its chat prompt, so the right calibration is applied.
+  - **Shadow decisions.** `StartShadowDecision` runs a decision beside an existing path without changing its outcome and records the agreement on the decision's run (`RunName = 'Shadow: <use>'`, comparison JSON in `Comments`).
+  - **Fitting is one rig run.** `FitDecisionCalibrations` (testing-engine) fits Platt calibrations for any use, question and model from labelled points or labelled decision prompt runs, out of fold, with an optional prior shift to production's mix, and the `fit-decision-calibration` rig prints ready-to-paste `Calibrations` entries and a report.
+  - **Typed decisions in the browser and in interactive components.** `RunDecision` takes up to 1,000 questions (was 32; the character caps still bound a request), and interactive components get `utilities.ai.Decide` (optional on `SimpleAITools`), allowed by the component linter and documented in the component spec guide.
+
+- cdcbfd1: Unify governed artifact tools and real-time collaborative workspaces across agents and Explorer viewers:
+  - Add governed artifact CoreActions and realtime channel / client-tool integrations (`ArtifactWorkspaceChannel`, live Explorer workspace actions, and realtime delegation routing) alongside updated Sage, Query Builder, and Loop agent prompts.
+  - Add multi-agent live collaboration presence indicators and cursor/region overlays across Markdown, Slide Deck, Whiteboard, and Spreadsheet viewers plus server Yjs relay awareness (`ArtifactCollaborationServer`).
+  - Resolve session-scoped alpha short IDs (e.g. `"D"`) to canonical `MJ: Artifacts` UUIDs in `ResolveEmbeddedArtifactId` and across `ArtifactToolManager`, `DocumentToolLibrary`, `SlideDeckToolLibrary`, and `SpreadsheetToolLibrary`, with frontend UUID guards before SQL `RunView` lookups.
+  - Add on-sheet floating charts (`Placement: 'sheet' | 'dock'`), drag/resize handles, comma-separated non-contiguous chart ranges and row/column orientation controls, a full Chart & Range Properties editor modal, and persisted horizontal chart-pane splitter height (`WorkbookSpec.PreferredObjectsPaneHeightPx`) synced across Yjs CRDT, XLSX metadata, and server room checkpoints.
+  - Add shared `<mj-context-menu>` overlay component and Docs/Slides/Sheets context-menu helpers with full keyboard navigation, viewport clamping, and mobile long-press support.
+  - Fix Explorer conversation chat change-detection (`NG0100`), suppress redundant `"Open Document"` action chips when an artifact is already opened inline, and prevent duplicate prompt emissions.
+
+### Patch Changes
+
+- 0fdcb51: Only a conversation's owner, a user with an Owner-level grant, or a user in the Developer or Integration role can delete a conversation. The server refuses everyone else (`MJConversationEntityServer.Delete`), `ConversationEngine` refuses before removing the conversation from the list and reports refused conversations by name, and the conversation list disables Delete with the reason. Previously any user who could load a conversation could delete it for everyone.
+- 92a4d65: Auto-collapse long settled non-most-recent messages (both user and agent) with a smooth gradient fade mask and a `Show more` / `Show less` toggle.
+- c67470e: Add Living Report manual refresh and recurring schedule management endpoints (`RefreshLivingArtifact`, `GetArtifactLivingReportSchedule`, `UpsertArtifactLivingReportSchedule`, `DeleteArtifactLivingReportSchedule`) with strict owner-context execution (`BaseScheduledJob.resolveScheduleOwnerUser` in `ActionScheduledJobDriver`), cron DoS and IANA timezone validation (`LivingReportScheduleHelpers`), toolbar/schedule modal UI in `<mj-artifact-viewer-panel>`, direct Sheet Chart and Sheet Range ribbon insert actions in `MarkdownArtifactViewerComponent`, fix MSE codec fallback for bare `video/mp4` fMP4 frames and suspended `AudioContext` resumption in `ai-realtime-client`, align realtime avatar/voice defaults and tab audio continuity (`@memberjunction/ai-agents`, `metadata`), gate live channel tabs to used channels with auto-switching (`@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`), persist and restore `Workspace`, `Media`, and `Remote Browser` tabs in session review, and restore target agent name, multi-leg channels, and `on-demand` workspace channels on **Resume session** (`MJServer`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`).
+- 7a6d72d: Tests only: bring `next` back to green after the unified-artifacts merge. The spreadsheet and permission test doubles match the current types again (`test:types`), the agent-presence DOM spec moves next to its components so it runs, the chat-area spec stubs its children instead of using a blanket schema, and `RealtimeArtifactWorkspaceSurfaceComponent` gets a DOM spec.
+- de2bf2e: Realtime call: the compact dock's closed "•••" sheet is now inert, so its invisible buttons (Type, Details, Camera, Share) are no longer reachable with Tab or by screen readers, and a click where they sit no longer lands on a hidden control (#6545).
+- 346a8d6: Content parsers read their input in linear time (CodeQL js/polynomial-redos, part of #5571). SKILL.md frontmatter, pipeline `{{ }}` templates, ContextCrush signature and whitespace passes, sentence and cell-range parsing, Loop templates, RSS/Atom item and permalink-guid extraction, vector template fields, Component Studio headings, realtime transcript markdown, whiteboard markdown export, SVG detection, React runtime error context and rgb() parsing, and connection-string redaction no longer use regexes that take quadratic time on crafted input. Results for well-formed input are unchanged.
+- 116cb9a: Tests: raise tight wall-clock bounds on pathological-input checks (TextToolLibrary ReDoS, template, RouteScrubber, FeaturePipelines numeric coercion) to 500–2000 ms, and the conversations pre-discovery "returns without waiting" checks from 5/15 ms to 45 ms (still below the fake worker's 50 ms delay). They guard against catastrophic backtracking or waiting, not machine speed; v6.3.0-edge.0's publish gate failed a 200 ms bound at 211 ms on a CI runner.
+- 0bad3a4: Resize the remote Chromium browser viewport in place to match the usable drawer area below the toolbar instead of scaling a fixed 1280 × 720 desktop frame, render the canvas and cursor overlay edge-to-edge at the frame's aspect ratio, re-arm standby `browser_*` tools after closing the drawer with `CloseRemoteBrowserPanel()`, and keep `HideRemoteBrowserPanel()` separate when toggling the header Browser button.
+- 9066253: Move Wave 6C edge agent pre-discovery Platt calibration parameters into `ModelConfiguration.Decision.Calibrations` metadata (`metadata/ai-models/.edge-discovery-models.json`) for `ms-marco-MiniLM-L-6-v2 (Local)` and resolve them via `FindDecisionCalibration` and `ApplyPlattCalibration` (keeping the verified `{ A: 1.0, B: 3.8 }` PoC fit as fallback when metadata is unloaded or unsynced).
+- e781aec: Add Wave 6C client-side Edge AI agent pre-discovery and client-only semantic Cmd+K Omnibox:
+  - **Shared Lazy WASM Edge AI Worker (`@memberjunction/ng-conversations`, `@memberjunction/ng-explorer-app`)**: Pre-bundles quantized `Xenova/bge-small-en-v1.5` (`q8`) and `Xenova/ms-marco-MiniLM-L-6-v2` (`q8`) into `assets/edge-ai.worker.js` (`device: 'wasm'`, `dtype: 'q8'`) with zero initial bundle overhead, per-user/session `SimpleVectorService` `'float32'` catalog caching, strict query deadlines, and a circuit-breaker fallback — shipped directly in `@memberjunction/ng-conversations` / `@memberjunction/ng-explorer-app` assets with zero host-app boilerplate.
+  - **Stage 6C.1 Edge Agent Pre-Discovery (`@memberjunction/ai-core-plus`, `@memberjunction/conversations-runtime`, `@memberjunction/ai-agents`, `@memberjunction/server`)**: Computes an untrusted advisory `EdgePreDiscoveryHint` (top-5 candidates + `logit >= -2.0` confidence gate). Server remains guard of truth, verifying `AIAgentPermissionHelper.HasPermission`, `AllowedAgentIDs`, and `IsRunnable` / `IsDirectlyDiscoverable` at both GraphQL ingress (`RunAIAgentResolver`) and `BaseAgent.InjectDecisionDiscovery`, discarding unauthorized/unknown IDs silently and falling back cleanly to `SearchEntity` / server `Jev` / `Sage`.
+  - **Stage 6C.2 Client-Only Semantic Omnibox (`@memberjunction/ng-explorer-core`)**: Adds `OmnibarSemanticIndexService` backed by `'float32'` `SimpleVectorService` and the shared `bge-small-en-v1.5` worker over browser-resident metadata (Entities, Saved Views, Dashboards, Apps/Navigation, Agents) for sub-15ms offline semantic matching with zero `PreviewSearch` GraphQL calls when offline and graceful fallback when cold/unavailable.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [484447a]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [12f453f]
+- Updated dependencies [c67470e]
+- Updated dependencies [bdf2257]
+- Updated dependencies [dfa6a4a]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [9532ed3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [7a6d72d]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [346a8d6]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [aa429c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [4f15ace]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/ng-artifacts@6.3.0-edge.1
+  - @memberjunction/ng-markdown@6.3.0-edge.1
+  - @memberjunction/ng-base-forms@6.3.0-edge.1
+  - @memberjunction/interactive-component-types@6.3.0-edge.1
+  - @memberjunction/ai-realtime-client@6.3.0-edge.1
+  - @memberjunction/realtime-runtime@6.3.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.1
+  - @memberjunction/conversations-runtime@6.3.0-edge.1
+  - @memberjunction/ng-code-editor@6.3.0-edge.1
+  - @memberjunction/ng-whiteboard@6.3.0-edge.1
+  - @memberjunction/ng-user-routines@6.3.0-edge.1
+  - @memberjunction/ng-shared-generic@6.3.0-edge.1
+  - @memberjunction/ai-agent-client@6.3.0-edge.1
+  - @memberjunction/ng-forms@6.3.0-edge.1
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.1
+  - @memberjunction/ng-tasks@6.3.0-edge.1
+  - @memberjunction/ng-testing@6.3.0-edge.1
+  - @memberjunction/ng-base-types@6.3.0-edge.1
+  - @memberjunction/ng-composer@6.3.0-edge.1
+  - @memberjunction/ng-container-directives@6.3.0-edge.1
+  - @memberjunction/ng-media-player@6.3.0-edge.1
+  - @memberjunction/ng-notifications@6.3.0-edge.1
+  - @memberjunction/ng-react@6.3.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.3.0-edge.1
+  - @memberjunction/ng-agent-client@6.3.0-edge.1
+  - @memberjunction/ng-realtime-media@6.3.0-edge.1
+  - @memberjunction/ng-ui-components@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

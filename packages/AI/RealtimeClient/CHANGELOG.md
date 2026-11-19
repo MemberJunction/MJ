@@ -1,5 +1,24 @@
 # @memberjunction/ai-realtime-client
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- c67470e: Add Living Report manual refresh and recurring schedule management endpoints (`RefreshLivingArtifact`, `GetArtifactLivingReportSchedule`, `UpsertArtifactLivingReportSchedule`, `DeleteArtifactLivingReportSchedule`) with strict owner-context execution (`BaseScheduledJob.resolveScheduleOwnerUser` in `ActionScheduledJobDriver`), cron DoS and IANA timezone validation (`LivingReportScheduleHelpers`), toolbar/schedule modal UI in `<mj-artifact-viewer-panel>`, direct Sheet Chart and Sheet Range ribbon insert actions in `MarkdownArtifactViewerComponent`, fix MSE codec fallback for bare `video/mp4` fMP4 frames and suspended `AudioContext` resumption in `ai-realtime-client`, align realtime avatar/voice defaults and tab audio continuity (`@memberjunction/ai-agents`, `metadata`), gate live channel tabs to used channels with auto-switching (`@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`), persist and restore `Workspace`, `Media`, and `Remote Browser` tabs in session review, and restore target agent name, multi-leg channels, and `on-demand` workspace channels on **Resume session** (`MJServer`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`).
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [9d82caa]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

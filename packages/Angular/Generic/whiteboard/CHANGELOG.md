@@ -1,5 +1,23 @@
 # @memberjunction/ng-whiteboard
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 346a8d6: Content parsers read their input in linear time (CodeQL js/polynomial-redos, part of #5571). SKILL.md frontmatter, pipeline `{{ }}` templates, ContextCrush signature and whitespace passes, sentence and cell-range parsing, Loop templates, RSS/Atom item and permalink-guid extraction, vector template fields, Component Studio headings, realtime transcript markdown, whiteboard markdown export, SVG detection, React runtime error context and rgb() parsing, and connection-string redaction no longer use regexes that take quadratic time on crafted input. Results for well-formed input are unchanged.
+- 2b4969f: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `TrimTrailingChars`, `TrimLeadingChars`, `TrimChars` and `IsEmailShaped` helpers in `@memberjunction/global`, used for URL, path and base64 trims and email-shape checks, plus index scans for Markdown fences and Slack link conversion. Results are unchanged for every input.
+- Updated dependencies [2d938cf]
+- Updated dependencies [44b885a]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ng-markdown@6.3.0-edge.1
+  - @memberjunction/ng-code-editor@6.3.0-edge.1
+  - @memberjunction/ng-ui-components@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes
