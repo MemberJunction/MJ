@@ -82,6 +82,9 @@ on:
       - '.github/scripts/wait-for-mjapi.sh'
       - '.github/scripts/check-fls-wire-bundles-ran.mjs'
       - '.github/scripts/select-integration-tier.mjs'
+      # The PostgreSQL lane's ratchet and its list: a PR that edits either must run that lane.
+      - '.github/scripts/check-integration-known-failures.mjs'
+      - '.github/integration-known-failures/**'
       # Root install inputs: the pnpm version pin (packageManager), the workspace globs and the
       # registry settings decide what the lane installs and builds.
       - 'package.json'
