@@ -1,5 +1,5 @@
 import { LogError, UserInfo } from '@memberjunction/core';
-import { ListOperations, ListSharing } from '@memberjunction/lists';
+import { type CheckedCallerSQL, ListFromQuery, type ListFromQueryOutcome, type ListFromQueryRequest, ListOperations, ListSharing } from '@memberjunction/lists';
 import type {
   ApplyResult as CoreApplyResult,
   ListDelta as CoreListDelta,
@@ -18,7 +18,9 @@ import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver 
 
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
-import { GetReadWriteProvider } from '../util.js';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { ActionEngineServer } from '@memberjunction/actions';
 
 // ---------------------------------------------------------------------------
 // GraphQL types — mirror the @memberjunction/lists shape one-to-one.
@@ -133,6 +135,35 @@ export class ApplyListResultType {
   @Field(() => [String], { nullable: true }) Errors?: string[];
   @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
   SourceChange?: ListSourceChangeType;
+}
+
+@InputType('CreateListFromQueryInput')
+export class CreateListFromQueryInput {
+  @Field(() => String) ListName!: string;
+  @Field(() => String, { nullable: true }) Description?: string;
+  @Field(() => String, { nullable: true, description: 'List Category to file the new list under.' }) CategoryID?: string;
+  @Field(() => String, { nullable: true, description: 'A saved query to link the list to. Pass QueryID or SQL, not both.' })
+  QueryID?: string;
+  @Field(() => String, {
+    nullable: true,
+    description: 'SQL written in a conversation. It gets the ExecuteAdhocQuery checks, is saved as a Pending query in the caller\'s User Lists, and the list is linked to it.',
+  })
+  SQL?: string;
+  @Field(() => String, { nullable: true, description: 'Required with SQL: the entity whose records the query returns.' }) EntityName?: string;
+  @Field(() => String, { nullable: true, description: "The query column holding the entity's primary key." }) KeyField?: string;
+  @Field(() => String, { nullable: true, description: "For a saved query: its parameter values, as a JSON object." }) ParametersJSON?: string;
+  @Field(() => String, { description: 'Refresh mode: Additive | Sync.' }) RefreshMode!: 'Additive' | 'Sync';
+  @Field(() => Boolean, { description: 'Refresh the list on the Lists app schedule.' }) AutoRefresh!: boolean;
+}
+
+@ObjectType('CreateListFromQueryResult')
+export class CreateListFromQueryResultType extends ApplyListResultType {
+  @Field(() => String, { nullable: true, description: 'The query the list refreshes from; empty when it will not refresh.' })
+  SourceQueryID?: string;
+  @Field(() => String, { nullable: true }) SourceQueryName?: string;
+  @Field(() => Boolean, { description: 'True when the SQL was saved by this call, as a Pending query.' }) SavedNewQuery!: boolean;
+  @Field(() => Boolean, { description: 'True when the list is linked to a query and can refresh.' }) Refreshes!: boolean;
+  @Field(() => String, { nullable: true, description: 'Why the list will not refresh, when it will not.' }) StaticReason?: string;
 }
 
 @InputType('ComputeDeltaInput')
@@ -471,6 +502,48 @@ export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
 // enforces the drop-guard / token / staleness contract.
 // ---------------------------------------------------------------------------
 
+/** The mutation's input as a `ListFromQuery` request, or why it is not valid. */
+export function ToListFromQueryRequest(input: CreateListFromQueryInput): ListFromQueryRequest | string {
+  if (!input.ListName?.trim()) return 'ListName is required.';
+  if (input.RefreshMode !== 'Additive' && input.RefreshMode !== 'Sync') return `RefreshMode must be 'Additive' or 'Sync', got '${input.RefreshMode}'.`;
+  let parameters: Record<string, unknown> | undefined;
+  if (input.ParametersJSON?.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(input.ParametersJSON);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'ParametersJSON must be a JSON object.';
+      parameters = parsed as Record<string, unknown>;
+    } catch {
+      return 'ParametersJSON must be a JSON object.';
+    }
+  }
+  return {
+    ListName: input.ListName.trim(),
+    Description: input.Description?.trim() || undefined,
+    CategoryID: input.CategoryID || undefined,
+    Parameters: parameters,
+    EntityName: input.EntityName?.trim() || undefined,
+    KeyField: input.KeyField?.trim() || undefined,
+    RefreshMode: input.RefreshMode,
+    AutoRefresh: input.AutoRefresh,
+  };
+}
+
+function refusedListFromQuery(code: string, message: string): CreateListFromQueryResultType {
+  return { Success: false, ResultCode: code, Message: message, SavedNewQuery: false, Refreshes: false };
+}
+
+export function FromListFromQueryOutcome(outcome: ListFromQueryOutcome): CreateListFromQueryResultType {
+  if (outcome.Kind === 'Refused') return refusedListFromQuery(outcome.Code, outcome.Message);
+  return {
+    ...FromCoreApplyResult(outcome.Result),
+    SourceQueryID: outcome.SourceQueryID ?? undefined,
+    SourceQueryName: outcome.SourceQueryName ?? undefined,
+    SavedNewQuery: outcome.SavedNewQuery,
+    Refreshes: !!outcome.Result.CreatedListId && !outcome.StaticReason,
+    StaticReason: outcome.StaticReason ?? undefined,
+  };
+}
+
 @Resolver()
 export class ListOperationsResolver extends ResolverBase {
   @Query(() => ListDeltaType, {
@@ -634,6 +707,29 @@ export class ListOperationsResolver extends ResolverBase {
     }
   }
 
+  @Mutation(() => CreateListFromQueryResultType, {
+    description:
+      'Creates a list from a saved query, or from SQL written in a conversation, linked so it refreshes. SQL is checked like ExecuteAdhocQuery and saved as a Pending query in the caller\'s User Lists; when the caller cannot save queries, the list is made but will not refresh.',
+  })
+  async CreateListFromQuery(
+    @Arg('input', () => CreateListFromQueryInput) input: CreateListFromQueryInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<CreateListFromQueryResultType> {
+    try {
+      const user = this.requireUser(ctx);
+      const request = ToListFromQueryRequest(input);
+      if (typeof request === 'string') return refusedListFromQuery('INVALID_PARAMETER', request);
+      if (!!input.QueryID === !!input.SQL) return refusedListFromQuery('MISSING_PARAMETER', 'Pass QueryID or SQL, not both.');
+      const service = new ListFromQuery(user, GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false }));
+      if (input.QueryID) return FromListFromQueryOutcome(await service.FromSavedQueryAsync({ ID: input.QueryID }, request));
+      const sql = this.checkCallerSQL(ctx, user, input.SQL!);
+      if (typeof sql === 'string') return refusedListFromQuery('PERMISSION_DENIED', sql);
+      return FromListFromQueryOutcome(await service.FromSQLAsync(sql, request));
+    } catch (e) {
+      return { ...this.unexpectedFailure(e, 'CreateListFromQuery'), SavedNewQuery: false, Refreshes: false };
+    }
+  }
+
   @Mutation(() => ListDeltaType, {
     description:
       'Preview a set-op (union / intersection / difference) across N sources, optionally projected into a target list.',
@@ -770,6 +866,32 @@ export class ListOperationsResolver extends ResolverBase {
     const user = this.requireUser(ctx);
     const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false });
     return new ListOperations(user, provider);
+  }
+
+  /**
+   * SECURITY: the ExecuteAdhocQuery checks for SQL a caller wrote. Scope-limited sessions are
+   * refused, the SQL runs only on the read-only login, the authorizer must accept the rendered SQL
+   * (one read statement reading only entity views the caller may read in full), and the server's
+   * timeout applies. The authorizer is the one MJServer registers with the action engine at
+   * startup (`CreateAdhocSQLAuthorizer`), so this applies ExecuteAdhocQuery's exact check; with
+   * none registered, SQL is refused. Returns the refusal message, or the SQL ready to run.
+   */
+  private checkCallerSQL(ctx: AppContext, user: UserInfo, sql: string): CheckedCallerSQL | string {
+    if (IsScopeLimitedPrincipal(user)) return 'Creating a list from SQL is not permitted for scope-limited sessions.';
+    const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
+    if (!provider) return 'No read-only data source is available to run the SQL.';
+    const authorizer = ActionEngineServer.Instance.AdhocSQLAuthorizer;
+    if (!authorizer) return 'Running SQL is not configured on this server: no ad-hoc SQL authorizer is registered.';
+    const refusal = authorizer.Authorize(sql, provider, user);
+    if (refusal) return `Not permitted to run this query: ${refusal}`;
+    const timeoutSeconds = authorizer.ClampTimeoutSeconds(undefined);
+    return {
+      SQL: sql,
+      Run: async (maxRows) => {
+        const result = await provider.RunQuery({ SQL: sql, MaxRows: maxRows, TimeoutSeconds: timeoutSeconds }, user);
+        return { Success: result.Success, Results: (result.Results ?? []) as Record<string, unknown>[], ErrorMessage: result.ErrorMessage };
+      },
+    };
   }
 
   private requireUser(ctx: AppContext): UserInfo {

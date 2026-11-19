@@ -1670,7 +1670,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (192 classes)
+// @memberjunction/core-actions (193 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1702,6 +1702,7 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -3148,6 +3149,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -3162,11 +3164,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DataMapperAction,
     DelayAction,
     DeleteDirectoryAction,
-    DeleteObjectAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
     DownloadSignedDocumentAction,
@@ -3375,7 +3377,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1391;
+export const CLASS_REGISTRATIONS_COUNT = 1392;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

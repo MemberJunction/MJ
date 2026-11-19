@@ -35,7 +35,7 @@
             } @else if (NeverRefreshed) {
               <span class="srp-pill srp-pill--warn"><i class="fa-solid fa-circle-info"></i> Not refreshed yet</span>
             } @else {
-              <span class="srp-pill srp-pill--ok"><i class="fa-solid fa-check"></i> Matches approved version</span>
+              <span class="srp-pill srp-pill--ok"><i class="fa-solid fa-check"></i> Definition unchanged</span>
             }
           </div>
           @if (NeedsReview) {
@@ -53,7 +53,7 @@
               @if (CanEdit) { Use Refresh now to preview what it would add. }
             </p>
           } @else {
-            <p class="srp-help">Each refresh first checks that the {{ SourceKindLabel.toLowerCase() }}'s definition is unchanged since it was approved.</p>
+            <p class="srp-help">Each refresh first checks that the {{ SourceKindLabel.toLowerCase() }}'s definition is unchanged since it was approved for this list.</p>
           }
           @if (IsOwner) {
             <div class="srp-actions">
