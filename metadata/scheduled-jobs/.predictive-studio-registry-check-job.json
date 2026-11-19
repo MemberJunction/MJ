@@ -23,7 +23,11 @@
         "AuditComparison": {
           "Enabled": true
         },
-        "StaleScoringRunHours": 6
+        "StaleScoringRunHours": 6,
+        "migration": {
+          "batchSize": 50,
+          "retrainPerRun": 3
+        }
       }
     },
     "primaryKey": {

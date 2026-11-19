@@ -83,6 +83,23 @@ export interface RunOutcomeRecord {
 /** The publish ledger's writes and reads. */
 export class PublishRecords {
   /**
+   * The purposes of an applied `publish` record that backs a Published model: a publish, a rollback, or an adoption of
+   * a pre-change model as Published (D4-61). The registry check's queries (`metadata/queries/SQL/predictive-studio-*`,
+   * pinned to this list by test) and the publish-record audit read exactly these (D-m6-3).
+   */
+  public static readonly BACKING_PURPOSES = ['publish', 'rollback', 'adopt'] as const satisfies readonly MJMLModelPublishRecordEntity['Purpose'][];
+
+  /** True when `record` is an applied `publish` record of a {@link BACKING_PURPOSES} purpose. Pure. */
+  public static BacksPublishedModel(record: { readonly Kind: string; readonly Purpose: string }): boolean {
+    return record.Kind === 'publish' && PublishRecords.BACKING_PURPOSES.some((p) => p === record.Purpose);
+  }
+
+  /** The `ExtraFilter` clause selecting the records that back a Published model ({@link BACKING_PURPOSES}). */
+  public static BackingRecordFilter(): string {
+    return `Kind='publish' AND Purpose IN (${PublishRecords.BACKING_PURPOSES.map((p) => `'${p}'`).join(',')})`;
+  }
+
+  /**
    * Writes the `publish` row of an applied publish and returns its ID.
    *
    * @throws Error naming the save's message when the row is not saved

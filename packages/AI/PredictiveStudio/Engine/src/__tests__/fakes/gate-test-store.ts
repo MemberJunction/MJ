@@ -45,6 +45,7 @@ import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { MemoryStorageAccount } from './storage-fakes';
+import { PublishRecords } from '../../registry/publish-records';
 
 /** One stored cell. */
 export type Cell = string | number | boolean | null | Date;
@@ -545,7 +546,7 @@ export class GateTestStore {
 
   /** The applied `publish` records (a publish or a rollback), in write order. */
   private appliedRecords(): Row[] {
-    return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => r['Kind'] === 'publish' && (r['Purpose'] === 'publish' || r['Purpose'] === 'rollback'));
+    return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => PublishRecords.BacksPublishedModel({ Kind: String(r['Kind']), Purpose: String(r['Purpose']) }));
   }
 
   /** @internal a new, unsaved record of `entityName` */

@@ -7,9 +7,9 @@ SELECT r.ID AS PublishRecordID, r.ModelID, r.TrainingRunID, r.Purpose, m.Status 
 FROM [__mj].MLModelPublishRecord r
 LEFT JOIN [__mj].MLModel m ON m.ID = r.ModelID
 WHERE r.Kind = 'publish'
-  AND r.Purpose IN ('publish', 'rollback')
+  AND r.Purpose IN ('publish', 'rollback', 'adopt')
   AND (m.ID IS NULL OR m.Status NOT IN ('Published', 'Archived'))
   AND (r.ModelID IS NULL OR r.RecordedAt = (
     SELECT MAX(r2.RecordedAt) FROM [__mj].MLModelPublishRecord r2
-    WHERE r2.ModelID = r.ModelID AND r2.Kind = 'publish' AND r2.Purpose IN ('publish', 'rollback')
+    WHERE r2.ModelID = r.ModelID AND r2.Kind = 'publish' AND r2.Purpose IN ('publish', 'rollback', 'adopt')
   ))

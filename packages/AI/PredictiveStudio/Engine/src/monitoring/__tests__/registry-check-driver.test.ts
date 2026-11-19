@@ -86,6 +86,14 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     ]));
   });
 
+  it('a Published model backed by an applied adopt record is not archived (D-m6-3: adopt backs it as publish does)', async () => {
+    const adopted = await Published();
+    for (const r of store.PublishRecords(adopted.ID)) if (r['Kind'] === 'publish') r['Purpose'] = 'adopt';
+    const findings = await Run();
+    expect(store.Status(adopted.ID)).toBe('Published');
+    expect(findings.filter((f) => f.SubjectID === adopted.ID && (f.Finding === 'a' || f.Finding === 'h' || f.Finding === 'b'))).toEqual([]);
+  });
+
   it('two Published models with publish records: the newest stays', async () => {
     const older = await Published();
     const newer = await Published({ IncumbentID: older.ID });
