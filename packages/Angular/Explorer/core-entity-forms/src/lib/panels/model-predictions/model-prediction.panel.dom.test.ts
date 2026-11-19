@@ -128,6 +128,8 @@ describe('ModelPredictionPanel (DOM) — predictions from Feature Values', () =>
         expect(Count(f, 'ps-prediction-history-point')).toBe(2);
         expect(Text(f, 'ps-prediction-lineage')).toContain(`v${MODEL_VERSION}`);
         expect(Text(f, 'ps-prediction-lineage')).toContain('RUN1');
+        // the card names its binding, so a reader (the browser walk) finds one binding's card among several
+        expect(f.nativeElement.querySelector('[data-testid="ps-prediction-card"]')?.getAttribute('data-binding-id')).toBe(binding.ID);
     });
 
     it('renders nothing for a user who holds none of the bindings\' authorizations', async () => {

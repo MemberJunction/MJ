@@ -15,7 +15,7 @@
     @if (Cards.length > 0) {
       <div class="mpp-cards">
         @for (card of Cards; track card.BindingID) {
-          <div class="mpp-card" data-testid="ps-prediction-card">
+          <div class="mpp-card" data-testid="ps-prediction-card" [attr.data-binding-id]="card.BindingID">
 
             <div class="mpp-card-head">
               <div class="mpp-head-left">

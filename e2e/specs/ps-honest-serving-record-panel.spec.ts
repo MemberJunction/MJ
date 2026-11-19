@@ -6,7 +6,8 @@
  *
  * Prerequisites as e2e/README.md: MJAPI and Explorer running on the milestone's build (§2.4: MJAPI :4041, Explorer
  * :4241). Each identity signs in by a one-time magic-link redemption URL (POST /magic-link/create, `MaxUses` 1 per test
- * that uses it); the session lives in the test's own tab. The scored record and the binding's feature come from the
+ * that uses it, `ApplicationId` the Predictive Studio application: a magic-link session is scoped to its invite's
+ * application, so a Data Explorer link cannot open the Studio); the session lives in the test's own tab. The scored record and the binding's feature come from the
  * caller's database: a record of PS_SCORED_ENTITY_NAME scored by the binding (with at least one pipeline Feature Value,
  * so the restricted user's Derived values section has a row). The database is read through PS_SQLCMD: a JSON array of
  * the sqlcmd argv without the query, e.g. '["sqlcmd","-S","localhost,1433","-U","sa","-P","…","-d","MJ_PS_PR4_claude","-C","-h","-1","-W"]'.
@@ -52,17 +53,18 @@ interface StoredPrediction {
   ValueNumeric: number;
   ModelVersion: number;
   ScoringRunID: string;
+  BindingID: string;
 }
 
 function storedPrediction(): StoredPrediction {
   const rows = sqlRows(
-    `SELECT l.ValueNumeric, r.ModelVersion, l.MLScoringRunID FROM __mj.vwLatestFeatureValues l ` +
+    `SELECT l.ValueNumeric, r.ModelVersion, l.MLScoringRunID, l.MLModelScoringBindingID FROM __mj.vwLatestFeatureValues l ` +
     `JOIN __mj.MLScoringRun r ON r.ID = l.MLScoringRunID ` +
     `WHERE l.RecordID = ${sqlText(need('PS_SCORED_PERSON_ID'))} AND l.FeatureName = ${sqlText(need('PS_BINDING_FEATURE_NAME'))} AND l.Source = N'Model'`,
   );
   if (rows.length !== 1) throw new Error(`expected one latest Model value of the scored record, found ${rows.length}`);
-  const [value, version, run] = rows[0];
-  return { ValueNumeric: Number(value), ModelVersion: Number(version), ScoringRunID: run };
+  const [value, version, run, binding] = rows[0];
+  return { ValueNumeric: Number(value), ModelVersion: Number(version), ScoringRunID: run, BindingID: binding };
 }
 
 /** Redeem a one-time sign-in link in this tab and wait until Explorer has kept the session token. */
@@ -90,12 +92,14 @@ test.describe('Predictive Studio — the record panel reads predictions from Fea
   test('an authorized user sees the prediction with its lineage on a scored Person', async ({ page }) => {
     const stored = storedPrediction();
     await openScoredRecord(page, need('PS_AUTHORIZED_SIGN_IN_URL'));
-    const card = page.locator('[data-testid="ps-prediction-card"]', { hasText: need('PS_BINDING_FEATURE_NAME') });
+    // the card's title is the model's record-panel label, so the binding's card is found by its binding ID
+    const card = page.locator(`[data-testid="ps-prediction-card"][data-binding-id="${stored.BindingID}" i]`);
     await expect(card).toHaveCount(1, { timeout: 60_000 });
     await expect(card.locator('[data-testid="ps-prediction-value"]')).toContainText(`${Math.round(stored.ValueNumeric * 100)}%`);
     const lineage = card.locator('[data-testid="ps-prediction-lineage"]');
     await expect(lineage).toContainText(`v${stored.ModelVersion}`);
-    await expect(lineage).toContainText(stored.ScoringRunID);
+    // sqlcmd prints a uniqueidentifier in lower case; the panel shows the ID as the provider returns it
+    await expect(lineage).toContainText(new RegExp(stored.ScoringRunID, 'i'));
   });
 
   test('a restricted user sees no prediction card and the Derived values section only', async ({ page }) => {
