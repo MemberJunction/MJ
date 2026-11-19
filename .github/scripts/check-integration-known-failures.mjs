@@ -4,9 +4,9 @@
  *
  * The deterministic tier runs on SQL Server as a hard gate. Running it on PostgreSQL as well catches
  * the dialect gaps SQL Server cannot see, but PostgreSQL starts with a backlog of known failures.
- * Gating on "zero failures" would leave the lane red on every pull request until that backlog is
- * cleared; not gating at all would let new PostgreSQL breakage land unnoticed. This script sits
- * between the two:
+ * Gating on "zero failures" would leave the lane red on every build until that backlog is cleared;
+ * not gating at all would let new PostgreSQL breakage land unnoticed. This script sits between the
+ * two. (integration.yml decides when it gates: the build engineer's migrations-pg PR, not feature PRs.)
  *
  * - a failing check that is NOT on the known-failures list fails the job (a regression);
  * - a check on the list that now PASSES also fails the job, so the list is shortened in the same
