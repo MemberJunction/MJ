@@ -1,8 +1,9 @@
 /**
- * Tests for `mj codegen public-page-html`: one HTML file per public page, with the page title and
- * link preview tags, and the Azure Static Web Apps routes that serve those files.
+ * Tests for the page files of `mj explorer postbuild`: one HTML file per public page, with the page
+ * title, link preview tags and security policy, and the Azure Static Web Apps routes that serve them.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +13,7 @@ import {
     WritePublicPageHtmlFiles,
     WriteStaticWebAppRoutes,
     type StaticWebAppRoute,
-} from '../commands/codegen/public-page-html.js';
+} from '../lib/explorer-postbuild/public-page-html.js';
 import type { OpenAppPublicPageEntry } from '../commands/codegen/manifest.js';
 import { PublicPageEntrySchema } from '../config.js';
 
@@ -78,6 +79,137 @@ describe('BuildPublicPageHtml', () => {
         expect(html).toContain('<title>MemberJunction Explorer</title>');
         expect(html).toContain('<meta name="description" content="Plans for every team.">');
         expect(html).not.toContain('og:title');
+    });
+});
+
+const THEME_SCRIPT = "\n    (function () { document.documentElement.setAttribute('data-theme', 'dark'); })();\n  ";
+const BRAND_SCRIPT = "(function () { /* brand */ })();";
+
+/** Explorer's built index.html, with the tags a public page must not keep. */
+const BUILT_INDEX_HTML = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8" />',
+    '  <title>MemberJunction Explorer</title>',
+    '  <base href="/" />',
+    '  <meta name="robots" content="noindex">',
+    `  <script>${THEME_SCRIPT}</script>`,
+    '  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">',
+    '  <!-- Leaflet for map view -->',
+    '  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-x" crossorigin="" />',
+    '  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-y" crossorigin="" defer></script>',
+    '  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="" />',
+    '  <script>',
+    '    (function () {',
+    "      var s = document.createElement('script');",
+    "      s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';",
+    '      document.head.appendChild(s);',
+    '    })();',
+    '  </script>',
+    '<link rel="stylesheet" href="styles-AAA.css" media="print" onload="this.media=\'all\'"><noscript><link rel="stylesheet" href="styles-AAA.css"></noscript></head>',
+    '<body>',
+    `  <script>${BRAND_SCRIPT}</script>`,
+    '<app-root></app-root>',
+    '<script src="main-BBB.js" type="module"></script></body>',
+    '</html>',
+].join('\n');
+
+function scriptHash(body: string): string {
+    return `'sha256-${createHash('sha256').update(body, 'utf-8').digest('base64')}'`;
+}
+
+function policyOf(html: string): string {
+    return html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/)?.[1] ?? '';
+}
+
+describe('BuildPublicPageHtml security', () => {
+    const html = BuildPublicPageHtml(BUILT_INDEX_HTML, PRICING);
+
+    it('removes the map library tags, and keeps the icon font', () => {
+        expect(html).not.toContain('unpkg.com');
+        expect(html).not.toContain('leaflet');
+        expect(html).toContain('font-awesome/6.5.2/css/all.min.css');
+    });
+
+    it('allows only scripts of the site and the inline scripts that remain', () => {
+        const policy = policyOf(html);
+        expect(policy).toContain(`script-src 'self' ${scriptHash(THEME_SCRIPT)} ${scriptHash(BRAND_SCRIPT)};`);
+        expect(policy).toContain("object-src 'none'");
+        expect(policy).toContain("base-uri 'self'");
+        expect(policy).not.toContain('unsafe-inline');
+        expect(policy.match(/sha256-/g)).toHaveLength(2);
+    });
+
+    it('puts the policy before every script and stylesheet', () => {
+        const policyAt = html.indexOf('http-equiv="Content-Security-Policy"');
+        expect(policyAt).toBeGreaterThan(-1);
+        expect(policyAt).toBeLessThan(html.indexOf('<script'));
+        expect(policyAt).toBeLessThan(html.indexOf('<link'));
+    });
+
+    it('loads the main stylesheet with a plain link, because the policy blocks the inline handler', () => {
+        expect(html).toContain('<link rel="stylesheet" href="styles-AAA.css">');
+        expect(html).not.toContain('onload=');
+        expect(html).not.toContain('<noscript>');
+    });
+
+    it('lets search engines index the page', () => {
+        expect(html).toContain('<meta name="robots" content="index, follow">');
+        expect(html).not.toContain('noindex');
+    });
+
+    it('writes the policy and the robots tag for a page with no title and no description', () => {
+        const bare = BuildPublicPageHtml(BUILT_INDEX_HTML, { ...PRICING, Title: undefined, Description: undefined });
+        expect(policyOf(bare)).toContain("script-src 'self'");
+        expect(bare).toContain('<meta name="robots" content="index, follow">');
+        expect(bare).toContain('<title>MemberJunction Explorer</title>');
+    });
+});
+
+describe('BuildPublicPageHtml with comments that name tags', () => {
+    const indexHtml = [
+        '<html><head>',
+        '  <title>MemberJunction Explorer</title>',
+        '  <!-- The plugin must not load as a plain <script> during <head> parse. -->',
+        '  <script>',
+        "    var s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';",
+        '  </script>',
+        '  <!-- <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"> was here -->',
+        '  <link rel="stylesheet" href="styles-ABC.css">',
+        '</head><body><app-root></app-root><script src="main.js" type="module"></script></body></html>',
+    ].join('\n');
+    const html = BuildPublicPageHtml(indexHtml, PRICING);
+
+    it('leaves no comment, so no tag after a comment is lost', () => {
+        expect(html).not.toContain('<!--');
+        expect(html).not.toContain('-->');
+        expect(html).toContain('<link rel="stylesheet" href="styles-ABC.css">');
+        expect(html).toContain('<script src="main.js" type="module"></script>');
+    });
+});
+
+const ERROR_PAGE: OpenAppPublicPageEntry = { AppName: 'acme-app', Role: 'error', Scope: 'pricing', PackageName: '@acme/app-public', ExportName: 'NotFoundPage', Enabled: true };
+
+describe('error pages', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'mj-public-page-html-'));
+        writeFileSync(join(dir, 'index.html'), INDEX_HTML);
+    });
+
+    afterEach(() => {
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('get no HTML file', () => {
+        expect(WritePublicPageHtmlFiles(dir, [PRICING, ERROR_PAGE, { ...ERROR_PAGE, Scope: '' }])).toBe(1);
+        expect(existsSync(join(dir, 'public-pages', '.html'))).toBe(false);
+    });
+
+    it('get no route', () => {
+        expect(ApplyPublicPageRoutes([], [PRICING, ERROR_PAGE])).toHaveLength(2);
     });
 });
 

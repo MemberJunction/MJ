@@ -4,8 +4,8 @@ const { startPublicHost } = vi.hoisted(() => ({ startPublicHost: vi.fn() }));
 vi.mock('../public-host.component', () => ({ StartPublicHost: startPublicHost }));
 
 import {
-  BuildLoginScreenURL, BuildSignInURL, FindPublicPage, IsPublicPagePath, LoadPublicPageComponent, ParsePublicPagePath,
-  ResolvePublicMJAPIURL, TryStartPublicPage, type PublicPageEntry,
+  BuildLoginScreenURL, BuildLowercaseSlugPath, BuildSignInURL, FindPublicErrorPage, FindPublicPage, IsPublicPagePath,
+  LoadPublicPageComponent, ParsePublicPagePath, ResolvePublicMJAPIURL, ResolvePublicPage, TryStartPublicPage, type PublicPageEntry,
 } from '../public-pages';
 
 const pages: PublicPageEntry[] = [{ Slug: 'pricing', AppName: 'Acme', Load: () => Promise.reject(new Error('not loaded')) }];
@@ -32,6 +32,14 @@ describe('TryStartPublicPage', () => {
     startPublicHost.mockResolvedValue(undefined);
     await expect(TryStartPublicPage(options)).resolves.toBe(true);
     expect(startPublicHost).toHaveBeenCalledWith(options);
+  });
+
+  it('sends an address with capital letters in the slug to its lowercase form', async () => {
+    const replace = vi.fn<(url: string) => void>();
+    vi.stubGlobal('window', { location: { pathname: '/p/Pricing/Plans', search: '?ref=Ad', hash: '#Top', replace } });
+    await expect(TryStartPublicPage(options)).resolves.toBe(true);
+    expect(replace).toHaveBeenCalledWith('/p/pricing/Plans?ref=Ad#Top');
+    expect(startPublicHost).not.toHaveBeenCalled();
   });
 
   it('does not let Explorer start when the public host fails', async () => {
@@ -133,5 +141,92 @@ describe('BuildLoginScreenURL', () => {
 describe('BuildSignInURL', () => {
   it('is Explorer\'s root', () => {
     expect(BuildSignInURL()).toBe('/');
+  });
+});
+
+describe('BuildLowercaseSlugPath', () => {
+  it('lower-cases the slug only', () => {
+    expect(BuildLowercaseSlugPath('/p/Docs/Guides/Setup')).toBe('/p/docs/Guides/Setup');
+  });
+
+  it('returns null when the slug is lowercase, missing or cannot be decoded', () => {
+    expect(BuildLowercaseSlugPath('/p/docs/Guides')).toBeNull();
+    expect(BuildLowercaseSlugPath('/p/')).toBeNull();
+    expect(BuildLowercaseSlugPath('/p/%E0%A4%A')).toBeNull();
+    expect(BuildLowercaseSlugPath('/App/Home')).toBeNull();
+  });
+
+  it('returns null when the lower case text is not a slug, so the browser never goes to the same address again', () => {
+    expect(BuildLowercaseSlugPath('/p/a%3Cb')).toBeNull();
+    expect(BuildLowercaseSlugPath('/p/Requested-%3Cimg%20src=x%3E')).toBeNull();
+    expect(BuildLowercaseSlugPath('/p/caf%C3%A9')).toBeNull();
+    expect(BuildLowercaseSlugPath('/p/My_Page')).toBeNull();
+  });
+});
+
+const sitePages: PublicPageEntry[] = [
+  { Slug: 'pricing', AppName: 'acme', Load: LoadFake },
+  { Slug: 'docs', AppName: 'acme', SubPaths: true, Load: LoadFake },
+  { Role: 'error', Scope: 'docs', AppName: 'acme', Load: LoadFake },
+  { Role: 'error', Scope: 'docs/guides/deep', AppName: 'acme', Load: LoadFake },
+  { Role: 'error', Scope: '', AppName: 'acme', Load: LoadFake },
+  { Role: 'error', Scope: '', AppName: 'other', Load: LoadFake },
+];
+
+describe('ResolvePublicPage', () => {
+  it('gives the page at its own address', () => {
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/pricing'))?.Slug).toBe('pricing');
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/pricing/'))?.Slug).toBe('pricing');
+  });
+
+  it('gives no page for an address under a page that did not opt in to sub-paths', () => {
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/pricing/anything'))).toBeNull();
+  });
+
+  it('gives the page for an address under a page with SubPaths', () => {
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/docs/guides/setup'))?.Slug).toBe('docs');
+  });
+
+  it('gives no page for an unknown slug or no slug', () => {
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/no-such-slug'))).toBeNull();
+    expect(ResolvePublicPage(sitePages, ParsePublicPagePath('/p/'))).toBeNull();
+  });
+
+  it('never gives an error entry as a page', () => {
+    const pages: PublicPageEntry[] = [{ Role: 'error', Scope: 'docs', AppName: 'acme', Load: LoadFake }];
+    expect(ResolvePublicPage(pages, ParsePublicPagePath('/p/docs'))).toBeNull();
+    expect(FindPublicPage(pages, 'docs')).toBeNull();
+  });
+});
+
+describe('FindPublicErrorPage', () => {
+  const scopeFor = (pathname: string): string | undefined => FindPublicErrorPage(sitePages, ParsePublicPagePath(pathname))?.Scope;
+
+  it('uses the error page of the requested folder first', () => {
+    expect(scopeFor('/p/docs/guides/deep')).toBe('docs/guides/deep');
+    expect(scopeFor('/p/docs/guides/deep/more')).toBe('docs/guides/deep');
+  });
+
+  it('walks up to the nearest parent folder with an error page', () => {
+    expect(scopeFor('/p/docs/guides/no-such-thing')).toBe('docs');
+    expect(scopeFor('/p/docs')).toBe('docs');
+  });
+
+  it('uses the root error page when no folder has one', () => {
+    expect(scopeFor('/p/pricing/anything')).toBe('');
+    expect(scopeFor('/p/no-such-slug')).toBe('');
+    expect(scopeFor('/p/')).toBe('');
+  });
+
+  it('uses the first root error page when two apps have one', () => {
+    expect(FindPublicErrorPage(sitePages, ParsePublicPagePath('/p/x'))?.AppName).toBe('acme');
+  });
+
+  it('gives null when there is no error page', () => {
+    expect(FindPublicErrorPage([{ Slug: 'pricing', AppName: 'acme', Load: LoadFake }], ParsePublicPagePath('/p/x'))).toBeNull();
+  });
+
+  it('does not match a folder by a part of its name', () => {
+    expect(scopeFor('/p/docs-old/page')).toBe('');
   });
 });

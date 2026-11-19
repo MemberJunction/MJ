@@ -30,13 +30,19 @@ const REPO_ROOT = '/fake/repo';
 
 interface PublicPageConfigEntry {
     AppName: string;
-    Slug: string;
+    Slug?: string;
+    Role?: 'error';
+    Scope?: string;
     PackageName: string;
     ExportName: string;
     Title?: string;
     Description?: string;
+    SubPaths?: boolean;
     Enabled: boolean;
 }
+
+interface ManifestPageInput { slug: string; export: string; package?: string; title?: string; description?: string; subPaths?: boolean }
+interface ManifestErrorInput { scope: string; export: string }
 
 function setupConfigFile(content: string): void {
     mockedExistsSync.mockReturnValue(true);
@@ -55,11 +61,14 @@ function evaluatedPublicPages(content: string): PublicPageConfigEntry[] {
     return sandbox.module.exports.publicPages ?? [];
 }
 
-function makeManifest(appName: string, pages: { slug: string; export: string; package?: string; title?: string; description?: string }[]): MJAppManifest {
+function makeManifest(appName: string, pages: ManifestPageInput[], errorPages: ManifestErrorInput[] = []): MJAppManifest {
     return {
         name: appName,
         packages: { client: [{ name: '@acme/lumen-public', role: 'components' }] },
-        publicPages: pages.map((p) => ({ slug: p.slug, package: p.package ?? '@acme/lumen-public', export: p.export, title: p.title, description: p.description })),
+        publicPages: [
+            ...pages.map((p) => ({ slug: p.slug, package: p.package ?? '@acme/lumen-public', export: p.export, title: p.title, description: p.description, subPaths: p.subPaths })),
+            ...errorPages.map((e) => ({ role: 'error', scope: e.scope, package: '@acme/lumen-public', export: e.export })),
+        ],
     } as MJAppManifest;
 }
 
@@ -67,9 +76,10 @@ function configWithPages(entries: PublicPageConfigEntry[]): string {
     const body = entries.map((e) => [
         '    {',
         `      AppName: '${e.AppName}',`,
-        `      Slug: '${e.Slug}',`,
+        ...(e.Role ? [`      Role: '${e.Role}',`, `      Scope: '${e.Scope}',`] : [`      Slug: '${e.Slug}',`]),
         `      PackageName: '${e.PackageName}',`,
         `      ExportName: '${e.ExportName}',`,
+        ...(e.SubPaths ? ['      SubPaths: true,'] : []),
         `      Enabled: ${e.Enabled}`,
         '    },',
     ].join('\n')).join('\n');
@@ -77,6 +87,8 @@ function configWithPages(entries: PublicPageConfigEntry[]): string {
 }
 
 const LUMEN: PublicPageConfigEntry = { AppName: 'acme-lumen', Slug: 'lumen', PackageName: '@acme/lumen-public', ExportName: 'LumenLandingPageComponent', Enabled: true };
+const LUMEN_ERROR: PublicPageConfigEntry = { AppName: 'acme-lumen', Role: 'error', Scope: 'lumen/guides', PackageName: '@acme/lumen-public', ExportName: 'LumenNotFoundPage', Enabled: true };
+const ROOT_ERROR: PublicPageConfigEntry = { ...LUMEN_ERROR, Scope: '', ExportName: 'NotFoundPage' };
 const OTHER: PublicPageConfigEntry = { AppName: 'other-app', Slug: 'other', PackageName: '@other/public', ExportName: 'OtherPage', Enabled: true };
 
 beforeEach(() => {
@@ -150,6 +162,58 @@ describe('AddPublicPages', () => {
         expect(evaluatedPublicPages(writtenContent())).toEqual([OTHER]);
     });
 
+    it('writes SubPaths for a page that answers the addresses under its slug', () => {
+        setupConfigFile(['module.exports = {', '};'].join('\n'));
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent', subPaths: true }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([{ ...LUMEN, SubPaths: true }]);
+    });
+
+    it('adds SubPaths to an existing page, and removes it when the manifest drops it', () => {
+        setupConfigFile(configWithPages([LUMEN]));
+        AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent', subPaths: true }]));
+        const withSubPaths = writtenContent();
+        expect(evaluatedPublicPages(withSubPaths)).toEqual([{ ...LUMEN, SubPaths: true }]);
+
+        vi.resetAllMocks();
+        setupConfigFile(withSubPaths);
+        AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent' }]));
+        expect(evaluatedPublicPages(writtenContent())).toEqual([LUMEN]);
+    });
+
+    it('writes error pages with their role and scope, and no slug', () => {
+        setupConfigFile(configWithPages([OTHER]));
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen',
+            [{ slug: 'lumen', export: 'LumenLandingPageComponent' }],
+            [{ scope: 'lumen/guides', export: 'LumenNotFoundPage' }, { scope: '', export: 'NotFoundPage' }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([OTHER, LUMEN, LUMEN_ERROR, ROOT_ERROR]);
+    });
+
+    it('updates an existing error page of the same scope in place and keeps its Enabled state', () => {
+        setupConfigFile(configWithPages([LUMEN, { ...LUMEN_ERROR, ExportName: 'OldNotFound', Enabled: false }, ROOT_ERROR]));
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen',
+            [{ slug: 'lumen', export: 'LumenLandingPageComponent' }],
+            [{ scope: 'lumen/guides', export: 'LumenNotFoundPage' }, { scope: '', export: 'NotFoundPage' }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([LUMEN, { ...LUMEN_ERROR, Enabled: false }, ROOT_ERROR]);
+    });
+
+    it('lets two apps each have a root error page', () => {
+        setupConfigFile(configWithPages([{ ...ROOT_ERROR, AppName: 'other-app' }]));
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent' }], [{ scope: '', export: 'NotFoundPage' }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([{ ...ROOT_ERROR, AppName: 'other-app' }, LUMEN, ROOT_ERROR]);
+    });
+
     it('fails, naming both apps, when another app owns the slug', () => {
         setupConfigFile(configWithPages([{ ...OTHER, Slug: 'lumen' }]));
 
@@ -194,7 +258,27 @@ describe('RemoveServerDynamicPackages', () => {
     });
 });
 
+describe('RemoveServerDynamicPackages with error pages', () => {
+    it('removes the app\'s error pages with its pages', () => {
+        setupConfigFile(configWithPages([LUMEN, LUMEN_ERROR, ROOT_ERROR, OTHER]));
+
+        const result = RemoveServerDynamicPackages(REPO_ROOT, 'acme-lumen');
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([OTHER]);
+    });
+});
+
 describe('PruneDynamicPackagesNotInManifest', () => {
+    it('removes the app\'s error pages whose scope the manifest no longer declares', () => {
+        setupConfigFile(configWithPages([LUMEN, LUMEN_ERROR, ROOT_ERROR, { ...ROOT_ERROR, AppName: 'other-app' }]));
+
+        const result = PruneDynamicPackagesNotInManifest(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent' }], [{ scope: '', export: 'NotFoundPage' }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([LUMEN, ROOT_ERROR, { ...ROOT_ERROR, AppName: 'other-app' }]);
+    });
+
     it('removes the app\'s pages whose slug the manifest no longer declares', () => {
         const dropped = { ...LUMEN, Slug: 'lumen-old' };
         setupConfigFile(configWithPages([{ ...LUMEN, Enabled: false }, dropped, OTHER]));

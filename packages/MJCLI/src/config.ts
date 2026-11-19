@@ -77,14 +77,18 @@ const dynamicPackageEntrySchema = z.object({
 });
 
 // Schema for top-level `publicPages` entries managed by `mj app install/remove/enable/disable`.
-// Read by `mj codegen manifest --public-pages` and `mj codegen public-page-html`.
+// Read by `mj codegen manifest --open-app-client-bootstrap` and `mj explorer postbuild`.
+// A page has a `Slug`. An error page has `Role: 'error'` and a `Scope` in its place.
 export const PublicPageEntrySchema = z.object({
   AppName: z.string(),
-  Slug: z.string(),
+  Slug: z.string().optional(),
+  Role: z.literal('error').optional(),
+  Scope: z.string().optional(),
   PackageName: z.string(),
   ExportName: z.string(),
   Title: z.string().optional(),
   Description: z.string().optional(),
+  SubPaths: z.boolean().optional(),
   Enabled: z.boolean().default(true),
 });
 

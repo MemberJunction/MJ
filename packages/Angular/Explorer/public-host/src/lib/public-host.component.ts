@@ -1,10 +1,10 @@
-import { Component, InjectionToken, OnInit, ViewEncapsulation, inject, provideZonelessChangeDetection, signal, type ApplicationRef, type Type } from '@angular/core';
+import { Component, InjectionToken, OnInit, ViewEncapsulation, effect, inject, provideZonelessChangeDetection, signal, type ApplicationRef, type Type } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { SanitizePublicLoginScreen, type PublicLoginScreen } from '@memberjunction/theme-engine';
-import { PublicPageContext } from './public-page-context';
+import { PublicPageContext, type PublicPageError } from './public-page-context';
 import {
-  BuildLoginScreenURL, BuildSignInURL, FindPublicPage, LoadPublicPageComponent, ParsePublicPagePath, ResolvePublicMJAPIURL,
+  BuildLoginScreenURL, BuildSignInURL, FindPublicErrorPage, LoadPublicPageComponent, ParsePublicPagePath, ResolvePublicMJAPIURL, ResolvePublicPage,
   type PublicHostConfig, type PublicHostEnvironment,
 } from './public-pages';
 
@@ -34,12 +34,24 @@ export async function LoadPublicBrand(environment: PublicHostEnvironment, timeou
   }
 }
 
-/** Where the host is in showing the page. */
+/** Where the host is in showing the page. `missing` and `failed` show the host's own error view. */
 export type PublicHostState = 'loading' | 'ready' | 'missing' | 'failed';
 
+/** Tells search engines not to index the document. The host calls it whenever an error page shows. */
+export function SetRobotsNoIndex(doc: Document): void {
+  let tag = doc.head.querySelector<HTMLMetaElement>('meta[name="robots"]');
+  if (!tag) {
+    tag = doc.createElement('meta');
+    tag.name = 'robots';
+    doc.head.appendChild(tag);
+  }
+  tag.content = 'noindex';
+}
+
 /**
- * Root component of the public host. Loads the page registered for the URL's slug and renders it,
- * or shows a "page not found" view.
+ * Root component of the public host. Renders the page that answers the address. For a wrong
+ * address, or a page that does not load, it renders the nearest error page of an installed app,
+ * or its own error view when there is none.
  */
 @Component({
   selector: 'mj-public-host',
@@ -72,6 +84,20 @@ export class PublicHostComponent implements OnInit {
   public readonly PageComponent = signal<Type<unknown> | null>(null);
   public readonly SignInURL = BuildSignInURL();
 
+  private readonly path = ParsePublicPagePath(window.location.pathname);
+
+  private errorShown = false;
+
+  constructor() {
+    effect(() => {
+      const error = this.context.Error();
+      if (error && !this.errorShown) {
+        this.errorShown = true;
+        void this.showErrorPage(error);
+      }
+    });
+  }
+
   ngOnInit(): void {
     void this.loadBrand();
     void this.loadPage();
@@ -82,17 +108,38 @@ export class PublicHostComponent implements OnInit {
   }
 
   private async loadPage(): Promise<void> {
-    const page = FindPublicPage(this.config.PublicPages, this.context.Slug);
+    const page = ResolvePublicPage(this.config.PublicPages, this.path);
     if (!page) {
-      this.State.set('missing');
+      this.context.SetError('not-found');
       return;
     }
     try {
-      this.PageComponent.set(await LoadPublicPageComponent(page));
-      this.State.set('ready');
+      const component = await LoadPublicPageComponent(page);
+      if (!this.errorShown) {
+        this.PageComponent.set(component);
+        this.State.set('ready');
+      }
     } catch (error) {
       console.error(`[PublicHost] Page '${page.Slug}' from '${page.AppName}' failed to load`, error);
-      this.State.set('failed');
+      this.context.SetError('load-failed');
+    }
+  }
+
+  /** Shows the nearest error page of an installed app, or the host's own view when there is none or it does not load. */
+  private async showErrorPage(error: PublicPageError): Promise<void> {
+    SetRobotsNoIndex(document);
+    const ownView: PublicHostState = error.Reason === 'not-found' ? 'missing' : 'failed';
+    const errorPage = FindPublicErrorPage(this.config.PublicPages, this.path);
+    if (!errorPage) {
+      this.State.set(ownView);
+      return;
+    }
+    try {
+      this.PageComponent.set(await LoadPublicPageComponent(errorPage));
+      this.State.set('ready');
+    } catch (loadError) {
+      console.error(`[PublicHost] Error page '${errorPage.Scope}' from '${errorPage.AppName}' failed to load`, loadError);
+      this.State.set(ownView);
     }
   }
 }
@@ -113,6 +160,7 @@ export function StartPublicHost(config: PublicHostConfig): Promise<ApplicationRe
     Slug: path.Slug ?? '',
     SubPath: path.SubPath,
     Search: window.location.search,
+    Pathname: window.location.pathname,
     MJAPIURL: ResolvePublicMJAPIURL(config.Environment),
     Navigate: (url: string) => window.location.assign(url),
   });

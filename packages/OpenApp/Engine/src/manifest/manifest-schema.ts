@@ -225,19 +225,44 @@ const templateUserSchema = z.object({
 /** Public page slug: lowercase alphanumeric words joined by single hyphens. */
 export const PUBLIC_PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** Slugs a visitor could take for a sign-in or account address of the host. No app may use them. */
+export const RESERVED_PUBLIC_PAGE_SLUGS: readonly string[] = ['login', 'signin', 'sign-in', 'auth', 'sso', 'oauth', 'account', 'admin', 'password', 'reset'];
+
+/** Error page scope: a folder under `/p/` (slug words joined by `/`), or empty for all of `/p/`. */
+const PUBLIC_ERROR_PAGE_SCOPE_PATTERN = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*)?$/;
+
+const publicPagePackageSchema = z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)');
+const publicPageExportSchema = z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier');
+
 /**
  * A page the app serves before sign-in, at `/p/<slug>` in the host.
  * `package` must be a browser-capable package the app declares in `packages.client` or `packages.shared`.
  */
 const publicPageSchema = z.object({
     slug: z.string().max(64).regex(PUBLIC_PAGE_SLUG_PATTERN, 'slug must be lowercase letters and digits, words joined by single hyphens'),
-    package: z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
-    export: z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier'),
+    role: z.literal('page').optional(),
+    package: publicPagePackageSchema,
+    export: publicPageExportSchema,
     /** The page title, and the title of its link preview. */
     title: z.string().max(120).optional(),
     /** The text of the page's link preview and search result. */
     description: z.string().max(300).optional(),
+    /** True when the page also answers the addresses under its slug (`/p/<slug>/...`). */
+    subPaths: z.boolean().optional(),
 });
+
+/**
+ * A page the host shows for a wrong address in a folder under `/p/`. The host uses the error page
+ * of the requested folder, then of each parent folder, then of the root (`scope: ""`).
+ */
+const publicErrorPageSchema = z.object({
+    role: z.literal('error'),
+    scope: z.string().max(200).regex(PUBLIC_ERROR_PAGE_SCOPE_PATTERN, 'scope must be a folder under /p/ (lowercase words joined by "/"), or empty for the root'),
+    package: publicPagePackageSchema,
+    export: publicPageExportSchema,
+});
+
+const publicPageEntrySchema = z.union([publicPageSchema, publicErrorPageSchema]);
 
 // ── Full Manifest ─────────────────────────────────────────
 
@@ -326,35 +351,53 @@ export const MjAppManifestSchema = z.object({
     templateUser: templateUserSchema.optional(),
 
     // Pages served before sign-in
-    publicPages: z.array(publicPageSchema).optional(),
+    publicPages: z.array(publicPageEntrySchema).optional(),
 
     // Discovery (MJ Central)
     categories: z.array(z.string()).max(5).optional(),
     tags: z.array(z.string().regex(tagRegex, 'Tags must be lowercase alphanumeric + hyphens, max 50 chars')).max(20).optional(),
 }).superRefine(ValidatePublicPages);
 
-/** Rejects duplicate public page slugs and pages whose package does not run in the browser. */
+/** True for an error page entry of `publicPages`. */
+export function IsManifestPublicErrorPage(entry: ManifestPublicPageEntry): entry is ManifestPublicErrorPage {
+    return entry.role === 'error';
+}
+
+/**
+ * Rejects duplicate and reserved slugs, duplicate error page scopes, an error page outside the
+ * app's own slugs, and entries whose package does not run in the browser.
+ */
 function ValidatePublicPages(
-    manifest: { packages?: z.infer<typeof packagesSchema>; publicPages?: z.infer<typeof publicPageSchema>[] },
+    manifest: { packages?: z.infer<typeof packagesSchema>; publicPages?: ManifestPublicPageEntry[] },
     ctx: z.RefinementCtx
 ): void {
+    const entries = manifest.publicPages ?? [];
     const browserPackages = new Set(
         [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])]
             .filter((pkg) => ResolvePackagePlatform(pkg) !== 'node')
             .map((pkg) => pkg.name)
     );
-    const seenSlugs = new Set<string>();
-    for (const [index, page] of (manifest.publicPages ?? []).entries()) {
-        if (seenSlugs.has(page.slug)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['publicPages', index, 'slug'], message: `Duplicate public page slug "${page.slug}".` });
+    const ownSlugs = new Set(entries.flatMap((entry) => (IsManifestPublicErrorPage(entry) ? [] : [entry.slug])));
+    const seen = new Set<string>();
+    for (const [index, entry] of entries.entries()) {
+        const isError = IsManifestPublicErrorPage(entry);
+        const label = isError ? `Public error page "${entry.scope}"` : `Public page "${entry.slug}"`;
+        const key = isError ? `error:${entry.scope}` : `page:${entry.slug}`;
+        const addIssue = (field: string, message: string): void => {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['publicPages', index, field], message });
+        };
+        if (seen.has(key)) {
+            addIssue(isError ? 'scope' : 'slug', isError ? `Duplicate public error page scope "${entry.scope}".` : `Duplicate public page slug "${entry.slug}".`);
         }
-        seenSlugs.add(page.slug);
-        if (!browserPackages.has(page.package)) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['publicPages', index, 'package'],
-                message: `Public page "${page.slug}" uses package "${page.package}", which must be declared in packages.client or packages.shared with a platform that runs in the browser.`,
-            });
+        seen.add(key);
+        if (!isError && RESERVED_PUBLIC_PAGE_SLUGS.includes(entry.slug)) {
+            addIssue('slug', `Public page slug "${entry.slug}" is reserved: a visitor could take it for a sign-in or account address.`);
+        }
+        if (isError && entry.scope !== '' && !ownSlugs.has(entry.scope.split('/')[0])) {
+            addIssue('scope', `Public error page scope "${entry.scope}" must start with a slug this app declares in publicPages, or be empty for the root.`);
+        }
+        if (!browserPackages.has(entry.package)) {
+            addIssue('package', `${label} uses package "${entry.package}", which must be declared in packages.client or packages.shared with a platform that runs in the browser.`);
         }
     }
 }
@@ -373,10 +416,14 @@ export type MJAppManifest = z.infer<typeof MjAppManifestSchema>;
  */
 export type ManifestPackageEntry = z.infer<typeof packageEntrySchema>;
 
-/**
- * Type for a single public page entry within the manifest.
- */
+/** A page entry of `publicPages` in the manifest. */
 export type ManifestPublicPage = z.infer<typeof publicPageSchema>;
+
+/** An error page entry of `publicPages` in the manifest. */
+export type ManifestPublicErrorPage = z.infer<typeof publicErrorPageSchema>;
+
+/** Any entry of `publicPages` in the manifest. */
+export type ManifestPublicPageEntry = ManifestPublicPage | ManifestPublicErrorPage;
 
 /**
  * Valid package roles.

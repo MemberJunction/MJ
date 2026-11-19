@@ -5515,6 +5515,9 @@ importers:
 
   packages/Angular/Explorer/explorer-app:
     dependencies:
+      '@angular/platform-browser':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
       '@angular/router':
         specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
@@ -5560,6 +5563,9 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.3.0-edge.1
         version: link:../../Generic/notifications
+      '@memberjunction/ng-public-host':
+        specifier: 6.3.0-edge.1
+        version: link:../public-host
       '@memberjunction/ng-realtime-channels':
         specifier: 6.3.0-edge.1
         version: link:../../Generic/realtime-channels
@@ -13522,9 +13528,6 @@ importers:
       '@memberjunction/ng-link-directives':
         specifier: 6.3.0-edge.1
         version: link:../Angular/Explorer/link-directives
-      '@memberjunction/ng-public-host':
-        specifier: 6.3.0-edge.1
-        version: link:../Angular/Explorer/public-host
       '@memberjunction/ng-record-changes':
         specifier: 6.3.0-edge.1
         version: link:../Angular/Generic/record-changes
@@ -33771,7 +33774,7 @@ snapshots:
       chokidar: 5.0.0
       convert-source-map: 1.9.0
       reflect-metadata: 0.2.2
-      semver: 7.7.4
+      semver: 7.8.5
       tslib: 2.8.1
       yargs: 18.0.0
     optionalDependencies:
@@ -44406,7 +44409,7 @@ snapshots:
       postcss-modules-scope: 3.2.1(postcss@8.5.25)
       postcss-modules-values: 4.0.0(postcss@8.5.25)
       postcss-value-parser: 4.2.0
-      semver: 7.7.4
+      semver: 7.8.5
     optionalDependencies:
       webpack: 5.105.2(esbuild@0.28.1)
 
@@ -48945,7 +48948,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.7.4
+      semver: 7.8.5
       validate-npm-package-name: 5.0.1
 
   npm-package-arg@13.0.2:
@@ -49794,7 +49797,7 @@ snapshots:
       cosmiconfig: 9.0.0(typescript@5.9.3)
       jiti: 2.6.1
       postcss: 8.5.23
-      semver: 7.7.4
+      semver: 7.8.5
     optionalDependencies:
       webpack: 5.105.2(esbuild@0.28.1)
     transitivePeerDependencies:

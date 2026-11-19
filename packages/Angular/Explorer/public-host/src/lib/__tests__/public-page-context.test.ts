@@ -6,6 +6,7 @@ function makeContext(navigate: (url: string) => void = () => undefined): PublicP
     Slug: 'lumen',
     SubPath: 'plans',
     Search: '?plan=team&ref=ad',
+    Pathname: '/p/lumen/plans',
     MJAPIURL: 'https://host/api',
     Navigate: navigate,
   });
@@ -35,5 +36,19 @@ describe('PublicPageContext', () => {
     expect(context.Brand()).toBeNull();
     context.SetBrand({ ThemeName: 'Acme', Design: null, Seeds: null, Logos: { wordmarkURL: 'https://cdn/acme.svg' } });
     expect(context.Brand()?.ThemeName).toBe('Acme');
+  });
+
+  it('has no error until the page or the host reports one', () => {
+    const context = makeContext();
+    expect(context.Error()).toBeNull();
+    context.ShowNotFound();
+    expect(context.Error()).toEqual({ Reason: 'not-found', RequestedPath: '/p/lumen/plans' });
+  });
+
+  it('keeps the first error', () => {
+    const context = makeContext();
+    context.SetError('load-failed');
+    context.ShowNotFound();
+    expect(context.Error()?.Reason).toBe('load-failed');
   });
 });

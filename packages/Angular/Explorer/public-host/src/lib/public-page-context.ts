@@ -7,9 +7,24 @@ export interface PublicPageContextConfig {
   Slug: string;
   SubPath: string;
   Search: string;
+  /** The full path of the address, such as `/p/docs/guides`. */
+  Pathname: string;
   MJAPIURL: string;
   /** Opens a URL in the current tab. */
   Navigate: (url: string) => void;
+}
+
+/** Why the host shows an error page: no page answers the address, or the page's code did not load. */
+export type PublicPageErrorReason = 'not-found' | 'load-failed';
+
+/** What an error page knows about the failed address. */
+export interface PublicPageError {
+  Reason: PublicPageErrorReason;
+  /**
+   * The path the visitor asked for. Whoever made the link wrote it: show it as text only, never
+   * as a link or as markup.
+   */
+  RequestedPath: string;
 }
 
 /**
@@ -26,13 +41,16 @@ export class PublicPageContext {
   public readonly MJAPIURL: string;
 
   private readonly navigate: (url: string) => void;
+  private readonly pathname: string;
   private readonly brand = signal<PublicLoginScreen | null>(null);
+  private readonly error = signal<PublicPageError | null>(null);
 
   constructor(config: PublicPageContextConfig) {
     this.Slug = config.Slug;
     this.SubPath = config.SubPath;
     this.QueryParams = new URLSearchParams(config.Search);
     this.MJAPIURL = config.MJAPIURL;
+    this.pathname = config.Pathname;
     this.navigate = config.Navigate;
   }
 
@@ -44,6 +62,26 @@ export class PublicPageContext {
   /** Sets the brand. The public host calls this when the design loads. */
   public SetBrand(brand: PublicLoginScreen | null): void {
     this.brand.set(brand);
+  }
+
+  /** Set while the host shows an error page in place of a page. An error page reads the reason and the address here. */
+  public get Error(): Signal<PublicPageError | null> {
+    return this.error.asReadonly();
+  }
+
+  /**
+   * Shows the error page in place of this page. A page with sub-paths calls it when the
+   * sub-path is not one of its views.
+   */
+  public ShowNotFound(): void {
+    this.SetError('not-found');
+  }
+
+  /** Records why the page cannot show. The first reason stays. The public host shows the error page. */
+  public SetError(reason: PublicPageErrorReason): void {
+    if (!this.error()) {
+      this.error.set({ Reason: reason, RequestedPath: this.pathname });
+    }
   }
 
   /** An absolute URL for a route on MJAPI, such as the Open App's `pre-auth` endpoints. */

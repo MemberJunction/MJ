@@ -2612,7 +2612,7 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   }
   warnSkipped(clientResult);
 
-  // Record the app's public pages in publicPages. `mj codegen manifest --public-pages`
+  // Record the app's public pages in publicPages. `mj codegen manifest --open-app-client-bootstrap`
   // (run by MJExplorer's prebuild) writes them to the host's page list.
   const publicPagesResult = AddPublicPages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!publicPagesResult.Success) {

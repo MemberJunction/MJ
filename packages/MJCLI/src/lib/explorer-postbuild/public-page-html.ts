@@ -1,8 +1,12 @@
-import { Command, Flags } from '@oclif/core';
+/**
+ * @fileoverview The HTML file of each public page, and the Azure Static Web Apps routes that
+ * serve those files. `mj explorer postbuild` runs this on MJ Explorer's build output.
+ */
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { PUBLIC_PAGE_SLUG_PATTERN } from '@memberjunction/open-app-engine';
-import { ReadConfiguredPublicPages, ReadFileIfExists, type OpenAppPublicPageEntry } from './manifest.js';
+import { IsPublicPage, ReadFileIfExists, type OpenAppPublicPage, type OpenAppPublicPageEntry } from '../../commands/codegen/manifest.js';
 
 /** Folder in the site folder that holds one HTML file per page. */
 const PUBLIC_PAGE_HTML_FOLDER = 'public-pages';
@@ -40,9 +44,13 @@ function escapeHtml(text: string): string {
         .replace(/'/g, '&#39;');
 }
 
-/** The enabled pages. Throws on a slug that does not follow the slug rule, because the slug is a file name and an address. */
-function enabledPages(entries: OpenAppPublicPageEntry[]): OpenAppPublicPageEntry[] {
-    const pages = entries.filter((entry) => entry.Enabled !== false);
+/**
+ * The enabled pages. Error pages are left out: they have no address of their own, so no file and
+ * no route. Throws on a slug that does not follow the slug rule, because the slug is a file name
+ * and an address.
+ */
+function enabledPages(entries: OpenAppPublicPageEntry[]): OpenAppPublicPage[] {
+    const pages = entries.filter(IsPublicPage).filter((entry) => entry.Enabled !== false);
     const invalid = pages.find((page) => !PUBLIC_PAGE_SLUG_PATTERN.test(page.Slug));
     if (invalid) {
         throw new Error(`Public page slug '${invalid.Slug}' of app '${invalid.AppName}' must be lowercase letters and digits joined by single hyphens.`);
@@ -51,7 +59,7 @@ function enabledPages(entries: OpenAppPublicPageEntry[]): OpenAppPublicPageEntry
 }
 
 /** The head tags that search results and link previews read for a page. */
-function previewTags(page: OpenAppPublicPageEntry): string[] {
+function previewTags(page: OpenAppPublicPage): string[] {
     const tags: string[] = [];
     if (page.Description) {
         tags.push(`<meta name="description" content="${escapeHtml(page.Description)}">`);
@@ -68,21 +76,93 @@ function previewTags(page: OpenAppPublicPageEntry): string[] {
 }
 
 /**
- * Builds a page's HTML from Explorer's `index.html`: the page title in `<title>`, and
- * the description and Open Graph tags that link previews read. A page with no title and no
- * description gets `index.html` unchanged.
+ * Removes HTML comments. A comment can hold text that looks like a tag, and the edits below
+ * must see real tags only. Text inside a script or a style block stays as it is.
  */
-export function BuildPublicPageHtml(indexHtml: string, page: OpenAppPublicPageEntry): string {
-    if (!page.Title && !page.Description) {
-        return indexHtml;
+function removeComments(html: string): string {
+    return html.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>|[ \t]*<!--[\s\S]*?-->\n?/gi, (match: string, block?: string) =>
+        block ? match : '');
+}
+
+/**
+ * Removes the map library's tags (Leaflet and its cluster plugin). They load scripts from another
+ * site, and a public page does not use them.
+ */
+function removeMapLibraryTags(html: string): string {
+    const mapLibraryUrl = 'https://unpkg\\.com/leaflet';
+    return html
+        .replace(new RegExp(`[ \\t]*<link\\b[^>]*\\bhref="${mapLibraryUrl}[^"]*"[^>]*>\\n?`, 'gi'), '')
+        .replace(new RegExp(`[ \\t]*<script\\b[^>]*\\bsrc="${mapLibraryUrl}[^"]*"[^>]*>\\s*</script>\\n?`, 'gi'), '')
+        .replace(/[ \t]*<script\b([^>]*)>([\s\S]*?)<\/script>\n?/gi, (tag: string, attributes: string, body: string) =>
+            !/\bsrc\s*=/i.test(attributes) && /unpkg\.com\/leaflet/i.test(body) ? '' : tag);
+}
+
+/**
+ * Turns a stylesheet link that Angular's build defers with an inline `onload` handler into a
+ * plain link, and removes its `<noscript>` copy. The page's policy blocks inline handlers.
+ */
+function useStylesheetLinks(html: string): string {
+    return html
+        .replace(/<link\b([^>]*?)\s+media="print"\s+onload="this\.media='all'"([^>]*)>/gi, '<link$1$2>')
+        .replace(/<noscript>\s*<link\b[^>]*\brel="stylesheet"[^>]*>\s*<\/noscript>/gi, '');
+}
+
+/** The policy source for each inline script: the SHA-256 hash of its text. Scripts with `src` and data blocks have none. */
+function inlineScriptHashes(html: string): string[] {
+    const hashes: string[] = [];
+    for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+        const [, attributes, body] = match;
+        const type = attributes.match(/\btype\s*=\s*["']?([^"'\s>]+)/i)?.[1]?.toLowerCase();
+        const runs = !type || type === 'module' || type.endsWith('javascript');
+        if (runs && !/\bsrc\s*=/i.test(attributes)) {
+            hashes.push(`'sha256-${createHash('sha256').update(body, 'utf-8').digest('base64')}'`);
+        }
     }
+    return hashes;
+}
+
+/**
+ * The page's Content Security Policy tag. Scripts run only from the site itself, plus the inline
+ * scripts that the page file holds. A script from another site, or one that an attacker injects,
+ * does not run, so it cannot read Explorer's sign-in tokens.
+ */
+function policyTag(html: string): string {
+    const scriptSources = ["'self'", ...inlineScriptHashes(html)].join(' ');
+    return `<meta http-equiv="Content-Security-Policy" content="script-src ${scriptSources}; object-src 'none'; base-uri 'self'">`;
+}
+
+/** Puts `tag` first in `<head>`: after the charset tag when there is one, so it applies to all that follows. */
+function insertFirstInHead(html: string, tag: string): string {
+    const charset = html.match(/<meta\b[^>]*\bcharset\b[^>]*>/i);
+    if (charset) {
+        return html.replace(charset[0], () => `${charset[0]}\n  ${tag}`);
+    }
+    return html.replace(/<head\b[^>]*>/i, (head) => `${head}\n  ${tag}`);
+}
+
+/** Sets the page's title and adds its link preview tags and the robots tag, in place of `<title>`. */
+function setHeadTags(html: string, page: OpenAppPublicPage): string {
     const titlePattern = /<title>[\s\S]*?<\/title>/i;
-    const currentTitle = indexHtml.match(titlePattern)?.[0];
+    const withoutRobots = html.replace(/[ \t]*<meta\b[^>]*\bname="robots"[^>]*>\n?/gi, '');
+    const currentTitle = withoutRobots.match(titlePattern)?.[0];
     const title = page.Title ? `<title>${escapeHtml(page.Title)}</title>` : currentTitle;
-    const head = [...(title ? [title] : []), ...previewTags(page).map((tag) => `  ${tag}`)].join('\n');
+    const tags = [...previewTags(page), '<meta name="robots" content="index, follow">'];
+    const head = [...(title ? [title] : []), ...tags.map((tag) => `  ${tag}`)].join('\n');
     return currentTitle
-        ? indexHtml.replace(titlePattern, () => head)
-        : indexHtml.replace(/<\/head>/i, () => `${head}\n</head>`);
+        ? withoutRobots.replace(titlePattern, () => head)
+        : withoutRobots.replace(/<\/head>/i, () => `${head}\n</head>`);
+}
+
+/**
+ * Builds a page's HTML from Explorer's built `index.html`:
+ * - the page title, and the description and Open Graph tags that link previews read
+ * - a robots tag that lets search engines index the page
+ * - no map library tags, and a plain link for the main stylesheet
+ * - a Content Security Policy that allows only the site's own scripts
+ */
+export function BuildPublicPageHtml(indexHtml: string, page: OpenAppPublicPage): string {
+    const html = setHeadTags(useStylesheetLinks(removeMapLibraryTags(removeComments(indexHtml))), page);
+    return insertFirstInHead(html, policyTag(html));
 }
 
 /**
@@ -147,44 +227,4 @@ export function WriteStaticWebAppRoutes(siteDir: string, entries: OpenAppPublicP
     }
     writeFileSync(configPath, `${JSON.stringify({ ...config, routes: updated }, null, 2)}\n`, 'utf-8');
     return true;
-}
-
-export default class CodeGenPublicPageHtml extends Command {
-    static description = `Write one HTML file per public page into MJ Explorer's build, with the page title and link preview tags.
-
-Reads the pages from mj.config \`publicPages\` (their \`Title\` and \`Description\` come from
-mj-app.json). Each file is a copy of Explorer's index.html, so link previews and search engines see
-the page's title and description without running JavaScript. The web host serves
-public-pages/<slug>.html for /p/<slug>. When the folder has a staticwebapp.config.json (Azure Static
-Web Apps), the command adds a rewrite for each page to it. Run it after the Explorer build.`;
-
-    static examples = [
-        {
-            command: '<%= config.bin %> <%= command.id %> --dir dist/MJExplorer/browser',
-            description: 'Write public-pages/<slug>.html for each public page',
-        },
-    ];
-
-    static flags = {
-        dir: Flags.string({
-            description: "The site folder: MJ Explorer's build output, with its index.html.",
-            required: true,
-        }),
-        quiet: Flags.boolean({
-            char: 'q',
-            description: 'Do not print a summary.',
-            default: false,
-        }),
-    };
-
-    async run(): Promise<void> {
-        const { flags } = await this.parse(CodeGenPublicPageHtml);
-        const dir = resolve(process.cwd(), flags.dir);
-        const entries = ReadConfiguredPublicPages();
-        const written = WritePublicPageHtmlFiles(dir, entries);
-        const routesChanged = WriteStaticWebAppRoutes(dir, entries);
-        if (!flags.quiet) {
-            this.log(`[public-page-html] ${written} ${written === 1 ? 'page' : 'pages'} written${routesChanged ? ', Static Web Apps routes updated' : ''}`);
-        }
-    }
 }

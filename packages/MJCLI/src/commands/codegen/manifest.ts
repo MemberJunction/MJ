@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import type { z } from 'zod';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { GetOptionalConfig, type PublicPageEntrySchema } from '../../config.js';
 
 /** A client dynamic-package entry as read from mj.config `dynamicPackages.client`. */
@@ -10,8 +10,19 @@ export interface OpenAppClientEntry {
     Enabled?: boolean;
 }
 
-/** A public page entry as read from mj.config `publicPages`. */
+/** A public page or error page entry as read from mj.config `publicPages`. */
 export type OpenAppPublicPageEntry = z.input<typeof PublicPageEntrySchema>;
+
+/** A page entry: it has a slug and is served at `/p/<Slug>`. */
+export type OpenAppPublicPage = OpenAppPublicPageEntry & { Slug: string; Role?: undefined };
+
+/** File name of the host's public pages list, written beside the class manifest. */
+const PUBLIC_PAGES_FILE_NAME = 'public-pages.generated.ts';
+
+/** True for a page entry, false for an error page entry. */
+export function IsPublicPage(entry: OpenAppPublicPageEntry): entry is OpenAppPublicPage {
+    return entry.Role !== 'error' && !!entry.Slug;
+}
 
 const OPEN_APP_BOOTSTRAP_BEGIN = '// ===== BEGIN Open App client bootstrap (managed by `mj app` / `mj codegen manifest`) =====';
 const OPEN_APP_BOOTSTRAP_END = '// ===== END Open App client bootstrap =====';
@@ -118,39 +129,56 @@ function exportAccess(exportName: string): string {
     return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(exportName) ? `m.${exportName}` : `m[${quoteTs(exportName)}]`;
 }
 
-/** One array line for a public page: a lazy-loaded element, or a comment when disabled. */
+/** One array line for a page or an error page: a lazy-loaded element, or a comment when disabled. */
 function publicPageLine(entry: OpenAppPublicPageEntry): string {
+    const isPage = IsPublicPage(entry);
     if (entry.Enabled === false) {
-        return `    // ${quoteTs(entry.Slug)} from ${quoteTs(entry.AppName)} disabled by \`mj app disable\``;
+        const name = isPage ? quoteTs(entry.Slug) : `error page ${quoteTs(entry.Scope ?? '')}`;
+        return `    // ${name} from ${quoteTs(entry.AppName)} disabled by \`mj app disable\``;
     }
-    return `    { Slug: ${quoteTs(entry.Slug)}, AppName: ${quoteTs(entry.AppName)}, ` +
-        `Load: () => import(${quoteTs(entry.PackageName)}).then((m) => ${exportAccess(entry.ExportName)}) },`;
+    const identity = isPage
+        ? `Slug: ${quoteTs(entry.Slug)}, AppName: ${quoteTs(entry.AppName)}, ${entry.SubPaths ? 'SubPaths: true, ' : ''}`
+        : `Role: 'error', Scope: ${quoteTs(entry.Scope ?? '')}, AppName: ${quoteTs(entry.AppName)}, `;
+    return `    { ${identity}Load: () => import(${quoteTs(entry.PackageName)}).then((m) => ${exportAccess(entry.ExportName)}) },`;
 }
 
 /**
  * Builds the TypeScript source of the host's public pages file from mj.config `publicPages`.
- * Each enabled page becomes a `PUBLIC_PAGES` element that lazy-loads its component; each
- * disabled page becomes a comment line. No entries gives an empty list.
+ * Each enabled page or error page becomes a `PUBLIC_PAGES` element that lazy-loads its component;
+ * each disabled one becomes a comment line. The file imports nothing, so it compiles in any host.
  */
 export function BuildPublicPagesFile(entries: OpenAppPublicPageEntry[]): string {
     const header = [
         '/**',
         ' * Public pages from installed Open Apps.',
-        ' * Written by `mj codegen manifest --public-pages`. Do not edit.',
+        ' * Written by `mj codegen manifest --open-app-client-bootstrap`. Do not edit.',
         ' */',
-        "import type { PublicPageEntry } from '@memberjunction/ng-public-host/bootstrap';",
-        '',
     ];
     if (entries.length === 0) {
-        return [...header, 'export const PUBLIC_PAGES: PublicPageEntry[] = [];', ''].join('\n');
+        return [...header, 'export const PUBLIC_PAGES = [] as const;', ''].join('\n');
     }
     return [
         ...header,
-        'export const PUBLIC_PAGES: PublicPageEntry[] = [',
+        'export const PUBLIC_PAGES = [',
         ...entries.map(publicPageLine),
-        '];',
+        '] as const;',
         '',
     ].join('\n');
+}
+
+/** The path of the host's public pages file: beside the class manifest at `manifestPath`. */
+export function PublicPagesFilePath(manifestPath: string): string {
+    return join(dirname(manifestPath), PUBLIC_PAGES_FILE_NAME);
+}
+
+/**
+ * The path of the host's `src/main.ts` when it does not call `StartExplorer()`, or null.
+ * Such a host has start-up code from before public pages and does not serve them.
+ */
+export function FindOutdatedHostMain(appDir: string): string | null {
+    const mainPath = join(appDir, 'src', 'main.ts');
+    const content = ReadFileIfExists(mainPath);
+    return content !== null && !/\bStartExplorer\s*\(/.test(content) ? mainPath : null;
 }
 
 /** Reads a text file, or returns null when there is no file at `filePath`. */
@@ -181,12 +209,13 @@ export function WritePublicPagesFile(filePath: string, entries: OpenAppPublicPag
     return true;
 }
 
-/** True when a config entry carries every field a public page needs. */
+/** True when a config entry carries every field a page, or an error page, needs. */
 function isCompletePublicPage(entry: Partial<OpenAppPublicPageEntry>): entry is OpenAppPublicPageEntry {
-    return !!entry.AppName && !!entry.Slug && !!entry.PackageName && !!entry.ExportName;
+    const hasIdentity = entry.Role === 'error' ? typeof entry.Scope === 'string' : !!entry.Slug;
+    return !!entry.AppName && hasIdentity && !!entry.PackageName && !!entry.ExportName;
 }
 
-/** The public pages from mj.config `publicPages` that carry every required field. */
+/** The pages and error pages from mj.config `publicPages` that carry every required field. */
 export function ReadConfiguredPublicPages(): OpenAppPublicPageEntry[] {
     return (GetOptionalConfig()?.publicPages ?? []).filter(isCompletePublicPage);
 }
@@ -290,12 +319,9 @@ generate a supplemental manifest covering only your own application classes.`;
         'open-app-client-bootstrap': Flags.boolean({
             description: 'After generating the manifest, append a managed block of side-effect imports — one per ' +
                 'Open App client package recorded in mj.config `dynamicPackages.client` — so installed apps\' client ' +
-                'classes register when the client bundle loads. Used by MJExplorer\'s prebuild; requires --output.',
+                'classes register when the client bundle loads. Also writes public-pages.generated.ts beside the manifest, ' +
+                'from mj.config `publicPages` (the pages installed Open Apps serve before sign-in). Used by MJExplorer\'s prebuild; requires --output.',
             default: false,
-        }),
-        'public-pages': Flags.string({
-            description: 'Output path for the public pages file. Written from mj.config `publicPages` (the pages installed ' +
-                'Open Apps serve before sign-in); an empty list when there are none. Used by MJExplorer\'s prebuild.',
         }),
     };
 
@@ -350,19 +376,24 @@ generate a supplemental manifest covering only your own application classes.`;
                 this.error('--open-app-client-bootstrap requires --output (the manifest file to append the client bootstrap block to).');
             }
             this.appendOpenAppClientBootstrap(flags.output, flags.quiet);
-        }
-
-        if (flags['public-pages']) {
-            this.writePublicPages(flags['public-pages'], flags.quiet);
+            this.writePublicPages(flags.output, flags.appDir || process.cwd(), flags.quiet);
         }
     }
 
-    /** Writes the public pages file from mj.config `publicPages`. */
-    private writePublicPages(outputPath: string, quiet: boolean): void {
+    /**
+     * Writes the public pages file beside the class manifest, from mj.config `publicPages`.
+     * Warns when the host's `main.ts` cannot serve the pages.
+     */
+    private writePublicPages(manifestPath: string, appDir: string, quiet: boolean): void {
         const entries = ReadConfiguredPublicPages();
-        const changed = WritePublicPagesFile(resolve(process.cwd(), outputPath), entries);
+        const changed = WritePublicPagesFile(PublicPagesFilePath(resolve(process.cwd(), manifestPath)), entries);
         if (!quiet) {
-            this.log(`[class-manifest] Public pages: ${entries.length} ${entries.length === 1 ? 'page' : 'pages'} ${changed ? 'written' : 'unchanged'}`);
+            this.log(`[class-manifest] Public pages: ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} ${changed ? 'written' : 'unchanged'}`);
+        }
+        const outdatedMain = entries.length > 0 ? FindOutdatedHostMain(resolve(process.cwd(), appDir)) : null;
+        if (outdatedMain) {
+            this.warn(`${outdatedMain} does not call StartExplorer(), so this host does not serve its ${entries.length} public page ${entries.length === 1 ? 'entry' : 'entries'}. ` +
+                `Replace it with the main.ts of this MemberJunction release.`);
         }
     }
 

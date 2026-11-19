@@ -5,5 +5,5 @@
  * @module @memberjunction/ng-public-host
  */
 
-export type { PublicHostConfig, PublicHostEnvironment, PublicPageEntry } from './lib/public-pages';
+export type { PublicErrorPage, PublicHostConfig, PublicHostEnvironment, PublicPage, PublicPageEntry } from './lib/public-pages';
 export * from './lib/public-page-context';
