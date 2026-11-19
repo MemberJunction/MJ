@@ -258,7 +258,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(vi.getTimerCount()).toBe(0);
         });
 
-        it('a barrier timeout sends the queued results first and ONE commit last (SF1)', async () => {
+        it('a barrier timeout sends the queued results first and ONE commit last', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b', 'c');
@@ -272,7 +272,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'text:x', 'tool:a', 'tool:b', 'commit']);
         });
 
-        it('a commit held when the barrier fires during a connection move goes out once the move completes (SF2)', async () => {
+        it('a commit held when the barrier fires during a connection move goes out once the move completes', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b');
@@ -288,7 +288,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(client.IsBusy).toBe(true); // busy for the reply the commit asks for
         });
 
-        it('a held commit also goes out when a failed move goes back to the old connection (SF2)', async () => {
+        it('a held commit also goes out when a failed move goes back to the old connection', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b');
@@ -301,7 +301,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
         });
 
-        it('expired results queued during a move all go out on resume, then ONE commit (R4-1)', async () => {
+        it('expired results queued during a move all go out on resume, then ONE commit', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b', 'c');
@@ -316,7 +316,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'tool:b', 'tool:c', 'commit']);
         });
 
-        it('expired results queued during a move all go out on resume without an open turn (R4-1)', async () => {
+        it('expired results queued during a move all go out on resume without an open turn', async () => {
             const { client, session } = await connect(BLOCKING);
             toolCall(client, 'a', 'b', 'c');
             client.SendToolResult('a', '{}');
@@ -330,7 +330,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c']);
         });
 
-        it('a typed turn queued during a move leaves no held commit behind for a later note (R4-2)', async () => {
+        it('a typed turn queued during a move leaves no held commit behind for a later note', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b');
@@ -354,7 +354,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual([...settled, 'note:later note']); // no unprompted commit
         });
 
-        it('a backstop that fires during a move keeps the held commit for the new connection (N3)', async () => {
+        it('a backstop that fires during a move keeps the held commit for the new connection', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b');
@@ -368,7 +368,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'commit']);
         });
 
-        it('a stale result while a new batch is owed neither commits early nor holds the batch (N1)', async () => {
+        it('a stale result while a new batch is owed neither commits early nor holds the batch', async () => {
             const { client, session } = await connect(BLOCKING);
             toolCall(client, 'p', 'old');
             client.SendToolResult('p', '{}');
@@ -383,7 +383,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['tool:p', 'note:ctx', 'tool:old', 'tool:x', 'tool:y', 'commit']);
         });
 
-        it('a duplicate result mid-batch stays queued behind the reply and the batch completes (P6)', async () => {
+        it('a duplicate result mid-batch stays queued behind the reply and the batch completes', async () => {
             const { client, session } = await connect(BLOCKING);
             client.SendContextNote('ctx');
             toolCall(client, 'a', 'b', 'c');
@@ -395,7 +395,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['note:ctx', 'tool:a', 'tool:b', 'tool:c', 'commit']);
         });
 
-        it('an interactionStatus IDLE frame on a turnComplete model does not clear the backstop (N2)', async () => {
+        it('an interactionStatus IDLE frame on a turnComplete model does not clear the backstop', async () => {
             const { client, session } = await connect(BLOCKING);
             toolCall(client, 'a');
             client.SendToolResult('a', '{}');
@@ -408,7 +408,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['tool:a', 'note:queued']);
         });
 
-        it('a second toolCall frame mid-batch keeps a note from slipping between results (N4)', async () => {
+        it('a second toolCall frame mid-batch keeps a note from slipping between results', async () => {
             const { client, session } = await connect(BLOCKING);
             toolCall(client, 'a', 'b');
             client.SendToolResult('a', '{}');
@@ -423,7 +423,7 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             expect(session.Wire).toEqual(['tool:a', 'tool:b', 'tool:c', 'note:note']);
         });
 
-        it('typed text mid-batch barges in: a note queued mid-batch goes out before it (N5)', async () => {
+        it('typed text mid-batch barges in: a note queued mid-batch goes out before it', async () => {
             const { client, session } = await connect(BLOCKING);
             toolCall(client, 'a', 'b');
             client.SendToolResult('a', '{}');
@@ -432,6 +432,69 @@ describe('GeminiRealtimeClient blocking tool-call batch (#6753)', () => {
             client.SendToolResult('b', '{}');
 
             expect(session.Wire).toEqual(['tool:a', 'note:queued note', 'text:barge in', 'tool:b', 'commit']);
+        });
+        it('the barrier timeout arms the backstop when a call is never answered and no client turn is open', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b');
+            client.SendToolResult('a', '{}'); // b is never answered
+            client.SendContextNote('queued');
+
+            vi.advanceTimersByTime(BARRIER_MS);
+            expect(session.Wire).toEqual(['tool:a']);
+
+            vi.advanceTimersByTime(BACKSTOP_MS);
+            expect(session.Wire).toEqual(['tool:a', 'note:queued']);
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('results queued behind a typed turn all go out once that turn completes, before the barrier', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a', 'b', 'c');
+            client.SendText('first'); // takes the floor before any result
+            client.SendToolResult('a', '{}');
+            client.SendToolResult('b', '{}');
+            client.SendToolResult('c', '{}');
+            expect(session.Wire).toEqual(['text:first']);
+
+            modelSpeaks(client);
+            turnComplete(client);
+
+            expect(session.Wire).toEqual(['text:first', 'tool:a', 'tool:b', 'tool:c']);
+        });
+
+        it('a new toolCall frame drops expired calls: a stale result after the new batch started waits for the reply', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'p', 'old');
+            client.SendToolResult('p', '{}');
+            vi.advanceTimersByTime(BARRIER_MS); // old is expired
+            modelSpeaks(client);
+            turnComplete(client);
+
+            toolCall(client, 'x');
+            client.SendToolResult('x', '{}'); // the reply to x is next
+            client.SendToolResult('old', '{}');
+            expect(session.Wire).toEqual(['tool:p', 'tool:x']);
+
+            modelSpeaks(client);
+            turnComplete(client);
+            expect(session.Wire).toEqual(['tool:p', 'tool:x', 'tool:old']);
+        });
+
+        it('a thought part restarts the backstop: the model is working on the reply, not silent', async () => {
+            const { client, session } = await connect(BLOCKING);
+            toolCall(client, 'a');
+            client.SendToolResult('a', '{}');
+            client.SendContextNote('queued');
+
+            vi.advanceTimersByTime(BACKSTOP_MS - 1000);
+            client.Emit({ serverContent: { modelTurn: { parts: [{ thought: true, text: 'planning the reply' }] } } } as LiveServerMessage);
+            vi.advanceTimersByTime(1000);
+            expect(client.IsBusy).toBe(true);
+            expect(session.Wire).toEqual(['tool:a']);
+
+            vi.advanceTimersByTime(BACKSTOP_MS);
+            expect(client.IsBusy).toBe(false);
+            expect(session.Wire).toEqual(['tool:a', 'note:queued']);
         });
     });
 
