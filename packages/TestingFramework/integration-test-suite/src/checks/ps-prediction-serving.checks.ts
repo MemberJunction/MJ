@@ -200,8 +200,9 @@ export class PsPredictionServing {
      * (`AuthorizationEvaluator.UserCanExecuteWithAncestors`, the panel's rule) and a value returned. A failed read
      * returns nothing (the panel renders nothing) and is reported; the value read is judged apart from the binding read.
      */
-    public static async PanelCards(provider: IMetadataProvider, entityId: string, recordId: string, binding: Pick<MJMLModelScoringBindingEntity, 'ID' | 'FeatureName' | 'ViewAuthorizationID'>): Promise<PanelReplay> {
-        const queries = PredictionPanelQueries.For(entityId, recordId, [binding.FeatureName]);
+    public static async PanelCards(provider: IMetadataProvider, entityId: string, recordId: string, binding: Pick<MJMLModelScoringBindingEntity, 'ID' | 'ViewAuthorizationID'>): Promise<PanelReplay> {
+        // No feature narrowing: the panel sends its first batch with none (it learns the bound features from it).
+        const queries = PredictionPanelQueries.For(entityId, recordId, []);
         const results = await RunView.FromMetadataProvider(provider).RunViews<Pick<MJFeatureValueEntity, 'ID' | 'MLModelScoringBindingID'>>(queries);
         const bindings = results[PredictionPanelQueries.Index.Bindings];
         const latest = results[PredictionPanelQueries.Index.Latest];
