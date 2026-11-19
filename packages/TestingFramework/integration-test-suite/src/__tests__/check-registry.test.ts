@@ -38,6 +38,7 @@ import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.che
 import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { ListRefreshChecks } from '../checks/list-refresh.checks';
+import { ListFromQueryChecks } from '../checks/list-from-query.checks';
 import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -206,6 +207,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
+        ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
@@ -443,6 +445,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
+        'list-from-query': 5,
         'list-refresh': 7,
         'lists': 3,
         'livekit-room': 1,
@@ -627,7 +630,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(248);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(249);
     });
 });
 
