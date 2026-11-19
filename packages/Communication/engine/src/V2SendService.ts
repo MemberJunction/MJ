@@ -68,7 +68,7 @@ export interface ProtectedComplianceSnapshot {
 
 const DEFAULT_CHUNK_SIZE = 50;
 const DEFAULT_ASYNC_THRESHOLD = 100;
-const DEFAULT_HMAC_SECRET = 'mj-comms-dev-tracking-secret';
+export const DEFAULT_COMMS_TRACKING_HMAC_SECRET = 'mj-comms-dev-tracking-secret';
 
 export function ComputeTrackingSignature(
   trackingToken: string,
@@ -508,7 +508,10 @@ export class V2SendService {
     const trackingToken = log.TrackingToken ?? randomUUID();
     const unsubscribeToken = log.UnsubscribeToken ?? randomUUID();
     const baseUrl = this.config.BaseTrackingURL ?? '';
-    const hmacSecret = this.config.TrackingHMACSecret ?? DEFAULT_HMAC_SECRET;
+    const hmacSecret =
+      this.config.TrackingHMACSecret ??
+      process.env.MJ_COMMS_HMAC_SECRET ??
+      DEFAULT_COMMS_TRACKING_HMAC_SECRET;
 
     const obligations = this.enrichObligations(target.Obligations, baseUrl, unsubscribeToken);
     const snapshot: ProtectedComplianceSnapshot = {

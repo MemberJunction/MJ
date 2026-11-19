@@ -14212,6 +14212,9 @@ importers:
       '@memberjunction/version-history':
         specifier: 6.3.0-edge.1
         version: link:../VersionHistory
+      '@memberjunction/work-queue-core':
+        specifier: 6.3.0-edge.1
+        version: link:../WorkQueue/core
       '@memberjunction/work-queue-engine':
         specifier: 6.3.0-edge.1
         version: link:../WorkQueue/engine

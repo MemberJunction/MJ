@@ -96,6 +96,7 @@ import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExp
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
+import { ConfigureCommsV2WorkQueue } from './services/CommsWorkQueueHandlers.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -2028,6 +2029,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+    ConfigureCommsV2WorkQueue(configInfo.publicUrl);
     const workQueuePool = dataSources[0]?.dataSource;
     const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
     StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)

@@ -18,6 +18,11 @@ import crypto from 'node:crypto';
 import express from 'express';
 import BodyParser from 'body-parser';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import {
+    ComputeTrackingSignature,
+    DEFAULT_COMMS_TRACKING_HMAC_SECRET,
+    VerifyTrackingSignature,
+} from '@memberjunction/communication-engine';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import {
     MJCommunicationConsentAuditLogEntity,
@@ -182,9 +187,20 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     router.get('/unsubscribe', async (req, res) => {
         await handleUnsubscribeRedirect(req, res, resolveUnsubRedirect);
     });
+    router.get('/unsubscribe/:token', async (req, res) => {
+        await handleUnsubscribeRedirect(req, res, resolveUnsubRedirect);
+    });
 
     router.post(
         '/unsubscribe',
+        BodyParser.json({ limit: '64kb' }),
+        BodyParser.urlencoded({ extended: false, limit: '64kb' }),
+        async (req, res) => {
+            await handleUnsubscribe(req, res, publishActivity);
+        },
+    );
+    router.post(
+        '/unsubscribe/:token',
         BodyParser.json({ limit: '64kb' }),
         BodyParser.urlencoded({ extended: false, limit: '64kb' }),
         async (req, res) => {
@@ -382,19 +398,13 @@ async function handleClickRedirect(
     res.redirect(302, targetUrl);
 }
 
-/** Computes and constant-time compares the HMAC-SHA256 signature over `token + '|' + targetUrl`. */
+/** Computes the HMAC-SHA256 signature over `trackingToken + ':' + targetUrl`. */
 export function SignClickTrackingUrl(secret: string, trackingToken: string, targetUrl: string): string {
-    return crypto.createHmac('sha256', secret).update(`${trackingToken}|${targetUrl}`).digest('hex');
+    return ComputeTrackingSignature(trackingToken, targetUrl, secret);
 }
 
 function verifyClickHmac(secret: string, trackingToken: string, targetUrl: string, providedSig: string): boolean {
-    const expectedHex = SignClickTrackingUrl(secret, trackingToken, targetUrl);
-    const expectedBuf = Buffer.from(expectedHex, 'utf8');
-    const providedBuf = Buffer.from(providedSig, 'utf8');
-    if (expectedBuf.length !== providedBuf.length) {
-        return false;
-    }
-    return crypto.timingSafeEqual(expectedBuf, providedBuf);
+    return VerifyTrackingSignature(trackingToken, targetUrl, providedSig, secret);
 }
 
 function isSafeHttpUrl(rawUrl: string): boolean {
@@ -429,6 +439,10 @@ function isJsonArrayPayload(rawBody: string): boolean {
 }
 
 function extractUnsubscribeToken(req: express.Request): string | undefined {
+    const routeToken = extractRouteToken(req);
+    if (routeToken) {
+        return routeToken;
+    }
     if (typeof req.query.token === 'string' && req.query.token.trim().length > 0) {
         return req.query.token.trim();
     }
@@ -468,7 +482,7 @@ function resolveSecretAccessor(hmacSecret?: string | (() => string | undefined))
     if (typeof hmacSecret === 'string') {
         return () => hmacSecret;
     }
-    return () => process.env.MJ_COMMS_HMAC_SECRET;
+    return () => process.env.MJ_COMMS_HMAC_SECRET ?? DEFAULT_COMMS_TRACKING_HMAC_SECRET;
 }
 
 async function defaultResolveWebhookKey(credentialId?: string): Promise<string | undefined> {
@@ -536,7 +550,9 @@ async function handleUnsubscribeRedirect(
     res: express.Response,
     resolveRedirect: (token: string) => Promise<string | undefined>,
 ): Promise<void> {
-    const token = typeof req.query.token === 'string' ? req.query.token.trim() : undefined;
+    const token =
+        extractRouteToken(req) ??
+        (typeof req.query.token === 'string' ? req.query.token.trim() : undefined);
     if (!token || !UUID_V4_REGEX.test(token)) {
         res.status(400).json({ error: 'Invalid or missing UnsubscribeToken' });
         return;

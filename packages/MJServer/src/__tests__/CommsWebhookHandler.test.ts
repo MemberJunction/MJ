@@ -17,6 +17,7 @@ import {
     type CommsActivityWorkPayload,
     type CommsWebhookHandlerOptions,
 } from '../rest/CommsWebhookHandler.js';
+import { ComputeTrackingSignature } from '@memberjunction/communication-engine';
 
 async function withServer(
     options: CommsWebhookHandlerOptions,
@@ -235,6 +236,51 @@ describe('CommsWebhookHandler', () => {
                     TrackingToken: token,
                     TargetURL: target,
                 });
+            },
+        );
+    });
+
+    it('POST /unsubscribe/:token and GET /unsubscribe/:token accept path-parameter tokens', async () => {
+        const validUuid = '11111111-2222-4333-8444-555555555555';
+        await withServer(
+            {
+                PublishActivity: async (p) => { published.push(p); },
+                ResolveUnsubscribeRedirect: async () => 'https://prefs.example.com',
+            },
+            async (baseUrl) => {
+                const postRes = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
+                expect(postRes.status).toBe(200);
+                expect(published[0]).toMatchObject({
+                    Source: 'unsubscribe',
+                    EventType: 'Unsubscribed',
+                    UnsubscribeToken: validUuid,
+                });
+
+                const getRes = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { redirect: 'manual' });
+                expect(getRes.status).toBe(302);
+                expect(getRes.headers.get('location')).toBe(`https://prefs.example.com?token=${validUuid}`);
+            },
+        );
+    });
+
+    it('GET /click/:token verifies signatures produced by V2SendService.ComputeTrackingSignature', async () => {
+        const secret = 'shared-comms-secret-32-characters';
+        const token = 'track-v2-roundtrip';
+        const target = 'https://memberjunction.org/guide';
+        const sig = ComputeTrackingSignature(token, target, secret);
+
+        await withServer(
+            {
+                HmacSecret: secret,
+                PublishActivity: async (p) => { published.push(p); },
+            },
+            async (baseUrl) => {
+                const res = await fetch(
+                    `${baseUrl}/click/${token}?u=${encodeURIComponent(target)}&sig=${sig}`,
+                    { redirect: 'manual' },
+                );
+                expect(res.status).toBe(302);
+                expect(res.headers.get('location')).toBe(target);
             },
         );
     });
