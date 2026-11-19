@@ -152,6 +152,7 @@ export function makeRecordChangesEntityInfo(): EntityInfo {
       { ...base, ID: 'FC000000-0000-0000-0000-000000000009', Sequence: 9, Name: 'RestoredFromID', Type: 'uniqueidentifier', Length: 16, AllowsNull: true },
       { ...base, ID: 'FC000000-0000-0000-0000-00000000000A', Sequence: 10, Name: 'RestoreReason', Type: 'nvarchar', Length: -1, AllowsNull: true },
       { ...base, ID: 'FC000000-0000-0000-0000-00000000000B', Sequence: 11, Name: 'ChangeContext', Type: 'nvarchar', Length: -1, AllowsNull: true },
+      { ...base, ID: 'FC000000-0000-0000-0000-00000000000C', Sequence: 12, Name: 'IntegrationID', Type: 'uniqueidentifier', Length: 16, AllowsNull: true },
     ],
     EntityPermissions: [],
   });

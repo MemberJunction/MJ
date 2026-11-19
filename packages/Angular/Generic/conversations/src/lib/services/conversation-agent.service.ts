@@ -7,6 +7,7 @@ import { AIEngineBase, FindMentionPinnedPresetID } from '@memberjunction/ai-engi
 import {
   ConversationEngine,
   MJConversationDetailEntity,
+  MJConversationDetailArtifactEntity,
   MJArtifactVersionEntity,
   MJArtifactEntity
 } from '@memberjunction/core-entities';
@@ -17,7 +18,7 @@ import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-c
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
 import {
@@ -562,10 +563,10 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
       }
 
-      // Queried, not read off the caller's window-scoped maps — see findAllAgentArtifacts.
+      // Queried, not read off the caller's window-scoped maps — see FindAgentArtifacts.
       // `conversationHistory` below is still the window on purpose: the `.slice(-10)` wants
       // the most recent exchange, which the loaded tail always contains.
-      const agentArtifacts = await this.findAllAgentArtifacts(conversationId, agentId, undefined, branchId);
+      const agentArtifacts = await this.FindAgentArtifacts(conversationId, agentId, undefined, branchId);
 
       const recentHistory = conversationHistory.slice(-10);
       const compactHistory = recentHistory.map((msg, idx) => {
@@ -768,7 +769,7 @@ ${compactHistory}${artifactContext}
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<ArtifactRow>({
       EntityName: 'MJ: Artifacts',
-      ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+      ExtraFilter: `ID IN (${artifactIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
       Fields: ['ID', 'Name', 'Type'],
       ResultType: 'simple'
     }, this.Provider.CurrentUser ?? undefined);
@@ -790,8 +791,9 @@ ${compactHistory}${artifactContext}
    * again" exchanges where payload continuity matters most. A null payload is a LEGAL agent
    * input, so the failure is silent: the agent regenerates from scratch instead of modifying.
    *
-   * Two reads: the agent's replies, then their newest Output version. Versions carry
-   * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
+   * Three RLS-safe reads: the agent's replies, their Output link rows, then their newest
+   * version. Versions carry `__mj_CreatedAt`, so "newest" is expressible without joining back
+   * for `Sequence`.
    *
    * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
    *   or after it count: a run that may not read earlier messages must not pick up their work
@@ -811,13 +813,14 @@ ${compactHistory}${artifactContext}
 
   /**
    * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced on one
-   * conversation path, in messages no rerun replaced, or null when the agent has no such reply
-   * there. Shared by {@link FindLatestAgentOutputVersion} and {@link findAllAgentArtifacts} so
-   * the two can never disagree about what "this agent's artifacts" means.
+   * conversation path, in messages no rerun replaced, or null when the agent has no such
+   * output there. Shared by {@link FindLatestAgentOutputVersion} and {@link findAllAgentArtifacts}
+   * so the two can never disagree about what "this agent's artifacts" means.
    *
-   * The replies are read with their own RunView ({@link agentReplyIds}), so the row-level
-   * security on conversation messages applies. A subquery over their view would skip it, and the
-   * server refuses one for a user whose read of messages is row-filtered.
+   * Both the replies (`MJ: Conversation Details`) and their output links
+   * (`MJ: Conversation Detail Artifacts`) are read with their own `RunView` calls so
+   * row-level security applies to each entity and `ClientClauseScreen` never refuses a
+   * base-view subquery on row-filtered conversation tables.
    */
   private async agentOutputVersionFilter(
     conversationId: string,
@@ -830,10 +833,33 @@ ${compactHistory}${artifactContext}
       return null;
     }
     const inReplies = replyIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
-    return `ID IN (
-        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
-        WHERE Direction='Output' AND ConversationDetailID IN (${inReplies})
-      )`;
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const linkResult = await rv.RunView<Pick<MJConversationDetailArtifactEntity, 'ArtifactVersionID'>>({
+      EntityName: 'MJ: Conversation Detail Artifacts',
+      ExtraFilter: `Direction='Output' AND ConversationDetailID IN (${inReplies})`,
+      Fields: ['ArtifactVersionID'],
+      ResultType: 'simple',
+      IgnoreMaxRows: true
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!linkResult.Success) {
+      console.error('Failed to load agent output artifact links:', linkResult.ErrorMessage);
+      return null;
+    }
+
+    const seenVersionIds = new UUIDSet();
+    const versionIds: string[] = [];
+    for (const row of linkResult.Results || []) {
+      const versionId = row.ArtifactVersionID?.trim();
+      if (versionId && !seenVersionIds.Has(versionId)) {
+        seenVersionIds.Add(versionId);
+        versionIds.push(versionId);
+      }
+    }
+    if (versionIds.length === 0) {
+      return null;
+    }
+    return `ID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`;
   }
 
   /**
@@ -902,7 +928,7 @@ ${compactHistory}${artifactContext}
    * artifact maps.
    */
   public async FindArtifactVersionById(versionId: string): Promise<AgentPayloadSource | null> {
-    return this.runPayloadSourceQuery(`ID='${versionId}'`, undefined);
+    return this.runPayloadSourceQuery(`ID='${EscapeSQLString(versionId)}'`, undefined);
   }
 
   /**
