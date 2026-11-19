@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
     test: {
         root: dirname(fileURLToPath(import.meta.url)),
-        include: ['__tests__/**/*.test.mjs'],
+        // Repo skills keep their helper-script tests beside the scripts.
+        include: ['__tests__/**/*.test.mjs', '../../.claude/skills/*/scripts/__tests__/**/*.test.mjs'],
         // The fixture-based tests spawn real node child processes per package check.
         testTimeout: 30000,
     },

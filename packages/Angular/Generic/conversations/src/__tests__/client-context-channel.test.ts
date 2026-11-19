@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
+import type { JSONObject } from '@memberjunction/ai';
 import {
   RealtimeConversationMemory,
   RenderRealtimeMemorySeed,
@@ -407,5 +408,30 @@ describe('ClientContextChannel — channel-addressed ContextTool calls (target)'
     expect(d).toMatchObject({ Key: 'ClientContextChannel', Version: '2.0.0', DisplayPolicy: 'headless', DefaultAvailability: 'all-sessions' });
     expect(d.Verbs).toEqual([]);
     expect(d.Nouns).toEqual([]);
+  });
+
+  it('answers read-only get_workspace_state / get_active_surface / peek_workspace without calling ExecuteClientTool', async () => {
+    const exec = vi.fn();
+    const ch = new ClientContextChannel();
+    ch.Initialize(
+      makeContext({
+        ExecuteClientTool: exec,
+        GetSurfaceSnapshot: (): JSONObject => ({
+          ActiveSurface: 'whiteboard',
+          ActiveChannels: [
+            { ChannelKey: 'whiteboard', Title: 'Whiteboard', Exposure: 'pixels', IsFocused: true, State: { nodeCount: 3 } },
+            { ChannelKey: 'media', Title: 'Media', Exposure: 'state', IsFocused: false, State: { itemCount: 1 } },
+          ],
+        }),
+      }),
+    );
+
+    for (const action of ['get_workspace_state', 'get_active_surface', 'peek_workspace']) {
+      const out = JSON.parse(await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action, params: {} })));
+      expect(out.success).toBe(true);
+      expect(out.output.surfaceSnapshot.ActiveSurface).toBe('whiteboard');
+      expect(out.output.surfaceSnapshot.ActiveChannels).toHaveLength(2);
+    }
+    expect(exec).not.toHaveBeenCalled();
   });
 });

@@ -610,5 +610,55 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       component.OnCellMouseEnter(4, 4);
       expect(component.SelectedRange).toBe('A1');
     });
+
+    it('supports Freeze Panes menu, Formula Bar autocomplete (=MJ. / =SP), and SVG Sparkline view model', () => {
+      const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SheetsPolishWB');
+      const sheet = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'B1', { Value: 30 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'C1', { Value: 20 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'D1', { Formula: '=SPARKLINE(A1:C1)' }, true);
+      component.Workbook = wb;
+
+      // Read access to read-only check works cleanly
+      component.readonly = false;
+      (component as unknown as { activeSheetID: string }).activeSheetID = sheet.SheetID;
+
+      // Freeze Panes operations
+      component.ActiveRowIndex = 3;
+      component.ActiveColumnIndex = 2;
+      component.FreezeToActiveCell();
+      expect(component.ActiveSheet.FrozenRows).toBe(2);
+      expect(component.ActiveSheet.FrozenColumns).toBe(1);
+
+      component.FreezeFirstColumn();
+      expect(component.ActiveSheet.FrozenColumns).toBe(1);
+      component.FreezeTopRow();
+      expect(component.ActiveSheet.FrozenRows).toBe(1);
+      component.UnfreezePanes();
+      expect(component.ActiveSheet.FrozenRows).toBe(0);
+      expect(component.ActiveSheet.FrozenColumns).toBe(0);
+
+      // Formula Autocomplete suggestions on `=MJ.` and `=SP` + Tab acceptance
+      component.FormulaBarInput = '=MJ.';
+      component.OnFormulaBarInputChange('=MJ.');
+      expect(component.ShowFormulaAutocomplete).toBe(true);
+      expect(component.FormulaAutocompleteSuggestions.some((s) => s.Name === 'MJ.QUERY')).toBe(true);
+
+      component.FormulaBarInput = '=SP';
+      component.OnFormulaBarInputChange('=SP');
+      expect(component.FormulaAutocompleteSuggestions[0]?.Name).toBe('SPARKLINE');
+      component.OnFormulaBarKeyDown(new KeyboardEvent('keydown', { key: 'Tab' }));
+      expect(component.FormulaBarInput).toBe('=SPARKLINE(');
+      expect(component.ShowFormulaAutocomplete).toBe(false);
+
+      // Sparkline SVG view model for cell D1
+      const d1 = component.ActiveSheet.Cells['D1'];
+      const spark = component.TryParseSparklineCell(d1);
+      expect(spark).not.toBeNull();
+      expect(spark?.Count).toBe(3);
+      expect(spark?.Type).toBe('line');
+      expect(spark?.PolylinePoints).toContain(' ');
+    });
   });
 });
