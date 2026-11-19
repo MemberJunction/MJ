@@ -3,8 +3,9 @@
  *
  * `LifecycleGate` — the only writer of `MJ: ML Models.Status` (§5.1's lifecycle table, §5.2). `Evaluate` moves a Draft
  * model to Validated or KeepBaseline as the run's stored gate decision says, or records a run whose decision shipped no
- * model row (D4-56); `Publish` is the one publish function every publisher calls; `Archive` takes a reason and no
- * sign-off. Each is a short composer over protected steps that a subclass may override and each step is unit-tested on
+ * model row (D4-56); `Publish` is the one publish function every publisher calls (it also archives a pre-change model
+ * serving the pipeline while Unevaluated); `Archive` takes a reason and no sign-off; `AdoptPublished` re-verifies a
+ * pre-change Published model on its stored gate record for the Registry Check job alone (§5.6 step 2, D4-61). Each is a short composer over protected steps that a subclass may override and each step is unit-tested on
  * its own. Every read and write runs on `ctx.Provider` as `ctx.ContextUser`, inside one provider transaction holding
  * the pipeline and model locks (pipeline first, D-020); a refused publish rolls that transaction back and records the
  * refusal and the model's `StatusReason` in a second, short one. Every ID comparison goes through `UUIDsEqual`.
@@ -48,7 +49,7 @@ import type { IArtifactLoader } from '../scoring/types';
 import { TrainerModelLineageReader } from '../training/trainer-model-lineage';
 import { ArtifactRegistry } from './artifact-registry';
 import type {
-  AppliedPublishPurpose, ArtifactCheck, EvaluateAttempt, EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, LockResult, PublishApprover, PublishCheck, PublishOutcome, PublishRequest,
+  AdoptOptions, AdoptOutcome, AppliedPublishPurpose, ArtifactCheck, EvaluateAttempt, EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, LockResult, PublishApprover, PublishCheck, PublishOutcome, PublishRequest,
   RefusalWriteIdentity, ScoringActionSync,
 } from './gate-context';
 import { GateRefusals } from './gate-refusals';
@@ -56,6 +57,7 @@ import { MonitoringJobs } from './monitoring-job';
 import { ProviderTransactions } from './provider-transactions';
 import { PUBLISH_LOCK_QUERIES, PublishLocks, SYSTEM_CLOCK, type GateClock, type LockAttempt } from './publish-locks';
 import { PublishRecords } from './publish-records';
+import { RegistryCheckInitiators } from './registry-check-initiators';
 import type { RegistryContext } from './registry-context';
 import { StatusWriteAuthorisations } from './status-write-authorisations';
 import { StoredPublishInputsLoader, StoredRuns } from './stored-publish-inputs';
@@ -75,7 +77,12 @@ export class LifecycleModelNotFoundError extends Error {
 
 /** One publish attempt inside its transaction: applied (committed), or refused (rolled back, then recorded). */
 type PublishAttempt =
-  | { readonly Kind: 'applied'; readonly Outcome: Exclude<PublishOutcome, { readonly Kind: 'withheld' }> }
+  | {
+      readonly Kind: 'applied';
+      readonly Outcome: Exclude<PublishOutcome, { readonly Kind: 'withheld' }>;
+      /** The pipeline's pre-change models the publish archived because they were serving it while Unevaluated (§5.1). */
+      readonly RetiredServing: readonly string[];
+    }
   | {
       readonly Kind: 'refused';
       readonly Refusal: TransitionRefusal;
@@ -101,6 +108,20 @@ type EvaluateAttemptResult =
       /** True when the caller lacks a grant Evaluate writes with ({@link LifecycleGate.EVALUATE_WRITES}): the record is written with the gate's identity (D4-134). */
       readonly MissingGrant: boolean;
     };
+
+/** One adoption inside its transaction: applied or found applied (committed), or refused (rolled back) and whether to demote. */
+type AdoptAttempt =
+  | Extract<AdoptOutcome, { readonly Kind: 'adopted' | 'already-adopted' }>
+  | {
+      readonly Kind: 'refused';
+      readonly Refusal: TransitionRefusal;
+      readonly Transient: boolean;
+      /** True when the stored record did not re-verify (the model is then demoted); false when nothing may change. */
+      readonly Demote: boolean;
+    };
+
+/** One demotion inside its transaction: recorded (committed), or refused with nothing written (rolled back). */
+type DemotionAttempt = { readonly Kind: 'recorded'; readonly RecordID: string } | { readonly Kind: 'refused'; readonly Refusal: TransitionRefusal };
 
 /** A refusal of {@link LifecycleGate.CheckInitiator}, and whether it was for a missing grant (case (a)). */
 export interface InitiatorRefusal {
@@ -185,6 +206,7 @@ export class LifecycleGate {
     const attempt = await ProviderTransactions.Run(ctx, `the publish of ML Model ${model.ID}`, () => this.attemptPublish(model, request, ctx), (a) => a.Kind === 'applied');
     if (attempt.Kind === 'refused') return this.recordWithheld(model.ID, request, attempt, ctx);
     if (attempt.Outcome.Kind === 'published') await this.syncAfterPublish(attempt.Outcome, ctx);
+    for (const retired of attempt.RetiredServing) await this.syncCommitted(retired, 'Archived', ctx);
     return attempt.Outcome;
   }
 
@@ -204,7 +226,106 @@ export class LifecycleGate {
     return result;
   }
 
+  /**
+   * Re-verifies a pre-change Published model on its stored gate record (§5.6 step 2, D4-61) with no status change:
+   * who started it first ({@link CheckAdoptInitiator}: only a Registry Check job run, R9), then under both locks in one
+   * transaction the back-fill `options` names, then the checks of a publish over the stored rows (the re-derived
+   * decision, the leakage flags, the servability holds, the semantics check, a verified artifact, the protocol's
+   * sign-off rule). A pass writes one `publish` record with `Purpose = 'adopt'` and the model's monitoring job when it
+   * has none; anything but a pass rolls the attempt back and, unless it was transient, demotes the model
+   * ({@link DemoteAdoption}): `Published → Unevaluated`, not serving, the refusal as its `StatusReason`, a `refusal`
+   * record, then §5.7 R7 (a)'s rollback of the pipeline's incumbent ({@link RollBackToIncumbent}). A retry of an
+   * applied adoption is `already-adopted`. The scoring Action follows the committed status.
+   *
+   * @throws LifecycleModelNotFoundError when the ID is not a UUID or names no model
+   */
+  public async AdoptPublished(modelId: string, initiator: Actor, ctx: GateContext, options: AdoptOptions = {}): Promise<AdoptOutcome> {
+    const model = await this.readModelOrThrow(modelId, ctx);
+    const refused = await this.CheckAdoptInitiator(initiator, ctx);
+    if (refused !== null) return { Kind: 'refused', ModelID: model.ID, Refusal: refused, Transient: false };
+    const request: PublishRequest = { modelId: model.ID, purpose: 'publish', initiator, signOffId: null, reason: LifecycleGate.ADOPT_REASON };
+    const attempt = await ProviderTransactions.Run(ctx, `the adoption of ML Model ${model.ID}`, () => this.attemptAdopt(model, request, ctx, options), (a) => a.Kind !== 'refused');
+    if (attempt.Kind === 'adopted') await this.syncCommitted(model.ID, 'Published', ctx);
+    if (attempt.Kind !== 'refused') return attempt;
+    if (!attempt.Demote) return { Kind: 'refused', ModelID: model.ID, Refusal: attempt.Refusal, Transient: attempt.Transient };
+    return this.DemoteAdoption(model, request, attempt.Refusal, ctx);
+  }
+
   // ========================================================================================= protected steps ==
+
+  /**
+   * Who may adopt (and so demote) a Published model: `actor-not-permitted` naming the initiator's kind unless
+   * `ctx.ContextUser` holds every permission the adoption writes with ({@link PUBLISH_WRITES}) and the initiator is a run
+   * of a Registry Check job ({@link RegistryCheckInitiators.RefusalOf}, R9). Checked before any lock or write.
+   */
+  protected async CheckAdoptInitiator(initiator: Actor, ctx: GateContext): Promise<TransitionRefusal | null> {
+    const permitted = this.CheckContextUserMayPublish(initiator, ctx);
+    if (permitted !== null) return permitted;
+    const why = await RegistryCheckInitiators.RefusalOf(initiator, ctx);
+    return why === null ? null : { kind: 'actor-not-permitted', actor: initiator.kind };
+  }
+
+  /**
+   * An adoption that did not re-verify: in its own short transaction under both locks, and only while the model is
+   * still Published, `Published → Unevaluated` with `ServingWhileUnevaluated` cleared (it stops serving, ruling R8),
+   * the refusal as its `StatusReason`, its monitoring job disabled and one `refusal` record with `Purpose = 'adopt'`;
+   * then, after the commit, its scoring Action disabled and the pipeline's incumbent rolled back
+   * ({@link RollBackToIncumbent}). A lock that times out, or a model no longer Published, changes nothing (`refused`).
+   */
+  protected async DemoteAdoption(model: MJMLModelEntity, request: PublishRequest, refusal: TransitionRefusal, ctx: GateContext): Promise<AdoptOutcome> {
+    const recorded = await ProviderTransactions.Run(ctx, `the demotion of ML Model ${model.ID}`, () => this.demoteLocked(model, request, refusal, ctx), (r) => r.Kind === 'recorded');
+    if (recorded.Kind === 'refused') return { Kind: 'refused', ModelID: model.ID, Refusal: recorded.Refusal, Transient: recorded.Refusal.kind === 'publish-in-progress' };
+    await this.syncCommitted(model.ID, 'Unevaluated', ctx);
+    const rollback = await this.RollBackToIncumbent(model.PipelineID, request.initiator, ctx);
+    return { Kind: 'demoted', ModelID: model.ID, Refusal: refusal, RefusalRecordID: recorded.RecordID, Rollback: rollback };
+  }
+
+  /**
+   * §5.7 R7 (a)'s rollback rule for a pipeline left with no Published model: the newest (highest `Version`) `Archived`
+   * model of the pipeline that has a `Delivery`, a verified artifact and a `publish` record for its training run is
+   * published again through {@link Publish} (`purpose: 'rollback'`); null when the pipeline has none (scoring then refuses
+   * `model-not-published` until a re-evaluation publishes).
+   */
+  protected async RollBackToIncumbent(pipelineId: string, initiator: Actor, ctx: GateContext): Promise<PublishOutcome | null> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelEntity, 'ID' | 'TrainingRunID' | 'Delivery'>>(
+      {
+        EntityName: 'MJ: ML Models', ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}' AND Status='Archived' AND ArtifactStatus='verified'`,
+        OrderBy: 'Version DESC', Fields: ['ID', 'TrainingRunID', 'Delivery'], ResultType: 'simple',
+      },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the archived models of pipeline ${pipelineId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    for (const candidate of r.Results) {
+      if (!candidate.Delivery || !candidate.TrainingRunID) continue;
+      if ((await PublishRecords.FindPublishForRun(candidate.TrainingRunID, ctx)) === null) continue;
+      return this.Publish({ modelId: candidate.ID, purpose: 'rollback', initiator, signOffId: null, reason: LifecycleGate.ADOPT_ROLLBACK_REASON }, ctx);
+    }
+    return null;
+  }
+
+  /**
+   * Archives the pipeline's pre-change models that serve it while Unevaluated (`ServingWhileUnevaluated = 1`) in the
+   * caller's publish transaction (§5.1): "Replaced by v<n>, published through the gate" as the reason, the flag cleared
+   * by the same authorised save, its monitoring job disabled. Returns their IDs, so their scoring Actions are disabled
+   * after the commit.
+   *
+   * @throws Error when the read or a save fails (the caller's transaction rolls the publish back)
+   */
+  protected async RetireServingModels(published: MJMLModelEntity, initiator: Actor, ctx: GateContext): Promise<string[]> {
+    const r = await StoredRowReads.Run<MJMLModelEntity>(
+      { EntityName: 'MJ: ML Models', ExtraFilter: `PipelineID='${EscapeSQLString(published.PipelineID)}' AND Status='Unevaluated' AND ServingWhileUnevaluated=1`, ResultType: 'entity_object' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the serving pre-change model of pipeline ${published.PipelineID} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const retired: string[] = [];
+    for (const serving of r.Results.filter((m) => !UUIDsEqual(m.ID, published.ID))) {
+      serving.StatusReason = `Replaced by v${published.Version}, published through the gate.`;
+      await LifecycleGate.saveAuthorised(serving, 'Archived', initiator, null, true);
+      await MonitoringJobs.DisableForModel(serving.ID, ctx);
+      retired.push(serving.ID);
+    }
+    return retired;
+  }
 
   /**
    * Takes the pipeline lock, then the model lock, through the two stored Queries on `ctx.Provider` (inside the caller's
@@ -495,6 +616,65 @@ export class LifecycleGate {
 
   // ================================================================================================ private ==
 
+  /** The `Reason` of an adoption's `publish` record (§5.6 step 2). */
+  private static readonly ADOPT_REASON = 'pre-change model re-verified on its stored gate record';
+  /** The `Reason` of the rollback a refused adoption starts (§5.7 R7 (a)). */
+  private static readonly ADOPT_ROLLBACK_REASON = 'rolled back: the Published pre-change model did not re-verify on its stored gate record';
+
+  /** The model's `StatusReason` after a refused adoption: the re-verification's refusal, in plain words and by kind. Pure. */
+  public static AdoptionRefusedReason(refusal: TransitionRefusal): string {
+    return `Trained before the Predictive Studio lifecycle gate; re-verification on its stored gate record refused (${refusal.kind}): ${GateRefusals.Describe(refusal)}`;
+  }
+
+  /**
+   * One adoption under both locks: a model no longer Published is `illegal-transition` (nothing to adopt); a run that
+   * already holds its `adopt` (or `publish`) record is `already-adopted`; then the back-fill, the stored-row checks of a
+   * publish, and the writes of a pass — the model's `StatusReason` cleared and its artifact `verified` in a save that
+   * changes no status, the `adopt` record, the monitoring job when the model has no open one.
+   */
+  private async attemptAdopt(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext, options: AdoptOptions): Promise<AdoptAttempt> {
+    const lock = await this.LockPipelineAndModel(model.PipelineID, model.ID, ctx);
+    if (lock.Locked === false) return { Kind: 'refused', Refusal: lock.Refusal, Transient: lock.Refusal.kind === 'publish-in-progress', Demote: false };
+    const locked = await this.readModel(model.ID, ctx);
+    if (locked === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: model.ID }, Transient: false, Demote: false };
+    if (locked.Status !== 'Published') {
+      return { Kind: 'refused', Refusal: { kind: 'illegal-transition', from: LifecycleStates.FromPersisted(locked.Status), to: 'published' }, Transient: false, Demote: false };
+    }
+    const prior = locked.TrainingRunID ? await PublishRecords.FindPublishForRun(locked.TrainingRunID, ctx) : null;
+    if (prior !== null) return { Kind: 'already-adopted', ModelID: locked.ID, PublishRecordID: prior.ID };
+    const backFill = options.BackFill ? await options.BackFill(locked, ctx) : null;
+    if (backFill !== null) return { Kind: 'refused', Refusal: backFill, Transient: false, Demote: true };
+    const checked = await this.checkFromStoredRows(locked, request, ctx);
+    if (checked.Ok === false) return { Kind: 'refused', Refusal: checked.Refusal, Transient: checked.Transient, Demote: !checked.Transient };
+    locked.StatusReason = null;
+    locked.ArtifactStatus = 'verified';
+    locked.ArtifactCheckedAt = new Date();
+    if (!(await locked.Save())) throw new Error(`Saving the adopted ML Model ${locked.ID} failed: ${locked.LatestResult?.CompleteMessage || 'unknown error'}`);
+    const recordId = await PublishRecords.WritePublish({
+      ModelID: locked.ID, TrainingRunID: locked.TrainingRunID, Purpose: 'adopt', Approver: checked.Approver, Initiator: request.initiator, Reason: request.reason,
+      GateDecision: checked.Reverified.Gate, Evidence: checked.Evidence, EvidenceSha256: checked.EvidenceSha256, SignOffID: null, ReplacesModelID: null,
+    }, ctx);
+    if ((await MonitoringJobs.OpenJobCount(locked.ID, ctx)) === 0) await this.CreateMonitoringJob(locked, ctx);
+    return { Kind: 'adopted', ModelID: locked.ID, PublishRecordID: recordId };
+  }
+
+  /** The demotion's writes under both locks ({@link DemoteAdoption}). */
+  private async demoteLocked(model: MJMLModelEntity, request: PublishRequest, refusal: TransitionRefusal, ctx: GateContext): Promise<DemotionAttempt> {
+    const lock = await this.LockPipelineAndModel(model.PipelineID, model.ID, ctx);
+    if (lock.Locked === false) return { Kind: 'refused', Refusal: lock.Refusal };
+    const locked = await this.readModel(model.ID, ctx);
+    if (locked === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: model.ID } };
+    if (locked.Status !== 'Published') return { Kind: 'refused', Refusal: { kind: 'illegal-transition', from: LifecycleStates.FromPersisted(locked.Status), to: 'unevaluated' } };
+    locked.StatusReason = LifecycleGate.AdoptionRefusedReason(refusal);
+    await LifecycleGate.saveAuthorised(locked, 'Unevaluated', request.initiator, null, locked.ServingWhileUnevaluated);
+    await MonitoringJobs.DisableForModel(locked.ID, ctx);
+    const recordId = await PublishRecords.WriteRefusal({
+      ModelID: locked.ID, TrainingRunID: locked.TrainingRunID, Purpose: 'adopt', Approver: LifecycleGate.approverOf(request.initiator, null),
+      Initiator: request.initiator, Refusal: refusal, Transient: false,
+    }, ctx);
+    return { Kind: 'recorded', RecordID: recordId };
+  }
+
   /** After a committed publish: the published model's Action generated, then the replaced model's disabled. */
   private async syncAfterPublish(outcome: Extract<PublishOutcome, { readonly Kind: 'published' }>, ctx: GateContext): Promise<void> {
     await this.syncCommitted(outcome.ModelID, 'Published', ctx);
@@ -534,7 +714,7 @@ export class LifecycleGate {
     if (locked === null) return LifecycleGate.refusedAttempt({ kind: 'model-not-found', modelId: model.ID }, false, null, model.Status, false);
     const prior = await this.findAppliedPublish(locked, request, ctx);
     if (prior !== null && locked.Status === 'Published') {
-      return { Kind: 'applied', Outcome: { Kind: 'already-published', Purpose: prior.Purpose, ModelID: locked.ID, PublishRecordID: prior.ID } };
+      return { Kind: 'applied', Outcome: { Kind: 'already-published', Purpose: prior.Purpose, ModelID: locked.ID, PublishRecordID: prior.ID }, RetiredServing: [] };
     }
     if (prior !== null && request.purpose === 'publish' && LifecycleGate.RESTORABLE_STATUSES.some((s) => s === locked.Status)) {
       return this.restorePublish(locked, request, prior.ID, ctx);
@@ -543,7 +723,7 @@ export class LifecycleGate {
     if (before !== null) return LifecycleGate.refusedAttempt(before, false, null, locked.Status, false);
     const checked = await this.checkFromStoredRows(locked, request, ctx);
     if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, locked.Status, false);
-    return { Kind: 'applied', Outcome: await this.applyPublish(locked, request, checked, ctx) };
+    return this.applyPublish(locked, request, checked, ctx);
   }
 
   /**
@@ -585,8 +765,12 @@ export class LifecycleGate {
     model.ArtifactStatus = 'verified';
     model.ArtifactCheckedAt = new Date();
     await this.ApplyTransition(model, 'Published', checked.Replaces, request.initiator, ctx);
+    const retired = await this.RetireServingModels(model, request.initiator, ctx);
     if ((await MonitoringJobs.OpenJobCount(model.ID, ctx)) === 0) await this.CreateMonitoringJob(model, ctx);
-    return { Kind: 'applied', Outcome: { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: checked.Replaces, Approver: checked.Approver.Kind } };
+    return {
+      Kind: 'applied', Outcome: { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: checked.Replaces, Approver: checked.Approver.Kind },
+      RetiredServing: retired,
+    };
   }
 
   /**
@@ -611,15 +795,23 @@ export class LifecycleGate {
     { EntityName: 'MJ: Scheduled Jobs', Need: 'CanUpdate' },
   ];
 
-  /** The writes of a passing publish, in the publish transaction (their permissions: {@link PUBLISH_WRITES}). */
-  private async applyPublish(model: MJMLModelEntity, request: PublishRequest, check: PassedCheck, ctx: GateContext): Promise<Extract<PublishOutcome, { readonly Kind: 'published' }>> {
+  /**
+   * The writes of a passing publish, in the publish transaction (their permissions: {@link PUBLISH_WRITES}): the status
+   * change with the archive of the replaced model, the archive of a pre-change model serving the pipeline
+   * ({@link RetireServingModels}), the `publish` record and the monitoring job.
+   */
+  private async applyPublish(model: MJMLModelEntity, request: PublishRequest, check: PassedCheck, ctx: GateContext): Promise<PublishAttempt> {
     model.StatusReason = null;
     model.ArtifactStatus = 'verified';
     model.ArtifactCheckedAt = new Date();
     await this.ApplyTransition(model, 'Published', check.Replaces, request.initiator, ctx);
+    const retired = await this.RetireServingModels(model, request.initiator, ctx);
     const recordId = await this.WritePublishRecord(model, request, check, ctx);
     await this.CreateMonitoringJob(model, ctx);
-    return { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: check.Replaces, Approver: check.Approver.Kind };
+    return {
+      Kind: 'applied', Outcome: { Kind: 'published', Purpose: request.purpose, ModelID: model.ID, PublishRecordID: recordId, Replaces: check.Replaces, Approver: check.Approver.Kind },
+      RetiredServing: retired,
+    };
   }
 
   /**
@@ -871,12 +1063,19 @@ export class LifecycleGate {
     return PERSISTED_STATUSES.find((s) => s === value) || null;
   }
 
-  /** Saves a status change the gate authorised for exactly this instance; the authorisation never outlives the save. */
-  private static async saveAuthorised(model: MJMLModelEntity, to: MJMLModelEntity['Status'], initiator: Actor, replaces: string | null): Promise<void> {
+  /**
+   * Saves a status change the gate authorised for exactly this instance; the authorisation never outlives the save.
+   * With `clearsServing`, the same save clears `ServingWhileUnevaluated` and the authorisation carries that change (the
+   * only change of the flag an entity save may make, D4-61).
+   */
+  private static async saveAuthorised(model: MJMLModelEntity, to: MJMLModelEntity['Status'], initiator: Actor, replaces: string | null, clearsServing = false): Promise<void> {
     const from = model.Status;
     if (!StatusWriteRules.IsAuthorisedTransition(from, to)) throw new Error(`Predictive Studio lifecycle gate: ${from} → ${to} is not in the lifecycle table`);
-    StatusWriteAuthorisations.Instance.Authorise(model, { From: from, To: to, Initiator: initiator, Replaces: replaces });
+    StatusWriteAuthorisations.Instance.Authorise(model, clearsServing
+      ? { From: from, To: to, Initiator: initiator, Replaces: replaces, ServingWhileUnevaluated: false }
+      : { From: from, To: to, Initiator: initiator, Replaces: replaces });
     try {
+      if (clearsServing) model.ServingWhileUnevaluated = false;
       model.Status = to;
       if (!(await model.Save())) throw new Error(`Saving ML Model ${model.ID} as ${to} failed: ${model.LatestResult?.CompleteMessage || 'unknown error'}`);
     } finally {

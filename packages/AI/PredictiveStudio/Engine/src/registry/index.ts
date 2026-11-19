@@ -26,5 +26,6 @@ export * from './automated-publisher';
 export * from './evidence-write-authorisations';
 export * from './pre-save-hook-registration';
 export * from './guard-context';
+export * from './registry-check-initiators';
 export * from './status-guard';
 export * from './evidence-guard';

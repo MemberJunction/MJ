@@ -24,8 +24,8 @@ export interface PublishRecordWrite {
   readonly ModelID: string;
   /** Its training run (the idempotency key of a `publish`), or null for a model without one. */
   readonly TrainingRunID: string | null;
-  /** The request's purpose. */
-  readonly Purpose: Extract<MJMLModelPublishRecordEntity['Purpose'], 'publish' | 'rollback'>;
+  /** The request's purpose; `adopt` for a pre-change Published model re-verified on its stored gate record (M7.2). */
+  readonly Purpose: Extract<MJMLModelPublishRecordEntity['Purpose'], 'publish' | 'rollback' | 'adopt'>;
   /** Who approved it (`ApproverKind` and `UserID`). */
   readonly Approver: PublishApprover;
   /** Who started it (stored as `Initiator` JSON). */

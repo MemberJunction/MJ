@@ -360,11 +360,22 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     if (recordProcessId === null || !IsValidUUID(recordProcessId)) return;
     const rp = await this.readRecordProcess(recordProcessId, ctx);
     if (rp === null) throw new Error(PipelineAutoTrainer.RecordProcessGoneMessage(recordProcessId, modelId, request.pipelineId));
-    rp.Configuration = JSON.stringify({ ...this.parseConfig(rp.Configuration), modelId });
+    rp.Configuration = PipelineAutoTrainer.RepointedConfiguration(rp.Configuration, modelId);
     if (!(await rp.Save())) {
       throw new Error(`Auto-train: failed to repoint Record Process '${rp.ID}': ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
     }
     if (request.binding) await this.ensureDeclaredBinding(request, request.binding, rp, ctx);
+  }
+
+  /**
+   * A Record Process `Configuration` repointed at `modelId`: every other key kept, `modelId` replaced (an empty or
+   * malformed configuration becomes `{ modelId }`). The one repoint rule, shared with the pre-change re-evaluation's
+   * re-enable of a process (§5.6 step 5). Pure.
+   */
+  public static RepointedConfiguration(raw: string | null, modelId: string): string {
+    const parsed = JsonParse.ParseJsonText(raw, 'Configuration');
+    const config: JsonObject = parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : {};
+    return JSON.stringify({ ...config, modelId });
   }
 
   /** The error of a repoint whose Record Process no longer exists (the run fails loudly; nothing is written to it). Pure. */
@@ -540,11 +551,5 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     );
     if (!r.Success) throw new Error(`Auto-train: reading ML Training Run ${trainingRunId} failed: ${r.ErrorMessage || 'unknown error'}`);
     return r.Results[0]?.ResultingModelID || null;
-  }
-
-  /** The Record Process Configuration JSON as an object ({} when it is empty, not JSON, or not an object). */
-  private parseConfig(raw: string | null): JsonObject {
-    const parsed = JsonParse.ParseJsonText(raw, 'Configuration');
-    return parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : {};
   }
 }
