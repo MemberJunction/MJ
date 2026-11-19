@@ -17234,6 +17234,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.3.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/entity-communications-server':
+        specifier: 6.3.0-edge.1
+        version: link:../../Communication/entity-comm-server
       '@memberjunction/external-data-sources':
         specifier: 6.3.0-edge.1
         version: link:../../ExternalDataSources/Engine

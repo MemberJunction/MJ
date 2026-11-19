@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT182 - Comms V2 Activity Worker and GDPR Erasure",
+    "Description": "Exercises CommsActivityWorker event processing, deduplication, SoftBounceThresholdPolicy auto-suppression, and EraseEndpointPII against live SQL Server.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Hard bounce and soft bounce thresholds create suppressions, duplicate events are skipped, and EraseEndpointPII scrubs PII while preserving compliance records."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "comms-v2-activity"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EE1BB739-9751-4C41-85F9-D550770850E0"
+  },
+  "sync": {
+    "lastModified": "2026-11-19T19:30:43.250Z",
+    "checksum": "19fc5540c744d79a15f95c77769c23a0391c6e1466d6593f41bd59a6ee9c7bad"
+  }
+}

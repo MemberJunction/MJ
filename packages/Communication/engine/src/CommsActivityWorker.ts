@@ -25,6 +25,7 @@ import type {
 import {
   EscapeSQLString,
   MJGlobal,
+  RegisterClass,
   UUIDMap,
   UUIDsEqual,
 } from '@memberjunction/global';
@@ -1045,7 +1046,7 @@ export class CommsActivityWorker {
           BaseCommunicationSuppressionPolicy,
           policy.DriverClass,
         );
-      if (!driver) continue;
+      if (!driver || typeof driver.Evaluate !== 'function') continue;
 
       let params: Record<string, unknown> = {};
       if (policy.Parameters) {
@@ -1216,5 +1217,20 @@ export class CommsActivityWorker {
       }
     }
     return scrubbedCount;
+  }
+}
+
+/**
+ * Built-in policy driver registration for `SoftBounceThresholdPolicy` (evaluated inline
+ * during soft-bounce event handling in `CommsActivityWorker`).
+ */
+@RegisterClass(BaseCommunicationSuppressionPolicy, 'SoftBounceThresholdPolicy')
+export class SoftBounceThresholdPolicy extends BaseCommunicationSuppressionPolicy {
+  public async Evaluate(
+    _events: NormalizedActivityEvent[],
+    _parameters: Record<string, unknown>,
+    _contextUser: UserInfo,
+  ): Promise<void> {
+    // Threshold evaluation and Policy suppression creation are performed inline by handleSoftBounce.
   }
 }
