@@ -443,7 +443,7 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(synth.Concept.ParentConceptName).toBe('Membership Governance');
 
         const edgeTypes = synth.Edges.map((e) => e.EdgeTypeName);
-        expect(edgeTypes).toContain('Broader Than');
+        expect(edgeTypes).toContain('BroaderThan');
         expect(edgeTypes).toContain('Measures'); // MJ: Queries included in schema-and-queries mode
         expect(edgeTypes).not.toContain('Implements'); // MJ: Actions excluded in schema-and-queries mode
         expect(synth.Edges.every((e) => e.Origin === 'Inferred')).toBe(true);

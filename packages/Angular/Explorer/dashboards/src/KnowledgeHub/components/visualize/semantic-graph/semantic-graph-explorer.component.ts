@@ -538,7 +538,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             let conflictCount = 0;
 
             for (const e of edges) {
-                const edgeLabel = e.EdgeType || 'Related To';
+                const edgeLabel = e.EdgeType || 'RelatedTo';
                 const isConflict = edgeLabel.toLowerCase().includes('contradict');
                 if (isConflict) {
                     conflictCount++;
@@ -915,9 +915,9 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
         ];
 
         this.rawEdges = [
-            { ID: 'e-1', SourceID: ID_DOMAIN_GOV, TargetID: ID_POLICY_GRACE, Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-2', SourceID: ID_DOMAIN_GOV, TargetID: ID_METRIC_NRR, Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-3', SourceID: ID_DOMAIN_GOV, TargetID: ID_PROCESS_RENEWAL, Label: 'Broader Than', Direction: 'directed' },
+            { ID: 'e-1', SourceID: ID_DOMAIN_GOV, TargetID: ID_POLICY_GRACE, Label: 'BroaderThan', Direction: 'directed' },
+            { ID: 'e-2', SourceID: ID_DOMAIN_GOV, TargetID: ID_METRIC_NRR, Label: 'BroaderThan', Direction: 'directed' },
+            { ID: 'e-3', SourceID: ID_DOMAIN_GOV, TargetID: ID_PROCESS_RENEWAL, Label: 'BroaderThan', Direction: 'directed' },
             { ID: 'e-4', SourceID: ID_ROLE_STEWARD, TargetID: ID_POLICY_GRACE, Label: 'Governs', Direction: 'directed' },
             { ID: 'e-5', SourceID: ID_METRIC_NRR, TargetID: ID_ABV_ACTIVE, Label: 'Defines', Direction: 'directed' },
             { ID: 'e-6', SourceID: ID_METRIC_NRR, TargetID: ID_QUERY_RETENTION, Label: 'Measures', Direction: 'directed' },

@@ -57,7 +57,8 @@ export interface SynthesizedGraphEdge {
     readonly EdgeTypeName:
         | 'SourcedFrom'
         | 'Mentions'
-        | 'Broader Than'
+        | 'BroaderThan'
+        | 'NarrowerThan'
         | 'Describes'
         | 'Defines'
         | 'Measures'
@@ -65,7 +66,6 @@ export interface SynthesizedGraphEdge {
         | 'Governs'
         | 'Contradicts'
         | 'RelatedTo'
-        | 'Related To'
         | (string & {});
     readonly SourceEntityName: string;
     /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */

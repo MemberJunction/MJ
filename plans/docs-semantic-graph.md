@@ -25,7 +25,7 @@ autocomplete UI waits for that editor; the `[[...]]` syntax and its edges do not
 | Piece | State |
 |---|---|
 | Graph substrate (`__mj.Graph*`, 9 tables) | Shipped. Edges carry `Origin` (Declared/Inferred), `Confidence`, `Status`. |
-| `GraphStage` (Content Pipeline) | Shipped. Clusters chunks into concepts; emits `SourcedFrom`, `Mentions`, `Broader Than`, grounding and `Contradicts` edges. |
+| `GraphStage` (Content Pipeline) | Shipped. Clusters chunks into concepts; emits `SourcedFrom`, `Mentions`, `BroaderThan`, grounding and `Contradicts` edges. |
 | `GraphEngine` (`MJCoreEntities/src/graph`) | Shipped. `Subgraph`, `Expand`, `DescribeForPrompt`; derived edge providers (`ForeignKey`, `RecordLink`, `Query`, …). |
 | Authority tiers | Table `MJ: Graph Authority Tiers` with `Rank`, loaded by `EntityGraphOverlayStore.LoadAuthorityTiers`. **But** a hardcoded fallback remains (§3). |
 | Node visibility | Per viewer: entity `CanRead` plus a batched `RunViews` as that viewer (`GraphEngine.resolveNodesForPrincipal`). Server read hooks on `MJ: Artifacts`, `Artifact Versions` and `Collections` (`RegisterArtifactPostRunViewProtectedEntities`) mean doc nodes should already follow artifact access. Not yet proven by a test. |
@@ -235,4 +235,8 @@ agreement for items and chunks, retraction and teardown leaving no rows behind.
   seeded row) instead of three separate `'Related To'` literals.
 - `IsCanonGraph` no longer treats a graph named "MJ Canon" as Canon: only `MJ: Graph Types.IsCanon`
   decides. The seeded "MJ Canon" graph is of the `Canon` type, so nothing changes for it.
+- Seeded edge type names are consistent CamelCase: `Broader Than` / `Narrower Than` became
+  `BroaderThan` / `NarrowerThan`, matching the `NarrowerThan` row, and the content pipeline writes the
+  new name. The row keeps its ID, and name matching ignores spacing, so edges written before the rename
+  still resolve.
 

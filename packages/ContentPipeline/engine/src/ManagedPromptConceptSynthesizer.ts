@@ -139,10 +139,10 @@ export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
             }
         }
 
-        // 2. Hierarchy edge: Parent Concept -> This Concept (Broader Than)
+        // 2. Hierarchy edge: Parent Concept -> This Concept (BroaderThan)
         if (parentConceptName) {
             edges.push({
-                EdgeTypeName: 'Broader Than',
+                EdgeTypeName: 'BroaderThan',
                 SourceEntityName: 'MJ: Graph Concepts',
                 SourceRecordID: `concept:${parentConceptName}`,
                 TargetEntityName: 'MJ: Graph Concepts',

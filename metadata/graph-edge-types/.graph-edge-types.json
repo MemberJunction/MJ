@@ -38,10 +38,10 @@
   {
     "fields": {
       "GraphID": null,
-      "Name": "Broader Than",
+      "Name": "BroaderThan",
       "Description": "Connects a parent or umbrella concept to a more specific child concept.",
       "IsDirected": true,
-      "InverseName": "Narrower Than",
+      "InverseName": "NarrowerThan",
       "DefaultWeight": 0.85,
       "AllowStored": true
     },

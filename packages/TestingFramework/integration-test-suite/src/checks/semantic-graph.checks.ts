@@ -471,7 +471,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         edgeType.GraphID = graph.ID;
         edgeType.Name = `__IT162_BroaderThan_${suffix}`;
         edgeType.Description = 'Parent concept is broader than child concept';
-        edgeType.InverseName = 'Narrower Than';
+        edgeType.InverseName = 'NarrowerThan';
         edgeType.IsDirected = true;
         edgeType.AllowStored = true;
         edgeType.DefaultWeight = 1.0;
@@ -664,7 +664,7 @@ async function checkSg5ContentPipelineGraphStage(ctx: IntegrationCheckContext): 
     AssertEqual(saved.Concept.ParentConceptName, 'Membership Governance', 'ParentConceptName');
 
     const edgeTypes = new Set<string>(store.PersistedEdges.map((e) => e.Edge.EdgeTypeName));
-    for (const requiredEdge of ['SourcedFrom', 'Mentions', 'Broader Than', 'Describes', 'Contradicts']) {
+    for (const requiredEdge of ['SourcedFrom', 'Mentions', 'BroaderThan', 'Describes', 'Contradicts']) {
         Assert(
             edgeTypes.has(requiredEdge),
             `Synthesized edges must include '${requiredEdge}', got [${Array.from(edgeTypes).join(', ')}]`,
