@@ -12,8 +12,10 @@ export * from './challenger-step';
 export * from './rollback-step';
 export * from './monitoring-store';
 export * from './monitoring-driver';
+export * from './registry-check-driver';
 
 import { PredictiveStudioModelMonitoringJobDriver } from './monitoring-driver';
+import { PredictiveStudioRegistryCheckJobDriver } from './registry-check-driver';
 
 /**
  * Tree-shaking anchor — call from a server bootstrap to keep the `@RegisterClass(BaseScheduledJob, …)` registrations
@@ -21,4 +23,5 @@ import { PredictiveStudioModelMonitoringJobDriver } from './monitoring-driver';
  */
 export function LoadPredictiveStudioMonitoringDrivers(): void {
   void PredictiveStudioModelMonitoringJobDriver;
+  void PredictiveStudioRegistryCheckJobDriver;
 }

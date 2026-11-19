@@ -515,9 +515,37 @@ export class GateTestStore {
         const versions = (this.Tables['MJ: ML Models'] || []).filter((m) => UUIDsEqual(String(m['PipelineID']), p['PipelineID'])).map((m) => Number(m['Version']));
         return [{ NextVersion: Math.max(0, ...versions) + 1 }];
       }
+      case 'Predictive Studio: Pipelines With More Than One Published Model': {
+        const counts = new Map<string, number>();
+        for (const m of (this.Tables['MJ: ML Models'] || []).filter((r) => r['Status'] === 'Published')) counts.set(String(m['PipelineID']), (counts.get(String(m['PipelineID'])) || 0) + 1);
+        return [...counts.entries()].filter(([, n]) => n > 1).map(([pipelineId, n]) => ({ PipelineID: pipelineId, Published: n }));
+      }
+      case 'Predictive Studio: Published Models Without A Publish Record':
+        return (this.Tables['MJ: ML Models'] || [])
+          .filter((m) => m['Status'] === 'Published' && m['Delivery'] !== null && m['Delivery'] !== undefined)
+          .filter((m) => !this.appliedRecords().some((r) => UUIDsEqual(String(r['ModelID']), String(m['ID']))))
+          .map((m) => ({ ModelID: m['ID'], PipelineID: m['PipelineID'] }));
+      case 'Predictive Studio: Publish Records Without A Status Change': {
+        const newest = new Map<string, Row>();
+        for (const r of this.appliedRecords()) newest.set(String(r['ModelID'] || r['ID']).toLowerCase(), r);   // rows are appended in RecordedAt order
+        return [...newest.values()].flatMap((r) => {
+          const model = r['ModelID'] ? this.Row('MJ: ML Models', String(r['ModelID'])) : undefined;
+          if (model && (model['Status'] === 'Published' || model['Status'] === 'Archived')) return [];
+          return [{ PublishRecordID: r['ID'], ModelID: r['ModelID'] || null, TrainingRunID: r['TrainingRunID'] || null, Purpose: r['Purpose'], ModelStatus: model ? model['Status'] : null, PipelineID: model ? model['PipelineID'] : null }];
+        });
+      }
+      case 'Predictive Studio: Stale Running Scoring Runs': {
+        const before = Date.parse(p['StartedBefore']);
+        return (this.Tables['MJ: ML Scoring Runs'] || []).filter((r) => r['Status'] === 'running' && r['StartedAt'] instanceof Date && r['StartedAt'].getTime() < before).map((r) => ({ ID: r['ID'], StartedAt: r['StartedAt'] }));
+      }
       default:
         throw new Error(`GateTestStore: no such query ${name}`);
     }
+  }
+
+  /** The applied `publish` records (a publish or a rollback), in write order. */
+  private appliedRecords(): Row[] {
+    return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => r['Kind'] === 'publish' && (r['Purpose'] === 'publish' || r['Purpose'] === 'rollback'));
   }
 
   /** @internal a new, unsaved record of `entityName` */
