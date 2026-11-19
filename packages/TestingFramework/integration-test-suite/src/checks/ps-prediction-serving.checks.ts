@@ -534,7 +534,7 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             const rerun = await score(ctx, f, f.Binding, DAY3, sidecar);
             AssertEqual(rerun.Status, 'completed', 'Z7: the re-run completed');
             const after = await modelRows(ctx, f.Binding.ID);
-            AssertEqual(after.length, before.length, 'Z7: a same-asOf re-run adds no row (UQ_FeatureValue_ModelRow replaces in place)');
+            AssertEqual(after.length, before.length, 'Z7: a same-asOf re-run adds no row (the writer replaces each row on its Model-row key in place)');
             const oldValue = new Map(before.map((r) => [r.RecordID.toLowerCase(), r.ValueNumeric]));
             Assert(after.every((r) => r.ValueNumeric !== oldValue.get(r.RecordID.toLowerCase())), 'Z7: every value was updated');
             const failing = new ServingSidecar();
