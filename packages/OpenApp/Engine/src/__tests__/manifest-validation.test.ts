@@ -113,6 +113,16 @@ describe('Manifest Validation', () => {
                 'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
             });
         });
+
+        it('should accept a file: locator as the repository of an array-form dependency', () => {
+            const m = {
+                ...minimalManifest(),
+                dependencies: [{ name: 'settings', repository: 'file:openapps/settings', versionRange: '^1.0.0' }],
+            };
+            const result = ValidateManifestObject(m);
+            expect(result.Success).toBe(true);
+            expect(result.Manifest!.dependencies).toEqual({ settings: { version: '^1.0.0', repository: 'file:openapps/settings' } });
+        });
     });
 
     describe('Invalid Name', () => {

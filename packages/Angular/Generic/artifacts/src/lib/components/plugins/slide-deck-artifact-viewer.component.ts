@@ -44,6 +44,9 @@ import {
   type SlideRegionKind,
   type SlideDeckThemeSpec,
   type SlideLayoutMetadata,
+  type SlideTransitionKind,
+  type SlideBackgroundStyle,
+  type SlideCardElevation,
   type DocumentBlockSpec,
   type DocumentBlockColumn,
   type DocumentBlockExecutionResult,
@@ -89,6 +92,7 @@ import {
 } from '../../services/slide-deck-export.service';
 import { EscapeHtml } from '../previews/office-preview.logic';
 import type { ContextMenuItem } from '../context-menu/context-menu.types';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 import {
   ComputeElementContextMenuAnchor,
   IsKeyboardContextMenuShortcut,
@@ -103,7 +107,6 @@ import {
   type SlidesContextMenuCommand,
   type SlidesContextMenuSnapshot,
   type SlidesContextMenuZone,
-  type SlideTransitionKind,
 } from './context-menus/slides-context-menu.helper';
 
 /**
@@ -195,6 +198,7 @@ export type SlidesToolbarItemKey =
   | 'add-slide'
   | 'duplicate-slide'
   | 'delete-slide'
+  | 'polish-slide'
   | 'theme'
   | 'md-to-deck'
   | 'export-pptx'
@@ -205,10 +209,6 @@ export type SlidesToolbarItemKey =
 export const DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS: readonly SlidesToolbarItemKey[] = [
   'present',
   'add-slide',
-  'duplicate-slide',
-  'delete-slide',
-  'theme',
-  'export-pptx',
 ];
 
 export interface ResolvedSlidesToolbarItem {
@@ -233,6 +233,9 @@ export interface ResolvedSlidesToolbarItem {
     <div
       class="mj-slides-shell"
       [class.mj-slides-fullscreen]="WorkspaceMode === 'present' || WorkspaceMode === 'presenter'"
+      [class.mj-slides-stage-blackout]="IsPresentationActive && PresentationOverlayMode === 'blackout'"
+      [class.mj-slides-stage-whiteout]="IsPresentationActive && PresentationOverlayMode === 'whiteout'"
+      (mousemove)="OnPresentShellPointerMove($event)"
       data-testid="mj-slides-shell"
     >
       <!-- Top Presentation Toolbar -->
@@ -341,36 +344,43 @@ export interface ResolvedSlidesToolbarItem {
                 }
               </button>
             }
-
-            <label class="mj-slides-inline-select-label">
-              <span>Layout:</span>
-              <select
-                class="mj-slides-select"
-                [ngModel]="ActiveSlide.Layout"
-                (ngModelChange)="OnChangeActiveSlideLayout($event)"
-                [disabled]="!CanEditSlideElements"
-                data-testid="slide-layout-select"
-              >
-                @for (layoutMeta of LayoutCatalog; track layoutMeta.Kind) {
-                  <option [value]="layoutMeta.Kind">{{ layoutMeta.Label }}</option>
-                }
-              </select>
-            </label>
           </div>
         }
 
-        <!-- Right-side Collaboration, Export & Comments Controls -->
-        <div class="mj-slides-toolbar-group">
+        <!-- Right-side Calm Status, Presence, AI, ⌘K, Comments & Overflow -->
+        <div class="mj-slides-toolbar-group mj-slides-toolbar-right">
+          @if (IsEditable) {
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.primary]="HasUnsavedChanges"
+              [class.mj-slides-save-quiet]="!HasUnsavedChanges"
+              (click)="OnSaveVersionCheckpoint()"
+              [disabled]="IsSavingVersion || !HasUnsavedChanges"
+              [title]="IsSavingVersion ? 'Saving checkpoint...' : (HasUnsavedChanges ? 'Save changes as a new version' : 'All changes synced — no unsaved changes')"
+              data-testid="save-slide-version-btn"
+            >
+              @if (IsSavingVersion) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              } @else if (HasUnsavedChanges) {
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              } @else {
+                <span class="mj-slides-saved-dot" aria-hidden="true"></span>
+              }
+              <span>{{ IsSavingVersion ? 'Saving…' : (!HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : (HasUnsavedChanges ? 'Save v' + (LastSavedVersionNumber || CurrentVersionNumber) : 'Saved')) }}</span>
+            </button>
+          }
+
           <div
-            class="mj-slides-collab-pill"
+            class="mj-slides-collab-pill mj-slides-collab-pill--compact"
             [attr.data-status]="ConnectionStatus"
+            [title]="GetCollaborationStatusLabel()"
             data-testid="slides-collab-status"
           >
             <span class="mj-slides-status-dot"></span>
-            <span>{{ GetCollaborationStatusLabel() }}</span>
             @if (IsWaitingForInitialCollabSync) {
               <span class="mj-slides-syncing-pill" data-testid="slides-initial-sync-badge">
-                <i class="fa-solid fa-spinner fa-spin"></i> Syncing…
+                <i class="fa-solid fa-spinner fa-spin"></i>
               </span>
             }
             @if (ConnectionStatus === 'error') {
@@ -386,16 +396,18 @@ export interface ResolvedSlidesToolbarItem {
             }
           </div>
 
-          <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
-            @for (peer of HumanCollaborators; track peer.ClientID) {
-              <span
-                class="mj-slides-peer-avatar"
-                [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
-              >
-                {{ GetInitials(peer.Name) }}
-              </span>
-            }
-          </div>
+          @if (HumanCollaborators.length > 0) {
+            <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
+              @for (peer of HumanCollaborators; track peer.ClientID) {
+                <span
+                  class="mj-slides-peer-avatar"
+                  [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
+                >
+                  {{ GetInitials(peer.Name) }}
+                </span>
+              }
+            </div>
+          }
           <mj-artifact-agent-presence-bar
             [Collaborators]="Collaborators"
             ActiveDomain="slides"
@@ -419,57 +431,16 @@ export interface ResolvedSlidesToolbarItem {
             </button>
           }
 
-          @if (IsEditable && WorkspaceMode === 'edit') {
+          @if (IsEditable && WorkspaceMode === 'edit' && IsAiAssistantEnabled) {
             <button
               type="button"
-              class="mj-slides-tool-btn"
-              [class.active]="!!ActiveSlide.Locked"
-              [disabled]="!CanToggleCurrentSlideLock"
-              (click)="ToggleCurrentSlideLock()"
-              [title]="ActiveSlide.Locked ? (ActiveSlide.AllowEditors ? 'Locked to collaborators with edit rights (click to unlock)' : 'Locked to owner-only (click to unlock)') : 'Lock current slide'"
-              data-testid="slides-lock-slide-quick-btn"
+              class="mj-slides-tool-btn mj-slides-ai-pill"
+              (click)="OpenAskAiForPresentation()"
+              title="Ask AI about this presentation (/ai)"
+              data-testid="slides-ask-ai-quick-btn"
             >
-              <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
-              <span>{{ ActiveSlide.Locked ? 'Locked' : 'Lock' }}</span>
-            </button>
-            @if (ActiveSlide.Locked && CanToggleCurrentSlideLock) {
-              <button
-                type="button"
-                class="mj-slides-tool-btn"
-                [class.active]="!!ActiveSlide.AllowEditors"
-                (click)="ToggleCurrentSlideLockScope()"
-                [title]="ActiveSlide.AllowEditors ? 'Switch lock to Owner-only' : 'Allow other editors to edit this locked slide'"
-                data-testid="slides-lock-slide-scope-btn"
-              >
-                <i class="fa-solid" [ngClass]="ActiveSlide.AllowEditors ? 'fa-users' : 'fa-user-shield'"></i>
-                <span>{{ ActiveSlide.AllowEditors ? 'Editors OK' : 'Owner Only' }}</span>
-              </button>
-            }
-            @if (IsAiAssistantEnabled) {
-              <button
-                type="button"
-                class="mj-slides-tool-btn primary"
-                (click)="OpenAskAiForPresentation()"
-                title="Open slide-in AI Assistant for this slide"
-                data-testid="slides-ask-ai-quick-btn"
-              >
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Ask AI</span>
-              </button>
-            }
-          }
-
-          @if (IsEditable) {
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              (click)="OnSaveVersionCheckpoint()"
-              [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="IsSavingVersion ? 'Saving checkpoint...' : (HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save')"
-              data-testid="save-slide-version-btn"
-            >
-              <i class="fa-solid" [ngClass]="IsSavingVersion ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'"></i>
-              <span>{{ IsSavingVersion ? 'Saving…' : (!HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save v' + (LastSavedVersionNumber || CurrentVersionNumber)) }}</span>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI</span>
             </button>
           }
 
@@ -478,10 +449,23 @@ export interface ResolvedSlidesToolbarItem {
             class="mj-slides-tool-btn"
             [class.active]="RightDrawerTab === 'comments'"
             (click)="ToggleRightDrawer('comments')"
+            [title]="'Comments (' + OpenThreadCount + ')'"
             data-testid="toggle-slide-comments-btn"
           >
             <i class="fa-regular fa-comments"></i>
-            <span>Comments ({{ OpenThreadCount }})</span>
+            @if (OpenThreadCount > 0) {
+              <span class="mj-slides-count-badge">{{ OpenThreadCount }}</span>
+            }
+          </button>
+
+          <button
+            type="button"
+            class="mj-slides-tool-btn mj-slides-cmdk-btn"
+            (click)="OpenCommandPalette()"
+            title="Search all slide actions, layouts, themes & exports (Cmd/Ctrl+K)"
+            data-testid="slides-cmdk-btn"
+          >
+            <span class="mj-slides-kbd-tag">⌘K</span>
           </button>
 
           <div class="mj-slides-more-anchor" #moreToolsAnchor>
@@ -764,6 +748,45 @@ export interface ResolvedSlidesToolbarItem {
             <button
               type="button"
               class="mj-slides-tool-btn"
+              [class.active]="LaserPointerActive"
+              (click)="ToggleLaserPointer()"
+              title="Toggle Laser Pointer (L)"
+              data-testid="present-laser-btn"
+            >
+              <i class="fa-solid fa-crosshairs"></i> Laser
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="PresentationOverlayMode === 'blackout'"
+              (click)="TogglePresentationOverlay('blackout')"
+              title="Blackout screen (B)"
+              data-testid="present-blackout-btn"
+            >
+              <i class="fa-solid fa-moon"></i>
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              (click)="OpenAudienceStageWindow()"
+              title="Pop out dual-window Audience Stage (BroadcastChannel synced)"
+              data-testid="present-popout-audience-btn"
+            >
+              <i class="fa-solid fa-up-right-from-square"></i> Audience Window
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="IsBrowserFullscreen"
+              (click)="ToggleBrowserFullscreen()"
+              title="Toggle Browser Fullscreen (F)"
+              data-testid="present-fullscreen-toggle-btn"
+            >
+              <i class="fa-solid" [ngClass]="IsBrowserFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
               (click)="ExitPresentationMode()"
               data-testid="exit-presentation-btn"
             >
@@ -965,7 +988,11 @@ export interface ResolvedSlidesToolbarItem {
                   [attr.data-aspect-ratio]="ActiveDeckForDisplay.AspectRatio"
                   [style.aspect-ratio]="ActiveDeckForDisplay.AspectRatio === '4:3' ? '4 / 3' : '16 / 9'"
                   [attr.data-theme-id]="ActiveDeckForDisplay.Theme.ThemeID"
+                  [attr.data-bg-style]="SafeTheme.BackgroundStyle"
+                  [attr.data-card-elevation]="SafeTheme.CardElevation"
+                  [attr.data-transition]="DisplayedSlide.Transition || 'fade'"
                   [style.--deck-bg]="SafeTheme.BackgroundColor"
+                  [style.--deck-secondary-bg]="SafeTheme.SecondaryGradientColor"
                   [style.--deck-surface]="SafeTheme.SurfaceColor"
                   [style.--deck-primary]="SafeTheme.PrimaryColor"
                   [style.--deck-accent]="SafeTheme.AccentColor"
@@ -973,6 +1000,7 @@ export interface ResolvedSlidesToolbarItem {
                   [style.--deck-muted]="SafeTheme.MutedTextColor"
                   [style.--deck-heading-font]="SafeTheme.HeadingFont"
                   [style.--deck-body-font]="SafeTheme.BodyFont"
+                  [style.--deck-card-radius.px]="SafeTheme.CardRadiusPx"
                   (contextmenu)="OnSlideStageContextMenu($event)"
                   data-testid="slide-canvas-stage"
                 >
@@ -1030,9 +1058,12 @@ export interface ResolvedSlidesToolbarItem {
                         class="mj-slide-region-card"
                         [class.active-region]="FocusedRegionID === region.RegionID"
                         [class.mj-slide-region--agent-active]="IsRegionEditedByAgent(region.RegionID)"
+                        [class.mj-slide-region--unrevealed]="IsPresentationActive && !IsRegionRevealed(region)"
                         (click)="FocusedRegionID = region.RegionID"
                         (contextmenu)="OnSlideRegionContextMenu($event, region)"
+                        [attr.data-region-id]="region.RegionID"
                         [attr.data-region-kind]="region.Kind"
+                        [attr.data-reveal-step]="region.RevealStep ?? null"
                         [attr.data-testid]="'slide-region-' + region.RegionID"
                       >
                         <!-- Region Authoring Bar (only in Edit mode) -->
@@ -1519,6 +1550,131 @@ export interface ResolvedSlidesToolbarItem {
                       placeholder="Add presenter talking points and cues for this slide..."
                       data-testid="speaker-notes-input"
                     ></textarea>
+                  </div>
+                }
+
+                <!-- Option A Contextual Floating Slide Design Pill (keeps Row 1 calm while putting Layout/Theme/Motion/Lock/Polish inline) -->
+                @if (WorkspaceMode === 'edit' && IsEditable && !IsPresentationActive) {
+                  <div class="mj-slides-floating-design-wrap">
+                    @if (ShowDesignPopover) {
+                      <div class="mj-slides-design-popover" data-testid="slides-design-popover">
+                        <div class="mj-slides-design-popover-head">
+                          <span>Layout &amp; Theme Preset</span>
+                          <button
+                            type="button"
+                            class="mj-slides-icon-btn"
+                            aria-label="Close design popover"
+                            (click)="ShowDesignPopover = false"
+                          >
+                            <i class="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                        <div class="mj-slides-design-grid">
+                          @for (layoutMeta of LayoutCatalog; track layoutMeta.Kind) {
+                            <button
+                              type="button"
+                              class="mj-slides-design-chip"
+                              [class.active]="ActiveSlide.Layout === layoutMeta.Kind"
+                              [disabled]="!CanEditSlideElements"
+                              [title]="layoutMeta.Description"
+                              [attr.data-testid]="'slide-layout-opt-' + layoutMeta.Kind"
+                              (click)="OnChangeActiveSlideLayout(layoutMeta.Kind); ShowDesignPopover = false"
+                            >
+                              {{ layoutMeta.Label }}
+                            </button>
+                          }
+                        </div>
+                        <div class="mj-slides-design-section-label">Theme Presets</div>
+                        <div class="mj-slides-design-swatches">
+                          @for (preset of ThemePresets; track preset.ThemeID) {
+                            <button
+                              type="button"
+                              class="mj-slides-design-swatch"
+                              [class.active]="Deck.Theme.ThemeID === preset.ThemeID"
+                              [title]="preset.ThemeID"
+                              [attr.data-testid]="'slide-theme-swatch-' + preset.ThemeID"
+                              (click)="OnSelectThemePreset(preset.ThemeID)"
+                            >
+                              <span
+                                class="mj-slides-swatch-dot"
+                                [style.background]="preset.PrimaryColor"
+                              ></span>
+                              <span>{{ preset.ThemeID }}</span>
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <div class="mj-slides-floating-pill" data-testid="slides-floating-design-pill">
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [class.active]="ShowDesignPopover"
+                        [disabled]="!CanEditSlideElements"
+                        (click)="ShowDesignPopover = !ShowDesignPopover"
+                        title="Choose slide layout or theme preset"
+                        data-testid="slides-floating-layout-btn"
+                      >
+                        <i class="fa-solid fa-table-columns"></i>
+                        <span>{{ ActiveSlideLayoutLabel }}</span>
+                        <i class="fa-solid fa-caret-down"></i>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [disabled]="!CanEditSlideElements"
+                        (click)="CycleActiveSlideTransition()"
+                        title="Cycle Present transition (None / Fade / Slide / Zoom)"
+                        data-testid="slides-floating-motion-btn"
+                      >
+                        <i class="fa-solid fa-wand-sparkles"></i>
+                        <span>{{ ActiveSlide.Transition || 'fade' }}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn"
+                        [class.active]="!!ActiveSlide.Locked"
+                        [disabled]="!CanToggleCurrentSlideLock"
+                        (click)="ToggleCurrentSlideLock()"
+                        [title]="ActiveSlide.Locked ? (ActiveSlide.AllowEditors ? 'Locked (editors allowed)' : 'Locked (owner only)') : 'Lock slide'"
+                        data-testid="slides-lock-slide-quick-btn"
+                      >
+                        <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
+                        @if (ActiveSlide.Locked) {
+                          <span>Locked</span>
+                        }
+                      </button>
+
+                      @if (ActiveSlide.Locked && CanToggleCurrentSlideLock) {
+                        <button
+                          type="button"
+                          class="mj-slides-pill-btn"
+                          [class.active]="!!ActiveSlide.AllowEditors"
+                          (click)="ToggleCurrentSlideLockScope()"
+                          [title]="ActiveSlide.AllowEditors ? 'Switch to Owner-only lock' : 'Allow collaborators with edit rights'"
+                          data-testid="slides-lock-slide-scope-btn"
+                        >
+                          <i class="fa-solid" [ngClass]="ActiveSlide.AllowEditors ? 'fa-users' : 'fa-user-shield'"></i>
+                        </button>
+                      }
+
+                      <span class="mj-slides-pill-sep"></span>
+
+                      <button
+                        type="button"
+                        class="mj-slides-pill-btn polish"
+                        (click)="OnPolishActiveSlide()"
+                        [disabled]="!CanEditSlideElements"
+                        title="Auto-polish typography, KPI cards, and progressive reveal steps"
+                        data-testid="polish-slide-btn"
+                      >
+                        <i class="fa-solid fa-sparkles"></i>
+                        <span>Polish</span>
+                      </button>
+                    </div>
                   </div>
                 }
               </div>
@@ -2040,6 +2196,116 @@ export interface ResolvedSlidesToolbarItem {
         </div>
       }
 
+      <!-- Full-Screen Presentation Overlays: Blackout / Whiteout / Laser / Floating Auto-Hide HUD -->
+      @if (IsPresentationActive && PresentationOverlayMode !== 'none') {
+        <div
+          class="mj-slides-stage-overlay"
+          [class.blackout]="PresentationOverlayMode === 'blackout'"
+          [class.whiteout]="PresentationOverlayMode === 'whiteout'"
+          (click)="TogglePresentationOverlay('none')"
+          data-testid="present-screen-overlay"
+        >
+          <span>
+            {{ PresentationOverlayMode === 'blackout' ? 'Screen Blacked Out — Press B or Esc to resume' : 'White Screen — Press W or Esc to resume' }}
+          </span>
+        </div>
+      }
+
+      @if (IsPresentationActive && LaserPointerActive) {
+        <div
+          class="mj-slides-laser-dot"
+          [style.left.%]="LaserPointerX"
+          [style.top.%]="LaserPointerY"
+          data-testid="present-laser-dot"
+        ></div>
+      }
+
+      @if (IsPresentationActive) {
+        <div
+          class="mj-slides-floating-hud"
+          [class.visible]="PresentHudVisible"
+          (mouseenter)="KeepPresentHudVisible()"
+          data-testid="present-floating-hud"
+        >
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [disabled]="!CanNavigatePrevSlide"
+            (click)="PrevSlide()"
+            title="Previous (Left Arrow / PageUp)"
+            data-testid="hud-prev-btn"
+          >
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <span class="mj-slides-hud-counter" data-testid="hud-slide-counter">
+            {{ ActiveSlideIndex + 1 }} / {{ ActiveDeckForDisplay.Slides.length }}
+            @if (MaxRevealStepOnDisplayedSlide > 0) {
+              <small>· Step {{ CurrentRevealStep }}/{{ MaxRevealStepOnDisplayedSlide }}</small>
+            }
+          </span>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [disabled]="!CanNavigateNextSlide"
+            (click)="NextSlide()"
+            title="Next (Right Arrow / Space / PageDown)"
+            data-testid="hud-next-btn"
+          >
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          <span class="mj-slides-hud-divider"></span>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="LaserPointerActive"
+            (click)="ToggleLaserPointer()"
+            title="Laser Pointer (L)"
+            data-testid="hud-laser-btn"
+          >
+            <i class="fa-solid fa-crosshairs"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="PresentationOverlayMode === 'blackout'"
+            (click)="TogglePresentationOverlay('blackout')"
+            title="Blackout (B)"
+            data-testid="hud-blackout-btn"
+          >
+            <i class="fa-solid fa-moon"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="PresentationOverlayMode === 'whiteout'"
+            (click)="TogglePresentationOverlay('whiteout')"
+            title="Whiteout (W)"
+            data-testid="hud-whiteout-btn"
+          >
+            <i class="fa-regular fa-square"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            [class.active]="IsBrowserFullscreen"
+            (click)="ToggleBrowserFullscreen()"
+            title="Fullscreen (F)"
+            data-testid="hud-fullscreen-btn"
+          >
+            <i class="fa-solid" [ngClass]="IsBrowserFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+          </button>
+          <button
+            type="button"
+            class="mj-slides-hud-btn"
+            (click)="ExitPresentationMode()"
+            title="Exit Presentation (Esc)"
+            data-testid="hud-exit-btn"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      }
+
       <mj-context-menu
         [IsOpen]="ContextMenuOpen"
         [AnchorX]="ContextMenuX"
@@ -2050,6 +2316,15 @@ export interface ResolvedSlidesToolbarItem {
         (ItemSelected)="OnSlidesContextMenuCommand($event)"
         (Closed)="CloseContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Slide Deck Commands"
+        Placeholder="Search layouts, themes, transitions, present, export..."
+        [Commands]="SlidesCommandPaletteItems"
+        (Execute)="ExecuteSlidePaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2073,23 +2348,304 @@ export interface ResolvedSlidesToolbarItem {
         position: fixed;
         inset: 0;
         z-index: 9999;
-        background: var(--mj-bg-page);
+        background: #090d16;
+      }
+      .mj-slides-fullscreen .mj-slides-center-stage {
+        background: radial-gradient(circle at top center, #111827 0%, #05070c 85%);
+        justify-content: center;
+        align-items: center;
+        padding: 20px 32px;
+      }
+      .mj-slides-fullscreen .mj-slide-canvas-stage {
+        max-width: min(1440px, 94vw);
+        max-height: calc(100vh - 110px);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+      }
+      .mj-slides-stage-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10020;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .mj-slides-stage-overlay.blackout {
+        background: #000000;
+        color: rgba(255, 255, 255, 0.35);
+      }
+      .mj-slides-stage-overlay.whiteout {
+        background: #ffffff;
+        color: rgba(15, 23, 42, 0.35);
+      }
+      .mj-slides-laser-dot {
+        position: fixed;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.32), 0 0 18px 4px rgba(239, 68, 68, 0.75);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 10030;
+      }
+      .mj-slides-floating-hud {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        z-index: 10025;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.82);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #f8fafc;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .mj-slides-floating-hud.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+      .mj-slides-hud-btn {
+        border: none;
+        background: transparent;
+        color: #e2e8f0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .mj-slides-hud-btn:hover:not(:disabled),
+      .mj-slides-hud-btn.active {
+        background: rgba(255, 255, 255, 0.16);
+        color: #ffffff;
+      }
+      .mj-slides-hud-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      .mj-slides-hud-counter {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 0 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .mj-slides-hud-divider {
+        width: 1px;
+        height: 16px;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .mj-slides-polish-btn {
+        background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 14%, transparent), color-mix(in srgb, var(--mj-brand-accent, var(--mj-brand-primary)) 12%, transparent));
+        border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+        color: var(--mj-brand-primary);
       }
       .mj-slides-toolbar {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        padding: 8px 14px;
-        background: var(--mj-bg-surface-card);
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-slides-toolbar::-webkit-scrollbar {
+        display: none;
       }
       .mj-slides-toolbar-group {
         display: flex;
         align-items: center;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
+      }
+      .mj-slides-toolbar-right {
+        margin-left: auto;
+      }
+      .mj-slides-save-quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+      }
+      .mj-slides-save-quiet:hover:not(:disabled) {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+      .mj-slides-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+      .mj-slides-ai-pill {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+      .mj-slides-cmdk-btn {
+        padding: 3px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+      .mj-slides-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+      .mj-slides-count-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--mj-brand-primary);
+        color: var(--mj-brand-on-primary);
+      }
+      .mj-slides-collab-pill--compact {
+        padding: 4px 7px;
+      }
+      .mj-slides-floating-design-wrap {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 8px;
+        z-index: var(--mj-z-dropdown, 100);
+      }
+      .mj-slides-floating-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 6px;
+        border-radius: 999px;
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-strong);
+        box-shadow: var(--mj-shadow-lg);
+      }
+      .mj-slides-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 26px;
+        padding: 0 9px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mj-text-primary);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mj-slides-pill-btn:hover:not(:disabled),
+      .mj-slides-pill-btn.active {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-slides-pill-btn.polish {
+        color: var(--mj-text-violet);
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, transparent);
+      }
+      .mj-slides-pill-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .mj-slides-pill-sep {
+        width: 1px;
+        height: 16px;
+        background: var(--mj-border-default);
+        margin: 0 2px;
+      }
+      .mj-slides-design-popover {
+        width: min(380px, 92vw);
+        margin-bottom: 8px;
+        padding: 10px;
+        border-radius: 12px;
+        background: var(--mj-bg-surface-elevated);
+        border: 1px solid var(--mj-border-default);
+        box-shadow: var(--mj-shadow-lg);
+      }
+      .mj-slides-design-popover-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        margin-bottom: 8px;
+      }
+      .mj-slides-design-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+      }
+      .mj-slides-design-chip {
+        padding: 6px 7px;
+        border-radius: 7px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+      }
+      .mj-slides-design-chip.active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+      .mj-slides-design-section-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        margin: 10px 0 6px;
+      }
+      .mj-slides-design-swatches {
+        display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 5px;
+      }
+      .mj-slides-design-swatch {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .mj-slides-design-swatch.active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+      }
+      .mj-slides-swatch-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
       }
 
       .mj-slides-undo-group {
@@ -2578,11 +3134,51 @@ export interface ResolvedSlidesToolbarItem {
         border: 2px solid var(--deck-primary, var(--mj-brand-primary));
         border-radius: 14px;
         box-shadow: var(--mj-shadow-md);
-        padding: 22px 30px;
+        padding: 24px 32px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         overflow: hidden;
+        position: relative;
+      }
+      .mj-slide-canvas-stage[data-bg-style='gradient'] {
+        background: linear-gradient(135deg, var(--deck-bg, #ffffff) 0%, var(--deck-secondary-bg, var(--deck-surface, #f8fafc)) 100%);
+      }
+      .mj-slide-canvas-stage[data-bg-style='mesh'] {
+        background:
+          radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--deck-primary, #4f46e5) 18%, transparent), transparent 46%),
+          radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--deck-accent, #0ea5e9) 16%, transparent), transparent 48%),
+          linear-gradient(160deg, var(--deck-bg, #0f172a) 0%, var(--deck-secondary-bg, var(--deck-bg, #0f172a)) 100%);
+      }
+      .mj-slide-canvas-stage[data-bg-style='accent-strip']::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(90deg, var(--deck-primary, #4f46e5), var(--deck-accent, #0ea5e9));
+      }
+      .mj-slide-canvas-stage[data-transition='fade'] {
+        animation: mjSlideFadeIn 0.28s ease-out;
+      }
+      .mj-slide-canvas-stage[data-transition='slide'] {
+        animation: mjSlidePushIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .mj-slide-canvas-stage[data-transition='zoom'] {
+        animation: mjSlideZoomIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      @keyframes mjSlideFadeIn {
+        from { opacity: 0.35; }
+        to { opacity: 1; }
+      }
+      @keyframes mjSlidePushIn {
+        from { opacity: 0.4; transform: translateX(24px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes mjSlideZoomIn {
+        from { opacity: 0.45; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
       }
       .mj-slide-master-header,
       .mj-slide-master-footer {
@@ -2650,16 +3246,54 @@ export interface ResolvedSlidesToolbarItem {
       .mj-slide-regions-grid[data-layout='BigNumber'] {
         grid-template-columns: 1fr 1fr;
       }
+      .mj-slide-regions-grid[data-layout='KpiStrip'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .mj-slide-regions-grid[data-layout='Timeline'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        position: relative;
+      }
+      .mj-slide-regions-grid[data-layout='BentoGrid'] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .mj-slide-regions-grid[data-layout='BentoGrid'] .mj-slide-region-card:first-child {
+        grid-column: 1 / -1;
+      }
+      .mj-slide-regions-grid[data-layout='Quadrant'] {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+      .mj-slide-regions-grid[data-layout='MetricComparison'] {
+        grid-template-columns: 1fr 1fr;
+      }
+      .mj-slide-regions-grid[data-layout='MetricComparison'] .mj-slide-region-card:nth-child(3) {
+        grid-column: 1 / -1;
+      }
       .mj-slide-region-card {
         background: var(--deck-surface, var(--mj-bg-surface));
         border: 1px solid var(--mj-border-default);
-        border-radius: 10px;
-        padding: 10px 14px;
+        border-radius: var(--deck-card-radius, 12px);
+        padding: 12px 16px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         min-height: 120px;
         overflow: auto;
+        transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.2s ease;
+      }
+      .mj-slide-canvas-stage[data-card-elevation='soft'] .mj-slide-region-card {
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+      }
+      .mj-slide-canvas-stage[data-card-elevation='glass'] .mj-slide-region-card {
+        background: color-mix(in srgb, var(--deck-surface, #1e293b) 82%, transparent);
+        border-color: color-mix(in srgb, var(--deck-primary, #38bdf8) 28%, rgba(255, 255, 255, 0.14));
+        backdrop-filter: blur(10px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+      }
+      .mj-slide-region-card.mj-slide-region--unrevealed {
+        opacity: 0.06;
+        transform: translateY(8px);
+        pointer-events: none;
       }
       .mj-slide-region-card.active-region {
         border-color: var(--deck-primary, var(--mj-brand-primary));
@@ -3326,7 +3960,7 @@ export class SlideDeckArtifactViewerComponent
 
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
 
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
   public ShowMoreToolsMenu = false;
   public DraggingSlideID: string | null = null;
   public DragOverSlideID: string | null = null;
@@ -3369,6 +4003,8 @@ export class SlideDeckArtifactViewerComponent
   public ActiveSlideID = 'slide-1';
   public FocusedRegionID = 'main';
   public WorkspaceMode: SlideWorkspaceMode = 'edit';
+  public ShowCommandPalette = false;
+  public ShowDesignPopover = false;
   public RightDrawerTab: SlideRightDrawerTab = 'none';
   public ShowFilmstrip = true;
   public StatusBannerMessage = '';
@@ -3562,9 +4198,23 @@ export class SlideDeckArtifactViewerComponent
     ':::',
   ].join('\n');
 
-  // Presenter View Elapsed Timer
+  // Presenter View Elapsed Timer & Full-Screen Presentation Controls (#1)
   public PresenterElapsedSeconds = 0;
   private presenterTimerHandle: ReturnType<typeof setInterval> | null = null;
+  public IsBrowserFullscreen = false;
+  public PresentationOverlayMode: 'none' | 'blackout' | 'whiteout' = 'none';
+  public LaserPointerActive = false;
+  public LaserPointerX = 50;
+  public LaserPointerY = 50;
+  public PresentHudVisible = true;
+  public CurrentRevealStep = 0;
+  public HasPopoutAudienceWindow = false;
+  private jumpDigitBuffer = '';
+  private jumpDigitTimer: ReturnType<typeof setTimeout> | null = null;
+  private presentHudHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private fullscreenChangeHandler: (() => void) | null = null;
+  private audienceChannel: BroadcastChannel | null = null;
+  private popoutAudienceWindow: Window | null = null;
 
   // Last Exported .pptx Package Audit Summary (for deterministic E2E & unit verification)
   public LastExportedPptxPackage: PptxExportPackage | null = null;
@@ -3666,6 +4316,7 @@ export class SlideDeckArtifactViewerComponent
 
   public get SafeTheme(): {
     BackgroundColor: string;
+    SecondaryGradientColor: string;
     SurfaceColor: string;
     PrimaryColor: string;
     AccentColor: string;
@@ -3673,19 +4324,48 @@ export class SlideDeckArtifactViewerComponent
     MutedTextColor: string;
     HeadingFont: string;
     BodyFont: string;
+    BackgroundStyle: SlideBackgroundStyle;
+    CardRadiusPx: number;
+    CardElevation: SlideCardElevation;
   } {
     const raw = this.ActiveDeckForDisplay.Theme;
     const engine = SlideDeckEngine.Instance;
+    const surface = engine.SanitizeCssValue(raw?.SurfaceColor, '#f8fafc');
     return {
       BackgroundColor: engine.SanitizeCssValue(raw?.BackgroundColor, '#ffffff'),
-      SurfaceColor: engine.SanitizeCssValue(raw?.SurfaceColor, '#f8fafc'),
+      SecondaryGradientColor: engine.SanitizeCssValue(raw?.SecondaryGradientColor, surface),
+      SurfaceColor: surface,
       PrimaryColor: engine.SanitizeCssValue(raw?.PrimaryColor, '#4f46e5'),
       AccentColor: engine.SanitizeCssValue(raw?.AccentColor, '#0ea5e9'),
       TextColor: engine.SanitizeCssValue(raw?.TextColor, '#0f172a'),
       MutedTextColor: engine.SanitizeCssValue(raw?.MutedTextColor, '#475569'),
       HeadingFont: engine.SanitizeCssValue(raw?.HeadingFont, 'Inter, system-ui, sans-serif'),
       BodyFont: engine.SanitizeCssValue(raw?.BodyFont, 'Inter, system-ui, sans-serif'),
+      BackgroundStyle: raw?.BackgroundStyle ?? 'accent-strip',
+      CardRadiusPx: typeof raw?.CardRadiusPx === 'number' ? Math.max(0, Math.min(32, raw.CardRadiusPx)) : 14,
+      CardElevation: raw?.CardElevation ?? 'soft',
     };
+  }
+
+  public get MaxRevealStepOnDisplayedSlide(): number {
+    let maxStep = 0;
+    for (const r of this.DisplayedSlide?.Regions ?? []) {
+      if (typeof r.RevealStep === 'number' && r.RevealStep > maxStep) {
+        maxStep = r.RevealStep;
+      }
+    }
+    return maxStep;
+  }
+
+  public IsRegionRevealed(region: SlideRegionSpec): boolean {
+    if (!this.IsPresentationActive) {
+      return true;
+    }
+    const step = region.RevealStep ?? 0;
+    if (step <= 0 || this.MaxRevealStepOnDisplayedSlide === 0) {
+      return true;
+    }
+    return this.CurrentRevealStep >= step;
   }
 
   public get ActiveSlideIndex(): number {
@@ -3710,10 +4390,16 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public get CanNavigatePrevSlide(): boolean {
+    if (this.IsPresentationActive && this.CurrentRevealStep > 0) {
+      return true;
+    }
     return this.findPrevNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
   }
 
   public get CanNavigateNextSlide(): boolean {
+    if (this.IsPresentationActive && this.CurrentRevealStep < this.MaxRevealStepOnDisplayedSlide) {
+      return true;
+    }
     return this.findNextNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
   }
 
@@ -3782,6 +4468,7 @@ export class SlideDeckArtifactViewerComponent
       clearTimeout(this.pendingVersionSaveTimer);
       this.pendingVersionSaveTimer = null;
     }
+    this.cleanupPresentationRuntime();
     this.unbindTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
@@ -3820,6 +4507,18 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
 
+    const isCmdOrCtrl = event.metaKey || event.ctrlKey;
+    if (isCmdOrCtrl && !event.altKey && event.key.toLowerCase() === 'k') {
+      const targetEl = event.target instanceof HTMLElement ? event.target : null;
+      const hostEl = this.hostElRef?.nativeElement ?? null;
+      if (!hostEl || (targetEl && hostEl.contains(targetEl))) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.OpenCommandPalette();
+      }
+      return;
+    }
+
     if (IsKeyboardContextMenuShortcut(event)) {
       const targetEl = event.target instanceof HTMLElement ? event.target : null;
       const hostEl = this.hostElRef?.nativeElement ?? null;
@@ -3835,15 +4534,58 @@ export class SlideDeckArtifactViewerComponent
     }
 
     if (this.WorkspaceMode === 'present' || this.WorkspaceMode === 'presenter') {
-      if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const inEditable = Boolean(
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable),
+      );
+      if (inEditable) {
+        return;
+      }
+
+      this.KeepPresentHudVisible();
+      const key = event.key;
+      const lower = key.toLowerCase();
+
+      if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
+        if (key === ' ' && target && target.tagName === 'BUTTON') {
+          return;
+        }
         event.preventDefault();
         this.NextSlide();
-      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+      } else if (key === 'ArrowLeft' || key === 'PageUp' || key === 'Backspace') {
         event.preventDefault();
         this.PrevSlide();
-      } else if (event.key === 'Escape') {
+      } else if (key === 'Home') {
         event.preventDefault();
-        this.ExitPresentationMode();
+        this.jumpToNavigableEdge('first');
+      } else if (key === 'End') {
+        event.preventDefault();
+        this.jumpToNavigableEdge('last');
+      } else if (lower === 'b') {
+        event.preventDefault();
+        this.TogglePresentationOverlay('blackout');
+      } else if (lower === 'w') {
+        event.preventDefault();
+        this.TogglePresentationOverlay('whiteout');
+      } else if (lower === 'l') {
+        event.preventDefault();
+        this.ToggleLaserPointer();
+      } else if (lower === 'f') {
+        event.preventDefault();
+        this.ToggleBrowserFullscreen();
+      } else if (/^[0-9]$/.test(key)) {
+        event.preventDefault();
+        this.bufferSlideJumpDigit(key);
+      } else if (key === 'Enter' && this.jumpDigitBuffer.length > 0) {
+        event.preventDefault();
+        this.commitSlideJumpBuffer();
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        if (this.PresentationOverlayMode !== 'none') {
+          this.TogglePresentationOverlay('none');
+        } else {
+          this.ExitPresentationMode();
+        }
       }
       return;
     }
@@ -3974,6 +4716,9 @@ export class SlideDeckArtifactViewerComponent
       );
       this.PresentationRefreshCount = 0;
       this.PresentationFrozenAt = new Date();
+      this.CurrentRevealStep = 0;
+      this.PresentationOverlayMode = 'none';
+      this.LaserPointerActive = false;
     }
     this.WorkspaceMode = mode;
     if (mode === 'presenter') {
@@ -3981,6 +4726,13 @@ export class SlideDeckArtifactViewerComponent
     } else {
       this.stopPresenterTimer();
     }
+    this.ensureFullscreenListener();
+    this.ensureBroadcastChannel();
+    if (mode === 'present' && !alreadyPresenting) {
+      this.requestShellFullscreen();
+    }
+    this.KeepPresentHudVisible();
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
@@ -3998,13 +4750,96 @@ export class SlideDeckArtifactViewerComponent
     const prevTime = this.PresentationFrozenAt?.getTime() ?? 0;
     const nowTime = Date.now();
     this.PresentationFrozenAt = new Date(nowTime > prevTime ? nowTime : prevTime + 1);
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
   public ExitPresentationMode(): void {
     this.stopPresenterTimer();
     this.PresentationFrozenDeck = null;
+    this.PresentationOverlayMode = 'none';
+    this.LaserPointerActive = false;
+    this.CurrentRevealStep = 0;
+    this.clearPresentTimers();
+    this.exitShellFullscreen();
     this.WorkspaceMode = 'edit';
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleBrowserFullscreen(): void {
+    if (this.IsBrowserFullscreen) {
+      this.exitShellFullscreen();
+    } else {
+      this.ensureFullscreenListener();
+      this.requestShellFullscreen();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public TogglePresentationOverlay(mode: 'none' | 'blackout' | 'whiteout'): void {
+    this.PresentationOverlayMode = this.PresentationOverlayMode === mode ? 'none' : mode;
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleLaserPointer(): void {
+    this.LaserPointerActive = !this.LaserPointerActive;
+    this.broadcastPresentationState();
+    this.cdr.markForCheck();
+  }
+
+  public KeepPresentHudVisible(): void {
+    if (!this.IsPresentationActive) {
+      return;
+    }
+    this.PresentHudVisible = true;
+    if (this.presentHudHideTimer) {
+      clearTimeout(this.presentHudHideTimer);
+      this.presentHudHideTimer = null;
+    }
+    if (this.WorkspaceMode === 'present') {
+      this.presentHudHideTimer = setTimeout(() => {
+        this.PresentHudVisible = false;
+        this.cdr.markForCheck();
+      }, 2800);
+    }
+  }
+
+  public OnPresentShellPointerMove(event: MouseEvent): void {
+    if (!this.IsPresentationActive) {
+      return;
+    }
+    this.KeepPresentHudVisible();
+    if (this.LaserPointerActive && typeof window !== 'undefined' && window.innerWidth > 0 && window.innerHeight > 0) {
+      this.LaserPointerX = Math.max(0, Math.min(100, (event.clientX / window.innerWidth) * 100));
+      this.LaserPointerY = Math.max(0, Math.min(100, (event.clientY / window.innerHeight) * 100));
+      this.broadcastPresentationState();
+    }
+  }
+
+  /**
+   * Opens a clean second-screen Audience window synchronized in real time via `BroadcastChannel`
+   * (zero `localStorage` used, per AGENTS.md § 9).
+   */
+  public OpenAudienceStageWindow(): void {
+    if (typeof window === 'undefined' || typeof window.open !== 'function') {
+      return;
+    }
+    this.ensureBroadcastChannel();
+    const channelName = this.getSyncChannelName();
+    const win = window.open('', `mj-slides-audience-${channelName}`, 'width=1280,height=720');
+    if (!win) {
+      return;
+    }
+    this.popoutAudienceWindow = win;
+    this.HasPopoutAudienceWindow = true;
+    try {
+      initializeAudienceWindowDom(win.document);
+    } catch {
+      // Cross-origin or sandboxed window open guard
+    }
+    this.broadcastPresentationState();
     this.cdr.markForCheck();
   }
 
@@ -4013,6 +4848,7 @@ export class SlideDeckArtifactViewerComponent
       this.flushPendingEdits();
     }
     this.ActiveSlideID = slideId;
+    this.CurrentRevealStep = 0;
     const slide = this.ActiveSlide;
     this.FocusedRegionID = slide.Regions[0]?.RegionID ?? 'main';
     this.PendingAnchorKey = `${slide.SlideID}:${this.FocusedRegionID}`;
@@ -4026,6 +4862,9 @@ export class SlideDeckArtifactViewerComponent
       slideNumber: slide.SlideNumber,
       elementId: this.FocusedRegionID || undefined,
     });
+    if (this.IsPresentationActive) {
+      this.broadcastPresentationState();
+    }
     this.cdr.markForCheck();
   }
 
@@ -4099,19 +4938,221 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public PrevSlide(): void {
+    if (this.IsPresentationActive && this.CurrentRevealStep > 0) {
+      this.CurrentRevealStep--;
+      this.broadcastPresentationState();
+      this.cdr.markForCheck();
+      return;
+    }
     const targetIdx = this.findPrevNavigableSlideIndex(this.ActiveSlideIndex);
+    if (targetIdx >= 0) {
+      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
+      this.SelectSlide(target.SlideID);
+      if (this.IsPresentationActive) {
+        this.CurrentRevealStep = this.MaxRevealStepOnDisplayedSlide;
+        this.broadcastPresentationState();
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  public NextSlide(): void {
+    const maxStep = this.MaxRevealStepOnDisplayedSlide;
+    if (this.IsPresentationActive && maxStep > 0 && this.CurrentRevealStep < maxStep) {
+      this.CurrentRevealStep++;
+      this.broadcastPresentationState();
+      this.cdr.markForCheck();
+      return;
+    }
+    const targetIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
     if (targetIdx >= 0) {
       const target = this.ActiveDeckForDisplay.Slides[targetIdx];
       this.SelectSlide(target.SlideID);
     }
   }
 
-  public NextSlide(): void {
-    const targetIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
-    if (targetIdx >= 0) {
-      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
-      this.SelectSlide(target.SlideID);
+  /**
+   * Auto-polishes the active slide deterministically (`BeautifySlide`), syncing via Yjs (`Accept #1`).
+   */
+  public get ActiveSlideLayoutLabel(): string {
+    const meta = this.LayoutCatalog.find((m) => m.Kind === this.ActiveSlide.Layout);
+    return meta?.Label ?? this.ActiveSlide.Layout;
+  }
+
+  public CycleActiveSlideTransition(): void {
+    const transitions: ReadonlyArray<SlideTransitionKind> = ['none', 'fade', 'slide', 'zoom'];
+    const current = this.ActiveSlide.Transition || 'fade';
+    const next = transitions[(transitions.indexOf(current) + 1) % transitions.length];
+    this.OnChangeActiveSlideTransition(next);
+  }
+
+  public OpenCommandPalette(): void {
+    this.ShowMoreToolsMenu = false;
+    this.ShowDesignPopover = false;
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get SlidesCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'present',
+        Label: 'Present Fullscreen',
+        Category: 'Present',
+        Icon: 'fa-play',
+        Description: 'Start full-screen slide presentation',
+      },
+      {
+        Id: 'presenter',
+        Label: 'Open Presenter View',
+        Category: 'Present',
+        Icon: 'fa-chalkboard-user',
+        Description: 'Speaker notes, next-slide cockpit & timer',
+      },
+      {
+        Id: 'polish-slide',
+        Label: 'Polish Active Slide',
+        Category: 'Design',
+        Icon: 'fa-sparkles',
+        Disabled: !this.CanEditSlideElements,
+        Description: 'Auto-improve spacing, KPI cards, and reveal steps',
+      },
+      {
+        Id: 'toggle-filmstrip',
+        Label: this.ShowFilmstrip ? 'Hide Slide Sorter Filmstrip' : 'Show Slide Sorter Filmstrip',
+        Category: 'View',
+        Icon: 'fa-film',
+      },
+      {
+        Id: 'comments',
+        Label: `Toggle Comments (${this.OpenThreadCount})`,
+        Category: 'Review',
+        Icon: 'fa-comments',
+      },
+      {
+        Id: 'lock-slide',
+        Label: this.ActiveSlide.Locked ? 'Unlock Current Slide' : 'Lock Current Slide',
+        Category: 'Permissions',
+        Icon: this.ActiveSlide.Locked ? 'fa-lock-open' : 'fa-lock',
+        Disabled: !this.CanToggleCurrentSlideLock,
+      },
+    ];
+
+    for (const item of this.AllToolbarItems) {
+      if (!items.some((existing) => existing.Id === `tb:${item.Key}`)) {
+        items.push({
+          Id: `tb:${item.Key}`,
+          Label: item.Label,
+          Category: item.Category,
+          Icon: item.Icon,
+          Description: item.Description,
+          Active: item.Active,
+          Disabled: item.Disabled,
+        });
+      }
     }
+
+    for (const layoutMeta of this.LayoutCatalog) {
+      items.push({
+        Id: `layout:${layoutMeta.Kind}`,
+        Label: `Layout: ${layoutMeta.Label}`,
+        Category: 'Layout',
+        Icon: 'fa-table-columns',
+        Active: this.ActiveSlide.Layout === layoutMeta.Kind,
+        Disabled: !this.CanEditSlideElements,
+      });
+    }
+
+    for (const preset of this.ThemePresets) {
+      items.push({
+        Id: `theme:${preset.ThemeID}`,
+        Label: `Theme: ${preset.ThemeID}`,
+        Category: 'Theme',
+        Icon: 'fa-palette',
+        Active: this.Deck.Theme.ThemeID === preset.ThemeID,
+        Disabled: !this.IsEditable,
+      });
+    }
+    return items;
+  }
+
+  public ExecuteSlidePaletteCommand(commandId: string): void {
+    if (commandId === 'present') {
+      this.SetWorkspaceMode('present');
+      return;
+    }
+    if (commandId === 'presenter') {
+      this.SetWorkspaceMode('presenter');
+      return;
+    }
+    if (commandId === 'polish-slide') {
+      this.OnPolishActiveSlide();
+      return;
+    }
+    if (commandId === 'toggle-filmstrip') {
+      this.ToggleFilmstrip();
+      return;
+    }
+    if (commandId === 'comments') {
+      this.ToggleRightDrawer('comments');
+      return;
+    }
+    if (commandId === 'lock-slide') {
+      this.ToggleCurrentSlideLock();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as SlidesToolbarItemKey;
+      const found = this.AllToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+      return;
+    }
+    if (commandId.startsWith('layout:')) {
+      this.OnChangeActiveSlideLayout(commandId.slice(7) as SlideLayoutKind);
+      return;
+    }
+    if (commandId.startsWith('theme:')) {
+      this.OnSelectThemePreset(commandId.slice(6));
+    }
+  }
+
+  public OnPolishActiveSlide(): void {
+    if (!this.IsEditable || !this.CanEditSlideElements) {
+      return;
+    }
+    this.flushPendingEdits();
+    const lockCtx = this.buildLockContext();
+    try {
+      const res = SlideDeckEngine.Instance.BeautifySlide(this.Deck, this.ActiveSlide.SlideID, lockCtx);
+      if (!res.UpdatedSlide) {
+        return;
+      }
+      this.Deck = res.Deck;
+      this.session?.UpdateSlideInDeck(res.UpdatedSlide, this.Deck);
+      this.session?.UpdateDeckMeta(this.Deck);
+      this.syncRawDeckJson();
+      this.FocusedRegionID = res.UpdatedSlide.Regions[0]?.RegionID ?? this.FocusedRegionID;
+      if (res.Improvements.length > 0) {
+        this.notificationService?.CreateSimpleNotification(
+          `Slide polished: ${res.Improvements[0]}`,
+          'success',
+          2600,
+        );
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.StatusBannerMessage = err instanceof Error ? err.message : String(err);
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnChangeActiveSlideTransition(transition: SlideTransitionKind): void {
+    if (!this.CanEditSlideElements) {
+      return;
+    }
+    this.applySingleSlideMetadataPatch(this.ActiveSlide.SlideID, { Transition: transition });
   }
 
   private findPrevNavigableSlideIndex(fromIdx: number): number {
@@ -5572,6 +6613,19 @@ export class SlideDeckArtifactViewerComponent
         Visible: canSlideEdit,
       },
       {
+        Key: 'polish-slide',
+        Label: 'Polish Slide',
+        ShortLabel: 'Polish',
+        Description: 'Auto-beautify typography, KPI layout & progressive reveal steps',
+        Icon: 'fa-sparkles',
+        Category: 'Design & AI',
+        Placement: 'left',
+        TestId: 'polish-slide-btn',
+        Active: false,
+        Disabled: !this.CanEditSlideElements,
+        Visible: canSlideEdit,
+      },
+      {
         Key: 'theme',
         Label: `Theme (${this.Deck.Theme.Name})`,
         ShortLabel: `Theme (${this.Deck.Theme.Name})`,
@@ -5738,6 +6792,9 @@ export class SlideDeckArtifactViewerComponent
         break;
       case 'delete-slide':
         this.OnDeleteActiveSlide();
+        break;
+      case 'polish-slide':
+        this.OnPolishActiveSlide();
         break;
       case 'theme':
         this.ToggleRightDrawer('theme');
@@ -9609,6 +10666,365 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
   }
+
+  private getSyncChannelName(): string {
+    const key = this.artifactVersion?.ArtifactID || this.Deck.DeckID || 'default';
+    return `mj-slides-sync-${key}`;
+  }
+
+  private ensureFullscreenListener(): void {
+    if (this.fullscreenChangeHandler || typeof document === 'undefined') {
+      return;
+    }
+    this.fullscreenChangeHandler = () => {
+      const activeFullscreen = Boolean(document.fullscreenElement);
+      const wasFullscreen = this.IsBrowserFullscreen;
+      this.IsBrowserFullscreen = activeFullscreen;
+      if (wasFullscreen && !activeFullscreen && this.WorkspaceMode === 'present') {
+        this.ExitPresentationMode();
+        return;
+      }
+      this.cdr.markForCheck();
+    };
+    document.addEventListener('fullscreenchange', this.fullscreenChangeHandler);
+  }
+
+  private requestShellFullscreen(): void {
+    const hostEl = this.hostElRef?.nativeElement ?? null;
+    const shell = hostEl?.querySelector<HTMLElement>('.mj-slides-shell') ?? hostEl;
+    if (shell && typeof shell.requestFullscreen === 'function') {
+      try {
+        const res = shell.requestFullscreen();
+        if (res && typeof (res as Promise<void>).then === 'function') {
+          void (res as Promise<void>).then(
+            () => {
+              this.IsBrowserFullscreen = true;
+              this.cdr.markForCheck();
+            },
+            () => undefined,
+          );
+        }
+      } catch {
+        // Non-user-gesture or headless browser environment without Fullscreen support
+      }
+    }
+  }
+
+  private exitShellFullscreen(): void {
+    if (typeof document !== 'undefined' && document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+      try {
+        void document.exitFullscreen().catch(() => undefined);
+      } catch {
+        // Ignore exit failures in headless environments
+      }
+    }
+    this.IsBrowserFullscreen = false;
+  }
+
+  private ensureBroadcastChannel(): void {
+    if (this.audienceChannel || typeof BroadcastChannel === 'undefined') {
+      return;
+    }
+    try {
+      this.audienceChannel = new BroadcastChannel(this.getSyncChannelName());
+      this.audienceChannel.onmessage = (event: MessageEvent<{ type?: string; slideId?: string }>) => {
+        const msg = event?.data;
+        if (!msg) return;
+        if (msg.type === 'audience-ready') {
+          this.broadcastPresentationState();
+        } else if (msg.type === 'select-slide' && typeof msg.slideId === 'string') {
+          this.SelectSlide(msg.slideId);
+        }
+      };
+    } catch {
+      this.audienceChannel = null;
+    }
+  }
+
+  private broadcastPresentationState(): void {
+    const hasOpenPopout = Boolean(this.popoutAudienceWindow && !this.popoutAudienceWindow.closed);
+    if (!this.audienceChannel && !hasOpenPopout) {
+      return;
+    }
+    const slide = this.DisplayedSlide;
+    if (!slide) {
+      return;
+    }
+    const theme = this.SafeTheme;
+    const payload: AudienceStagePayload = {
+      type: 'state',
+      presenting: this.IsPresentationActive,
+      slideNumber: this.ActiveSlideIndex + 1,
+      slideCount: this.ActiveDeckForDisplay.Slides.length,
+      layout: slide.Layout,
+      title: slide.Title,
+      subtitle: slide.Subtitle || '',
+      overlayMode: this.PresentationOverlayMode,
+      revealStep: this.CurrentRevealStep,
+      maxRevealStep: this.MaxRevealStepOnDisplayedSlide,
+      laserActive: this.LaserPointerActive,
+      laserX: this.LaserPointerX,
+      laserY: this.LaserPointerY,
+      footerText: this.ActiveDeckForDisplay.Master.FooterText || '',
+      theme,
+      regions: (slide.Regions ?? []).map((r) => ({
+        RegionID: r.RegionID,
+        Label: r.Label,
+        Kind: r.Kind,
+        MarkdownContent: r.MarkdownContent,
+        BigNumberValue: r.BigNumberValue || '',
+        BigNumberLabel: r.BigNumberLabel || '',
+        BigNumberDelta: r.BigNumberDelta || '',
+        QuoteAttribution: r.QuoteAttribution || '',
+        RevealStep: r.RevealStep ?? 0,
+      })),
+    };
+    if (this.audienceChannel) {
+      try {
+        this.audienceChannel.postMessage(payload);
+      } catch {
+        // Channel may have closed externally
+      }
+    }
+    if (hasOpenPopout && this.popoutAudienceWindow) {
+      try {
+        renderAudienceWindowState(this.popoutAudienceWindow.document, payload);
+      } catch {
+        // Cross-origin or closed popout guard
+      }
+    }
+  }
+
+  private jumpToNavigableEdge(edge: 'first' | 'last'): void {
+    const slides = this.ActiveDeckForDisplay.Slides;
+    if (slides.length === 0) return;
+    const target =
+      edge === 'first'
+        ? slides.find((s) => !s.Hidden) ?? slides[0]
+        : [...slides].reverse().find((s) => !s.Hidden) ?? slides[slides.length - 1];
+    this.SelectSlide(target.SlideID);
+  }
+
+  private bufferSlideJumpDigit(digit: string): void {
+    this.jumpDigitBuffer = `${this.jumpDigitBuffer}${digit}`.slice(-3);
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+    }
+    this.jumpDigitTimer = setTimeout(() => {
+      this.commitSlideJumpBuffer();
+    }, 1100);
+  }
+
+  private commitSlideJumpBuffer(): void {
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+      this.jumpDigitTimer = null;
+    }
+    const num = Number.parseInt(this.jumpDigitBuffer, 10);
+    this.jumpDigitBuffer = '';
+    if (!Number.isFinite(num) || num < 1) {
+      return;
+    }
+    const target = this.ActiveDeckForDisplay.Slides[num - 1];
+    if (target) {
+      this.SelectSlide(target.SlideID);
+    }
+  }
+
+  private clearPresentTimers(): void {
+    if (this.presentHudHideTimer) {
+      clearTimeout(this.presentHudHideTimer);
+      this.presentHudHideTimer = null;
+    }
+    if (this.jumpDigitTimer) {
+      clearTimeout(this.jumpDigitTimer);
+      this.jumpDigitTimer = null;
+    }
+    this.jumpDigitBuffer = '';
+  }
+
+  private cleanupPresentationRuntime(): void {
+    this.clearPresentTimers();
+    if (this.fullscreenChangeHandler && typeof document !== 'undefined') {
+      document.removeEventListener('fullscreenchange', this.fullscreenChangeHandler);
+      this.fullscreenChangeHandler = null;
+    }
+    this.exitShellFullscreen();
+    if (this.audienceChannel) {
+      try {
+        this.audienceChannel.close();
+      } catch {
+        // Ignore close failure
+      }
+      this.audienceChannel = null;
+    }
+    if (this.popoutAudienceWindow && !this.popoutAudienceWindow.closed) {
+      try {
+        this.popoutAudienceWindow.close();
+      } catch {
+        // Ignore cross-window close restriction
+      }
+    }
+    this.popoutAudienceWindow = null;
+    this.HasPopoutAudienceWindow = false;
+  }
+}
+
+interface AudienceStagePayload {
+  type: 'state';
+  presenting: boolean;
+  slideNumber: number;
+  slideCount: number;
+  layout: string;
+  title: string;
+  subtitle: string;
+  overlayMode: string;
+  revealStep: number;
+  maxRevealStep: number;
+  laserActive: boolean;
+  laserX: number;
+  laserY: number;
+  footerText: string;
+  theme: Pick<
+    SlideDeckThemeSpec,
+    'BackgroundColor' | 'SurfaceColor' | 'PrimaryColor' | 'AccentColor' | 'TextColor' | 'MutedTextColor'
+  >;
+  regions: Array<{
+    RegionID: string;
+    Label?: string;
+    Kind: string;
+    MarkdownContent: string;
+    BigNumberValue: string;
+    BigNumberLabel: string;
+    BigNumberDelta: string;
+    QuoteAttribution: string;
+    RevealStep: number;
+  }>;
+}
+
+const AUDIENCE_STAGE_STYLES = [
+  '*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#05070c;color:#f8fafc;font-family:Inter,system-ui,sans-serif;overflow:hidden}',
+  'body{display:flex;align-items:center;justify-content:center;padding:24px}',
+  '#stage{width:100%;max-width:1440px;aspect-ratio:16/9;background:var(--bg,#fff);color:var(--text,#0f172a);border-radius:16px;padding:36px 48px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 28px 80px rgba(0,0,0,.6);position:relative;overflow:hidden}',
+  '#title{margin:0;font-size:38px;font-weight:800;color:var(--primary,#4f46e5)}',
+  '#subtitle{margin:8px 0 0;font-size:18px;color:var(--muted,#475569)}',
+  '#regions{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:20px 0;align-content:stretch}',
+  '.card{background:var(--surface,#f8fafc);border-radius:14px;padding:18px 22px;border:1px solid rgba(148,163,184,.28);display:flex;flex-direction:column;gap:8px;transition:opacity .25s ease}',
+  '.card.hidden-step{opacity:.06}',
+  '.kpi-val{font-size:48px;font-weight:800;color:var(--accent,#0ea5e9);line-height:1.1}',
+  '.kpi-lbl{font-size:16px;font-weight:600}',
+  '.kpi-delta{font-size:13px;color:var(--primary,#4f46e5);font-weight:600}',
+  '#footer{display:flex;justify-content:space-between;font-size:13px;color:var(--muted,#475569);border-top:1px solid rgba(148,163,184,.25);padding-top:10px}',
+  '#overlay{position:fixed;inset:0;display:none;z-index:20}',
+  '#laser{position:fixed;width:16px;height:16px;border-radius:50%;background:#ef4444;box-shadow:0 0 18px 4px rgba(239,68,68,.75);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:30}',
+].join('');
+
+/** Builds the audience stage popup DOM directly via DOM APIs without document.write or HTML strings. */
+function initializeAudienceWindowDom(doc: Document): void {
+  doc.title = 'MJ Slides — Audience Stage';
+  if (doc.head) {
+    const meta = doc.createElement('meta');
+    meta.setAttribute('charset', 'utf-8');
+    const style = doc.createElement('style');
+    style.textContent = AUDIENCE_STAGE_STYLES;
+    doc.head.replaceChildren(meta, style);
+  }
+  if (!doc.body) {
+    return;
+  }
+
+  const header = doc.createElement('div');
+  const titleEl = doc.createElement('h1');
+  titleEl.id = 'title';
+  titleEl.textContent = 'Waiting for presenter…';
+  const subtitleEl = doc.createElement('p');
+  subtitleEl.id = 'subtitle';
+  header.append(titleEl, subtitleEl);
+
+  const regionsEl = doc.createElement('div');
+  regionsEl.id = 'regions';
+
+  const footer = doc.createElement('div');
+  footer.id = 'footer';
+  const footerLeft = doc.createElement('span');
+  footerLeft.id = 'f-left';
+  const footerRight = doc.createElement('span');
+  footerRight.id = 'f-right';
+  footer.append(footerLeft, footerRight);
+
+  const stage = doc.createElement('div');
+  stage.id = 'stage';
+  stage.append(header, regionsEl, footer);
+
+  const overlay = doc.createElement('div');
+  overlay.id = 'overlay';
+  const laser = doc.createElement('div');
+  laser.id = 'laser';
+
+  doc.body.replaceChildren(stage, overlay, laser);
+}
+
+/** Renders presenter state into the audience window document using safe textContent and style updates. */
+function renderAudienceWindowState(doc: Document, payload: AudienceStagePayload): void {
+  const stage = doc.getElementById('stage');
+  const titleEl = doc.getElementById('title');
+  const subEl = doc.getElementById('subtitle');
+  const regEl = doc.getElementById('regions');
+  const fLeft = doc.getElementById('f-left');
+  const fRight = doc.getElementById('f-right');
+  const overlay = doc.getElementById('overlay');
+  const laser = doc.getElementById('laser');
+  if (!stage || !titleEl || !subEl || !regEl || !fLeft || !fRight || !overlay || !laser) {
+    return;
+  }
+
+  const theme = payload.theme;
+  stage.style.setProperty('--bg', theme.BackgroundColor || '#fff');
+  stage.style.setProperty('--surface', theme.SurfaceColor || '#f8fafc');
+  stage.style.setProperty('--primary', theme.PrimaryColor || '#4f46e5');
+  stage.style.setProperty('--accent', theme.AccentColor || '#0ea5e9');
+  stage.style.setProperty('--text', theme.TextColor || '#0f172a');
+  stage.style.setProperty('--muted', theme.MutedTextColor || '#475569');
+
+  titleEl.textContent = payload.title || '';
+  subEl.textContent = payload.subtitle || '';
+  fLeft.textContent = payload.footerText || '';
+  fRight.textContent = `${payload.slideNumber} / ${payload.slideCount}`;
+
+  overlay.style.display = payload.overlayMode && payload.overlayMode !== 'none' ? 'block' : 'none';
+  overlay.style.background = payload.overlayMode === 'whiteout' ? '#fff' : '#000';
+
+  laser.style.display = payload.laserActive ? 'block' : 'none';
+  laser.style.left = `${payload.laserX || 50}%`;
+  laser.style.top = `${payload.laserY || 50}%`;
+
+  const maxStep = payload.maxRevealStep || 0;
+  const curStep = payload.revealStep || 0;
+  const cards: HTMLElement[] = [];
+  for (const r of payload.regions) {
+    const card = doc.createElement('div');
+    const revealed = !maxStep || !r.RevealStep || curStep >= r.RevealStep;
+    card.className = revealed ? 'card' : 'card hidden-step';
+    if (r.Kind === 'big-number') {
+      const valEl = doc.createElement('div');
+      valEl.className = 'kpi-val';
+      valEl.textContent = r.BigNumberValue || '—';
+      const lblEl = doc.createElement('div');
+      lblEl.className = 'kpi-lbl';
+      lblEl.textContent = r.BigNumberLabel || r.Label || '';
+      const deltaEl = doc.createElement('div');
+      deltaEl.className = 'kpi-delta';
+      deltaEl.textContent = r.BigNumberDelta || '';
+      card.append(valEl, lblEl, deltaEl);
+    } else {
+      const bodyEl = doc.createElement('div');
+      bodyEl.style.whiteSpace = 'pre-wrap';
+      bodyEl.textContent = r.MarkdownContent || r.Label || '';
+      card.append(bodyEl);
+    }
+    cards.push(card);
+  }
+  regEl.replaceChildren(...cards);
 }
 
 function generateSlideBlockUuid(): string {

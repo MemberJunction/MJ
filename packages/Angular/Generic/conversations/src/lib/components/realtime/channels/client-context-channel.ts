@@ -54,12 +54,12 @@ const CONTEXT_TOOL_DEFINITION: RealtimeToolDefinition = {
   Name: CONTEXT_TOOL_NAME,
   Description:
     "Perform an action in the application the user is currently in, or on one of the interactive " +
-    "channels listed in your channel notes. The set of valid actions (the client tools and the things " +
-    "you can do on the current surface) is provided to you continuously as context — only call actions " +
-    "listed as currently available. Pass the action name and its parameters. To act on an interactive " +
-    "channel instead of the app, also pass `target` naming the channel (and, for a channel that has " +
-    "several, the instance); to open a channel that is available but not open yet, use action \"open\" " +
-    "with that target.",
+    "channels listed in your channel notes, OR peek read-only at what surface/tab the user is looking at " +
+    "right now. To inspect the active tab (Workspace, Whiteboard, Remote Browser, Media, Activity) and " +
+    "each open channel's state without mutating anything, pass action \"get_workspace_state\" (or " +
+    "\"get_active_surface\" / \"peek_workspace\") with empty params {}. Otherwise, pass an action from your " +
+    "context catalog; to act on an interactive channel instead of the app, pass `target` naming the channel " +
+    "(and instance if multi-instance); to open an available channel, use action \"open\" with that target.",
   ParametersSchema: {
     type: 'object',
     properties: {
@@ -135,7 +135,9 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
       DisplayName: this.TabTitle,
       Instructions:
         'Keeps you aware of where the user is in the app and lets you act there through ContextTool. ' +
-        'It is not itself something to operate.',
+        'For a read-only peek at which surface/tab the user is looking at and open channel states ' +
+        '(Workspace, Whiteboard, Remote Browser, Media, Activity), call ContextTool with ' +
+        '{ "action": "get_workspace_state", "params": {} } (or "get_active_surface" / "peek_workspace").',
       Nouns: [],
       Verbs: [],
       DisplayPolicy: 'headless',
@@ -160,6 +162,22 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
     const parsed = this.parseArgs(argsJson);
     if (!parsed.action) {
       return JSON.stringify({ success: false, output: 'ContextTool requires an "action" naming the tool to run.' });
+    }
+    if (!parsed.target) {
+      const normalizedAction = parsed.action.trim().toLowerCase();
+      if (
+        normalizedAction === 'get_workspace_state' ||
+        normalizedAction === 'get_active_surface' ||
+        normalizedAction === 'peek_workspace'
+      ) {
+        return JSON.stringify({
+          success: true,
+          output: {
+            surfaceSnapshot: this.Context?.GetSurfaceSnapshot?.() ?? null,
+            appContext: this.baselineSnapshot ?? null,
+          },
+        });
+      }
     }
     if (parsed.target) {
       return this.applyChannelAction(parsed.action, parsed.params, parsed.target);

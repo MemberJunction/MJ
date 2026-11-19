@@ -26,6 +26,7 @@ import type {
 } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
+import type { DbConfig } from './config';
 
 /**
  * The self-contained Query/Category fixtures the `runquery-cache` bundle needs:
@@ -312,6 +313,19 @@ export interface ListRefreshFixture {
 }
 
 /**
+ * Shared fixture for the `list-from-query` bundle: the query saved from SQL (and a second one saved
+ * under the same name), the list made from it, and whether the user's User Lists category already
+ * existed, so teardown deletes only what the run created.
+ */
+export interface ListFromQueryFixture {
+    QueryIDs: string[];
+    ListID: string | null;
+    /** The user's subcategory of User Lists, and whether this run created it. */
+    CategoryID: string | null;
+    CreatedCategory: boolean;
+}
+
+/**
  * Shared fixture for the `entity-writes` bundle: the resolved entity IDs the write-side checks need
  * plus the FK-safe teardown accumulators. Nothing is created in Setup — each mutating check creates
  * exactly the throwaway rows it needs and appends their IDs here, so teardown can delete them in
@@ -411,6 +425,28 @@ export interface OpenAppTeardownFixture {
     RecordChangeID: string;
     ApplicationID: string;
     Tag: string;
+}
+
+/**
+ * Shared fixture for the `open-app-local-source` bundle: a throwaway consumer repository (a pnpm
+ * workspace in the OS temp directory) whose app folders the checks install from, plus the apps and
+ * schemas the checks created, which teardown removes.
+ */
+export interface OpenAppLocalSourceFixture {
+    /** Unique per run; part of every app, schema, package and folder name. */
+    Tag: string;
+    /** Absolute path of the throwaway consumer repository. */
+    RepoRoot: string;
+    /** Absolute path of an app folder next to the repository, which a local install must refuse. */
+    OutsideFolder: string;
+    /** Connection settings the engine gives to the migration runner. */
+    Db: DbConfig;
+    /** True when the test login can create and drop schemas. */
+    CanChangeSchemas: boolean;
+    /** Apps the checks installed, in install order. */
+    AppNames: string[];
+    /** Schemas the checks' apps own. */
+    SchemaNames: string[];
 }
 
 /**
@@ -722,8 +758,12 @@ export interface IntegrationCheckContext {
     ListsFixture?: ListsFixture;
     /** Shared fixture for the `list-refresh` bundle. */
     ListRefreshFixture?: ListRefreshFixture;
+    /** Shared fixture for the `list-from-query` bundle. */
+    ListFromQueryFixture?: ListFromQueryFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
+    /** Shared fixture for the `open-app-local-source` bundle. */
+    OpenAppLocalSourceFixture?: OpenAppLocalSourceFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */

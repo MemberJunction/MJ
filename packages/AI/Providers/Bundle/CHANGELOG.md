@@ -1,5 +1,53 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [1351528]
+- Updated dependencies [09cdf29]
+- Updated dependencies [5563937]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [6f1109b]
+- Updated dependencies [5c9a2f5]
+- Updated dependencies [31c2439]
+- Updated dependencies [9d82caa]
+  - @memberjunction/ai-anthropic@6.3.0-edge.1
+  - @memberjunction/ai-gemini@6.3.0-edge.1
+  - @memberjunction/ai-mistral@6.3.0-edge.1
+  - @memberjunction/ai-bedrock@6.3.0-edge.1
+  - @memberjunction/ai-ollama@6.3.0-edge.1
+  - @memberjunction/ai-lmstudio@6.3.0-edge.1
+  - @memberjunction/ai-groq@6.3.0-edge.1
+  - @memberjunction/ai-openai@6.3.0-edge.1
+  - @memberjunction/ai-elevenlabs@6.3.0-edge.1
+  - @memberjunction/ai-openrouter@6.3.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.3.0-edge.1
+  - @memberjunction/ai-azure@6.3.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.3.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.3.0-edge.1
+  - @memberjunction/ai-assemblyai@6.3.0-edge.1
+  - @memberjunction/ai-betty-bot@6.3.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.3.0-edge.1
+  - @memberjunction/ai-cerebras@6.3.0-edge.1
+  - @memberjunction/ai-cloudflare@6.3.0-edge.1
+  - @memberjunction/ai-cohere@6.3.0-edge.1
+  - @memberjunction/ai-deepinfra@6.3.0-edge.1
+  - @memberjunction/ai-fireworks@6.3.0-edge.1
+  - @memberjunction/ai-heygen@6.3.0-edge.1
+  - @memberjunction/ai-inception@6.3.0-edge.1
+  - @memberjunction/ai-inworld@6.3.0-edge.1
+  - @memberjunction/ai-llamacpp@6.3.0-edge.1
+  - @memberjunction/ai-minimax@6.3.0-edge.1
+  - @memberjunction/ai-siliconflow@6.3.0-edge.1
+  - @memberjunction/ai-systemone@6.3.0-edge.1
+  - @memberjunction/ai-vertex@6.3.0-edge.1
+  - @memberjunction/ai-zhipu@6.3.0-edge.1
+  - @memberjunction/ai-xai@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

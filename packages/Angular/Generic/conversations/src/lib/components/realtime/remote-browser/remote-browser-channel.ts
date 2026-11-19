@@ -1,16 +1,20 @@
 import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
+  IsSafeRasterImageDataUrl,
   RemoteBrowserHumanInputEvent,
   RemoteBrowserSnapshotView,
   RemoteBrowserSurfaceComponent,
   RemoteBrowserViewportSize,
+  type RemoteBrowserHistoryEntry,
+  type SerializedRemoteBrowserState,
 } from './remote-browser-surface.component';
+import { IsAllowedExternalMediaUrl } from '../media/media-channel-state';
 import {
   MapToolToAction,
   REMOTE_BROWSER_TOOL_DEFINITIONS,
@@ -371,6 +375,16 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * as somebody else navigating — the first page of a session was nobody's takeover.
    */
   private lastNotedUrl: string | null = null;
+  /** Sequential history of pages visited in this session (capped for compact persistence). */
+  private visitedHistory: RemoteBrowserHistoryEntry[] = [];
+  /** Latest bounded screenshot data URL captured for post-session review & resume. */
+  private lastScreenshotDataUrl: string | null = null;
+  /** Debounce timer for saving updated screenshots without hammering storage on 60fps streams. */
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private static readonly MAX_HISTORY_ENTRIES = 50;
+  private static readonly MAX_SAVED_SCREENSHOT_BYTES = 1_500_000;
+  private static readonly SCREENSHOT_SAVE_DEBOUNCE_MS = 1500;
 
   /**
    * How many browser operations the AGENT itself has in flight right now (#3496).
@@ -527,6 +541,12 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
+    if (this.lastNotedUrl && !instance.CurrentUrl) {
+      instance.CurrentUrl = this.lastNotedUrl;
+    }
+    if (this.lastScreenshotDataUrl && !instance.ScreenshotDataUrl) {
+      instance.ScreenshotDataUrl = this.lastScreenshotDataUrl;
+    }
     instance.Fetch = () => this.fetchSnapshot();
     // Copy-out: the surface reads the remote selection through this on a local `copy` and writes it locally.
     instance.FetchSelection = () => this.fetchSelection();
@@ -547,6 +567,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override UnbindSurface(): void {
+    this.flushSaveState();
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
     this.viewportResizeSub?.unsubscribe();
@@ -559,6 +580,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override Dispose(): void {
+    this.flushSaveState();
+    this.clearSaveTimer();
     this.clearScreencastTrailingTimer();
     this.pendingScreencastFrame = null;
     this.videoBridge?.Stop();
@@ -672,6 +695,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
 
     this.surface?.RenderFrame(dataBase64);
+    this.recordScreenshotFrame(`data:image/jpeg;base64,${dataBase64}`);
 
     const now = Date.now();
     const cadenceMs = this.getNegotiatedVideoCadenceMs();
@@ -876,8 +900,103 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
     const snapshot = data?.RemoteBrowserSnapshot ?? null;
+    if (snapshot?.ScreenshotBase64) {
+      this.recordScreenshotFrame(`data:image/png;base64,${snapshot.ScreenshotBase64}`);
+    }
     this.notePageChange(snapshot?.CurrentUrl ?? null, 'observed');
     return snapshot;
+  }
+
+  /** Returns a compact summary of the active remote browser URL and navigation history for surface notes and peek calls. */
+  public override GetState(): JSONObject {
+    return {
+      currentUrl: this.lastNotedUrl ?? null,
+      historyCount: this.visitedHistory.length,
+      recentUrls: this.visitedHistory.slice(-5).map((h) => h.Url),
+    };
+  }
+
+  /** Serializes the visited page history and latest bounded screenshot for review / resume. */
+  public override SerializeState(): string | null {
+    if (!this.lastNotedUrl && this.visitedHistory.length === 0 && !this.lastScreenshotDataUrl) {
+      return null;
+    }
+    const payload: SerializedRemoteBrowserState = {
+      V: 1,
+      CurrentUrl: this.lastNotedUrl,
+      History: this.visitedHistory,
+      ...(this.lastScreenshotDataUrl ? { ScreenshotDataUrl: this.lastScreenshotDataUrl } : {}),
+    };
+    return JSON.stringify(payload);
+  }
+
+  /** Restores saved URL history and screenshot metadata from a prior session leg. */
+  public override RestoreState(stateJson: string): boolean {
+    const parsed = SafeJSONParse<Partial<SerializedRemoteBrowserState>>(stateJson);
+    if (!parsed || typeof parsed !== 'object') {
+      return false;
+    }
+    const safeUrl =
+      typeof parsed.CurrentUrl === 'string' && IsAllowedExternalMediaUrl(parsed.CurrentUrl)
+        ? parsed.CurrentUrl.trim()
+        : null;
+    const history = Array.isArray(parsed.History)
+      ? parsed.History
+          .filter(
+            (h): h is RemoteBrowserHistoryEntry =>
+              h != null &&
+              typeof h === 'object' &&
+              typeof h.Url === 'string' &&
+              IsAllowedExternalMediaUrl(h.Url),
+          )
+          .slice(-RemoteBrowserChannel.MAX_HISTORY_ENTRIES)
+      : [];
+    const screenshot =
+      typeof parsed.ScreenshotDataUrl === 'string' &&
+      IsSafeRasterImageDataUrl(parsed.ScreenshotDataUrl) &&
+      parsed.ScreenshotDataUrl.length <= RemoteBrowserChannel.MAX_SAVED_SCREENSHOT_BYTES
+        ? parsed.ScreenshotDataUrl
+        : null;
+    if (!safeUrl && history.length === 0 && !screenshot) {
+      return false;
+    }
+    this.lastNotedUrl = safeUrl;
+    this.visitedHistory = history;
+    this.lastScreenshotDataUrl = screenshot;
+    return true;
+  }
+
+  private recordScreenshotFrame(dataUrl: string): void {
+    if (!IsSafeRasterImageDataUrl(dataUrl) || dataUrl.length > RemoteBrowserChannel.MAX_SAVED_SCREENSHOT_BYTES) {
+      return;
+    }
+    this.lastScreenshotDataUrl = dataUrl;
+    this.scheduleSaveState();
+  }
+
+  private scheduleSaveState(): void {
+    if (this.saveTimer !== null || !this.Context) {
+      return;
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.flushSaveState();
+    }, RemoteBrowserChannel.SCREENSHOT_SAVE_DEBOUNCE_MS);
+  }
+
+  private clearSaveTimer(): void {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+  }
+
+  private flushSaveState(): void {
+    this.clearSaveTimer();
+    const serialized = this.SerializeState();
+    if (serialized) {
+      this.Context?.RequestSave(serialized);
+    }
   }
 
   /**
@@ -915,8 +1034,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const firstSighting = this.lastNotedUrl === null;
     this.lastNotedUrl = next;
+    if (IsAllowedExternalMediaUrl(next)) {
+      const lastEntry = this.visitedHistory[this.visitedHistory.length - 1];
+      if (!lastEntry || lastEntry.Url !== next) {
+        this.visitedHistory = [
+          ...this.visitedHistory.slice(-(RemoteBrowserChannel.MAX_HISTORY_ENTRIES - 1)),
+          { Url: next, VisitedAt: new Date().toISOString() },
+        ];
+      }
+      this.flushSaveState();
+    }
     // A change seen WHILE the agent is driving is the agent's own, whichever feed spotted it first.
     const byAgent = cause === 'agent' || this.agentDrivingDepth > 0;
+    this.RecordChange({ Author: byAgent ? 'agent' : 'user', Perceive: false });
     this.Context?.SendContextNote(
       byAgent || firstSighting
         ? `[browser] current page: ${next}`

@@ -134,7 +134,8 @@ export class RealtimeSurfaceStageModel {
   private update(): void {
     this.resolvePlacements();
     for (const [key, placement] of this.placements) {
-      if (placement === 'stage' || placement === 'pip' || (placement === 'tab' && key === this.activeTabKey)) {
+      const carriesAgentVideo = this.plugins.get(key)?.ShowsAgentVideo === true;
+      if (placement === 'stage' || placement === 'pip' || (placement === 'tab' && (key === this.activeTabKey || carriesAgentVideo))) {
         this.seen.add(key);
       }
     }
