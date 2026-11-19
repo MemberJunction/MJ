@@ -110,10 +110,9 @@ export function ConvertTaskGraphToAgentSpec(
     const decisionKeys = assignDecisionKeys(graph.tasks);
 
     for (const node of graph.tasks) {
-        // Human and External have no design-time equivalent — reported, never emitted as an empty
-        // step, which would look like a workflow that runs unattended. Every OTHER kind maps to a
-        // step type: reading only `agentName` used to mislabel action, prompt and loop nodes as
-        // "human task" losses and drop them.
+        // A kind with no design-time step type is reported, never emitted as an empty step, which
+        // would look like a workflow that runs unattended. Today every kind maps to a step type;
+        // Human, External and Wait included.
         const omitted = noDesignTimeEquivalent(node);
         if (omitted) {
             losses.push({ Kind: 'HumanTask', TempId: node.tempId, Detail: omitted });
@@ -245,16 +244,15 @@ export function FormatSaveAsWorkflowLosses(losses: SaveAsWorkflowLoss[]): string
     return losses.map((l) => `[${l.Kind}] ${l.Detail}`).join('\n');
 }
 
-/** Why a node cannot become a Flow step, or `null` when it can. */
-function noDesignTimeEquivalent(node: TaskGraphSpecNode): string | null {
-    switch (node.kind) {
-        case 'Human':
-            return `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`;
-        case 'External':
-            return `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`;
-        default:
-            return null;
-    }
+/**
+ * Why a node cannot become a Flow step, or `null` when it can.
+ *
+ * Every kind has a design-time equivalent now: Human steps since flows gained them, and External and
+ * Wait since `AIAgentStep.StepType` accepted both. Kept as the one place to say so if a future kind
+ * arrives before its step type does.
+ */
+function noDesignTimeEquivalent(_node: TaskGraphSpecNode): string | null {
+    return null;
 }
 
 /**
@@ -443,9 +441,33 @@ function stepShapeFor(
                 Configuration: JSON.stringify(configuration),
             };
         }
+        case 'Human': {
+            const cfg = ConfigOf(node, 'Human');
+            return {
+                StepType: 'Human',
+                // The step's description IS what the person is asked to do — the convention the flow
+                // compiler reads it back with.
+                Description: cfg?.instructions ?? node.description,
+                Configuration: JSON.stringify(omitUndefined({
+                    assignToUserID: cfg?.assignToUserID,
+                    expiresInHours: cfg?.expiresInHours,
+                    provider: cfg?.provider,
+                    providerConfiguration: cfg?.providerConfiguration,
+                })),
+            };
+        }
+        case 'External':
+            return { StepType: 'External', Configuration: JSON.stringify(ConfigOf(node, 'External') ?? { domain: 'external' }) };
+        case 'Wait':
+            return { StepType: 'Wait', Configuration: JSON.stringify(ConfigOf(node, 'Wait') ?? {}) };
         default:
-            // Human/External are filtered out before this point; the fallback keeps the function
-            // total rather than letting a future kind fall through as undefined.
+            // Every kind is handled above; the fallback keeps the function total rather than letting
+            // a future kind fall through as undefined.
             return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
     }
+}
+
+/** Drops undefined members, so a saved step's configuration carries only what was set. */
+function omitUndefined(value: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
 }

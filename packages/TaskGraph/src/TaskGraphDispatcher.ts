@@ -92,6 +92,8 @@ import {
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
+import { WaitingStepRunner } from './WaitingStepRunner';
+import { IsProviderHumanTask, WAITING_STEP_MARKER, WaitingStepKindOf } from './waiting-steps';
 import {
     IsSettlementExpired,
     IsSubmittingRunReady,
@@ -551,6 +553,8 @@ export type ClaimedTaskCandidate = {
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+    /** Reaches and settles External, Wait and provider-Human steps — the steps no runner executes. */
+    private readonly waitingSteps: WaitingStepRunner;
 
     /**
      * Edges already reported as unevaluable, so the report is once per transition and not once per
@@ -715,6 +719,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
+        this.waitingSteps = new WaitingStepRunner(this.claims, () => this.contextUser);
         this.conditionEvaluator = new DispatcherConditionEvaluator();
     }
 
@@ -1380,6 +1385,14 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Recording first costs a poll: the skips now land after the completion, so a rollup
             // that lands in between sees work still Pending and settles one pass later. That is a
             // delay; the other order was a wrong graph.
+            //
+            // A retryable failure is not an outcome yet. It goes back to Pending with its next
+            // attempt on the row, so the retry survives this process and runs on whichever instance
+            // is free once its moment comes — and nothing downstream reacts to a failure that may
+            // still succeed.
+            if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
+                return;
+            }
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -1510,8 +1523,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Human steps are only swept when the loaded graph actually contains at least one
         // non-terminal Human task. When a graph has 0 pending human tasks (99% of graphs), this
         // check short-circuits in memory with 0 DB queries instead of running 3 RunViews per graph.
+        // A Human step handed to a plugged-in provider is a WAITING step, not an inbox step: it has no
+        // request for these sweeps to settle, expire or re-raise.
         const pendingHumanTasks = [...graph.entityById.values()].filter(
-            (t) => t.Status === 'Pending' && IsHumanTask(t),
+            (t) => t.Status === 'Pending' && IsHumanTask(t) && !IsProviderHumanTask(t),
         );
         if (pendingHumanTasks.length > 0) {
             await this.expireOverdueRequests(provider, parentID, pendingHumanTasks);
@@ -1520,6 +1535,20 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (settledHumanCount > 0) {
                 // Re-evaluate conditional edges and skip/block cascades now that a human step's
                 // answer and status have landed, reusing the already-loaded parent task.
+                graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
+                if (graph.nodes.length === 0) return undefined;
+            }
+        }
+
+        // Waiting steps (External, Wait, provider-Human) the graph has already reached: complete the
+        // waits whose moment has come, apply held signals, fail what is past its deadline. Same
+        // in-memory short-circuit as the human sweep — a graph with none costs no query.
+        const reachedWaitingSteps = [...graph.entityById.values()].filter(
+            (t) => t.Status === 'Pending' && t.ClaimedBy === WAITING_STEP_MARKER && WaitingStepKindOf(t) !== null,
+        );
+        if (reachedWaitingSteps.length > 0) {
+            const settledWaiting = await this.waitingSteps.Sweep(provider, parentID, reachedWaitingSteps);
+            if (settledWaiting > 0) {
                 graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
                 if (graph.nodes.length === 0) return undefined;
             }
@@ -2861,6 +2890,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
                 if (sagaHolds && !IsCompensationTask(entity)) continue;
+                // A scheduled retry waits for its moment. The claim procedure enforces this on the
+                // database clock; skipping here only saves a claim attempt that would be refused.
+                if (entity.NextAttemptAt && new Date(entity.NextAttemptAt).getTime() > Date.now()) continue;
 
                 // Human tasks are never dispatched — a person completes them. But "eligible" is the
                 // moment that person can finally act, and nothing else in the system knows it has
@@ -2868,7 +2900,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // they cleared. Without a notification here a workflow simply stops, waiting on
                 // someone who was never told. That silent stall is the failure mode this exists to
                 // prevent, so it happens on the eligibility check rather than at submission.
-                if (entity.StepType === 'Decision') {
+                if (WaitingStepKindOf(entity)) {
+                    // External, Wait and provider-Human steps are never claimed — nothing runs them.
+                    // Reaching one marks it waiting (once) and, for a provider-Human step, raises it.
+                    // Tested before the key columns, which none of them carry.
+                    await this.reachWaitingStep(entity, graph, provider);
+                    continue;
+                } else if (entity.StepType === 'Decision') {
                     // Tested before the key columns: a Decision carries its decision prompt in
                     // PromptID, but it runs on the decision runner, which every dispatcher has — so
                     // a host with no PROMPT runner must not leave it Pending.
@@ -2960,6 +2998,34 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Hands a waiting step the dispatcher has found eligible to the waiting-step runner, with the
+     * payload it is reached with — computed exactly as a runner's starting payload is, so a
+     * `payload.<path>` in a Wait's `until` or an External's correlation key reads the same values a
+     * branch condition would.
+     */
+    private async reachWaitingStep(entity: MJTaskEntity, graph: GraphState, provider: IMetadataProvider): Promise<void> {
+        if (entity.ClaimedBy === WAITING_STEP_MARKER) return;
+        const parsed = ParseTaskInputPayload(entity.ID, entity.InputPayload);
+        const authored = 'Payload' in parsed && parsed.Payload && typeof parsed.Payload === 'object' && !Array.isArray(parsed.Payload)
+            ? (parsed.Payload as Record<string, unknown>)
+            : null;
+        const payload = this.mergedPayload(authored, this.extractDependencyOutputsFromGraph(entity.ID, graph));
+        const owner = graph.parentMetadata.submittedByUserID ?? null;
+        // The same taint a runner would be given for this node. A waiting step runs nothing, but it
+        // hands its input on, so the steps after it must be gated by what reached it — and a
+        // security refusal on the node reads as tainted, as it does everywhere else.
+        const context = await this.graphContext(provider, entity, { parentTask: graph.parent, parentMetadata: graph.parentMetadata });
+        const envelope = this.nodeEnvelope(entity, context, {
+            upstreamTasks: this.upstreamTasksInGraph(entity.ID, graph),
+            upstreamOf: this.upstreamLookupInGraph(graph),
+        });
+        await this.waitingSteps.Reach(
+            { Task: entity, Payload: payload, OwnerUserID: owner, InputTainted: this.inputTaintOf(envelope) },
+            provider,
+        );
+    }
+
+    /**
      * Whether THIS host can act on a task right now — the runner-availability question, asked
      * without acting on it.
      *
@@ -2969,6 +3035,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private canActOn(entity: MJTaskEntity): boolean {
         if (this.inFlight.has(entity.ID)) return false;
+        // Reaching a waiting step is an act: it marks the step and may raise it with a provider.
+        if (WaitingStepKindOf(entity)) return true;
         // Before the PromptID test, for the reason given in `findClaimableTasks`.
         if (entity.StepType === 'Decision') return true;
         if (entity.ActionID) return !!this.actionRunner;
@@ -4255,7 +4323,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const raw = task.ActionID
             ? {
-                ...await this.invokeActionWithRetry(
+                ...await this.invokeAction(
                     task,
                     provider,
                     effectiveInput,
@@ -4281,14 +4349,12 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Runs an action task, retrying a failure up to the step's `retryCount` — but only when running the
-     * action again is safe: only when the action's `IsIdempotent` column says so. A forward step's node may
-     * turn that off (`compensation.isIdempotent: false`) but never on, because the node is written by a
-     * model and the column by whoever owns the action; a compensation task retries when its compensation
-     * action is idempotent. A non-idempotent action is never re-run: a payment that failed after charging
-     * must not charge again. Retries back off exponentially (`RetryBackoffBaseMs`, doubling, capped at 30×).
+     * Runs an action task once.
+     *
+     * Retrying is not done here any more: sleeping inside the claim lost the retry to any restart.
+     * A retryable failure is scheduled durably on the row instead (see {@link scheduleRetryIfAllowed}).
      */
-    private async invokeActionWithRetry(
+    private async invokeAction(
         task: MJTaskEntity,
         provider: IMetadataProvider,
         effectiveInput: Record<string, unknown>,
@@ -4297,7 +4363,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
         effectiveEnvelope?: TaskSecurityEnvelope,
     ): Promise<TaskActionRunResult> {
-        const run = () => this.actionRunner!.RunActionForTask({
+        return this.actionRunner!.RunActionForTask({
             TaskID: task.ID,
             ActionID: task.ActionID!,
             InputPayload: effectiveInput,
@@ -4307,18 +4373,52 @@ export class TaskGraphDispatcher implements IShutdownable {
             OnProgress: onProgress,
             ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
         });
-        let result = await run();
-        if (result.Success || result.ResultCode === TAINTED_EGRESS_BLOCKED) {
-            return result;
+    }
+
+    /**
+     * Schedules a failed run for another attempt when its step allows one.
+     *
+     * Retryable means: the step's policy asks for retries, attempts remain, the failure is not a
+     * security refusal, and running the step again is safe — an Action step only when its action is
+     * idempotent (see {@link allowedRetries}), a Prompt or Decision step always (a model call has no
+     * side effects), an Agent step never (its run may have called actions that must not run twice,
+     * and an agent carries no idempotency flag to say otherwise).
+     *
+     * @returns true when the retry was scheduled and the caller must NOT record a final outcome
+     */
+    private async scheduleRetryIfAllowed(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        result: { Success: boolean; ErrorMessage?: string; ResultCode?: string },
+        ownerUserID: string | null | undefined,
+    ): Promise<boolean> {
+        if (result.ResultCode === TAINTED_EGRESS_BLOCKED) return false;
+        const maxAttempts = await this.allowedRetries(provider, task);
+        const attemptsSoFar = task.AttemptCount ?? 0;
+        if (attemptsSoFar >= maxAttempts) return false;
+
+        const nextAttempt = attemptsSoFar + 1;
+        const delay = RetryBackoffMs(nextAttempt, this.config.RetryBackoffBaseMs);
+        const scheduled = await this.claims.TryScheduleRetry(
+            provider, task.ID, maxAttempts, delay, result.ErrorMessage ?? null, this.contextUser,
+        );
+        if (!scheduled) {
+            // Refused: the step moved under us, or the count on the row is already at the cap. Either
+            // way the caller records the outcome as it would have without a retry policy.
+            return false;
         }
-        const retries = await this.allowedRetries(provider, task);
-        for (let attempt = 1; !result.Success && attempt <= retries; attempt++) {
-            const delay = RetryBackoffMs(attempt, this.config.RetryBackoffBaseMs);
-            LogStatus(`[TaskGraphDispatcher] Retrying idempotent action task '${task.Name}' (${task.ID}) in ${delay}ms, attempt ${attempt}/${retries}.`);
-            await new Promise<void>((resolve) => setTimeout(resolve, delay));
-            result = await run();
-        }
-        return result;
+        LogStatus(
+            `[TaskGraphDispatcher] '${task.Name}' (${task.ID}) failed; retry ${nextAttempt}/${maxAttempts} ` +
+            `scheduled in ${delay}ms: ${result.ErrorMessage ?? 'no message'}`,
+        );
+        this.emit({
+            Kind: 'ClaimChanged', ParentTaskID: task.ParentID ?? '', OwnerUserID: ownerUserID,
+            TaskID: task.ID, TaskName: task.Name, Status: 'Pending',
+            ClaimEvent: 'retry-scheduled', Attempt: nextAttempt,
+            NextAttemptAt: new Date(Date.now() + delay).toISOString(),
+            ErrorMessage: result.ErrorMessage,
+        });
+        return true;
     }
 
     /**
@@ -4329,8 +4429,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         const config = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const compensation = ReadTaskCompensationMetadata(task.Configuration);
         const requested = Math.max(0, Math.floor(config?.policy?.retryCount ?? compensation?.retryCount ?? 0));
-        if (requested === 0 || !task.ActionID) {
+        if (requested === 0 || task.AgentID) {
+            // An agent's run may have called actions that must not run twice, and an agent carries
+            // no idempotency flag that could say otherwise. A loop whose body is an agent included.
             return 0;
+        }
+        if (!task.ActionID) {
+            // A model call — a Prompt or Decision step, or a loop over a prompt — changes nothing it
+            // would repeat. Anything else has no runner to retry.
+            return task.PromptID ? requested : 0;
         }
         // The action's own column decides. A forward step's node can only narrow it: a model-written
         // `isIdempotent: true` must not make a payment retryable that its action says is not.

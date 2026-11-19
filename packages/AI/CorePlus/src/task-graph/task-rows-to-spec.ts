@@ -163,6 +163,9 @@ function nodeFor(
             return TaskNode.While(base, config?.while ?? { condition: '' });
         case 'External':
             return TaskNode.External(base, config?.external ?? { domain: 'external' });
+        case 'Wait':
+            // A wait whose settings are unreadable still draws as a wait; the run's DueAt is the truth.
+            return TaskNode.Wait(base, config?.wait ?? { durationSeconds: 0 });
         case 'Decision':
             return TaskNode.Decision(base, {
                 promptName: config?.decision?.promptName,
@@ -174,6 +177,8 @@ function nodeFor(
             return TaskNode.Human(base, {
                 assignToUserID: row.UserID ?? undefined,
                 instructions: config?.human?.instructions,
+                ...(config?.human?.provider ? { provider: config.human.provider } : {}),
+                ...(config?.human?.providerConfiguration ? { providerConfiguration: config.human.providerConfiguration } : {}),
             });
     }
 }
@@ -181,10 +186,11 @@ function nodeFor(
 /** The parts of `Task.Configuration` this projection reads. */
 type StoredConfiguration = {
     agent?: { message?: string; presetName?: string };
-    human?: { instructions?: string };
+    human?: { instructions?: string; provider?: string; providerConfiguration?: Record<string, unknown> };
     forEach?: { collectionPath: string };
     while?: { condition: string };
-    external?: { domain: string; ref?: string };
+    external?: TaskGraphNodeConfigMap['External'];
+    wait?: TaskGraphNodeConfigMap['Wait'];
     decision?: Partial<TaskGraphNodeConfigMap['Decision']>;
     inputMapping?: string;
     outputMapping?: string;
