@@ -22,8 +22,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Source Types&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-04-06T11:01:39.742Z",
-            "checksum": "971439d270d042a68f501aa30e744531a3bb77ffba5988c734d66defa375640f"
+            "lastModified": "2026-11-18T00:23:12.779Z",
+            "checksum": "5d15d50c84f6ea9fee66df0be0392f1dd8d92d555f6d885a7c8dcb934eb0cd73"
           }
         }
       ]
@@ -55,8 +55,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Sources&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-11-03T23:45:43.589Z",
-            "checksum": "267e0d1da1b0107c32c7b8509dd8a381bd13717530c49315ce4ac1edde3e5fb1"
+            "lastModified": "2026-11-18T00:23:12.792Z",
+            "checksum": "0a7bb2af52c5c697aad69f84ca1073257b5b1b99915218d50a786ba0826186f1"
           }
         },
         {
@@ -70,6 +70,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Sources&Name=DiscoverState"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.801Z",
+            "checksum": "5e92fa84e64d12a3b37641c3590549248ae5cc2688332dfc7a1c566ce0cd7ab2"
           }
         }
       ]
@@ -101,8 +105,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Types&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-07-28T16:46:19.756Z",
-            "checksum": "01f16e56d885618917226b2f5d3f9e3510d66158a709b34328f24c7cda605335"
+            "lastModified": "2026-11-18T00:23:12.816Z",
+            "checksum": "c747fcbf99a2abfddfdf09fb74d9383536f7dd37a11231edb694061d9613b2a9"
           }
         }
       ]

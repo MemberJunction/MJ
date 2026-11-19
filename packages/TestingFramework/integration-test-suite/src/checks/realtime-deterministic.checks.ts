@@ -17,11 +17,12 @@
  *    jump, the unacknowledged leakage flag, and an archive without a reason (RD9),
  *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to a tagged voiced agent, becomes the
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
- *    network), once that agent's own video setting (its TypeConfiguration) is on. With the agent's setting off it asks
- *    for none, even when the call's override turns video on (the override can't), and a call that picked an avatar
- *    then hears why (`video-off`); on a phone call (even one in a room that could publish it) the prep asks for none and says why
- *    (`phone`), and in an app that shows no agent video it asks for none (`host`), both keeping the persona's voice;
- *    without that face, the prep asks for no avatar and says why (`no-binding`); its fixture rows are deleted afterwards,
+ *    network), once that agent's own video setting (its TypeConfiguration) is on OR an authorized runtime override turns
+ *    video on. With video off and no override it asks for none; picking an avatarId without turning video on hears why
+ *    (`video-off`), whereas selecting an avatar-enabled voice with `enabled: true` resolves that avatar; on a phone call
+ *    (even one in a room that could publish it) the prep asks for none and says why (`phone`), and in an app that shows
+ *    no agent video it asks for none (`host`), both keeping the persona's voice; without that face, the prep asks for no
+ *    avatar and says why (`no-binding`); its fixture rows are deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
  *    ClassFactory, so a driver missing from the class-registration manifest is caught,
  *  - a bridged (server-held) realtime session's usage landing on its co-agent prompt run before
@@ -626,9 +627,10 @@ async function assertNoAgentVideoAsksForNone(ctx: IntegrationCheckContext, servi
 }
 
 /**
- * RD13's video-off legs, with the voiced agent's own video setting off and its face on the vendor: the session asks for
- * no avatar, with no reason to give when the call picked none. The call's runtime override can't turn the setting on,
- * so an override of `enabled: true` alone changes nothing, and a call that also picked the face hears why (`video-off`).
+ * RD13's video-off and runtime-override legs, with the voiced agent's own video setting off and its face on the
+ * vendor: a bare call asks for no avatar (`Reason: undefined`), an `avatarId`-only override without `enabled: true` still
+ * asks for no avatar and reports `video-off`, while an authorized override with `enabled: true` enables video (resolving
+ * the persona's face, or the explicit picked `avatarId`).
  */
 async function assertAgentVideoOffAsksForNone(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
     const off = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors), ctx.User, ctx.Provider);
@@ -636,16 +638,21 @@ async function assertAgentVideoOffAsksForNone(ctx: IntegrationCheckContext, serv
     AssertEqual(off.SessionParams?.Avatar, undefined, "RD13: with the agent's video setting off, the session asks for no avatar");
     AssertEqual(off.AvatarResolution?.Reason, undefined, "RD13: with the agent's video setting off and no pick, there is no reason to give");
 
+    const pickedWithoutVideo = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { avatarId: fixture.AvatarID }), ctx.User, ctx.Provider);
+    Assert(pickedWithoutVideo.Success, `RD13: the prep with a picked avatar and video off failed: ${pickedWithoutVideo.ErrorMessage}`);
+    Assert(pickedWithoutVideo.EffectiveConfig?.realtime?.video?.enabled !== true, 'RD13: an avatarId-only override without enabled:true keeps video off');
+    AssertEqual(pickedWithoutVideo.SessionParams?.Avatar, undefined, "RD13: a picked avatar without enabled:true when the agent's video setting is off asks for no avatar");
+    AssertEqual(pickedWithoutVideo.AvatarResolution?.Reason, 'video-off', "RD13: the prep says why: the call picked an avatar while video is off");
+
     const overridden = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { enabled: true }), ctx.User, ctx.Provider);
     Assert(overridden.Success, `RD13: the prep with the override turning video on failed: ${overridden.ErrorMessage}`);
-    Assert(overridden.EffectiveConfig?.realtime?.video?.enabled !== true, "RD13: the call's override can't turn the agent's video setting on");
-    AssertEqual(overridden.SessionParams?.Avatar, undefined, "RD13: with the agent's video setting off, the override alone asks for no avatar");
-    AssertEqual(overridden.AvatarResolution?.Reason, undefined, 'RD13: the override picked no avatar, so there is no reason to give');
+    AssertEqual(overridden.EffectiveConfig?.realtime?.video?.enabled, true, "RD13: an authorized runtime override with enabled:true enables video");
+    assertAvatarResolved(overridden, anchors, fixture);
 
-    const picked = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { enabled: true, avatarId: fixture.AvatarID }), ctx.User, ctx.Provider);
-    Assert(picked.Success, `RD13: the prep with a picked avatar failed: ${picked.ErrorMessage}`);
-    AssertEqual(picked.SessionParams?.Avatar, undefined, "RD13: a picked avatar with the agent's video setting off asks for no avatar");
-    AssertEqual(picked.AvatarResolution?.Reason, 'video-off', "RD13: the prep says why: the call picked an avatar and the agent's video setting is off");
+    const pickedWithVideo = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { enabled: true, avatarId: fixture.AvatarID }), ctx.User, ctx.Provider);
+    Assert(pickedWithVideo.Success, `RD13: the prep with an avatar-enabled voice pick failed: ${pickedWithVideo.ErrorMessage}`);
+    AssertEqual(pickedWithVideo.EffectiveConfig?.realtime?.video?.enabled, true, 'RD13: selecting an avatar-enabled voice enables video via runtime override');
+    AssertEqual(pickedWithVideo.SessionParams?.Avatar?.AvatarID, fixture.AvatarID, 'RD13: the resolved avatar matches the picked avatarId');
 }
 
 // ── RD18: the Modalities gate for avatars ──────────────────────────────────────────────────────────
@@ -1903,7 +1910,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD13',
-        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request once the agent's video setting is on; with it off, none, even when the call's override turns video on (a picked avatar: video-off); on a phone call, none (phone); in an app that shows no agent video, none (host); without the face, no-binding (run-scoped key, no network)",
+        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request once the agent's video setting or an authorized runtime override turns video on; with video off and no enabled override, none (an avatarId-only pick hears video-off); on a phone call, none (phone); in an app that shows no agent video, none (host); without the face, no-binding (run-scoped key, no network)",
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const deployment = findAvatarFixtureAnchors(AIEngineBase.Instance);

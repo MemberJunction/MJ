@@ -426,6 +426,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
                     HasAudio: renderResult.HasAudio,
                     RendererVersion: renderResult.RendererVersion,
                     RenderDurationMs: renderResult.RenderDurationMs,
+                    ...(renderResult.Workers !== undefined ? { Workers: renderResult.Workers } : {}),
+                    ...(renderResult.Audio ? { Audio: renderResult.Audio } : {}),
                 };
                 writeEvent({ Type: 'Result', Result: metadata });
             } catch (err) {

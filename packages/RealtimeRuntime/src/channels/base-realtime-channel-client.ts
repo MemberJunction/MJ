@@ -210,6 +210,12 @@ export interface RealtimeChannelContext {
    * @returns A structured outcome the proxy serializes back to the model.
    */
   DispatchContextAction?(request: RealtimeContextActionRequest): Promise<RealtimeContextActionResult>;
+  /**
+   * OPTIONAL — returns a read-only JSON snapshot of all currently active surfaces (which surface
+   * tab the user is viewing plus each open channel's key, title, exposure, and state when
+   * `Exposure !== 'none'`). Provided by the runtime for read-only introspection tools.
+   */
+  GetSurfaceSnapshot?: () => JSONObject;
 
   /**
    * The resolved per-channel configuration for THIS channel: the host's defaults beneath the agent's

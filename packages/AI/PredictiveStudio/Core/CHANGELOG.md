@@ -1,5 +1,16 @@
 # @memberjunction/predictive-studio-core
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 2b4969f: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `TrimTrailingChars`, `TrimLeadingChars`, `TrimChars` and `IsEmailShaped` helpers in `@memberjunction/global`, used for URL, path and base64 trims and email-shape checks, plus index scans for Markdown fences and Slack link conversion. Results are unchanged for every input.
+- Updated dependencies [2d938cf]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

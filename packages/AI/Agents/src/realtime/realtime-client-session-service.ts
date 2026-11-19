@@ -4039,7 +4039,10 @@ export class RealtimeClientSessionService {
         }
         return (
             'Earlier in this conversation (a previous live session that you are now resuming), ' +
-            'you and the user discussed the following. Treat it as shared context you both remember:\n' +
+            'you and the user discussed the following. Treat it as shared context you both remember — ' +
+            'pick up naturally mid-conversation without giving a fresh cold introduction or asking the ' +
+            'user to repeat what was already covered, and refer to restored Workspace/Whiteboard/Browser/Media ' +
+            'surfaces when helpful:\n' +
             text
         );
     }

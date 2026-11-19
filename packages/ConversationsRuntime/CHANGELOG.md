@@ -1,5 +1,88 @@
 # @memberjunction/conversations-runtime
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- e781aec: Add Wave 6C client-side Edge AI agent pre-discovery and client-only semantic Cmd+K Omnibox:
+  - **Shared Lazy WASM Edge AI Worker (`@memberjunction/ng-conversations`, `@memberjunction/ng-explorer-app`)**: Pre-bundles quantized `Xenova/bge-small-en-v1.5` (`q8`) and `Xenova/ms-marco-MiniLM-L-6-v2` (`q8`) into `assets/edge-ai.worker.js` (`device: 'wasm'`, `dtype: 'q8'`) with zero initial bundle overhead, per-user/session `SimpleVectorService` `'float32'` catalog caching, strict query deadlines, and a circuit-breaker fallback — shipped directly in `@memberjunction/ng-conversations` / `@memberjunction/ng-explorer-app` assets with zero host-app boilerplate.
+  - **Stage 6C.1 Edge Agent Pre-Discovery (`@memberjunction/ai-core-plus`, `@memberjunction/conversations-runtime`, `@memberjunction/ai-agents`, `@memberjunction/server`)**: Computes an untrusted advisory `EdgePreDiscoveryHint` (top-5 candidates + `logit >= -2.0` confidence gate). Server remains guard of truth, verifying `AIAgentPermissionHelper.HasPermission`, `AllowedAgentIDs`, and `IsRunnable` / `IsDirectlyDiscoverable` at both GraphQL ingress (`RunAIAgentResolver`) and `BaseAgent.InjectDecisionDiscovery`, discarding unauthorized/unknown IDs silently and falling back cleanly to `SearchEntity` / server `Jev` / `Sage`.
+  - **Stage 6C.2 Client-Only Semantic Omnibox (`@memberjunction/ng-explorer-core`)**: Adds `OmnibarSemanticIndexService` backed by `'float32'` `SimpleVectorService` and the shared `bge-small-en-v1.5` worker over browser-resident metadata (Entities, Saved Views, Dashboards, Apps/Navigation, Agents) for sub-15ms offline semantic matching with zero `PreviewSearch` GraphQL calls when offline and graceful fallback when cold/unavailable.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [7231715]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [44f7869]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.1
+  - @memberjunction/ai-agent-client@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

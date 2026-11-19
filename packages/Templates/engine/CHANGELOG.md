@@ -1,5 +1,86 @@
 # Change Log - @memberjunction/templates
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- 3e9d745: Wave 5 backend and core performance optimizations:
+  - **Zero-readback `TrackRecordChanges` (`@memberjunction/sqlserver-dataprovider`)**: Add optional `@EntityID` and `@SuppressReturn` parameters to `[__mj].[spCreateRecordChange_Internal]` and emit `@EntityID` + `@SuppressReturn=1` inside inline save/delete batches instead of allocating `@ResultChangesTable` and joining `vwRecordChanges` for discarded rows. Also terminate `TrackRecordChanges` delete statements with `;` and harden `SQLServerTransactionGroup.ScopeItemVariables` EXEC-span boundary detection.
+  - **Batched `RelatedRecordCollection` request deserialization (`@memberjunction/core`)**: Preload existing child rows and pending removals in O(1) `RunView` queries per entity type (`BaseEntity.HydrateFromRow`) instead of N serial `InnerLoad` roundtrips when entities use default `InnerLoad`.
+  - **Contiguous leaf-node batching in `EntitySavePlan` (`@memberjunction/core`)**: Group consecutive homogeneous `CanBatchLeaf` steps inside `ExecuteEntitySavePlan` into a `TransactionGroup` with `BatchedSubmit = true`.
+  - **Savepoint-safe post-commit task coalescing (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**: Add `ScheduleAfterCommit` (`coalesceKey`, `coalesceMode`: `'coalesce' | 'dedupe' | 'append'`) on `DatabaseProviderBase` / `GenericDatabaseProvider`, respecting transaction rollback and savepoints.
+  - **Pure-interpolation template fast-path (`@memberjunction/templates`)**: Compile pure `{{ a.b }}` Nunjucks templates without tags, filters, or comments directly against the sandboxed member lookup helpers (`ResolveSafeMemberLookup` / `ResolveSafeRootBinding`).
+  - **`UserInfo` linked entity typing (`@memberjunction/core`)**: Fix `UserInfo.LinkedEntityID` and `UserInfo.LinkedEntityRecordID` from `number` to `string`.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/templates-base-types@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes
