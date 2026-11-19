@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[817,3],"text":"PipelineID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[695,3],"text":"PipelineID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"$patch":{"keep":[716,101],"text":"PipelineID_2 | sqlString"}},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": null,
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"$patch":{"keep":[861,928],"text":"currentStart_2 | sqlDate}}\n         AND evaluation.\"SubmittedAt\" < {{ periodEnd | sqlDate }}\n        THEN score.\"NormalizedScore\"\n    END) AS \"CurrentMean\",\n    AVG(CASE\n        WHEN evaluation.\"SubmittedAt\" >= {{ previousStart | sqlDate }}\n         AND evaluation.\"SubmittedAt\" < {{currentStart_2 | sqlDate"}},
   "shipped/SQL/rubric-drift-period-means.sql": {"$patch":{"keep":[418,946],"text":"currentStart_2 | sqlDate}}\n         AND evaluation.[SubmittedAt] < {{ periodEnd | sqlDate }}\n        THEN score.[NormalizedScore]\n    END) AS CurrentMean,\n    AVG(CASE\n        WHEN evaluation.[SubmittedAt] >= {{ previousStart | sqlDate }}\n         AND evaluation.[SubmittedAt] < {{currentStart_2 | sqlDate"}},
   "shipped/SQL/server-installed-version-history.pg.sql": null,

@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,844]}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,722]}},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"IsLegalInCTE":true,"OrderByClause":"StartedAt DESC","Positions":[817],"SqlWithoutOrderBy":{"$slice":[0,840]}},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1075]}},
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,2096]}},
   "shipped/SQL/rubric-drift-period-means.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1669]}},
   "shipped/SQL/server-installed-version-history.pg.sql": {"IsLegalInCTE":false,"OrderByClause":"installed_on DESC","Positions":[340],"SqlWithoutOrderBy":{"$slice":[0,339]}},

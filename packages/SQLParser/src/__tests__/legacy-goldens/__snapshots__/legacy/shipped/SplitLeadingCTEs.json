@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": null,
   "shipped/SQL/predictive-studio-next-model-version.sql": null,
   "shipped/SQL/predictive-studio-running-training-run.sql": null,
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": null,
   "shipped/SQL/rubric-drift-period-means.pg.sql": null,
   "shipped/SQL/rubric-drift-period-means.sql": null,
   "shipped/SQL/server-installed-version-history.pg.sql": null,

@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [{"$slice":[0,844]}],
   "shipped/SQL/predictive-studio-next-model-version.sql": [{"$slice":[0,722]}],
   "shipped/SQL/predictive-studio-running-training-run.sql": [{"$slice":[0,745]}," Status = 'Running'\n  ",{"$slice":[773,841]}],
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": [{"$slice":[0,1075]}],
   "shipped/SQL/rubric-drift-period-means.pg.sql": [{"$slice":[0,1803]}," evaluation.\"EvaluatorType\" <> 'Self'\n  "," score.\"IsComputed\" = false\n  "," score.\"NormalizedScore\" IS NOT NULL\n  "," evaluation.\"SubmittedAt\" >= {{ previousStart | sqlDate }}\n  ",{"$slice":[1988,2096]}],
   "shipped/SQL/rubric-drift-period-means.sql": [{"$slice":[0,1380]}," evaluation.[EvaluatorType] <> 'Self'\n  "," score.[IsComputed] = 0\n  "," score.[NormalizedScore] IS NOT NULL\n  "," evaluation.[SubmittedAt] >= {{ previousStart | sqlDate }}\n  ",{"$slice":[1561,1669]}],
   "shipped/SQL/server-installed-version-history.pg.sql": [{"$slice":[0,367]}],
