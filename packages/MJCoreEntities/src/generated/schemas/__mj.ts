@@ -33029,7 +33029,7 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
+    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore'), z.literal('Sync')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
@@ -33040,6 +33040,7 @@ export const MJRecordChangeSchema = z.object({
     *   * External
     *   * Internal
     *   * Restore
+    *   * Sync
         * * Description: Internal or External`),
     ChangedAt: z.date().describe(`
         * * Field Name: ChangedAt

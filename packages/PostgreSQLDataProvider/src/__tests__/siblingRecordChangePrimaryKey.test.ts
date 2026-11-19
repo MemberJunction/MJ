@@ -6,10 +6,33 @@
  */
 import { describe, it, expect } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import type { EntityInfo } from '@memberjunction/core';
+import type { CloneContext, EntityInfo, RestoreContext, SyncContext, UserInfo } from '@memberjunction/core';
 
 type Host = {
-    BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string, source?: 'Internal' | 'Clone', changeContext?: string | null) => string;
+    BuildSiblingRecordChangeSQL: (
+        varName: string,
+        entityInfo: EntityInfo,
+        changesJSON: string,
+        changesDesc: string,
+        pkValue: string,
+        userId: string,
+        source?: 'Internal' | 'Clone' | 'Sync',
+        changeContext?: string | null,
+        integrationID?: string | null,
+    ) => string;
+    BuildRecordChangeSQL: (
+        newData: Record<string, unknown> | null,
+        oldData: Record<string, unknown> | null,
+        entityName: string,
+        recordID: string,
+        entityInfo: EntityInfo,
+        type: 'Create' | 'Update' | 'Delete',
+        user: UserInfo,
+        restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
+    ) => { sql: string; parameters?: unknown[] } | null;
+    BuildRecordChangePayload: PostgreSQLDataProvider['BuildRecordChangePayload'];
 };
 
 function makeHost(): Host {
@@ -56,5 +79,57 @@ describe('BuildSiblingRecordChangeSQL — IS-A sibling read uses the real key co
         const plain = makeHost().BuildSiblingRecordChangeSQL('@_rc_prop_0', entity, '{}', 'desc', 'abc', 'u-1');
         expect(plain).not.toContain('ChangeContext');
         expect(plain).toContain("'Internal'");
+    });
+
+    it('writes Source=Sync, ChangeContext, and IntegrationID on PostgreSQL BuildRecordChangeSQL and BuildSiblingRecordChangeSQL', () => {
+        const entity = {
+            ...makeEntity('Widgets', 'ID'),
+            TrackRecordChanges: true,
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, NeedsQuotes: true },
+                { Name: 'Name', IsPrimaryKey: false, NeedsQuotes: true },
+            ],
+        } as unknown as EntityInfo;
+
+        const syncCtx: SyncContext = {
+            OriginDeploymentID: '11111111-1111-4111-8111-111111111111',
+            PairingID: 'pair-pg-1',
+            RunID: 'run-pg-1',
+            OriginChangeIDs: ['chg-pg-1'],
+            IntegrationID: '22222222-2222-4222-8222-222222222222',
+        };
+        const user = { ID: '33333333-3333-4333-8333-333333333333', Name: 'PG Sync', Email: '' } as UserInfo;
+
+        const recordChange = makeHost().BuildRecordChangeSQL(
+            { ID: 'w-1', Name: 'Synced' },
+            null,
+            'Widgets',
+            'ID|w-1',
+            entity,
+            'Create',
+            user,
+            null,
+            null,
+            syncCtx,
+        );
+        expect(recordChange).not.toBeNull();
+        expect(recordChange!.sql).toContain(', "ChangeContext", "IntegrationID")');
+        expect(recordChange!.sql).toContain('$11::text, $12::uuid');
+        expect(recordChange!.parameters).toContain('Sync');
+        expect(recordChange!.parameters).toContain('22222222-2222-4222-8222-222222222222');
+
+        const siblingSync = makeHost().BuildSiblingRecordChangeSQL(
+            '@_rc_prop_0',
+            entity,
+            '{}',
+            'desc',
+            'w-1',
+            user.ID,
+            'Sync',
+            '{"Version":1,"Kind":"Sync"}',
+            '22222222-2222-4222-8222-222222222222',
+        );
+        expect(siblingSync).toContain(', "ChangeContext", "IntegrationID")');
+        expect(siblingSync).toContain("'22222222-2222-4222-8222-222222222222'::uuid");
     });
 });
