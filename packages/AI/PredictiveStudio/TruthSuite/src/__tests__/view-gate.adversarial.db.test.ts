@@ -397,11 +397,13 @@ describe('M5b.10 harness', () => {
       r.Scope = JSON.stringify({ recordIds: [extra.ID] }); r.AsOfDate = DAY3; r.ReadPolicy = '{}'; r.RequestedBy = JSON.stringify({ kind: 'system', component: 'view-gate-test' }); r.Status = 'completed';
     });
     await writeModelRows(f.Binding, run.ID, DAY3, [extra.ID], 0.4);
+    // A successful Delete resets the entity object (BaseEntity.resetDeletedRecords), so the ID is read before it.
+    const deletedId = extra.ID;
     expect(await extra.Delete()).toBe(true);
-    const byId = await ReadAs(f.Developer, 'MJ: Latest Feature Values', `RecordID = '${EscapeSQLString(extra.ID)}'`);
+    const byId = await ReadAs(f.Developer, 'MJ: Latest Feature Values', `RecordID = '${EscapeSQLString(deletedId)}'`);
     expect(byId.map((r) => r.Source)).toEqual(['Model']);
     // The panel opens on a record's form; the record is gone, so no form (and no panel) can show it.
-    const target = await RunView.FromMetadataProvider(server.Provider).RunView<{ ID: string }>({ EntityName: TARGET, ExtraFilter: `ID = '${EscapeSQLString(extra.ID)}'`, Fields: ['ID'], ResultType: 'simple' }, f.Developer);
+    const target = await RunView.FromMetadataProvider(server.Provider).RunView<{ ID: string }>({ EntityName: TARGET, ExtraFilter: `ID = '${EscapeSQLString(deletedId)}'`, Fields: ['ID'], ResultType: 'simple' }, f.Developer);
     expect([target.Success, target.Results.length]).toEqual([true, 0]);
   }, CASE_TIMEOUT_MS);
 
