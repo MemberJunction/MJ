@@ -525,7 +525,8 @@ export class HarnessCleanup {
   private static async readRecorded(store: CleanupStore, records: RunRecords): Promise<RecordedRows> {
     const modelFilter = HarnessCleanup.anyIn([['ID', records.ModelIDs], ['PipelineID', records.PipelineIDs]]);
     const models = modelFilter ? await store.Models(modelFilter) : [];
-    const modelIds = new RecordIDSet(models.map((m) => m.ID));
+    // The recorded model IDs too: a model deleted by SQL (the delete procedure's model step) leaves its monitoring job.
+    const modelIds = new RecordIDSet([...models.map((m) => m.ID), ...records.ModelIDs]);
     const pipelineIds = new RecordIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
     const scoring = await HarnessCleanup.readScoring(store, modelIds, pipelineIds);
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);

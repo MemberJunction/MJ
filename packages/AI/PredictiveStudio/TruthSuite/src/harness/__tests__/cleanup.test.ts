@@ -68,6 +68,8 @@ interface FakeStoreOptions {
   readonly ThrowObjects?: ReadonlySet<string>;
   /** The store holds what the lifecycle gate writes for M1: a publish record, a monitoring job and a scoring Action with one param. */
   readonly GateRows?: boolean;
+  /** The model rows are gone (deleted by SQL, as the delete procedure's model step does); their gate rows remain. */
+  readonly ModelsGone?: boolean;
   /**
    * The store holds what a full gate run writes, with the database's foreign keys: M1's sign-off, the publish record
    * that consumed it (`SignOffID`), a run-level refusal naming only RUN-1, and M1's `Pending` monitoring job with one job
@@ -187,6 +189,7 @@ class FakeStore implements CleanupStore {
   }
   public async Models(filter: string): Promise<CleanupModelRow[]> {
     this.Filters.push(`MJ: ML Models | ${filter}`);
+    if (this.options.ModelsGone) return [];
     return [this.row('MJ: ML Models', M1, AGENT_P, F1), this.row('MJ: ML Models', M2, P1)];
   }
   public async PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]> {
@@ -382,6 +385,15 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(at(`MJ: ML Monitoring Results:${MONITORING_RESULT}`)).toBeLessThan(at('MJ: Scheduled Jobs:JOB-M1'));
     expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
     expect(store.Filters).toContain(`MJ: Actions | ParentID IS NOT NULL AND (ID IN ('ACT-1'))`);
+  });
+
+  it('deletes a recorded model\'s monitoring job when the model row is already gone (deleted by SQL)', async () => {
+    const records = new RunRecords();
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { GateRows: true, ModelsGone: true });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted).toContain('MJ: Scheduled Jobs:JOB-M1');
+    expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
   });
 
   it('a full gate run leaves 0 PSTruth rows in the publish, monitoring-job and model tables', async () => {

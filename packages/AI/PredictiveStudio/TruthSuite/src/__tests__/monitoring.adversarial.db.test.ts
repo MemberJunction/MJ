@@ -108,14 +108,14 @@ async function specOf(modelId: string): Promise<MonitoringJobReadSpec> {
   return parsed.Value;
 }
 
-async function rows<T>(entityName: string, filter: string, fields: string[]): Promise<T[]> {
-  const r = await RunView.FromMetadataProvider(server.Provider).RunView<T>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true }, server.User);
+async function rows<T>(entityName: string, filter: string, fields: string[], orderBy?: string): Promise<T[]> {
+  const r = await RunView.FromMetadataProvider(server.Provider).RunView<T>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, OrderBy: orderBy, ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true }, server.User);
   if (!r.Success) throw new Error(`reading ${entityName} failed: ${r.ErrorMessage}`);
   return r.Results;
 }
 
-async function periodRows(modelId: string, period: MonitoringPeriod): Promise<Pick<MJMLMonitoringResultEntity, 'ID' | 'State' | 'JoinedRows' | 'ScoredRows' | 'ExcludedInTrainingRows' | 'RollbackCheck' | 'TrackedMetrics' | 'PrimaryScore'>[]> {
-  return rows('MJ: ML Monitoring Results', `ModelID='${EscapeSQLString(modelId)}' AND PeriodGrain='month' AND Period='${UtcDay.UtcDayIso(period.Start)}'`, ['ID', 'State', 'JoinedRows', 'ScoredRows', 'ExcludedInTrainingRows', 'RollbackCheck', 'TrackedMetrics', 'PrimaryScore']);
+async function periodRows(modelId: string, period: MonitoringPeriod): Promise<Pick<MJMLMonitoringResultEntity, 'ID' | 'State' | 'ErrorMessage' | 'JoinedRows' | 'ScoredRows' | 'ExcludedInTrainingRows' | 'RollbackCheck' | 'TrackedMetrics' | 'PrimaryScore'>[]> {
+  return rows('MJ: ML Monitoring Results', `ModelID='${EscapeSQLString(modelId)}' AND PeriodGrain='month' AND Period='${UtcDay.UtcDayIso(period.Start)}'`, ['ID', 'State', 'ErrorMessage', 'JoinedRows', 'ScoredRows', 'ExcludedInTrainingRows', 'RollbackCheck', 'TrackedMetrics', 'PrimaryScore']);
 }
 
 async function statusOf(modelId: string): Promise<string | null> {
@@ -197,9 +197,14 @@ async function scorePeriod(f: Pick<D1cFixture, 'Binding' | 'Dataset'>, p: number
 
 async function createD1c(): Promise<D1cFixture> {
   const dataset = await DatasetLoader.Load({ Provider: server.Provider, User: server.User, Pool: pool }, { Kind: 'scenario', ID: 'D1c', Seed: DatasetSeeds.SeedSet('scenario', 'D1c', 'base')[0] });
-  const pipeline = await provision(d1cDraft(dataset), ['EngagementZ', 'TenureZ', 'AutoRenew'], 'Logistic Regression', [DEGRADATION]);
+  // The predecessor trains without EngagementZ (the scenario's strongest input), the current one with it, so the current
+  // model beats the predecessor on its holdout and publishes over it: two trainings on one snapshot and one feature set
+  // fit the same model, which the gate withholds (does-not-beat-incumbent).
+  const pipeline = await provision(d1cDraft(dataset), ['TenureZ', 'AutoRenew'], 'Logistic Regression', [DEGRADATION]);
   const predecessor = await train(pipeline);
   await publish(predecessor);
+  pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 'select', Kind: 'select', Columns: ['EngagementZ', 'TenureZ', 'AutoRenew'] }] });
+  if (!(await pipeline.Save())) throw new Error(`widening the D1c pipeline's features failed: ${pipeline.LatestResult?.CompleteMessage}`);
   const current = await train(pipeline);
   await publish(current);
   const binding = await ScoringBindings.Upsert({
@@ -207,7 +212,7 @@ async function createD1c(): Promise<D1cFixture> {
     viewAuthorizationId: ScoringBindings.ResolveViewAuthorizationID(null, server.Provider),
   }, new MetadataEntityFactory(server.Provider), server.User);
   const f: D1cFixture = { Dataset: dataset, Pipeline: pipeline, Predecessor: await loadModel(predecessor.ID), Current: await loadModel(current.ID), Binding: binding };
-  for (const p of [2, 3, 4, 5]) await scorePeriod(f, p);
+  for (const p of [1, 2, 3, 4, 5]) await scorePeriod(f, p);
   return f;
 }
 
@@ -341,8 +346,9 @@ describe('M6.9 harness', () => {
   describe('deleted parent or child — training-snapshot rows', () => {
     it('training-snapshot rows of either model are excluded from the rollback comparison', async () => {
       const { Driver, Ctx } = monitoringCtx(new Date(Date.UTC(2026, 0, 1)));
-      await Driver.MonitorPeriods(await specOf(d1c.Current.ID), [periodOf(2)], Ctx);
-      const [row] = await periodRows(d1c.Current.ID, periodOf(2));
+      // Period 1 is training rows of both models; period 2 is the year-cutoff protocol's holdout, so not InTraining.
+      await Driver.MonitorPeriods(await specOf(d1c.Current.ID), [periodOf(1)], Ctx);
+      const [row] = await periodRows(d1c.Current.ID, periodOf(1));
       expect(row).toMatchObject({ JoinedRows: 0 });
       expect(row.ExcludedInTrainingRows).toBe(row.ScoredRows);
       expect(row.ScoredRows).toBeGreaterThan(0);
@@ -426,7 +432,8 @@ describe('M6.9 harness', () => {
   describe('deleted parent or child — the predecessor deleted since its publish record', () => {
     it('a deleted predecessor makes the rollback not-eligible', async () => {
       const [published] = await rows<{ ID: string }>('MJ: ML Models', `PipelineID='${EscapeSQLString(d1c.Pipeline.ID)}' AND Status='Published'`, ['ID']);
-      const [record] = await rows<{ ReplacesModelID: string | null }>('MJ: ML Model Publish Records', `ModelID='${EscapeSQLString(published.ID)}' AND Kind='publish'`, ['ReplacesModelID']);
+      // The Published model's newest applied record (the race above published either the candidate or the rolled-back predecessor).
+      const [record] = await rows<{ ReplacesModelID: string | null }>('MJ: ML Model Publish Records', `ModelID='${EscapeSQLString(published.ID)}' AND Kind='publish'`, ['ReplacesModelID'], '__mj_CreatedAt DESC');
       const victim = record?.ReplacesModelID;
       if (!victim) throw new Error('the Published model replaced no predecessor');
       // Adversary (the delete procedure's model step, by direct SQL in one transaction): the model's rows, then the model.
@@ -435,14 +442,15 @@ describe('M6.9 harness', () => {
         DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelID = @ModelID AND Source = 'Model';
         DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE ModelID = @ModelID;
         UPDATE ${t('MJ: ML Model Publish Records')} SET ReplacesModelID = NULL WHERE ReplacesModelID = @ModelID;
-        UPDATE ${t('MJ: ML Model Publish Records')} SET ModelID = NULL WHERE ModelID = @ModelID;
+        DELETE FROM ${t('MJ: ML Model Publish Records')} WHERE ModelID = @ModelID;
         UPDATE ${t('MJ: ML Training Runs')} SET ResultingModelID = NULL WHERE ResultingModelID = @ModelID;
         DELETE FROM ${t('MJ: ML Output Bindings')} WHERE ModelID = @ModelID;
         DELETE FROM ${t('MJ: ML Models')} WHERE ID = @ModelID;
         COMMIT;`);
       const { Driver, Ctx } = monitoringCtx(new Date(Date.UTC(2026, 0, 1)));
       const spec = await specOf(published.ID);
-      await Driver.MonitorPeriods({ ...spec, rollback: { kind: 'previous-beats-current', margin: EvaluationProtocol.ToNonNegative(0), consecutivePeriods: 1 } }, [periodOf(3)], Ctx);
+      // Rollback only: no retrain trigger, so no challenger publish can change the status this case reads.
+      await Driver.MonitorPeriods({ ...spec, retrainTriggers: [], rollback: { kind: 'previous-beats-current', margin: EvaluationProtocol.ToNonNegative(0), consecutivePeriods: 1 } }, [periodOf(3)], Ctx);
       const [row] = await periodRows(published.ID, periodOf(3));
       const stored = JsonParse.ParseJsonText(row.RollbackCheck, 'RollbackCheck');
       const check = stored.Ok && JsonParse.IsJsonObject(stored.Value) ? JsonParse.JsonString(stored.Value, 'kind') : null;
@@ -472,11 +480,13 @@ describe('M6.9 harness', () => {
       const pipeline = await provision(draft, ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], 'Logistic Regression', []);
       const model = await train(pipeline);
       await publish(model);
-      const now = new Date(Date.now() + 3 * 86_400_000);
-      const { Driver, Ctx } = monitoringCtx(now);
       const period = MonitoringPeriods.Containing(new Date(`${today}T00:00:00.000Z`), 'month');
+      // The clock three days after the period ends, so its one-day label window has closed.
+      const now = new Date(period.End.getTime() + 3 * 86_400_000);
+      const { Driver, Ctx } = monitoringCtx(now);
       await Driver.MonitorPeriods(await specOf(model.ID), [period], Ctx);
       const [row] = await periodRows(model.ID, period);
+      expect([row.State, row.ErrorMessage]).toEqual(['evaluated', null]);
       const primary = MonitoringResultSchemas.ParsePrimaryScore(row.PrimaryScore);
       expect(primary.Ok && primary.Value.metric === 'multiclass-log-loss' && primary.Value.interval.lower <= primary.Value.value).toBe(true);
       const tracked = JsonParse.ParseJsonText(row.TrackedMetrics, 'TrackedMetrics');
