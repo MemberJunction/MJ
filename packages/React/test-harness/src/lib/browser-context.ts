@@ -1,5 +1,5 @@
 import { chromium, Browser, BrowserContext, Page, Route } from 'playwright';
-import { NetworkAccessMode, NetworkAllowlist, RedactUrl } from './network-policy';
+import { BROWSER_LAUNCH_ARGS, DISABLE_WEBRTC_SCRIPT, NetworkAccessMode, NetworkAllowlist, RedactUrl } from './network-policy';
 
 /** Environment-variable fallbacks for attaching to an existing browser. */
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
@@ -45,15 +45,18 @@ export interface BrowserContextOptions {
   reuseExistingContext?: boolean;
 
   /**
-   * What the test page may reach on the network. Defaults to `'allowlist'`: only the hosts of
-   * the runtime and component-library CDN URLs, plus `allowedNetworkHosts`. Requests anywhere
-   * else are aborted and reported, WebSockets are closed, and service workers are blocked.
-   * `'unrestricted'` turns the filter off; use it only for local debugging, never for
-   * generated code.
+   * What the test page may reach on the network. Defaults to `'allowlist'`: only the origins of
+   * the runtime and component-library CDN URLs (fallbacks included), plus `allowedNetworkHosts`.
+   * Requests anywhere else are aborted and reported, WebSockets are closed, service workers are
+   * blocked, and WebRTC is removed. `'unrestricted'` turns the filter off; use it only for local
+   * debugging, never for generated code.
    */
   networkAccess?: NetworkAccessMode;
 
-  /** Extra hosts (or URLs, whose host is taken) the test page may reach. */
+  /**
+   * Extra hosts the test page may reach. A URL allows its origin only; a bare host name allows
+   * that host on any port, and 'host:port' that port only.
+   */
   allowedNetworkHosts?: string[];
 }
 
@@ -94,6 +97,8 @@ export class BrowserManager {
   private readonly network: NetworkAllowlist;
   /** The requests each page tried that the allowlist refused, as redacted URLs. */
   private readonly blockedByPage = new WeakMap<Page, string[]>();
+  /** Origins one page alone may reach, such as the URL {@link NavigateTo} was asked to open. */
+  private readonly allowedByPage = new WeakMap<Page, NetworkAllowlist>();
 
   constructor(private options: BrowserContextOptions = {}) {
     this.options = {
@@ -112,6 +117,13 @@ export class BrowserManager {
   /** Let the test page reach the host of each URL (runtime and library CDN URLs). */
   AllowNetworkUrls(urls: readonly string[]): void {
     this.network.AllowUrls(urls);
+  }
+
+  /** Let `page` alone reach the origin of each URL; other pages keep the shared allowlist. */
+  AllowNetworkUrlsForPage(page: Page, urls: readonly string[]): void {
+    const allowlist = this.allowedByPage.get(page) ?? new NetworkAllowlist();
+    allowlist.AllowUrls(urls);
+    this.allowedByPage.set(page, allowlist);
   }
 
   /** The requests `page` tried that were blocked, as origin + path (query strings dropped). */
@@ -150,22 +162,40 @@ export class BrowserManager {
     const page = await this.context!.newPage();
     if (this.filtersNetwork) {
       this.blockedByPage.set(page, []);
+      await page.addInitScript(DISABLE_WEBRTC_SCRIPT);
       await page.route('**/*', route => this.routeRequest(route, page));
       await page.routeWebSocket(/.*/, ws => ws.close({ code: 1008, reason: 'Blocked by test harness network policy' }));
     }
     return page;
   }
 
+  /**
+   * Lets an allowed request through and aborts any other, recording it for the page it came from.
+   * The context-wide route passes no page, so it looks the page up from the request's frame.
+   */
   private async routeRequest(route: Route, page: Page | null): Promise<void> {
     const url = route.request().url();
-    if (this.network.IsAllowed(url)) {
-      await route.fallback();
-      return;
+    const owner = page ?? this.harnessPageOf(route);
+    const allowed = this.network.IsAllowed(url) || (owner !== null && this.allowedByPage.get(owner)?.IsAllowed(url) === true);
+    if (!allowed && owner) {
+      this.blockedByPage.get(owner)?.push(RedactUrl(url));
     }
-    if (page) {
-      this.blockedByPage.get(page)?.push(RedactUrl(url));
+    try {
+      await (allowed ? route.fallback() : route.abort('blockedbyclient'));
+    } catch {
+      // The page or context closed while the request was paused; nothing is left to route.
     }
-    await route.abort('blockedbyclient');
+  }
+
+  /** The harness page a request came from, or null for a request no harness page owns. */
+  private harnessPageOf(route: Route): Page | null {
+    try {
+      const page = route.request().frame().page();
+      return this.blockedByPage.has(page) ? page : null;
+    } catch {
+      // Playwright throws when the request has no frame, as for a service worker's.
+      return null;
+    }
   }
 
   /** Resolve whether to reuse the existing context (option → env-var fallback). */
@@ -191,7 +221,10 @@ export class BrowserManager {
         : await chromium.connectOverCDP(endpoint);
       this.connected = true;
     } else {
-      this.browser = await chromium.launch({ headless: this.options.headless });
+      this.browser = await chromium.launch({
+        headless: this.options.headless,
+        args: this.filtersNetwork ? [...BROWSER_LAUNCH_ARGS] : []
+      });
       this.connected = false;
     }
 
@@ -237,9 +270,20 @@ export class BrowserManager {
     return this.GetPage();
   }
 
+  /** Opens a fresh page at `url`. The page alone may reach that URL's origin. */
   async NavigateTo(url: string): Promise<void> {
     const page = await this.GetPage();
+    this.AllowNetworkUrlsForPage(page, [url]);
     await page.goto(url);
+  }
+
+  /**
+   * Closes a page from {@link GetPage}. Its routes are removed first, so a request still paused
+   * in them is dropped rather than failing once the page is gone.
+   */
+  async ClosePage(page: Page): Promise<void> {
+    await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+    await page.close();
   }
 
   /** @deprecated Use {@link NavigateTo}. */

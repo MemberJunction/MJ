@@ -15,12 +15,13 @@ vi.mock('playwright', () => ({
 
 import type { Page } from 'playwright';
 import { BrowserManager, ClassifyConnectEndpoint } from '../../lib/browser-context';
+import { DISABLE_WEBRTC_SCRIPT } from '../../lib/network-policy';
 
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
 const REUSE_CONTEXT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_REUSE_CONTEXT';
 
 type Spy = ReturnType<typeof vi.fn>;
-type FakePage = { close: Spy; route: Spy; routeWebSocket: Spy };
+type FakePage = { close: Spy; route: Spy; routeWebSocket: Spy; addInitScript: Spy; unrouteAll: Spy; goto: Spy };
 type FakeContext = { newPage: Spy; close: Spy; route: Spy; routeWebSocket: Spy };
 type FakeBrowser = { newContext: Spy; contexts: Spy; close: Spy };
 
@@ -30,6 +31,9 @@ function installFakeBrowser(): { page: FakePage; context: FakeContext; existingC
     close: vi.fn().mockResolvedValue(undefined),
     route: vi.fn().mockResolvedValue(undefined),
     routeWebSocket: vi.fn().mockResolvedValue(undefined),
+    addInitScript: vi.fn().mockResolvedValue(undefined),
+    unrouteAll: vi.fn().mockResolvedValue(undefined),
+    goto: vi.fn().mockResolvedValue(null),
   };
   const fakeContext = (): FakeContext => ({
     newPage: vi.fn().mockResolvedValue(page),
@@ -101,7 +105,7 @@ describe('BrowserManager attach behavior', () => {
     await mgr.initialize();
 
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(launch).toHaveBeenCalledWith({ headless: true });
+    expect(launch).toHaveBeenCalledWith({ headless: true, args: ['--dns-prefetch-disable'] });
     expect(connect).not.toHaveBeenCalled();
     expect(connectOverCDP).not.toHaveBeenCalled();
     expect(browser.newContext).toHaveBeenCalledTimes(1);
@@ -229,12 +233,21 @@ describe('BrowserManager network allowlist', () => {
     ({ page, context, existingContext, browser } = installFakeBrowser());
   });
 
-  /** A fake Playwright route for `url`. */
-  const fakeRoute = (url: string) => ({
-    request: () => ({ url: () => url }),
+  /** A fake Playwright route for `url`, made by `fromPage` when given (else it has no frame). */
+  const fakeRoute = (url: string, fromPage?: object) => ({
+    request: () => ({
+      url: () => url,
+      frame: () => {
+        if (!fromPage) {
+          throw new Error('no frame');
+        }
+        return { page: () => fromPage };
+      },
+    }),
     abort: vi.fn().mockResolvedValue(undefined),
     fallback: vi.fn().mockResolvedValue(undefined),
   });
+  type RouteHandler = (route: ReturnType<typeof fakeRoute>) => Promise<void>;
 
   it('guards the context it creates: service workers blocked, requests and WebSockets routed', async () => {
     const mgr = new BrowserManager({});
@@ -245,6 +258,8 @@ describe('BrowserManager network allowlist', () => {
     expect(context.routeWebSocket).toHaveBeenCalledTimes(1);
     expect(page.route).toHaveBeenCalledWith('**/*', expect.any(Function));
     expect(page.routeWebSocket).toHaveBeenCalledTimes(1);
+    expect(page.addInitScript).toHaveBeenCalledWith(DISABLE_WEBRTC_SCRIPT);
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ args: ['--dns-prefetch-disable'] }));
   });
 
   it("guards only its own pages in a reused context, never the user's other tabs", async () => {
@@ -266,6 +281,8 @@ describe('BrowserManager network allowlist', () => {
     expect(browser.newContext).toHaveBeenCalledWith(expect.objectContaining({ serviceWorkers: 'allow' }));
     expect(context.route).not.toHaveBeenCalled();
     expect(page.route).not.toHaveBeenCalled();
+    expect(page.addInitScript).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ args: [] }));
   });
 
   it('aborts a request to a host that was not allowed and records it for that page', async () => {
@@ -294,5 +311,59 @@ describe('BrowserManager network allowlist', () => {
     const allowed = fakeRoute('https://cdn.example.com/lib.js');
     await handler(allowed);
     expect(allowed.fallback).toHaveBeenCalled();
+  });
+
+  it('records a request the context-wide route blocks for the page whose frame made it', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    const opened: Page = await context.newPage.mock.results[0].value;
+    const contextHandler = context.route.mock.calls[0][1] as RouteHandler;
+
+    const fromPage = fakeRoute('https://attacker.example/w?rows=secret', opened);
+    const noFrame = fakeRoute('https://attacker.example/sw');
+    await contextHandler(fromPage);
+    await contextHandler(noFrame);
+
+    expect(fromPage.abort).toHaveBeenCalledWith('blockedbyclient');
+    expect(noFrame.abort).toHaveBeenCalledWith('blockedbyclient');
+    expect(mgr.GetBlockedRequests(opened)).toEqual(['https://attacker.example/w']);
+  });
+
+  it('does not throw when the page closed while a request was paused', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    const handler = page.route.mock.calls[0][1] as RouteHandler;
+    const route = fakeRoute('https://attacker.example/c');
+    route.abort.mockRejectedValue(new Error('Target page, context or browser has been closed'));
+
+    await expect(handler(route)).resolves.toBeUndefined();
+  });
+
+  it('lets the page NavigateTo opens reach that origin, and no other page', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    await mgr.NavigateTo('https://myapp.local/test');
+    const opened: Page = await context.newPage.mock.results[1].value;
+    const contextHandler = context.route.mock.calls[0][1] as RouteHandler;
+
+    const fromNavigatedPage = fakeRoute('https://myapp.local/app.js', opened);
+    const fromOtherPage = fakeRoute('https://myapp.local/app.js', {});
+    await contextHandler(fromNavigatedPage);
+    await contextHandler(fromOtherPage);
+
+    expect(page.goto).toHaveBeenCalledWith('https://myapp.local/test');
+    expect(fromNavigatedPage.fallback).toHaveBeenCalled();
+    expect(fromOtherPage.abort).toHaveBeenCalledWith('blockedbyclient');
+  });
+
+  it('removes a page\'s routes before closing it', async () => {
+    const mgr = new BrowserManager({});
+    await mgr.Initialize();
+    const opened = await mgr.GetPage();
+    await mgr.ClosePage(opened);
+
+    expect(page.unrouteAll).toHaveBeenCalledWith({ behavior: 'ignoreErrors' });
+    expect(page.close).toHaveBeenCalled();
+    expect(page.unrouteAll.mock.invocationCallOrder[0]).toBeLessThan(page.close.mock.invocationCallOrder[0]);
   });
 });

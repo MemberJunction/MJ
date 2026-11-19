@@ -111,6 +111,7 @@ describe.skipIf(!RUN)('BrowserManager network allowlist (integration)', () => {
       }), `${outsideOrigin()}/from-worker?rows=secret`);
       expect(outcome).not.toBe('sent');
       expect(sentToOutside()).toEqual([]);
+      expect(manager.GetBlockedRequests(page)).toContain(`${outsideOrigin()}/from-worker`);
     } finally {
       await manager.Close();
     }
@@ -147,6 +148,53 @@ describe.skipIf(!RUN)('BrowserManager network allowlist (integration)', () => {
     }
   }, 60000);
 
+  it('blocks another port on an allowed host when the allowlist was given a URL', async () => {
+    const manager = new BrowserManager({ allowedNetworkHosts: [`${allowedOrigin()}/lib.js`] });
+    await manager.Initialize();
+    try {
+      const page = await manager.GetPage();
+      await page.goto(`${allowedOrigin()}/`);
+      const otherPort = `http://127.0.0.1:${port + 1}/graphql`;
+      await page.evaluate(async url => { try { await fetch(url); } catch { /* blocked */ } }, otherPort);
+      expect(manager.GetBlockedRequests(page)).toEqual([otherPort]);
+    } finally {
+      await manager.Close();
+    }
+  }, 60000);
+
+  it('removes WebRTC from the page and from frames it creates', async () => {
+    const { manager, page } = await guardedPage();
+    try {
+      const types = await page.evaluate(() => {
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        const frameWindow = frame.contentWindow as (Window & typeof globalThis) | null;
+        return { page: typeof RTCPeerConnection, frame: typeof frameWindow?.RTCPeerConnection };
+      });
+      expect(types).toEqual({ page: 'undefined', frame: 'undefined' });
+    } finally {
+      await manager.Close();
+    }
+  }, 60000);
+
+  it('lets NavigateTo open a host that is not allowed, for that page only', async () => {
+    received.length = 0;
+    const manager = new BrowserManager({});
+    await manager.Initialize();
+    try {
+      await manager.NavigateTo(`${outsideOrigin()}/app`);
+      expect(sentToOutside()).toEqual([`localhost:${port}/app`]);
+
+      const other = await manager.GetPage();
+      await other.goto('about:blank');
+      await other.evaluate(async url => { try { await fetch(url); } catch { /* blocked */ } }, `${outsideOrigin()}/other`);
+      expect(manager.GetBlockedRequests(other)).toEqual([`${outsideOrigin()}/other`]);
+      expect(sentToOutside()).toEqual([`localhost:${port}/app`]);
+    } finally {
+      await manager.Close();
+    }
+  }, 60000);
+
   it("does no filtering in 'unrestricted' mode", async () => {
     received.length = 0;
     const manager = new BrowserManager({ networkAccess: 'unrestricted' });
@@ -157,6 +205,7 @@ describe.skipIf(!RUN)('BrowserManager network allowlist (integration)', () => {
       const status = await page.evaluate(async url => (await fetch(url)).status, `${outsideOrigin()}/open`);
       expect(status).toBe(200);
       expect(sentToOutside()).toEqual([`localhost:${port}/open`]);
+      expect(await page.evaluate(() => typeof RTCPeerConnection)).toBe('function');
     } finally {
       await manager.Close();
     }

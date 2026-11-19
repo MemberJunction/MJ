@@ -21,6 +21,7 @@ import {
   SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
 import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import type { ExternalLibraryConfig } from '@memberjunction/react-runtime';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -620,6 +621,11 @@ export const SANDBOX_UTILITY_UNAVAILABLE_RULE = 'sandbox-utility-unavailable';
  */
 export const NETWORK_REQUEST_BLOCKED_RULE = 'network-request-blocked';
 
+/** Every URL the core runtime libraries load from: each primary CDN URL and its fallbacks. */
+export function CoreRuntimeNetworkUrls(libraries: readonly Pick<ExternalLibraryConfig, 'cdnUrl' | 'fallbackCdnUrls'>[]): string[] {
+  return libraries.flatMap(lib => [lib.cdnUrl, ...(lib.fallbackCdnUrls ?? [])]).filter(url => url.length > 0);
+}
+
 /** Every script and stylesheet URL the registered component libraries load from. */
 export function LibraryNetworkUrls(libraries: readonly Pick<MJComponentLibraryEntity, 'CDNUrl' | 'CDNCssUrl'>[]): string[] {
   return libraries.flatMap(lib => [
@@ -801,15 +807,17 @@ export class ComponentRunner {
   }
 
   /**
-   * One warning per utility the component called that this harness was not given. They are
-   * warnings rather than errors so they never fail the run or reach a fixer as a defect:
-   * the call was not tested, and the component may well be correct.
+   * One warning per distinct blocked request. The request may come from the component's own code
+   * or from a library it loads (map tiles, web fonts, telemetry), so the message says both and
+   * tells the reader how to tell them apart rather than calling the component defective.
    */
   private static buildBlockedRequestWarnings(blocked: string[]): Violation[] {
     return [...new Set(blocked)].map(url => ({
       message:
-        `The component requested ${url}, which the test harness blocked. Components get data ` +
-        `through the provided utilities and may not call other hosts.`,
+        `A request to ${url} was blocked by the test harness, which lets the page reach only the ` +
+        `runtime and component-library CDNs. If the component's own code calls this host, change it ` +
+        `to get data through the provided utilities. If the call comes from a library the component ` +
+        `uses, the component is not at fault; the host can be allowed with allowedNetworkHosts.`,
       severity: 'medium' as const,
       rule: NETWORK_REQUEST_BLOCKED_RULE,
       line: 0,
@@ -818,6 +826,11 @@ export class ComponentRunner {
     }));
   }
 
+  /**
+   * One warning per utility the component called that this harness was not given. They are
+   * warnings rather than errors so they never fail the run or reach a fixer as a defect:
+   * the call was not tested, and the component may well be correct.
+   */
   private static buildUnavailableUtilityWarnings(unavailableUtilities: Set<string>): Violation[] {
     return [...unavailableUtilities].map(name => ({
       message:
@@ -2023,6 +2036,7 @@ export class ComponentRunner {
           column: 0
         }));
 
+      const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
       const result: ComponentExecutionResult = {
         success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
@@ -2038,7 +2052,7 @@ export class ComponentRunner {
           })),
           ...capWarnings,
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
-          ...ComponentRunner.buildBlockedRequestWarnings(this.browserManager.GetBlockedRequests(page)),
+          ...ComponentRunner.buildBlockedRequestWarnings(blockedNetworkRequests),
         ],
         console: consoleLogs,
         screenshot,
@@ -2046,7 +2060,7 @@ export class ComponentRunner {
         renderCount,
         codeExecutionSuccess,
         dataAccess,
-        blockedNetworkRequests: this.browserManager.GetBlockedRequests(page),
+        blockedNetworkRequests,
         sourceMaps: (this as any)._lastSourceMaps,
       };
 
@@ -2113,6 +2127,7 @@ export class ComponentRunner {
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
       FinalizePendingDataAccess(dataAccess);
 
+      const blockedNetworkRequests = this.browserManager.GetBlockedRequests(page);
       const result: ComponentExecutionResult = {
         success: false,
         html: '',
@@ -2126,7 +2141,7 @@ export class ComponentRunner {
             column: 0
           })),
           ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
-          ...ComponentRunner.buildBlockedRequestWarnings(this.browserManager.GetBlockedRequests(page)),
+          ...ComponentRunner.buildBlockedRequestWarnings(blockedNetworkRequests),
         ],
         console: consoleLogs,
         executionTime: Date.now() - startTime,
@@ -2135,7 +2150,7 @@ export class ComponentRunner {
         codeExecutionSuccess,
         // Data calls made before the failure still describe what the component reached for.
         dataAccess,
-        blockedNetworkRequests: this.browserManager.GetBlockedRequests(page),
+        blockedNetworkRequests,
       };
 
       if (debug) {
@@ -2154,7 +2169,7 @@ export class ComponentRunner {
       // This is important because getPage() now creates a new page each time
       // Closing the page ensures clean isolation between test runs
       try {
-        await page.close();
+        await this.browserManager.ClosePage(page);
       } catch (closeError) {
         // Ignore errors when closing the page
         if (debug) {
@@ -2179,7 +2194,7 @@ export class ComponentRunner {
     // environment with window/document, but we're in Node.js with Playwright
     const { getCoreRuntimeLibraries } = await import('@memberjunction/react-runtime');
     const coreLibraries = getCoreRuntimeLibraries(debug);
-    this.browserManager.AllowNetworkUrls(coreLibraries.map(lib => lib.cdnUrl).filter((url): url is string => !!url));
+    this.browserManager.AllowNetworkUrls(CoreRuntimeNetworkUrls(coreLibraries));
     
     // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
