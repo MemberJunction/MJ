@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
 import { MarkdownModule } from '../markdown.module';
+import { UpgradeInlineMediaElements } from '../extensions/inline-media.extension';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -749,6 +750,56 @@ describe('MarkdownComponent (DOM)', () => {
       await Promise.resolve();
       expect(c.querySelector('video')).toBeNull();
       expect(c.querySelectorAll('img')).toHaveLength(5);
+    });
+
+    it('rejects backslash origin-bypass paths and invalid file IDs, and renders XSS cue text literally', async () => {
+      // Directly exercise UpgradeInlineMediaElements with a raw backslash protocol-relative bypass
+      // that Markdown/DOMPurify might strip before UpgradeInlineMediaElements runs.
+      const host = document.createElement('div');
+      const bypassImg = document.createElement('img');
+      bypassImg.setAttribute('src', '/\\evil.example/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video');
+      host.appendChild(bypassImg);
+      UpgradeInlineMediaElements(host);
+      expect(host.querySelectorAll('video')).toHaveLength(0);
+      expect(host.querySelectorAll('img')).toHaveLength(1);
+
+      const md =
+        '![InvalidFileId](/media/bad.file/clip.mp4?token=tok1&kind=video) ' +
+        '![ValidClip](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+      const xssVtt = [
+        'WEBVTT',
+        '',
+        '00:00:01.000 --> 00:00:03.000',
+        'Before <img src=x onerror=alert(1)> and &lt;img onerror=alert(2)&gt;',
+      ].join('\n');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(xssVtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      try {
+        const c = container(render({ data: md, EnableInlineMedia: true }));
+
+        expect(c.querySelectorAll('img')).toHaveLength(1);
+        const video = c.querySelector<HTMLVideoElement>('video.mj-markdown-video__player')!;
+        expect(video).not.toBeNull();
+        expect(video.getAttribute('src')).toBe(
+          `${window.location.origin}/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2`,
+        );
+
+        const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript')!;
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+
+        await vi.waitFor(() => {
+          expect(details.querySelectorAll('button.mj-markdown-video__cue')).toHaveLength(1);
+        });
+        expect(details.querySelectorAll('img')).toHaveLength(0);
+        expect(details.querySelector('.mj-markdown-video__cue-text')?.textContent).toBe(
+          'Before and <img onerror=alert(2)>',
+        );
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
   });
 

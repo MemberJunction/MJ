@@ -17,12 +17,13 @@ import {
     ContentSegment,
     LooksLikeCaptionText,
     MediaReference,
+    PAGED_CONTENT_SEGMENTER_KEY,
     ResolveContentCleaner,
     ResolveSegmenter,
     SegmentationOptions,
     SegmentationParams,
     SuggestCleanerKey,
-    SuggestSegmenterKey,
+    TRANSCRIPT_SEGMENTER_KEY,
     TranscriptCue,
 } from '@memberjunction/ai-segmentation';
 import {
@@ -101,7 +102,8 @@ export class SegmentStage extends BasePipelineStage {
 
         const resolved = await this.resolveSegmentation(record, context);
         const mimeType = this.resolveMimeType(record, media);
-        const cleaned = storedText ? this.clean(record, storedText, resolved, context, mimeType) : null;
+        const isHtmlExtractor = record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY;
+        const cleaned = storedText ? this.clean(record, storedText, resolved, context, mimeType, isHtmlExtractor) : null;
         const text = cleaned ? (cleaned.Content.trim().length > 0 ? cleaned.Content : undefined) : undefined;
         if (cleaned && !text && !hasCues && !hasPages) {
             return Outcome.Skipped(`no text left to segment after cleaning with '${cleaned.CleanerKey}'`);
@@ -116,9 +118,15 @@ export class SegmentStage extends BasePipelineStage {
             ContextUser: context.ContextUser,
             Options: resolved.Options,
         };
-        const suggestedKey = SuggestSegmenterKey(segParams);
-        // An unresolvable key degrades to the content-suggested segmenter, then FixedWindow.
-        const segmenter = ResolveSegmenter(resolved.SegmenterKey ?? undefined, suggestedKey);
+        const isCaptionMime = mimeType === 'text/vtt' || mimeType === 'application/x-subrip';
+        const isCaptionSource = !isHtmlExtractor && (isCaptionMime || (text !== undefined && LooksLikeCaptionText(text)));
+        const multimodalFallbackKey = (hasCues || isCaptionSource)
+            ? TRANSCRIPT_SEGMENTER_KEY
+            : hasPages
+                ? PAGED_CONTENT_SEGMENTER_KEY
+                : undefined;
+        // An unresolvable or unconfigured key keeps FixedWindow for plain prose while auto-routing cues, pages, and captions.
+        const segmenter = ResolveSegmenter(resolved.SegmenterKey ?? undefined, multimodalFallbackKey);
 
         let result;
         try {
@@ -165,13 +173,12 @@ export class SegmentStage extends BasePipelineStage {
         resolved: ResolvedSegmentation,
         context: StageContext,
         mimeTypeHint?: string,
+        isHtmlExtractor: boolean = record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY,
     ): ContentCleaningResult {
-        const isCaption =
-            mimeTypeHint === 'text/vtt' ||
-            mimeTypeHint === 'application/x-subrip' ||
-            LooksLikeCaptionText(text);
-        const isHtml = !isCaption && record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY;
-        const mimeType = isCaption ? (mimeTypeHint ?? 'text/vtt') : isHtml ? 'text/html' : 'text/plain';
+        const isCaptionMime = mimeTypeHint === 'text/vtt' || mimeTypeHint === 'application/x-subrip';
+        const isCaption = !isHtmlExtractor && (isCaptionMime || LooksLikeCaptionText(text));
+        const isHtml = isHtmlExtractor || (!isCaption && mimeTypeHint === 'text/html');
+        const mimeType = isHtml ? 'text/html' : isCaption ? (mimeTypeHint ?? 'text/vtt') : 'text/plain';
         // An unresolvable key degrades to the plain-text cleaner, and the result names the key that actually ran.
         const cleaner = ResolveContentCleaner(resolved.CleanerKey ?? SuggestCleanerKey(mimeType));
         const result = cleaner.Clean({ Content: text, MimeType: mimeType, Options: resolved.CleaningOptions });

@@ -112,11 +112,16 @@ describe('ParseCaptionCues', () => {
 });
 
 describe('LooksLikeCaptionText', () => {
-    it('detects WebVTT headers and SRT timing blocks while rejecting regular prose', () => {
+    it('detects WebVTT headers and opening SRT blocks while rejecting timing lines quoted in prose', () => {
         expect(LooksLikeCaptionText('WEBVTT\n\n00:00.000 --> 00:01.000\nHi')).toBe(true);
-        expect(LooksLikeCaptionText('\uFEFFWEBVTT - Title\n')).toBe(true);
+        expect(LooksLikeCaptionText('\uFEFF\nWEBVTT - Title\n')).toBe(true);
         expect(LooksLikeCaptionText('1\n00:00:01,000 --> 00:00:03,500\nSubtitle line')).toBe(true);
         expect(LooksLikeCaptionText('# Markdown Document\n\n10:30 --> 11:00 agenda item')).toBe(false);
+        expect(
+            LooksLikeCaptionText(
+                'SRT format notes\n\nEach cue has a timing line such as:\n00:00:01,000 --> 00:00:04,000\nHello\n\nImportant paragraph.',
+            ),
+        ).toBe(false);
         expect(LooksLikeCaptionText(undefined)).toBe(false);
     });
 });

@@ -464,4 +464,80 @@ describe('SegmentStage', () => {
         expect(hydrated.GetExtension<string>('Pipeline', 'transcript')).toBe('Host: Welcome.');
         expect(hydrated.GetExtension<string>('Pipeline', 'parentChunkID')).toBe('CHUNK-1');
     });
+
+    it('keeps FixedWindow and retains all text for unconfigured plain prose quoting a timing line', async () => {
+        const doc = [
+            'SRT format notes',
+            '',
+            'Each cue has a timing line such as:',
+            '00:00:01,000 --> 00:00:04,000',
+            'Hello',
+            '',
+            'Important paragraph that should be indexed.',
+            '',
+            'Another important paragraph.',
+        ].join('\n');
+        const record = item(doc);
+
+        const outcome = await new SegmentStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+        expect(record.GetExtension<string>('Segment', 'segmenterKey')).toBe('FixedWindow');
+        expect(record.GetExtension<string>('Segment', 'cleanerKey')).toBe('PlainText');
+        const combined = record.Children.map((c) => String(c.Get('Text') ?? '')).join('\n');
+        expect(combined).toContain('SRT format notes');
+        expect(combined).toContain('Important paragraph that should be indexed.');
+        expect(combined).toContain('Another important paragraph.');
+    });
+
+    it('lets the Html extractor win over caption sniffing and keeps FixedWindow without markup leakage', async () => {
+        const html = [
+            '<!doctype html>',
+            '<html><head><style>.hidden { display: none; }</style><script>console.log("ad")</script></head>',
+            '<body><nav>Home | Docs</nav>',
+            '<main><h1>Caption Spec Guide</h1><p>Introduction before examples.</p>',
+            '<pre>WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nHello</pre>',
+            '<p>Important closing guidance.</p></main></body></html>',
+        ].join('\n');
+        const record = item(html);
+        record.SetExtension('Pipeline', 'extractorKey', 'Html');
+
+        const outcome = await new SegmentStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+        expect(record.GetExtension<string>('Segment', 'cleanerKey')).toBe('Html');
+        expect(record.GetExtension<string>('Segment', 'segmenterKey')).toBe('FixedWindow');
+        const combined = record.Children.map((c) => String(c.Get('Text') ?? '')).join('\n');
+        expect(combined).toContain('Caption Spec Guide');
+        expect(combined).toContain('Important closing guidance.');
+        expect(combined).not.toContain('<!doctype html>');
+        expect(combined).not.toContain('console.log');
+    });
+
+    it('truncates SegmentTitle to 500 characters in chunk columns and Pipeline.segmentTitle extension', async () => {
+        const longTitle = 'T'.repeat(620);
+        const vtt = [
+            'WEBVTT',
+            '',
+            '00:00:01.000 --> 00:00:03.000',
+            'First line.',
+        ].join('\n');
+        const record = item(vtt);
+        record.SetExtension('Pipeline', 'mimeType', 'text/vtt');
+        const stage = new SegmentStage();
+        const segmentSpy = vi.spyOn(BaseSegmenter.prototype, 'Segment').mockResolvedValueOnce({
+            Success: true,
+            SegmenterKey: 'Transcript',
+            Segments: [{ Sequence: 0, Text: 'First line.', Title: longTitle, Modality: 'video', SegmenterKey: 'Transcript' }],
+        });
+
+        try {
+            const outcome = await stage.Run(record, contextWith());
+            expect(outcome.Status).toBe('Complete');
+            const chunk = record.Children[0];
+            const columns = chunk.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+            expect(columns?.SegmentTitle).toBe('T'.repeat(500));
+            expect(chunk.GetExtension<string>('Pipeline', 'segmentTitle')).toBe('T'.repeat(500));
+        } finally {
+            segmentSpy.mockRestore();
+        }
+    });
 });

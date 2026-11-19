@@ -256,11 +256,14 @@ interface ParsedMediaRoute {
   filename?: string;
 }
 
+function defaultAllowedOrigin(): string {
+  return typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+    ? window.location.origin
+    : 'http://localhost';
+}
+
 function normalizeAllowedOrigins(allowedOrigins?: string | readonly string[]): Set<string> {
-  const out = new Set<string>();
-  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
-    out.add(window.location.origin);
-  }
+  const out = new Set<string>([defaultAllowedOrigin()]);
   const list = typeof allowedOrigins === 'string'
     ? [allowedOrigins]
     : Array.isArray(allowedOrigins)
@@ -280,7 +283,6 @@ function normalizeAllowedOrigins(allowedOrigins?: string | readonly string[]): S
 }
 
 function isAllowedMediaOrigin(route: ParsedMediaRoute, allowedOrigins?: string | readonly string[]): boolean {
-  if (route.isRelativePath) return true;
   return normalizeAllowedOrigins(allowedOrigins).has(route.url.origin);
 }
 
@@ -289,10 +291,7 @@ function parseMediaRoute(src: string, allowedOrigins?: string | readonly string[
   if (!trimmed || !trimmed.includes('/media/')) return null;
 
   const isRelativePath = trimmed.startsWith('/') && !trimmed.startsWith('//');
-  const fallbackOrigin =
-    typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
-      ? window.location.origin
-      : 'http://localhost';
+  const fallbackOrigin = defaultAllowedOrigin();
 
   let url: URL;
   try {
@@ -468,7 +467,7 @@ export function UpgradeInlineMediaElements(
 
     const video = doc.createElement('video');
     video.className = 'mj-markdown-video__player';
-    video.setAttribute('src', src);
+    video.setAttribute('src', route.url.href);
     video.setAttribute('controls', '');
     video.setAttribute('preload', 'metadata');
     video.setAttribute('playsinline', '');

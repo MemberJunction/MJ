@@ -47,7 +47,10 @@ export function ResolveSegmenter(key?: string, fallbackKey?: string): BaseSegmen
  * should treat this as a default that explicit configuration may override.
  */
 export function SuggestSegmenterKey(params: SegmentationParams): string {
-    if ((params.Cues && params.Cues.length > 0) || LooksLikeCaptionText(params.Text)) {
+    const mime = (params.MimeType ?? '').toLowerCase();
+    const isCaptionMime = mime === 'text/vtt' || mime === 'application/x-subrip';
+    const isHtmlMime = mime === 'text/html' || mime === 'application/xhtml+xml';
+    if ((params.Cues && params.Cues.length > 0) || isCaptionMime || (!isHtmlMime && LooksLikeCaptionText(params.Text))) {
         return TRANSCRIPT_SEGMENTER_KEY;
     }
     if (params.Pages && params.Pages.length > 0) {

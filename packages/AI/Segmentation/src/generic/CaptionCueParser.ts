@@ -48,14 +48,22 @@ export function LooksLikeCaptionText(text?: string): boolean {
     }
     const sample = text.slice(0, CAPTION_SNIFF_CHARS).replace(/^\uFEFF/, '');
     const lines = sample.split(/\r?\n/, CAPTION_SNIFF_LINES);
-    const first = (lines[0] ?? '').trim();
+    let firstIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim().length > 0) {
+            firstIdx = i;
+            break;
+        }
+    }
+    if (firstIdx < 0) {
+        return false;
+    }
+    const first = lines[firstIdx].trim();
     if (first === 'WEBVTT' || first.startsWith('WEBVTT ') || first.startsWith('WEBVTT\t')) {
         return true;
     }
-    for (const line of lines) {
-        if (parseTimingLine(line) !== null) {
-            return true;
-        }
+    if (isDigitsOnly(first) && firstIdx + 1 < lines.length) {
+        return parseTimingLine(lines[firstIdx + 1].trim()) !== null;
     }
     return false;
 }
