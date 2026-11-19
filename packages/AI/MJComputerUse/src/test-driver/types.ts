@@ -70,6 +70,7 @@ export interface ComputerUseOracleConfig {
  */
 import type { ArtifactRetentionPolicy } from './driver-policy.js';
 import type { ReplayTier, ReplayHealPolicy } from '@memberjunction/computer-use';
+import type { JudgeCriterionInput } from '@memberjunction/testing-engine';
 
 /**
  * The Computer Use driver's slice of `Test.Configuration`.
@@ -356,8 +357,12 @@ export interface ComputerUseExpectedOutcomes {
     /** Maximum number of steps allowed (exceeding = fail) */
     maxSteps?: number;
 
-    /** Custom validation criteria for LLM judge oracles */
-    judgeValidationCriteria?: string[];
+    /**
+     * Validation criteria, each a string or `{ criterion, weight }`. The in-run judge receives their
+     * texts and decides Done per criterion; the judge oracles read the same list and apply the weights
+     * to the score.
+     */
+    judgeValidationCriteria?: JudgeCriterionInput[];
 
     /**
      * Ordered tour checkpoints. When set, the test is verified

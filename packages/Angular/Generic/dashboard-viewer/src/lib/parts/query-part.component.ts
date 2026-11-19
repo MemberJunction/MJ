@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } fro
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { MJQueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent, QueryParameterValues, QuerySelectionChangedEvent } from '@memberjunction/ng-query-viewer';
 import { PartInputProblemMessage, PartInputResolution, ROW_SELECTED_EVENT } from '../models/dashboard-properties';
 import { LoadPartInterface } from '../models/dashboard-part-interfaces';
@@ -234,13 +234,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
                 this.QueryId = queryId;
             } else if (queryName) {
-                // Query by name - find the query ID from metadata
-                const queryInfo = p.Queries.find(q => q.Name === queryName);
-                if (queryInfo) {
-                    this.QueryId = queryInfo.ID;
-                } else {
-                    throw new Error(`Query "${queryName}" not found`);
-                }
+                this.QueryId = await this.findQueryIdByName(queryName);
             }
 
             if (!(await this.applyQueryInputs(config))) return;
@@ -258,6 +252,19 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
             this.showingInputProblem = false;
             this.setError(error instanceof Error ? error.message : 'Failed to load query');
         }
+    }
+
+    /**
+     * Resolves a query name to its ID through the provider's QueryEngine, loading the engine first
+     * if it has not loaded yet. Throws when no query has that name.
+     */
+    private async findQueryIdByName(queryName: string): Promise<string> {
+        const p = this.ProviderToUse;
+        const engine = QueryEngine.GetProviderInstance<QueryEngine>(p, QueryEngine) as QueryEngine;
+        await engine.Config(false, p.CurrentUser, p);
+        const query = engine.FindQueryByName(queryName);
+        if (!query) throw new Error(`Query "${queryName}" not found`);
+        return query.ID;
     }
 
     /**

@@ -14,6 +14,7 @@ import { NamingConventionsCheck } from './checks/naming-conventions.js';
 import { PolymorphicFKCheck } from './checks/polymorphic-fk.js';
 import { MigrationExistenceGuardsCheck } from './checks/migration-existence-guards.js';
 import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
+import { MigrationStringCollationCheck } from './checks/migration-string-collation.js';
 
 /**
  * Every registered standard.
@@ -32,6 +33,7 @@ export const STANDARD_CHECKS: readonly StandardCheck[] = [
     PolymorphicFKCheck,
     MigrationExistenceGuardsCheck,
     ReadableStatusValuesCheck,
+    MigrationStringCollationCheck,
 ];
 
 /** Look up a check by its config key. */

@@ -7,6 +7,7 @@ import {
     Document,
     HeadingLevel,
     ImageRun,
+    LevelFormat,
     Packer,
     Paragraph,
     Table,
@@ -58,18 +59,41 @@ type RawSectionItem = Record<string, unknown>;
  */
 export async function RenderDocxFromSections(sections: DocxSection[], options: WordOptions): Promise<Buffer> {
     const children: (Paragraph | Table)[] = [];
+    let orderedListInstance = 0;
 
     for (const section of sections) {
         if (section.Heading) {
             children.push(buildHeading(section.Heading, section.Level ?? 1, options));
         }
         for (const item of section.content ?? []) {
-            const built = buildContentItem(item, options);
+            const listInstance = item.type === 'list' && item.Ordered ? orderedListInstance++ : 0;
+            const built = buildContentItem(item, options, listInstance);
             if (built) children.push(...built);
         }
     }
 
     const doc = new Document({
+        numbering: {
+            config: [
+                {
+                    reference: 'ordered-list',
+                    levels: [
+                        {
+                            level: 0,
+                            format: LevelFormat.DECIMAL,
+                            text: '%1.',
+                            alignment: AlignmentType.LEFT,
+                            start: 1,
+                            style: {
+                                paragraph: {
+                                    indent: { left: 720, hanging: 360 },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
         sections: [{
             properties: {
                 page: {
@@ -115,10 +139,10 @@ function buildHeading(text: string, level: number, options: WordOptions): Paragr
     });
 }
 
-function buildContentItem(item: DocxContentItem, options: WordOptions): (Paragraph | Table)[] | null {
+function buildContentItem(item: DocxContentItem, options: WordOptions, orderedListInstance = 0): (Paragraph | Table)[] | null {
     switch (item.type) {
         case 'paragraph': return [buildParagraph(item, options)];
-        case 'list':      return buildList(item, options);
+        case 'list':      return buildList(item, options, orderedListInstance);
         case 'table':     return [buildTable(item, options)];
         case 'image':     return buildImage(item, options);
         default:          return null;
@@ -143,11 +167,12 @@ function buildParagraph(
 
 function buildList(
     item: Extract<DocxContentItem, { type: 'list' }>,
-    options: WordOptions
+    options: WordOptions,
+    orderedListInstance = 0
 ): Paragraph[] {
     return item.Items.map(text => new Paragraph({
         numbering: item.Ordered
-            ? { reference: 'ordered-list', level: 0 }
+            ? { reference: 'ordered-list', level: 0, instance: orderedListInstance }
             : undefined,
         bullet: item.Ordered ? undefined : { level: 0 },
         children: [new TextRun({

@@ -1,8 +1,9 @@
-import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo, ViewPropertyValues } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, RunViewParameters, UserInfo, ViewPropertyValues } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
 import { GetSystemUser } from './auth/index.js';
+import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -33,6 +34,10 @@ export type UserPayload = {
    * redemption; do not treat `undefined` as `false`.
    */
   emailVerified?: boolean;
+  /** Verified JWT expiration timestamp in epoch milliseconds (`payload.exp * 1000`), when authenticated by JWT. */
+  tokenExpiresAtMs?: number;
+  /** Raw Magic Link scopes (`mj_scopes` claim) carried on Magic Link session JWTs. */
+  magicLinkScopes?: MagicLinkScopeEntry[];
   /**
    * Set only on a payload elevated by `ElevateUserPayload`: the principal the elevated user stands in for (a public
    * widget guest). The run's own records are written as `userRecord`, but the guest's conversation is written as
@@ -90,7 +95,7 @@ export type AppContext = {
 
 export class ProviderInfo {
   provider: DatabaseProviderBase;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
-  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Adhoc-Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class DataSourceInfo  {
@@ -173,6 +178,16 @@ export type RunViewGenericParams = {
    * There is deliberately no server-properties field: those are set only by server code.
    */
   properties?: ViewPropertyValues;
+  /**
+   * Named parameter values referenced as `@paramName` in `ExtraFilter`.
+   * Propagated to `RunViewParams.Parameters`.
+   */
+  parameters?: RunViewParameters;
+  /**
+   * Optional JSON-encoded `CompositeFilterDescriptor` for structured filtering.
+   * Parsed into `RunViewParams.Filter`.
+   */
+  filter?: string;
 };
 
 

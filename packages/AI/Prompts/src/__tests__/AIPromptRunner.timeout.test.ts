@@ -7,6 +7,9 @@
  * (or the runner's `DefaultPromptTimeoutMS`) and the caller token BOTH apply, whichever fires first
  * wins, and neither bound may be discarded — plus the no-timeout legacy behavior.
  *
+ * Issue #3133 adds the prompt's own `AIPrompt.TimeoutMS` column. Precedence: the caller's
+ * `timeoutMS`, then the prompt's `TimeoutMS`, then the runner default; NULL on the prompt sets no bound.
+ *
  * Boundaries mocked exactly like AIPromptRunner.execute-e2e.test.ts (AIEngine catalog, credentials,
  * ClassFactory → controllable LLM, prompt-run persistence), so these exercise the REAL ExecutePrompt
  * pipeline end to end.
@@ -84,6 +87,7 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 
 import { AIPromptRunner, type ExecutionBound } from '../AIPromptRunner';
 import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
+import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TestLLM } from '@memberjunction/unit-testing';
@@ -135,11 +139,13 @@ function makeParams(prompt: Record<string, unknown>, o: Record<string, unknown> 
 }
 
 /** Reaches the protected bound-composition helpers for direct unit assertions. */
+type PromptTimeout = { TimeoutMS?: number | null };
 type BoundInternals = {
-  getEffectiveTimeoutMS(params: { timeoutMS?: number }): number | undefined;
-  createExecutionBound(prompt: { Name: string }, params: { timeoutMS?: number }, token?: AbortSignal): ExecutionBound;
+  getEffectiveTimeoutMS(prompt: PromptTimeout | null | undefined, params: { timeoutMS?: number }): number | undefined;
+  createExecutionBound(prompt: { Name: string } & PromptTimeout, params: { timeoutMS?: number }, token?: AbortSignal): ExecutionBound;
 };
 function priv(r: AIPromptRunner): BoundInternals { return r as unknown as BoundInternals; }
+const NO_PROMPT_TIMEOUT: PromptTimeout = { TimeoutMS: null };
 
 let runner: AIPromptRunner;
 beforeEach(() => {
@@ -154,23 +160,53 @@ beforeEach(() => {
 
 describe('getEffectiveTimeoutMS', () => {
   it('returns the caller-supplied timeoutMS when it is a positive number', () => {
-    expect(priv(runner).getEffectiveTimeoutMS({ timeoutMS: 5000 })).toBe(5000);
+    expect(priv(runner).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, { timeoutMS: 5000 })).toBe(5000);
   });
   it('returns undefined when no timeoutMS is supplied and the runner declares no default (opt-out preserved)', () => {
-    expect(priv(runner).getEffectiveTimeoutMS({})).toBeUndefined();
+    expect(priv(runner).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, {})).toBeUndefined();
   });
   it('returns undefined for 0 / negative values (treated as "no timeout")', () => {
-    expect(priv(runner).getEffectiveTimeoutMS({ timeoutMS: 0 })).toBeUndefined();
-    expect(priv(runner).getEffectiveTimeoutMS({ timeoutMS: -1 })).toBeUndefined();
+    expect(priv(runner).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, { timeoutMS: 0 })).toBeUndefined();
+    expect(priv(runner).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, { timeoutMS: -1 })).toBeUndefined();
   });
   it('falls back to the runner-level DefaultPromptTimeoutMS when the caller supplies none', () => {
     class BoundedRunner extends AIPromptRunner {
       protected override get DefaultPromptTimeoutMS(): number | undefined { return 1234; }
     }
     const bounded = new BoundedRunner();
-    expect(priv(bounded).getEffectiveTimeoutMS({})).toBe(1234);
+    expect(priv(bounded).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, {})).toBe(1234);
     // an explicit caller value still wins over the engine default
-    expect(priv(bounded).getEffectiveTimeoutMS({ timeoutMS: 99 })).toBe(99);
+    expect(priv(bounded).getEffectiveTimeoutMS(NO_PROMPT_TIMEOUT, { timeoutMS: 99 })).toBe(99);
+  });
+});
+
+describe('getEffectiveTimeoutMS — precedence with the prompt TimeoutMS column (issue #3133)', () => {
+  it('uses the prompt TimeoutMS when the caller supplies none', () => {
+    expect(priv(runner).getEffectiveTimeoutMS({ TimeoutMS: 2500 }, {})).toBe(2500);
+  });
+  it('the caller timeoutMS wins over the prompt TimeoutMS', () => {
+    expect(priv(runner).getEffectiveTimeoutMS({ TimeoutMS: 2500 }, { timeoutMS: 700 })).toBe(700);
+  });
+  it('a caller timeoutMS of 0 opts this call out of the prompt bound', () => {
+    expect(priv(runner).getEffectiveTimeoutMS({ TimeoutMS: 2500 }, { timeoutMS: 0 })).toBeUndefined();
+  });
+  it('a NULL prompt TimeoutMS sets no bound', () => {
+    expect(priv(runner).getEffectiveTimeoutMS({ TimeoutMS: null }, {})).toBeUndefined();
+    expect(priv(runner).getEffectiveTimeoutMS(undefined, {})).toBeUndefined();
+  });
+  it('the prompt TimeoutMS wins over the runner default, which still applies when the prompt has none', () => {
+    class BoundedRunner extends AIPromptRunner {
+      protected override get DefaultPromptTimeoutMS(): number | undefined { return 1234; }
+    }
+    const bounded = new BoundedRunner();
+    expect(priv(bounded).getEffectiveTimeoutMS({ TimeoutMS: 99 }, {})).toBe(99);
+    expect(priv(bounded).getEffectiveTimeoutMS({ TimeoutMS: null }, {})).toBe(1234);
+  });
+  it('createExecutionBound applies the prompt TimeoutMS with no caller timeout', () => {
+    const bound = priv(runner).createExecutionBound({ Name: 'p', TimeoutMS: 20 }, {});
+    expect(bound.Signal).toBeDefined();
+    expect(bound.TimeoutMS).toBe(20);
+    bound.Dispose();
   });
 });
 
@@ -264,6 +300,81 @@ describe('ExecutePrompt — timeout enforcement on the single-model path', () =>
     const result = await runner.ExecutePrompt(makeParams(makePrompt(), { timeoutMS: 5000 }) as never);
     expect(result.success).toBe(true);
     expect(result.result).toBe('done');
+  });
+});
+
+describe('ExecutePrompt — the prompt TimeoutMS column (issue #3133)', () => {
+  it('the column alone bounds a hung model call', async () => {
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
+    const start = Date.now();
+    const result = await runner.ExecutePrompt(makeParams(makePrompt({ TimeoutMS: 40 })) as never);
+
+    expect(Date.now() - start).toBeLessThan(3000);
+    expect(result.success).toBe(false);
+    const err = result.chatResult?.exception;
+    expect(err).toBeInstanceOf(AIPromptTimeoutError);
+    expect((err as AIPromptTimeoutError).TimeoutMS).toBe(40);
+  });
+
+  it('the caller timeoutMS takes precedence over the column', async () => {
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
+    const result = await runner.ExecutePrompt(makeParams(makePrompt({ TimeoutMS: 60_000 }), { timeoutMS: 30 }) as never);
+
+    expect(result.success).toBe(false);
+    expect((result.chatResult?.exception as AIPromptTimeoutError).TimeoutMS).toBe(30);
+  });
+
+  it('a call inside the column budget succeeds', async () => {
+    testLLM.SetDefaultOutcome({ kind: 'succeed', content: 'done', delayMS: 10 });
+    const result = await runner.ExecutePrompt(makeParams(makePrompt({ TimeoutMS: 5000 })) as never);
+    expect(result.success).toBe(true);
+  });
+
+  it('a NULL column leaves the call unbounded', async () => {
+    testLLM.SetDefaultOutcome({ kind: 'succeed', content: 'done', delayMS: 120 });
+    const result = await runner.ExecutePrompt(makeParams(makePrompt({ TimeoutMS: null })) as never);
+    expect(result.success).toBe(true);
+    expect(testLLM.Calls[0].cancellationToken).toBeUndefined();
+  });
+});
+
+describe('ParallelExecutionCoordinator — honors the prompt TimeoutMS on each task', () => {
+  type CoordInternals = {
+    executeModel: (...args: unknown[]) => Promise<unknown>;
+    executeSingleTask: (params: unknown, task: unknown, timeoutMS: number) => Promise<{ success: boolean }>;
+  };
+  function makeTask(prompt: Record<string, unknown>): Record<string, unknown> {
+    return {
+      taskId: 't1', prompt, model: { ID: 'm1', Name: 'Model One', DriverClass: 'TestLLM', APIName: 'test' },
+      renderedPrompt: 'hello', executionGroup: 0, priority: 0, templateMessageRole: 'system',
+    };
+  }
+  function hangingCoordinator(): CoordInternals {
+    const coord = new ParallelExecutionCoordinator() as unknown as CoordInternals;
+    vi.spyOn(coord, 'executeModel').mockImplementation(() => new Promise<never>(() => { /* hung provider */ }));
+    return coord;
+  }
+
+  it('the prompt TimeoutMS replaces the coordinator backstop', async () => {
+    const coord = hangingCoordinator();
+    const start = Date.now();
+    await expect(coord.executeSingleTask({ verbose: false }, makeTask(makePrompt({ TimeoutMS: 40 })), 60_000))
+      .rejects.toThrow('Task execution timeout');
+    expect(Date.now() - start).toBeLessThan(3000); // the 60s backstop would still be waiting
+  });
+
+  it('the caller timeoutMS still wins over the prompt TimeoutMS', async () => {
+    const coord = hangingCoordinator();
+    const start = Date.now();
+    await expect(coord.executeSingleTask({ verbose: false, timeoutMS: 30 }, makeTask(makePrompt({ TimeoutMS: 60_000 })), 60_000))
+      .rejects.toThrow('Task execution timeout');
+    expect(Date.now() - start).toBeLessThan(3000);
+  });
+
+  it('a NULL prompt TimeoutMS falls back to the coordinator backstop', async () => {
+    const coord = hangingCoordinator();
+    await expect(coord.executeSingleTask({ verbose: false }, makeTask(makePrompt({ TimeoutMS: null })), 40))
+      .rejects.toThrow('Task execution timeout');
   });
 });
 

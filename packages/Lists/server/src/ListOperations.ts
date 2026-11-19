@@ -8,7 +8,8 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { MJListDetailEntity, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJListEntity, MJUserRoutineEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 import {
   ComputeSourceSignature,
@@ -16,6 +17,8 @@ import {
   SignDeltaToken,
   VerifyDeltaToken,
 } from './deltaToken';
+import { EmitListAuditLog } from './listAuditLog';
+import { ListRefreshSource, type ListSourceDefinition } from './ListRefreshSource';
 import type {
   ApplyResult,
   ApplyResultCode,
@@ -25,7 +28,11 @@ import type {
   ListDeltaCounts,
   ListDeltaWarning,
   ListRefreshMode,
+  ListRefreshPreview,
+  ListRefreshPreviewOptions,
   ListSource,
+  ListSourceChange,
+  MaterializeFromQueryOptions,
   MaterializeOptions,
   ResolvedRecordSet,
   SetOpKind,
@@ -35,6 +42,18 @@ import type {
  *  Server-internal — not exposed on the public type surface because no
  *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
+
+/** Where a list being created comes from, so it can refresh. */
+type NewListLineage =
+  | { kind: 'view'; viewId: string; filterSnapshot: string | null; refreshMode: ListRefreshMode; useSnapshot: boolean }
+  | {
+      kind: 'query';
+      queryId: string;
+      parameters: Record<string, unknown> | undefined;
+      keyField: string;
+      refreshMode: ListRefreshMode;
+      autoRefresh: boolean;
+    };
 
 /**
  * A provider that screens client SQL clauses (GenericDatabaseProvider does, as
@@ -46,6 +65,14 @@ interface ClauseScreeningProvider {
 
 function canScreenClauses(provider: IMetadataProvider | undefined): provider is IMetadataProvider & ClauseScreeningProvider {
   return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
+
+/** The first candidate that is a string with non-whitespace content, or null. */
+function firstNonBlank(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) return candidate;
+  }
+  return null;
 }
 
 /**
@@ -116,8 +143,16 @@ export class ListOperations {
     source: ListSource,
     mode: ListRefreshMode,
   ): Promise<ListDelta> {
-    const sourceSet = await this.ResolveSource(source);
+    return this.computeDeltaFromSourceSet(target, await this.ResolveSource(source), mode);
+  }
 
+  /** `ComputeDelta` for a source already resolved to its records (a list's query source is resolved this way). */
+  private async computeDeltaFromSourceSet(
+    target: DeltaTarget,
+    sourceSet: ResolvedRecordSet,
+    mode: ListRefreshMode,
+    sign: boolean = true,
+  ): Promise<ListDelta> {
     if (target === 'new') {
       return await this.buildDelta({
         targetListId: null,
@@ -128,6 +163,8 @@ export class ListOperations {
         warnings: this.buildWarnings(sourceSet, null, 0),
         tokenMode: mode,
         signatureRecordIds: sourceSet.RecordIds,
+        targetTotal: 0,
+        sign,
       });
     }
 
@@ -156,6 +193,8 @@ export class ListOperations {
       warnings: this.buildWarnings(sourceSet, targetSet, toRemoveIds.length),
       tokenMode: mode,
       signatureRecordIds: sourceSet.RecordIds,
+      targetTotal: targetIds.size,
+      sign,
     });
   }
 
@@ -193,6 +232,7 @@ export class ListOperations {
         warnings: entityWarnings,
         tokenMode: 'SetOp',
         signatureRecordIds: resultIds,
+        targetTotal: 0,
       });
     }
 
@@ -227,6 +267,7 @@ export class ListOperations {
       ],
       tokenMode: 'SetOp',
       signatureRecordIds: resultIds,
+      targetTotal: targetIds.size,
     });
   }
 
@@ -251,8 +292,18 @@ export class ListOperations {
   ): Promise<ApplyResult> {
     const tokenResult = await this.verifyTokenForDelta(delta, opts.DeltaToken);
     if (!tokenResult.ok) return tokenResult.failure;
+    return this.applyCheckedDelta(delta, opts.ConfirmDrops);
+  }
 
-    if (delta.Counts.Remove > 0 && !opts.ConfirmDrops) {
+  /**
+   * Every guard of {@link ApplyDelta} except the token: the drop guard, the target check, the
+   * Editor permission check and target-drift detection, then the mutations. The token proves a
+   * delta came from this server; a delta computed and applied in the same server call (as
+   * {@link RefreshFromSource} does) never leaves it, so it comes here directly and needs no signing
+   * secret.
+   */
+  private async applyCheckedDelta(delta: ListDelta, confirmDrops: boolean): Promise<ApplyResult> {
+    if (delta.Counts.Remove > 0 && !confirmDrops) {
       return this.failure(
         'DROP_NOT_CONFIRMED',
         `Apply would remove ${delta.Counts.Remove} record(s). Pass ConfirmDrops: true to proceed.`,
@@ -312,67 +363,223 @@ export class ListOperations {
     // 3. Create + save the list record.
     const listResult = await this.createListWithLineage({
       entityId: entityInfo.ID,
-      viewId: opts.RememberLineage ? viewId : null,
-      filterSnapshot,
       opts,
+      lineage: opts.RememberLineage
+        ? { kind: 'view', viewId, filterSnapshot, refreshMode: opts.RefreshMode, useSnapshot: opts.UseSnapshot }
+        : null,
     });
     if (!listResult.ok) return listResult.failure;
-    const listId = listResult.listId;
 
-    // 4. Bulk-insert the resolved members. Any per-record failure is
-    //    surfaced in the result rather than aborting the whole batch.
-    const insertResult = await this.insertListMembers(listId, resolved.RecordIds);
-
-    return {
-      Success: insertResult.failed === 0,
-      ResultCode: insertResult.failed === 0 ? 'SUCCESS' : 'PARTIAL_SUCCESS',
-      Message:
-        insertResult.failed === 0
-          ? `Materialized list with ${insertResult.added} member(s)`
-          : `Materialized list with ${insertResult.added} added, ${insertResult.failed} failed`,
-      CreatedListId: listId,
-      TargetListId: listId,
-      Counts: { Added: insertResult.added, Removed: 0, Failed: insertResult.failed },
-      Errors: insertResult.errors.length > 0 ? insertResult.errors : undefined,
-    };
+    // 4. Bulk-insert the resolved members.
+    return this.fillNewList(listResult.listId, resolved.RecordIds);
   }
 
   /**
-   * Refresh an existing list against its captured source view. The list
-   * must have been created with `RememberLineage = true` (i.e. it has a
-   * non-null `SourceViewID`) — otherwise this returns `TARGET_NOT_FOUND`.
+   * Create a new list from a saved query's rows, linked to the query so it can refresh from it.
    *
-   * When `list.UseSnapshot = true`, the source is re-evaluated against the
-   * filter snapshot captured at materialization time. When `false`, the
-   * live view is re-run — which means edits to the view since
-   * materialization will be reflected in the result.
+   * The query runs as the acting user with `opts.Parameters`. The list stores the query, its
+   * parameter values, the key column and the refresh mode, and takes the query's current definition
+   * fingerprint, so a later edit to the query stops refreshes until the owner approves it. With
+   * `AutoRefresh`, the list's refresh routine is created as it is saved.
    *
-   * In `Sync` mode, callers MUST pass `ConfirmDrops: true` or the
-   * server-side drop guard will reject the apply with `DROP_NOT_CONFIRMED`.
-   * On success, `LastRefreshedAt` and `LastRefreshedByUserID` are updated.
+   * The entity and key column come from `opts` or, when left out, from the query's field metadata
+   * (see `MaterializeFromQueryOptions`). Never produces drops, so no delta token is involved.
+   */
+  public async MaterializeFromQuery(queryId: string, opts: MaterializeFromQueryOptions): Promise<ApplyResult> {
+    const key = await this.resolveQueryKey(queryId, opts);
+    if (!key.ok) return key.failure;
+
+    // Fingerprinted before the run, so an edit made in between is caught by the next refresh.
+    const definition = await this.refreshSource().QueryDefinitionAsync(queryId);
+    const resolved = await this.refreshSource().RunQueryRecordsAsync({
+      QueryID: queryId,
+      Parameters: opts.Parameters,
+      KeyField: key.keyField,
+      EntityInfo: key.entityInfo,
+      Label: `query "${definition.Name}"`,
+    });
+
+    const listResult = await this.createListWithLineage({
+      entityId: key.entityInfo.ID,
+      opts,
+      lineage: {
+        kind: 'query',
+        queryId,
+        parameters: opts.Parameters,
+        keyField: key.keyField,
+        refreshMode: opts.RefreshMode,
+        autoRefresh: opts.AutoRefresh ?? false,
+      },
+    });
+    if (!listResult.ok) return listResult.failure;
+
+    const result = await this.fillNewList(listResult.listId, resolved.RecordIds);
+    // Saving a new source clears the list's fingerprint; this fill is its first refresh.
+    await this.stampRefreshMetadata(listResult.listId, definition.Fingerprint);
+    return result;
+  }
+
+  /**
+   * Create a new list holding the given records, with no source: it never refreshes. For callers
+   * that resolved the records themselves and have nothing a list can be linked to (for example SQL
+   * that could not be saved as a query). `recordIds` are in `MJ: List Details.RecordID` form.
+   */
+  public async CreateListFromRecords(
+    entityName: string,
+    recordIds: readonly string[],
+    opts: Pick<MaterializeOptions, 'ListName' | 'Description' | 'CategoryId'>,
+  ): Promise<ApplyResult> {
+    const entityInfo = this.metadata().EntityByName(entityName);
+    if (!entityInfo) {
+      return this.failure('UNEXPECTED_ERROR', `Entity '${entityName}' not found in metadata`);
+    }
+    const listResult = await this.createListWithLineage({ entityId: entityInfo.ID, opts, lineage: null });
+    if (!listResult.ok) return listResult.failure;
+    return this.fillNewList(listResult.listId, [...new Set(recordIds)]);
+  }
+
+  /**
+   * Refresh an existing list against its source: a saved query (`SourceQueryID`) or a User View
+   * (`SourceViewID`). A list with neither returns `TARGET_NOT_FOUND`.
+   *
+   * Before anything is computed, the source's current definition fingerprint is compared with the
+   * one the list was linked against (`List.SourceFingerprint`). When they differ the refresh applies
+   * nothing and returns `SOURCE_CHANGED`, and an active refresh routine is paused, until the owner
+   * approves the new definition with `ApproveListSource`. A list with no stored fingerprint yet
+   * takes the current one on its next successful refresh. `UseSnapshot` lists are frozen on purpose
+   * and skip the check.
+   *
+   * When `list.UseSnapshot = true`, a view source is re-evaluated against the filter snapshot
+   * captured at materialization time instead of the live view.
+   *
+   * In `Sync` mode, callers MUST pass `ConfirmDrops: true` or the server-side drop guard rejects the
+   * apply with `DROP_NOT_CONFIRMED`. With no `mode`, the list's own `RefreshMode` applies, so a
+   * scheduled routine follows the list when its owner changes the mode. On success,
+   * `LastRefreshedAt`, `LastRefreshedByUserID` and (when empty) `SourceFingerprint` are updated.
    */
   public async RefreshFromSource(
     listId: string,
-    mode: ListRefreshMode,
+    mode: ListRefreshMode | null | undefined,
     opts: { ConfirmDrops: boolean },
   ): Promise<ApplyResult> {
-    const sourceResolution = await this.resolveRefreshSource(listId);
-    if (!sourceResolution.ok) return sourceResolution.failure;
+    const loaded = await this.loadRefreshList(listId);
+    if (!loaded.ok) return loaded.failure;
+    const list = loaded.list;
 
-    const delta = await this.ComputeDelta(
-      { kind: 'list', listId },
-      sourceResolution.source,
-      mode,
-    );
-    const result = await this.ApplyDelta(delta, {
-      ConfirmDrops: opts.ConfirmDrops,
-      DeltaToken: delta.DeltaToken,
-    });
+    const definition = await this.currentDefinitionAsync(list);
+    if (this.sourceChanged(list, definition)) {
+      return this.handleSourceChanged(list, definition);
+    }
 
+    const sourceSet = await this.resolveRefreshSourceSet(list);
+    if (!sourceSet.ok) return sourceSet.failure;
+
+    const effectiveMode = mode ?? list.RefreshMode;
+    // Computed and applied in this one call, so the delta is never signed (see applyCheckedDelta).
+    const delta = await this.computeDeltaFromSourceSet({ kind: 'list', listId }, sourceSet.records, effectiveMode, false);
+    const result = await this.applyCheckedDelta(delta, opts.ConfirmDrops);
+
+    if (result.Success) await this.afterRefreshApplied(list, definition, delta, result, effectiveMode);
+    return result;
+  }
+
+  /**
+   * Previews what refreshing a list from its source would change, so a person can review it before
+   * applying it with {@link ApplyRefreshPreview}. Unlike {@link ComputeDelta}, it works for every
+   * kind of list source, query sources included. It never mutates, and a changed source returns
+   * `SOURCE_CHANGED` without pausing the list's routine.
+   *
+   * With `AcceptCurrentSource` (owner only) it previews the source's current definition anyway, and
+   * optionally new query parameter values, which is what approving the change would apply.
+   */
+  public async PreviewRefreshFromSource(
+    listId: string,
+    opts: ListRefreshPreviewOptions = {},
+  ): Promise<ListRefreshPreview> {
+    const loaded = await this.loadRefreshList(listId);
+    if (!loaded.ok) return loaded.failure;
+    const list = loaded.list;
+    if (opts.AcceptCurrentSource && !UUIDsEqual(list.UserID, this.contextUser.ID)) {
+      return this.failure('PERMISSION_DENIED', `Only the owner of list '${list.Name}' can preview a change to its source.`);
+    }
+
+    const definition = await this.currentDefinitionAsync(list);
+    if (!opts.AcceptCurrentSource && this.sourceChanged(list, definition)) {
+      return this.sourceChangedFailure(list, definition);
+    }
+    if (opts.AcceptCurrentSource && opts.Parameters !== undefined && list.SourceQueryID) {
+      // In memory only: the list is never saved here.
+      list.SourceQueryParameters = JSON.stringify(opts.Parameters);
+    }
+
+    const sourceSet = await this.resolveRefreshSourceSet(list);
+    if (!sourceSet.ok) return sourceSet.failure;
+    const delta = await this.computeDeltaFromSourceSet({ kind: 'list', listId }, sourceSet.records, opts.Mode ?? list.RefreshMode);
+    return { Success: true, ResultCode: 'SUCCESS', Message: 'Preview only; nothing has changed.', Delta: delta };
+  }
+
+  /**
+   * Applies a delta returned by {@link PreviewRefreshFromSource}, with the same guards as
+   * {@link ApplyDelta}. It re-checks the source first: if the source changed since it was approved,
+   * nothing is applied and the result is `SOURCE_CHANGED`. On success the list's refresh metadata is
+   * stamped and, when the list changed, a "List Refreshed" audit row is written.
+   */
+  public async ApplyRefreshPreview(
+    delta: ListDelta,
+    opts: { ConfirmDrops: boolean; DeltaToken: string },
+  ): Promise<ApplyResult> {
+    if (!delta.TargetListId) {
+      return this.failure('TARGET_NOT_FOUND', 'ApplyRefreshPreview requires the delta of an existing list.');
+    }
+    const loaded = await this.loadRefreshList(delta.TargetListId);
+    if (!loaded.ok) return loaded.failure;
+    const list = loaded.list;
+
+    const definition = await this.currentDefinitionAsync(list);
+    if (this.sourceChanged(list, definition)) return this.sourceChangedFailure(list, definition);
+
+    const result = await this.ApplyDelta(delta, opts);
     if (result.Success) {
-      await this.stampRefreshMetadata(listId);
+      await this.afterRefreshApplied(list, definition, delta, result, await this.tokenModeAsync(opts.DeltaToken));
     }
     return result;
+  }
+
+  /**
+   * The list owner approves the current definition of the list's source after it changed, so
+   * refreshes resume. Stores the current fingerprint (and, for a query whose parameters changed,
+   * new parameter values), sets a paused refresh routine back to Active, writes a "List Source
+   * Approved" audit row, then refreshes the list right away.
+   *
+   * Only the list's owner can approve. `Parameters` replaces `SourceQueryParameters` when given.
+   */
+  public async ApproveListSource(
+    listId: string,
+    opts: { ConfirmDrops: boolean; Parameters?: Record<string, unknown> },
+  ): Promise<ApplyResult> {
+    const loaded = await this.loadRefreshList(listId);
+    if (!loaded.ok) return loaded.failure;
+    const list = loaded.list;
+    if (!UUIDsEqual(list.UserID, this.contextUser.ID)) {
+      return this.failure('PERMISSION_DENIED', `Only the owner of list '${list.Name}' can approve a change to its source.`);
+    }
+    const definition = await this.refreshSource().CurrentDefinitionAsync(list);
+    if (!definition) {
+      return this.failure('TARGET_NOT_FOUND', `List '${listId}' has no source to approve.`);
+    }
+    const linkedFingerprint = list.SourceFingerprint;
+    list.SourceFingerprint = definition.Fingerprint;
+    if (opts.Parameters !== undefined && list.SourceQueryID) {
+      list.SourceQueryParameters = JSON.stringify(opts.Parameters);
+    }
+    if (!(await list.Save())) {
+      return this.failure('UNEXPECTED_ERROR', `Could not save the approval: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+    await this.setRoutineStatus(list, 'Paused', 'Active');
+    await this.emitAudit(list, 'List Source Approved', `${this.userLabel()} approved the current definition of ${definition.Kind} "${definition.Name}"`, {
+      SourceKind: definition.Kind, SourceID: definition.ID, LinkedFingerprint: linkedFingerprint, ApprovedFingerprint: definition.Fingerprint,
+    });
+    return this.RefreshFromSource(listId, undefined, { ConfirmDrops: opts.ConfirmDrops });
   }
 
   /**
@@ -548,24 +755,18 @@ export class ListOperations {
     warnings: ListDeltaWarning[];
     tokenMode: DeltaTokenMode;
     signatureRecordIds: string[];
+    /** Size of the target as previewed (0 for a new list). */
+    targetTotal: number;
+    /** False for a delta applied in the same server call: it carries an empty `DeltaToken`. */
+    sign?: boolean;
   }): Promise<ListDelta> {
     const counts: ListDeltaCounts = {
       Add: args.toAddIds.length,
       Remove: args.toRemoveIds.length,
       Unchanged: args.unchangedIds.length,
       SourceTotal: args.toAddIds.length + args.unchangedIds.length,
-      TargetTotal: args.unchangedIds.length + args.toRemoveIds.length,
-    };
-    // ComputeSourceSignature and SignDeltaToken are async because Web
-    // Crypto's SubtleCrypto is async. Build them in sequence — the
-    // signature feeds the token payload.
-    const ssig = await ComputeSourceSignature(args.signatureRecordIds);
-    const payload: DeltaTokenPayload = {
-      v: 1,
-      tid: args.targetListId,
-      ssig,
-      m: args.tokenMode,
-      iat: Date.now(),
+      // Not Unchanged + Remove: Additive mode keeps target-only records without listing them.
+      TargetTotal: args.targetTotal,
     };
     return {
       TargetListId: args.targetListId,
@@ -575,8 +776,21 @@ export class ListOperations {
       Unchanged: args.unchangedIds,
       Counts: counts,
       Warnings: args.warnings,
-      DeltaToken: await SignDeltaToken(payload),
+      DeltaToken: args.sign === false ? '' : await this.signDeltaAsync(args),
     };
+  }
+
+  private async signDeltaAsync(args: { targetListId: string | null; tokenMode: DeltaTokenMode; signatureRecordIds: string[] }): Promise<string> {
+    // The source signature feeds the token payload, so build them in sequence.
+    const ssig = await ComputeSourceSignature(args.signatureRecordIds);
+    const payload: DeltaTokenPayload = {
+      v: 1,
+      tid: args.targetListId,
+      ssig,
+      m: args.tokenMode,
+      iat: Date.now(),
+    };
+    return SignDeltaToken(payload);
   }
 
   private buildWarnings(
@@ -711,7 +925,10 @@ export class ListOperations {
     const expected = new Set<string>([...delta.Unchanged, ...delta.ToRemove]);
     const actual = new Set<string>(current.RecordIds);
 
-    if (expected.size !== actual.size) {
+    // Compare the size against the target as previewed, not against `expected`: Additive mode
+    // keeps target-only records without listing them, so `expected` is smaller than an
+    // unchanged target whenever the source has dropped a member.
+    if (actual.size !== delta.Counts.TargetTotal) {
       return { ok: false, failure: this.failure('STALE_DELTA', 'Target list has been modified since preview was generated.') };
     }
     for (const id of expected) {
@@ -813,36 +1030,40 @@ export class ListOperations {
     return errors;
   }
 
-  /**
-   * Pick the source for a refresh based on the list's lineage. Live mode
-   * just points back at the original view ID. Snapshot mode reads the
-   * captured filter blob and constructs an ad-hoc source against the
-   * list's entity using whichever WHERE clause the view had at
-   * materialization time.
-   */
-  private async resolveRefreshSource(
+  /** Loads the list a refresh or approval acts on. It must exist and have a source query or view. */
+  private async loadRefreshList(
     listId: string,
-  ): Promise<{ ok: true; source: ListSource } | { ok: false; failure: ApplyResult }> {
-    const md = this.metadata();
-    const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
-    const loaded = await list.Load(listId);
-    if (!loaded) {
+  ): Promise<{ ok: true; list: MJListEntity } | { ok: false; failure: ApplyResult }> {
+    const list = await this.metadata().GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
+    if (!(await list.Load(listId))) {
       return { ok: false, failure: this.failure('TARGET_NOT_FOUND', `List '${listId}' not found`) };
     }
-    if (!list.SourceViewID) {
+    if (!list.SourceViewID && !list.SourceQueryID) {
       return {
         ok: false,
         failure: this.failure(
           'TARGET_NOT_FOUND',
-          `List '${listId}' has no SourceViewID — refresh is only supported for lists materialized with lineage.`,
+          `List '${listId}' has no source query or view — refresh is only supported for lists linked to a source.`,
         ),
       };
     }
+    return { ok: true, list };
+  }
 
-    if (!list.UseSnapshot) {
-      return { ok: true, source: { kind: 'view', viewId: list.SourceViewID } };
+  /** The records the list's source holds now: the query's rows, the view's, or the view snapshot's. */
+  private async resolveRefreshSourceSet(
+    list: MJListEntity,
+  ): Promise<{ ok: true; records: ResolvedRecordSet } | { ok: false; failure: ApplyResult }> {
+    if (list.SourceQueryID) {
+      const entityInfo = this.metadata().EntityByID(list.EntityID);
+      if (!entityInfo) {
+        return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Entity '${list.EntityID}' of list '${list.ID}' not found in metadata.`) };
+      }
+      return { ok: true, records: await this.refreshSource().ResolveQueryRecordsAsync(list, entityInfo) };
     }
-
+    if (!list.UseSnapshot) {
+      return { ok: true, records: await this.ResolveSource({ kind: 'view', viewId: list.SourceViewID! }) };
+    }
     // Snapshot mode — re-evaluate the captured filter against the list's entity.
     const adhoc = this.buildAdhocSourceFromSnapshot(list);
     if (!adhoc) {
@@ -850,19 +1071,138 @@ export class ListOperations {
         ok: false,
         failure: this.failure(
           'UNEXPECTED_ERROR',
-          `List '${listId}' has UseSnapshot=1 but no usable SourceFilterSnapshot — re-materialize the list to capture one.`,
+          `List '${list.ID}' has UseSnapshot=1 but no usable SourceFilterSnapshot — re-materialize the list to capture one.`,
         ),
       };
     }
-    return { ok: true, source: adhoc };
+    return { ok: true, records: await this.ResolveSource(adhoc) };
+  }
+
+  /**
+   * The list's source changed since it was linked or last approved. Nothing is applied. When the
+   * list has an active refresh routine, it is paused and a "List Source Changed" audit row is
+   * written, so later scheduled runs neither repeat the work nor repeat the owner's notification:
+   * the routine's own failure notification for this run tells the owner.
+   */
+  private async handleSourceChanged(list: MJListEntity, definition: ListSourceDefinition): Promise<ApplyResult> {
+    const failure = this.sourceChangedFailure(list, definition);
+    const paused = await this.setRoutineStatus(list, 'Active', 'Paused');
+    if (paused) {
+      await this.emitAudit(list, 'List Source Changed', `The ${definition.Kind} "${definition.Name}" changed; refreshes of the list are paused until its owner approves the change`, {
+        ...failure.SourceChange, RoutineID: list.RefreshRoutineID,
+      });
+    }
+    return failure;
+  }
+
+  /** The `SOURCE_CHANGED` result for a list whose source no longer matches its stored fingerprint. */
+  private sourceChangedFailure(list: MJListEntity, definition: ListSourceDefinition): ApplyResult & { SourceChange: ListSourceChange } {
+    const change: ListSourceChange = {
+      SourceKind: definition.Kind,
+      SourceID: definition.ID,
+      SourceName: definition.Name,
+      ChangedAt: definition.UpdatedAt,
+      LinkedFingerprint: list.SourceFingerprint ?? '',
+      CurrentFingerprint: definition.Fingerprint,
+    };
+    const when = definition.UpdatedAt ? ` on ${definition.UpdatedAt.toISOString()}` : '';
+    return {
+      ...this.failure(
+        'SOURCE_CHANGED',
+        `The ${definition.Kind} "${definition.Name}" this list refreshes from changed${when}. Nothing was applied. ` +
+          `The list's owner needs to review and approve the change before it refreshes again.`,
+      ),
+      TargetListId: list.ID,
+      SourceChange: change,
+    };
+  }
+
+  /** The source's current definition, or null for a snapshot list, which is frozen on purpose. */
+  private async currentDefinitionAsync(list: MJListEntity): Promise<ListSourceDefinition | null> {
+    return list.UseSnapshot ? null : this.refreshSource().CurrentDefinitionAsync(list);
+  }
+
+  /** True when the list has an approved fingerprint and its source no longer matches it. */
+  private sourceChanged(list: MJListEntity, definition: ListSourceDefinition | null): definition is ListSourceDefinition {
+    return !!definition && !!list.SourceFingerprint && definition.Fingerprint !== list.SourceFingerprint;
+  }
+
+  /** Stamps the refresh metadata and, when the list changed, writes a "List Refreshed" audit row. */
+  private async afterRefreshApplied(
+    list: MJListEntity,
+    definition: ListSourceDefinition | null,
+    delta: ListDelta,
+    result: ApplyResult,
+    mode: DeltaTokenMode | null,
+  ): Promise<void> {
+    await this.stampRefreshMetadata(list.ID, definition?.Fingerprint ?? null);
+    const added = result.Counts?.Added ?? 0;
+    const removed = result.Counts?.Removed ?? 0;
+    if (added === 0 && removed === 0) return;
+    const from = definition ? ` from ${definition.Kind} "${definition.Name}"` : ' from its source snapshot';
+    await this.emitAudit(list, 'List Refreshed', `${this.userLabel()} refreshed the list${from}: +${added} / −${removed}`, {
+      Mode: mode,
+      Added: added,
+      Removed: removed,
+      Failed: result.Counts?.Failed ?? 0,
+      RecordsBefore: delta.Counts.TargetTotal,
+      RecordsAfter: delta.Counts.TargetTotal + added - removed,
+      SourceKind: definition?.Kind ?? (list.SourceQueryID ? 'query' : 'view'),
+      SourceID: definition?.ID ?? list.SourceQueryID ?? list.SourceViewID,
+      SourceName: definition?.Name ?? null,
+      SourceFingerprint: definition?.Fingerprint ?? null,
+    });
+  }
+
+  /** The mode a verified delta token was issued for, or null when it can't be read. */
+  private async tokenModeAsync(token: string): Promise<DeltaTokenMode | null> {
+    try {
+      return (await VerifyDeltaToken(token)).m;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Moves the list's refresh routine from one status to another. Returns true when it changed; a
+   * routine in any other status, or no routine, is left alone. Best effort: a failure is logged.
+   */
+  private async setRoutineStatus(
+    list: MJListEntity,
+    from: MJUserRoutineEntity['Status'],
+    to: MJUserRoutineEntity['Status'],
+  ): Promise<boolean> {
+    if (!list.RefreshRoutineID) return false;
+    const routine = await this.metadata().GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', this.contextUser);
+    if (!(await routine.Load(list.RefreshRoutineID)) || routine.Status !== from) return false;
+    routine.Status = to;
+    if (await routine.Save()) return true;
+    LogError(`Could not set refresh routine ${routine.ID} of list ${list.ID} to ${to}: ${routine.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return false;
+  }
+
+  private async emitAudit(list: MJListEntity, type: string, description: string, details: Record<string, unknown>): Promise<void> {
+    await EmitListAuditLog({ Type: type, ListID: list.ID, Description: description, Details: details }, this.metadata(), this.contextUser, this.provider);
+  }
+
+  private userLabel(): string {
+    return this.contextUser.Name ?? this.contextUser.Email;
+  }
+
+  private refreshSource(): ListRefreshSource {
+    return new ListRefreshSource(this.contextUser, this.metadata(), this.runView(), this.provider);
   }
 
   /**
    * Parse the captured `SourceFilterSnapshot` and turn it into an ad-hoc
-   * `ListSource`. We prefer `customWhereClause` over `whereClause` because
-   * the custom form is the user-authored override; smart-filter clauses
-   * fall in last because they're AI-derived. Returns null if no usable
-   * clause is present (in which case the caller surfaces a clear error).
+   * `ListSource`. The filter is the view's `whereClause`, which is what a live
+   * view run applies: the view compiles its filter state or smart filter into
+   * `WhereClause` on save, unless it's a hand-written custom clause, which is
+   * stored there too. `customWhereClause` is the view's `CustomWhereClause`
+   * bit (true when that clause was hand-written), never filter text, so it
+   * plays no part here. `smartFilterWhereClause` is a fallback for a
+   * snapshot whose `whereClause` is empty. Returns null if no usable clause is
+   * present (in which case the caller surfaces a clear error).
    */
   private buildAdhocSourceFromSnapshot(list: MJListEntity): ListSource | null {
     if (!list.SourceFilterSnapshot) return null;
@@ -873,7 +1213,6 @@ export class ListOperations {
 
     let parsed: {
       whereClause?: string | null;
-      customWhereClause?: string | null;
       smartFilterWhereClause?: string | null;
       alternateBaseView?: string | null;
     };
@@ -884,10 +1223,9 @@ export class ListOperations {
       return null;
     }
 
-    const extraFilter =
-      parsed.customWhereClause ?? parsed.whereClause ?? parsed.smartFilterWhereClause ?? null;
+    const extraFilter = firstNonBlank(parsed.whereClause, parsed.smartFilterWhereClause);
     const altBaseView = parsed.alternateBaseView?.trim() || undefined;
-    if ((!extraFilter || extraFilter.trim().length === 0) && !altBaseView) return null;
+    if (!extraFilter && !altBaseView) return null;
 
     return {
       kind: 'adhoc',
@@ -903,7 +1241,7 @@ export class ListOperations {
    * (the records are already in the right state), but we do log it so
    * the discrepancy is observable.
    */
-  private async stampRefreshMetadata(listId: string): Promise<void> {
+  private async stampRefreshMetadata(listId: string, sourceFingerprint: string | null): Promise<void> {
     const md = this.metadata();
     const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
     const loaded = await list.Load(listId);
@@ -913,6 +1251,8 @@ export class ListOperations {
     }
     list.LastRefreshedAt = new Date();
     list.LastRefreshedByUserID = this.contextUser.ID;
+    // A list linked before fingerprints existed takes the source's current one on its first refresh.
+    if (!list.SourceFingerprint && sourceFingerprint) list.SourceFingerprint = sourceFingerprint;
     const ok = await list.Save();
     if (!ok) {
       LogError(
@@ -959,15 +1299,13 @@ export class ListOperations {
   }
 
   /**
-   * Create + save the parent `MJ: List` record. Lineage fields are only
-   * populated when `RememberLineage = true` on `opts` — otherwise the new
-   * list is a plain one-shot copy with no upstream reference.
+   * Create + save the parent `MJ: List` record. With no `lineage` the new list is a plain one-shot
+   * copy with no upstream reference.
    */
   private async createListWithLineage(args: {
     entityId: string;
-    viewId: string | null;
-    filterSnapshot: string | null;
-    opts: MaterializeOptions;
+    opts: Pick<MaterializeOptions, 'ListName' | 'Description' | 'CategoryId'>;
+    lineage: NewListLineage | null;
   }): Promise<{ ok: true; listId: string } | { ok: false; failure: ApplyResult }> {
     const md = this.metadata();
     const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
@@ -977,21 +1315,77 @@ export class ListOperations {
     list.UserID = this.contextUser.ID;
     if (args.opts.Description) list.Description = args.opts.Description;
     if (args.opts.CategoryId) list.CategoryID = args.opts.CategoryId;
-
-    if (args.viewId) {
-      list.SourceViewID = args.viewId;
-      list.RefreshMode = args.opts.RefreshMode;
-      list.UseSnapshot = args.opts.UseSnapshot;
-      if (args.filterSnapshot) list.SourceFilterSnapshot = args.filterSnapshot;
-    }
+    if (args.lineage) this.applyLineage(list, args.lineage);
 
     const saved = await list.Save();
     if (!saved) {
       const msg = list.LatestResult?.CompleteMessage ?? 'unknown error';
-      LogError(`MaterializeFromView: list save failed — ${msg}`);
+      LogError(`Materialize: list save failed — ${msg}`);
       return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Failed to create list: ${msg}`) };
     }
     return { ok: true, listId: list.ID };
+  }
+
+  /** Sets a new list's source fields from its lineage. */
+  private applyLineage(list: MJListEntity, lineage: NewListLineage): void {
+    list.RefreshMode = lineage.refreshMode;
+    if (lineage.kind === 'view') {
+      list.SourceViewID = lineage.viewId;
+      list.UseSnapshot = lineage.useSnapshot;
+      if (lineage.filterSnapshot) list.SourceFilterSnapshot = lineage.filterSnapshot;
+      return;
+    }
+    list.SourceQueryID = lineage.queryId;
+    list.SourceQueryKeyField = lineage.keyField;
+    list.SourceQueryParameters = lineage.parameters ? JSON.stringify(lineage.parameters) : null;
+    list.AutoRefresh = lineage.autoRefresh;
+  }
+
+  /**
+   * Adds the resolved records to a list just created and reports the result. A per-record failure
+   * is surfaced in the result rather than aborting the whole batch.
+   */
+  private async fillNewList(listId: string, recordIds: readonly string[]): Promise<ApplyResult> {
+    const insertResult = await this.insertListMembers(listId, recordIds);
+    const ok = insertResult.failed === 0;
+    return {
+      Success: ok,
+      ResultCode: ok ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+      Message: ok
+        ? `Materialized list with ${insertResult.added} member(s)`
+        : `Materialized list with ${insertResult.added} added, ${insertResult.failed} failed`,
+      CreatedListId: listId,
+      TargetListId: listId,
+      Counts: { Added: insertResult.added, Removed: 0, Failed: insertResult.failed },
+      Errors: insertResult.errors.length > 0 ? insertResult.errors : undefined,
+    };
+  }
+
+  /**
+   * The entity a query-sourced list holds and the query column with its key: as given when both are
+   * given, otherwise worked out from the query's field metadata.
+   */
+  private async resolveQueryKey(
+    queryId: string,
+    opts: Pick<MaterializeFromQueryOptions, 'EntityName' | 'KeyField'>,
+  ): Promise<{ ok: true; entityInfo: EntityInfo; keyField: string } | { ok: false; failure: ApplyResult }> {
+    const named = opts.EntityName ? this.metadata().EntityByName(opts.EntityName) : undefined;
+    if (opts.EntityName && !named) {
+      return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Entity '${opts.EntityName}' not found in metadata`) };
+    }
+    const keyField = opts.KeyField?.trim();
+    if (named && keyField) return { ok: true, entityInfo: named, keyField };
+
+    const inferred = await this.refreshSource().InferQueryKeyAsync(queryId, { EntityName: named?.Name, KeyField: keyField });
+    if (inferred) return { ok: true, entityInfo: inferred.EntityInfo, keyField: inferred.KeyField };
+    const forEntity = named ? ` for ${named.Name}` : '';
+    return {
+      ok: false,
+      failure: this.failure(
+        'UNEXPECTED_ERROR',
+        `Could not tell which column of the query holds the record key${forEntity}. Give both the entity and the key column.`,
+      ),
+    };
   }
 
   /**

@@ -167,7 +167,7 @@ Full API: [`packages/Angular/Generic/task-graph-editor/README.md`](../packages/A
 ## What this is not
 
 - Not a second canvas. The authoring canvas grew badges and a connection event; `flow-editor` stays a generic graph editor.
-- Not cross-run breakpoint persistence. "Always break on this step of this workflow" is a design-time feature and a separate piece of work.
+- Not shared breakpoints. A person can **remember** a breakpoint for future runs of the same workflow (step context menu → *Remember Breakpoint for Future Runs*). It is kept per user and per workflow in the `TaskGraph.Breakpoints/<workflow agent ID>` user setting, as the steps' stable IDs (`Configuration.stepId`, the spec's `tempId`), because task IDs are new on every run. A Debug run started from the AI test harness sends them as `taskGraphDebug.breakpointStepIDs`, and Submit maps them to the new run's task IDs before any dispatcher sees the graph; a step that no longer exists is dropped. Only breakpoints are remembered — edge overrides and pause state stay per run — and nothing is shared between users.
 - Not a live channel to a worker. Every control is a row write. Every dispatcher instance obeys on the next pass (kicked immediately after Submit).
 - Not "step one ForEach iteration." The loop is one task. Step/Continue claims that row once.
 

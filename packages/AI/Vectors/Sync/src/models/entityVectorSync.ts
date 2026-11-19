@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
@@ -618,6 +618,7 @@ export class EntityVectorSyncer extends VectorBase {
   ): Promise<EmbeddingRunResult> {
     return embeddingRunner.RunEmbedding({
       Texts: texts,
+      PromptName: EmbeddingCarrierPrompts.VectorSync,
       ModelID: aiModelID,
       Dimensions: embeddingDimensions,
       ContextUser: this.CurrentUser,
@@ -993,7 +994,41 @@ export class EntityVectorSyncer extends VectorBase {
    */
   protected BuildRecordPageFilter(entity: EntityInfo, params: VectorizeEntityParams, entityDocument: MJEntityDocumentEntity, md: IMetadataProvider): string | undefined {
     const listFilter = params.listID ? this.BuildListFilter(entity, md.ConfigData.MJCoreSchemaName, params.listID) : undefined;
-    return CombineExtraFilters(listFilter, GetEntityDocumentRecordFilter(entityDocument));
+    const combinedInputFilter = CombineExtraFilters(listFilter, params.extraFilter);
+    return CombineExtraFilters(combinedInputFilter, GetEntityDocumentRecordFilter(entityDocument));
+  }
+
+  /**
+   * Vectorizes a specific subset of records identified by their `CompositeKey` primary keys
+   * without scanning the entire entity table (spec §11.6 / §19.8).
+   */
+  public async VectorizeRecords(
+    entityID: string,
+    recordIDs: CompositeKey[],
+    contextUser: UserInfo,
+    entityDocumentID?: string,
+  ): Promise<VectorizeEntityResponse> {
+    if (recordIDs.length === 0) {
+      return {
+        success: true,
+        status: 'Complete',
+        errorMessage: '',
+        totalRecords: 0,
+        processedRecords: 0,
+        errorCount: 0,
+        elapsedMs: 0,
+      };
+    }
+    const extraFilter = recordIDs.map((k) => `(${k.ToWhereClause()})`).join(' OR ');
+    return await this.VectorizeEntity(
+      {
+        entityID,
+        entityDocumentID,
+        extraFilter,
+        CurrentUser: contextUser,
+      },
+      contextUser,
+    );
   }
 
   /**

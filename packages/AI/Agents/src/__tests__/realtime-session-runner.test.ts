@@ -1061,17 +1061,17 @@ describe('C2: per-modality usage accumulation', () => {
         vi.useFakeTimers();
         const runner = new RealtimeSessionRunner(h.deps);
         await runner.Start();
-        h.session.fireUsage({ InputTokens: 100, OutputTokens: 40, InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 }, OutputTokenDetails: { TextTokens: 10, AudioTokens: 30 } });
-        h.session.fireUsage({ InputTokens: 50, OutputTokens: 20, InputTokenDetails: { TextTokens: 5, AudioTokens: 45 }, OutputTokenDetails: { AudioTokens: 20 } });
+        h.session.fireUsage({ InputTokens: 100, OutputTokens: 40, InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10, CachedAudioTokens: 6 }, OutputTokenDetails: { TextTokens: 10, AudioTokens: 30 } });
+        h.session.fireUsage({ InputTokens: 50, OutputTokens: 20, InputTokenDetails: { TextTokens: 5, AudioTokens: 45, CachedTokens: 40, CachedAudioTokens: 35 }, OutputTokenDetails: { AudioTokens: 20 } });
         await vi.advanceTimersByTimeAsync(5001);
         expect(h.checkpointSpy).toHaveBeenCalledWith({
             InputTokens: 150,
             OutputTokens: 60,
-            InputTokenDetails: { TextTokens: 25, AudioTokens: 115, CachedTokens: 10 },
+            InputTokenDetails: { TextTokens: 25, AudioTokens: 115, CachedTokens: 50, CachedAudioTokens: 41 },
             OutputTokenDetails: { TextTokens: 10, AudioTokens: 50 },
         });
         const result = await runner.Stop();
-        expect(result.FinalUsage.InputTokenDetails).toEqual({ TextTokens: 25, AudioTokens: 115, CachedTokens: 10 });
+        expect(result.FinalUsage.InputTokenDetails).toEqual({ TextTokens: 25, AudioTokens: 115, CachedTokens: 50, CachedAudioTokens: 41 });
     });
 
     it('totals-only updates never grow phantom detail blocks', async () => {
@@ -1571,4 +1571,44 @@ describe('C4 re-audit: abort during the StartSession await is not lost', () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(gated.Session.Closed).toBe(true); // post-attach recheck caught the already-fired abort
     });
+
+    it('passes accumulated conversationMemory transcript turns as InitialContext into StartSession on transport reconnect', async () => {
+        const capturedParams: RealtimeSessionParams[] = [];
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+                capturedParams.push(params);
+                const s = new MockRealtimeSession();
+                this.Sessions.push(s);
+                return s;
+            }
+        })();
+        const h = buildHarness({
+            Model: model,
+            SessionParams: {
+                Model: 'mock-realtime',
+                SystemPrompt: 'You are Sage.',
+                InitialContext: 'Initial caller profile: Jane.',
+            },
+        });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+
+        model.Sessions[0].fireTranscript({ Role: 'user', Text: 'We need a Q3 forecast.', IsFinal: true });
+        model.Sessions[0].fireTranscript({ Role: 'assistant', Text: 'I will prepare the Q3 forecast.', IsFinal: true });
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Fatal drop triggers transport reconnect:
+        model.Sessions[0].fireError({ Message: 'socket dropped', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(capturedParams).toHaveLength(2);
+        expect(capturedParams[1].InitialContext).toContain('Initial caller profile: Jane.');
+        expect(capturedParams[1].InitialContext).toContain('[Connection resumed. Transcript so far, for continuity.');
+        expect(capturedParams[1].InitialContext).toContain('User: We need a Q3 forecast.');
+        expect(capturedParams[1].InitialContext).toContain('Assistant: I will prepare the Q3 forecast.');
+        await runner.Stop();
+    });
 });
+

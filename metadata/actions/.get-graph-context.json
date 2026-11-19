@@ -1,0 +1,306 @@
+[
+  {
+    "fields": {
+      "Name": "Get Graph Context",
+      "Description": "Returns a bounded neighborhood of a semantic graph (default \"MJ Canon\") around concepts matching a natural-language Question and/or explicit seed nodes: the nodes and edges as JSON and as compact prompt text. Every node is one the caller may see. Use it to find the canonical definition of a business term and the views, queries and entities that define, measure or describe it. Fails with GRAPH_NOT_FOUND when the graph is unknown or not active.",
+      "DriverClass": "Get Graph Context",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GraphName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name or ID of an active graph to traverse. Default: \"MJ Canon\".",
+            "IsRequired": false,
+            "DefaultValue": "MJ Canon"
+          },
+          "primaryKey": {
+            "ID": "22D53579-281E-4A22-8094-6521AE139AA0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.742Z",
+            "checksum": "967ce22938ee708a7d0f05dc0841738b5a7aa3a6950e5cefdb9aeeab42c2ccc1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Question",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural-language text; concepts whose name or synonyms match it become seeds (up to 5). Provide this and/or Seeds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "27CCE18D-6FB8-48A0-8495-05510F2C0B10"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.765Z",
+            "checksum": "723c4ec9ef4ea59846e56b2d4a3f79a0f1a8b6c0044401f7ffda68f8cefe0897"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seeds",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Explicit seeds: an array of { EntityName, RecordID } objects and/or concept names or IDs (a JSON string or a comma-separated list is also accepted). Provide this and/or Question.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8A9E5588-3FB4-42EA-B27C-B8C943AA8870"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.789Z",
+            "checksum": "107f3a7dc36a7aedb96feac69a953614e1aa88462c6a7ef7e91d02b851f78529"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Depth",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum hops from the seeds, 1 to 4. Default: 2.",
+            "IsRequired": false,
+            "DefaultValue": "2"
+          },
+          "primaryKey": {
+            "ID": "B5C0437B-91BD-44AE-B410-6B856DFFF30C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.812Z",
+            "checksum": "17e5d7c55731ce944a6937a25192f9b83d1ea088b092ebd877c19a77ce0ca4dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxNodes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum nodes returned, 1 to 200. Default: 50.",
+            "IsRequired": false,
+            "DefaultValue": "50"
+          },
+          "primaryKey": {
+            "ID": "2A08CAF1-4A17-4290-B634-E9177D36AB55"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.841Z",
+            "checksum": "4c289e6dc581d3076bb12cebdf96b1c7866d9607e32d616e55c107cd69597245"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgeTypes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Optional allow-list of edge type names to follow (array, JSON string or comma-separated list).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9C53C93A-2D49-4D6F-B55B-A83B0277B0E8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.867Z",
+            "checksum": "418e0efe6094fa4eab001c604248db6afae9640ec361f7b263c8dd8d50313bb1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinWeight",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional minimum edge weight to follow, 0 to 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "98588C09-BB2E-4C46-B826-AD60C1F64DB7"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.889Z",
+            "checksum": "40fa5519a0afad140836c9af0ca52a0b35750f2a28d65e887e1e3fc1d81dc1d7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeProposed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, also follow stored edges still awaiting review (Status Proposed). Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "55360060-BF77-4984-B17F-2861AB9BBD39"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.912Z",
+            "checksum": "4ad1e7ade2fb6164bc5ad9328b8975711b026ccbc38069b63ac28a8d66f58e9e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subgraph",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The subgraph: { Nodes, Edges, Message? }. Each node carries its label, hop count and the edge that reached it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7F17398A-E007-4E47-83BB-69A4D82A27FD"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.936Z",
+            "checksum": "6ca86b36a9aa888d0cde3048ce25b091d6e708935de9f52859512797b40a9802"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptText",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The subgraph rendered as compact Markdown for a prompt.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EE252530-3462-45C2-A7F3-B650C02F8EB3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.961Z",
+            "checksum": "2b23ac8b3da939c4d10f6caaa0994dd78079d26c2ea903d498eb6d57459b69e0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NodeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of nodes returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "03F6DC44-87CE-4E8A-9114-BC7E9EF89284"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.986Z",
+            "checksum": "ba90402a9bd77310305968a96874b8f9fe45085923a875a42f9e14bff671523b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of edges returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C217B0BB-D458-48CF-B0ED-3240201E3F8C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:30.009Z",
+            "checksum": "f940c26c5829a00dfa9e82948261e56f6bbb34d05d72d46ebc66e9d38bc3b1d4"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The subgraph was built. NodeCount is 0 when nothing the caller may see matched the inputs."
+          },
+          "primaryKey": {
+            "ID": "163CB422-441F-47F9-80B5-4588E3881351"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:30.024Z",
+            "checksum": "6a8983745c956e556923796afad1654fb8ee56fc5c61020f1dc35dd61696faec"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "No ContextUser, or neither Question nor Seeds was provided."
+          },
+          "primaryKey": {
+            "ID": "B22E6D96-4DB7-462D-8838-EA553D74143F"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:30.038Z",
+            "checksum": "c378acb3f3007136b63fc07fb5e7dd2e60371fdacbb4d926a8f5f37a868e07d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GRAPH_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The named graph does not exist or is not active; nothing was traversed."
+          },
+          "primaryKey": {
+            "ID": "C82574B1-7800-4459-BA04-B36E38694024"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:30.053Z",
+            "checksum": "182322d55f0ca839a2c943e3490e0e4f813b6982d68777958fb3a836558b66ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "The traversal failed; Message carries the error."
+          },
+          "primaryKey": {
+            "ID": "4CCDA786-4816-4E95-9BFC-0C5F1755F0E4"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:30.070Z",
+            "checksum": "b6d124f2298e2a8bc7a54a8f53df9c09d4c7ee919dd9c8b9f9bb306a9d981b3e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A39B5FF6-A7DD-4851-9172-32713A601273"
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:29.708Z",
+      "checksum": "6e02b6509379d49a71c3694d9c72b6d4863cb2e2a7126852ccc2e9d834d6deb4"
+    }
+  }
+]

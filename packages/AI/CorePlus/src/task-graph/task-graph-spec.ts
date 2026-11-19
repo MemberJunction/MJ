@@ -139,7 +139,7 @@ export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGrap
  * Adding a kind is one entry in {@link TaskGraphNodeConfigMap} plus one runner — the compiler then
  * forces every exhaustive `switch` over kinds to be updated, which is the point of the union.
  */
-export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
 
 /**
  * One question a `Decision` node asks: the LLM-facing shape agents already use for decisions, plus
@@ -184,6 +184,51 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
 };
 
 /**
+ * Policy when a saga compensation action itself fails after retries exhaust.
+ *
+ * - `'EscalateToHumanTask'` (default) — raises an `MJ: AI Agent Requests` human escalation with the
+ *   forward execution context, record changes snapshot, and compensation failure details.
+ * - `'HaltSaga'` — stops downstream compensation steps immediately.
+ * - `'ContinueCompensation'` — logs the failure and continues running remaining upstream compensation steps.
+ */
+export type ActionCompensationFailurePolicy = 'EscalateToHumanTask' | 'HaltSaga' | 'ContinueCompensation';
+
+/**
+ * Saga compensation contract for an `Action` step.
+ */
+export interface ActionCompensationSpec {
+    /** Overrides `Action.CompensationActionID` when specified on the workflow node (UUID). */
+    readonly compensationActionId?: string;
+    /** Optional action name of the compensation action (resolved to `compensationActionId` at submit time). */
+    readonly compensationActionName?: string;
+    /**
+     * Explicit mapping from forward `{ input, output, actionLogId, recordChanges }` -> compensation params.
+     * Accepts either a parameter-name -> path dictionary or a serialized JSON mapping string.
+     */
+    readonly inputMapping?: Readonly<Record<string, string>> | string;
+    /** Alias for `inputMapping` matching `CompensationInputMapping` metadata column naming. */
+    readonly compensationInputMapping?: Readonly<Record<string, string>> | string;
+    /** Policy if compensation itself fails after maxRetries. Default `'EscalateToHumanTask'`. */
+    readonly onCompensationFailure?: ActionCompensationFailurePolicy;
+    /**
+     * `false` turns off automatic retry of this node's action. It can only narrow the action's own
+     * `IsIdempotent` column, never widen it: `true` on an action not marked idempotent changes nothing.
+     */
+    readonly isIdempotent?: boolean;
+    /** Optional automatic retry count when `isIdempotent === true` or on the compensation step. */
+    readonly retryCount?: number;
+}
+
+/**
+ * Workflow-level saga failure policy when an unhandled step fails.
+ *
+ * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+ * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+ *   completed compensatable `Action` steps.
+ */
+export type TaskGraphFailurePolicy = 'Halt' | 'CompensateCompleted';
+
+/**
  * Per-kind configuration.
  *
  * `ForEach`/`While` reuse {@link ForEachOperation} / {@link WhileOperation} **verbatim**. Those types
@@ -197,19 +242,56 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
  */
 export type TaskGraphNodeConfigMap = {
     Agent: { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string };
-    Action: { actionName: string; inputMapping?: string; outputMapping?: string };
-    Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
+    Action: { actionName: string; inputMapping?: string; outputMapping?: string; compensation?: ActionCompensationSpec };
+    Human: {
+        assignToUserID?: string;
+        instructions?: string;
+        expiresInHours?: number;
+        /**
+         * Which human-task provider raises this step, as its ClassFactory key. Omitted (or
+         * {@link DEFAULT_HUMAN_TASK_PROVIDER}) is MJ's built-in `MJ: AI Agent Requests` inbox. Any other
+         * key is a provider an app registered with `@RegisterClass(BaseHumanTaskProvider, '<key>')` in
+         * `@memberjunction/task-graph`; core never names one.
+         */
+        provider?: string;
+        /** Provider-specific settings, handed to the provider unchanged. */
+        providerConfiguration?: Record<string, unknown>;
+    };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
     ForEach: ForEachOperation;
     While: WhileOperation;
     /**
-     * A node completed by something outside MJ (D21 / parent-plan Phase 9). The runner ships with
-     * Phase 9; until then the dispatcher parks it exactly like `Human` — never claimed, sweep-exempt.
+     * A node completed by something outside the graph: a webhook, another app, a sprint closing.
      *
-     * It is in the union NOW so the first external consumer never sees the flat shape, which is the
-     * whole reason the union exists.
+     * When the dispatcher reaches it, it is marked waiting and nothing runs. Something then calls
+     * `TaskGraph.CompleteWaitingStep` (or `TaskGraphWaitingSteps.CompleteWaitingStep` in-process)
+     * with the task's ID, or with the `correlationKey` it waits on. The payload supplied becomes the
+     * step's output, so downstream edges can branch on what the signal said. A signal that arrives
+     * before the step is reached is held on the step and applied the moment it is.
      */
-    External: { domain: string; ref?: string };
+    External: {
+        /** Which system owns this step — documentation and filtering, never routing. */
+        domain: string;
+        /** That system's own identifier for the work. */
+        ref?: string;
+        /**
+         * The key a caller can signal by instead of the task ID. A literal, or a payload path
+         * (`payload.sprintKey`) resolved when the step is reached. Not unique: one signal releases
+         * every reached step waiting on the key.
+         */
+        correlationKey?: string;
+        /** Hours to wait before the step fails. Omitted means no deadline. */
+        expiresInHours?: number;
+    };
+    /**
+     * A node that waits for a moment in time, then completes. Exactly one of the two is set.
+     *
+     * `until` is an ISO-8601 timestamp or a payload path (`payload.renewal.chargeOn`) resolved when
+     * the step is reached; a moment already past continues at once. `durationSeconds` counts from the
+     * moment the step is reached. The wait is durable — it is a `Task.DueAt`, judged on the database
+     * clock — so a restart neither loses it nor restarts it.
+     */
+    Wait: { until?: string; durationSeconds?: number };
     /**
      * A typed judgment, resolved as a STEP so that no condition ever has to make one.
      *
@@ -369,6 +451,15 @@ export type TaskGraphSpec = {
      * downstream work the producer intended to be gated on success.
      */
     failureSemantics?: 'block' | 'edges';
+
+    /**
+     * Saga rollback policy when an unhandled step fails. Default `'Halt'`.
+     *
+     * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+     * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+     *   completed compensatable `Action` steps.
+     */
+    failurePolicy?: TaskGraphFailurePolicy;
 };
 
 /**
@@ -393,9 +484,23 @@ export const TaskNode = {
         ({ ...base, kind: 'While', configuration }),
     External: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['External']): TaskGraphSpecNode<'External'> =>
         ({ ...base, kind: 'External', configuration }),
+    Wait: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Wait']): TaskGraphSpecNode<'Wait'> =>
+        ({ ...base, kind: 'Wait', configuration }),
     Decision: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Decision']): TaskGraphSpecNode<'Decision'> =>
         ({ ...base, kind: 'Decision', configuration }),
 } as const;
+
+/**
+ * The built-in human-task provider: an `MJ: AI Agent Requests` row in the person's inbox. A Human
+ * step with no `provider`, or with this one, uses it.
+ */
+export const DEFAULT_HUMAN_TASK_PROVIDER = 'AgentRequest';
+
+/** True when a Human step's provider is MJ's built-in inbox rather than a plugged-in one. */
+export function IsDefaultHumanTaskProvider(provider: string | null | undefined): boolean {
+    const key = provider?.trim();
+    return !key || key.toLowerCase() === DEFAULT_HUMAN_TASK_PROVIDER.toLowerCase();
+}
 
 /** Everything a node needs that is not its kind or configuration. */
 export type TaskNodeBase = Omit<TaskGraphSpecNode, 'kind' | 'configuration'>;
@@ -452,9 +557,33 @@ export type TaskGraphValidationResult = {
 };
 
 /**
- * Maximum nodes in a single submitted graph.
+ * Maximum nodes in a graph a MODEL authored — a Loop agent's `nextStep.tasks`, or a `Workflow.Draft`.
  *
- * Matches `scratchpadMaxTasks` so an agent that can hold N items in its scratchpad cannot submit
- * a graph larger than it can reason about. Also bounds the blast radius of a runaway producer.
+ * Matches `scratchpadMaxTasks` so an agent that can hold N items in its scratchpad cannot emit a graph
+ * larger than it can reason about, and bounds what a runaway model can put on the dispatcher. It is a
+ * limit on *model output*, not on workflows: a graph a person drew, or code built, is not subject to
+ * it. Callers that validate model output pass it as {@link TaskGraphValidationOptions.MaxTasks}.
  */
-export const MAX_TASKS_PER_GRAPH = 50;
+export const MAX_TASKS_PER_AGENT_GRAPH = 50;
+
+/**
+ * The ceiling for ANY submitted graph — a blast-radius bound, not a design limit.
+ *
+ * `TaskGraph.Submit` is a remote operation, so something has to stop one request from writing an
+ * unbounded number of rows. It is set far above any real workflow (a software-factory epic is
+ * hundreds of nodes). Work that genuinely fans out wider than this is one node repeated over a
+ * collection, which is what `ForEach` and Record Processes are for.
+ *
+ * This used to be 50 for every producer, which capped drawn and code-built workflows at the size of
+ * an LLM scratchpad. That limit now lives on {@link MAX_TASKS_PER_AGENT_GRAPH}, where it belongs.
+ */
+export const MAX_TASKS_PER_GRAPH = 10_000;
+
+/** Options for `ValidateTaskGraphSpec`. */
+export type TaskGraphValidationOptions = {
+    /**
+     * The most nodes this graph may have. Default {@link MAX_TASKS_PER_GRAPH}. A caller validating
+     * model output passes {@link MAX_TASKS_PER_AGENT_GRAPH}. A value above the ceiling is clamped to it.
+     */
+    MaxTasks?: number;
+};

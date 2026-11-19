@@ -11,8 +11,11 @@ import {
   ConvertStringConcat, ConvertTopToLimit, ConvertCastTypes,
   ConvertIIF, ConvertConvertFunction, RemoveNPrefix, RemoveCollate,
   ConvertCommonFunctions, ConvertStuff, EmitDropOverloadsBlock,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema, StripComments,
+  ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, TransformCodeOnly,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
+import { CrudCallPerformLines, type CrudCallArg } from './CrudCallEmitter.js';
 
 /**
  * Views referenced via `RETURNS SETOF` by CRUD sprocs for deprecated entities
@@ -53,7 +56,26 @@ export class ProcedureToFunctionRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL CREATE PROCEDURE → PG CREATE FUNCTION conversion: parameter renaming (@param → p_param), DECLARE handling, RAISERROR → RAISE EXCEPTION, INSERT...OUTPUT handling, RETURN value semantics, and SETOF return types. This is structural transformation sqlglot does not perform.';
 
-  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
+  PostProcess(sql: string, originalSQL: string, context: ConversionContext): string {
+    const normalized = sql.replace(/\bCREATE\s+OR\s+ALTER\s+PROC(EDURE)?\b/i, 'CREATE PROC$1');
+    const schema = RoutineSchema(normalized);
+    // An Open App procedure is converted through the core-schema path only when it is CodeGen
+    // CRUD output (spCreate/spUpdate/spDelete), whose shape that path is built for. A hand-written
+    // app procedure is left for a person to author rather than run through generic conversion
+    // (issue #5364 item 8).
+    if (schema && schema.toLowerCase() !== '__mj') {
+      const name = StripComments(normalized).match(/\bCREATE\s+PROC(?:EDURE)?\s+\S+?\.\s*\[?"?(\w+)/i)?.[1] ?? '';
+      if (!/^sp(?:Create|Update|Delete)\w+$/i.test(name)) {
+        return NeedsHandAuthoring('procedure', `${name} is a hand-written procedure in schema ${schema}`, originalSQL);
+      }
+      const converted = ConvertInRoutineSchema(normalized, (aliased) => this.convertCoreSchemaProcedure(aliased, context));
+      return converted ?? NeedsHandAuthoring('procedure', `${name} references the core schema by its literal name`, originalSQL);
+    }
+    return this.convertCoreSchemaProcedure(normalized, context);
+  }
+
+  /** Convert a procedure created in MJ core's `__mj` schema (the shape every pattern below assumes). */
+  private convertCoreSchemaProcedure(sql: string, context: ConversionContext): string {
     // Extract proc name via regex
     let procMatch = sql.match(
       /CREATE\s+PROC(?:EDURE)?\s+\[?__mj\]?\.\[?(\w+)\]?\s*(.*?)(?:\bAS\b)/is
@@ -91,15 +113,20 @@ export class ProcedureToFunctionRule implements IConversionRule {
       return `-- SKIPPED (INTENTIONAL): ${procName} — ${paramCount} parameters exceeds PostgreSQL's ${POSTGRESQL_PROCEDURE_PARAM_LIMIT}-argument limit and could not be auto-converted to JSON-arg shape; needs manual handling`;
     }
 
-    const pgParams = this.convertProcParams(paramsBlock);
-    const booleanParams = this.extractBooleanParams(paramsBlock);
-    const pgBody = this.convertProcBody(body, procName, context, booleanParams);
-    const returnsClause = this.determineReturnType(body, procName, context);
+    const rowReturnsClause = this.determineReturnType(body, procName, context);
 
     // If the return type references a view that doesn't exist, skip this procedure
-    if (returnsClause.startsWith('-- SKIPPED')) {
-      return returnsClause;
+    if (rowReturnsClause.startsWith('-- SKIPPED')) {
+      return rowReturnsClause;
     }
+
+    // OUTPUT params become INOUT, and PG derives the return type from them. PG rejects INOUT
+    // params next to a row-returning type, so a procedure that also returns rows keeps them IN.
+    const outputAsInOut = rowReturnsClause === 'RETURNS VOID AS' && hasOutputParams(paramsBlock);
+    const returnsClause = outputAsInOut ? 'AS' : rowReturnsClause;
+    const pgParams = this.convertProcParams(paramsBlock, outputAsInOut);
+    const booleanParams = this.extractBooleanParams(paramsBlock);
+    const pgBody = this.convertProcBody(body, procName, context, booleanParams);
 
     // Drop any existing overloads of this function before recreating. PG
     // dispatches functions by (name, ordered-arg-type-list) — `CREATE OR
@@ -260,7 +287,8 @@ $$ LANGUAGE plpgsql;
   // Parameter conversion
   // ---------------------------------------------------------------------------
 
-  private convertProcParams(paramsBlock: string): string {
+  /** Converts the parameter list. `outputAsInOut` emits OUTPUT params as INOUT; otherwise they are IN. */
+  private convertProcParams(paramsBlock: string, outputAsInOut = false): string {
     if (!paramsBlock.trim()) {
       return '';
     }
@@ -282,26 +310,17 @@ $$ LANGUAGE plpgsql;
       const param = rawParam.trim();
       if (!param) continue;
 
-      const m = param.match(
-        /@(\w+)\s+([\w(),\s]+?)(?:\s*=\s*(.+?))?(?:\s+OUTPUT|\s+OUT)?\s*$/i
-      );
-      if (m) {
-        // Only match OUTPUT/OUT as a trailing keyword, not as part of the param name
-        const isOutput = /\s+(?:OUTPUT|OUT)\s*$/i.test(param);
-        parsedParams.push({
-          Name: m[1],
-          Type: m[2].trim(),
-          Default: m[3] ?? null,
-          IsOutput: isOutput,
-        });
+      const parsed = parseProcParam(param);
+      if (parsed) {
+        parsedParams.push({ ...parsed, IsOutput: isOutputParam(param) });
       }
     }
 
-    // Second pass: ensure all params after a default have defaults too
+    // Second pass: ensure all input params after a default have defaults too (INOUT is an input)
     for (const pp of parsedParams) {
       if (pp.Default !== null) {
         hasDefaultStarted = true;
-      } else if (hasDefaultStarted && !pp.IsOutput) {
+      } else if (hasDefaultStarted && (!pp.IsOutput || outputAsInOut)) {
         pp.Default = 'NULL';
       }
     }
@@ -310,7 +329,7 @@ $$ LANGUAGE plpgsql;
     const params: string[] = [];
     for (const pp of parsedParams) {
       const pgType = this.mapType(pp.Type);
-      const direction = 'IN';
+      const direction = pp.IsOutput && outputAsInOut ? 'INOUT' : 'IN';
       let paramStr = `    ${direction} p_${pp.Name} ${pgType}`;
       if (pp.Default !== null) {
         let pgDefault = convertDefault(pp.Default);
@@ -372,7 +391,7 @@ $$ LANGUAGE plpgsql;
   // Body conversion
   // ---------------------------------------------------------------------------
 
-  private convertProcBody(body: string, _procName: string, context?: ConversionContext, booleanParams?: Set<string>): string {
+  private convertProcBody(body: string, _procName: string, context: ConversionContext, booleanParams?: Set<string>): string {
     let sql = body;
 
     // Remove SET NOCOUNT ON
@@ -399,6 +418,9 @@ $$ LANGUAGE plpgsql;
     const hasRowcount = /@@ROWCOUNT/i.test(body);
     sql = sql.replace(/@@ROWCOUNT/gi, '_v_row_count');
     sql = sql.replace(/@@ERROR/gi, '0');
+
+    // SELECT @a = x, @b = y FROM ... → SELECT x, y INTO @a, @b FROM ...
+    sql = convertSelectAssignments(sql);
 
     // Convert @variable → p_variable
     sql = sql.replace(/@(\w+)/g, 'p_$1');
@@ -507,6 +529,10 @@ $$ LANGUAGE plpgsql;
       }
     }
 
+    // "BoolCol" = 1 and alias.BoolCol = 1 → = TRUE, for columns the context knows are BOOLEAN
+    sql = ConvertBooleanLiteralComparisons(sql, context.TableColumns);
+    sql = convertQualifiedBooleanComparisons(sql, context.TableColumns);
+
     // N'string' → 'string'
     sql = sql.replace(/N'/g, "'");
 
@@ -599,7 +625,7 @@ $$ LANGUAGE plpgsql;
     sql = convertCursorLoops(sql);
 
     // Convert EXEC proc → PERFORM proc()
-    sql = convertExecCalls(sql);
+    sql = convertExecCalls(sql, context);
 
     // Convert BEGIN TRY/CATCH → EXCEPTION blocks
     sql = convertBeginTryCatch(sql);
@@ -816,6 +842,208 @@ function splitParams(str: string): string[] {
   }
 
   return params;
+}
+
+/**
+ * `alias.BoolCol = 1` → `alias."BoolCol" = TRUE` for columns the context knows are BOOLEAN.
+ * Covers the column refs without brackets that a hand-written body uses, which
+ * ConvertBooleanLiteralComparisons (quoted names only) does not match.
+ */
+function convertQualifiedBooleanComparisons(sql: string, tableColumns: Map<string, Map<string, string>>): string {
+  const boolNames = CollectBooleanColumnNames(tableColumns);
+  if (boolNames.size === 0) return sql;
+  return TransformCodeOnly(sql, (code) =>
+    code.replace(
+      /\b(\w+)\.([A-Za-z_]\w*)\s*(=|<>|!=)\s*([01])(?![\w.])/g,
+      (match: string, alias: string, col: string, op: string, val: string) =>
+        boolNames.has(col.toLowerCase()) ? `${alias}."${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}` : match,
+    ),
+  );
+}
+
+/** True when any parameter in a T-SQL parameter list is declared OUTPUT. */
+function hasOutputParams(paramsBlock: string): boolean {
+  return splitParams(paramsBlock).some(isOutputParam);
+}
+
+/**
+ * Splits one T-SQL parameter declaration (`@Name type [= default] [OUTPUT|OUT]`) into its name,
+ * type and default. Returns null when it is not one: no `@name`, a type with characters other than
+ * word characters, parentheses, commas and whitespace, or an `=` with nothing after it. Parsed by
+ * hand rather than with one regex, whose overlapping whitespace quantifiers backtrack polynomially.
+ */
+function parseProcParam(param: string): { Name: string; Type: string; Default: string | null } | null {
+  const head = /^@(\w+)\s/.exec(param);
+  if (!head) return null;
+  let rest = param.slice(head[0].length).trim();
+  const output = /\s(?:OUTPUT|OUT)$/i.exec(rest);
+  if (output) rest = rest.slice(0, output.index).trimEnd();
+
+  const eq = rest.indexOf('=');
+  const type = (eq === -1 ? rest : rest.slice(0, eq)).trim();
+  const defaultValue = eq === -1 ? null : rest.slice(eq + 1).trim();
+  if (!type || !/^[\w(),\s]+$/.test(type) || defaultValue === '') return null;
+  return { Name: head[1], Type: type, Default: defaultValue };
+}
+
+/** True when a T-SQL parameter declaration ends with the OUTPUT or OUT keyword. */
+function isOutputParam(param: string): boolean {
+  const words = param.trim().split(/\s+/);
+  return words.length > 1 && /^(?:OUTPUT|OUT)$/i.test(words[words.length - 1]);
+}
+
+// -----------------------------------------------------------------------------
+// SELECT @var = expr → SELECT expr INTO @var
+// -----------------------------------------------------------------------------
+
+/** `SELECT` (with an optional `TOP n`) whose select list starts with a variable assignment. */
+const SELECT_ASSIGNMENT_HEAD = /\bSELECT(\s+(?:TOP\s*(?:\(\s*\d+\s*\)|\d+)\s+)?)(?=@\w+\s*=)/gi;
+/** One `@var =` item at the start of the text, with the whitespace before it. */
+const ASSIGNMENT_ITEM = /^(\s*)@(\w+)\s*=/;
+/** Clauses that end a select list. */
+const SELECT_LIST_END = /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|UNION|EXCEPT|INTERSECT|OPTION)\b/i;
+/** Keywords that start a new statement when they begin a line. */
+const STATEMENT_START =
+  /^(?:SELECT|SET|IF|ELSE|BEGIN|END|DECLARE|EXEC|EXECUTE|INSERT|UPDATE|DELETE|MERGE|RETURN|WHILE|PRINT|RAISERROR|THROW|FETCH|OPEN|CLOSE|DEALLOCATE|WITH|COMMIT|ROLLBACK|BREAK|CONTINUE|TRUNCATE)\b/i;
+
+/** Where one select-list expression ends, and what ends it. */
+interface SelectItemEnd {
+  End: number;
+  /** A comma follows, so another item comes next. */
+  More: boolean;
+  /** The SELECT statement ends here, with no semicolon. */
+  NewStatement: boolean;
+}
+
+/**
+ * Rewrites T-SQL variable-assignment SELECTs as PL/pgSQL `SELECT ... INTO`:
+ * `SELECT @a = x, @b = y FROM t` → `SELECT x, y INTO @a, @b FROM t`. In PostgreSQL the
+ * T-SQL form is a list of comparisons with no destination. Strings and comments are not changed.
+ */
+function convertSelectAssignments(sql: string): string {
+  let out = '';
+  let last = 0;
+  for (const m of sql.matchAll(SELECT_ASSIGNMENT_HEAD)) {
+    const start = m.index ?? 0;
+    if (start < last || isInsideNonCode(sql, start)) continue;
+    const rewritten = rewriteAssignmentList(sql, start + m[0].length);
+    if (!rewritten) continue;
+    out += sql.slice(last, start) + 'SELECT' + m[1] + rewritten.Text;
+    last = rewritten.End;
+  }
+  return out + sql.slice(last);
+}
+
+/**
+ * Rewrites the `@var = expr, ...` select list that starts at `start` as `expr, ... INTO @var, ...`.
+ * Returns the new text and the index where the list ends, or null when an item is not an assignment.
+ */
+function rewriteAssignmentList(sql: string, start: number): { Text: string; End: number } | null {
+  const vars: string[] = [];
+  const exprs: string[] = [];
+  let pos = start;
+  for (;;) {
+    const item = ASSIGNMENT_ITEM.exec(sql.slice(pos));
+    if (!item) return null;
+    const exprStart = pos + item[0].length;
+    const scan = scanSelectItem(sql, exprStart);
+    const raw = sql.slice(exprStart, scan.End);
+    vars.push(`@${item[2]}`);
+    exprs.push(item[1] + raw.trim());
+    if (scan.More) {
+      pos = scan.End + 1;
+      continue;
+    }
+    const trailing = raw.match(/\s*$/)?.[0] ?? '';
+    const into = intoClause(vars, trailing) + (scan.NewStatement ? ';' : '');
+    return { Text: exprs.join(',') + into + trailing, End: scan.End };
+  }
+}
+
+/** The INTO clause, on its own line when the select list ends with a line break. */
+function intoClause(vars: string[], trailing: string): string {
+  const list = `INTO ${vars.join(', ')}`;
+  if (!trailing.includes('\n')) return ` ${list}`;
+  return `\n${trailing.slice(trailing.lastIndexOf('\n') + 1)}${list}`;
+}
+
+/**
+ * Scans one select-list expression from `start` to the comma, clause, semicolon or new
+ * statement that ends it. Parentheses, CASE ... END, strings and comments do not end it.
+ */
+function scanSelectItem(sql: string, start: number): SelectItemEnd {
+  let depth = 0;
+  let caseDepth = 0;
+  for (let i = start; i < sql.length; i++) {
+    const skipped = skipNonCode(sql, i);
+    if (skipped > i) {
+      i = skipped - 1;
+      continue;
+    }
+    const ch = sql[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      if (depth === 0) return { End: i, More: false, NewStatement: false };
+      depth--;
+    } else if (depth === 0 && (ch === ',' || ch === ';')) {
+      return { End: i, More: ch === ',', NewStatement: false };
+    } else if (depth === 0 && isWordStart(sql, i)) {
+      const word = sql.slice(i, i + 40);
+      if (/^CASE\b/i.test(word)) caseDepth++;
+      else if (caseDepth > 0) caseDepth -= /^END\b/i.test(word) ? 1 : 0;
+      else if (SELECT_LIST_END.test(word)) return { End: i, More: false, NewStatement: false };
+      else if (isLineStart(sql, i) && STATEMENT_START.test(word)) return { End: i, More: false, NewStatement: true };
+    }
+  }
+  return { End: sql.length, More: false, NewStatement: true };
+}
+
+/** Index after the string literal, quoted identifier or comment that starts at `i`; `i` when none does. */
+function skipNonCode(sql: string, i: number): number {
+  if (sql[i] === "'" || sql[i] === '"') return skipQuoted(sql, i, sql[i]);
+  if (sql.startsWith('--', i)) {
+    const nl = sql.indexOf('\n', i);
+    return nl === -1 ? sql.length : nl;
+  }
+  if (sql.startsWith('/*', i)) {
+    const close = sql.indexOf('*/', i + 2);
+    return close === -1 ? sql.length : close + 2;
+  }
+  return i;
+}
+
+/** Index after the quoted run that starts at `i`. A doubled quote is an escaped quote. */
+function skipQuoted(sql: string, i: number, quote: string): number {
+  for (let j = i + 1; j < sql.length; j++) {
+    if (sql[j] !== quote) continue;
+    if (sql[j + 1] === quote) {
+      j++;
+      continue;
+    }
+    return j + 1;
+  }
+  return sql.length;
+}
+
+/** True when `index` is inside a string literal, quoted identifier or comment. */
+function isInsideNonCode(sql: string, index: number): boolean {
+  let i = 0;
+  while (i < index) {
+    const skipped = skipNonCode(sql, i);
+    if (skipped > index) return true;
+    i = skipped > i ? skipped : i + 1;
+  }
+  return false;
+}
+
+/** True when a word starts at `i` (not inside an identifier, variable or qualified name). */
+function isWordStart(sql: string, i: number): boolean {
+  return /[A-Za-z_]/.test(sql[i]) && (i === 0 || !/[\w@#$.]/.test(sql[i - 1]));
+}
+
+/** True when only spaces or tabs come before `i` on its line. */
+function isLineStart(sql: string, i: number): boolean {
+  return /^[ \t]*$/.test(sql.slice(sql.lastIndexOf('\n', i - 1) + 1, i));
 }
 
 /** Convert default value expressions from T-SQL to PostgreSQL */
@@ -1071,7 +1299,7 @@ function convertCursorLoops(sql: string): string {
  * Convert T-SQL EXEC/sp_executesql to PostgreSQL EXECUTE/PERFORM.
  * Ported from Python convert_exec_calls().
  */
-function convertExecCalls(sql: string): string {
+function convertExecCalls(sql: string, context: ConversionContext): string {
   // EXEC sp_executesql @sql → EXECUTE p_sql
   sql = sql.replace(/\bEXEC\s+sp_executesql\s+/gi, 'EXECUTE ');
 
@@ -1091,30 +1319,53 @@ function convertExecCalls(sql: string): string {
   // parameter declarations.
   sql = sql.replace(
     /\bEXEC\s+(__mj\."sp\w+")\s*(.*?)(?:;|$)/gim,
-    (_match: string, procRef: string, paramsStr: string) => {
+    (_match: string, procRef: string, paramsStr: string, offset: number, whole: string) => {
       const trimmedParams = paramsStr.trim().replace(/;$/, '');
       if (!trimmedParams) {
         return `PERFORM ${procRef}();`;
       }
-      const paramParts = trimmedParams.split(/,\s*/);
-      const args: string[] = [];
-      for (const p of paramParts) {
-        // Capture both the parameter name and the value so we can emit
-        // PG's named-arg call syntax `name => value`.
-        const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
-        if (eqMatch) {
-          args.push(`${eqMatch[1]} => ${eqMatch[2].trim()}`);
-        } else {
-          // Fallback: positional argument (no `param = value` form). Rare
-          // for MJ-generated SS sprocs, but preserved for robustness.
-          args.push(p.trim());
-        }
-      }
-      return `PERFORM ${procRef}(${args.join(', ')});`;
+      const lineStart = whole.lastIndexOf('\n', offset - 1) + 1;
+      const indent = whole.slice(lineStart, offset).match(/^[ \t]*/)?.[0] ?? '';
+      return convertNamedExec(procRef, trimmedParams.split(/,\s*/), indent, context);
     }
   );
 
   return sql;
+}
+
+/**
+ * PERFORM for an EXEC whose arguments are `p_param = value` pairs. The call works whether
+ * the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1`
+ * to boolean parameters as `FALSE`/`TRUE`. The first line carries no indent, because the
+ * EXEC's own indent stays in place; later lines get `indent`.
+ */
+function convertNamedExec(procRef: string, paramParts: string[], indent: string, context: ConversionContext): string {
+  const args: CrudCallArg[] = [];
+  for (const p of paramParts) {
+    const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
+    if (!eqMatch) {
+      return `PERFORM ${procRef}(${positionalExecArgs(paramParts)});`;
+    }
+    args.push({ ParamName: eqMatch[1], ValueExpr: eqMatch[2].trim() });
+  }
+  const lines = CrudCallPerformLines(procRef, args, context, indent, {
+    ParamLimit: POSTGRESQL_PROCEDURE_PARAM_LIMIT,
+    NamedArgOperator: '=>',
+  });
+  return lines.join('\n').trimStart();
+}
+
+/**
+ * Argument list for an EXEC that has positional arguments. Rare for MJ-generated SS sprocs;
+ * named arguments become `name => value` and positional ones pass through.
+ */
+function positionalExecArgs(paramParts: string[]): string {
+  return paramParts
+    .map(p => {
+      const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
+      return eqMatch ? `${eqMatch[1]} => ${eqMatch[2].trim()}` : p.trim();
+    })
+    .join(', ');
 }
 
 /**

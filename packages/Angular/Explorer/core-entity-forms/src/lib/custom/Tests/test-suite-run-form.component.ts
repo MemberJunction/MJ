@@ -8,6 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJTestSuiteRunFormComponent } from '../../generated/Entities/MJTestSuiteRun/mjtestsuiterun.form.component';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 import {
   TestingDialogService,
   TagsHelper,
@@ -472,6 +473,22 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       this.LoadingTestRuns = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** The tab strip as `mj-section-picker` items: strip order, the run count once loaded. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'overview', Title: 'Overview', Icon: 'fas fa-th-large' },
+      { Key: 'runs', Title: 'Test Runs', Icon: 'fas fa-list', Count: this.TestRunsLoaded ? this.TestRuns.length : null },
+      { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle' },
+      { Key: 'analytics', Title: 'Analytics', Icon: 'fas fa-chart-bar' },
+      { Key: 'execution', Title: 'Execution', Icon: 'fas fa-microchip' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; goes through ChangeTab so lazy loads fire. An unknown key is ignored. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
   }
 
   ChangeTab(tab: string) {

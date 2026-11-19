@@ -25,7 +25,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -35,10 +35,92 @@ import {
 } from '../shared/agent-tool-validation';
 
 /**
- * The pages serve one agent, identified by its metadata name. The id is resolved at runtime
- * through `AIEngineBase.GetAgentByName`, never hardcoded.
+ * The default agent the pages open on, identified by its metadata name. An agent picker in the
+ * page toolbar lets the user switch between top-level always-on agents (e.g., Chief of Staff,
+ * Software Factory) so the same Overview, Approvals & Wakes, and Governance pages serve every
+ * governed agent.
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
+
+export interface SelectableGovernanceAgent {
+    ID: string;
+    Name: string;
+}
+
+export interface GovernanceAgentCandidate {
+    ID: string;
+    Name: string | null;
+    ParentID?: string | null;
+    Status?: string | null;
+}
+
+/**
+ * Builds the sorted list of agents available in the Chief of Staff app's agent picker:
+ * active top-level (`ParentID == null`) agents, plus any agent explicitly referenced in
+ * `extraReferencedIds` (e.g., existing policies/routines/requests for the user), with
+ * `'Chief of Staff'` ordered first and the rest alphabetical by name.
+ */
+export function SelectableAgentsForGovernance(
+    agents: readonly GovernanceAgentCandidate[],
+    extraReferencedIds?: ReadonlySet<string>,
+): SelectableGovernanceAgent[] {
+    const seen = new Set<string>();
+    const out: SelectableGovernanceAgent[] = [];
+    const extraRefSet = extraReferencedIds ? new UUIDSet(extraReferencedIds) : null;
+
+    for (const a of agents) {
+        const name = a.Name?.trim() ?? '';
+        if (!a.ID || !name) {
+            continue;
+        }
+        const key = a.ID.trim().toLowerCase();
+        if (seen.has(key)) {
+            continue;
+        }
+        const isCos = name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        const isTopLevelActive =
+            a.ParentID == null && (a.Status == null || a.Status === 'Active');
+        const isReferenced = extraRefSet ? extraRefSet.Has(a.ID) : false;
+
+        if (isCos || isTopLevelActive || isReferenced) {
+            seen.add(key);
+            out.push({ ID: a.ID, Name: name });
+        }
+    }
+
+    return out.sort((a, b) => {
+        const aIsCos = a.Name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        const bIsCos = b.Name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        if (aIsCos && !bIsCos) return -1;
+        if (!aIsCos && bIsCos) return 1;
+        return a.Name.localeCompare(b.Name);
+    });
+}
+
+/**
+ * Resolves an agent from the picker list by exact ID, exact name (case-insensitive), or
+ * unambiguous partial name (case-insensitive). Returns `null` when empty or unmatched.
+ */
+export function ResolveSelectableAgent(
+    agents: readonly SelectableGovernanceAgent[],
+    rawQuery: string | null | undefined,
+): SelectableGovernanceAgent | null {
+    const query = rawQuery?.trim() ?? '';
+    if (!query) {
+        return null;
+    }
+    const byId = agents.find((a) => UUIDsEqual(a.ID, query));
+    if (byId) {
+        return byId;
+    }
+    const lower = query.toLowerCase();
+    const byExactName = agents.find((a) => a.Name.toLowerCase() === lower);
+    if (byExactName) {
+        return byExactName;
+    }
+    const partial = agents.filter((a) => a.Name.toLowerCase().includes(lower));
+    return partial.length === 1 ? partial[0] : null;
+}
 
 /** The name of the Chief of Staff application whose nav items open the pages. */
 export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
@@ -239,9 +321,9 @@ export interface GovernancePolicyDraft {
 }
 
 /** The draft shown before the user has a policy record. */
-export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
+export function CreateDefaultPolicyDraft(agentName: string = CHIEF_OF_STAFF_AGENT_NAME): GovernancePolicyDraft {
     return {
-        DisplayNameOverride: 'Chief of Staff',
+        DisplayNameOverride: agentName,
         Status: 'Active',
         OnboardingStatus: 'Completed',
         CoordinationMode: 'Coordinator',
@@ -260,9 +342,12 @@ export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
 }
 
 /** A draft copied from the user's policy record, or the default draft when there is none. */
-export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | null): GovernancePolicyDraft {
+export function BuildPolicyDraftFromEntity(
+    entity: MJAIAgentUserPolicyEntity | null,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): GovernancePolicyDraft {
     if (!entity) {
-        return CreateDefaultPolicyDraft();
+        return CreateDefaultPolicyDraft(agentName);
     }
     return {
         DisplayNameOverride: entity.DisplayNameOverride ?? '',
@@ -283,17 +368,34 @@ export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | n
     };
 }
 
+/** The display name for any selected agent: the draft's override, 'My Chief of Staff' for Chief of Staff, or the agent's name. */
+export function AgentDisplayName(
+    draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): string {
+    const override = draft.DisplayNameOverride.trim();
+    if (override.length > 0) {
+        return override;
+    }
+    return agentName.trim().toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase()
+        ? 'My Chief of Staff'
+        : agentName.trim() || 'My Chief of Staff';
+}
+
 /** The display name: the draft's override, or 'My Chief of Staff'. */
 export function ChiefOfStaffDisplayName(draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>): string {
-    const override = draft.DisplayNameOverride.trim();
-    return override.length > 0 ? override : 'My Chief of Staff';
+    return AgentDisplayName(draft, CHIEF_OF_STAFF_AGENT_NAME);
 }
 
 /** The governance summary published in the agent context. */
-export function BuildGovernanceSummary(draft: GovernancePolicyDraft, hasPolicyRecord: boolean): PolicyGovernanceSummary {
+export function BuildGovernanceSummary(
+    draft: GovernancePolicyDraft,
+    hasPolicyRecord: boolean,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): PolicyGovernanceSummary {
     return {
         HasPolicyRecord: hasPolicyRecord,
-        DisplayName: ChiefOfStaffDisplayName(draft),
+        DisplayName: AgentDisplayName(draft, agentName),
         Status: draft.Status,
         OnboardingStatus: draft.OnboardingStatus,
         CoordinationMode: draft.CoordinationMode,
@@ -320,6 +422,9 @@ export interface ChiefOfStaffMetrics {
 export interface ChiefOfStaffAgentContextInput {
     Page: ChiefOfStaffPage;
     SearchText: string;
+    SelectedAgentID?: string | null;
+    SelectedAgentName?: string;
+    AvailableAgentNames?: readonly string[];
     Metrics: ChiefOfStaffMetrics;
     Governance: PolicyGovernanceSummary;
     Routines: readonly RoutineSummaryItem[];
@@ -364,12 +469,12 @@ export interface ChiefOfStaffScopeFilters {
     Requests: string;
 }
 
-export function BuildChiefOfStaffScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): ChiefOfStaffScopeFilters {
+export function BuildChiefOfStaffScopeFilters(currentUserId: string, selectedAgentId: string): ChiefOfStaffScopeFilters {
     const user = EscapeSQLString(currentUserId);
-    const agent = EscapeSQLString(chiefOfStaffAgentId);
+    const agent = EscapeSQLString(selectedAgentId);
     return {
         Policy: `AgentID = '${agent}' AND UserID = '${user}'`,
-        Routines: `UserID = '${user}' AND (RoutineType = 'AgentWake' OR TargetID = '${agent}')`,
+        Routines: `UserID = '${user}' AND TargetID = '${agent}'`,
         Requests: `AgentID = '${agent}' AND RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
     };
 }
@@ -407,11 +512,18 @@ export function BuildChiefOfStaffAgentContext(
 ): AgentContextRecord {
     const routineNames = input.Routines.map((r) => `${r.Name} (${r.Status})`).filter((n) => !!n);
     const boundedRoutineNames = BoundNameList(routineNames, AGENT_CONTEXT_NAME_LIST_CAP);
+    const boundedAgentNames = BoundNameList(
+        [...(input.AvailableAgentNames ?? [])],
+        AGENT_CONTEXT_NAME_LIST_CAP,
+    );
 
     return {
         Surface: 'ChiefOfStaff',
         Page: input.Page,
         SearchText: input.SearchText,
+        SelectedAgentID: input.SelectedAgentID ?? null,
+        SelectedAgentName: input.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME,
+        AvailableAgentNames: boundedAgentNames,
         PendingApprovalCount: input.Metrics.PendingApprovalCount,
         HighPriorityPendingCount: input.Metrics.HighPriorityPendingCount,
         ActiveWakeRoutineCount: input.Metrics.ActiveWakeRoutineCount,

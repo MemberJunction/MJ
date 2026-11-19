@@ -24,7 +24,7 @@ import {
     QueryDefinitionRows,
     QueryEngine,
 } from "@memberjunction/core-entities";
-import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
 import { CompositionFullPath } from "@memberjunction/sql-parser";
 import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
@@ -66,6 +66,13 @@ function IsExtractionProvider(provider: unknown): provider is ExtractionProvider
     if (provider === null || typeof provider !== 'object') return false;
     return typeof Reflect.get(provider, 'RunView') === 'function' && typeof Reflect.get(provider, 'GetEntityObject') === 'function';
 }
+
+/**
+ * Queries whose save is running in this process, by ID, counting nested saves (a re-extraction can
+ * run inside another save). A dialect row written during its query's save leaves the fingerprint to
+ * that save, which stamps last; see {@link MJQueryEntityServer.IsSaveInProgress}.
+ */
+const savesInProgress = new UUIDMap<number>();
 
 /** Whether and how a save extracts. */
 interface ExtractionPlan {
@@ -202,6 +209,37 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         // the save reaches applies the approval rules and extracts; doing it here too would write the
         // child rows twice, the second time from the client.
         if (this.savesOverNetwork) return super.Save(options);
+        const id = this.ID;
+        savesInProgress.Set(id, (savesInProgress.Get(id) ?? 0) + 1);
+        try {
+            return await this.saveOnServerAsync(options);
+        } finally {
+            const remaining = (savesInProgress.Get(id) ?? 1) - 1;
+            if (remaining > 0) savesInProgress.Set(id, remaining);
+            else savesInProgress.Delete(id);
+        }
+    }
+
+    /**
+     * Whether a save of this query is running in this process. Its dialect and parameter rows are
+     * written during that save, before it stamps the fingerprints, so a row saved then needs no
+     * stamp of its own.
+     */
+    public static IsSaveInProgress(queryID: string): boolean {
+        return savesInProgress.Has(queryID);
+    }
+
+    /**
+     * Re-stamps `DefinitionFingerprint` from the definition as now stored. For a dialect row saved
+     * or deleted on its own, after this query's save: a metadata push writes a query's
+     * `relatedEntities` rows after the query, so the save's own stamp did not see them. Approval is
+     * untouched; only a save can approve.
+     */
+    public async RestampDefinitionFingerprintAsync(): Promise<void> {
+        await this.stampFingerprintsAsync(undefined, false);
+    }
+
+    private async saveOnServerAsync(options: EntitySaveOptions | undefined): Promise<boolean> {
         let approving: boolean;
         try {
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
@@ -251,16 +289,19 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             return false;
         }
         if (extraction) {
-            await this.writeExtractionAsync(extraction, options, postCommit);
+            await this.writeExtractionAsync(extraction);
             // A refresh brings the derived rows in line with the SQL; it never writes SQL, a dialect variant's included.
             if (!this.refreshing) await this.autoConvertDialectsAsync();
         } else if (!this.hasSQL) {
             await this.cleanupEmptyQueryAsync();
         }
-        // The child and dialect rows are rewritten after the Query row, so the approved fingerprint is
-        // taken last, from the definition as stored.
-        if (approving) {
-            await this.stampApprovalFingerprintAsync(options);
+        // The child and dialect rows are rewritten after the Query row, so the fingerprints are taken
+        // last, from the definition as stored. A ReplayOnly save writes nothing, so it has nothing to stamp.
+        if (!options?.ReplayOnly) {
+            await this.stampFingerprintsAsync(options, approving);
+        }
+        if (this.lastWriteSummary) {
+            this.queueDescriptionPass(this.lastWriteSummary, options, postCommit);
         }
         return true;
     }
@@ -394,18 +435,25 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     }
 
     /**
-     * Stores the fingerprint of the definition just approved: this row's SQL, template flag and
-     * external source, with its dialect and parameter rows read back from the database. Until this
-     * write lands the approval is not current, so a failure here fails closed.
+     * Stores the fingerprint of the definition as now stored: this row's SQL, template flag and
+     * external source, with its dialect and parameter rows read back from the database.
+     *
+     * It always goes in `DefinitionFingerprint`, which a list linked to this query compares before
+     * each refresh. On an approving save it also goes in `ApprovedFingerprint`; until that write
+     * lands the approval is not current, so a failure here fails closed. Nothing is written when
+     * neither value changed.
      */
-    private async stampApprovalFingerprintAsync(options?: EntitySaveOptions): Promise<void> {
+    private async stampFingerprintsAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<void> {
         try {
-            this.ApprovedFingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
+            const fingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
+            this.DefinitionFingerprint = fingerprint;
+            if (approving) this.ApprovedFingerprint = fingerprint;
+            if (!this.Dirty) return;
             if (!await super.Save(options)) {
-                LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+                LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint was not: ${this.LatestResult?.CompleteMessage}`);
             }
         } catch (e) {
-            LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -541,16 +589,15 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Writes the derived child rows as the system user, inside the caller's transaction when there
-     * is one, then queues the description pass. A failed write is recorded on the query
-     * (`ExtractionStatus` `Error`) rather than failing a save whose row is already written.
+     * is one. A failed write is recorded on the query (`ExtractionStatus` `Error`) rather than
+     * failing a save whose row is already written.
      */
-    private async writeExtractionAsync(extraction: QueryExtractionResult, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): Promise<void> {
+    private async writeExtractionAsync(extraction: QueryExtractionResult): Promise<void> {
         const provider = this.extractionProvider;
         try {
             if (!provider) throw new Error('the query is not saved through a database provider');
             const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser, EntityName: id => this.entityNameOf(id) }, extraction);
             this.lastWriteSummary = summary;
-            this.queueDescriptionPass(summary, options, postCommit);
         } catch (e) {
             // An explicit refresh runs in its own transaction, which a failed write rolls back.
             if (this.refreshing) throw e;

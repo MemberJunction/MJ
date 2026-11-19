@@ -25,6 +25,7 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.neural_network import MLPClassifier
 
 from app import artifacts
+from tests.tools import legacy_envelope as legacy
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ def _fitted_estimators() -> list:
 
 @pytest.mark.parametrize("estimator,X", _fitted_estimators(), ids=lambda v: type(v).__name__)
 def test_estimator_round_trips_through_restricted_loader(estimator: Any, X: np.ndarray) -> None:
-    artifact_b64, _ = artifacts.serialize_envelope(estimator, {}, [])
+    artifact_b64, _ = legacy.serialize_envelope(estimator, {}, [])
     loaded, envelope = artifacts.deserialize_envelope(artifact_b64)
     assert envelope["format"] == "joblib"
     _assert_same_predictions(loaded, estimator, X)
@@ -64,15 +65,14 @@ def test_estimator_round_trips_through_restricted_loader(estimator: Any, X: np.n
 # ---------------------------------------------------------------------------
 
 def _families():
-    from app import algorithms
     Xc, yc = make_classification(n_samples=120, n_features=5, random_state=1)
     Xr, yr = make_regression(n_samples=120, n_features=5, random_state=1)
     labels = np.array(["renew" if v else "lapse" for v in yc])
     cases = []
-    for alg in algorithms.supported_algorithms():
+    for alg in sorted(legacy.LEGACY_DRIVERS):
         for pt, X, y in (("classification", Xc, labels), ("regression", Xr, yr)):
             try:
-                est = algorithms.build_estimator(alg, pt, {})
+                est = legacy.build_estimator(alg, pt)
             except Exception:
                 continue
             if alg in ("xgboost", "lightgbm") and pt == "classification":
@@ -88,7 +88,7 @@ def test_every_trained_family_round_trips(estimator: Any, X: np.ndarray, y: np.n
     except Exception as exc:  # driver unavailable on this machine (no OpenMP runtime)
         pytest.skip(f"driver unavailable: {exc}")
     estimator.mj_label_classes_ = ["lapse", "renew"]
-    artifact_b64, _ = artifacts.serialize_envelope(estimator, {}, [])
+    artifact_b64, _ = legacy.serialize_envelope(estimator, {}, [])
     loaded, _ = artifacts.deserialize_envelope(artifact_b64)
     _assert_same_predictions(loaded, estimator, X)
 
@@ -97,7 +97,7 @@ def test_string_class_labels_round_trip() -> None:
     X, y = make_classification(n_samples=80, n_features=4, random_state=2)
     labels = np.array(["renew" if v else "lapse" for v in y])
     est = LogisticRegression(max_iter=200).fit(X, labels)
-    loaded, _ = artifacts.deserialize_envelope(artifacts.serialize_envelope(est, {}, [])[0])
+    loaded, _ = artifacts.deserialize_envelope(legacy.serialize_envelope(est, {}, [])[0])
     assert list(loaded.classes_) == ["lapse", "renew"]
 
 
@@ -108,7 +108,7 @@ def test_legitimate_object_dtype_array_loads_through_the_guarded_path() -> None:
     est = LogisticRegression(max_iter=200).fit(X, y)
     est.classes_ = np.array(["lapse", "renew"], dtype=object)
     est.mj_label_classes_ = ["lapse", "renew"]
-    loaded, _ = artifacts.deserialize_envelope(artifacts.serialize_envelope(est, {}, [])[0])
+    loaded, _ = artifacts.deserialize_envelope(legacy.serialize_envelope(est, {}, [])[0])
     assert loaded.classes_.dtype == object
     assert list(loaded.classes_) == ["lapse", "renew"]
 
@@ -138,13 +138,13 @@ class _RunsOnLoad:
 
 
 def _envelope_for(obj: Any) -> str:
-    return artifacts.serialize_envelope(obj, {}, [])[0]
+    return legacy.serialize_envelope(obj, {}, [])[0]
 
 
 def _envelope_for_payload(payload: bytes) -> str:
     envelope = {
         "format": "joblib",
-        "version": artifacts.ENVELOPE_VERSION,
+        "version": legacy.ENVELOPE_VERSION,
         "payload_b64": base64.b64encode(payload).decode("ascii"),
         "fitted_preprocessing": {},
         "feature_schema": [],

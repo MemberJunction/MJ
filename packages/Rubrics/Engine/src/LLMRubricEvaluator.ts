@@ -1,7 +1,7 @@
-import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
-import { BaseRubricEvaluator, type EvidenceRef } from './RubricEvaluator.js';
+import { BaseRubricEvaluator, type EvidenceRef, type RubricCandidate } from './RubricEvaluator.js';
 import type {
     RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue, RubricPromptMode, RubricPromptRef,
 } from './evaluatorServices.js';
@@ -109,16 +109,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         const criterionPrompt = PromptRef(settings.CriterionPromptID, settings.CriterionPromptName, RUBRIC_CRITERION_PROMPT);
         const criteria = await RenderCriteriaText(context.Version, prompts, criterionPrompt);
         const promptRunIds: string[] = [];
-        const runner: RubricPromptRunner = {
-            async run(request) {
-                const output = await prompts.Run({
-                    Prompt: system, Judge: judge, Data: request.Data, Subject: request.Subject,
-                    ModelID: settings.ModelID, ModelSelection: settings.ModelSelection,
-                });
-                if (output.PromptRunID) promptRunIds.push(output.PromptRunID);
-                return output.Text;
-            },
-        };
+        const runner = PromptServiceRunner(context, promptRunIds);
         const mode = settings.Mode ?? this.mode;
         const samples = SampleCount(settings.Samples);
         const evaluator = new LLMRubricEvaluator(runner, mode);
@@ -140,6 +131,23 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         return { ...result, aiPromptRunId: promptRunIds.length === 1 ? promptRunIds[0] : null, metadata };
     }
 
+    /**
+     * Asks the given criteria and returns their accepted answers as candidates, without scoring.
+     * DecisionThenLLM uses it to ask only the criteria its decision pass could not settle, then
+     * scores everything together. Same rules as {@link EvaluateContent}.
+     */
+    public async AnswerCriteria(
+        version: RubricVersionSnapshot,
+        content: RubricSubjectContent,
+        criteria: RubricCriterionPromptData[] = BuildCriteriaPromptData(version),
+        subject: { entityName: string; recordId: string } = { entityName: '', recordId: '' },
+    ): Promise<{ candidates: RubricCandidate[]; droppedUnknownKeys: number; droppedQuotes: number }> {
+        const decisions = this.mode === 'SinglePass'
+            ? await this.singlePass(version, content, criteria, subject)
+            : await this.perCriterion(version, content, criteria, subject);
+        return this.candidatesFrom(version, content, decisions);
+    }
+
     private get promptRunner(): RubricPromptRunner {
         if (!this.runner) throw new Error('An LLM evaluation requires a prompt runner.');
         return this.runner;
@@ -155,16 +163,22 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         criteria: RubricCriterionPromptData[] = BuildCriteriaPromptData(version),
         subject: { entityName: string; recordId: string } = { entityName: '', recordId: '' },
     ): Promise<LLMRubricResult> {
+        const answered = await this.AnswerCriteria(version, content, criteria, subject);
+        const scored = this.Evaluate(version, answered.candidates);
+        return { ...scored, droppedUnknownKeys: answered.droppedUnknownKeys, droppedQuotes: answered.droppedQuotes };
+    }
+
+    /** The accepted decisions as candidates: unknown keys and quotes not in the subject are dropped and counted. */
+    private candidatesFrom(
+        version: RubricVersionSnapshot, content: RubricSubjectContent, decisions: LLMDecision[],
+    ): { candidates: RubricCandidate[]; droppedUnknownKeys: number; droppedQuotes: number } {
         const text = content.text ?? '';
-        const decisions = this.mode === 'SinglePass'
-            ? await this.singlePass(version, content, criteria, subject)
-            : await this.perCriterion(version, content, criteria, subject);
         let droppedUnknownKeys = 0;
         let droppedQuotes = 0;
         const byKey = new Map(LeafNodes(version).map(node => [node.key, node]));
-        const candidates = [];
+        const candidates: RubricCandidate[] = [];
         for (const decision of decisions) {
-            const node = decision.key ? byKey.get(decision.key) : undefined;
+            const node = resolveCriterionNode(decision.key, byKey);
             if (!node) {
                 droppedUnknownKeys += 1;
                 continue;
@@ -197,8 +211,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 confidence,
             });
         }
-        const scored = this.Evaluate(version, candidates);
-        return { ...scored, droppedUnknownKeys, droppedQuotes };
+        return { candidates, droppedUnknownKeys, droppedQuotes };
     }
 
     /**
@@ -220,17 +233,20 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 : await this.perCriterion(version, content, criteria, subject));
         }
         const leaves = LeafNodes(version);
-        const known = new Set(leaves.map(node => node.key));
+        const byKey = new Map(leaves.map(node => [node.key, node]));
         let droppedUnknownKeys = 0;
-        for (const run of runs) {
-            for (const decision of run) {
-                if (!decision.key || !known.has(decision.key)) droppedUnknownKeys += 1;
+        const normalizedRuns = runs.map(run => run.map(decision => {
+            const node = resolveCriterionNode(decision.key, byKey);
+            if (!node) {
+                droppedUnknownKeys += 1;
+                return { ...decision, key: undefined };
             }
-        }
+            return decision.key === node.key ? decision : { ...decision, key: node.key };
+        }));
         const chosen: LLMDecision[] = [];
         const sampleSpread: { key: string; levels: string[]; median: string }[] = [];
         for (const node of leaves) {
-            const samples = runs
+            const samples = normalizedRuns
                 .map(run => run.find(item => item.key === node.key))
                 .filter((item): item is LLMDecision => !!item);
             const levels: string[] = [];
@@ -295,6 +311,30 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
     }
 }
 
+/**
+ * A runner that sends each call through the context's prompt service: the evaluator prompt (the
+ * settings' SystemPromptID/Name, else `Rubric Evaluator`) with the judge (PromptID/Name, else the
+ * default judge) in its slot, on the settings' ModelID and ModelSelection. Each prompt run it writes
+ * is appended to `promptRunIds`.
+ */
+export function PromptServiceRunner(context: RubricEvaluatorContext, promptRunIds: string[]): RubricPromptRunner {
+    const prompts = context.Services.Prompts;
+    if (!prompts) throw new Error('An LLM evaluation requires a prompt service.');
+    const settings = context.Settings;
+    const system = PromptRef(settings.SystemPromptID, settings.SystemPromptName, RUBRIC_EVALUATOR_PROMPT);
+    const judge = PromptRef(settings.PromptID, settings.PromptName, DEFAULT_RUBRIC_JUDGE_PROMPT);
+    return {
+        async run(request) {
+            const output = await prompts.Run({
+                Prompt: system, Judge: judge, Data: request.Data, Subject: request.Subject,
+                ModelID: settings.ModelID, ModelSelection: settings.ModelSelection,
+            });
+            if (output.PromptRunID) promptRunIds.push(output.PromptRunID);
+            return output.Text;
+        },
+    };
+}
+
 /** The evaluator prompt's template data for one call. */
 export function PromptData(
     version: RubricVersionSnapshot, mode: RubricPromptMode, criteria: RubricCriterionPromptData[], subject: { entityName: string; recordId: string },
@@ -353,4 +393,46 @@ function assertInScale(key: string, scale: RubricVersionSnapshot['scales'][numbe
     if (value < scale.minValue || value > scale.maxValue) {
         throw new Error(`${key} is outside ${scale.minValue}..${scale.maxValue}.`);
     }
+}
+
+/**
+ * Matches a model's `key` back to its leaf criterion: exact key, backtick-quoted key (`` `key` ``),
+ * or the rendered criterion heading (`Name (\`key\`)` / `### Name (\`key\`)`) when its title also matches.
+ */
+function resolveCriterionNode(
+    rawKey: string | undefined,
+    byKey: Map<string, RubricNodeSnapshot>,
+): RubricNodeSnapshot | undefined {
+    if (!rawKey) return undefined;
+    const trimmed = rawKey.trim();
+    if (!trimmed) return undefined;
+    const direct = byKey.get(rawKey) ?? byKey.get(trimmed);
+    if (direct) return direct;
+    if (trimmed.length > 2 && trimmed.startsWith('`') && trimmed.endsWith('`')) {
+        const unquoted = trimmed.slice(1, -1).trim();
+        const byUnquoted = byKey.get(unquoted);
+        if (byUnquoted) return byUnquoted;
+    }
+    if (trimmed.endsWith(')')) {
+        const openParen = trimmed.lastIndexOf('(');
+        if (openParen > 0) {
+            let inner = trimmed.slice(openParen + 1, -1).trim();
+            if (inner.length > 2 && inner.startsWith('`') && inner.endsWith('`')) {
+                inner = inner.slice(1, -1).trim();
+            }
+            const candidate = byKey.get(inner);
+            if (candidate && stripHeadingHashes(trimmed.slice(0, openParen)) === candidate.name.trim()) {
+                return candidate;
+            }
+        }
+    }
+    return undefined;
+}
+
+function stripHeadingHashes(value: string): string {
+    let index = 0;
+    while (index < value.length && value.charCodeAt(index) === 35) {
+        index += 1;
+    }
+    return value.slice(index).trim();
 }

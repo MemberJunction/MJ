@@ -497,8 +497,10 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   get ChildChain(): BaseEntity[] {
     if (!this.Record) return [];
     const chain: BaseEntity[] = [];
+    const visited = new Set<BaseEntity>([this.Record]);
     let current = this.Record.ISAChild;
-    while (current) {
+    while (current && !visited.has(current)) {
+      visited.add(current);
       chain.push(current);
       current = current.ISAChild;
     }
@@ -655,6 +657,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     }
     // No changes - cancel immediately
     this.emitCancel();
+  }
+
+  /** The Discard confirm's message: how many unsaved changes the user is about to lose. */
+  get DiscardMessage(): string {
+    const n = this.DirtyFieldDisplayNames.length;
+    // A record can be dirty with no named field changed (a new record prefilled by its caller);
+    // "0 unsaved changes" would contradict the prompt, so say it plainly.
+    if (n === 0) return 'You have unsaved changes. Are you sure you want to discard them?';
+    return `You have ${n} unsaved change${n === 1 ? '' : 's'}. Are you sure you want to discard ${n === 1 ? 'it' : 'them'}?`;
   }
 
   OnDiscardConfirm(): void {

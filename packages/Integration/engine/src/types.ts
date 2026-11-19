@@ -36,6 +36,8 @@ export type SyncErrorCode =
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'OBJECT_UNAVAILABLE'
+    /** An object reached the per-run page cap (`maxBatchesPerMap`) before the source said it was done. */
+    | 'BATCH_CAP_REACHED'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
@@ -194,6 +196,15 @@ export interface MappedRecord {
     /** ID of an existing MJ record if matched */
     MatchedMJRecordID?: string;
     /**
+     * True when key-field or duplicate-detection matching found multiple distinct candidate
+     * records in the destination entity (spec §11 / §19.5).
+     */
+    AmbiguousMatch?: boolean;
+    /**
+     * Candidate MJ record IDs when `AmbiguousMatch === true`.
+     */
+    AmbiguousCandidateIDs?: string[];
+    /**
      * Source keys the record returned that have NO active field map — the "extra" fields
      * the target table has no column for (yet). Computed at {@link MapSingleRecord} as
      * `keys(ExternalRecord.Fields) − active map SourceFieldNames`. Empty/undefined in the
@@ -202,6 +213,11 @@ export interface MappedRecord {
      * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
      */
     UnmappedFields?: Record<string, unknown>;
+    /**
+     * #5202 — the source flags this record as deleted (entity-map Configuration `sourceDeleteField` /
+     * `sourceDeleteValue`) and the map's DeleteBehavior is SoftDelete: the row is written tombstoned.
+     */
+    SourceDeleted?: boolean;
 }
 
 /**

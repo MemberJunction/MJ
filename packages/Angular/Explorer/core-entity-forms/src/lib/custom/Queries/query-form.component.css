@@ -850,3 +850,85 @@
 .query-header button.refresh-metadata-btn:hover {
   background: color-mix(in srgb, var(--mj-text-inverse) 15%, transparent);
 }
+
+/* Phone (375px): the metadata rows wrap instead of clipping their trailing button. */
+@media (max-width: 768px) {
+  .query-meta-item,
+  .meta-dropdown-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* Phone: sections sit on the page's 12px gutter, so the content area drops its side padding
+   (it would indent every section twice). */
+@media (max-width: 768px) {
+    .query-content {
+        padding: 12px 0;
+        background: transparent;
+    }
+
+    /* The identity row shows the whole name on a phone instead of an ellipsis */
+    .query-name-section {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+
+    .query-name-display {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    /* The identity row's status chip is compact, like the other phone heroes' */
+    .query-name-section .status-pill.phone-hero-only {
+        flex-shrink: 0;
+        padding: 2px 8px;
+        font-size: var(--mj-text-xs);
+    }
+
+    /* The phone hero matches the other forms' heroes (Actions, AI Prompts, Templates): a card
+       surface with a bottom rule and the standard text tokens, in place of the desktop brand bar.
+       The phone hero's own 12px is the only gutter. */
+    .query-header.phone-hero {
+        background: var(--mj-bg-surface-card);
+        border-bottom: 2px solid var(--mj-border-default);
+        color: var(--mj-text-primary); /* the summary line inherits this; white would vanish in light theme */
+    }
+
+    .query-header.phone-hero .query-header-content {
+        padding: 0;
+        gap: 8px;
+    }
+
+    .query-header.phone-hero .query-title-icon {
+        color: var(--mj-brand-primary);
+    }
+
+    .query-header.phone-hero .query-name-display {
+        color: var(--mj-text-secondary);
+    }
+
+    .query-header.phone-hero .meta-label {
+        color: var(--mj-text-muted);
+    }
+
+    .query-header.phone-hero .meta-value {
+        color: var(--mj-text-primary);
+    }
+
+    .query-header.phone-hero .query-description-text {
+        color: var(--mj-text-secondary);
+    }
+
+    /* The desktop rule above styles this button for the brand bar (inverse text); on the card
+       surface that text vanishes, so it takes the standard secondary-on-surface pair. Size="sm"
+       is 34px tall; a touch target is 44px, like the hero's Run. */
+    .query-header.phone-hero button.refresh-metadata-btn {
+        min-height: 44px;
+        color: var(--mj-text-secondary);
+        border-color: var(--mj-border-default);
+    }
+
+    .query-header.phone-hero button.refresh-metadata-btn:hover {
+        background: var(--mj-bg-surface-hover);
+    }
+}

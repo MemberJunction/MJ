@@ -81,6 +81,7 @@
     align-items: flex-start;
     gap: 16px;
     flex: 1;
+    min-width: 0; /* a flex child; without this it cannot shrink below its title row */
 }
 
 .run-icon-wrapper {
@@ -386,6 +387,14 @@
 /* Panels */
 .form-content {
     padding: 16px;
+}
+
+/* The panels sit inside mj-accordion-sections (the phone section picker's host). Keep them in a flex
+   column on desktop too, as they were as direct flex children of .form-content: in a plain block their
+   margins collapse and the gap between panels halves. */
+.form-content mj-accordion-sections {
+    display: flex;
+    flex-direction: column;
 }
 
 .panel-title {
@@ -1100,4 +1109,44 @@ mj-accordion-panel {
 .fullscreen-body mj-code-editor {
     display: block;
     height: 100%;
+}
+
+/* Phone (375px): the Re-Run / Refresh row drops under the title instead of overflowing. */
+@media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .run-actions {
+    flex-basis: 100%;
+  }
+}
+
+/* Phone: sections sit at the page gutter; the desktop panel padding would indent them twice.
+   The hero's title row ("Prompt Run", the id, the status chip) wraps at a phone size, beside
+   a smaller icon. */
+@media (max-width: 768px) {
+    .run-overview {
+        gap: 10px;
+    }
+
+    .run-icon-wrapper {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+
+    .run-title {
+        flex-wrap: wrap;
+        row-gap: 4px;
+        font-size: 1.15em;
+    }
+
+    .form-content {
+        padding: 12px;
+    }
+
+    .form-content .panel-content {
+        padding: 0;
+    }
 }

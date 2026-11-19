@@ -284,6 +284,17 @@ export type GetMessageMessage = {
      * Optional: providers that cannot supply it leave it undefined.
      */
     CCRecipients?: string[];
+    /**
+     * All BCC recipients of the message, normalized to bare email addresses. Only a copy held by
+     * the sending mailbox carries them. Optional: undefined means the provider does not say.
+     */
+    BCCRecipients?: string[];
+    /**
+     * Whether the mailbox being read sent the message (`Outbound`) or received it (`Inbound`).
+     * A message sent on someone's behalf from this mailbox is `Outbound` even though its From is
+     * the other person. Optional: undefined means the provider does not say.
+     */
+    Direction?: 'Inbound' | 'Outbound';
     Body: string;
     /**
      * In some providers, such as MS Graph, replies can be sent to multiple other recipients
@@ -590,6 +601,12 @@ export type ForwardMessageParams = {
     * The recipients to send a blind copy of the forwarded message to
     */
     BCCRecipients?: string[];
+
+    /**
+     * Provider-specific context data, as on the other message operations. MS Graph reads
+     * `ContextData.Email` as the mailbox to forward from.
+     */
+    ContextData?: Record<string, unknown>;
 };
 
 export type ForwardMessageResult<T = Record<string, any>> = BaseMessageResult & {

@@ -1000,6 +1000,13 @@ mj-collapsible-panel.mj-form-role-more {
   .mj-forms-panels-container {
     padding: 16px 12px 32px;
   }
+
+  /* Phones stack the panels and the ISA side panel, so the desktop gap between them only
+     narrows the form (an empty side panel still claims it). Left-nav rows keep their own
+     8px rail gap from the more specific rule above. */
+  .mj-forms-layout-row {
+    gap: 0;
+  }
 }
 
 /* ====================================================================

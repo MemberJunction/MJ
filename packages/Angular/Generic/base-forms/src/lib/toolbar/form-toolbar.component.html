@@ -488,60 +488,31 @@
 }
 
 <!-- ============================================
-     DISCARD CHANGES CONFIRMATION DIALOG
+     DISCARD / DELETE CONFIRMATIONS
+     The shared mj-confirm-dialog: an alert dialog, so on phones it opens as a bottom sheet with
+     full-width 44px actions. Backdrop, Esc and the close button cancel, as before.
      ============================================ -->
-@if (ShowDiscardDialog) {
-  <div class="mj-dialog-overlay" (click)="OnDiscardCancel()">
-    <div class="mj-dialog" (click)="$event.stopPropagation()">
-      <div class="mj-dialog-header">
-        <h3>Discard Changes?</h3>
-        <button class="mj-dialog-close" (click)="OnDiscardCancel()">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <div class="mj-dialog-body">
-        <p>You have <strong>{{ DirtyFieldDisplayNames.length }}</strong> unsaved change{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }}. Are you sure you want to discard {{ DirtyFieldDisplayNames.length === 1 ? 'it' : 'them' }}?</p>
-      </div>
-      <div class="mj-dialog-footer">
-        <button class="mj-forms-btn mj-forms-btn--danger" (click)="OnDiscardConfirm()">
-          <i class="fa-solid fa-rotate-left"></i>
-          Discard Changes
-        </button>
-        <button class="mj-forms-btn" (click)="OnDiscardCancel()">
-          Keep Editing
-        </button>
-      </div>
-    </div>
-  </div>
-}
+<mj-confirm-dialog
+  [Visible]="ShowDiscardDialog"
+  Title="Discard Changes?"
+  Type="danger"
+  [Message]="DiscardMessage"
+  ConfirmText="Discard Changes"
+  CancelText="Keep Editing"
+  (Confirmed)="OnDiscardConfirm()"
+  (Cancelled)="OnDiscardCancel()">
+</mj-confirm-dialog>
 
-<!-- ============================================
-     DELETE CONFIRMATION DIALOG
-     ============================================ -->
-@if (ShowDeleteDialog) {
-  <div class="mj-dialog-overlay" (click)="OnDeleteCancel()">
-    <div class="mj-dialog" (click)="$event.stopPropagation()">
-      <div class="mj-dialog-header">
-        <h3>Confirm Deletion</h3>
-        <button class="mj-dialog-close" (click)="OnDeleteCancel()">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <div class="mj-dialog-body">
-        <p>Are you sure you want to delete this record? This action cannot be undone.</p>
-      </div>
-      <div class="mj-dialog-footer">
-        <button class="mj-forms-btn mj-forms-btn--danger" (click)="OnDeleteConfirm()">
-          <i class="fa-solid fa-trash-can"></i>
-          Delete
-        </button>
-        <button class="mj-forms-btn" (click)="OnDeleteCancel()">
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-}
+<mj-confirm-dialog
+  [Visible]="ShowDeleteDialog"
+  Title="Confirm Deletion"
+  Type="danger"
+  Message="Are you sure you want to delete this record? This action cannot be undone."
+  ConfirmText="Delete"
+  CancelText="Cancel"
+  (Confirmed)="OnDeleteConfirm()"
+  (Cancelled)="OnDeleteCancel()">
+</mj-confirm-dialog>
 
 <!-- Recursive template for IS-A descendant tree rendering.
      Single child at a level → inline with chevron.

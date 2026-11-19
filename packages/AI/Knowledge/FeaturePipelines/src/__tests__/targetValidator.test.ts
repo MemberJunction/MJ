@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   type DataFeatureSpec,
+  ValidateSpec,
   validateMaterializationTargets,
   type TargetValidationMetadataProvider,
   type EntityInfoLike,
@@ -333,6 +334,49 @@ describe('validateMaterializationTargets (P1-4)', () => {
     const issues = validateMaterializationTargets(spec, mockProvider, 'Customers');
     const error = issues.find((i) => i.Message.includes('tinyint (max: 255)'));
     expect(error).toBeDefined();
+  });
+
+  // #5831: lookup settings on a field that is not a foreign key were accepted, and every record got NULL.
+  it('rejects LookupMatchField / OnLookupMiss on a non-FK target, once, through both validators', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Lookup on non-FK',
+      Description: 'SeniorityLevelID has no related entity',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.level',
+          Name: 'Level',
+          Target: { Mode: 'field', EntityFieldName: 'ChurnRiskBand', LookupMatchField: 'Name', OnLookupMiss: 'null' },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+
+    const fromTargets = validateMaterializationTargets(spec, mockProvider, 'Customers').filter((i) => i.Message.includes('is not a foreign key'));
+    expect(fromTargets).toHaveLength(1);
+    expect(fromTargets[0].Severity).toBe('error');
+    expect(fromTargets[0].Message).toContain('LookupMatchField and OnLookupMiss');
+
+    const fromSpec = ValidateSpec(spec, {
+      Name: customerEntity.Name,
+      Fields: customerEntity.Fields.map((f) => ({ Name: f.Name, TSType: f.TSType ?? undefined, IsVirtual: f.IsVirtual ?? false })),
+    }).filter((i) => i.Message.includes('is not a foreign key'));
+    expect(fromSpec).toHaveLength(1);
+  });
+
+  it('accepts lookup settings on a foreign-key target', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Lookup on FK',
+      Description: 'AccountManagerID points at Employees',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        { Ref: '$.manager', Name: 'Manager', Target: { Mode: 'field', EntityFieldName: 'AccountManagerID', LookupMatchField: 'FullName' } },
+      ],
+      Caching: { Cacheable: false },
+    };
+    expect(validateMaterializationTargets(spec, mockProvider, 'Customers').some((i) => i.Message.includes('is not a foreign key'))).toBe(false);
   });
 
   it('validates foreign key targets and rejects virtual or missing LookupMatchField', () => {

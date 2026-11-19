@@ -1,0 +1,123 @@
+{
+  "name": "ExportableData",
+  "title": "Exportable Data",
+  "description": "@file:../../descriptions/generic/exportable-data.md",
+  "type": "widget",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/exportable-data.md",
+  "technicalDesign": "@file:../../technical-design/generic/exportable-data.md",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Loads no data. Exports the rows the caller passes in `rows`, or the rows `getRows` returns."
+  },
+  "typeDefinitions": {
+    "ExportColumn": {
+      "description": "One column of the exported file, in file order.",
+      "properties": {
+        "field": {
+          "type": "string",
+          "required": true,
+          "description": "Key of the value in each row object"
+        },
+        "label": {
+          "type": "string",
+          "required": false,
+          "description": "Header text in the file. Defaults to `field`."
+        },
+        "type": {
+          "type": "'string' | 'number' | 'currency' | 'percent' | 'date' | 'boolean'",
+          "required": false,
+          "description": "Cell type in Excel. `percent` values are fractions (0.25 is 25%). `date` accepts a Date or an ISO string. Defaults to 'string'."
+        }
+      }
+    }
+  },
+  "properties": [
+    {
+      "name": "exportID",
+      "type": "string",
+      "description": "Identifier of this element, kebab-case and unique within the component. Write it as a string literal (e.g. \"revenue-by-month\"), never an expression.",
+      "required": true,
+      "exampleValue": "\"revenue-by-month\""
+    },
+    {
+      "name": "label",
+      "type": "string",
+      "description": "Human name of the element. Used in the menu tooltip and as the filename: `<label>_<YYYY-MM-DD>.<ext>`.",
+      "required": true,
+      "exampleValue": "\"Revenue by Month\""
+    },
+    {
+      "name": "kind",
+      "type": "'table' | 'chart'",
+      "description": "'table' offers CSV and Excel. 'chart' also offers PNG.",
+      "required": true,
+      "exampleValue": "\"chart\""
+    },
+    {
+      "name": "rows",
+      "type": "Array<object>",
+      "description": "The data the element DISPLAYS, not the raw fetched records. Table: the rows after the user's filters and sort, across all pages. Chart: wide rows, one per x-axis value (category, month or plotted point) with one column per series or measure; network and sankey charts give one row per link. Keep values typed: numbers as numbers, percents as fractions.",
+      "required": false
+    },
+    {
+      "name": "getRows",
+      "type": "() => Array<object> | { rows: Array<object>, note?: string } | Promise<Array<object> | { rows: Array<object>, note?: string }>",
+      "description": "Called at export time instead of reading `rows`. For registry components whose rows are not all in memory (EntityDataGrid loads one page at a time). Return `{ rows, note }` to end the file with a note row, such as when the rows were capped. Generated components pass `rows`.",
+      "required": false
+    },
+    {
+      "name": "columns",
+      "type": "Array<ExportColumn>",
+      "description": "The columns of the file, in order. Give every column a `type` so Excel cells are typed. If omitted, columns are taken from the keys of the first row as strings, and a warning is logged.",
+      "required": true,
+      "exampleValue": "[{ \"field\": \"Month\", \"label\": \"Month\", \"type\": \"string\" }, { \"field\": \"Revenue\", \"label\": \"Revenue\", \"type\": \"currency\" }]"
+    },
+    {
+      "name": "getImage",
+      "type": "() => Promise<string>",
+      "description": "Returns a PNG data URL of the element, which the wrapper draws on the background the element is shown on. Only for registry components that own their chart instance. When omitted, the wrapper finds a Chart.js or ApexCharts chart inside itself and uses that library's own export, then falls back to a capture of its own subtree.",
+      "required": false
+    },
+    {
+      "name": "placement",
+      "type": "'overlay' | 'toolbar'",
+      "description": "Where the export button sits. 'overlay' (default): over the element's top-right corner, shown on hover or keyboard focus and always on touch screens; no space is reserved. 'toolbar': flush with the top-right corner at the 32px control height and always shown, for a parent whose toolbar row (such as DataGrid's search box) leaves 40px free on its right. Generated components leave it unset.",
+      "required": false,
+      "defaultValue": "overlay"
+    },
+    {
+      "name": "style",
+      "type": "object",
+      "description": "Style for the wrapper's own div, which replaces the wrapped element in its parent's layout. Move layout styles here (e.g. `{ flex: 1, minWidth: 0 }`) when the wrapped element is a flex or grid item. The wrapper always sets `position: relative`.",
+      "required": false
+    },
+    {
+      "name": "children",
+      "type": "ReactNode",
+      "description": "The element to make exportable: a table, or a chart together with its sized container. Rendered unchanged.",
+      "required": true
+    }
+  ],
+  "events": [],
+  "libraries": [
+    {
+      "name": "antd",
+      "version": "5.12.0",
+      "globalVariable": "antd"
+    },
+    {
+      "name": "xlsx",
+      "version": "0.18.5",
+      "globalVariable": "XLSX"
+    },
+    {
+      "name": "html2canvas",
+      "version": "1.4.1",
+      "globalVariable": "html2canvas"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../../code/generic/exportable-data.js",
+  "exampleUsage": "// Custom Chart.js chart: wrap the sized container, not the bare <canvas>\nconst { ExportableData } = components;\n\nconst chartRows = months.map((month, i) => ({\n  Month: month,\n  Revenue: revenue[i],\n  Target: target[i],\n  Attainment: revenue[i] / target[i]   // fraction, not '87%'\n}));\n\n<ExportableData\n  exportID=\"revenue-by-month\"\n  label=\"Revenue by Month\"\n  kind=\"chart\"\n  rows={chartRows}\n  columns={[\n    { field: 'Month', label: 'Month', type: 'string' },\n    { field: 'Revenue', label: 'Revenue', type: 'currency' },\n    { field: 'Target', label: 'Target', type: 'currency' },\n    { field: 'Attainment', label: 'Attainment', type: 'percent' }\n  ]}\n>\n  <div style={{ height: 320 }}>\n    <canvas ref={canvasRef} />\n  </div>\n</ExportableData>\n\n// Custom table: export every row that passes the user's filter, in the current sort, not just the visible page\n<ExportableData\n  exportID=\"overdue-invoices\"\n  label=\"Overdue Invoices\"\n  kind=\"table\"\n  rows={sortedFilteredInvoices}\n  columns={[\n    { field: 'InvoiceNumber', label: 'Invoice', type: 'string' },\n    { field: 'Customer', label: 'Customer', type: 'string' },\n    { field: 'DueDate', label: 'Due', type: 'date' },\n    { field: 'Balance', label: 'Balance', type: 'currency' }\n  ]}\n>\n  <table>{/* ... */}</table>\n</ExportableData>\n\n// Not a dataset: leave it unwrapped and say why\n{/* export-opt-out: single member detail panel */}\n<MemberDetailPanel member={selected} />"
+}

@@ -1,6 +1,7 @@
-import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { BaseSingleton, GetClassName, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
+import { CompositeFilter } from './filters/compositeFilter';
 // Type-only import — avoids a runtime circular dependency with baseEngine.ts
 // (which imports BaseEngineRegistry). Erased at compile time.
 import type { BaseEnginePropertyConfig } from './baseEngine';
@@ -115,6 +116,7 @@ export interface CachedEntityMatch<T extends BaseEntity = BaseEntity> {
  * ```
  */
 export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
+    private static readonly MAX_NAME_COLLISIONS = 1000;
     private _engines: Map<string, EngineRegistrationInfo> = new Map();
 
     /**
@@ -175,7 +177,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param className - Optional class name override (uses constructor name by default)
      */
     public RegisterEngine(engine: unknown, className?: string): void {
-        const name = className || (engine as object).constructor.name;
+        const name = className || this.registrationKeyFor(engine as object);
 
         const existingInfo = this._engines.get(name);
         if (existingInfo) {
@@ -200,15 +202,33 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     }
 
     /**
+     * The registry key for an engine: its class name, or `Name#2`, `Name#3`… when a different engine
+     * class already holds that name. Minified builds rename classes to `e`, `t` and so on, so unrelated
+     * engines share names there; without this they would overwrite each other's registration and drop
+     * out of `FindCachedEntity` / `FindEnginesDeclaringEntity`. The same instance or class keeps its slot.
+     */
+    private registrationKeyFor(engine: object): string {
+        const name = GetClassName(engine.constructor);
+        for (let n = 1; n <= BaseEngineRegistry.MAX_NAME_COLLISIONS; n++) {
+            const key = n === 1 ? name : `${name}#${n}`;
+            const holder = this._engines.get(key)?.instance;
+            if (holder === undefined || holder === engine || (holder as object).constructor === engine.constructor) {
+                return key;
+            }
+        }
+        throw new Error(`BaseEngineRegistry: more than ${BaseEngineRegistry.MAX_NAME_COLLISIONS} engine classes share the name '${name}'`);
+    }
+
+    /**
      * Unregister an engine from the registry
      *
      * @param engine - The engine instance to unregister
      */
     public UnregisterEngine(engine: unknown): void {
-        const name = (engine as object).constructor.name;
-        this._engines.delete(name);
+        // Match by class, not bare name: under minification another engine class can share the name.
+        const ctor = (engine as object).constructor;
         for (const [k, v] of this._engines) {
-            if (v.instance === engine) {
+            if (v.instance === engine || (v.instance as object | undefined)?.constructor === ctor) {
                 this._engines.delete(k);
             }
         }
@@ -251,7 +271,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      */
     public GetMemoryStats(): EngineMemoryStats {
         // Update all engine stats first
-        for (const [name, info] of this._engines) {
+        for (const info of this._engines.values()) {
             info.isLoaded = this.checkEngineLoaded(info.instance);
             info.estimatedMemoryBytes = this.estimateEngineMemory(info.instance);
             info.itemCount = this.countEngineItems(info.instance);
@@ -298,7 +318,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param engine - The engine that was loaded
      */
     public NotifyEngineLoaded(engine: unknown): void {
-        const name = (engine as object).constructor.name;
+        const name = this.registrationKeyFor(engine as object);
         const info = this._engines.get(name);
         if (info) {
             info.lastLoadedAt = new Date();
@@ -395,7 +415,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         if ('_dataMap' in engineObj) {
             const dataMap = engineObj._dataMap as Map<string, { data: unknown[] }>;
             if (dataMap && dataMap instanceof Map) {
-                for (const [key, value] of dataMap) {
+                for (const value of dataMap.values()) {
                     if (value && Array.isArray(value.data)) {
                         totalBytes += this.estimateArraySize(value.data);
                     }
@@ -433,7 +453,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         if ('_dataMap' in engineObj) {
             const dataMap = engineObj._dataMap as Map<string, { data: unknown[] }>;
             if (dataMap && dataMap instanceof Map) {
-                for (const [key, value] of dataMap) {
+                for (const value of dataMap.values()) {
                     if (value && Array.isArray(value.data)) {
                         totalItems += value.data.length;
                     }
@@ -604,7 +624,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         }
         this._recordedEngineInstances.add(engine);
 
-        const engineClassName = engine.constructor.name;
+        const engineClassName = this.registrationKeyFor(engine);
         for (const entityName of entityNames) {
             this.RecordEntityLoad(engineClassName, entityName);
         }
@@ -725,7 +745,15 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 const records = cfg.PropertyName ? engineObj[cfg.PropertyName] : undefined;
                 if (!Array.isArray(records)) continue;
 
-                const unfiltered = (!cfg.Filter || cfg.Filter.trim().length === 0)
+                const hasFilter =
+                    typeof cfg.Filter === 'string'
+                        ? cfg.Filter.trim().length > 0
+                        : cfg.Filter != null &&
+                          !(cfg.Filter instanceof CompositeFilter
+                              ? cfg.Filter
+                              : CompositeFilter.FromDescriptor(cfg.Filter)
+                          ).IsEmpty;
+                const unfiltered = !hasFilter
                     && (!cfg.AlternateBaseView || cfg.AlternateBaseView.trim().length === 0);
                 if (options?.unfilteredOnly && !unfiltered) continue;
 

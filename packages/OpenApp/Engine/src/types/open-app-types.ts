@@ -166,7 +166,11 @@ export interface AppHookPayload {
  * Options for the install command.
  */
 export interface InstallOptions {
-    /** GitHub repository URL or app name (for registry lookup) */
+    /**
+     * GitHub repository URL, or a `file:` locator for a folder in the consumer repository
+     * (relative to `OrchestratorContext.RepoRoot`, e.g. `file:openapps/analytics`).
+     * `NormalizeAppSource` turns a folder path into this locator.
+     */
     Source: string;
     /** Specific version to install (default: latest) */
     Version?: string;
@@ -225,6 +229,12 @@ export interface UpgradeOptions {
     AppName: string;
     /** Specific version to upgrade to (default: latest) */
     Version?: string;
+    /**
+     * Run the upgrade even when the app is already at the target version: new migrations, package
+     * entries, config and hooks are applied again. A lower target version is still refused. Used
+     * to apply changes made in a local app folder without a version bump.
+     */
+    Reapply?: boolean;
     /** Enable verbose output */
     Verbose?: boolean;
     /**
@@ -305,7 +315,7 @@ export interface InstalledAppInfo {
     PublisherEmail: string | null;
     /** Publisher website URL */
     PublisherURL: string | null;
-    /** GitHub repository URL */
+    /** Where the app is installed from: a GitHub repository URL, or a `file:` locator for a local folder */
     RepositoryURL: string;
     /** In-repo subpath to the app (for multi-app repos); null/undefined = repo root */
     Subpath?: string | null;

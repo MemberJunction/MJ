@@ -161,6 +161,7 @@ imported by the application. A key that resolves to nothing plans as `HandlerNot
 | Backlog for an autoscaler | `mj queue backlog --subscription s` | `WorkQueue.GetBacklog` |
 | Check bindings | `mj queue validate-bindings [--transport t]` | `WorkQueue.ValidateBindings` |
 | Run work in a container job | `mj queue work --subscription s --once` | — |
+| Run work until stopped | `mj queue work --subscription s [--concurrency n] [--sweeper-interval-ms ms] [--reconcile-interval-ms ms]` | — |
 | One sweeper pass from a cron (exit 1 when the pass or a step fails; a held lock exits 0) | `mj queue sweep [--json]` | — |
 
 **Who may call the operations.** Every caller needs entity permissions: **Read** on `MJ: Work Queue Deliveries` for
@@ -194,10 +195,23 @@ mj queue work --subscription venue-import --once --max 5 --concurrency 2 --max-d
 after that long and drains; keep it below the scheduler's job deadline. `SIGTERM` and `SIGINT` drain the host in both
 `--once` and long-running modes.
 
-A `--once` job neither sweeps nor re-plans. Without `--once` the worker may be the only host against the database, so
-it sweeps every 60 s and re-plans every 30 s, the same defaults as MJAPI; `--sweeper-interval-ms` and
-`--reconcile-interval-ms` override either, and `0` disables. `--concurrency` above 1 is safe in both modes: each
-delivery gets its own provider.
+**Concurrency.** Each delivery gets its own connection-scoped provider (`IndependentProviderSource`, as MJAPI does),
+released when the delivery settles, so parallel handlers never share transaction state. `--concurrency` above 1 is
+safe in both modes.
+
+**Long-running mode.** A `--once` job neither sweeps nor re-plans. Without `--once` the worker may be the only host
+against the database, so it runs the sweeper (lease expiry, retention and dedup purge) every 60 s and re-plans its
+subscriptions every 30 s, the same defaults as MJAPI. `--sweeper-interval-ms` and `--reconcile-interval-ms` override
+either, and `0` disables.
+
+**When no host sweeps.** Retention and dedup purge only happen in a sweeper pass. If every MJAPI instance is
+publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or enable
+the sweeper on a publish-only MJAPI:
+
+```javascript
+// mj.config.cjs — an MJAPI that publishes and sweeps but runs no handlers
+workQueue: { enabled: true, subscriptions: [], sweeperEnabled: true },
+```
 
 **Exit codes.** `0` when the host ran — including "the queue was empty", a spent budget, `--max-duration-ms`, a
 signal, or a subscription an operator paused — so a scheduler never records a failure for idleness. **Non-zero** when

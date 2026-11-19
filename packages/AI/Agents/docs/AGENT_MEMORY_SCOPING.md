@@ -36,7 +36,7 @@ These flow into `AgentContextInjector` for retrieval and onto the `AIAgentRun` r
 
 #### Note retrieval priority (8 levels)
 
-`AgentContextInjector.buildNotesScopingFilter()` (`agent-context-injector.ts:282-337`) returns notes whose `(AgentID, UserID, CompanyID)` tuple matches **any** of these levels — the SQL filter is an `OR` across all matching levels for the runtime triplet:
+`AgentContextInjector.filterNotesByScoping()` (`agent-context-injector.ts`) filters the AIEngine's cached notes in memory. It keeps injectable notes (`Active` and `Provisional`, the same set the semantic path uses) whose `(AgentID, UserID, CompanyID)` tuple matches **any** of these levels for the runtime triplet:
 
 | Level | AgentID | UserID | CompanyID | Description |
 |---|---|---|---|---|

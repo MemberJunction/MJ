@@ -17,6 +17,48 @@
  * which silently merges all chunks into one.
  */
 
+// --- @memberjunction/ng-auth-services → ./auth0 (1 entries) ---
+const loadNgAuthServicesAuth0 = {
+  chunkId: '@memberjunction/ng-auth-services/auth0',
+  load: () => import('@memberjunction/ng-auth-services/auth0').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./cognito (1 entries) ---
+const loadNgAuthServicesCognito = {
+  chunkId: '@memberjunction/ng-auth-services/cognito',
+  load: () => import('@memberjunction/ng-auth-services/cognito').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./local-dev (1 entries) ---
+const loadNgAuthServicesLocalDev = {
+  chunkId: '@memberjunction/ng-auth-services/local-dev',
+  load: () => import('@memberjunction/ng-auth-services/local-dev').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./magic-link (1 entries) ---
+const loadNgAuthServicesMagicLink = {
+  chunkId: '@memberjunction/ng-auth-services/magic-link',
+  load: () => import('@memberjunction/ng-auth-services/magic-link').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./msal (1 entries) ---
+const loadNgAuthServicesMsal = {
+  chunkId: '@memberjunction/ng-auth-services/msal',
+  load: () => import('@memberjunction/ng-auth-services/msal').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./okta (1 entries) ---
+const loadNgAuthServicesOkta = {
+  chunkId: '@memberjunction/ng-auth-services/okta',
+  load: () => import('@memberjunction/ng-auth-services/okta').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./workos (1 entries) ---
+const loadNgAuthServicesWorkos = {
+  chunkId: '@memberjunction/ng-auth-services/workos',
+  load: () => import('@memberjunction/ng-auth-services/workos').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 entries) ---
 const loadNgDashboardsActionsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
@@ -47,7 +89,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (40 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (42 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -71,7 +113,7 @@ const loadNgDashboardsIntegrationModule = {
   load: () => import('@memberjunction/ng-dashboards/integration.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
+// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (6 entries) ---
 const loadNgDashboardsListsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/lists-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/lists-dashboards.module').then(() => {})
@@ -89,7 +131,7 @@ const loadNgDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (7 entries) ---
 const loadNgDashboardsPredictiveStudioDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/predictive-studio-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module').then(() => {})
@@ -154,6 +196,27 @@ const loadNgFileStorageFileStorageModule = {
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
  */
 export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {
+  // @memberjunction/ng-auth-services → ./auth0
+  'MJAuthBase::auth0': loadNgAuthServicesAuth0,
+
+  // @memberjunction/ng-auth-services → ./cognito
+  'MJAuthBase::cognito': loadNgAuthServicesCognito,
+
+  // @memberjunction/ng-auth-services → ./local-dev
+  'MJAuthBase::local': loadNgAuthServicesLocalDev,
+
+  // @memberjunction/ng-auth-services → ./magic-link
+  'MJAuthBase::magic-link': loadNgAuthServicesMagicLink,
+
+  // @memberjunction/ng-auth-services → ./msal
+  'MJAuthBase::msal': loadNgAuthServicesMsal,
+
+  // @memberjunction/ng-auth-services → ./okta
+  'MJAuthBase::okta': loadNgAuthServicesOkta,
+
+  // @memberjunction/ng-auth-services → ./workos
+  'MJAuthBase::workos': loadNgAuthServicesWorkos,
+
   // @memberjunction/ng-dashboards → ./actions-dashboards.module
   'BaseResourceComponent::ActionExplorerResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsCodeResource': loadNgDashboardsActionsDashboardsModule,
@@ -207,6 +270,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::HealthObservatoryDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeManagerDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeStudioDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
@@ -225,6 +289,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::HealthObservatoryResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::InteractionOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
@@ -271,6 +336,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::ListsCategoriesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsMyListsResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsOperationsResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsRefreshesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsSharedWithMeResource': loadNgDashboardsListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
@@ -281,6 +347,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseFormPanel::form-panel:MJMLEvaluationProtocols:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLModels:evaluation': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLPredictionUnits:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLTrainingPipelines:bindings': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioModelsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioPredictionsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioStudioResource': loadNgDashboardsPredictiveStudioDashboardsModule,
@@ -335,4 +405,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 135;
+export const LAZY_FEATURE_CONFIG_COUNT = 149;

@@ -105,8 +105,9 @@ vi.mock('@memberjunction/ai-agents', () => ({
   RealtimeClientSessionService: class {
     FinalizeCoAgentRun = vi.fn(async () => undefined);
   },
-  // SessionManager.CloseSession tells the channel-plugin host a session closed.
+  // SessionManager.CloseSession tells the channel-plugin host a session closed and evicts its mint snapshot.
   RealtimeChannelServerHost: { Instance: { OnSessionClosed: h.sessionClosedHook } },
+  RealtimeMintSnapshotRegistry: { Instance: { Delete: vi.fn() } },
 }));
 
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /

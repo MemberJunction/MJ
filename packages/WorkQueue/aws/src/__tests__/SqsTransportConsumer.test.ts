@@ -5,6 +5,7 @@ import { SqsTransportConsumer } from '../consumer/SqsTransportConsumer';
 import { AwsGatewayError } from '../gateway/errors';
 import type { SqsReceivedMessage } from '../gateway/SqsGateway';
 import { FakeSqsGateway } from '../testing/fakes';
+import { DistinctDeadLetters } from '../operator/deadLetterScan';
 import { TestAwsResources, TestMessage, TestSubscriptionBinding } from '../testing/fixtures';
 
 const r = TestAwsResources(true);
@@ -208,6 +209,32 @@ describe('SqsTransportConsumer.ExtendLease', () => {
 });
 
 describe('SqsTransportConsumer.DeadLetter', () => {
+    // #5143: on a standard queue a lost lease makes the source delete fail, the source comes back, and a second
+    // dead-letter copy is written. Both carry the source MessageId; the operator listing shows one.
+    it('marks every copy with its source MessageId; a lost lease leaves a duplicate the listing shows once', async () => {
+        const standard = TestAwsResources(false);
+        sqs.AddQueue(standard.QueueUrl, { Fifo: false }).AddQueue(standard.DeadLetterQueueUrl, { Fifo: false });
+        const first = new SqsTransportConsumer(sqs, TestSubscriptionBinding(false), { Now: () => sqs.Now });
+        const second = new SqsTransportConsumer(sqs, TestSubscriptionBinding(false), { Now: () => sqs.Now });
+        await sqs.Send({ QueueUrl: standard.QueueUrl, Body: JSON.stringify(TestMessage(1)) });
+
+        const [stale] = await first.Receive(1, 0, signal);
+        sqs.Advance(61);                               // the lease runs out; SQS hands the message to someone else
+        const [fresh] = await second.Receive(1, 0, signal);
+
+        expect(await first.DeadLetter(stale, 'Fatal', 'boom')).toEqual({ Kind: 'LeaseLost', DeliveryID: stale.DeliveryID });
+        expect(await second.DeadLetter(fresh, 'Fatal', 'boom')).toMatchObject({ Kind: 'Settled', Status: 'DeadLettered' });
+
+        const copies = sqs.Messages(standard.DeadLetterQueueUrl);
+        expect(copies).toHaveLength(2);
+        const sourceIds = copies.map((c) => c.Attributes[DEAD_LETTER_ATTRIBUTES.SourceMessageId]);
+        expect(sourceIds[0]).toBeTruthy();
+        expect(sourceIds[1]).toBe(sourceIds[0]);
+
+        const scanned = copies.map((c) => ({ Raw: { MessageId: c.MessageId, ReceiptHandle: '', Body: c.Body, Attributes: c.Attributes, ReceiveCount: 0, SentTimestamp: 0 }, Envelope: null }));
+        expect(DistinctDeadLetters(scanned as never)).toHaveLength(1);
+    });
+
     it('copies to the dead-letter queue, then deletes', async () => {
         await send(1);
         const [delivery] = await consumer.Receive(1, 0, signal);

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EvaluationLineage, InvalidMajorityBaselineRuleError } from '../evaluation-record';
+import { IMPORTANCE_KINDS } from '../sidecar-contract';
+import { TrainerContract } from '../trainer-contract';
 
 describe('evaluation record', () => {
   it('records what the caller says about out-of-sample validation, and no withheld reason for an ordinary pipeline', () => {
@@ -11,6 +13,10 @@ describe('evaluation record', () => {
   it('withholds the verdict when a time index is declared (not evaluated as a forecast)', () => {
     const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' }, { ValidationOutOfSample: true });
     expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce', ImportanceKind: null });
+  });
+  it('withholds nothing from a time-indexed model whose holdout respects time (it was tested on later periods)', () => {
+    const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' }, { ValidationOutOfSample: true, HoldoutRespectsTime: true });
+    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: null });
   });
   it('round-trips through the Lineage JSON and tolerates lineage without it', () => {
     const record = EvaluationLineage.Build({ Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' }, { ValidationOutOfSample: true, ImportanceKind: 'none' });
@@ -29,6 +35,20 @@ describe('evaluation record', () => {
     expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: legacy }))).toEqual({
       ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'warn', ImportanceKind: null,
     });
+  });
+  it("reads ImportanceKind 'held_out_permutation'", () => {
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'held_out_permutation' } }))?.ImportanceKind).toBe(
+      'held_out_permutation',
+    );
+  });
+  it('accepts every importance kind the trainer path writes, and reads each back', () => {
+    const measured = [{ sourceColumn: 'Tenure', permutationImportance: { metric: 'log-loss' as const, value: 0.1, interval: { level: 0.95, lower: 0.05, upper: 0.15 }, n: 100 } }];
+    const written = [TrainerContract.ImportanceKindOf([]), TrainerContract.ImportanceKindOf(measured)];
+    expect(written).toEqual(['none', 'held_out_permutation']);
+    for (const kind of written) {
+      expect(IMPORTANCE_KINDS).toContain(kind);
+      expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: kind } }))?.ImportanceKind).toBe(kind);
+    }
   });
   it("reads ImportanceKind 'none' and drops an unknown kind", () => {
     expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'none' } }))?.ImportanceKind).toBe('none');

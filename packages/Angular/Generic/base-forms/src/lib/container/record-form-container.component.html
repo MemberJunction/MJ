@@ -242,7 +242,8 @@
             <button type="button"
                     class="mj-forms-section-picker"
                     aria-haspopup="dialog"
-                    [attr.aria-label]="'Change section — ' + ChromeActiveTitle"
+                    [attr.aria-expanded]="SectionSheetOpen"
+                    [attr.aria-label]="SectionPickerLabel"
                     (click)="OpenSectionSheet()">
               <i [class]="ChromeActiveIcon" aria-hidden="true"></i>
               <span class="mj-forms-section-picker-title">{{ ChromeActiveTitle }}</span>
@@ -589,6 +590,10 @@
                       (click)="OnSectionSheetSelect(group.Key)">
                 <i [class]="group.Icon" aria-hidden="true"></i>
                 <span class="mj-forms-section-sheet-label">{{ group.Title }}</span>
+                @if (sheetIndicators.DirtyCount > 0) {
+                  <span class="mj-forms-chrome-rail-dirty" role="img"
+                        [attr.aria-label]="RailDirtyTitle(sheetIndicators.DirtyCount, group.Title)"></span>
+                }
                 @if (sheetIndicators.ErrorCount > 0) {
                   <span class="mj-forms-chrome-rail-error" role="img"
                         [attr.aria-label]="RailErrorTitle(sheetIndicators.ErrorCount, group.Title)">
@@ -599,10 +604,6 @@
                         [attr.aria-label]="RailWarningTitle(sheetIndicators.WarningCount, group.Title)">
                     <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.WarningCount }}
                   </span>
-                }
-                @if (sheetIndicators.DirtyCount > 0) {
-                  <span class="mj-forms-chrome-rail-dirty" role="img"
-                        [attr.aria-label]="RailDirtyTitle(sheetIndicators.DirtyCount, group.Title)"></span>
                 }
                 @let sheetCount = ChromeGroupRowCount(group);
                 @if (sheetCount != null && sheetCount > 0) {
@@ -616,6 +617,17 @@
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">
         <ng-content></ng-content>
+
+        @if (EffectiveRecord && EffectiveRecord.EntityInfo.SubtypeSelectorConfig?.FoldIntoForm && !FormComponent?.OwnsEntireFormBody) {
+          <mj-folded-subtype-section
+            [Provider]="Provider"
+            [Record]="EffectiveRecord"
+            [FormComponent]="FormComponent"
+            [FormContext]="FormComponent?.formContext"
+            [EditMode]="EffectiveEditMode"
+            (Navigate)="OnNavigate($event)">
+          </mj-folded-subtype-section>
+        }
 
         <!--
           Fill-in related grids for DisplayInForm relationships the template

@@ -13,12 +13,13 @@
  * SQL Server and PostgreSQL), deleted in teardown. Self-cleaning, so the deterministic tier.
  */
 import { Metadata, RunQuery, RunView } from '@memberjunction/core';
-import type { RunQueryParams, RunQueryResult, UserInfo } from '@memberjunction/core';
+import type { EntitySaveOptions, RunQueryParams, RunQueryResult, UserInfo } from '@memberjunction/core';
 import { GetQueryApprovalStateAsync, QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 import { CreateRenderCategory, DeleteRenderQueries, RefreshRenderQueries } from './runquery-rendering-fixture';
 import type { RenderFixtures } from './runquery-rendering-fixture';
 
@@ -44,8 +45,12 @@ function requireQuery(name: string): MJQueryEntity {
     return query;
 }
 
-async function saveOrThrow(entity: { Save(): Promise<boolean>; LatestResult?: { CompleteMessage?: string } | null }, what: string): Promise<void> {
-    if (!await entity.Save()) {
+async function saveOrThrow(
+    entity: { Save(options?: EntitySaveOptions): Promise<boolean>; LatestResult?: { CompleteMessage?: string } | null },
+    what: string,
+    options?: EntitySaveOptions
+): Promise<void> {
+    if (!await entity.Save(options)) {
         throw new Error(`${what} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 }
@@ -69,7 +74,9 @@ async function createQuery(name: string, sql: string, user: UserInfo): Promise<M
     query.CategoryID = fixtures!.Category.ID;
     query.SQL = sql;
     query.Status = 'Pending';
-    await saveOrThrow(query, `saving '${name}'`);
+    // Skips the description pass: with no AI credentials it fails and records that on the query row
+    // with a full-row save, which can land after this file's approval and put Status back to Pending.
+    await saveOrThrow(query, `saving '${name}'`, FixtureQuerySaveOptions());
     fixtures!.Queries.set(name, query);
     return query;
 }
@@ -121,7 +128,7 @@ function rowNumbers(result: RunQueryResult): number[] {
 async function editChapterSQL(ctx: IntegrationCheckContext, sql: string): Promise<void> {
     const chapter = requireQuery(CHAPTER_QUERY);
     chapter.SQL = sql;
-    await saveOrThrow(chapter, 'editing the chapter query SQL');
+    await saveOrThrow(chapter, 'editing the chapter query SQL', FixtureQuerySaveOptions());
     await RefreshRenderQueries(ctx.User);
 }
 

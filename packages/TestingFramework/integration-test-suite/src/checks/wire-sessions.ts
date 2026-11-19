@@ -28,20 +28,34 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
 /** Opens a separate session against the running MJAPI, with a WebSocket when `withWebSocket` is true. */
 export async function OpenWireSession(withWebSocket: boolean): Promise<GraphQLDataProvider> {
     const client = LoadClientConfig();
-    const provider = newSecondaryGraphQLProvider();
-    const config = new GraphQLProviderConfigData(
-        '',
-        client.Url,
-        withWebSocket ? client.WsUrl : '',
-        async () => '',
-        undefined, undefined, undefined,
-        client.MJAPIKey
-    );
-    const ok = await provider.Config(config, undefined, true /* separateConnection */);
-    if (!ok) {
-        throw new Error('secondary GraphQLDataProvider Config() returned false');
+    const deadline = Date.now() + 180_000;
+    for (;;) {
+        const provider = newSecondaryGraphQLProvider();
+        try {
+            const config = new GraphQLProviderConfigData(
+                '',
+                client.Url,
+                withWebSocket ? client.WsUrl : '',
+                async () => '',
+                undefined, undefined, undefined,
+                client.MJAPIKey
+            );
+            const ok = await provider.Config(config, undefined, true /* separateConnection */);
+            if (!ok || provider.Entities.length === 0) {
+                const cause = provider.LastMetadataLoadError;
+                throw cause
+                    ? new Error(`secondary GraphQLDataProvider Config() loaded no entity metadata: ${cause.message}`, { cause })
+                    : new Error('secondary GraphQLDataProvider Config() loaded no entity metadata');
+            }
+            return provider;
+        } catch (e) {
+            provider.DisposeWebSocketResources();
+            if (Date.now() > deadline) {
+                throw e;
+            }
+            await Sleep(3_000);
+        }
     }
-    return provider;
 }
 
 /** Releases a session's WebSocket so the process can exit; HTTP needs no teardown. */

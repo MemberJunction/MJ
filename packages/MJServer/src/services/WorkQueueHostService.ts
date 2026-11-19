@@ -120,18 +120,28 @@ export class MJServerWorkQueueProviderSource implements WorkQueueProviderSource 
         this.factory = pool ? new TaskGraphProviderFactory(pool) : null;
     }
 
+    /** Providers minted by CreateIndependentInstance, which this source releases; the factory's own keep their lifecycle. */
+    private readonly minted = new WeakSet<IMetadataProvider>();
+
     public async CreateProvider(): Promise<IMetadataProvider> {
         if (this.factory) {
             return this.factory.CreateProvider();
         }
         if (hasCreateIndependentInstance(this.fallback)) {
-            return this.fallback.CreateIndependentInstance();
+            const provider = await this.fallback.CreateIndependentInstance();
+            this.minted.add(provider);
+            return provider;
         }
         return this.fallback;
     }
 
+    /** Releases a provider minted by CreateIndependentInstance once its delivery settles (#6273). */
     public async ReleaseProvider(provider: IMetadataProvider): Promise<void> {
-        if (provider !== this.fallback && hasReleaseIndependentInstance(provider)) {
+        if (!this.minted.has(provider)) {
+            return;
+        }
+        this.minted.delete(provider);
+        if (hasReleaseIndependentInstance(provider)) {
             await provider.ReleaseIndependentInstance();
         }
     }

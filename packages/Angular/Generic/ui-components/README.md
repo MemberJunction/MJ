@@ -1,6 +1,6 @@
 # @memberjunction/ng-ui-components
 
-Reusable, **standalone** Angular UI components for MemberJunction applications — the house replacement for Kendo UI. Every component is token-driven (`--mj-*` design tokens from `_tokens.scss`), dark-mode safe by construction, and keyboard/ARIA accessible.
+Reusable, **standalone** Angular UI components for MemberJunction applications — the house UI kit. Every component is token-driven (`--mj-*` design tokens from `_tokens.scss`), dark-mode safe by construction, and keyboard/ARIA accessible.
 
 **The rule for consuming apps: check here before building.** If a control, layout region, overlay, or pattern exists in this package, use it. Hand-rolling an app-prefixed equivalent (a bespoke button, chip, empty state, dialog…) creates divergence this package exists to eliminate. If what you need doesn't exist, propose it — generic components belong here; app-domain components belong in the app's shared package.
 
@@ -255,7 +255,7 @@ Re-export of `angular-split` — use `<as-split>` / `<as-split-area>` directly:
 ```
 
 ### `mj-accordion-panel` — MJAccordionPanelComponent (+ directives)
-Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare` (no border, header background, body fill or row hover fill, for a panel inside a card or a section directly on a page; on a device that can hover, pointing at the title or chevron gives both the brand color), `HeadingLevel: 1–6 | null` (wraps the toggle in a `role="heading"` element with that `aria-level`; null, the default, adds no wrapper), `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
+Collapsible panel for grouped content. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare` (no border, header background, body fill or row hover fill, for a panel inside a card or a section directly on a page; on a device that can hover, pointing at the title or chevron gives both the brand color), `HeadingLevel: 1–6 | null` (wraps the toggle in a `role="heading"` element with that `aria-level`; null, the default, adds no wrapper), `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
 
 ```html
 <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">
@@ -264,10 +264,22 @@ Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Ex
 </mj-accordion-panel>
 ```
 
+Flat mode: `Flat` renders the panel as a plain headed block, the title as a heading over a body that is always open, with no toggle, border or body padding. A panel nested inside a flat panel, or inside the active section of an `mj-accordion-sections`, renders flat automatically, so accordions within accordions become headed blocks. A flat body is instantiated (lazy `mjAccordionBody` included) and, the first time a panel opens this way, it emits `ExpandedChange(true)` the way a click would, so a body that loads its data on first expand still loads. `SectionKey`, `SectionTitle`, `SectionIcon` and `SectionCount` describe the panel to an `mj-accordion-sections` picker; set `SectionTitle` whenever the title template carries badges or extra text, because the fallback is `Title`, then the rendered title text.
+
+### `mj-accordion-sections` — MJAccordionSectionsComponent
+The phone presentation of a stack of `mj-accordion-panel`s. Disabled, it renders nothing of its own and the panels behave as accordions. Enabled, it puts an `mj-section-picker` above them (sticky), shows one top-level panel at a time with its accordion chrome gone, and renders panels nested inside that section as flat headed blocks. Top-level means a direct child; a panel inside an `@if` counts and joins or leaves the picker as the condition changes. No breakpoint logic, the caller decides. Inputs: `Enabled`, `ActiveKey` (falls back to the first panel). Output: `ActiveKeyChange`. Give every panel a `SectionKey` so the active section survives panels appearing or disappearing (an unkeyed panel is keyed by position). Not exported from `MJAccordionModule` (it depends on the section picker); import `MJAccordionSectionsComponent` alongside it.
+
+```html
+<mj-accordion-sections [Enabled]="IsPhone" [ActiveKey]="phoneSection" (ActiveKeyChange)="phoneSection = $event">
+  <mj-accordion-panel SectionKey="input" SectionTitle="Input" SectionIcon="fa-solid fa-comment-dots" [Expanded]="true">…</mj-accordion-panel>
+  <mj-accordion-panel SectionKey="history" SectionTitle="Execution History" [SectionCount]="runs.length">…</mj-accordion-panel>
+</mj-accordion-sections>
+```
+
 ## Overlays
 
 ### `mj-dialog` — MJDialogComponent
-Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`.
+Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`. On phones (768px and below) the dialog picks its own presentation from `Size` and `Role` (`PhoneMode`): every `alertdialog`, and `sm` / `auto` dialogs without a `Width`, open as a bottom sheet sized to their content with full-width 44px actions; `md` / `lg` / `xl` and `Width`-set dialogs go full-screen on `100dvh` with the title and actions pinned and safe-area padding. No input changes are needed.
 
 Focus inputs, each on by default:
 
@@ -290,7 +302,7 @@ Focus inputs, each on by default:
 `Open(settings): MJDialogRef` with `{ title, content: string | Type, actions: [{ text, primary?, themeColor? }], width, … }`. `ref.Result` (Observable) emits the clicked action or `undefined` on dismiss; `ref.Content.instance` exposes a mounted content component; `ref.Close(result?)`.
 
 ### `mj-confirm-dialog` — MJConfirmDialogComponent
-Purpose-built confirmation on top of `mj-dialog`. Inputs: `[(Visible)]` (two-way), `Type: 'default'|'danger'|'warning'|'info'`, `Title`, `Message`, `DetailMessage`, `ConfirmText`, `CancelText`, `Icon`, `Processing` (spinner + blocks dismissal for async work). Outputs: `Confirmed` (**stays open — you close it when the work finishes**), `Cancelled` (auto-closes). Confirm button is leftmost, per MJ dialog convention.
+Purpose-built confirmation on top of `mj-dialog`. Inputs: `[(Visible)]` (two-way), `Type: 'default'|'danger'|'warning'|'info'`, `Title`, `Message`, `DetailMessage`, `ConfirmText`, `CancelText`, `Icon`, `Processing` (spinner + blocks dismissal for async work). Outputs: `Confirmed` (**stays open — you close it when the work finishes**), `Cancelled` (auto-closes). Confirm button is leftmost, per MJ dialog convention. Initial focus goes to the confirm button, except for `Type="danger"`, which opens on Cancel (the least destructive action, per the WAI-ARIA alert dialog pattern), so an Enter pressed as it opens does not delete or discard. `MJConfirmService.ConfirmDelete` gets this too.
 
 ### `MJConfirmService` — promise-based confirms
 `await Confirm({ message, title?, detail?, type?, … })` → `boolean`, and `ConfirmDelete(...)` which forces danger styling and "Delete". Mounts above `mj-window` (z-index 20000).
@@ -313,6 +325,18 @@ Generic mobile bottom sheet: scrim + panel sliding up from the bottom edge with 
 <mj-bottom-sheet [(Visible)]="sheetOpen" Title="Open Records">
   <div class="rows">…</div>
 </mj-bottom-sheet>
+```
+
+### `mj-section-picker` — MJSectionPickerComponent
+The phone replacement for a section rail, tab strip or icon rail: one full-width 44px button naming the current section (icon, title, error/warning/dirty indicators, row count, chevron) that opens a searchable "Sections" `mj-bottom-sheet` listing every section, first-class `Items` first and then each `Groups` entry under its heading (a form's More folder, say). Pure chrome, no breakpoint logic: the caller decides when a picker is the right presentation and applies the selection itself. Inputs: `Items: SectionPickerItem[]` (`Key`, `Title`, `Icon?`, `Count?`, `ErrorCount?`, `WarningCount?`, `DirtyCount?`), `Groups: SectionPickerGroup[]` (`Title`, `Items`), `ActiveKey` (falls back to the first item), `SheetTitle`, `Searchable`, `SearchPlaceholder`. Output: `ActiveKeyChange` (the sheet closes and the search clears on every pick). Every tap target is 44px. Enter in the search box opens the first match, which is outlined while a search is typed; with no search or no match it does nothing. Enter never reaches a surrounding `<form>`, so a picker inside a form cannot click the form's first button.
+
+```html
+@if (IsPhone) {
+  <mj-section-picker [Items]="sections" [Groups]="[{ Title: 'More', Items: moreSections }]"
+                     [ActiveKey]="activeKey" (ActiveKeyChange)="Activate($event)"></mj-section-picker>
+} @else {
+  <mj-left-nav …></mj-left-nav>
+}
 ```
 
 ## Patterns

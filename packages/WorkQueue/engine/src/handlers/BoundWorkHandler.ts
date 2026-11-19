@@ -4,46 +4,19 @@ import type { WorkContext, WorkHandler, WorkMessage, WorkOutcome } from '@member
 import type { BaseWorkHandler } from './BaseWorkHandler';
 
 /**
- * Supplies the provider a delivery's handler uses. A host may mint one per delivery or share one. A source that mints
- * implements ReleaseProvider; the host calls it once the handler has settled, success or failure.
+ * Supplies the provider a delivery's handler uses. A host may mint one per delivery or share one.
+ *
+ * Contract: deliveries handled in parallel must not share a provider that holds transaction state, or their
+ * transactions interleave (#6273). A source that mints a provider per delivery implements {@link ReleaseProvider},
+ * which {@link BoundWorkHandler} calls once that delivery's handler settles, also when it throws.
  */
 export interface WorkQueueProviderSource {
     CreateProvider(): Promise<IMetadataProvider>;
+    /** Gives back a provider {@link CreateProvider} minted. Optional: a shared provider needs no release. */
     ReleaseProvider?(provider: IMetadataProvider): Promise<void>;
 }
 
-/** What IndependentProviderSource needs from the root provider; DatabaseProviderBase satisfies it. */
-export interface IndependentInstanceRoot {
-    CreateIndependentInstance(): Promise<IMetadataProvider>;
-}
-
-interface ReleasableProvider extends IMetadataProvider {
-    ReleaseIndependentInstance(): Promise<void>;
-}
-
-function IsReleasable(provider: IMetadataProvider): provider is ReleasableProvider {
-    return 'ReleaseIndependentInstance' in provider && typeof provider.ReleaseIndependentInstance === 'function';
-}
-
-/**
- * Mints an independent provider over the root's shared pool for every delivery, so concurrent handlers never share a
- * transaction scope, and drops that instance's transaction handle when the handler settles.
- */
-export class IndependentProviderSource implements WorkQueueProviderSource {
-    constructor(private readonly root: IndependentInstanceRoot) {}
-
-    public async CreateProvider(): Promise<IMetadataProvider> {
-        return this.root.CreateIndependentInstance();
-    }
-
-    public async ReleaseProvider(provider: IMetadataProvider): Promise<void> {
-        if (IsReleasable(provider)) {
-            await provider.ReleaseIndependentInstance();
-        }
-    }
-}
-
-/** Hands every delivery the same provider — tests, CLIs and hosts without a connection pool. */
+/** Hands every delivery the same provider — tests, and hosts that run one delivery at a time. */
 export class SharedProviderSource implements WorkQueueProviderSource {
     constructor(private readonly provider: IMetadataProvider) {}
 

@@ -4,9 +4,11 @@ import { MJGlobal } from '@memberjunction/global';
 import { Outcome } from '@memberjunction/work-queue-core';
 import type { WorkContext, WorkMessage, WorkOutcome } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler } from '../handlers/BaseWorkHandler';
-import { BoundWorkHandler, IndependentProviderSource, SharedProviderSource } from '../handlers/BoundWorkHandler';
-import type { IndependentInstanceRoot, WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
+import { BoundWorkHandler, SharedProviderSource } from '../handlers/BoundWorkHandler';
+import type { WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
+import { IndependentProviderSource } from '../handlers/IndependentProviderSource';
+import type { IndependentProviderFactory } from '../handlers/IndependentProviderSource';
 import { MakeContext, MakeMessage, SilentLogger, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
 
 class EchoHandler extends BaseWorkHandler {
@@ -137,7 +139,7 @@ describe('IndependentProviderSource', () => {
 
     it('mints a new instance for every delivery instead of sharing the root provider (#6273)', async () => {
         const { provider, minted } = root();
-        const source = new IndependentProviderSource(provider as unknown as IndependentInstanceRoot);
+        const source = new IndependentProviderSource(provider as unknown as IndependentProviderFactory);
         const first = await source.CreateProvider();
         const second = await source.CreateProvider();
         expect(first).not.toBe(second);
@@ -147,9 +149,61 @@ describe('IndependentProviderSource', () => {
 
     it('releases the instance it minted', async () => {
         const { provider, minted } = root();
-        const source = new IndependentProviderSource(provider as unknown as IndependentInstanceRoot);
+        const source = new IndependentProviderSource(provider as unknown as IndependentProviderFactory);
         const child = await source.CreateProvider();
         await source.ReleaseProvider(child);
         expect(minted[0].Released).toBe(1);
+    });
+});
+
+class SlowHandler extends BaseWorkHandler {
+    public static Seen: IMetadataProvider[] = [];
+    public async Handle(message: WorkMessage, _context: WorkContext): Promise<WorkOutcome> {
+        SlowHandler.Seen.push(this.Provider);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (message.Attributes.throw === 'yes') {
+            throw new Error('handler blew up');
+        }
+        return Outcome.Complete();
+    }
+}
+MJGlobal.Instance.ClassFactory.Register(BaseWorkHandler, SlowHandler, 'test.slow-handler');
+
+describe('IndependentProviderSource — a provider per delivery (#6273)', () => {
+    function factory() {
+        const released: string[] = [];
+        let n = 0;
+        const base = {
+            CreateIndependentInstance: vi.fn(async () => {
+                const id = `p${++n}`;
+                return { Id: id, ReleaseIndependentInstance: vi.fn(async () => { released.push(id); }) } as unknown as IMetadataProvider & { ReleaseIndependentInstance(): Promise<void> };
+            }),
+        };
+        return { base, released };
+    }
+
+    it('gives two concurrent deliveries distinct providers and releases each once', async () => {
+        const { base, released } = factory();
+        SlowHandler.Seen = [];
+        const bound = new BoundWorkHandler('test.slow-handler', TEST_USER, new IndependentProviderSource(base), ResolveWorkHandler);
+
+        await Promise.all([bound.Handle(MakeMessage(), MakeContext()), bound.Handle(MakeMessage(), MakeContext())]);
+
+        expect(SlowHandler.Seen).toHaveLength(2);
+        expect(SlowHandler.Seen[0]).not.toBe(SlowHandler.Seen[1]);
+        expect(released.sort()).toEqual(['p1', 'p2']);
+    });
+
+    it('releases the provider when the handler throws', async () => {
+        const { base, released } = factory();
+        const bound = new BoundWorkHandler('test.slow-handler', TEST_USER, new IndependentProviderSource(base), ResolveWorkHandler);
+
+        await expect(bound.Handle(MakeMessage({ Attributes: { throw: 'yes' } }), MakeContext())).rejects.toThrow('handler blew up');
+        expect(released).toEqual(['p1']);
+    });
+
+    it('a shared source needs no release', async () => {
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, new SharedProviderSource(TEST_PROVIDER), ResolveWorkHandler);
+        expect(await bound.Handle(MakeMessage(), MakeContext())).toEqual({ Kind: 'Complete' });
     });
 });

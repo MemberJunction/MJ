@@ -1,0 +1,179 @@
+[
+  {
+    "_comments": [
+      "Collaborative Yjs CRDT working state: server-internal only, no change tracking, no caching, no user search, no public GraphQL mutations"
+    ],
+    "fields": {
+      "Name": "MJ: Artifact Working States",
+      "IncludeInAPI": true,
+      "AllowAllRowsAPI": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowUserSearchAPI": false,
+      "AllowCaching": false,
+      "TrustServerCacheCompletely": false,
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Working States"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:12.131Z",
+      "checksum": "a3b5d5471af28b0fcebfcb3c434ce9bb92c716b26bd51cf638cfbecb39c2e879"
+    }
+  },
+  {
+    "_comments": [
+      "Hide incoming Artifact Working States relationships from Artifact/User forms and API bundles"
+    ],
+    "fields": {
+      "Name": "MJ: Artifacts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Working States&RelatedEntityJoinField=ArtifactID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.200Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        },
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.208Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifacts"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Artifact Versions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactVersionID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.217Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Users&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Working States&RelatedEntityJoinField=LastModifiedByUserID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.225Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        },
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Users&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=CreatedByUserID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.232Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invites"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "DisplayInForm": false,
+            "BundleInAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Magic Link Invites&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=MagicLinkInviteID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.240Z",
+            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    }
+  },
+  {
+    "_comments": [
+      "External guest share links bind Frozen ArtifactVersions to MagicLinkInvites and must only be accessed via governed Remote Operations and scoped resolvers, never public GraphQL CRUD or user search"
+    ],
+    "fields": {
+      "Name": "MJ: Artifact Guest Share Links",
+      "IncludeInAPI": true,
+      "AllowAllRowsAPI": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowUserSearchAPI": false,
+      "AllowCaching": false,
+      "TrustServerCacheCompletely": false,
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:12.158Z",
+      "checksum": "eda0fb93227081b0881a5202663b59b808d890c01ca5e0da39cc1b24e002856c"
+    }
+  }
+]

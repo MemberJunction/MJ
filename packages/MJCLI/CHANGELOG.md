@@ -1,5 +1,250 @@
 # Change Log - @memberjunction/cli
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 13a71da: Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
+  - Business Central posts to the connection's `ExternalSystemID` only, reads its Credential through `CredentialEngine`, and takes `AuthorityHost` from the Credential within an Entra ID allow list. A connection that kept its company only on the Credential must now set `ExternalSystemID`. QuickBooks `GetGLEntries` filters by `DocumentNumber`.
+  - Dropbox `ListObjects` returns every page and `SearchFiles` pages with a real cursor (`FileSearchOptions.pageToken`); Apollo retries a 429 with `Retry-After` up to 120 s.
+  - MS Graph `ForwardMessage` reads the mailbox from `ContextData.Email`; received messages carry `Direction` and `BCCRecipients`.
+  - Notification email/SMS go through `NOTIFICATION_EMAIL_PROVIDER` / `NOTIFICATION_SMS_PROVIDER` or `notifications.emailProvider` / `smsProvider` in `mj.config.cjs`; malformed `SecondaryScopes` rows are skipped and refused at save; uncached recipients get their roles read.
+  - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
+  - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
+  - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+  - Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
+
+- e97d093: Distribution installs no longer ship MJ Explorer's `@memberjunction/*` prebundle exclude. The monorepo needs it for its symlinked packages, but an app that installs MJ from npm then has `ng serve` resolve MJ libraries' third-party imports from the app's folder, so under pnpm the page fails to load until the app declares each one (6.2's markdown component lazy-loads `katex`). The distribution's `angular.json` keeps an empty exclude list, and `mj dev workspace` now adds `@memberjunction/*` to an app shell that links MJ in, and removes it on clean.
+
+### Patch Changes
+
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- acd082e: Add collaborative MJ Documents, MJ Presentations (16:9 structured Slide Decks), MJ Spreadsheets (formulas, `=MJ.QUERY()` live governed tables, range charts, and round-trip `.xlsx` / `.csv` import & export), inline OLE Whiteboard editing, the Excel Office Add-in (`@memberjunction/excel-addin` + `@memberjunction/excel-addin-server`), and the unified **Library** application (`LibraryResource` + `<mj-library-workspace>`):
+  - **Real-time Collaboration & Governance (`@memberjunction/core-entities`, `@memberjunction/server`, `@memberjunction/ai-agents`)**: Yjs CRDT collaboration rooms over WebSocket (`ArtifactCollaborationServer`), viewer-scoped permission delegation (`ArtifactPermissionEngine` across ownership, host-entity delegates, direct grants, and cascaded collection grants), governed document blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `Artifact`, `InteractiveComponent`), `SlideDeckEngine`, and `SpreadsheetEngine`.
+  - **Collaborative Artifact Viewers (`@memberjunction/ng-artifacts`, `@memberjunction/ng-conversations`)**: Rich Markdown document editor with Suggesting mode and word-level tracked changes, `.docx` / `.pptx` / `.xlsx` import and export services, interactive 16:9 Slide Deck studio and presenter view, collaborative Spreadsheet studio, and explicit Save/Commit inline Whiteboard canvas editing.
+  - **Dedicated `Library` Application & Explorer Routing (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-application`, `@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`)**: Ships a dedicated header-pinned `Library` application (`DefaultForNewUser: true`) alongside an untouched `File Browser`, preserves `Collections` and user-scoped `Agent Activity` (with an authorized `All Users` scope toggle and `Tasks` -> `Agent Activity` nav migration via `MOVED_NAV_ITEMS`) in `Chat`, removes arbitrary row caps on shared items, queries exact per-artifact latest versions, bounds remote Connected Drive text previews to 100 KB, and adds version-aware + overwrite-safe Connected Drive exports.
+
+  **Upgrade & Environment Notes:**
+  - **Required Server HMAC Secrets**: Configure dedicated `>= 32`-character secrets on `MJAPI` for collaboration WebSocket tickets (`MJ_ARTIFACT_COLLAB_HMAC_SECRET`, e.g. `openssl rand -hex 32`) and frozen live-block snapshots (`MJ_FROZEN_BLOCK_HMAC_SECRET`, e.g. `openssl rand -hex 32`). Both endpoints fail closed if their secret is unset or shorter than 32 characters; `MJServer` logs a startup warning when either secret is missing, and collaborative viewers display a live-sync unavailable notice while remaining safely read-only.
+  - **Reverse-Proxy WebSocket URLs & Multi-Node Routing (`MJAPI_PUBLIC_URL`)**: `DocumentCollaborationService` derives the Yjs WebSocket endpoint directly from the browser's configured GraphQL URL unless `MJAPI_PUBLIC_URL` (`publicUrl`) is explicitly set on `MJAPI`, preventing `ws://localhost:4000` fallbacks behind reverse proxies. Multi-node `MJAPI` clusters should configure sticky WebSocket routing unless a distributed `ITicketReplayStore` is registered via `SetTicketReplayStore`.
+  - **Existing Users & `Library` App Visibility**: New users receive the `Library` application automatically via `DefaultForNewUser: true`. Existing users who already customized their `MJ: User Applications` rows retain their existing app selections; they can enable `Library` in the Explorer App Switcher / Settings, or administrators can provision `UserApplication` rows (`ApplicationID = 'DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A'`) for pre-existing active users as a one-time post-upgrade step.
+  - **Deployment / Rolling-Upgrade Note (`@memberjunction/server` + `@memberjunction/ng-artifacts`)**: `MJAPI` (`@memberjunction/server`) and `MJExplorer` (`@memberjunction/ng-artifacts`) require an **all-at-once coordinated deployment** rather than a mixed-version rolling upgrade. The collaboration protocol introduces incremental CRDT delta payloads on `version-saved` (`prevStateVectorB64` / `savedSnapshotB64`), the JSON `PayloadBase64` WebSocket relay envelope, and the `CollaborationTicketResult.ErrorCode` GraphQL field, which must be deployed together across server and web client bundles.
+
+  Application metadata (`metadata/applications`), authorization metadata (`metadata/authorizations`, `metadata/authorization-roles`), entity metadata (`metadata/entities`), and artifact type metadata (`metadata/artifact-types`) change, so the release requires a consolidated metadata sync migration.
+
+- 74950be: Open Apps can be installed from a folder in the consumer repository. `mj app install ./openapps/analytics` stores the app as a `file:` locator relative to the repository root (`file:openapps/analytics`), and `mj app upgrade`, `mj app remove` and `mj app check-updates` read the app from that folder. The folder, its `mj-app.json` and its SQL directories must be inside the repository with links resolved, so a link to a folder or file outside it is refused. The folder's version is the `version` in its `mj-app.json`. Its migrations, `-pg` migrations and teardown scripts are copied with the same rules as a GitHub download. Its npm packages are written as `workspace:*`, and the install stops before any change when a package of the app, or of any local dependency it installs, is not a project in the pnpm or yarn workspace. Remove reads the installed version's migrations and teardown scripts from the folder, so it stops before any change when the folder is at another version or was deleted; the `mj app remove` help says to restore the folder from git first.
+
+  A dependency can name another local app with a `file:` locator, but only from an app that is itself installed from a local folder. `mj app upgrade --reapply` runs the upgrade again at the installed version, so changes in a local folder apply without a version bump.
+
+  The engine reads every manifest, version and SQL file through an `OpenAppSource` (`GitHubAppSource` or `LocalAppSource`), selected by `ResolveAppSource`. GitHub installs call the GitHub client with the same arguments as before.
+
+  The deterministic integration tier has a new bundle, `open-app-local-source` (IT178), that installs, upgrades and removes apps from a throwaway pnpm workspace against the live database. `@memberjunction/testing-integration` exports its fixture type, `OpenAppLocalSourceFixture`.
+
+- e288291: PostgreSQL conversion fixes for Open App migrations (issue #5364).
+  - sql-converter (`mj migrate convert`): T-SQL built-ins are no longer emitted as quoted identifiers (`"UPPER"(x)`, `"LEN"(x)`); `OBJECT_ID('s.T')` becomes `to_regclass('s."T"')` and `parent_object_id` becomes `conrelid` in constraint guards; `LIKE` patterns with character classes become `~` / `!~` regexes instead of CHECKs that accept every value; `IF COL_LENGTH(...) IS [NOT] NULL` column guards are translated and placed with the DDL, ahead of the backfill and CHECK that use the column; mid-batch `DECLARE @X = (SELECT ...)` variables are inlined where they are used; `Length=` / `Precision=` in CodeGen `UPDATE EntityField` blocks are quoted; CodeGen hierarchy inline TVFs convert with typed result columns and keep `+ 1` as arithmetic; CodeGen CRUD procedures and `__mj_UpdatedAt` triggers in an Open App schema convert instead of being skipped; `CREATE OR ALTER` routines are classified by kind, and hand-written Open App triggers, procedures and functions are commented out whole under a counted `NEEDS HAND AUTHORING` gap instead of passing through as live T-SQL. An `__mj_<App>.` schema qualifier is no longer quoted as if it were an `__mj_` column.
+  - sqlglot-ts: `TINYINT` maps to `SMALLINT` (it was emitted as `UTINYINT`).
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` bake a baseline's CodeGen only for entities in the target `--schema`, not every schema in the working database.
+
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [e97d093]
+- Updated dependencies [f49a2e1]
+- Updated dependencies [add9e8f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [f49a2e1]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [51972e3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [74950be]
+- Updated dependencies [f671eff]
+- Updated dependencies [4262206]
+- Updated dependencies [e9472ef]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [c17c7be]
+- Updated dependencies [e288291]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [a78d855]
+- Updated dependencies [7747b73]
+- Updated dependencies [c705137]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core-entities-server@6.3.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.1
+  - @memberjunction/work-queue-engine@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/codegen-lib@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/metadata-sync@6.3.0-edge.1
+  - @memberjunction/testing-cli@6.3.0-edge.1
+  - @memberjunction/installer@6.3.0-edge.1
+  - @memberjunction/db-auto-doc@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/open-app-engine@6.3.0-edge.1
+  - @memberjunction/sql-converter@6.3.0-edge.1
+  - @memberjunction/sqlglot-ts@6.3.0-edge.1
+  - @memberjunction/redis-provider@6.3.0-edge.1
+  - @memberjunction/ai-cli@6.3.0-edge.1
+  - @memberjunction/query-gen@6.3.0-edge.1
+  - @memberjunction/record-cloning@6.3.0-edge.1
+  - @memberjunction/cli-core@6.3.0-edge.1
+  - @memberjunction/diagnostics@6.3.0-edge.1
+  - @memberjunction/config@6.3.0-edge.1
+  - @memberjunction/dynamic-packages@6.3.0-edge.1
+  - @memberjunction/standards@6.3.0-edge.1
+  - @memberjunction/work-queue-core@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 8fb8a07: Open App CLI messages and exit codes: `mj app check-updates` and migration downloads explain a private repository the credential cannot read, the credential message names the token in use and covers fine-grained and SSO tokens; `mj app remove`/`enable`/`disable` exit 1 once on failure; `mj migrate` without `--schema` uses the schema from `mj-app.json` and logs it.
+- 2bf6237: Polish Citizen Agent Builder Docker runtime, audit CLI, and inactive credential decryption:
+  - Fix `mj ai audit agent-run --list` (`FormatRunList`) to handle plain objects returned by `ResultType: 'simple'` when formatting as JSON, and safely normalize `Date | string` step timestamps in `AgentAuditService`.
+  - Pass `-w /workspace` in `citizen-builder/scripts/query-run-history.sh` and `citizen-builder/scripts/sync-metadata.sh` so container CLI commands always resolve `/workspace/mj.config.cjs`.
+  - Pass `API_PORT` and `EXPLORER_PORT` into the `mj` container, sync `GRAPHQL_URI` and `GRAPHQL_WS_URI` in MJExplorer's environment files when `API_PORT` is non-default, and display actual host ports in the container startup banner.
+  - Cap SQL Server container memory (`MSSQL_MEMORY_LIMIT_MB`, default `3072`), run `mjapi` and `mjexplorer` directly under PM2 in `apps/MJAPI` and `apps/MJExplorer` so OOM exits are not masked by `turbo`, and add `globalPassThroughEnv` to `distribution.turbo.json`.
+  - Suppress false-alarm `LogError` messages when decrypting fields on explicitly inactive rows (`IsActive === false` or `0`) in `GenericDatabaseProvider`.
+- 93cae0c: `mj dev workspace` adds the linked repos' npm scopes to each app shell's `angular.json` prebundle exclude on join, records them in the sentinel, reports them in `status`/`doctor`, and `clean` removes exactly those entries (#3875).
+- fcc8668: PostgreSQL converter: an `EXEC` inside a converted procedure body (such as CodeGen's spDelete cascade updates) now emits a call that works whether the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1` to `_Clear` flags and known boolean columns as `FALSE`/`TRUE`. Before, these calls used typed arguments and integer literals, so deleting a record with dependents failed at run time with `function ... does not exist` (for example, deleting a conversation). The call logic is now shared with the top-level EXEC conversion.
+
+  Converted procedure bodies also handle three more T-SQL forms: `SELECT @a = x, @b = y ...` becomes `SELECT x, y INTO p_a, p_b ...` (before, it became a comparison with no destination); `OUTPUT` parameters become `INOUT` when the procedure returns no rows (before, they were `IN` with `RETURNS VOID`, so the caller got nothing back); and `0`/`1` compared with a known boolean column, such as `ci.IsActive = 1`, becomes `FALSE`/`TRUE`.
+
+  `mj migrate convert` without `--split` now warns when a migration contains CodeGen CRUD procedures, and names `--split --bake-codegen` as the way to write them natively for PostgreSQL.
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- f0c7dcd: Add `mj doctor value-lists`, which finds rows whose value-list field holds a value outside its list (they fail validation on their next save) and can set named fields to `ListOrUserEntry`. Add the `migration-string-collation` standard, which flags new string columns in migrations that do not declare a collation.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [8fb8a07]
+- Updated dependencies [76dc1bb]
+- Updated dependencies [064f9a9]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [ed5c6e2]
+- Updated dependencies [6555a44]
+- Updated dependencies [c3a1be6]
+- Updated dependencies [7bbc72f]
+- Updated dependencies [1ce1b80]
+- Updated dependencies [9cd37bd]
+- Updated dependencies [a0079ce]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [a894cd0]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [fcc8668]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [2aa1c10]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [1e73a8d]
+- Updated dependencies [7069bfe]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [f0c7dcd]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/open-app-engine@6.3.0-edge.0
+  - @memberjunction/codegen-lib@6.3.0-edge.0
+  - @memberjunction/testing-cli@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai-cli@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.0
+  - @memberjunction/installer@6.3.0-edge.0
+  - @memberjunction/sqlglot-ts@6.3.0-edge.0
+  - @memberjunction/cli-core@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/record-cloning@6.3.0-edge.0
+  - @memberjunction/sql-converter@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/core-entities-server@6.3.0-edge.0
+  - @memberjunction/redis-provider@6.3.0-edge.0
+  - @memberjunction/standards@6.3.0-edge.0
+  - @memberjunction/work-queue-engine@6.3.0-edge.0
+  - @memberjunction/db-auto-doc@6.3.0-edge.0
+  - @memberjunction/metadata-sync@6.3.0-edge.0
+  - @memberjunction/query-gen@6.3.0-edge.0
+  - @memberjunction/diagnostics@6.3.0-edge.0
+  - @memberjunction/config@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+  - @memberjunction/work-queue-core@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -693,7 +693,7 @@ function ScopeOf(spec: string): string | undefined {
  * Builds the full list of workspace targets from options.
  * Combines the primary server/client paths with any additional targets.
  */
-function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
+function buildTargetList(options: PackageStepFileOptions): WorkspaceTarget[] {
   const targets: WorkspaceTarget[] = [
     { Path: ResolveServerPackagePath(options.RepoRoot, options.ServerPackagePath), Role: 'server' },
     { Path: ResolveClientPackagePath(options.RepoRoot, options.ClientPackagePath), Role: 'client' },
@@ -836,6 +836,40 @@ export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareV
   }
 
   return updatedCount;
+}
+
+/** Where the package step of an install or upgrade writes: the workspace layout and package manager. */
+export type PackageStepFileOptions = Pick<
+  PackageManagerOptions,
+  'RepoRoot' | 'ServerPackagePath' | 'ClientPackagePath' | 'AdditionalTargets' | 'PackageManager'
+>;
+
+/** Lockfiles a package install can rewrite at its install root. */
+const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'package-lock.json'] as const;
+
+/**
+ * Every file the package step can write, as absolute paths: the server/client (and additional)
+ * workspace `package.json` files {@link AddAppPackages} edits, every workspace `package.json`
+ * {@link BumpPrefixedDependencies} may edit, and the lockfiles at the repo root and at the root
+ * {@link RunPackageInstallAsync} installs from (an `mj dev workspace` parent, when the repo is a
+ * member of one). A lockfile that does not exist yet is listed too, so a caller can tell one the
+ * install created. Read-only. `node_modules` is not listed: it cannot be snapshotted.
+ */
+export function ListPackageStepFiles(options: PackageStepFileOptions): string[] {
+  const files = new Set<string>();
+  for (const target of buildTargetList(options)) {
+    files.add(resolve(options.RepoRoot, target.Path, 'package.json'));
+  }
+  for (const pkgJson of findWorkspacePackageJsonFiles(options.RepoRoot)) {
+    files.add(pkgJson);
+  }
+  const installRoot = ResolveInstallRoot(options.RepoRoot, options.PackageManager).Root;
+  for (const root of new Set([resolve(options.RepoRoot), resolve(installRoot)])) {
+    for (const lockfile of LOCKFILE_NAMES) {
+      files.add(join(root, lockfile));
+    }
+  }
+  return [...files];
 }
 
 /**

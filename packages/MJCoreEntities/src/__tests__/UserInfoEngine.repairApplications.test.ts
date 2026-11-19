@@ -12,6 +12,8 @@ let mockCurrentUser: { ID: string; UserRoles: { UserID: string; RoleID: string }
 let mockRunViewResults: { Success: boolean; Results: unknown[]; RowCount: number; TotalRowCount: number; ExecutionTime: number; ErrorMessage: string };
 let mockRunViewCallCount: number;
 let mockRunViewLastParams: Record<string, unknown> | null;
+/** When non-empty, each RunView call takes the next result from here instead of mockRunViewResults. */
+let mockRunViewQueue: Array<typeof mockRunViewResults> = [];
 
 /**
  * Tracks calls to GetEntityObject + Save to verify self-healing creation.
@@ -93,7 +95,7 @@ vi.mock('@memberjunction/core', () => {
             async RunView(params: Record<string, unknown>) {
                 mockRunViewCallCount++;
                 mockRunViewLastParams = params;
-                return mockRunViewResults;
+                return mockRunViewQueue.length > 0 ? mockRunViewQueue.shift() : mockRunViewResults;
             }
         },
     };
@@ -150,6 +152,7 @@ describe('UserInfoEngine — CreateDefaultApplications DB Repair', () => {
         };
         mockRunViewCallCount = 0;
         mockRunViewLastParams = null;
+        mockRunViewQueue = [];
         mockSaveCallIndex = 0;
         mockSaveResults = [true, true];
 
@@ -260,5 +263,52 @@ describe('UserInfoEngine — CreateDefaultApplications DB Repair', () => {
 
         // Should have attempted DB query
         expect(mockRunViewCallCount).toBe(1);
+    });
+});
+
+describe('UserInfoEngine — CreateDefaultApplications when the server created the rows first (#6054)', () => {
+    let engine: UserInfoEngine;
+    const empty = { Success: true, Results: [] as unknown[], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+
+    beforeEach(() => {
+        engine = UserInfoEngine.Instance;
+        mockCurrentUser = { ID: USER_ID, UserRoles: [{ UserID: USER_ID, RoleID: 'ROLE-1' }] };
+        mockRunViewCallCount = 0;
+        mockRunViewLastParams = null;
+        mockRunViewQueue = [];
+        mockSaveCallIndex = 0;
+        (engine as unknown as { _userApplications: unknown[] })._userApplications = [];
+        (engine as unknown as { _loadedForUserId: string })._loadedForUserId = USER_ID;
+        (engine as unknown as { _applicationRoles: unknown[] })._applicationRoles = [];
+    });
+
+    it('keeps the server\'s row for a save the unique key refused, and logs no error for it', async () => {
+        const serverRow = makeUserAppRecord('APP-2', 1);
+        mockSaveResults = [true, false]; // Home saves; Admin collides with the server's row
+        mockRunViewQueue = [empty, { ...empty, Results: [makeUserAppRecord('APP-1', 0), serverRow], RowCount: 2, TotalRowCount: 2 }];
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const result = await engine.CreateDefaultApplications();
+
+        expect(result.map((r) => r.ApplicationID)).toEqual(['APP-1', 'APP-2']);
+        expect(result[1]).toBe(serverRow);
+        expect(mockRunViewLastParams).toMatchObject({ BypassCache: true });
+        expect(errorSpy).not.toHaveBeenCalled();
+        const cached = (engine as unknown as { _userApplications: Array<{ ApplicationID: string }> })._userApplications;
+        expect(cached.map((r) => r.ApplicationID).sort()).toEqual(['APP-1', 'APP-2']);
+        errorSpy.mockRestore();
+    });
+
+    it('still reports an app whose save failed and that the database does not have', async () => {
+        mockSaveResults = [true, false];
+        mockRunViewQueue = [empty, { ...empty, Results: [makeUserAppRecord('APP-1', 0)], RowCount: 1, TotalRowCount: 1 }];
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const result = await engine.CreateDefaultApplications();
+
+        expect(result.map((r) => r.ApplicationID)).toEqual(['APP-1']);
+        expect(errorSpy).toHaveBeenCalledTimes(1);
+        expect(String(errorSpy.mock.calls[0][0])).toContain('Failed to create for Admin');
+        errorSpy.mockRestore();
     });
 });

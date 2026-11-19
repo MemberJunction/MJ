@@ -13,7 +13,7 @@ Direct integrations with large language model APIs.
 | Package | npm | Description |
 |---------|-----|-------------|
 | [Anthropic](./Anthropic/readme.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
-| [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
+| [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models, including the Gemini Decisions API (`gemini-decision-1`) |
 | [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
 | [Inception](./Inception/README.md) | `@memberjunction/ai-inception` | Inception Labs' Mercury diffusion models: the Mercury chat models, and the Mercury Decide decision model on Inception's Decisions API |
 | [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |

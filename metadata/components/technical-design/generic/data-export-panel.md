@@ -1,3 +1,5 @@
+> **Deprecated**: kept for existing components. New components use the built-in export of DataGrid, EntityDataGrid and SimpleChart, `ExportableData` for other data elements, and the artifact viewer's PDF export for a whole component.
+
 ## Architecture
 React functional component with dual-mode operation (UI vs headless) supporting CSV, Excel (XLSX), and PDF exports.
 

@@ -31,16 +31,21 @@
  * promote STEPWISE. If the freshly-trained model is leakage-flagged, the gate refuses Published
  * unless `signOff=true` + a `reason`; we pass both defensively so it always reaches Published.
  *
- * THROWAWAY rows it creates (all cleaned up in `finally`, child→parent): a driver-named ML Algorithm
- * (if missing) + an ML Training Pipeline + the trained Model (+ its Training Run), plus the
- * server-generated Action + its Params. The shared "Predictive Studio Models" Action Category is
- * NOT deleted (it may hold other models' actions).
+ * THROWAWAY rows it creates, all deleted in `finally` through `lib/ps-rig-lifecycle.ts`, children
+ * first, every Delete() checked — a row it cannot delete fails the rig: the server-generated Action
+ * + its Params (found by the model ID baked into its ModelID param), then through the harness
+ * cleanup the ML Training Pipeline, the version-1 Prediction
+ * Unit and Evaluation Protocol it is bound to (bound through the harness's pipeline migration, every
+ * row saved over GraphQL), the trained Model, its Training Run(s), Training Snapshot and stored
+ * files, and the driver's ML Algorithm when the rig created it. The shared "Predictive Studio
+ * Models" Action Category is NOT deleted (it may hold other models' actions).
  *
  * AUTH: system API key from MJ_API_KEY (x-mj-api-key) via the shared harness — no secrets here.
  *
  * PREREQUISITES:
  *   - MJAPI up on :4000 with the Predictive Studio server-bootstrap (ops registered) + the PS2-2
- *     promote-gate scoring-action generation + the local-disk artifact fallback.
+ *     promote-gate scoring-action generation, and `PS_STORAGE_PROVIDER` naming a provider configured on it for
+ *     model files (default "Local File System", rooted at STORAGE_LOCAL_ROOT).
  *   - The canonical 'Score Record Set' parent Action (DriverClass='PredictiveStudioScoreRecordSetAction',
  *     ParentID NULL) seeded — the generator links the child to it.
  *   - The Python sidecar reachable by MJAPI (managed child-process default is fine).
@@ -49,18 +54,19 @@
  *
  * Gracefully SKIPs (exit 0) when AssociationDemo `Memberships` or `MJ: ML Algorithms` aren't present.
  *
- * USAGE (from the repo root, with MJAPI already up on :4000):
- *   npx tsx packages/MJServer/integration-test-scripts/ps-live-modelaction-generation.ts
+ * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-modelaction-generation.ts
  */
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { ShippedModelID } from './lib/ps-train-output';
 import { PromoteModel } from './lib/ps-promote';
-import { Metadata, RunView, UserInfo, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
+import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
+import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity,
   MJMLModelEntity,
   MJActionEntity,
   MJActionParamEntity,
@@ -133,34 +139,6 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
   }
   console.log(`Connected to ${client.Url} as ${user.Name ?? user.Email ?? user.ID}`);
   return { md, route, user };
-}
-
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver key
- * (the TrainingEngine sends `pipeline.Algorithm` — the denormalized algorithm NAME — to the
- * sidecar). Returns the row id + whether we created it (for cleanup).
- */
-async function ensureDriverNamedAlgorithm(md: Metadata, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const rv = new RunView();
-  const existing = await rv.RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY;
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
 }
 
 /** Resolve an entity's ID by name (throws if not found). */
@@ -278,66 +256,12 @@ async function findParentActionId(user: UserInfo): Promise<string | undefined> {
   return res.Success && (res.Results?.length ?? 0) > 0 ? res.Results[0].ID : undefined;
 }
 
-/**
- * Best-effort cleanup, child→parent: the generated Action's Params → the Action row → the model's
- * training run(s) → the Model → the Pipeline → (if created) the Algorithm. Leaves the shared
- * 'Predictive Studio Models' Action Category (it may hold other models' actions).
- */
-async function cleanup(md: Metadata, user: UserInfo, ids: {
-  actionId?: string; pipelineId?: string; modelId?: string;
-  algorithmId?: string; algorithmCreated?: boolean;
-}): Promise<void> {
-  banner('CLEANUP');
-  const rv = new RunView();
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`  skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // The generated Action's params FK the Action; delete them first, then the Action.
-  if (ids.actionId) {
-    const params = await rv.RunView<MJActionParamEntity>(
-      { EntityName: 'MJ: Action Params', ExtraFilter: `ActionID='${ids.actionId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const p of params.Results ?? []) {
-      const ok = await p.Delete();
-      if (!ok) {
-        console.log(`  FAILED to delete MJ: Action Params ${p.ID} — ${p.LatestResult?.CompleteMessage}`);
-      }
-    }
-    await del('MJ: Actions', ids.actionId);
-  }
-
-  // Training runs reference the pipeline (and the model); delete them before the model/pipeline.
-  if (ids.pipelineId) {
-    const trainingRuns = await rv.RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of trainingRuns.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} MJ: ML Training Runs ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-  if (ids.algorithmId && ids.algorithmCreated) await del('MJ: ML Algorithms', ids.algorithmId);
-}
-
 async function main(): Promise<void> {
   const t0 = Date.now();
   const { md, route, user } = await connect();
 
-  let actionId: string | undefined;
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
-  let algorithm: { id: string; created: boolean } | undefined;
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
 
   try {
     // ── 1. Resolve entities + algorithm (graceful SKIP if AssociationDemo / ML metadata absent) ──
@@ -353,8 +277,8 @@ async function main(): Promise<void> {
       process.exit(0);
     }
     console.log(`  Memberships entity: ${membership.Name} (${membership.ID})`);
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
+    algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
+    console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
     const parentActionId = await findParentActionId(user);
     console.log(`  Parent action '${PARENT_ACTION_NAME}': ${parentActionId ?? '(MISSING — generation will be skipped server-side)'}`);
     if (!parentActionId) {
@@ -363,9 +287,12 @@ async function main(): Promise<void> {
     }
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
-    banner('2. CREATE ML TRAINING PIPELINE');
-    const pipeline = await createPipeline(md, user, algorithm.id);
-    pipelineId = pipeline.ID;
+    banner('2. CREATE ML TRAINING PIPELINE + BIND UNIT AND PROTOCOL');
+    const pipeline = await createPipeline(md, user, algorithm.ID);
+    records.RecordPipeline(pipeline.ID);
+    // Training refuses a pipeline without a Prediction Unit (UNIT_REQUIRED): bind version 1 of each, saved over GraphQL.
+    await BindUnitAndProtocol(route, user, pipeline, records);
+    console.log(`  Bound Prediction Unit ${pipeline.PredictionUnitID} and Evaluation Protocol ${pipeline.EvaluationProtocolID}`);
     console.log(`  Pipeline ${pipeline.ID} (Name='${TAG}' → becomes the model's Pipeline label)`);
 
     // ── 3. Train a fresh model ────────────────────────────────────────────────
@@ -380,8 +307,10 @@ async function main(): Promise<void> {
       throw new Error(`Training failed: ${trainResult.ErrorMessage}`);
     }
     const out = trainResult.Output;
-    modelId = out.modelId;
-    console.log(`  modelId        = ${out.modelId}`);
+    const shippedModelId = ShippedModelID(out, 'promote and generate its scoring action', check);
+    if (shippedModelId === null) throw new Error(`Training shipped no model to promote and generate its scoring action: ${out.gateOutcome ?? 'no gate decision'}.`);
+    records.RecordModel(shippedModelId);
+    console.log(`  modelId        = ${shippedModelId}`);
     console.log(`  version        = ${out.version}`);
     console.log(`  status         = ${out.status}`);
     console.log(`  leakageFlagged = ${out.leakageFlagged}`);
@@ -390,15 +319,15 @@ async function main(): Promise<void> {
     // The gate enforces ALLOWED_TRANSITIONS — no Draft→Published jump — so step through Validated.
     // signOff=true + reason are passed defensively in case the model is leakage-flagged.
     banner('4. PROMOTE STEPWISE → Published (PredictiveStudio.PromoteModel)');
-    const s1 = await PromoteModel(route, user, out.modelId, 'Validated', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
+    const s1 = await PromoteModel(route, user, shippedModelId, 'Validated', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
     console.log(`  Draft → Validated: promoted, status=${s1}`);
     check(s1 === 'Validated', `step 1 status = Validated (got '${s1}')`);
-    const s2 = await PromoteModel(route, user, out.modelId, 'Published', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
+    const s2 = await PromoteModel(route, user, shippedModelId, 'Published', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
     console.log(`  Validated → Published: promoted, status=${s2}`);
     check(s2 === 'Published', `step 2 status = Published (got '${s2}')`);
 
     // Re-read the published model for the authoritative Pipeline + Version the generator used.
-    const model = await loadModelRow(user, out.modelId);
+    const model = await loadModelRow(user, shippedModelId);
     check(model.Status === 'Published', `model.Status = Published (got '${model.Status}')`);
     const expectedName = expectedActionName(model);
     console.log(`  Model.Pipeline='${model.Pipeline}', Version=${model.Version}`);
@@ -412,7 +341,6 @@ async function main(): Promise<void> {
     if (!action) {
       throw new Error(`Generated action '${expectedName}' was not found — did the model reach Published and the parent exist?`);
     }
-    actionId = action.ID;
     console.log(`  Action ${action.ID}`);
     check(action.Type === 'Custom', `action.Type = 'Custom' (got '${action.Type}')`);
     check(action.DriverClass === SCORE_DRIVER_CLASS, `action.DriverClass = '${SCORE_DRIVER_CLASS}' (got '${action.DriverClass}')`);
@@ -432,8 +360,8 @@ async function main(): Promise<void> {
       check(modelParam.IsRequired === false, `ModelID param is NOT required (so the default feeds the scorer)`);
       // The crux of PS2-2: the model's id is BAKED into the ModelID param's DefaultValue.
       check(
-        modelParam.DefaultValue === out.modelId,
-        `ModelID DefaultValue === the model id (expected '${out.modelId}', got '${modelParam.DefaultValue}')`,
+        modelParam.DefaultValue === shippedModelId,
+        `ModelID DefaultValue === the model id (expected '${shippedModelId}', got '${modelParam.DefaultValue}')`,
       );
     }
     const scopeParam = params.find((p) => p.Name === 'Scope');
@@ -469,10 +397,9 @@ async function main(): Promise<void> {
     banner(failures === 0 ? 'PS2-2 PROOF COMPLETE — ALL CHECKS PASSED' : `PS2-2 PROOF FAILED — ${failures} CHECK(S) FAILED`);
     console.log(`  Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } finally {
-    await cleanup(md, user, {
-      actionId, pipelineId, modelId,
-      algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
-    });
+    banner('CLEANUP');
+    // The generated Action (found by the model ID its ModelID param defaults to) and its params go first.
+    failures += ReportCleanup(await DeleteRecordedRows(route, user, records, algorithm));
   }
   process.exit(failures > 0 ? 1 : 0);
 }

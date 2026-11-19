@@ -218,35 +218,37 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-lifecycle', {
 // ─────────────────────────────────────────────────────────────────── checks
 
 /**
- * LC1 — the flag flip is ATOMIC (2.4). A permission row planted by direct SQL (invisible to
- * the delta, which reads metadata) makes the snapshot collide with
- * UQ_EntityFieldPermission_Field_Role midway. The save must report failure, the flag must
- * roll back to 0, and no snapshot rows may survive — only the planted poison row.
+ * LC1 — the flag flip is ATOMIC (2.4). A temporary CHECK constraint planted by direct SQL refuses
+ * the snapshot row for one field midway (the snapshot reads the existing rows from the database,
+ * so a planted duplicate row no longer collides). The save must report failure, the flag must roll
+ * back to 0, and no snapshot rows may survive.
  */
 export async function CheckLc1FlagFlipIsAtomic(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC1')) return;
-    const fx = ctx.FlsFixture!;
     await resetFls(ctx);
     const entity = FlsEntity(ctx);
     const fields = RestrictableFields(entity);
     const midField = fields[Math.floor(fields.length / 2)];
+    const constraint = `CK_IT_FLS_LC1_${Date.now()}`;
     await Q(ctx,
-        `INSERT INTO [${SchemaOf(ctx)}].EntityFieldPermission (EntityFieldID, RoleID, ReadAccess, UpdateAccess, CreateAccess) ` +
-        `VALUES ('${midField.ID}', '${fx.RoleIDs!.Reader}', 'Allow', 'No Access', 'No Access')`);
+        `ALTER TABLE [${SchemaOf(ctx)}].EntityFieldPermission WITH NOCHECK ` +
+        `ADD CONSTRAINT [${constraint}] CHECK (EntityFieldID <> '${midField.ID}')`);
+    try {
+        const [ok, msg] = await setFlag(ctx, true);
+        Assert(!ok, `the enable must FAIL on the planted constraint (got success; poison on ${midField.Name})`);
+        Assert(msg.length > 0, 'the failed save must carry an error message');
 
-    const [ok, msg] = await setFlag(ctx, true);
-    Assert(!ok, `the enable must FAIL on the planted unique-key collision (got success; poison on ${midField.Name})`);
-    Assert(msg.length > 0, 'the failed save must carry an error message');
-
-    const flag = await Q<{ f: boolean }>(ctx,
-        `SELECT EnableFieldLevelSecurity AS f FROM [${SchemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
-    AssertEqual(flag[0].f, false, 'the flag must roll back to 0 with the snapshot');
-    const rows = await Q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
-    AssertEqual(rows[0].n, 1, 'only the planted poison row may remain — a partial snapshot means the transaction tore');
-
-    await resetFls(ctx); // remove the poison
+        const flag = await Q<{ f: boolean }>(ctx,
+            `SELECT EnableFieldLevelSecurity AS f FROM [${SchemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
+        AssertEqual(flag[0].f, false, 'the flag must roll back to 0 with the snapshot');
+        const rows = await Q<{ n: number }>(ctx,
+            `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+            `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
+        AssertEqual(rows[0].n, 0, 'no snapshot row may remain — a partial snapshot means the transaction tore');
+    } finally {
+        await Q(ctx, `ALTER TABLE [${SchemaOf(ctx)}].EntityFieldPermission DROP CONSTRAINT [${constraint}]`).catch(() => undefined);
+        await resetFls(ctx);
+    }
 }
 
 /** @deprecated Use {@link CheckLc1FlagFlipIsAtomic}. */
@@ -402,6 +404,15 @@ export async function CheckLc6_DenyOnSystemRoleRefused(ctx: IntegrationCheckCont
     return CheckLc6DenyOnSystemRoleRefused(ctx);
 }
 
+/** Lower-cased IDs of the roles holding at least one Allow permission row on the entity's fields. */
+async function rolesHoldingAllow(ctx: IntegrationCheckContext, entityId: string): Promise<Set<string>> {
+    const rows = await Q<{ RoleID: string }>(ctx,
+        `SELECT DISTINCT LOWER(CONVERT(NVARCHAR(36), p.RoleID)) AS RoleID ` +
+        `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `WHERE f.EntityID = '${entityId}' AND (p.ReadAccess='Allow' OR p.UpdateAccess='Allow' OR p.CreateAccess='Allow')`);
+    return new Set(rows.map(r => r.RoleID));
+}
+
 /**
  * LC7 — the role-REMOVAL half of the guard. Removing a system-user role is permitted while
  * the other roles still duplicate its Allows; refused when it carries the LAST Allow; and a
@@ -419,32 +430,43 @@ export async function CheckLc7SystemRoleRemovalGuard(ctx: IntegrationCheckContex
     // a function of the role set alone, so the check is repeat-safe on a persistent dev database.
     const roles = [...sysUser.UserRoles.map(r => r.RoleID)].sort(ordinalCompare);
     Assert(roles.length >= 2, `the system user must hold at least two roles for this check (holds ${roles.length})`);
-    const [keeper, spare] = roles;
+    // `keeper` must carry an Allow on the fixture entity. The guard judges the AFTER-state: removing a
+    // role is refused only when, with it gone, no remaining role holds an Allow on a field. A system
+    // user that also holds a role with no rows on this entity (a magic-link baseline role, say) would
+    // otherwise make the alphabetically first role the keeper, step 2 would be refused because nobody
+    // holds an Allow rather than because `keeper` holds the last one, and step 3 would be refused too.
+    // `spare` is the first OTHER role: step 2 narrows it to No Access whether or not it has rows, and a
+    // role with no rows contributes no Allow by construction.
+    const entity = FlsEntity(ctx);
+    const allowRoles = await rolesHoldingAllow(ctx, entity.ID);
+    const keeper = roles.find(r => allowRoles.has(r.toLowerCase()));
+    Assert(keeper != null, `no system-user role carries an Allow on '${entity.Name}' (roles: ${roles.join(', ')}; with Allow: ${[...allowRoles].join(', ') || 'none'})`);
+    const spare = roles.find(r => r !== keeper);
+    Assert(spare != null, `the system user needs a second role besides ${keeper} (roles: ${roles.join(', ')})`);
 
     // 1) every role still duplicates the others' Allows → removal permitted.
-    const first = await loadUserRole(ctx, sysUser.ID, keeper);
+    const first = await loadUserRole(ctx, sysUser.ID, keeper!);
     const firstId = first.ID; // read BEFORE Delete(): a deleted BaseEntity no longer carries the row's key
     Assert(await first.Delete(), `removing a redundant system-user role must be permitted: ${first.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, keeper, firstId);
+    await restoreUserRole(ctx, sysUser.ID, keeper!, firstId);
 
     // 2) narrow every OTHER role to No Access by direct SQL, so `keeper` carries the only Allows.
-    const entity = FlsEntity(ctx);
     const others = roles.filter(r => r !== keeper).map(r => `'${r.toLowerCase()}'`).join(',');
     await Q(ctx,
         `UPDATE p SET p.ReadAccess='No Access', p.UpdateAccess='No Access', p.CreateAccess='No Access' ` +
         `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
         `WHERE f.EntityID = '${entity.ID}' AND LOWER(CONVERT(NVARCHAR(36), p.RoleID)) IN (${others})`);
     await ctx.Provider.Refresh();
-    const lastCarrier = await loadUserRole(ctx, sysUser.ID, keeper);
+    const lastCarrier = await loadUserRole(ctx, sysUser.ID, keeper!);
     const okLast = await lastCarrier.Delete();
     Assert(!okLast, `removing the role carrying the system user's LAST Allow must be refused ` +
         `(${lastCarrier.LatestResult?.CompleteMessage?.slice(0, 100) ?? 'DELETED — the guard did not fire'})`);
 
     // 3) a role contributing no Allow can still be removed.
-    const redundant = await loadUserRole(ctx, sysUser.ID, spare);
+    const redundant = await loadUserRole(ctx, sysUser.ID, spare!);
     const redundantId = redundant.ID; // read BEFORE Delete() — see above
     Assert(await redundant.Delete(), `removing a no-Allow system-user role must still be permitted: ${redundant.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, spare, redundantId);
+    await restoreUserRole(ctx, sysUser.ID, spare!, redundantId);
 }
 
 /** @deprecated Use {@link CheckLc7SystemRoleRemovalGuard}. */

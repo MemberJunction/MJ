@@ -1,6 +1,6 @@
 # @memberjunction/ng-generic-dialog
 
-A flexible, customizable modal dialog component for Angular applications in the MemberJunction framework. Built on Kendo UI Dialog, it provides a consistent way to create modals with standard OK/Cancel buttons and custom action slots.
+A flexible, customizable modal dialog component for Angular applications in the MemberJunction framework. Built on `mj-dialog`, it provides a consistent way to create modals with standard OK/Cancel buttons and custom action slots.
 
 ## Installation
 
@@ -10,7 +10,7 @@ npm install @memberjunction/ng-generic-dialog
 
 ## Overview
 
-The Generic Dialog wraps Kendo UI's dialog with a standardized API for content projection, configurable buttons, and a data refresh lifecycle. It serves as the foundation for many dialog experiences throughout MemberJunction applications.
+The Generic Dialog wraps the MJ dialog with a standardized API for content projection, configurable buttons, and a data refresh lifecycle. It serves as the foundation for many dialog experiences throughout MemberJunction applications.
 
 ```mermaid
 flowchart TD
@@ -72,8 +72,8 @@ export class YourModule {}
   <div>Your dialog content here</div>
 
   <div custom-actions>
-    <button kendoButton (click)="saveSettings()" themeColor="primary">Save</button>
-    <button kendoButton (click)="applySettings()">Apply</button>
+    <button mjButton (click)="saveSettings()" variant="primary">Save</button>
+    <button mjButton (click)="applySettings()">Apply</button>
   </div>
 </mj-generic-dialog>
 ```
@@ -118,8 +118,8 @@ export class YourModule {}
 
 ## Dependencies
 
-- `@progress/kendo-angular-dialog` -- Dialog rendering
-- `@progress/kendo-angular-buttons` -- Button components
+- `@memberjunction/ng-ui-components` -- Dialog rendering
+- `@memberjunction/ng-ui-components` -- Button components
 
 ## Related Packages
 

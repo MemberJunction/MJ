@@ -66,13 +66,12 @@ describe('ArchiveExtractor', () => {
         expect(result.Blocks[0].Title).toBe('Quarterly Report');
     });
 
-    it('stops unpacking when the signal fires', async () => {
+    it('throws a TransientStageError when the signal fires so partial members are never committed', async () => {
         const extractor = new TestArchiveExtractor();
         extractor.Members = [member('a.txt', 'a'), member('b.txt', 'b')];
         const controller = new AbortController();
         controller.abort();
-        const result = await extractor.Extract(request(controller.signal));
-        expect(result.Blocks).toHaveLength(0);
+        await expect(extractor.Extract(request(controller.signal))).rejects.toThrow(/archive extraction stopped/);
     });
 
     it('FAILS on bytes that are not an archive, rather than reporting an empty one as read', async () => {
@@ -160,14 +159,11 @@ describe('HtmlExtractor', () => {
         FileType: 'html',
     });
 
-    it('extracts readable text through MJ’s TextExtractor rather than a second implementation', async () => {
-        const result = await new HtmlExtractor().Extract(
-            html('<html><head><title>Quarterly</title><style>p{color:red}</style></head><body><p>Revenue rose.</p><script>x()</script></body></html>'),
-        );
+    it('stores the page as it was served: Segment cleans it, and its selectors need the markup', async () => {
+        const page = '<html><head><title>Quarterly</title><style>p{color:red}</style></head><body><nav>Home</nav><p>Revenue rose.</p><script>x()</script></body></html>';
+        const result = await new HtmlExtractor().Extract(html(page));
         expect(result.Blocks).toHaveLength(1);
-        expect(result.Blocks[0].Text).toContain('Revenue rose.');
-        expect(result.Blocks[0].Text).not.toContain('color:red');
-        expect(result.Blocks[0].Text).not.toContain('x()');
+        expect(result.Blocks[0].Text).toBe(page);
     });
 
     it('takes the document title when it has one and decodes HTML entities', async () => {

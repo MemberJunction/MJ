@@ -112,6 +112,17 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
         return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${columnsBody}\n);`;
     }
 
+    /** `CREATE [UNIQUE] INDEX IF NOT EXISTS ...;` as a single statement. */
+    CreateIndexIfAbsent(options: IndexOptions): string {
+        const ddl = this.IndexDDL(options);
+        return ddl.endsWith(';') ? ddl : `${ddl};`;
+    }
+
+    /** `DROP INDEX IF EXISTS <schema>.<indexName>;` as a single statement. */
+    DropIndexIfExists(schema: string, _tableName: string, indexName: string): string {
+        return `DROP INDEX IF EXISTS ${this.Writer.QuoteSchema(schema, indexName)};`;
+    }
+
     /** {@link CommentOnObject} terminated with `;`, for platforms whose comment statement is idempotent. */
     CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
         return this.CommentOnObject(objectType, schema, name, comment) + ';';

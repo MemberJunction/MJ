@@ -8,9 +8,15 @@
 import { BaseEntity, CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJContentFileTypeEntity, MJContentSourceEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { FieldConfidenceMap, PipelineStageRequest, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
+import { FieldConfidenceMap, PipelineStageRequest, RetryBackoff, RetryDelayMs, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 import { WhereEqual } from './Filters.js';
+import { BASE_ITEM_ENTITY, ItemEntityResolver } from './ItemEntityResolver.js';
+
+/** Retries in a row since a stage last settled the record. Content Items and Content Item Chunks carry it. */
+const RETRY_COUNT_FIELD = 'RetryCount';
+/** The earliest time a stage may pick the record up again; null means no wait. */
+const RETRY_AFTER_FIELD = 'RetryAfter';
 
 /** Columns a child record inherits from whatever produced it. */
 export type ChildCommitDefaults = Readonly<Record<string, unknown>>;
@@ -54,6 +60,9 @@ const FRAMEWORK_OWNED_COLUMNS: ReadonlySet<string> = new Set([
     'EmbeddingModelID',
     'Sequence',
     'ForceDiscovery',
+    'RetryCount',
+    'RetryAfter',
+    'DiscoverState',
     'Name',
     'Text',
     'Date',
@@ -71,6 +80,9 @@ const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
  * A commit is safe to repeat: nothing here depends on the record's prior state.
  */
 export class WorkingRecordCommitter {
+    /** Existing core rows promoted to an IS-A extension in {@link load}, awaiting the commit's single `Save()`. */
+    private readonly pendingExtensionAttachments = new WeakSet<BaseEntity>();
+
     constructor(
         private readonly provider: IMetadataProvider,
         private readonly contextUser: UserInfo,
@@ -80,7 +92,21 @@ export class WorkingRecordCommitter {
      * Write a working record's changes and set `statusField` to `status`. Columns a stage set directly
      * (`Pipeline.columns`) are always written; `Pipeline.completionColumns` only when the stage succeeded.
      */
-    public async Commit(record: WorkingRecord, statusField: string | null, status: string, succeeded = true): Promise<CommitResult> {
+    /**
+     * Commit a record a stage worked on: its changed fields, then its status.
+     *
+     * `status` null leaves the status column as it is. That is how a record stays ready for its stage
+     * after a Retry: pass `retry` and the record's retry schedule (`RetryCount`, `RetryAfter`) moves on,
+     * so the stage's readiness filter skips it until the backoff has passed. Any commit without `retry`
+     * clears the schedule: the stage has settled the record one way or the other.
+     */
+    public async Commit(
+        record: WorkingRecord,
+        statusField: string | null,
+        status: string | null,
+        succeeded = true,
+        retry?: RetryBackoff,
+    ): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
         const storedChecksum = this.readString(entityObject, 'Checksum');
@@ -90,6 +116,7 @@ export class WorkingRecordCommitter {
         written.push(...this.applyColumns(record, entityObject));
         if (succeeded) {
             written.push(...this.applyColumns(record, entityObject, 'completionColumns'));
+            written.push(...this.clearColumns(record, entityObject, 'completionClears'));
         }
         const resetConfidence = await this.reconcileExtractedContent(
             record,
@@ -100,10 +127,12 @@ export class WorkingRecordCommitter {
             changedNonTextFields.length > 0 || customWritten.length > 0,
             written,
         );
-        if (statusField && this.hasField(entityObject, statusField)) {
+        if (statusField && status !== null && this.hasField(entityObject, statusField)) {
             this.writeColumn(entityObject, statusField, status);
             written.push(statusField);
+            written.push(...this.settleEmbeddingAfterSegment(entityObject, statusField, status));
         }
+        written.push(...(retry ? this.scheduleRetry(entityObject, retry) : this.clearRetrySchedule(entityObject)));
         this.applyConfidence(record, entityObject, written, resetConfidence, unresolved);
         this.applyCompletionSignal(record, entityObject, statusField, written);
         return this.save(record, entityObject, written, created);
@@ -122,7 +151,7 @@ export class WorkingRecordCommitter {
     ): Promise<CommitResult> {
         await this.matchExisting(child, parentDefaults);
         const created = !child.Identity.IsPersisted;
-        const entityObject = await this.load(child);
+        const entityObject = await this.load(child, parentDefaults.ContentSourceID);
         const wasPendingDelete = !created && this.readColumn(entityObject, 'DeleteStatus') === 'Pending';
         const storedDateBefore = this.readColumn(entityObject, 'Date');
         const storedConfidence = created || wasPendingDelete ? {} : this.parseConfidence(this.readString(entityObject, 'FieldConfidence'));
@@ -230,7 +259,7 @@ export class WorkingRecordCommitter {
             return this.resetAndSaveDiscoveredChild(child, entityObject, statusField, status, wasPendingDelete, written, unresolved);
         }
         if (request === 'MetadataChanged') {
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
@@ -242,19 +271,19 @@ export class WorkingRecordCommitter {
         const currentStatus = this.readColumn(entityObject, statusField);
         if ((isSyncWalk || dateUnchanged) && request !== 'Reextract' && (currentStatus === 'Complete' || currentStatus === 'Skipped')) {
             if (nonDateMetadataChanged) {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             if (dateChanged) {
                 this.writeColumn(entityObject, statusField, status);
                 written.push(statusField);
-            } else if (written.length === 0) {
+            } else if (written.length === 0 && !this.pendingExtensionAttachments.has(entityObject)) {
                 return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
             }
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
         if (nonDateMetadataChanged) {
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
         }
         this.writeColumn(entityObject, statusField, status);
         written.push(statusField);
@@ -298,10 +327,10 @@ export class WorkingRecordCommitter {
         const changed = this.contentChanged(child, entityObject);
         const forceReprocess = request === 'Reprocess';
         if (!changed && !forceReprocess && !wasPendingDelete && request !== 'Reextract') {
-            if (written.length === 0 && request !== 'MetadataChanged') {
+            if (written.length === 0 && request !== 'MetadataChanged' && !this.pendingExtensionAttachments.has(entityObject)) {
                 return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
             }
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
@@ -332,7 +361,7 @@ export class WorkingRecordCommitter {
         record: WorkingRecord,
         entityObject: BaseEntity,
         statusField: string | null,
-        status: string,
+        status: string | null,
         storedChecksum: string | null,
         metadataChanged: boolean,
         written: string[],
@@ -340,12 +369,17 @@ export class WorkingRecordCommitter {
         const request = record.GetExtension<PipelineStageRequest>('Pipeline', 'request');
         if (record.Entity !== 'Content Item' || statusField !== 'ExtractionStatus' || status !== 'Complete') {
             if (request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         const extractedChecksum = record.GetExtension<string>('Pipeline', 'checksum');
         if (!extractedChecksum) {
+            // No hash to compare, so the content is taken as unchanged. A new decorator still has to
+            // reach the chunks (see settleMetadataChange); other metadata waits for a hashed extraction.
+            if (this.decoratorChanged(written)) {
+                await this.settleMetadataChange(entityObject, written);
+            }
             return false;
         }
         const isValidStoredHash = storedChecksum !== null && SHA256_HEX_PATTERN.test(storedChecksum);
@@ -356,19 +390,60 @@ export class WorkingRecordCommitter {
                 return true;
             }
             if (metadataChanged || request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         if (extractedChecksum === storedChecksum && request !== 'Reprocess') {
             if (metadataChanged || request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
         written.push(...this.resetDownstream(record, entityObject, statusField));
         return true;
+    }
+
+    /**
+     * An item's metadata changed but its content did not. Usually only the vectors' metadata needs
+     * refreshing (`MetadataOnly`). The decorator is the exception: Segment copies it onto every chunk
+     * and Embed embeds it in front of the chunk's text, so a refresh would leave the old one in every
+     * chunk and every vector. A changed `Decorator` sends the item back to Segment instead: new chunks
+     * carry the new decorator, the old ones are retired for the Delete stage, and Embed embeds the new
+     * ones. Extraction and tagging stand, since the text did not change. A record with no Segment stage
+     * (a chunk) whose own decorator changed is embedded again in full.
+     */
+    private async settleMetadataChange(entityObject: BaseEntity, written: string[]): Promise<void> {
+        if (!this.decoratorChanged(written)) {
+            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            return;
+        }
+        const reset = this.hasField(entityObject, 'SegmentationStatus')
+            ? { SegmentationStatus: 'Pending', EmbeddingStatus: 'Pending' }
+            : { EmbeddingStatus: 'Pending' };
+        written.push(...this.applyValues(entityObject, reset), ...this.clearRetrySchedule(entityObject));
+    }
+
+    /**
+     * Segment ended the item without chunks to embed: it failed, or the item held nothing to cut. An item's
+     * `EmbeddingStatus` otherwise follows its chunks once they are embedded ({@link ItemEmbeddingRollup}), and
+     * no chunk is coming here, so the item takes Segment's verdict now. A Skipped Segment also retires the
+     * item's earlier chunks, so the item really has nothing in the index.
+     */
+    private settleEmbeddingAfterSegment(entityObject: BaseEntity, statusField: string, status: string): string[] {
+        if (statusField !== 'SegmentationStatus' || (status !== 'Failed' && status !== 'Skipped')) {
+            return [];
+        }
+        if (!this.hasField(entityObject, 'EmbeddingStatus') || this.readColumn(entityObject, 'EmbeddingStatus') === status) {
+            return [];
+        }
+        return this.applyValues(entityObject, { EmbeddingStatus: status });
+    }
+
+    /** Whether this commit wrote a new `Decorator` (the columns written hold only values that changed). */
+    private decoratorChanged(written: readonly string[]): boolean {
+        return written.includes('Decorator');
     }
 
     /** Set `EmbeddingStatus = 'MetadataOnly'` on the item and any live embedded chunks when metadata changed. */
@@ -386,6 +461,7 @@ export class WorkingRecordCommitter {
                 EntityName: 'MJ: Content Item Chunks',
                 ExtraFilter: WhereEqual({ ContentItemID: itemID, EmbeddingStatus: 'Complete', DeleteStatus: null }),
                 ResultType: 'entity_object',
+                IgnoreMaxRows: true,
             },
             this.contextUser,
         );
@@ -403,13 +479,15 @@ export class WorkingRecordCommitter {
 
     private async save(record: WorkingRecord, entityObject: BaseEntity, written: string[], created: boolean): Promise<CommitResult> {
         const existingID = this.readString(entityObject, 'ID');
-        if (!created && written.length === 0 && existingID) {
+        const mustSave = created || this.pendingExtensionAttachments.has(entityObject);
+        if (!mustSave && written.length === 0 && existingID) {
             record.ClearChanged();
             return { RecordID: existingID, ColumnsWritten: [], Created: false };
         }
         if (!(await entityObject.Save())) {
             throw new Error(`Failed to commit ${GetEntityName(record.Entity)} '${record.Identity.Key}': ${this.describeFailure(entityObject)}`);
         }
+        this.pendingExtensionAttachments.delete(entityObject);
         const recordID = this.readColumn(entityObject, 'ID') as string;
         record.Identity.RecordID = recordID;
         record.ClearChanged();
@@ -444,7 +522,43 @@ export class WorkingRecordCommitter {
     private resetDownstream(child: WorkingRecord, entityObject: BaseEntity, statusField: string): string[] {
         const fields = GetStatusFields(child.Entity);
         const later = fields.slice(fields.indexOf(statusField) + 1);
-        return this.applyValues(entityObject, Object.fromEntries(later.map((f) => [f, 'Pending'])));
+        // New content is a fresh start: a wait left by an earlier Retry no longer applies.
+        return [...this.applyValues(entityObject, Object.fromEntries(later.map((f) => [f, 'Pending']))), ...this.clearRetrySchedule(entityObject)];
+    }
+
+    /**
+     * After a Retry: count it, and set the earliest time a stage may pick the record up again
+     * (the backoff doubles with each Retry in a row). Returns the columns written; none on an
+     * entity without a retry schedule.
+     */
+    private scheduleRetry(entityObject: BaseEntity, retry: RetryBackoff): string[] {
+        if (!this.hasRetrySchedule(entityObject)) {
+            return [];
+        }
+        const previous = this.readColumn(entityObject, RETRY_COUNT_FIELD);
+        const count = (typeof previous === 'number' && Number.isFinite(previous) ? previous : 0) + 1;
+        this.writeColumn(entityObject, RETRY_COUNT_FIELD, count);
+        this.writeColumn(entityObject, RETRY_AFTER_FIELD, new Date(Date.now() + RetryDelayMs(count, retry)));
+        return [RETRY_COUNT_FIELD, RETRY_AFTER_FIELD];
+    }
+
+    /** Forget a record's retry schedule. Writes nothing when there is none to forget. */
+    private clearRetrySchedule(entityObject: BaseEntity): string[] {
+        if (!this.hasRetrySchedule(entityObject)) {
+            return [];
+        }
+        const count = this.readColumn(entityObject, RETRY_COUNT_FIELD);
+        const after = this.readColumn(entityObject, RETRY_AFTER_FIELD);
+        if ((count === 0 || count == null) && after == null) {
+            return [];
+        }
+        this.writeColumn(entityObject, RETRY_COUNT_FIELD, 0);
+        this.writeColumn(entityObject, RETRY_AFTER_FIELD, null);
+        return [RETRY_COUNT_FIELD, RETRY_AFTER_FIELD];
+    }
+
+    private hasRetrySchedule(entityObject: BaseEntity): boolean {
+        return this.hasField(entityObject, RETRY_COUNT_FIELD) && this.hasField(entityObject, RETRY_AFTER_FIELD);
     }
 
     /** `LatestResult.Message` is often empty while `Errors` holds the per-field failures. */
@@ -532,11 +646,11 @@ export class WorkingRecordCommitter {
         for (const [column, value] of Object.entries(custom)) {
             if (FRAMEWORK_OWNED_COLUMNS.has(column) || column.startsWith('__mj_')) {
                 throw new Error(
-                    `Column '${column}' on ${GetEntityName(record.Entity)} is owned by the pipeline framework and cannot be set via Columns`,
+                    `Column '${column}' on ${entityObject.EntityInfo?.Name ?? GetEntityName(record.Entity)} is owned by the pipeline framework and cannot be set via Columns`,
                 );
             }
             if (entityObject.Fields.length > 0 && !this.hasField(entityObject, column)) {
-                throw new Error(`Column '${column}' does not exist on ${GetEntityName(record.Entity)}`);
+                throw new Error(`Column '${column}' does not exist on ${entityObject.EntityInfo?.Name ?? GetEntityName(record.Entity)}`);
             }
             const previous = this.readColumn(entityObject, column);
             const changed = value instanceof Date ? !this.datesEqual(previous, value) : previous !== value;
@@ -546,6 +660,14 @@ export class WorkingRecordCommitter {
             }
         }
         return written;
+    }
+
+    /** Set to null each listed column this entity has and that holds a value (`Pipeline.completionClears`). */
+    private clearColumns(record: WorkingRecord, entityObject: BaseEntity, extension: 'completionClears'): string[] {
+        const columns = record.GetExtension<string[]>('Pipeline', extension) ?? [];
+        const cleared = columns.filter((column) => this.hasField(entityObject, column) && this.readColumn(entityObject, column) != null);
+        cleared.forEach((column) => this.writeColumn(entityObject, column, null));
+        return cleared;
     }
 
     /** Set each non-null value whose column this entity has; returns the columns written. */
@@ -560,18 +682,62 @@ export class WorkingRecordCommitter {
         return written;
     }
 
-    /** Load the existing row, or start a new one for a record that has only just been produced. */
-    private async load(record: WorkingRecord): Promise<BaseEntity> {
-        const entityObject = await this.provider.GetEntityObject<BaseEntity>(GetEntityName(record.Entity), this.contextUser);
+    /**
+     * Load the existing row, or start a new one for a record that has only just been produced. A Content Item
+     * is loaded or created as the entity its source's items are ({@link ItemEntityResolver}), so an IS-A
+     * extension's fields can be written and a new item's save writes its extension row too. An existing item
+     * that has no extension row yet gets one added here.
+     */
+    private async load(record: WorkingRecord, contentSourceID?: unknown): Promise<BaseEntity> {
+        const entityName = await this.entityNameFor(record, contentSourceID);
+        const entityObject = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
         if (record.Identity.RecordID) {
-            if (!(await entityObject.InnerLoad(CompositeKey.FromID(record.Identity.RecordID)))) { // first-pk-ok: MJ core content entity, single-column ID
-                throw new Error(`${GetEntityName(record.Entity)} record '${record.Identity.RecordID}' vanished before commit`);
+            const key = CompositeKey.FromID(record.Identity.RecordID); // first-pk-ok: MJ core content entity, single-column ID
+            if (!(await entityObject.InnerLoad(key))) {
+                if (entityName !== GetEntityName(record.Entity)) {
+                    return this.addExtensionRow(entityName, key, record.Identity.RecordID);
+                }
+                throw new Error(`${entityName} record '${record.Identity.RecordID}' vanished before commit`);
             }
         } else {
             entityObject.NewRecord();
             this.applyValues(entityObject, { URL: record.Identity.EphemeralID || null });
         }
         return entityObject;
+    }
+
+    /**
+     * The entity to load or create this record as. Only a Content Item can be an extension; the answer is kept
+     * on the record (`Pipeline.itemEntity`, which the hydrator also sets) so a record resolves once.
+     */
+    private async entityNameFor(record: WorkingRecord, contentSourceID?: unknown): Promise<string> {
+        if (record.Entity !== 'Content Item') {
+            return GetEntityName(record.Entity);
+        }
+        const known = record.GetExtension<string>('Pipeline', 'itemEntity');
+        if (known) {
+            return known;
+        }
+        const sourceID = typeof contentSourceID === 'string' ? contentSourceID : record.GetExtension<string>('Pipeline', 'contentSourceID');
+        const resolved = await new ItemEntityResolver(this.provider, this.contextUser).Resolve(sourceID);
+        record.SetExtension('Pipeline', 'itemEntity', resolved.EntityName);
+        return resolved.EntityName;
+    }
+
+    /**
+     * Give an existing item the extension row it lacks (created before the setting, or by a path that wrote
+     * only the core row): bind a new extension record to the existing core row so the commit's single save
+     * inserts the extension row together with any extension columns.
+     */
+    private async addExtensionRow(entityName: string, key: CompositeKey, recordID: string): Promise<BaseEntity> {
+        const extension = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+        extension.NewRecord();
+        if (!(await extension.AttachToParent(key))) {
+            throw new Error(`${BASE_ITEM_ENTITY} record '${recordID}' vanished before commit`);
+        }
+        this.pendingExtensionAttachments.add(extension);
+        LogStatus(`WorkingRecordCommitter: attached the missing '${entityName}' row to item '${recordID}'`);
+        return extension;
     }
 
     /** A new Content Item takes its content type, source type and file type from its source. */

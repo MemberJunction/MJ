@@ -162,7 +162,7 @@ export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { ConnectorSettingDescriptor } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
-export { DecideSchemaLimitViolations, decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+export { DecideSchemaLimitViolations, decideSchemaLimitViolations, DecideTypeOverlay, decideTypeOverlay } from './IntegrationSchemaSync.js';
 // MJ-RUN-37 — the persist layer's watermark-invalidation signal, consumed by the schema evolution.
 export { ObjectsWithWatermarkFieldChange, WATERMARK_INVALIDATING_ATTRIBUTES } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
@@ -196,3 +196,18 @@ export type { CatalogSource } from './CatalogSource.js';
 export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
 export type { CatalogWriter } from './CatalogWriter.js';
 export * from './ResourcePressure.js';
+
+// ── Three-Way Field Merge & Match Strategy (spec §10 / §11 / §19) ──
+export { ComputeThreeWayFieldMerge, ValuesEqual } from './ThreeWayMerge.js';
+export type {
+    ThreeWayFieldMapping,
+    ThreeWayMergeOptions,
+    ThreeWayMergeResult,
+} from './ThreeWayMerge.js';
+export { ParseMatchStrategy } from './MatchEngine.js';
+export type { MatchStrategyConfig } from './MatchEngine.js';
+export type { ConnectorPipelineContext } from './BaseIntegrationConnector.js';
+
+// ── MJ Peer Sync Connector & Protocol Modules ──
+export * from './peer-sync/index.js';
+

@@ -112,7 +112,9 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
         CacheLocal: true,
       },
     ];
-    await this.Load(configs, provider, forceRefresh, contextUser);
+    // No provider means the engine's own (`ProviderToUse`: the provider it is bound to, else the global one), which is
+    // what BaseEngine.Load falls back to for an absent provider.
+    await this.Load(configs, provider || this.ProviderToUse, forceRefresh, contextUser);
   }
 
   // ─── Read-side accessors ────────────────────────────────────────────────

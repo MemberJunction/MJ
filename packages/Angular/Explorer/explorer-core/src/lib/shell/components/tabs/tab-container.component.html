@@ -21,7 +21,7 @@
   @if (RecordsStyleActive) {
     <!-- Origin crumbs are PANE-LEVEL now (first element inside each record
          pane — see RecordOriginCrumbComponent); the region needs no bar. -->
-    <div class="records-region" [class.region-hidden]="!ShowRecordsRegion">
+    <div class="records-region" [class.region-hidden]="!ShowRecordsRegion" [class.records-mobile]="IsMobileRecords">
       <!-- MOBILE: the GL tab strip is unusable at phone widths (one tab
            fits, no overflow UI) — the record bar replaces it and opens the
            record switcher sheet. The GL itself runs headerless (HideHeaders). -->

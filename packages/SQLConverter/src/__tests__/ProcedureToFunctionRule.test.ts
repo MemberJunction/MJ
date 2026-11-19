@@ -185,7 +185,7 @@ END`;
       expect(result).toContain('p_Name VARCHAR(100) DEFAULT NULL');
     });
 
-    it('should convert OUTPUT params to IN', () => {
+    it('keeps OUTPUT params as IN when the procedure returns rows', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
     @ID uniqueidentifier OUTPUT
 AS
@@ -197,6 +197,36 @@ END`;
       const result = convert(input);
       expect(result).toContain('IN p_ID UUID');
       expect(result).not.toContain('INOUT');
+    });
+
+    it('parses tab-separated params, defaults with OUTPUT, and a default that ends in OUT', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Count\t\tint\t=\t5 OUTPUT,
+    @Mode nvarchar(20) = 'TIMEOUT',
+    @Amount decimal(18, 2) OUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 1
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('p_Count INTEGER DEFAULT 5');
+      expect(result).toContain("p_Mode VARCHAR(20) DEFAULT 'TIMEOUT'");
+      expect(result).toMatch(/p_Amount NUMERIC\(18,\s?2\)/);
+    });
+
+    it('parses a long whitespace run in a param quickly', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A ${'\t'.repeat(50000)}int
+AS
+BEGIN
+    SELECT 1
+END`;
+
+      const started = Date.now();
+      convert(input);
+      expect(Date.now() - started).toBeLessThan(2000);
     });
 
     it('should convert BIT default 0 to FALSE', () => {
@@ -734,7 +764,8 @@ END`;
       const result = convert(input);
       // Named-arg PERFORM (`p_X => value`) — NOT positional
       expect(result).toContain('p_ID => p_ID');
-      expect(result).toContain('p_IsActive => 0');
+      // User.IsActive is BOOLEAN, so the BIT literal becomes FALSE
+      expect(result).toContain('p_IsActive => FALSE');
       // The bug pattern would have been positional `(p_ID, 0)` — verify
       // we don't emit that.
       expect(result).not.toMatch(/PERFORM\s+__mj\."spUpdateUser"\(p_ID,\s*0\)/);
@@ -761,6 +792,125 @@ BEGIN
 END`;
       const result = convert(input);
       expect(result).toContain(`PERFORM __mj."spCleanupOrphans"()`);
+    });
+  });
+
+  // ─── Cascade EXEC calls into CRUD sprocs ────
+  //
+  // CodeGen's spDelete cascades call the child's spUpdate with `@FK_Clear = 1`.
+  // On PostgreSQL the `_Clear` param is BOOLEAN and a wide child's spUpdate takes
+  // a single `p_data JSONB` argument, so the call must fit either shape.
+  describe('cascade EXEC calls into CRUD sprocs', () => {
+    const cascadeInput = `CREATE PROCEDURE [__mj].[spDeleteConversationDetail]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
+    DECLARE @Notes_ID uniqueidentifier
+    DECLARE @Notes_Note nvarchar(MAX)
+    DECLARE @Notes_SourceConversationDetailID uniqueidentifier
+    DECLARE cascade_update_Notes_cursor CURSOR FOR
+        SELECT [ID], [Note], [SourceConversationDetailID]
+        FROM [__mj].[AIAgentNote]
+        WHERE [SourceConversationDetailID] = @ID
+
+    OPEN cascade_update_Notes_cursor
+    FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Notes_SourceConversationDetailID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [__mj].[spUpdateAIAgentNote] @ID = @Notes_ID, @Note = @Notes_Note, @SourceConversationDetailID_Clear = 1, @SourceConversationDetailID = @Notes_SourceConversationDetailID
+
+        FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+    END
+
+    CLOSE cascade_update_Notes_cursor
+    DEALLOCATE cascade_update_Notes_cursor
+
+    DELETE FROM [__mj].[ConversationDetail] WHERE [ID] = @ID
+END`;
+
+    it('passes a _Clear flag literal as BOOLEAN', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain('p_SourceConversationDetailID_Clear => TRUE');
+      expect(result).not.toMatch(/_Clear\s*=>\s*1\b/);
+    });
+
+    it('calls the single-JSONB shape when the callee has it', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain(
+        `IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace ` +
+        `WHERE n.nspname = '__mj' AND p.proname = 'spUpdateAIAgentNote' ` +
+        `AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype) THEN`,
+      );
+      const jsonArg = result.match(/PERFORM __mj\."spUpdateAIAgentNote"\(p_data := (jsonb_build_object\([\s\S]*?\))\);/);
+      expect(jsonArg).not.toBeNull();
+      expect(jsonArg![1]).toContain(`'SourceConversationDetailID', p_Notes_SourceConversationDetailID`);
+      expect(jsonArg![1]).not.toContain('_Clear');
+    });
+  });
+
+  describe('OUTPUT parameters set by SELECT assignment', () => {
+    const outputInput = `CREATE PROC [__mj].[spGetAuthenticationDataByExternalSystemID]
+	@IntegrationName NVARCHAR(100),
+	@ExternalSystemID NVARCHAR(100),
+	@AccessToken NVARCHAR(255)=NULL OUTPUT,
+	@RefreshToken NVARCHAR(255)=NULL OUTPUT,
+	@TokenExpirationDate DATETIME=NULL OUTPUT,
+	@APIKey NVARCHAR(255)=NULL OUTPUT
+AS
+
+SET @IntegrationName = TRIM(@IntegrationName)
+SET @ExternalSystemID = TRIM(@ExternalSystemID)
+
+SELECT
+	@AccessToken = ci.AccessToken,
+	@RefreshToken = ci.RefreshToken,
+	@TokenExpirationDate = ci.TokenExpirationDate,
+	@APIKey = ci.APIKey
+FROM
+	__mj.CompanyIntegration ci
+JOIN __mj.Integration i
+	ON i.ID = ci.IntegrationID
+WHERE
+	i.Name = @IntegrationName
+	AND ci.ExternalSystemID = @ExternalSystemID
+	AND ci.IsActive = 1`;
+
+    it('returns OUTPUT params as INOUT when the procedure returns no rows', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INOUT p_AccessToken VARCHAR(255) DEFAULT NULL');
+      expect(result).toContain('INOUT p_APIKey VARCHAR(255) DEFAULT NULL');
+      expect(result).not.toContain('RETURNS VOID');
+    });
+
+    it('assigns the selected values with SELECT ... INTO', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INTO p_AccessToken, p_RefreshToken, p_TokenExpirationDate, p_APIKey');
+      expect(result).not.toMatch(/p_AccessToken\s*=\s*ci\./);
+    });
+
+    it('compares a known boolean column with TRUE, not 1', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('ci."IsActive" = TRUE');
+    });
+
+    it('assigns a single variable on one line with SELECT ... INTO', () => {
+      const result = convert(`CREATE PROCEDURE [__mj].[spCountOpenTasks]
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @Count INT;
+    SELECT @Count = COUNT(*) FROM [__mj].[Task] WHERE [UserID] = @UserID;
+    UPDATE [__mj].[User] SET [Title] = CAST(@Count AS NVARCHAR(10)) WHERE [ID] = @UserID;
+END`);
+      expect(result).toContain('SELECT COUNT(*) INTO p_Count FROM __mj."Task"');
     });
   });
 });

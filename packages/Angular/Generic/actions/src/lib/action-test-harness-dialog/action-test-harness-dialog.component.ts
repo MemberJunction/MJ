@@ -1,10 +1,10 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
 import { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
-import { ActionResult } from '../action-test-harness/action-test-harness.component';
+import { ActionResult, ActionTestHarnessComponent } from '../action-test-harness/action-test-harness.component';
 
 /**
- * A dialog wrapper component for the Action Test Harness.
- * This component provides a modal dialog experience without Kendo dependencies.
+ * A dialog wrapper component for the Action Test Harness, built on the shared mj-dialog
+ * (700px on desktop, full-screen on phones; it also locks page scroll while open).
  *
  * Usage:
  * <mj-action-test-harness-dialog
@@ -46,11 +46,6 @@ export class ActionTestHarnessDialogComponent implements OnInit {
     @Input()
     set IsOpen(value: boolean) {
         this._isOpen = value;
-        if (value) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
     }
     get IsOpen(): boolean {
         return this._isOpen;
@@ -63,17 +58,54 @@ export class ActionTestHarnessDialogComponent implements OnInit {
         // Any initialization if needed
     }
 
+    private readonly cdr = inject(ChangeDetectorRef);
+
+    /** The harness inside the dialog; the footer's buttons drive it. */
+    @ViewChild(ActionTestHarnessComponent) Harness?: ActionTestHarnessComponent;
+
+    /**
+     * Footer state. Each getter falls back to the harness's own starting values (not running, no
+     * results) until the harness exists, so the first render and Angular's check pass agree.
+     */
+    public get IsRunning(): boolean {
+        return !!this.Harness?.IsExecuting;
+    }
+
+    public get CanRun(): boolean {
+        return this.Action?.Status === 'Active' && !this.IsRunning;
+    }
+
+    public get HasResults(): boolean {
+        return !!(this.Harness?.ExecutionResult || this.Harness?.ExecutionError);
+    }
+
+    public RunAction(): void {
+        void this.Harness?.ExecuteAction();
+    }
+
+    public ResetHarness(): void {
+        this.Harness?.ResetParams();
+    }
+
+    public ClearHarnessResults(): void {
+        this.Harness?.ClearResults();
+    }
+
+    /** The harness started or finished a run, or cleared its results: refresh the footer. */
+    public OnHarnessStateChange(): void {
+        this.cdr.markForCheck();
+    }
+
+    /** The dialog title: the action's name once it is bound. */
+    public get DialogTitle(): string {
+        return this.Action ? `Action Test Harness - ${this.Action.Name}` : 'Action Test Harness';
+    }
+
     public OnClose(): void {
         this.IsOpen = false;
         this.Close.emit();
     }
 
-    public OnBackdropClick(event: MouseEvent): void {
-        // Only close if clicking directly on backdrop, not on dialog content
-        if ((event.target as HTMLElement).classList.contains('dialog-backdrop')) {
-            this.OnClose();
-        }
-    }
 
     public OnExecutionComplete(result: ActionResult): void {
         this.ExecutionComplete.emit(result);

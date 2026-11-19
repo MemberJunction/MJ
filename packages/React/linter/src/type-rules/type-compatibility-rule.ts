@@ -192,7 +192,7 @@ export class TypeCompatibilityRule {
    * Check method calls (array methods, string methods) for type compatibility
    */
   private checkMethodCalls(ast: t.File, context: LintContext, violations: Violation[]): void {
-    const { typeEngine } = context;
+    const { typeEngine, controlFlowAnalyzer } = context;
 
     traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
@@ -243,9 +243,12 @@ export class TypeCompatibilityRule {
 
           if (stringOnlyMethods.includes(methodName)) {
             const objectType = typeEngine.inferExpressionType(node.callee.object, path);
+            // Respect a typeof guard, as the arithmetic check does:
+            // `if (typeof aVal === 'string') { aVal.localeCompare(bVal) }`
+            const stringGuarded = controlFlowAnalyzer.IsNarrowedToType(node.callee.object, path, 'string');
 
             // Only flag if we know it's definitely not a string
-            if (objectType.type !== 'unknown' && objectType.type !== 'string') {
+            if (!stringGuarded && objectType.type !== 'unknown' && objectType.type !== 'string') {
               violations.push({
                 rule: 'type-compatibility',
                 severity: 'high',

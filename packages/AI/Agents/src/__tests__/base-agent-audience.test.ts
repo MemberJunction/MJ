@@ -67,6 +67,13 @@ const LATE = userOf(LATE_ID, 'Late');
 
 /** A provider that IS a database provider for the refresh's `instanceof` check, and does nothing else. */
 const DB_PROVIDER = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
+(DB_PROVIDER as { RunView?: () => Promise<Record<string, unknown>> }).RunView = async () => ({
+    Success: true,
+    Results: [],
+    RowCount: 0,
+    TotalRowCount: 0,
+    ExecutionTime: 0,
+});
 
 const AGENT = { ID: 'aaaaaaaa-0000-4000-8000-0000000000a1', Name: 'Room Agent' } as unknown as MJAIAgentEntityExtended;
 const ACTION_ENTITY = { ID: 'aaaaaaaa-0000-4000-8000-0000000000f1', Name: 'Calculate Expression', Params: { Items: [] } } as unknown as MJActionEntityExtended;

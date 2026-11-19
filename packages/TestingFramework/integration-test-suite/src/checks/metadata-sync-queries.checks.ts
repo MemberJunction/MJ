@@ -1,5 +1,5 @@
 /**
- * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ10), deterministic
+ * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ11), deterministic
  * tier (IT140).
  *
  * `mj sync push`, through `PushService`, of scratch `MJ: Queries` trees, and the child rows that
@@ -24,6 +24,9 @@
  *  - MSQ10: `mj sync pull`, through `PullService`, of a query whose rows all came from extraction
  *    writes them under `collections` with their IDs, and pushing the pulled file back writes no row.
  *
+ *  - MSQ11: a dialect variant pushed under `relatedEntities`, which the push writes after its query,
+ *    still counts in the query's stored `DefinitionFingerprint`.
+ *
  * MSQ7 is also the fresh-install no-op: a fresh install's first push is the same push of the
  * shipped tree onto rows the release migrations wrote, so a separate case would repeat it.
  *
@@ -36,7 +39,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { BaseEngineRegistry, BaseEntity } from '@memberjunction/core';
 import type { DatabasePlatform, UserInfo } from '@memberjunction/core';
-import { QueryEngine } from '@memberjunction/core-entities';
+import { ComputeQueryFingerprintAsync, QueryEngine } from '@memberjunction/core-entities';
+import type { QueryDefinitionFields, QueryDefinitionRows } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { PullService, PushService, SyncEngine } from '@memberjunction/metadata-sync';
@@ -173,9 +177,33 @@ function parameterLines(rows: StoredQueryRows): string {
     return rows.Parameters.map(p => `${p.Name}:${NormalizeUUID(p.ID)}:${p.DetectionMethod}:${p.Description ?? ''}`).join(' | ');
 }
 
-/** `Name:DetectionMethod` for every field, in order, with the ID when `withIDs`. */
+/** How {@link fieldLines} shows a field row that came from extraction. */
+const EXTRACTED = 'Extracted';
+
+/**
+ * A child row's `DetectionMethod` as these checks compare it. `Database` and `AI` both mean the row
+ * came from extraction: the LLM description pass, which runs only where AI keys are configured,
+ * changes a field's `Database` to `AI` when it writes the description. `Manual` and `Parser` are
+ * compared as stored.
+ */
+function detection(method: string): string {
+    return method === 'Database' || method === 'AI' ? EXTRACTED : method;
+}
+
+/** `Name:DetectionMethod` for every field, in order, with the ID when `withIDs`; see {@link detection}. */
 function fieldLines(rows: StoredQueryRows, withIDs = false): string {
-    return rows.Fields.map(f => `${f.Name}${withIDs ? `:${NormalizeUUID(f.ID)}` : ''}:${f.DetectionMethod}`).join(' | ');
+    return rows.Fields.map(f => `${f.Name}${withIDs ? `:${NormalizeUUID(f.ID)}` : ''}:${detection(f.DetectionMethod)}`).join(' | ');
+}
+
+/**
+ * Every field that came from extraction (`Database`, or `AI` once the description pass described it)
+ * carries the SQL types the describe gave it. Runs with or without AI keys. The description pass
+ * itself writes only `Description` and `DetectionMethod` (descriptionPass.ts `applyDescriptions`),
+ * so this checks extraction's output rather than the pass.
+ */
+function assertExtractedFieldsTyped(rows: StoredQueryRows, label: string): void {
+    const untyped = rows.Fields.filter(f => detection(f.DetectionMethod) === EXTRACTED && (!f.SQLBaseType || !f.SQLFullType)).map(f => f.Name);
+    AssertEqual(untyped.join(', '), '', `${label}: extracted fields carry their SQL types`);
 }
 
 function assertOneRowPerName(rows: StoredQueryRows, label: string): void {
@@ -238,7 +266,9 @@ async function checkMsq1DeclaredCollections(ctx: IntegrationCheckContext): Promi
         AssertEqual(parameterLines(rows), `VendorName:${NormalizeUUID(paramID)}:Manual:The vendor to find (${version}).`, `${label}: the declared parameter`);
         const id = rows.Fields.find(x => x.Name === 'ID');
         AssertEqual(`${NormalizeUUID(id?.ID ?? '')}:${id?.DetectionMethod}:${id?.Description}`, `${NormalizeUUID(fieldID)}:Manual:The vendor ID (${version}).`, `${label}: the declared field`);
-        AssertEqual(rows.Fields.find(x => x.Name === 'Name')?.DetectionMethod ?? '(missing)', 'Database', `${label}: the undeclared column's row comes from extraction`);
+        const undeclared = rows.Fields.find(x => x.Name === 'Name');
+        AssertEqual(undeclared ? detection(undeclared.DetectionMethod) : '(missing)', EXTRACTED, `${label}: the undeclared column's row comes from extraction`);
+        assertExtractedFieldsTyped(rows, label);
         AssertEqual(rows.Entities.map(e => `${NormalizeUUID(e.ID)}:${e.DetectionMethod}`).join(','), `${NormalizeUUID(entityID)}:Manual`, `${label}: the declared entity link`);
         assertOneRowPerName(rows, label);
     }
@@ -270,13 +300,15 @@ async function checkMsq3AutoExtraction(ctx: IntegrationCheckContext): Promise<vo
     const [queryID] = ids(1);
     await pushQueries(ctx, 'msq3-new', [queryRecord(f, { ID: queryID, Name: 'MSQ3 auto', SQL: vendorSQL(f.Platform) })], queryID);
     const created = await ReadQueryRows(ctx, BUNDLE, queryID);
-    AssertEqual(fieldLines(created), 'ID:Database | Name:Database', 'MSQ3 (new): fields from the describe');
+    AssertEqual(fieldLines(created), `ID:${EXTRACTED} | Name:${EXTRACTED}`, 'MSQ3 (new): fields from the describe');
+    assertExtractedFieldsTyped(created, 'MSQ3 (new)');
     AssertEqual(created.Parameters.map(p => `${p.Name}:${p.DetectionMethod}:${String(p.IsRequired)}`).join(','), 'VendorName:Parser:true', 'MSQ3 (new): the parameter from the parser');
     AssertEqual(created.Entities.map(e => `${NormalizeUUID(e.EntityID)}:${e.DetectionMethod}`).join(','), `${NormalizeUUID(f.VendorEntityID)}:Parser`, 'MSQ3 (new): the entity link');
 
     await pushQueries(ctx, 'msq3-update', [queryRecord(f, { ID: queryID, Name: 'MSQ3 auto', SQL: vendorSQL(f.Platform, ', v.[Description]', '') })], queryID);
     const updated = await ReadQueryRows(ctx, BUNDLE, queryID);
-    AssertEqual(fieldLines(updated), 'ID:Database | Name:Database | Description:Database', 'MSQ3 (update): the new column has a field');
+    AssertEqual(fieldLines(updated), `ID:${EXTRACTED} | Name:${EXTRACTED} | Description:${EXTRACTED}`, 'MSQ3 (update): the new column has a field');
+    assertExtractedFieldsTyped(updated, 'MSQ3 (update)');
     AssertEqual(updated.Parameters.length, 0, 'MSQ3 (update): the parameter the SQL dropped is removed');
     const kept = created.Fields.map(x => NormalizeUUID(x.ID)).join(',');
     AssertEqual(updated.Fields.slice(0, 2).map(x => NormalizeUUID(x.ID)).join(','), kept, 'MSQ3 (update): unchanged fields keep their rows');
@@ -412,7 +444,8 @@ async function checkMsq8ComposedInSamePush(ctx: IntegrationCheckContext): Promis
 
     const rows = await ReadQueryRows(ctx, BUNDLE, composerID);
     AssertEqual(rows.Dependencies.map(d => NormalizeUUID(d.DependsOnQueryID)).join(','), NormalizeUUID(targetID), 'MSQ8: the composing query depends on the query pushed with it');
-    AssertEqual(fieldLines(rows), 'ID:Database | Name:Database', 'MSQ8: the composing query\'s fields come from describing the composed render');
+    AssertEqual(fieldLines(rows), `ID:${EXTRACTED} | Name:${EXTRACTED}`, 'MSQ8: the composing query\'s fields come from describing the composed render');
+    assertExtractedFieldsTyped(rows, 'MSQ8');
     const stored = await ReloadQuery(ctx, composerID);
     // A Warning can come from the post-commit description pass (no model configured); a composition
     // problem would be an Error or carry an MJQ_COMPOSITION diagnostic.
@@ -491,14 +524,18 @@ function readPulledRecord(dir: string, queryID: string): PulledRecord {
     return record;
 }
 
-/** `ID:Name-or-EntityID:DetectionMethod` per child row, sorted, from the file or from the stored rows. */
+/**
+ * `ID:Name-or-EntityID:DetectionMethod` per child row, sorted, from the file or from the stored rows.
+ * The method goes through {@link detection}, so a description pass that lands between the read and
+ * the pull does not read as a difference.
+ */
 function pulledChildLines(items: readonly ChildRecord[]): string {
     const key = (i: ChildRecord) => typeof i.fields.EntityID === 'string' ? NormalizeUUID(i.fields.EntityID) : String(i.fields.Name ?? '');
-    return items.map(i => `${NormalizeUUID(i.primaryKey.ID)}:${key(i)}:${String(i.fields.DetectionMethod ?? '')}`).sort().join(' | ');
+    return items.map(i => `${NormalizeUUID(i.primaryKey.ID)}:${key(i)}:${detection(String(i.fields.DetectionMethod ?? ''))}`).sort().join(' | ');
 }
 
 function storedChildLines(rows: StoredQueryRows): { [collection: string]: string } {
-    const line = (id: string, key: string, method: string) => `${NormalizeUUID(id)}:${key}:${method}`;
+    const line = (id: string, key: string, method: string) => `${NormalizeUUID(id)}:${key}:${detection(method)}`;
     return {
         Fields: rows.Fields.map(r => line(r.ID, r.Name, r.DetectionMethod)).sort().join(' | '),
         Parameters: rows.Parameters.map(r => line(r.ID, r.Name, r.DetectionMethod)).sort().join(' | '),
@@ -516,7 +553,8 @@ async function checkMsq10PullAfterAutoExtraction(ctx: IntegrationCheckContext): 
     const [queryID] = ids(1);
     await pushQueries(ctx, 'msq10-auto', [queryRecord(f, { ID: queryID, Name: 'MSQ10 pulled', SQL: vendorSQL(f.Platform) })], queryID);
     const stored = await ReadQueryRows(ctx, BUNDLE, queryID);
-    AssertEqual(`${fieldLines(stored)} / ${stored.Parameters.length} / ${stored.Entities.length}`, 'ID:Database | Name:Database / 1 / 1', 'MSQ10: the pushed query has extracted rows');
+    AssertEqual(`${fieldLines(stored)} / ${stored.Parameters.length} / ${stored.Entities.length}`, `ID:${EXTRACTED} | Name:${EXTRACTED} / 1 / 1`, 'MSQ10: the pushed query has extracted rows');
+    assertExtractedFieldsTyped(stored, 'MSQ10');
 
     const dir = writePullTree(path.join(f.Root, 'msq10-pull'));
     await runPull(ctx.User, dir, queryID);
@@ -540,6 +578,42 @@ async function checkMsq10PullAfterAutoExtraction(ctx: IntegrationCheckContext): 
     Assert(before === after, `MSQ10: pushing the pulled file back wrote rows: ${SnapshotDifference(before, after)}`);
 }
 
+// ─── MSQ11: the fingerprint counts dialect rows written after the query ─────
+
+/** The query's definition as stored now: its own fields and its dialect and parameter rows, bypassing every cache. */
+async function storedDefinition(ctx: IntegrationCheckContext, queryID: string): Promise<{ Stored: string | null; Query: QueryDefinitionFields; Rows: QueryDefinitionRows }> {
+    type QueryRow = QueryDefinitionFields & { DefinitionFingerprint: string | null };
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    const filter = `QueryID='${queryID}'`;
+    const [query, sqls, parameters] = await provider.RunViews([
+        { EntityName: 'MJ: Queries', ExtraFilter: `ID='${queryID}'`, Fields: ['SQL', 'UsesTemplate', 'ExternalDataSourceID', 'DefinitionFingerprint'], ResultType: 'simple', BypassCache: true },
+        { EntityName: 'MJ: Query SQLs', ExtraFilter: filter, Fields: ['SQLDialectID', 'SQL'], ResultType: 'simple', BypassCache: true },
+        { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, Fields: ['Name', 'Type', 'IsRequired', 'ValidationFilters', 'IsServerSet'], ResultType: 'simple', BypassCache: true },
+    ], ctx.User);
+    if (!query?.Success || !sqls?.Success || !parameters?.Success) {
+        throw new Error(`MSQ11: could not read the query's definition: ${query?.ErrorMessage || sqls?.ErrorMessage || parameters?.ErrorMessage}`);
+    }
+    const row = query.Results[0] as QueryRow | undefined;
+    if (!row) throw new Error(`MSQ11: query ${queryID} was not stored`);
+    return { Stored: row.DefinitionFingerprint, Query: row, Rows: { SQLs: sqls.Results as QueryDefinitionRows['SQLs'], Parameters: parameters.Results as QueryDefinitionRows['Parameters'] } };
+}
+
+async function checkMsq11FingerprintCountsRelatedDialectRows(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const [queryID, variantID] = ids(2);
+    const otherPlatform: DatabasePlatform = f.Platform === 'postgresql' ? 'sqlserver' : 'postgresql';
+    const variant: ChildRecord = {
+        primaryKey: { ID: variantID },
+        fields: { QueryID: '@parent:ID', SQLDialectID: await dialectIDFor(ctx, otherPlatform), SQL: vendorSQL(otherPlatform, '', '') },
+    };
+    const record = queryRecord(f, { ID: queryID, Name: 'MSQ11 variant', SQL: vendorSQL(f.Platform, '', ''), RelatedEntities: { 'MJ: Query SQLs': [variant] } });
+    await pushQueries(ctx, 'msq11', [record], queryID);
+
+    const stored = await storedDefinition(ctx, queryID);
+    AssertEqual(stored.Rows.SQLs.length, 1, 'MSQ11: the pushed dialect variant is stored');
+    AssertEqual(stored.Stored, await ComputeQueryFingerprintAsync(stored.Query, stored.Rows), "MSQ11: the stored DefinitionFingerprint is the fingerprint of the query's stored definition, dialect variant included");
+}
+
 export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ1`, Name: 'MSQ1: declared collections are stored as declared on a new query and updated in place', Fn: checkMsq1DeclaredCollections },
     { Id: `${BUNDLE}.MSQ2`, Name: 'MSQ2: the legacy relatedEntities format is promoted, so each declared row is stored once under its own ID', Fn: checkMsq2LegacyRelatedEntitiesPromoted },
@@ -551,6 +625,7 @@ export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ8`, Name: 'MSQ8: one push creates a reusable query and a query composing it', Fn: checkMsq8ComposedInSamePush },
     { Id: `${BUNDLE}.MSQ9`, Name: 'MSQ9: a declared field with only its name and annotations gets its facts from extraction', Fn: checkMsq9FactlessDeclaredFieldGetsFacts },
     { Id: `${BUNDLE}.MSQ10`, Name: 'MSQ10: a pull after auto extraction writes the child rows as collections, and pushing it back writes nothing', Fn: checkMsq10PullAfterAutoExtraction },
+    { Id: `${BUNDLE}.MSQ11`, Name: "MSQ11: a dialect variant pushed under relatedEntities, after its query, counts in the query's stored fingerprint", Fn: checkMsq11FingerprintCountsRelatedDialectRows },
 ];
 
 for (const check of MetadataSyncQueriesChecks) {

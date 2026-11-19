@@ -14,6 +14,7 @@ const finalizeCoAgentRunMock = vi.fn(async () => undefined);
 const keepCoAgentRunAliveMock = vi.fn();
 const hostSessionStartedMock = vi.fn(async () => undefined);
 const hostSessionClosedMock = vi.fn(async () => undefined);
+const mintSnapshotDeleteMock = vi.fn();
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
@@ -24,6 +25,13 @@ vi.mock('@memberjunction/ai-agents', () => ({
             return {
                 OnSessionStarted: hostSessionStartedMock,
                 OnSessionClosed: hostSessionClosedMock,
+            };
+        },
+    },
+    RealtimeMintSnapshotRegistry: {
+        get Instance() {
+            return {
+                Delete: mintSnapshotDeleteMock,
             };
         },
     },
@@ -142,6 +150,7 @@ function mockSessionRunRecords(runIDs: string[], promptRunID?: string): void {
 beforeEach(() => {
     hasPermissionMock.mockReset();
     finalizeCoAgentRunMock.mockClear();
+    mintSnapshotDeleteMock.mockClear();
     hostSessionStartedMock.mockReset();
     hostSessionStartedMock.mockResolvedValue(undefined);
     hostSessionClosedMock.mockReset();
@@ -533,6 +542,7 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(session.CloseReason).toBe('Explicit');
+        expect(mintSnapshotDeleteMock).toHaveBeenCalledWith('session-default');
     });
 
     it.each(['Janitor', 'Shutdown', 'Error', 'Explicit'] as const)(
@@ -629,6 +639,71 @@ describe('SessionManager.CloseSession', () => {
 
         const ok = await mgr.CloseSession('missing', makeUser(), provider);
         expect(ok).toBe(false);
+    });
+
+    // #6462 review #37: a page-close beacon can land while the End mutation's close of the same session is still in
+    // flight, through a DIFFERENT SessionManager instance (each resolver owns one). Both loads see `Active`, so before
+    // the fix both ran the full close work and the later save overwrote CloseReason/ClosedAt.
+    describe('overlapping closes of one session share a single close', () => {
+        function makeVoiceSession(): FakeEntity {
+            return makeSessionEntity({
+                ID: 'session-overlap',
+                Status: 'Active',
+                Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+            });
+        }
+
+        it('runs the close work once and keeps the first close reason', async () => {
+            mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
+            // Each load hands out its own entity, as two requests reading the row do.
+            const { provider, handedOut } = makeProvider(() => makeVoiceSession());
+
+            const [first, second] = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), provider, 'Janitor'),
+                new SessionManager().CloseSession('SESSION-OVERLAP', makeUser(), provider, 'Explicit'),
+            ]);
+
+            expect(first).toBe(true);
+            expect(second).toBe(true);
+            const saves = handedOut.filter((e) => (e.Save as ReturnType<typeof vi.fn>).mock.calls.length > 0);
+            expect(saves).toHaveLength(1);
+            expect(saves[0].CloseReason).toBe('Janitor');
+            expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+            expect(hostSessionClosedMock).toHaveBeenCalledTimes(1);
+            expect(hostSessionClosedMock).toHaveBeenCalledWith('session-overlap', 'Janitor');
+        });
+
+        it('shares one close across spellings of the session ID that differ in case or padding', async () => {
+            mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
+            const { provider, handedOut } = makeProvider(() => makeVoiceSession());
+
+            const results = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), provider, 'Janitor'),
+                new SessionManager().CloseSession('  SESSION-OVERLAP ', makeUser(), provider, 'Explicit'),
+            ]);
+
+            expect(results).toEqual([true, true]);
+            expect(handedOut.filter((e) => (e.Save as ReturnType<typeof vi.fn>).mock.calls.length > 0)).toHaveLength(1);
+            expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+        });
+
+        it('a joined caller sees the shared close fail, and a later close runs afresh', async () => {
+            const failing = makeSessionEntity({ ID: 'session-overlap', Status: 'Active', Save: vi.fn(async () => false) });
+            const { provider: failingProvider } = makeProvider(() => failing);
+
+            const results = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), failingProvider),
+                new SessionManager().CloseSession('session-overlap', makeUser(), failingProvider),
+            ]);
+            expect(results).toEqual([false, false]);
+            expect(failing.Save).toHaveBeenCalledTimes(1);
+
+            // The finished close leaves nothing behind: the next close loads and saves again.
+            const retry = makeSessionEntity({ ID: 'session-overlap', Status: 'Active' });
+            const { provider } = makeProvider(() => retry);
+            expect(await new SessionManager().CloseSession('session-overlap', makeUser(), provider)).toBe(true);
+            expect(retry.Save).toHaveBeenCalledTimes(1);
+        });
     });
 });
 
