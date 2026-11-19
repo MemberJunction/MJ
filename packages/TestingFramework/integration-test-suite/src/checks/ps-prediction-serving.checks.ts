@@ -65,11 +65,11 @@ export interface SchemaFingerprint {
 /** What changed between two fingerprints. */
 export interface FingerprintDelta {
     /** 0 when every column is as before; else at least 1 (the count difference when the count moved). */
-    readonly columnsChanged: number;
+    readonly ColumnsChanged: number;
     /** Migrations applied in between. */
-    readonly migrationsAdded: number;
+    readonly MigrationsAdded: number;
     /** 1 when an MJ: Entities row changed in between (a CodeGen run), else 0. */
-    readonly entityMetadataChanged: number;
+    readonly EntityMetadataChanged: number;
 }
 
 /** One wire identity: its user and the secondary provider authenticated by its API key. */
@@ -231,9 +231,9 @@ export class PsPredictionServing {
     public static Delta(before: SchemaFingerprint, after: SchemaFingerprint): FingerprintDelta {
         const countMoved = Math.abs(after.ColumnCount - before.ColumnCount);
         return {
-            columnsChanged: countMoved > 0 ? countMoved : after.ColumnChecksum === before.ColumnChecksum ? 0 : 1,
-            migrationsAdded: after.MigrationCount - before.MigrationCount,
-            entityMetadataChanged: after.EntityMetadataUpdatedAt === before.EntityMetadataUpdatedAt ? 0 : 1,
+            ColumnsChanged: countMoved > 0 ? countMoved : after.ColumnChecksum === before.ColumnChecksum ? 0 : 1,
+            MigrationsAdded: after.MigrationCount - before.MigrationCount,
+            EntityMetadataChanged: after.EntityMetadataUpdatedAt === before.EntityMetadataUpdatedAt ? 0 : 1,
         };
     }
 
@@ -453,9 +453,9 @@ export const PsPredictionServingChecks: NamedCheck[] = [
         Fn: async (ctx) => {
             const f = PsPredictionServing.Fixture();
             const delta = PsPredictionServing.Delta(f.Before, await PsPredictionServing.Fingerprint(ctx.Provider, ctx.User));
-            AssertEqual(delta.columnsChanged, 0, 'Z3: sys.columns unchanged');
-            AssertEqual(delta.migrationsAdded, 0, 'Z3: no flyway_schema_history row added');
-            AssertEqual(delta.entityMetadataChanged, 0, 'Z3: no MJ: Entities row changed (no CodeGen run)');
+            AssertEqual(delta.ColumnsChanged, 0, 'Z3: sys.columns unchanged');
+            AssertEqual(delta.MigrationsAdded, 0, 'Z3: no flyway_schema_history row added');
+            AssertEqual(delta.EntityMetadataChanged, 0, 'Z3: no MJ: Entities row changed (no CodeGen run)');
         },
     },
     {

@@ -63,15 +63,15 @@ export const PsGateC1S74No2Checks: NamedCheck[] = [
       const panelRestricted = Math.max(restricted.Cards, restricted.ValuesReturned);
       const scored = run.Written;
       PsGate.Assert({
-        Passed: run.Ok && binding.TargetColumn === null && delta.columnsChanged === 0 && delta.migrationsAdded === 0 && delta.entityMetadataChanged === 0
+        Passed: run.Ok && binding.TargetColumn === null && delta.ColumnsChanged === 0 && delta.MigrationsAdded === 0 && delta.EntityMetadataChanged === 0
           && scored > 0 && run.Total === scored && rowsWithLineage === scored && latest.LatestFeatureValues === scored && authorized.Cards === 1 && panelRestricted === 0,
         Measured: {
-          columnsChanged: delta.columnsChanged, migrationsAdded: delta.migrationsAdded, entityMetadataChanged: delta.entityMetadataChanged,
+          columnsChanged: delta.ColumnsChanged, migrationsAdded: delta.MigrationsAdded, entityMetadataChanged: delta.EntityMetadataChanged,
           rowsWithLineage, scored, latestRows: latest.LatestFeatureValues, panelAuthorized: authorized.Cards, panelRestricted,
           targetColumn: binding.TargetColumn, refusal: run.ErrorMessage?.slice(0, 200) || null,
           panelReadError: authorized.ReadError || restricted.ReadError, entity: entityName,
         },
-        Detail: `publishing and binding the C1 model changed ${delta.columnsChanged} column(s), applied ${delta.migrationsAdded} migration(s) and touched entity metadata ${delta.entityMetadataChanged} time(s); `
+        Detail: `publishing and binding the C1 model changed ${delta.ColumnsChanged} column(s), applied ${delta.MigrationsAdded} migration(s) and touched entity metadata ${delta.EntityMetadataChanged} time(s); `
           + `${rowsWithLineage} of ${scored} scored records carry the four lineage fields and ${latest.LatestFeatureValues} are in MJ: Latest Feature Values; `
           + `the panel shows the prediction to a user holding the binding's authorization, ${authorized.Cards} of 1, and shows nothing to a user without it, ${1 - panelRestricted} of 1`,
       });

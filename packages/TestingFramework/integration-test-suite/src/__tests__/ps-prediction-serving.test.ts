@@ -9,16 +9,16 @@ const BEFORE: SchemaFingerprint = { ColumnCount: 9000, ColumnChecksum: 123456, M
 
 describe('PsPredictionServing.Delta', () => {
   it('reports nothing changed for the same fingerprint', () => {
-    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE })).toEqual({ columnsChanged: 0, migrationsAdded: 0, entityMetadataChanged: 0 });
+    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE })).toEqual({ ColumnsChanged: 0, MigrationsAdded: 0, EntityMetadataChanged: 0 });
   });
 
   it('counts added columns, and a retyped or renamed column (same count, other checksum) as one', () => {
-    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE, ColumnCount: 9002, ColumnChecksum: 99 }).columnsChanged).toBe(2);
-    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE, ColumnChecksum: 99 }).columnsChanged).toBe(1);
+    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE, ColumnCount: 9002, ColumnChecksum: 99 }).ColumnsChanged).toBe(2);
+    expect(PsPredictionServing.Delta(BEFORE, { ...BEFORE, ColumnChecksum: 99 }).ColumnsChanged).toBe(1);
   });
 
   it('counts applied migrations and flags an entity-metadata change (a CodeGen run)', () => {
     const after = { ...BEFORE, MigrationCount: 411, EntityMetadataUpdatedAt: '2026-11-19T10:05:00.000Z' };
-    expect(PsPredictionServing.Delta(BEFORE, after)).toEqual({ columnsChanged: 0, migrationsAdded: 1, entityMetadataChanged: 1 });
+    expect(PsPredictionServing.Delta(BEFORE, after)).toEqual({ ColumnsChanged: 0, MigrationsAdded: 1, EntityMetadataChanged: 1 });
   });
 });
