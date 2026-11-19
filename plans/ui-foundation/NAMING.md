@@ -98,12 +98,13 @@ Roles for other families get added the same way, when the first component that n
 - `--mj-shadow-<role>`: surface, overlay, raised (the elevation ramp).
 - `--mj-space-<role>`: control-padding, surface-padding, stack-gap, inline-gap. Only if the space scale alone proves too loose in practice.
 
-Surfaces are roles too, not components. A surface level is a context content sits on, not a thing you place, so surface tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Leave the level out when the token applies to every level.
+Surfaces are roles too, not components. A surface level is a context content sits on, not a thing you place, so surface level tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Leave the level out only when a surface role default applies across levels (`--mj-surface-border-width`, `--mj-surface-border-style`, `--mj-surface-text-muted-selected`); level-less property names (`--mj-surface-bg`, `--mj-surface-border`, `--mj-surface-radius`, `--mj-surface-padding`, `--mj-surface-shadow`) are reserved for Tier 3 `<mj-surface>` instance overrides, and `.mj-surface` resets them in `@layer primitives` so an override on an outer surface does not cascade into a nested `<mj-surface>`.
 
 | Token | What it does |
 | --- | --- |
 | `--mj-surface-elevated-bg-hover` | background of an elevated surface on hover |
-| `--mj-surface-base-border-selected` | border of a selected base surface |
+| `--mj-surface-base-border-selected` | border color of a selected base surface |
+| `--mj-surface-border-width` / `--mj-surface-border-style` | default surface stroke (`1px` / `solid`), overridable per level via `--mj-surface-<level>-border-{width,style}` |
 | `--mj-surface-elevated-text-muted` | what `--mj-text-muted` resolves to inside an elevated surface |
 | `--mj-surface-text-muted-selected` | muted text inside a selected surface at any level |
 
@@ -124,6 +125,11 @@ There are four levels. Each has a background token that defaults to an existing 
 - **Overlays sit on elevated.** In the light theme base and elevated are the same white, so nothing moves. In the dark theme elevated is one step lighter than base, so dialogs, bottom sheets, slide panels and windows get one step lighter when they are converted. Menus, dropdown panels and the datepicker are already there. This is an intentional visible change. Shadows barely read on a dark background, so height is shown by lightness: the higher the surface, the lighter it is. Overlay keeps its own name so a theme can lift it above elevated later. Check at conversion: dialog and window title bars and the inputs inside dialogs are painted with `--mj-bg-surface-card`, which in dark sits below elevated, so they will read darker than the body around them instead of lighter.
 - **Sunken has no state tokens.** A sunken surface is a well, something content sits in, and a well is not something you click. Hover, active and selected exist for base, elevated and overlay only. If a thing in a well is interactive it is a control or a base surface sitting in the well, and it brings its own hover. A state token with no level, such as `--mj-surface-text-muted-selected`, covers those three. This also closes a real hole: in the light theme `--mj-bg-surface-sunken` and `--mj-bg-surface-hover` are the same gray, so a shared hover on a sunken surface would not show at all.
 - **Card is not a level.** `--mj-bg-surface-card` keeps its name and its value. It is a fill, not a context: today it paints cards and also chips, tab bars, the view toggle, stat badges, and dialog and window title bars. `--mj-card-bg` defaults to it. For token re-pointing a card sits at the base level.
+
+Open-axis families in wave 0 (D2 in [UNIFIED_PLAN.md](UNIFIED_PLAN.md) and PR [#5911](https://github.com/MemberJunction/MJ/pull/5911)):
+
+- `--mj-tone-<name>-{bg,text,border,bg-selected}`: open semantic tone axis. Shipped names `success`, `warning`, `error` and `info` default to `--mj-status-<name>-*`; `neutral` defaults to the active surface and text roles; brands add custom tones (`--mj-tone-plum-text`, `--mj-tone-plum-bg`) on `:root` without touching component CSS.
+- `--mj-visual-role-<name>-{bg,text,border,shadow}`: open visual-treatment axis used by `VisualRole` (`visual-role` on Custom Elements). Spelled `visual-role` so it never collides with HTML's ARIA `role` attribute or overloads the word "role" with Tier 2 itself.
 
 Rules for the role tier:
 
@@ -153,11 +159,12 @@ Property vocabulary. Fixed list; a new word needs a reason and goes in the index
 | `text` | color (of text) | matches `--mj-text-*` roles; never a size in tier 3 |
 | `border` | border-color | matches `--mj-border-*` |
 | `border-width` | border-width | so nobody invents `border-size` or crams `1px solid` into `border`; needed for 2px active indicators and borderless card modes |
+| `border-style` | border-style | completes the border split: `border` is the color, `border-width` the stroke, `border-style` solid or dashed. Agreed with Colin when the surface border stopped being a `1px solid` shorthand (`--mj-surface-border-style`) |
 | `radius` | border-radius | matches `--mj-radius-*` |
 | `shadow` | box-shadow | matches `--mj-shadow-*`; a custom focus ring is `-shadow-focus`, no separate `ring` word |
-| `height` | height / min-height | controls only |
-| `width` | width / max-width |  |
-| `padding` | padding (all sides, or -x / -y) | `--mj-card-body-padding-x` |
+| `height` / `min-height` | height / min-height | `height` on fixed controls (`--mj-button-height`), `min-height` on content-growing rows (`--mj-row-min-height`) |
+| `width` / `max-width` | width / max-width | `max-width` on bounded containers and overlays (`--mj-layer-max-width`) |
+| `padding` | padding (all sides, or `-x` / `-y` / `-inline` / `-block`) | `--mj-card-body-padding-x`, `--mj-row-padding-inline` |
 | `gap` | gap | between children |
 | `font-size` | font-size | `--mj-chart-font-size` is the one existing precedent |
 | `font-weight` | font-weight |  |

@@ -1,6 +1,6 @@
 # Project Lego: Wave 0 Spec
 
-**Status:** DRAFT 2026-11-13, for review.
+**Status:** DRAFT 2026-11-13, for review. Updated 2026-11-18 with decisions from Matt and Colin's UI/UX Check-In.
 **Parents:** [UNIFIED_PLAN.md](UNIFIED_PLAN.md), [NAMING.md](NAMING.md), [WAVE_0_PLAN.md](WAVE_0_PLAN.md)
 
 This spec defines the Wave 0 foundation in Angular terms: the CSS cascade contract, the three-tier token architecture, the unified CDK overlay/announcer base, the three Wave 0 primitives (`surface`, `layer`, `row`), the event and L0-L3 layering rules, the package shape (D9), the intentional visible changes, and the prototype gate criteria.
@@ -16,7 +16,7 @@ Measured from the repository on 2026-11-13:
 1. **Encapsulation in `@memberjunction/ng-ui-components`**:
    - 59 `@Component` and `@Directive` declarations exist under `packages/Angular/Generic/ui-components/src/lib`.
    - 0 opt out of Angular's emulated view encapsulation (`ViewEncapsulation.None` is not used).
-   - 13 component/feature `.scss` files are copied flat into `dist/lib/` via `copy-assets` in `packages/Angular/Generic/ui-components/package.json` and imported globally by hosts (`explorer-app/src/lib/styles.scss` and `main.scss`).
+   - 13 component/feature `.scss` files are copied flat into `dist/lib/` via `copy-assets` in `packages/Angular/Generic/ui-components/package.json`; on `next`, `explorer-app/src/lib/styles.scss` imports 12 of the 13 (all except `card-grid/card-grid`, proposed in PR #6610) and `explorer-app/src/lib/styles/main.scss` imports 11 (omitting `tabs/tabs` and `card-grid/card-grid`).
 2. **Token tiers vs. `NAMING.md`**:
    - Source of truth is `packages/Angular/Generic/shared/src/lib/_tokens.scss` (675 lines), with deprecated aliases in `packages/Angular/Explorer/explorer-app/src/lib/styles/_variables.scss` (29 lines).
    - **Tier 1 (Scale)** exists for color palettes, typography, spacing, radius, shadows, transitions, and z-index (`--mj-z-drawer` and `--mj-z-dialog` in the 1000+ overlay band).
@@ -35,11 +35,13 @@ Measured from the repository on 2026-11-13:
    - The 4 overlay containers (`dialog`, `slide-panel`, `bottom-sheet`, `window`) do not use CDK:
      - `dialog` and `bottom-sheet` each hand-roll `querySelectorAll` focus traps and `previousFocus.focus()` restore; `slide-panel` and `window` have none.
      - All 4 implement separate Escape handlers.
-     - `dialog`, `bottom-sheet`, and `dialog.service.ts` each mutate `document.body.style.overflow = 'hidden'` directly.
-     - Z-index stacking is fragmented across 5 hardcoded bands (`1000`, `1200`, `9998/9999`, `10000`, `10001`, `20000`).
-5. **`explorer-app/_common.scss` globals & `.mj-*` collisions**:
-   - `packages/Angular/Explorer/explorer-app/src/lib/styles/_common.scss` (731 lines) declares unlayered global element rules (`*`, `input, textarea, select`, `body, h1, h2, h3`, `a`), form classes (`.form-group`, `.form-label`, `.form-control`), and `.mj-*` classes.
-   - CSS class usage of those `.mj-*` classes across `packages/Angular`: `.mj-card` (18 files; header 7, body 7, footer 2), `.mj-grid` (11 files), `.mj-empty-state` (4 files; `<mj-empty-state>` tag is in 368 files), `.mj-toolbar` (3 files), `.mj-modal-header`/`body`/`footer` (3 files each), `.mj-breadcrumb` (1 file), `.mj-header` / `.mj-container` / `.mj-content-container` (1 file each).
+     - `dialog.component.ts` and `bottom-sheet.component.ts` each mutate `document.body.style.overflow = 'hidden'` directly.
+     - Z-index stacking is fragmented: `_tokens.scss` defines `--mj-z-drawer` (`1100`) and `--mj-z-dialog` (`1200`), while component stylesheets and services hardcode `1000`, `1200`, `9998`/`9999`, `10000`, `10001`, and `20000` (`confirm-dialog.service.ts`).
+5. **`explorer-app/src/lib/styles/` globals & `.mj-*` collisions**:
+   - `packages/Angular/Explorer/explorer-app/src/lib/styles/` declares unlayered global element and legacy component rules across `_common.scss` (731 lines: `*`, `input, textarea, select`, `body, h1, h2, h3`, `a`, `.form-*`, `.mj-*`), `_typography.scss` (`body`, `h1`-`h5`, `p`, `a`), and `_shared-patterns.scss` (imported by `styles/main.scss`: `.mj-badge*`, `.mj-btn`, `.mj-card*`, `.mj-dashboard-header`, `.mj-empty-state`, `.mj-input`, `.mj-loading*`, `.mj-panel*`, `.mj-search*`, `.mj-table`).
+   - CSS class usage of `_common.scss` `.mj-*` classes across `packages/Angular`: `.mj-card` (18 files; header 7, body 7, footer 2), `.mj-grid` (11 files), `.mj-empty-state` (4 files; `<mj-empty-state>` tag is in 368 files), `.mj-toolbar` (3 files), `.mj-modal-header`/`body`/`footer` (3 files each), `.mj-breadcrumb` (1 file), `.mj-header*` / `.mj-container*` / `.mj-content-container` / `.mj-page-container` / `.mj-loading*` / `.mj-search*` (1 to 3 files each, plus downstream BizApps consumers of `explorer-app/styles.scss`).
+6. **Existing Playwright & `axe` infrastructure**:
+   - `@playwright/test` and `@axe-core/playwright` already run under `e2e/` (`e2e/playwright.config.ts`, `pnpm test:e2e`, `e2e/specs/a11y.spec.ts`, `e2e/visual-capture/`, and `.github/workflows/release-test.yml` with a primed MSAL auth profile), and `@memberjunction/ng-test-utils` exports `ExpectNoAxeViolations` for Vitest DOM specs. Pixel-diff `toHaveScreenshot` assertions are what Wave 0 adds.
 
 ---
 
@@ -51,16 +53,17 @@ Every Wave 0+ primitive ships with:
 2. **`.mj-` class prefix** on every element and part class inside the primitive (e.g. `.mj-surface`, `.mj-layer`, `.mj-row`, `.mj-row-leading`).
 3. **All primitive CSS wrapped in `@layer primitives`**.
 4. **No `:host` attribute-leak assumptions**: primitives do not rely on `_ngcontent-*` scoping. Host-element layout (`display`, `box-sizing`) uses the component's tag or `.mj-<name>` host class inside `@layer primitives` so an unlayered host rule always wins without `!important`.
+5. **State classes are `.is-hover` and `.is-selected`**, set on the host next to its `.mj-` class (`.mj-surface.is-selected`, `.mj-row.is-hover`). They are the one unprefixed exception, so selectors only ever use them compounded with an `.mj-` class and they never style anything on their own. Primitives do not use `data-*` attributes for visual state. Interactive primitives give `:hover` and `.is-hover` the same rule, so a host can show the hover look on demand. Accessibility state still goes in ARIA (`aria-selected`, `aria-current`); the class is only the styling hook. This matches the `.mj-surface-*` classes proposed in PR #6609.
 
 ### 2.2 Open axes (D2)
-Closed union types for visual axes (`role`, `tone`, `density`, `emphasis`) are prohibited unless they are defaults over an open string axis.
-- **Inputs accept `string` with documented defaults** (e.g. `Tone = input<string>('neutral')`, `VisualRole = input<string>('surface')`). Note: the visual role axis uses `VisualRole` (`visual-role` in Custom Elements) so it never collides with HTML's native ARIA `role` attribute.
-- **Runtime variable mapping**: primitives bind runtime private variables on their host (`--_mj-tone-text: var(--mj-tone-<name>-text, ...)`, `--_mj-role-bg: var(--mj-role-<name>-bg, ...)`) so a brand adds a custom tone or role purely by declaring `--mj-tone-<name>-*` or `--mj-role-<name>-*` tokens in `:root` without writing CSS selectors against primitive internals.
+Closed union types for visual axes (`visual-role`, `tone`, `density`, `emphasis`) are prohibited unless they are defaults over an open string axis.
+- **Inputs accept `string` with documented defaults** (e.g. `Tone = input<string>('neutral')`, `VisualRole = input<string>('surface')`). The visual role axis uses `VisualRole` (`visual-role` in Custom Elements) and `--mj-visual-role-<name>-*` tokens ([NAMING.md](NAMING.md)) so it never collides with HTML's native ARIA `role` attribute or overloads the word "role" with Tier 2's name.
+- **Runtime variable mapping**: primitives bind runtime private variables on their host (`--_mj-tone-text: var(--mj-tone-<name>-text, ...)`, `--_mj-visual-role-bg: var(--mj-visual-role-<name>-bg, ...)`) so a brand adds a custom tone or visual role purely by declaring `--mj-tone-<name>-*` or `--mj-visual-role-<name>-*` tokens in `:root` without writing CSS selectors against primitive internals. Shipped tones `success`, `warning`, `error`, and `info` default to `--mj-status-<name>-*`.
 
 ### 2.3 PascalCase Angular inputs vs. kebab-case Custom Element attributes
 MemberJunction's Angular convention uses PascalCase inputs in both TypeScript and Angular templates (`[Density]="'sm'"`, `[AllowPhoneSheet]="true"`), while HTML parsers lowercase Custom Element attributes (`density="sm"`, `allow-phone-sheet="true"`). Note that Angular's `input(..., { alias: 'density' })` would replace the Angular template binding name and create two dialects across MJ components, so `alias` is **not** used.
-- **Rule**: Components declare standard unaliased PascalCase `input()` properties (`Density`, `Interactive`, `AllowPhoneSheet`) so Angular templates keep `[Density]` everywhere. In the Angular Elements registrar (`defineElement`), `reflectComponentType(component)` derives kebab-case attribute names (`AllowPhoneSheet` -> `allow-phone-sheet`) and extends `ctor.observedAttributes` and `ctor.prototype.attributeChangedCallback` / `connectedCallback` automatically.
-- **Why**: Zero dialect split in Angular templates, zero `MutationObserver`, and native Custom Element attribute reactivity. Primitives run zoneless (`provideZonelessChangeDetection()`) and never bundle `zone.js` into Angular Elements.
+- **Rule**: New L1 primitives adopt signal `input()` / `output()` properties (`Density`, `Interactive`, `AllowPhoneSheet`) as a deliberate convention so Angular templates keep `[Density]` everywhere. In the Angular Elements registrar (`defineElement`), `reflectComponentType(component)` derives kebab-case attribute names (`AllowPhoneSheet` -> `allow-phone-sheet`) and extends `ctor.observedAttributes` and `ctor.prototype.attributeChangedCallback` / `connectedCallback` automatically.
+- **Why**: Zero dialect split in Angular templates, zero `MutationObserver`, and native Custom Element attribute reactivity. Primitives are zoneless-compatible (`provideZonelessChangeDetection()`); the Wave 0 prototype Element bundle runs without `zone.js`, while `ng-realtime-widget` migrates off its `zone.js` entry and `@layer mj-realtime-widget-defaults` in Phase 2.
 
 ---
 
@@ -93,7 +96,7 @@ border-radius: var(--mj-button-radius, var(--mj-radius-control, var(--mj-radius-
 | --- | --- | --- |
 | `--mj-radius-control` | `var(--mj-radius-md)` (8px) | Buttons, inputs, selects, textareas, toggles, segmented controls |
 | `--mj-radius-surface` | `var(--mj-radius-lg)` (12px) | Cards, panels, wells, sections, tiles |
-| `--mj-radius-overlay` | `var(--mj-radius-lg)` (12px) *(note: PR #6609 sets `xl`/16px; align at Monday check-in)* | Dialogs, sheets, popovers, menus, toasts |
+| `--mj-radius-overlay` | `var(--mj-radius-lg)` (12px) | Dialogs, sheets, popovers, menus, toasts |
 | `--mj-radius-pill` | `var(--mj-radius-full)` (9999px) | Chips, badges, status dots, avatars, toggle thumbs |
 
 #### Control heights (Scale + touch rule)
@@ -120,8 +123,10 @@ Four levels: `sunken`, `base`, `elevated`, `overlay`.
 - `--mj-surface-base-bg`: `var(--mj-bg-surface)`
 - `--mj-surface-elevated-bg`: `var(--mj-bg-surface-elevated)`
 - `--mj-surface-overlay-bg`: `var(--mj-bg-surface-elevated)` (`--mj-bg-overlay` stays the translucent scrim)
-- Inside a surface container (`.mj-surface-<level>`, matching the utility classes added in PR #6609), text and border role tokens (`--mj-text-primary`, `--mj-text-secondary`, `--mj-text-muted`, `--mj-border-default`) are re-pointed to that level's surface tokens so nested children meet WCAG 2.1 AA contrast on both light and dark elevated surfaces per the Ramp B contrast table.
-- PRs #6609 and #6610 also introduce `--mj-bg-canvas`, `--mj-ambient` / `--mj-ambient-strength` (off by default), and `--mj-font-family-display` (Montserrat) in `_tokens.scss`; when Step 7 lands `@layer reset, foundation, primitives;`, those `:root` / `[data-theme="dark"]` / `.mj-surface-*` rules are wrapped in `@layer foundation`.
+- **Border color, width and style are separate tokens.** `--mj-surface-<level>-border` and `--mj-surface-<level>-border-selected` carry color only. Width and style are `--mj-surface-border-width` (`1px`) and `--mj-surface-border-style` (`solid`), with optional per-level overrides `--mj-surface-<level>-border-width` and `--mj-surface-<level>-border-style`. A brand can re-color a surface without restating the stroke, or make surfaces borderless or 2px without touching color. The selected state changes `border-color` only. This matches the token split proposed in PR #6609.
+- **State tokens** exist on `base`, `elevated` and `overlay`: `-bg-hover` (`--mj-bg-surface-hover`), `-bg-selected` and `-border-selected` (`--mj-brand-primary`). The selected fill mixes brand primary into the level's background: 8% on `base` and 10% on `elevated` and `overlay` (`color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface))`). The `.mj-surface-<level>` classes take `.is-hover` and `.is-selected` for these states (Section 2.1).
+- Inside a surface container (`.mj-surface-<level>`, matching the utility classes proposed in PR #6609), text and border role tokens (`--mj-text-primary`, `--mj-text-secondary`, `--mj-text-muted`, `--mj-border-default`) are re-pointed to that level's surface tokens so nested children meet WCAG 2.1 AA contrast on both light and dark elevated surfaces per the Ramp B contrast table.
+- PRs #6609 and #6610 also propose `--mj-bg-canvas`, `--mj-ambient` / `--mj-ambient-strength` (off by default), and `--mj-font-family-display` (Montserrat) in `_tokens.scss`; when Step 7 lands `@layer reset, foundation, primitives;`, those `:root` / `[data-theme="dark"]` / `.mj-surface-*` rules are wrapped in `@layer foundation`.
 
 ---
 
@@ -134,23 +139,23 @@ Every host (Explorer, standalone Angular apps, and Angular Elements) declares th
 @layer reset, foundation, primitives;
 ```
 
-- **`reset`**: Legacy global resets and element defaults (formerly unlayered in `explorer-app/_common.scss`). Lowest priority.
+- **`reset`**: Legacy global resets, element defaults, and shared selector patterns in `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`). Lowest priority.
 - **`foundation`**: Design tokens (`:root`, `[data-theme="dark"]`, surface level re-points) and base focus/typography utilities.
-- **`primitives`**: All `@memberjunction/ng-ui-components` styles.
+- **`primitives`**: New and converted `@memberjunction/ng-ui-components` primitive styles. Note: the 13 existing copied `.scss` files in `ng-ui-components` remain unlayered in Step 7 and move into `@layer primitives` one by one as each component is converted in Waves 1 and 2 (paired with before-and-after screenshot diffs).
 - **Unlayered host CSS**: Any host CSS outside `@layer` beats all three layers by construction with zero `!important`.
 
 ### 4.2 Where the order is declared
 1. `@memberjunction/ng-shared-generic` emits `@layer reset, foundation, primitives;` as the first line of `_tokens.scss` and the compiled `tokens.css`.
-2. `explorer-app` (`styles.scss` and `main.scss`) imports tokens before `_common.scss` or third-party stylesheets.
-3. Angular Elements bundles (the Wave 0 prototype and `ng-realtime-widget`) open their injected stylesheet with `@layer reset, foundation, primitives;` and wrap defaults in `@layer foundation` and primitive CSS in `@layer primitives`.
+2. `explorer-app` (`styles.scss` and `styles/main.scss`) imports tokens before `_typography.scss`, `_common.scss`, `_shared-patterns.scss`, or third-party stylesheets.
+3. Angular Elements bundles (the Wave 0 prototype now, and `ng-realtime-widget` when its `@layer mj-realtime-widget-defaults` migrates in Phase 2) open their injected stylesheet with `@layer reset, foundation, primitives;` and wrap defaults in `@layer foundation` and primitive CSS in `@layer primitives`.
 
-### 4.3 Moving `explorer-app/_common.scss` into `@layer reset`
-Only after the Step 4 visual regression harness captures baseline Explorer screenshots, the unlayered global rules in `packages/Angular/Explorer/explorer-app/src/lib/styles/_common.scss` are wrapped in `@layer reset { ... }`.
+### 4.3 Moving `explorer-app/src/lib/styles/` globals into `@layer reset`
+Only after Step 4 (`e2e/specs/ui-foundation-baseline.spec.ts`) captures baseline Explorer screenshots, Step 7 wraps the unlayered global element and legacy rules in `packages/Angular/Explorer/explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, and `_shared-patterns.scss`) in `@layer reset { ... }` (keeping `@import url(...)` rules at the top of `_typography.scss` outside `@layer` per CSS syntax).
 
 ### 4.4 `.mj-*` collision rule
-Primitives own the `.mj-` prefix. Because `@layer reset` only loses to `@layer primitives` on properties both rules declare (undeclared properties still bleed through), **no primitive may ship with a class name that still exists in `_common.scss`**.
-- Wave 0 (`surface`, `layer`, `row`) has zero collisions with `_common.scss`.
-- Colliding `_common.scss` classes (`.mj-card*`, `.mj-grid*`, `.mj-empty-state`, `.mj-toolbar`, `.mj-modal-*`, `.mj-breadcrumb`, `.mj-header`, `.mj-container`) are renamed to `.mj-legacy-*` or retired in the Wave 1/2 PR that introduces the corresponding primitive.
+Primitives own the `.mj-` prefix. Because `@layer reset` only loses to `@layer primitives` on properties both rules declare (undeclared properties still bleed through), **no primitive may ship with a class name that still exists in `_common.scss` or `_shared-patterns.scss`**.
+- Wave 0 (`surface`, `layer`, `row`) has zero collisions with `_common.scss` or `_shared-patterns.scss`.
+- Colliding classes in `_common.scss` and `_shared-patterns.scss` (`.mj-card*`, `.mj-grid*`, `.mj-empty-state`, `.mj-toolbar*`, `.mj-modal-*`, `.mj-breadcrumb*`, `.mj-header*`, `.mj-container*`, `.mj-page-container`, `.mj-loading*`, `.mj-search*`, `.mj-badge*`, `.mj-panel*`, `.mj-table`, `.mj-dashboard-header`, `.mj-btn`, `.mj-input`) are renamed to `.mj-legacy-*` or retired in the Wave 1/2 PR that introduces the corresponding primitive. Because downstream apps (such as BizApps and OpenApps importing `explorer-app/styles.scss`) may reference `.mj-card*` or `.mj-badge*`, each conversion PR keeps a deprecated alias or documents the class rename in release notes before removing the rule in a major version.
 
 ---
 
@@ -160,7 +165,7 @@ A single CDK-backed service pair replaces the four separate overlay implementati
 
 ### 5.1 `MJLayerService` (on `@angular/cdk/overlay` + `@angular/cdk/a11y`)
 - **Single overlay stack**: Tracks open layer refs in a LIFO stack (`MJLayerRef[]`). Escape and backdrop clicks target only the topmost dismissible layer.
-- **Z-index ladder**: Managed by CDK `OverlayContainer` order plus `--mj-z-overlay` base token, eliminating the 5 hardcoded z-index bands (`1000`, `1200`, `9998`, `10000`, `10001`, `20000`) for new/migrated layers.
+- **Z-index ladder**: Managed by CDK `OverlayContainer` DOM order anchored on the existing `--mj-z-dialog` (`1200`) / `--mj-z-popover` (`1060`) scale tokens (exposed to layers via `--mj-layer-z`, defaulting to `--mj-z-dialog`), retiring the hardcoded `9998`/`9999`, `10000`, `10001`, and `20000` z-index bands as overlays convert.
 - **Focus trap, popover/menu entry, & restore**: Uses `ConfigurableFocusTrapFactory` (`@angular/cdk/a11y`) on modal/sheet/panel layers, moves initial focus into both modal and non-modal `popover`/`menu` portals (since CDK portals render at the end of `document.body` outside natural DOM Tab order), synchronizes `aria-expanded` on anchor triggers, provides Arrow/Home/End roving focus on `Kind="menu"`, and restores focus to the trigger element on close.
 - **Angular Elements portal safety (`DomPortal`)**: Uses CDK `DomPortal` backed by a hidden staging wrapper (`.mj-layer-staging`) rather than `TemplatePortal` when hosting custom elements so nested Angular Elements are not destroyed by `@angular/elements`'s disconnect timer while closed.
 - **Ref-counted scroll lock**: Replaces direct `document.body.style.overflow = 'hidden'` mutations with a ref-counted lock (or CDK `BlockScrollStrategy`) so closing a nested modal never unlocks scroll while a parent sheet is still open.
@@ -182,11 +187,13 @@ A passive or interactive container that establishes a surface level (applying `.
   - `Level: 'sunken' | 'base' | 'elevated' | 'overlay' | string = 'base'`
   - `Elevation: 'none' | 'sm' | 'md' | 'lg' | string = 'none'`
   - `Interactive: boolean = false` (enables hover/active/selected state tokens; ignored when `Level === 'sunken'`)
-  - `Selected: boolean = false`
+  - `Selected: boolean = false` (adds `.is-selected` to the host)
   - `Padding: string = 'md'` (maps to `--mj-space-*` or `none`)
   - `Radius: string = 'surface'` (maps to `--mj-radius-surface` by default)
+  - `Tone: string = 'neutral'` (open semantic axis, `--mj-tone-<name>-*`)
+  - `VisualRole: string = 'surface'` (open visual-role axis, `--mj-visual-role-<name>-*`)
 - **Named parts**: `mjSurfaceHeader`, `mjSurfaceBody`, `mjSurfaceFooter` (order-free, all optional).
-- **Exposed tokens (Tier 3 -> Tier 2)**: `--mj-surface-bg`, `--mj-surface-border`, `--mj-surface-radius`, `--mj-surface-padding`, `--mj-surface-shadow`, plus state variants `-hover` / `-selected`.
+- **Exposed tokens (Tier 3 -> Tier 2)**: `--mj-surface-bg`, `--mj-surface-border`, `--mj-surface-border-width`, `--mj-surface-border-style`, `--mj-surface-radius`, `--mj-surface-padding`, `--mj-surface-shadow`, plus state variants `-hover` / `-selected`. `--mj-surface-border` and its `-selected` variant carry color only (Section 3.3). Level-less Tier 3 overrides (`--mj-surface-bg`, `--mj-surface-border`, `--mj-surface-shadow`) are reset on `.mj-surface` in `@layer primitives` ([NAMING.md](NAMING.md)) so an override on an outer surface never cascades into a nested `<mj-surface>`.
 - **Accessibility**: Semantic container by default (no forced `role`); when `Interactive` is true without a nested button/link, pairs with `mjClickable` or native `<button>`/`<a>`.
 
 ### 6.2 `mj-layer`
@@ -194,21 +201,22 @@ The structural primitive rendered inside `MJLayerService` (or declaratively) for
 - **Inputs**:
   - `Kind: 'dialog' | 'sheet' | 'popover' | 'menu' | 'tooltip' | 'toast' | string = 'dialog'`
   - `Placement: 'center' | 'start' | 'end' | 'bottom' | 'top' | string = 'center'`
-  - `Modal: boolean = true`
+  - `Modal: boolean | undefined = undefined` (defaults by `Kind`: `true` for `'dialog'` and `'sheet'`, `false` for `'popover'`, `'menu'`, `'tooltip'`, and `'toast'`; explicit boolean overrides)
   - `Closeable: boolean = true`
   - `Size: 'sm' | 'md' | 'lg' | 'full' | string = 'md'`
 - **Named parts**: `mjLayerHeader`, `mjLayerTitle` (attribute directive on consumer's `<h2>`/`<h3>`), `mjLayerBody`, `mjLayerFooter` (affirmative button on the left, decline on the right per `packages/Angular/CLAUDE.md`).
 - **Exposed tokens**: `--mj-layer-bg` (`--mj-surface-overlay-bg`), `--mj-layer-radius` (`--mj-radius-overlay`), `--mj-layer-shadow`, `--mj-layer-padding`, `--mj-layer-max-width`, `--mj-layer-backdrop-bg` (`--mj-bg-overlay`).
-- **Accessibility**: `role="dialog"` + `aria-modal="true"` + `aria-labelledby` wired to `mjLayerTitle` for modal kinds; `role="status"` / `role="alert"` for `toast`; Escape + focus trap + focus return guaranteed by `MJLayerService`.
+- **Accessibility**: `role="dialog"` + `aria-modal="true"` + `aria-labelledby` wired to `mjLayerTitle` when modal; non-modal `role="dialog"` / `role="menu"` / `role="tooltip"` for anchored kinds; `role="status"` / `role="alert"` for `toast`; Escape + focus trap (when modal) + focus return guaranteed by `MJLayerService`.
 
 ### 6.3 `mj-row`
 A horizontal flex/grid item primitive for list items, nav rows, menu items, picker options, and toolbar rows.
 - **Inputs**:
   - `Density: 'sm' | 'md' | 'lg' | string = 'md'` (defaults height to `--mj-control-height-<density>`, 44px on `pointer: coarse` for `sm`/`md`)
   - `Interactive: boolean = false`
-  - `Selected: boolean = false`
+  - `Selected: boolean = false` (adds `.is-selected` to the host)
   - `Disabled: boolean = false`
-  - `Tone: string = 'neutral'` (open axis)
+  - `Tone: string = 'neutral'` (open semantic axis, `--mj-tone-<name>-*`)
+  - `VisualRole: string = 'row'` (open visual-role axis, `--mj-visual-role-<name>-*`)
 - **Named parts**: `mjRowLeading` (icon/avatar/checkbox), `mjRowContent` (primary + secondary text), `mjRowTrailing` (badge/action/chevron). Any part can be omitted or reordered in the template without breaking layout.
 - **Exposed tokens**: `--mj-row-min-height`, `--mj-row-padding-inline`, `--mj-row-padding-block`, `--mj-row-gap`, `--mj-row-bg`, `--mj-row-bg-hover`, `--mj-row-bg-selected`, `--mj-row-radius`.
 - **Accessibility (WCAG 4.1.2 & APG Listbox)**:
@@ -226,19 +234,19 @@ A horizontal flex/grid item primitive for list items, nav rows, menu items, pick
    - Angular `@Output()` / `output()` events do not bubble across native DOM / Angular Elements boundaries on their own.
    - Where a primitive is exposed as an Angular Element or notifies ancestor non-Angular hosts, lifecycle events dispatch a `CustomEvent('mj-<event>', { bubbles: true, composed: true, detail })` from the host element in addition to the Angular output, matching `ng-realtime-widget`'s event contract.
 3. **Signals alignment**:
-   - Inputs and outputs use Angular's `input()` / `output()` signal APIs (or remain signal-compatible) per Amith's PR #6181 composition direction.
+   - New L1 primitives adopt Angular's signal `input()` / `output()` APIs as a deliberate convention (aligned with PR #6181's composition direction), while existing NgModule components keep `@Input()` / `@Output()` until converted.
 
 ---
 
 ## 8. L0 to L3 Layering
 
-| Piece | MJ UI Layer | Package | Enforcement |
+| Piece | Conceptual Role / `mjUILayer` | Package | Enforcement |
 | --- | --- | --- | --- |
-| Tier 1 & 2 tokens, `@layer` order | L0 (Foundation) | `@memberjunction/ng-shared-generic` | `mjUILayer` + CSS export check |
-| `surface`, `layer`, `row`, `MJLayerService`, `MJAnnouncerService` | L1 (`"mjUILayer": "widgets"`) | `@memberjunction/ng-ui-components` | `pnpm run check:ui-layers` (`mj standards check --check ui-layers`) |
-| Explorer `_common.scss` in `@layer reset` | L3 (`"mjUILayer": "shell"`) | `@memberjunction/ng-explorer-app` | `pnpm run check:ui-layers` |
+| Tier 1 & 2 tokens, `@layer` order | Conceptual foundation (`"mjUILayer": "widgets"` in `package.json`) | `@memberjunction/ng-shared-generic` | `pnpm run check:ui-layers` (TS/manifest boundaries); CSS `@layer` order verified by unit/gate specs until the Phase 3 catalog gate |
+| `surface`, `layer`, `row`, `MJLayerService`, `MJAnnouncerService` | L1 (`"mjUILayer": "widgets"`) | `@memberjunction/ng-ui-components` | `pnpm run check:ui-layers` (`mj standards check --check ui-layers`) + co-located DOM specs |
+| Explorer `styles/` globals in `@layer reset` | L3 (`"mjUILayer": "shell"`) | `@memberjunction/ng-explorer-app` | `pnpm run check:ui-layers` + Step 7 Playwright baseline check |
 
-Primitives in L1 (`widgets`) have zero dependencies on `@angular/router`, `NavigationService`, `@memberjunction/ng-shared`, or entity metadata/data access (`RunView`, `Metadata`). Everything arrives via inputs/projection and leaves via events.
+Note: `check:ui-layers` enforces TypeScript import and `package.json` `"mjUILayer"` rules only; CSS `@layer` placement is verified by the prototype gate and unit specs now, and automated across all primitives by the Phase 3 catalog gate that replaces `check:ui`. Primitives in L1 (`widgets`) have zero dependencies on `@angular/router`, `NavigationService`, `@memberjunction/ng-shared`, or entity metadata/data access (`RunView`, `Metadata`). Everything arrives via inputs/projection and leaves via events.
 
 ---
 
@@ -246,7 +254,7 @@ Primitives in L1 (`widgets`) have zero dependencies on `@angular/router`, `Navig
 
 `@memberjunction/ng-ui-components` moves from a single barrel + `copy-assets` flat `.scss` copies to structured `package.json` `"exports"`:
 
-1. **Root barrel (`.`)**: Keeps existing exports for backwards compatibility during Waves 1 to 4.
+1. **Root barrel (`.`) and transitional `dist/*` passthrough**: Keeps `.` (`./dist/public-api.js`) plus `"./dist/*": "./dist/*"` during Waves 1 to 4 so existing deep SCSS/JS imports do not break before callers migrate.
 2. **Secondary entry points per primitive family**:
    - `@memberjunction/ng-ui-components/surface`
    - `@memberjunction/ng-ui-components/layer`
@@ -255,7 +263,7 @@ Primitives in L1 (`widgets`) have zero dependencies on `@angular/router`, `Navig
 3. **Explicit style entry points**:
    - `@memberjunction/ng-shared-generic/tokens.css` and `@memberjunction/ng-shared-generic/tokens.scss`
    - `@memberjunction/ng-ui-components/styles/primitives.css` (and per-family CSS exports)
-   So `ng-realtime-widget`, `explorer-app` (including `card-grid/card-grid` added in PR #6610), and Angular Elements import documented package exports instead of reaching into `dist/lib/*.scss` by file path.
+   So `ng-realtime-widget`, `explorer-app` (including `card-grid/card-grid` proposed in PR #6610), and Angular Elements import documented package exports instead of reaching into `dist/lib/*.scss` by file path.
 
 ---
 
@@ -272,15 +280,16 @@ These changes are intentional and must be called out in PR descriptions and veri
 
 ---
 
-## 11. Gate Criteria (Step 6 Prototype Gate)
+## 11. Gate Criteria (Step 6 Prototype Gate & Step 7 Exit Check)
 
-The Wave 0 prototype builds `mj-surface`, `mj-layer`, and `mj-row` in a private, unpublished workspace package compiled as Angular Elements and loaded onto the MJ Elements Phase 0 test page (PR #5916). The gate passes only when **all eight** criteria pass:
+The Wave 0 prototype builds `mj-surface`, `mj-layer`, and `mj-row` in a private, unpublished workspace package compiled as Angular Elements and loaded onto the MJ Elements Phase 0 test page (PR #5916), verified under `e2e/ui-primitives/`. The Step 6 Prototype Gate passes only when **all seven** prototype criteria pass:
 
 1. **Same markup, three looks**: Identical template markup renders in (a) MJ default, (b) LXP, and (c) a dense, flat, square-cornered serif look, with **0 lines of component CSS differing** between them.
 2. **Parts**: Removing or reordering any named part (`mjSurfaceHeader`, `mjRowLeading`, `mjLayerFooter`, etc.) in the host template breaks neither layout nor behavior.
 3. **Host wins**: A single unlayered host CSS rule overrides a primitive style with **no `!important`**.
 4. **Hostile host & strict CSP**: Primitives survive the test page's hostile host CSS, strict CSP mode (no `unsafe-eval`, no inline style violations), and render fonts and icons cleanly.
-5. **Open axes**: A custom `Role` and a custom `Tone` not shipped in the library's defaults both render and fall back cleanly.
+5. **Open axes**: A custom `VisualRole` (`--mj-visual-role-<name>-*`) and a custom `Tone` (`--mj-tone-<name>-*`) not shipped in the library's defaults both render and fall back cleanly.
 6. **Layer mechanics**: `dialog`, `sheet`, and `popover` run on `MJLayerService`; keyboard Tab trap, Escape dismiss, ref-counted scroll lock, and focus return all pass, and `dialog` collapses to `sheet` on phone width.
-7. **Accessibility**: axe passes with zero violations on the prototype page; focus rings are visible in all three looks; interactive touch targets measure at least 44px at phone width (`pointer: coarse`).
-8. **Explorer unaffected**: The Playwright visual regression harness shows zero unexpected diffs on the baseline Explorer screens after `@layer reset, foundation, primitives;` and `_common.scss` move to `@layer reset`.
+7. **Accessibility**: `@axe-core/playwright` (`e2e/ui-primitives/`) and `ExpectNoAxeViolations` (`@memberjunction/ng-test-utils` in co-located Vitest DOM specs) pass with zero violations; focus rings are visible in all three looks; interactive touch targets measure at least 44px at phone width (`pointer: coarse`).
+
+**Step 7 Exit Check (Explorer layer migration)**: After the Step 6 Prototype Gate passes, Step 7 declares `@layer reset, foundation, primitives;` in `@memberjunction/ng-shared-generic` and wraps `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`) in `@layer reset`. Step 7 passes only when `e2e/specs/ui-foundation-baseline.spec.ts` (`PW_VISUAL_BASELINE=1`, reusing `e2e/fixtures.ts`'s authenticated MSAL profile) shows **zero unexpected visual diffs** against the Step 4 baseline screenshots.

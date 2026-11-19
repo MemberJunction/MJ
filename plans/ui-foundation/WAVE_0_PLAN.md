@@ -1,6 +1,6 @@
 # Wave 0 work plan
 
-**Status:** DRAFT 2026-11-13, for Matt's review. Not committed.
+**Status:** DRAFT 2026-11-13, for Matt's review. Updated 2026-11-18 with decisions from Matt and Colin's UI/UX Check-In.
 
 This is the plan for getting through wave 0, which is Matt's half of Phase 0 in [UNIFIED_PLAN.md](UNIFIED_PLAN.md). It is not the wave 0 spec. The spec is the first deliverable below.
 
@@ -32,8 +32,8 @@ The checklist order is not the build order. Two dependencies change it:
 | 3 | Full spec draft | `WAVE_0_SPEC.md`, docs PR | 2 |
 | 4 | Visual regression harness | Baseline screenshots of a fixed set of Explorer screens | Nothing, can run alongside 2 and 3 |
 | 5 | Prototype: surface, layer, row | Private package plus host page | 3 |
-| 6 | Gate review | Pass or fail against the criteria below | 5 |
-| 7 | Layer order lands in code, globals move | PR to `ng-shared-generic` and `explorer-app` | 4 and 6 |
+| 6 | Gate review | Pass or fail on the standalone prototype (7 criteria below) | 5 |
+| 7 | Layer order lands in code, globals move | PR to `ng-shared-generic` and `explorer-app` with zero unexpected Explorer baseline diffs | 4 and 6 |
 | 8 | Close out | README on #5911 updated, Phase 0 boxes ticked | 6 and 7 |
 
 ## Step 1: inventory
@@ -44,9 +44,9 @@ The spec has to start from measured facts, the same way the README did. To measu
 - What token tiers exist now against the three in [NAMING.md](NAMING.md): scale, role, component
 - What the package exports. Today it is one barrel with no `exports` map, and the realtime widget reaches into `dist` by file path for tokens and button styles
 - Which CDK pieces are already used, and where the four overlays duplicate each other
-- What `explorer-app/src/lib/styles/_common.scss` sets globally
+- What `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`) sets globally
 
-One finding already, from reading `_common.scss` for this plan: it defines global `.mj-card`, `.mj-card-header`, `.mj-card-body`, `.mj-card-footer`, `.mj-empty-state`, `.mj-toolbar`, `.mj-breadcrumb`, `.mj-modal-header`, `.mj-modal-body`, `.mj-modal-footer`, `.mj-grid` and `.mj-header`. With encapsulation off, primitives use a class prefix, and `mj-` is the obvious one. Those names are taken, by rules that will apply to any element carrying them. The spec has to pick a prefix that cannot collide, or retire these globals first.
+One finding already, from reading `_common.scss` and `_shared-patterns.scss` for this plan: they define global `.mj-card*`, `.mj-empty-state`, `.mj-toolbar*`, `.mj-breadcrumb*`, `.mj-modal-*`, `.mj-grid*`, `.mj-header*`, `.mj-loading*`, `.mj-search*`, `.mj-page-container`, `.mj-badge*`, `.mj-panel*`, `.mj-table`, `.mj-btn` and `.mj-input`. With encapsulation off, primitives use a class prefix, and `.mj-` is the obvious one. Wave 0 (`surface`, `layer`, `row`) has no collisions with that list; Waves 1 and 2 retire or rename each colliding global in the PR that converts its primitive.
 
 ## Steps 2 and 3: the spec
 
@@ -68,13 +68,13 @@ The README's wave 0 row is wider than the unified plan's checklist. It also list
 
 ## Step 4: visual regression harness
 
-The repo has no screenshot comparison today. Playwright is present only in the AI browser packages.
+The repo already runs `@playwright/test` and `@axe-core/playwright` under `e2e/` (`e2e/playwright.config.ts`, `pnpm test:e2e`, `e2e/specs/a11y.spec.ts`, `e2e/visual-capture/`, and `.github/workflows/release-test.yml` with a primed MSAL auth profile), plus `ExpectNoAxeViolations` in `@memberjunction/ng-test-utils` for Vitest DOM specs. What does not exist yet is `toHaveScreenshot` pixel-diff regression assertions.
 
-Proposal: Playwright's built-in screenshot comparison, started small.
+Proposal: extend `e2e/` with Playwright's built-in `toHaveScreenshot` comparisons rather than creating a second Playwright harness.
 
-- First target is the prototype host page, in light and dark, at desktop and phone widths
-- Second target is a fixed list of Explorer screens, captured before step 7
-- Runs locally at first. CI comes when the gallery exists in Phase 3, because Explorer screenshots need a seeded database to be stable
+- First target (`e2e/ui-primitives/`) is the standalone prototype host page, in light and dark, at desktop and phone widths
+- Second target (`e2e/specs/ui-foundation-baseline.spec.ts`, reusing `e2e/fixtures.ts`'s authenticated MSAL session) is a fixed list of Explorer screens captured before Step 7 and diffed in Step 7
+- Prototype screenshots run cleanly anywhere; Explorer baseline comparison stays opt-in (`PW_VISUAL_BASELINE=1`) until Phase 3 seeds deterministic gallery data for CI
 
 ## Step 5: the prototype
 
@@ -92,14 +92,15 @@ PR #5916 is still open. The prototype either stacks on it or waits for it to mer
 - **Parts.** A part can be removed or reordered in the template and nothing breaks.
 - **Host wins.** One unlayered host rule overrides a primitive with no `!important`.
 - **Hostile host.** The primitives survive the test page's hostile styles and strict CSP.
-- **Open axes.** A role and a tone the library never shipped both work.
+- **Open axes.** A visual role (`VisualRole`) and a tone (`Tone`) the library never shipped both work.
 - **Layer.** Dialog, sheet and popover bodies run on one layer base. Focus trap, Escape, scroll lock and return focus pass by keyboard.
-- **Accessibility.** axe passes on the page. Focus is visible in all three looks. Touch targets are 44 on phones.
-- **Explorer unaffected.** The harness shows no diffs.
+- **Accessibility.** axe passes on the page (`@axe-core/playwright` and `ExpectNoAxeViolations` in Vitest DOM tests). Focus is visible in all three looks. Touch targets are 44 on phones.
 
 ## Step 7: layer order in code
 
-This is the only step that touches shipped code. It declares the layer order and moves the unlayered globals in `_common.scss` into the reset layer. Colin's WS4 contract fixes land in the same package, so the two PRs get sequenced at a Monday check-in.
+This is the only step that touches shipped code. It declares `@layer reset, foundation, primitives;` and moves the unlayered element and legacy globals in `explorer-app/src/lib/styles/` (`_common.scss`, `_typography.scss`, `_shared-patterns.scss`) into `@layer reset`. Colin's WS4 contract fixes land in the same package. Step 7's exit check is **Explorer unaffected**: zero unexpected visual diffs against the Step 4 Explorer baseline screenshots.
+
+Merge order, agreed at the UI/UX Check-In: Colin's #6609 (WS6b tokens) and #6610 (WS4 contract fixes) merge first. The wave 0 prototype (#6673) merges after them and re-layers so the variables win. Colin's `.mj-surface-*` classes are unlayered and paint background, border and shadow; wave 0 treats them as variables, with the primitive doing the painting inside `@layer primitives`. Unlayered rules beat every layer, so without the re-layer those classes would override the primitives. Step 7 is wave 0 work too, so it also lands after both of Colin's PRs.
 
 ## Coordination with Colin
 
@@ -114,8 +115,8 @@ This is the only step that touches shipped code. It declares the layer order and
 | 1 | Where the prototype lives | Private workspace package, loaded on the Elements test page |
 | 2 | What the third look is | Something dense and flat with square corners and a serif face, so it shares nothing with MJ or LXP |
 | 3 | Spec scope | Full wave 0 at contract level; prototype builds surface, layer, row only |
-| 4 | Class prefix, given the `_common.scss` collisions | Decide in the spec after the inventory counts how many templates use those global classes |
-| 5 | Harness tooling and where it runs | Playwright screenshots, local first |
+| 4 | Class prefix, given the `_common.scss` collisions | **Decided:** `.mj-` prefix kept; Wave 0 (`surface`, `layer`, `row`) has zero collisions, and Wave 1/2 PRs retire or rename colliding globals in `_common.scss` / `_shared-patterns.scss` per component |
+| 5 | Harness tooling and where it runs | `toHaveScreenshot` inside existing `e2e/` (`e2e/ui-primitives/` + `e2e/specs/`), Explorer baselines opt-in locally first |
 | 6 | Who implements the control-height and radius role tokens | Colin declares, Matt's component PRs adopt |
 | 7 | Branch and file | `WAVE_0_SPEC.md` in this folder, on a new docs branch off `next` |
 
