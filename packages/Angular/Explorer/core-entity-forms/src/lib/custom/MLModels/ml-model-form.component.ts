@@ -44,7 +44,8 @@ export class MLModelFormComponentExtended extends MJMLModelFormComponent impleme
 
     /** Opens the record a model-detail tab links to (an initiator, a publish record) through the form's navigation. */
     public OnOpenModelRecord(request: PSOpenRecordRequest): void {
-        this.OnFormNavigate({ Kind: 'record', EntityName: request.EntityName, PrimaryKey: CompositeKey.FromID(request.RecordID), OpenInNewTab: true });
+        const key = CompositeKey.FromID(request.RecordID); // first-pk-ok: every record the detail links (users, agent runs, job runs, process runs, publish records) is an MJ core entity keyed on ID
+        this.OnFormNavigate({ Kind: 'record', EntityName: request.EntityName, PrimaryKey: key, OpenInNewTab: true });
     }
 
     /** The bindings section's grid parameters and new-record values for the record's pipeline. */

@@ -22,14 +22,15 @@ try {
  * strip + a master-list row + detail). Standalone.
  */
 
-const makeEngine = (publishedModels: unknown[]) => {
+const makeEngine = (publishedModels: unknown[], processes: unknown[] = []) => {
   const subject = new BehaviorSubject<unknown[]>(publishedModels);
   return {
     ObserveProperty: () => subject.asObservable(),
     PublishedModels: publishedModels,
     ScoringBindings: [],
     ScoringBindingsForPipeline: () => [],
-    RecordProcessesForModel: () => [],
+    RecordProcessesForModel: () => processes,
+    Models: publishedModels,
     RecordProcessByID: () => undefined,
     ModelDisplayName: () => 'Renewal Model',
     AlgorithmName: () => 'XGBoost',
@@ -47,6 +48,7 @@ const makeModel = (over: Record<string, unknown> = {}) =>
     HoldoutMetrics: '{"AUC":0.86}',
     PipelineID: 'p1',
     ArtifactFileID: 'f1',
+    ArtifactStatus: 'verified',
     Status: 'Published',
     ...over,
   });
@@ -55,6 +57,39 @@ const render = (publishedModels: unknown[]) =>
   renderComponentFixture(PSProductionComponent, {
     inputs: { Engine: makeEngine(publishedModels), Provider: createFakeProvider({ runViewResults: [] }) },
   });
+
+/** One `MJ: ML Model Publish Records` row the production view reads for the last auto-train outcome. */
+interface PublishRecordDouble {
+  ID: string;
+  ModelID: string;
+  Kind: 'publish' | 'refusal';
+  RecordedAt: Date;
+  InitiatorObject: { kind: 'system'; component: string; processRunId?: string };
+  RefusalObject: { kind: 'keep-baseline-not-auto-published' } | null;
+}
+const M = makeModel;
+const published = makeModel({ ID: 'M-PUB', PipelineID: 'P-1' });
+const Refusal = (over: Partial<PublishRecordDouble>): PublishRecordDouble => ({
+  ID: 'PR-1', ModelID: 'M-PUB', Kind: 'refusal', RecordedAt: new Date('2026-11-10T00:00:00Z'),
+  InitiatorObject: { kind: 'system', component: 'auto-train', processRunId: 'RUN-1' }, RefusalObject: null, ...over,
+});
+const KeepBaselineNotAutoPublished = (): PublishRecordDouble['RefusalObject'] => ({ kind: 'keep-baseline-not-auto-published' });
+
+/** Renders the view over `models` with an auto-train process and, when given, its last auto-train outcome record. */
+async function RenderProduction(opts: { models: unknown[]; autoTrainOutcome?: PublishRecordDouble }) {
+  const records = opts.autoTrainOutcome ? [opts.autoTrainOutcome] : [];
+  const fixture = renderComponentFixture(PSProductionComponent, {
+    inputs: {
+      Engine: makeEngine(opts.models, [{ ID: 'RP-1', ScheduleEnabled: true }]),
+      Provider: createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? records : []) }),
+    },
+  });
+  for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
+  return fixture;
+}
+const Text = (f: Awaited<ReturnType<typeof RenderProduction>>, testId: string): string => query(f, `[data-testid="${testId}"]`)?.textContent || '';
+const Button = (f: Awaited<ReturnType<typeof RenderProduction>>, testId: string): HTMLButtonElement => query(f, `[data-testid="${testId}"]`) as HTMLButtonElement;
 
 describe('PSProductionComponent (DOM)', () => {
   it('shows the empty state when there are no published models', () => {
@@ -88,12 +123,26 @@ describe('PSProductionComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-production-operate"]')).not.toBeNull();
   });
 
-  it('marks a published model with no trained artifact as Needs training and disables Operate', () => {
-    const fixture = render([makeModel({ ArtifactFileID: null })]);
-    expect(query(fixture, '[data-testid="ps-production-row"]')?.textContent).toContain('Needs training');
-    expect(query(fixture, '[data-testid="ps-production-needs-training"]')).not.toBeNull();
-    const operate = query(fixture, '[data-testid="ps-production-operate"]') as HTMLButtonElement | null;
-    expect(operate?.disabled).toBe(true);
+  it('a model whose artifact is missing is unscorable with the reason and Operate disabled', async () => {
+    const f = await RenderProduction({ models: [M({ ArtifactStatus: 'missing', ArtifactFileID: 'f1' })] });
+    expect(Text(f, 'ps-deploy-state').toLowerCase()).toContain('unscorable');
+    expect(Text(f, 'ps-production-unscorable')).toContain(PSProductionComponent.UnscorableReason('missing') || 'no reason');
+    expect(Button(f, 'ps-production-operate').disabled).toBe(true);
+  });
+
+  it('a hash-mismatched or legacy-local artifact is unscorable; a verified one is not', () => {
+    expect([PSProductionComponent.UnscorableReason('hash-mismatch') !== null, PSProductionComponent.UnscorableReason('legacy-local') !== null, PSProductionComponent.UnscorableReason('verified')]).toEqual([true, true, null]);
+  });
+
+  it('an auto-train process shows its last outcome: withheld with the reason', async () => {
+    const f = await RenderProduction({ models: [published], autoTrainOutcome: Refusal({ RefusalObject: KeepBaselineNotAutoPublished() }) });
+    expect(Text(f, 'ps-auto-train-outcome')).toContain('withheld');
+    expect(Text(f, 'ps-auto-train-outcome')).toContain('simple baseline');
+  });
+
+  it('an auto-train publish shows as published', async () => {
+    const f = await RenderProduction({ models: [published], autoTrainOutcome: Refusal({ Kind: 'publish' }) });
+    expect(Text(f, 'ps-auto-train-outcome')).toContain('published');
   });
 
   it('names the metric of each holdout score in the list and the header, so a loss never reads as an AUC', () => {
