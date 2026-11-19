@@ -18,6 +18,7 @@ import {
   PredictiveStudioModelTransition,
 } from '@memberjunction/core-entities';
 import { ImportanceDisplay, StatusWriteRules } from '@memberjunction/predictive-studio-core';
+import { PSScoringBindingEditorComponent } from './ps-scoring-binding-editor.component';
 
 import {
   PSFeatureBar,
@@ -75,13 +76,14 @@ const TRANSITION_ORDER: readonly PredictiveStudioModelTransition[] = ['evaluate'
  *   - Target leakage gate verification
  *   - The lifecycle transitions the §5.1 table allows from the model's status (evaluate, publish, archive, rollback),
  *     each applied by the lifecycle gate through the `PredictiveStudio.PromoteModel` Remote Operation
+ *   - A Bindings section hosting `<ps-scoring-binding-editor>` for the model's training pipeline (when a provider is bound)
  */
 @Component({
   standalone: true,
   selector: 'ps-model-detail',
   templateUrl: './ps-model-detail.component.html',
   styleUrls: ['./ps-model-detail.component.css'],
-  imports: [CommonModule, FormsModule, MJButtonDirective],
+  imports: [CommonModule, FormsModule, MJButtonDirective, PSScoringBindingEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSModelDetailComponent {

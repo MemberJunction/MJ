@@ -4,12 +4,13 @@ import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import type { RunViewParams } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import type { SemanticsCheckBinding } from '@memberjunction/predictive-studio-core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
 import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from './ps-predictions-grid.component';
+import type { LatestPredictionRow } from '../latest-prediction-rows';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -227,5 +228,61 @@ describe('PSPredictionsGridComponent (DOM) — from the predictions-grid binding
     const grid = await RenderGrid(fixture, { model: broken, binding: { Surface: 'predictions-grid' } });
     expect(grid.IsRenewalModel).toBe(false);
     expect(fixture.querySelector('[data-testid="ps-semantics-problem"]')?.textContent).toContain('OutputSemantics');
+  });
+});
+
+describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s scoring binding', () => {
+  /** A churn model (no inversion) of pipeline P1 whose class order is ['false', 'true']: the score is P(true). */
+  const churn: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = {
+    ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null,
+    OutputSemantics: JSON.stringify({ task: { kind: 'binary', classOrder: ['false', 'true'], adverseIndex: 1 } }),
+  };
+  /** The model pipeline's Active scoring binding. */
+  const scoringBinding = { ID: 'SB1', MLTrainingPipelineID: 'P1', FeatureName: 'Churn risk', TargetEntityID: 'E-MEMBERS', Status: 'Active' } as const;
+  /** The latest Champion Model value of `recordId`: adverse probability `score`, its probabilities in class order. */
+  const Latest = (recordId: string, score: number): LatestPredictionRow => ({
+    ID: `LV-${recordId}`, RecordID: recordId, ValueText: score >= 0.5 ? 'true' : 'false', ValueNumeric: score, Confidence: Math.max(score, 1 - score),
+    ValueJSON: JSON.stringify({ Probabilities: { false: 1 - score, true: score }, Drivers: [{ sourceColumn: 'DaysSinceLogin', contribution: 0.4, effect: 'raises-adverse' }] }),
+    EffectiveAsOf: new Date('2026-11-03T00:00:00Z'), ComputedAt: new Date('2026-11-03T01:00:00Z'),
+  });
+
+  async function RenderLatest(latest: LatestPredictionRow[], reads: RunViewParams[]): Promise<PSPredictionsGridComponent> {
+    // the engine's cached binding: the double carries only the members the grid reads
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([scoringBinding as unknown as MJMLModelScoringBindingEntity]);
+    const runDetails = vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails');
+    const provider = createFakeProvider<ModelRow | LatestPredictionRow>({ runViewResults: (p: RunViewParams) => {
+      reads.push(p);
+      if (p.EntityName === 'MJ: ML Models') return [churn];
+      if (p.EntityName === 'MJ: Latest Feature Values') return latest;
+      return [];
+    } });
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: churn.ID, Provider: provider },
+      providers: [{ provide: NavigationService, useValue: {} }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(runDetails).not.toHaveBeenCalled();
+    return fixture.componentInstance;
+  }
+
+  it('the predictions grid reads the binding feature from the latest-value entity', async () => {
+    const reads: RunViewParams[] = [];
+    const grid = await RenderLatest([Latest('r1', 0.9), Latest('r2', 0.2)], reads);
+    expect(reads.map((r) => r.EntityName)).toContain('MJ: Latest Feature Values');
+    expect(grid.AllRows.map((r) => r.score)).toEqual([0.9, 0.2]);
+  });
+
+  it('reads the binding\'s feature on its target entity, Model rows only, past the server cache', async () => {
+    const reads: RunViewParams[] = [];
+    await RenderLatest([Latest('r1', 0.9)], reads);
+    const latestRead = reads.find((r) => r.EntityName === 'MJ: Latest Feature Values');
+    expect([latestRead?.ExtraFilter, latestRead?.BypassCache]).toEqual(["EntityID='E-MEMBERS' AND FeatureName='Churn risk' AND Source='Model'", true]);
+  });
+
+  it('takes the drivers and the scored date from the stored value', async () => {
+    const grid = await RenderLatest([Latest('r1', 0.9)], []);
+    expect(grid.AllRows[0].drivers.map((d) => [d.Label, d.Up])).toEqual([['Days Since Login', true]]);
+    expect(grid.AllRows[0].scoredAtDate?.toISOString()).toBe('2026-11-03T00:00:00.000Z');
   });
 });

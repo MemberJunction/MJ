@@ -181,7 +181,16 @@
       </div>
     }
 
-    <!-- 7. Confirm Transition Modal -->
+    <!-- 7. Bindings: the pipeline's scoring bindings (D4-48); needs a provider to read and write them through -->
+    @if (Provider) {
+      <div class="ps-card" data-testid="ps-model-bindings" id="ps-model-bindings">
+        <div class="ps-card-body">
+          <ps-scoring-binding-editor [Model]="Model" [Provider]="Provider"></ps-scoring-binding-editor>
+        </div>
+      </div>
+    }
+
+    <!-- 8. Confirm Transition Modal -->
     @if (Pending && PendingPresentation; as presentation) {
       <div class="ps-modal-backdrop" (click)="CancelTransition()">
         <div class="ps-modal" (click)="$event.stopPropagation()" data-testid="ps-confirm-modal">

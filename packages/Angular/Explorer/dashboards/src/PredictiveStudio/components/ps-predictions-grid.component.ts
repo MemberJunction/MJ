@@ -21,9 +21,9 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, type RunViewParams, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -60,7 +60,8 @@ import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
-import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
+import { PredictiveStudioEngine, type PSRunDetailRow, type PSRunDetails } from '../engine/predictive-studio.engine';
+import { LatestPredictionRows, type LatestPredictionBinding, type LatestPredictionRow } from '../latest-prediction-rows';
 import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -166,6 +167,9 @@ export interface PredictionGridRowsLoadedEvent {
  *   1. **Predictions tab** (`PSPredictionsResourceComponent`) — business view of all at-risk records.
  *   2. **Models tab** (`PSProductionComponent`) — analyst run drill-in view.
  *
+ * Reads, with no run bound, the latest values of the model pipeline's scoring binding from `MJ: Latest Feature Values`
+ * (§5.8.4); with a run bound, that run's process run details.
+ *
  * Supports:
  *   - Virtualized AG Grid scrolling for thousands of rows (no artificial 50/200 cap).
  *   - Automatic target entity record display name resolution (e.g. member/customer names).
@@ -193,7 +197,7 @@ export interface PredictionGridRowsLoadedEvent {
 export class PSPredictionsGridComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
   /** The `MJ: ML Models` row whose predictions the grid shows. */
   @Input() ModelId: string | null = null;
-  /** The run to show; null shows the model's latest run. */
+  /** The run to show; null shows the latest values of the model pipeline's scoring binding (or, without one, the latest run). */
   @Input() RunId: string | null = null;
   /**
    * The surface the grid renders as, whose `MJ: ML Output Bindings` row it reads: `at-risk-list` in the business
@@ -608,17 +612,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const user = provider.CurrentUser || undefined;
       const read0 = await this.loadModelAndBindings();
       const model = read0.Model;
-      const effectiveRunId = this.RunId === null || this.RunId === undefined ? await this.resolveLatestRunId() : this.RunId;
-      if (!effectiveRunId) {
+      const read = await this.loadScoredRows(model, provider, user);
+      if (!read) {
         this.applyFilter();
         this.RowsLoaded.emit({ Rows: [], Capped: false, Binding: read0.Binding });
         return;
       }
-
-      await this.resolveTargetEntity(model);
-
-      // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
-      const read = await PredictiveStudioEngine.Instance.LoadRunDetails(effectiveRunId, provider, user);
       const atRiskOptions = this.applyModelOptions(read0);
       const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
         read.Rows.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
@@ -647,6 +646,78 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.cdr.markForCheck();
     }
   }
+
+  /**
+   * The rows the grid shows. With no run bound and an `Active` scoring binding on the model's pipeline: the binding's
+   * latest values from `MJ: Latest Feature Values` (§5.8.4). With a run bound (an analyst's drill-in to a past run), or a
+   * model whose pipeline has no binding: that run's — or the latest run's — process run details, the per-run audit.
+   * Null when there is nothing to show (no binding and no run). Throws when a read fails.
+   */
+  private async loadScoredRows(model: PredictionGridModelFields | null, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
+    const binding = this.RunId ? null : this.activeScoringBinding(model);
+    if (binding) {
+      await this.resolveTargetEntity(model);
+      const latest = await this.LoadLatestValues(binding);
+      return { Rows: latest.Rows.map((r) => LatestPredictionRows.ToRunDetail(r)).filter((r): r is PSRunDetailRow => r !== null), Capped: latest.Capped };
+    }
+    const runId = this.RunId || (await this.resolveLatestRunId());
+    if (!runId) return null;
+    await this.resolveTargetEntity(model);
+    // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
+    return PredictiveStudioEngine.Instance.LoadRunDetails(runId, provider, user);
+  }
+
+  /** The model pipeline's `Active` scoring binding with a target entity (one per pipeline and entity), from the engine's cache. */
+  private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
+    if (!model?.PipelineID) return null;
+    return PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID).find((b) => b.Status === 'Active' && !!b.TargetEntityID) || null;
+  }
+
+  /**
+   * The binding's latest scored values (`Source = 'Model'`) from `MJ: Latest Feature Values`, one keyset page at a time,
+   * up to {@link PredictiveStudioEngine.MaxRunDetailRows}; `Capped` when more exist. Read past MJAPI's RunView cache: the
+   * view entity has no save event to invalidate a cached read. The row-level security filter returns no row to a user
+   * who does not hold the binding's view authorization.
+   *
+   * @throws Error when a page fails to load
+   */
+  protected async LoadLatestValues(binding: LatestPredictionBinding): Promise<{ Rows: LatestPredictionRow[]; Capped: boolean }> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const user = this.ProviderToUse.CurrentUser || undefined;
+    const rows: LatestPredictionRow[] = [];
+    let afterKey: CompositeKey | undefined;
+    while (true) {
+      const page = await rv.RunView<LatestPredictionRow>(
+        {
+          EntityName: 'MJ: Latest Feature Values',
+          ExtraFilter: LatestPredictionRows.Filter(binding),
+          Fields: [...LatestPredictionRows.Fields],
+          MaxRows: PSPredictionsGridComponent.latestPageSize,
+          AfterKey: afterKey,
+          ResultType: 'simple',
+          BypassCache: true,
+        },
+        user,
+      );
+      if (!page.Success || !page.Results) {
+        throw new Error(`Could not read the latest values of "${binding.FeatureName}": ${page.ErrorMessage || 'the request failed'}`);
+      }
+      rows.push(...page.Results);
+      if (page.Results.length < PSPredictionsGridComponent.latestPageSize) return { Rows: rows, Capped: false };
+      afterKey = CompositeKey.FromID(page.Results[page.Results.length - 1].ID);
+      if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
+        // Capped only when more really exist: exactly the cap is complete.
+        const probe = await rv.RunView<Pick<LatestPredictionRow, 'ID'>>(
+          { EntityName: 'MJ: Latest Feature Values', ExtraFilter: LatestPredictionRows.Filter(binding), Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, AfterKey: afterKey, ResultType: 'simple', BypassCache: true },
+          user,
+        );
+        return { Rows: rows, Capped: probe.Success && probe.Results.length > 0 };
+      }
+    }
+  }
+
+  /** The page size of {@link LoadLatestValues}. */
+  private static readonly latestPageSize = 1000;
 
   /** Clears everything derived from the previous run, so a model or run switch never shows the old run's rows or notices. */
   private resetRunState(): void {

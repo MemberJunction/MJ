@@ -4,10 +4,11 @@ import { Subscription } from 'rxjs';
 import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProcessRunRow, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 import { HumanizeCron, ModeBadgeClass, StatusVariant } from '../production-distribution';
@@ -26,7 +27,10 @@ type DeployState = 'needs-training' | 'bound' | 'scheduled' | 'idle';
 interface BindingVM {
   id: string;
   targetEntity: string;
-  targetColumn: string;
+  /** The binding's prediction feature name. */
+  featureName: string;
+  /** The column the latest value is also copied into, or null. */
+  targetColumn: string | null;
   mode: MJMLModelScoringBindingEntity['Mode'];
   schedulePhrase: string | null;
 }
@@ -190,7 +194,7 @@ interface RunDetailVM {
                       <h3>Deployment</h3>
                       <span class="ps-muted ps-small">{{ Selected.processCount }} process{{ Selected.processCount === 1 ? '' : 'es' }} · {{ Selected.bindingCount }} binding{{ Selected.bindingCount === 1 ? '' : 's' }}</span>
                       @if (IsDeploymentCollapsed && SelectedBindings.length > 0) {
-                        <span class="ps-badge gray ps-small">{{ SelectedBindings[0].targetEntity }}.{{ SelectedBindings[0].targetColumn }}</span>
+                        <span class="ps-badge gray ps-small">{{ SelectedBindings[0].targetEntity }} · {{ SelectedBindings[0].featureName }}</span>
                       }
                     </div>
                     <div style="display:flex;align-items:center;gap:6px">
@@ -215,13 +219,16 @@ interface RunDetailVM {
                         @if (SelectedBindings.length > 0) {
                           <div class="ps-section-title">Scoring bindings</div>
                           @for (b of SelectedBindings; track b.id) {
-                            <div class="bind-row">
+                            <div class="bind-row" data-testid="ps-production-binding">
                               <i class="fa-solid fa-arrow-right-to-bracket ps-muted"></i>
                               <div style="flex:1">
-                                <div class="ps-small"><strong>{{ b.targetEntity }}</strong>.{{ b.targetColumn }}</div>
-                                <div class="ps-muted ps-small">{{ b.mode }}{{ b.schedulePhrase ? ' · ' + b.schedulePhrase : '' }}</div>
+                                <div class="ps-small"><strong>{{ b.targetEntity }}</strong> · {{ b.featureName }}</div>
+                                <div class="ps-muted ps-small">{{ b.targetColumn ? 'copied to ' + b.targetColumn + ' · ' : '' }}{{ b.mode }}{{ b.schedulePhrase ? ' · ' + b.schedulePhrase : '' }}</div>
                               </div>
                               <span class="ps-badge" [class]="ModeBadge(b.mode)">{{ b.mode }}</span>
+                              <button mjButton variant="secondary" size="sm" data-testid="ps-production-binding-open" title="Edit or withdraw this binding in the model's Bindings section" (click)="OpenBindings()">
+                                <i class="fa-solid fa-pen-to-square"></i> Bindings
+                              </button>
                             </div>
                           }
                         } @else {
@@ -317,6 +324,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   @Input() Engine!: PredictiveStudioEngine;
 
   private cdr = inject(ChangeDetectorRef);
+  private navigationService = inject(NavigationService);
   private modelsSub?: Subscription;
 
   /** The published models, as the list shows them. */
@@ -547,7 +555,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     return {
       id: b.ID,
       targetEntity: this.resolveEntityName(b),
-      targetColumn: b.TargetColumn === null || b.TargetColumn === undefined ? '(generic output)' : b.TargetColumn,
+      featureName: b.FeatureName,
+      targetColumn: b.TargetColumn || null,
       mode: b.Mode,
       schedulePhrase: b.Mode === 'Scheduled' ? HumanizeCron(process?.CronExpression === null || process?.CronExpression === undefined ? null : process.CronExpression) : null,
     };
@@ -722,6 +731,15 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       case 'scheduled': return 'blue';
       case 'idle': return 'gray';
     }
+  }
+
+  /**
+   * Opens the selected model's record, whose model detail hosts the Bindings section where its pipeline's scoring
+   * bindings are created, edited and withdrawn (D4-48: the editor lives in the forms package, not here).
+   */
+  public OpenBindings(): void {
+    if (!this.SelectedModelId) return;
+    this.navigationService.OpenEntityRecord('MJ: ML Models', CompositeKey.FromID(this.SelectedModelId));
   }
 
   /** The badge variant of a binding mode. */

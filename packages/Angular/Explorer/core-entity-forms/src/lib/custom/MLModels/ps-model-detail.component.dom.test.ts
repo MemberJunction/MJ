@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { PredictiveStudioPromoteModelOperation, type MJMLModelEntity, type PredictiveStudioPromoteModelInput, type PredictiveStudioPromoteModelOutput } from '@memberjunction/core-entities';
 import type { RemoteOpResult } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -107,6 +107,18 @@ describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
   it('lists only holdout metrics in the stat bar beside the holdout tile, never the training metrics', () => {
     const fixture = render(makeModel({ Metrics: '{"AUC":0.9,"Accuracy":0.95,"F1":0.93}', HoldoutMetrics: null }));
     expect(query(fixture, '.stat-bar')).toBeNull();
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — the Bindings section', () => {
+  it('hosts the scoring binding editor in a Bindings section when it has a provider', () => {
+    const provider = CreateFakeProvider({ runViewResults: [] });
+    const fixture = renderComponentFixture(PSModelDetailComponent, { inputs: { Model: makeModel({}) as unknown as MJMLModelEntity, Provider: provider } });
+    expect(query(fixture, '[data-testid="ps-model-bindings"] ps-scoring-binding-editor')).not.toBeNull();
+  });
+
+  it('shows no Bindings section without a provider to read and write bindings through', () => {
+    expect(query(render(makeModel({})), '[data-testid="ps-model-bindings"]')).toBeNull();
   });
 });
 

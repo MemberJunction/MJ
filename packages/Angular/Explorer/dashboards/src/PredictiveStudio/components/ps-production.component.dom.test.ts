@@ -4,6 +4,8 @@ import { BehaviorSubject } from 'rxjs';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
+import type { CompositeKey } from '@memberjunction/core';
+import { NavigationService } from '@memberjunction/ng-shared';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProductionComponent } from './ps-production.component';
 
@@ -22,13 +24,13 @@ try {
  * strip + a master-list row + detail). Standalone.
  */
 
-const makeEngine = (publishedModels: unknown[]) => {
+const makeEngine = (publishedModels: unknown[], bindings: unknown[] = []) => {
   const subject = new BehaviorSubject<unknown[]>(publishedModels);
   return {
     ObserveProperty: () => subject.asObservable(),
     PublishedModels: publishedModels,
-    ScoringBindings: [],
-    ScoringBindingsForPipeline: () => [],
+    ScoringBindings: bindings,
+    ScoringBindingsForPipeline: () => bindings,
     RecordProcessesForModel: () => [],
     RecordProcessByID: () => undefined,
     ModelDisplayName: () => 'Renewal Model',
@@ -51,12 +53,26 @@ const makeModel = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
-const render = (publishedModels: unknown[]) =>
+/** The record opens the component asked the navigation service for. */
+const opened: Array<{ EntityName: string; Key: string }> = [];
+const navigation = { OpenEntityRecord: (entityName: string, key: CompositeKey) => { opened.push({ EntityName: entityName, Key: key.ToURLSegment() }); return 'tab-1'; } };
+
+const render = (publishedModels: unknown[], bindings: unknown[] = []) =>
   renderComponentFixture(PSProductionComponent, {
-    inputs: { Engine: makeEngine(publishedModels), Provider: createFakeProvider({ runViewResults: [] }) },
+    inputs: { Engine: makeEngine(publishedModels, bindings), Provider: createFakeProvider({ runViewResults: [] }) },
+    providers: [{ provide: NavigationService, useValue: navigation }],
   });
 
 describe('PSProductionComponent (DOM)', () => {
+  it("a scoring binding row names its feature and opens the model's record, whose detail hosts the Bindings section", () => {
+    opened.length = 0;
+    const binding = { ID: 'b1', MLTrainingPipelineID: 'p1', FeatureName: 'Renewal risk', TargetEntityID: null, TargetEntity: 'Members', TargetColumn: null, Mode: 'OnDemand', Status: 'Active', RecordProcessID: null };
+    const fixture = render([makeModel()], [binding]);
+    expect(query(fixture, '[data-testid="ps-production-binding"]')?.textContent).toContain('Renewal risk');
+    (query(fixture, '[data-testid="ps-production-binding-open"]') as HTMLButtonElement).click();
+    expect(opened).toEqual([{ EntityName: 'MJ: ML Models', Key: 'ID|m1' }]);
+  });
+
   it('shows the empty state when there are no published models', () => {
     const fixture = render([]);
     expect(query(fixture, '[data-testid="ps-production-empty"]')).not.toBeNull();

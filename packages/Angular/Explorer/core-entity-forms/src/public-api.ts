@@ -34,6 +34,7 @@ export { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended
 export { MLModelFormComponentExtended, LoadMLModelFormComponentExtended, MLModelFormPolicy } from './lib/custom/MLModels/ml-model-form.component';
 export { RecordProcessFormComponentExtended, LoadRecordProcessFormComponentExtended, RecordProcessFormPolicy } from './lib/custom/RecordProcesses/record-process-form.component';
 export { PSModelDetailComponent } from './lib/custom/MLModels/ps-model-detail.component';
+export { PSScoringBindingEditorComponent, VIEW_MODEL_PREDICTIONS } from './lib/custom/MLModels/ps-scoring-binding-editor.component';
 export * from './lib/custom/MLModels/ml-model-view-models';
 export { ModelPredictionLogic, type PanelBindingRow, type PanelValueRow, type PanelRunRow, type PanelOutputBindingRow, type PredictionCard } from './lib/panels/model-predictions/model-prediction.logic';
 
