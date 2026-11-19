@@ -118,5 +118,16 @@
       "lastModified": "2026-04-11T22:21:09.550Z",
       "checksum": "dbe0cc1ccebcec6e1b3c3baaf7f80199f029d71bf0bbca156bf2be526437c1ec"
     }
+  },
+  {
+    "fields": {
+      "Name": "User Lists",
+      "ParentID": null,
+      "Description": "Queries saved so a list can refresh from them, one subcategory per user. A query here is saved Pending; its owner can approve it.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "D6E999CC-BF2C-4D98-8BC8-4A86764D164C"
+    }
   }
 ]

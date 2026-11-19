@@ -15,7 +15,7 @@ const mockViewFingerprint = vi.fn();
 const mockQueryFingerprint = vi.fn();
 const mockAudit = vi.fn();
 
-const CONTACTS_ENTITY = { ID: 'entity-contacts', Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }] };
+const CONTACTS_ENTITY = { ID: 'entity-contacts', Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } };
 
 vi.mock('@memberjunction/core', () => {
   class CompositeKey {
@@ -497,5 +497,163 @@ describe('ApplyRefreshPreview', () => {
     const result = await ops.ApplyRefreshPreview(preview.Delta!, { ConfirmDrops: false, DeltaToken: preview.Delta!.DeltaToken });
 
     expect(result.ResultCode).toBe('DROP_NOT_CONFIRMED');
+  });
+});
+
+describe('MaterializeFromQuery', () => {
+  type NewList = MockList & { NewRecord: ReturnType<typeof vi.fn>; AutoRefresh: boolean };
+
+  function newList(): NewList {
+    return { ...makeList({ SourceViewID: null, SourceFingerprint: null }), NewRecord: vi.fn(), AutoRefresh: false };
+  }
+
+  /** The query's traced fields, as `MJ: Query Fields` holds them. */
+  function wireQueryFields(rows: Array<{ Name: string; SourceEntityID: string | null; SourceFieldName: string | null }>) {
+    mockRunView.mockImplementation(async (params: { EntityName?: string }) => {
+      if (params.EntityName === 'MJ: Query Fields') return { Success: true, Results: rows, RowCount: rows.length };
+      return { Success: true, Results: [], RowCount: 0 };
+    });
+  }
+
+  it('creates the list linked to the query, fills it, and takes the query\'s fingerprint', async () => {
+    const list = newList();
+    const details = wireEntities(list);
+    mockRunQuery.mockResolvedValue({ Success: true, Results: [{ ContactID: 'a' }, { ContactID: 'b' }, { ContactID: 'a' }] });
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', {
+      ListName: 'Conference attendees',
+      EntityName: 'Contacts',
+      KeyField: 'ContactID',
+      Parameters: { EventCode: 'CONF2026' },
+      RefreshMode: 'Sync',
+      AutoRefresh: true,
+    });
+
+    expect(result.ResultCode).toBe('SUCCESS');
+    expect(result.Counts).toEqual({ Added: 2, Removed: 0, Failed: 0 });
+    expect(mockRunQuery).toHaveBeenCalledWith({ QueryID: 'query-1', Parameters: { EventCode: 'CONF2026' } });
+    expect(list).toMatchObject({
+      Name: 'Conference attendees',
+      EntityID: CONTACTS_ENTITY.ID,
+      UserID: OWNER.ID,
+      SourceQueryID: 'query-1',
+      SourceQueryKeyField: 'ContactID',
+      SourceQueryParameters: '{"EventCode":"CONF2026"}',
+      RefreshMode: 'Sync',
+      AutoRefresh: true,
+      SourceFingerprint: 'fp-linked',
+      LastRefreshedByUserID: OWNER.ID,
+    });
+    expect(list.LastRefreshedAt).toBeInstanceOf(Date);
+    expect(details.map((d) => d.RecordID).sort()).toEqual(['a', 'b']);
+    expect(mockRunView).not.toHaveBeenCalledWith(expect.objectContaining({ EntityName: 'MJ: Query Fields' }));
+  });
+
+  it('fingerprints the query before running it, so an edit made in between is caught later', async () => {
+    wireEntities(newList());
+    mockRunQuery.mockResolvedValue({ Success: true, Results: [] });
+
+    await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', {
+      ListName: 'L', EntityName: 'Contacts', KeyField: 'ContactID', RefreshMode: 'Additive',
+    });
+
+    expect(mockQueryFingerprint.mock.invocationCallOrder[0]).toBeLessThan(mockRunQuery.mock.invocationCallOrder[0]);
+  });
+
+  it('works out the entity and key column from the query\'s traced fields', async () => {
+    const list = newList();
+    wireEntities(list);
+    wireQueryFields([
+      { Name: 'ContactID', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'id' },
+      { Name: 'Email', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'Email' },
+      { Name: 'EventID', SourceEntityID: 'entity-unknown', SourceFieldName: 'ID' },
+      { Name: 'Total', SourceEntityID: null, SourceFieldName: null },
+    ]);
+    mockRunQuery.mockResolvedValue({ Success: true, Results: [{ ContactID: 'a' }] });
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', { ListName: 'L', RefreshMode: 'Additive' });
+
+    expect(result.ResultCode).toBe('SUCCESS');
+    expect(list.EntityID).toBe(CONTACTS_ENTITY.ID);
+    expect(list.SourceQueryKeyField).toBe('ContactID');
+    expect(list.SourceQueryParameters).toBeNull();
+    expect(list.AutoRefresh).toBe(false);
+  });
+
+  it('refuses when the key column is ambiguous, before running the query or saving a list', async () => {
+    const list = newList();
+    wireEntities(list);
+    wireQueryFields([
+      { Name: 'ContactID', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'ID' },
+      { Name: 'ReferredByID', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'ID' },
+    ]);
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', { ListName: 'L', EntityName: 'Contacts', RefreshMode: 'Additive' });
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toMatch(/which column of the query holds the record key for Contacts/);
+    expect(mockRunQuery).not.toHaveBeenCalled();
+    expect(list.Save).not.toHaveBeenCalled();
+  });
+
+  it('uses a named key column to pick between candidates', async () => {
+    const list = newList();
+    wireEntities(list);
+    wireQueryFields([
+      { Name: 'ContactID', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'ID' },
+      { Name: 'ReferredByID', SourceEntityID: CONTACTS_ENTITY.ID, SourceFieldName: 'ID' },
+    ]);
+    mockRunQuery.mockResolvedValue({ Success: true, Results: [{ ReferredByID: 'r' }] });
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', { ListName: 'L', KeyField: 'referredbyid', RefreshMode: 'Additive' });
+
+    expect(result.ResultCode).toBe('SUCCESS');
+    expect(list.SourceQueryKeyField).toBe('ReferredByID');
+  });
+
+  it('refuses an unknown entity name', async () => {
+    wireEntities(newList());
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', {
+      ListName: 'L', EntityName: 'Nope', KeyField: 'ID', RefreshMode: 'Additive',
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toMatch(/Entity 'Nope' not found/);
+  });
+
+  it('reports the list save failing without adding records', async () => {
+    const list = newList();
+    list.Save.mockResolvedValue(false);
+    list.LatestResult = { CompleteMessage: 'Only the owner can link a source' };
+    const details = wireEntities(list);
+    mockRunQuery.mockResolvedValue({ Success: true, Results: [{ ContactID: 'a' }] });
+
+    const result = await new ListOperations(OWNER as never).MaterializeFromQuery('query-1', {
+      ListName: 'L', EntityName: 'Contacts', KeyField: 'ContactID', RefreshMode: 'Additive',
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toMatch(/Failed to create list: Only the owner/);
+    expect(details).toHaveLength(0);
+  });
+});
+
+describe('CreateListFromRecords', () => {
+  it('creates a list with no source and adds each record once', async () => {
+    const list = { ...makeList({ SourceViewID: null, SourceFingerprint: null }), NewRecord: vi.fn() };
+    const details = wireEntities(list);
+
+    const result = await new ListOperations(OWNER as never).CreateListFromRecords('Contacts', ['a', 'b', 'a'], { ListName: 'One-off' });
+
+    expect(result).toMatchObject({ Success: true, CreatedListId: 'list-1', Counts: { Added: 2, Removed: 0, Failed: 0 } });
+    expect(list).toMatchObject({ Name: 'One-off', EntityID: CONTACTS_ENTITY.ID, SourceViewID: null, SourceQueryID: null });
+    expect(details.map((d) => d.RecordID).sort()).toEqual(['a', 'b']);
+  });
+
+  it('refuses an unknown entity', async () => {
+    const result = await new ListOperations(OWNER as never).CreateListFromRecords('Nope', ['a'], { ListName: 'L' });
+
+    expect(result).toMatchObject({ Success: false, Message: "Entity 'Nope' not found in metadata" });
   });
 });
