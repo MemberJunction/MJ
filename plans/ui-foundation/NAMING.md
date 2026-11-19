@@ -128,7 +128,7 @@ There are four levels. Each has a background token that defaults to an existing 
 
 Open-axis families in wave 0 (D2 in [UNIFIED_PLAN.md](UNIFIED_PLAN.md) and PR [#5911](https://github.com/MemberJunction/MJ/pull/5911)):
 
-- `--mj-tone-<name>-{bg,text,border,bg-selected}`: open semantic tone axis. Shipped names `success`, `warning`, `error` and `info` default to `--mj-status-<name>-*`; `neutral` defaults to the active surface and text roles; brands add custom tones (`--mj-tone-plum-text`, `--mj-tone-plum-bg`) on `:root` without touching component CSS.
+- `--mj-tone-<name>-{bg,text,border}`: open semantic tone axis. Shipped names `success`, `warning`, `error` and `info` default to the matching `--mj-status-<name>-bg`, `-text` and `-border`; `neutral` defaults to the active surface and text roles. A tone has no selected state: selection is the component's own state (`--mj-row-bg-selected`, `--mj-surface-<level>-bg-selected`), so a selected row looks selected whatever its tone, and the tone stays visible through its text and border. Brands add custom tones (`--mj-tone-plum-text`, `--mj-tone-plum-bg`) on `:root` without touching component CSS.
 - `--mj-visual-role-<name>-{bg,text,border,shadow}`: open visual-treatment axis used by `VisualRole` (`visual-role` on Custom Elements). Spelled `visual-role` so it never collides with HTML's ARIA `role` attribute or overloads the word "role" with Tier 2 itself.
 
 Rules for the role tier:

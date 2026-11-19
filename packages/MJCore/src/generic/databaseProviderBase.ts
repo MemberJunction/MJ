@@ -1,7 +1,7 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
-import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
+import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext, SerializeSyncChangeContext, SyncContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { EntitySaveReturnMode } from "./entityConfiguration";
 import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
@@ -1750,8 +1750,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
                 undefined,
-                entity.CloneContext ? 'Clone' : 'Internal',
-                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
+                entity.CloneContext ? 'Clone' : entity.SyncContext ? 'Sync' : 'Internal',
+                entity.CloneContext
+                    ? SerializeCloneChangeContext(entity.CloneContext)
+                    : entity.SyncContext
+                      ? SerializeSyncChangeContext(entity.SyncContext)
+                      : null,
+                entity.SyncContext?.IntegrationID ?? null,
             );
         }
         return null;
@@ -3231,8 +3236,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): Promise<unknown[] | undefined> {
-        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext, cloneContext);
+        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext, cloneContext, syncContext);
         if (sqlResult) {
             return await this.ExecuteSQL(sqlResult.sql, sqlResult.parameters ?? undefined, undefined, user);
         }
@@ -3253,7 +3259,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Builds the dialect-agnostic payload for a RecordChange row from the
-     * entity's old/new data and an optional restore or clone context. Concrete
+     * entity's old/new data and an optional restore, clone, or sync context. Concrete
      * providers consume the returned payload to render their dialect-specific
      * SQL (SQL Server EXEC, PostgreSQL INSERT, etc.).
      *
@@ -3282,6 +3288,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param skipFullRecordJSON When true (because the dialect builds `FullRecordJSON` in SQL
      *   from the returned row), skips `EscapeQuotesInProperties` and `JSON.stringify` for
      *   `fullRecordJSON`, returning `''`.
+     * @param syncContext When non-null, populates `source='Sync'`, `integrationID`,
+     *   and the structured `changeContext` JSON payload.
      */
     protected BuildRecordChangePayload(
         newData: Record<string, unknown> | null,
@@ -3294,9 +3302,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         quoteToEscape: string = "'",
         cloneContext?: CloneContext | null,
         skipFullRecordJSON: boolean = false,
+        syncContext?: SyncContext | null,
     ): RecordChangePayload | null {
-        if (restoreContext && cloneContext) {
-            throw new Error('BuildRecordChangePayload: both restoreContext and cloneContext were provided; an operation cannot be both a restore and a clone');
+        const activeContexts = [restoreContext, cloneContext, syncContext].filter(Boolean).length;
+        if (activeContexts > 1) {
+            throw new Error('BuildRecordChangePayload: restoreContext, cloneContext, and syncContext are mutually exclusive; at most one may be provided');
         }
 
         const isCreateOrDelete = oldData === null || newData === null;
@@ -3319,8 +3329,18 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             ? this.CreateUserDescriptionOfChanges(changes!)
             : (!oldData ? 'Record Created' : 'Record Deleted');
 
-        const source: RecordChangeSource = restoreContext ? 'Restore' : cloneContext ? 'Clone' : 'Internal';
-        const changeContext = cloneContext ? SerializeCloneChangeContext(cloneContext) : null;
+        const source: RecordChangeSource = restoreContext
+            ? 'Restore'
+            : cloneContext
+              ? 'Clone'
+              : syncContext
+                ? 'Sync'
+                : 'Internal';
+        const changeContext = cloneContext
+            ? SerializeCloneChangeContext(cloneContext)
+            : syncContext
+              ? SerializeSyncChangeContext(syncContext)
+              : null;
 
         return {
             entityID: entityInfo.ID,
@@ -3334,6 +3354,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             restoredFromID: restoreContext?.SourceChangeID ?? null,
             restoreReason: restoreContext?.Reason ?? null,
             changeContext,
+            integrationID: syncContext?.IntegrationID ?? null,
         };
     }
 
@@ -3355,6 +3376,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   `BaseEntity.RestoreContext` immediately before generating SQL.
      * @param cloneContext When non-null, the resulting RecordChange row is
      *   written with `Source='Clone'` and `ChangeContext` JSON provenance.
+     * @param syncContext When non-null, the resulting RecordChange row is
+     *   written with `Source='Sync'`, `IntegrationID`, and `ChangeContext` JSON provenance.
      */
     protected abstract BuildRecordChangeSQL(
         newData: Record<string, unknown> | null,
@@ -3366,6 +3389,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null;
 
     /**
@@ -3391,6 +3415,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         extraExecOptions?: Record<string, unknown>,
         source: RecordChangeSource = 'Internal',
         changeContext: string | null = null,
+        integrationID: string | null = null,
     ): Promise<void> {
         const sqlParts: string[] = [];
 
@@ -3422,6 +3447,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     safeUserId,
                     source,
                     changeContext,
+                    integrationID,
                 ));
             }
         }
@@ -3452,6 +3478,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string;
 
     /**************************************************************************/

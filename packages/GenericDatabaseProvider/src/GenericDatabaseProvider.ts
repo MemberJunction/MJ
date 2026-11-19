@@ -21,6 +21,7 @@ import {
     BaseEntityResult,
     ConcurrencyCheckMode,
     SerializeCloneChangeContext,
+    SerializeSyncChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -1461,8 +1462,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
                 undefined,
-                entity.CloneContext ? 'Clone' : 'Internal',
-                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
+                entity.CloneContext ? 'Clone' : entity.SyncContext ? 'Sync' : 'Internal',
+                entity.CloneContext
+                    ? SerializeCloneChangeContext(entity.CloneContext)
+                    : entity.SyncContext
+                      ? SerializeSyncChangeContext(entity.SyncContext)
+                      : null,
+                entity.SyncContext?.IntegrationID ?? null,
             )
             : null;
 
@@ -2464,6 +2470,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 "'",
                 entity.CloneContext,
                 snapshotFromRow,
+                entity.SyncContext,
             );
             if (payload) {
                 // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
