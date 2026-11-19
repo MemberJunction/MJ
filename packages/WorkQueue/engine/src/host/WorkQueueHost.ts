@@ -186,6 +186,14 @@ class BudgetedConsumer<TPayload extends WorkJson = WorkJson> implements ITranspo
         return this.settle(this.inner.Release(delivery));
     }
 
+    public Defer(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, reason: string): Promise<SettleResult> {
+        return this.settle(
+            this.inner.Defer
+                ? this.inner.Defer(delivery, delaySeconds, reason)
+                : this.inner.Retry(delivery, delaySeconds, reason),
+        );
+    }
+
     public AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settle(this.inner.AcknowledgeCancel(delivery));
     }

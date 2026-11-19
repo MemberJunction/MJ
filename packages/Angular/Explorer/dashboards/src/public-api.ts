@@ -9,6 +9,7 @@ export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
 export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
+export * from './Communications/communications-admin-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
 export * from './ThemeStudio/theme-studio-dashboard.component';

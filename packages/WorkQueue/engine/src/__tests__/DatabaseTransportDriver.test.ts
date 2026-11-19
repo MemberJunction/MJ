@@ -196,4 +196,24 @@ describe('DatabaseTransportDriver surface', () => {
         expect(await driver.GetBacklog(SubscriptionBindingFixture())).toEqual({ Claimable: 2, InFlight: 1, Capped: false });
         expect(await driver.CheckPrerequisites()).toEqual([]);
     });
+
+    it('updates VisibleAt in the same transaction when ScheduledAt is set on the message', async () => {
+        const source = new RecordingExecutor()
+            .QueueRows([INSERTED])
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 1 }]);
+        const driver = new DatabaseTransportDriver(source, TestDeps(source));
+        const scheduledAt = '2026-06-01T12:00:00.000Z';
+        const [result] = await driver.Publish(
+            TopicBindingFixture(),
+            [{ ...MESSAGE, ScheduledAt: scheduledAt }],
+            [SubscriptionBindingFixture({ PartitionMode: 'None' }, { SubscriptionID: 'S-NONE' })],
+        );
+        expect(result.Status).toBe('Accepted');
+        expect(source.Calls).toHaveLength(3);
+        expect(source.Calls[2].SQL).toContain('UPDATE [__mj].[WorkQueueDelivery]');
+        expect(source.Calls[2].SQL).toContain('[VisibleAt]');
+        expect(source.Calls[2].Params).toEqual([MESSAGE.MessageID, scheduledAt]);
+        expect(source.Calls[2].InTransaction).toBe(true);
+    });
 });

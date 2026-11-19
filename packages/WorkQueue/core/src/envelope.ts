@@ -35,4 +35,6 @@ export interface WorkMessage<TPayload extends WorkJson = WorkJson> {
     CorrelationID?: string;
     /** ISO-8601 UTC, assigned by the publisher (MJ), not the producer. */
     PublishedAt: string;
+    /** Optional ISO-8601 UTC not-before timestamp; deliveries are deferred until ScheduledAt. */
+    ScheduledAt?: string;
 }

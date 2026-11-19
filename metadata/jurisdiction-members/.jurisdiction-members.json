@@ -1,0 +1,110 @@
+[
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US-CA"
+    },
+    "primaryKey": {
+      "ID": "7ED53D2E-DBB3-44F1-9023-15795919EB49"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US-FL"
+    },
+    "primaryKey": {
+      "ID": "BD294318-FF3C-462D-B25A-ADD33A49A995"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US-OK"
+    },
+    "primaryKey": {
+      "ID": "AE121103-F282-4081-BD2B-D95215C9A0A4"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=US-TX"
+    },
+    "primaryKey": {
+      "ID": "C80421FB-AF25-4A14-A03C-ED0C6264B111"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=CA",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=CA-QC"
+    },
+    "primaryKey": {
+      "ID": "BC2C7372-9CBC-4201-9A25-5D6A39FEBF84"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=DE"
+    },
+    "primaryKey": {
+      "ID": "5D6576A0-7340-4987-90D9-942CFC18C912"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=FR"
+    },
+    "primaryKey": {
+      "ID": "EF0E51A3-A9E7-4A59-8725-9E71246DA23A"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=IE"
+    },
+    "primaryKey": {
+      "ID": "9E5231A1-2CBA-4737-81D0-468FFC842A93"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=NL"
+    },
+    "primaryKey": {
+      "ID": "14326C8D-E584-4762-A7D1-BA54996271B6"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=ES"
+    },
+    "primaryKey": {
+      "ID": "77AC0FF2-3B6C-43B2-9F74-3B7EF183C387"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=IT"
+    },
+    "primaryKey": {
+      "ID": "5DF2732B-9DA4-40AB-9C3E-02712B308813"
+    }
+  },
+  {
+    "fields": {
+      "GroupJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EEA",
+      "MemberJurisdictionID": "@lookup:MJ: Jurisdictions.Code=EU"
+    },
+    "primaryKey": {
+      "ID": "6DC65119-834B-40C8-8055-27C58677D862"
+    }
+  }
+]

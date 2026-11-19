@@ -101,6 +101,21 @@ export class WorkQueueConsumeSql extends ProcedureCallBuilder implements Consume
         ]);
     }
 
+    public SetDeliveryVisibleAt(deliveryID: string, delaySeconds: number): SqlStatement {
+        const p = this.NewParams();
+        const id = p.Add(deliveryID);
+        const secs = p.Add(Math.max(0, Math.round(delaySeconds)));
+        const deliveries = this.Table(WorkQueueTables.Delivery);
+        const update = this.Context.PlatformKey === 'postgresql'
+            ? `UPDATE ${deliveries}
+SET "VisibleAt" = NOW() + make_interval(secs => ${secs}::int)
+WHERE "ID" = ${id}::uuid AND "Status" = 'Pending'`
+            : `UPDATE ${deliveries}
+SET [VisibleAt] = DATEADD(SECOND, ${secs}, SYSDATETIMEOFFSET())
+WHERE [ID] = ${id} AND [Status] = N'Pending'`;
+        return this.Statement(this.Context.Dialect.AffectedRowCountSQL(update, 'AffectedRows'), p);
+    }
+
     public AcknowledgeCancel(deliveryID: string, leaseToken: string): SqlStatement {
         return this.Call(WorkQueueProcedures.AcknowledgeCancel, [
             { Name: 'DeliveryID', Value: deliveryID },

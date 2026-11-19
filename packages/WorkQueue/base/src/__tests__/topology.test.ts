@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { WORK_QUEUE_FILTER_SUPPORT } from '@memberjunction/work-queue-core';
+import { WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type { TransportCapabilities } from '@memberjunction/work-queue-core';
-import { FindByName, ResolveTopic, ToSubscriptionBinding, ToTopicBinding } from '../topology/bindings';
+import { FindByName, ResolveTopic, ToSubscriptionBinding, ToSubscriptionPolicy, ToTopicBinding } from '../topology/bindings';
 import type { TopologySnapshot } from '../topology/bindings';
 import { ValidateTopologyRows } from '../topology/validateTopology';
 import {
@@ -111,5 +111,23 @@ describe('ValidateTopologyRows', () => {
         expect(issue).toMatchObject({ Severity: 'Error', Subject: 'venue-import' });
         expect(issue.Message).toContain('startswith');
         expect(issue.Message).toContain('tenant');
+    });
+
+    it('parses BindingConfig.RateLimit onto SubscriptionPolicy and rejects invalid configs', () => {
+        const row = {
+            ...SUBSCRIPTION_ROW,
+            BindingConfig: JSON.stringify({ RateLimit: { MaxPerWindow: 25, WindowMs: 60_000, KeyPath: 'CredentialID' } }),
+        };
+        const policy = ToSubscriptionPolicy(row, TOPIC_ROW);
+        expect(policy.RateLimit).toEqual({ MaxPerWindow: 25, WindowMs: 60_000, KeyPath: 'CredentialID' });
+
+        const invalidRows = [
+            { ...SUBSCRIPTION_ROW, BindingConfig: JSON.stringify({ RateLimit: { MaxPerWindow: 0, WindowMs: 1000 } }) },
+            { ...SUBSCRIPTION_ROW, BindingConfig: JSON.stringify({ RateLimit: { MaxPerWindow: 5, WindowMs: -10 } }) },
+            { ...SUBSCRIPTION_ROW, BindingConfig: JSON.stringify({ RateLimit: { MaxPerWindow: 5, WindowMs: 1000, KeyPath: '   ' } }) },
+        ];
+        for (const bad of invalidRows) {
+            expect(() => ToSubscriptionPolicy(bad, TOPIC_ROW)).toThrow(WorkQueueConfigurationError);
+        }
     });
 });

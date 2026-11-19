@@ -70,6 +70,15 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
             await this.deadLetterAndDelete(message, 'MaxAttemptsExceeded', `Received ${message.ReceiveCount} times without being settled`);
             return null;
         }
+        if (envelope.ScheduledAt !== undefined) {
+            const scheduledMs = Date.parse(envelope.ScheduledAt);
+            const nowMs = this.now();
+            if (Number.isFinite(scheduledMs) && scheduledMs > nowMs) {
+                const delaySeconds = Math.min(Math.ceil((scheduledMs - nowMs) / 1000), SQS_MAX_INVISIBLE_SECONDS);
+                await this.gateway.ChangeVisibility(this.config.QueueUrl, message.ReceiptHandle, delaySeconds);
+                return null;
+            }
+        }
         const receivedAt = this.now();
         this.tracked.set(message.MessageId, { Raw: message, ReceivedAt: receivedAt });
         return {
@@ -130,6 +139,12 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
     /** Visibility 0. SQS has already counted this receive; the receive margins (Task 4) absorb it. */
     public async Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settle(delivery, 'Pending', () => this.gateway.ChangeVisibility(this.config.QueueUrl, delivery.LeaseToken, 0));
+    }
+
+    /** Defers an in-flight delivery via SQS ChangeMessageVisibility (used for rate-limit deferral). */
+    public async Defer(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, _reason: string): Promise<SettleResult> {
+        const seconds = Math.max(0, Math.min(Math.ceil(delaySeconds), this.windowLeftSeconds(delivery)));
+        return this.settle(delivery, 'Pending', () => this.gateway.ChangeVisibility(this.config.QueueUrl, delivery.LeaseToken, seconds));
     }
 
     /** CancelInFlight is false on this transport: there is no cancel flag to acknowledge (03 §5). */

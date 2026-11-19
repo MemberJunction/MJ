@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJCommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Communication Logs') // Tell MemberJunction about this class
 @Component({
@@ -17,7 +18,12 @@ export class MJCommunicationLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'messageIdentification', sectionName: 'Message Identification', isExpanded: true },
             { sectionKey: 'messageDetails', sectionName: 'Message Details', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
+            { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false },
+            { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false }
         ]);
     }
 }

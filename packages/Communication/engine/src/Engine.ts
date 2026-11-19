@@ -1,8 +1,24 @@
-import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, MJCommunicationProviderEntityExtended, ProviderCredentialsBase } from "@memberjunction/communication-types";
+import {
+    BaseCommunicationProvider,
+    CommunicationEngineBase,
+    CreateDraftResult,
+    EvaluateEligibilityParams,
+    EvaluateEligibilityResult,
+    Message,
+    MessageRecipient,
+    MessageResult,
+    MJCommunicationProviderEntityExtended,
+    PrincipalRecordRef,
+    ProviderCredentialsBase,
+    ResolvedEndpoint,
+    SendToPrincipalsParams,
+    SendV2Result,
+} from "@memberjunction/communication-types";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity } from "@memberjunction/core-entities";
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
+import { V2DispatchConfig, V2SendService } from "./V2SendService";
  
 
 /**
@@ -56,6 +72,58 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
      * admin-managed via `MJ: Communication Providers`), so no eviction is needed.
      */
     private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
+    private _v2SendService = new V2SendService();
+
+    /**
+     * Configures V2 dispatch behavior (chunk fan-out, tracking base URL, HMAC secret, instance enforcement mode).
+     */
+    public ConfigureV2Dispatch(config: V2DispatchConfig): void {
+        this._v2SendService.Configure(config);
+    }
+
+    /**
+     * V2: Resolves and persists communication endpoints for a batch of principal records.
+     */
+    public async ResolveEndpoints(
+        records: PrincipalRecordRef[],
+        channelID: string,
+        contextUser?: UserInfo,
+    ): Promise<Map<string, ResolvedEndpoint[]>> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.ResolveEndpoints(records, channelID, contextUser ?? this.ContextUser);
+    }
+
+    /**
+     * V2: Evaluates pre-flight compliance eligibility for a batch of recipients without sending.
+     */
+    public async EvaluateEligibility(
+        params: EvaluateEligibilityParams,
+        contextUser?: UserInfo,
+    ): Promise<EvaluateEligibilityResult> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.EvaluateEligibility(params, contextUser ?? this.ContextUser);
+    }
+
+    /**
+     * V2: Compliance-gated, endpoint-resolved send pipeline with link/open tracking and chunked fan-out.
+     */
+    public async Send(
+        params: SendToPrincipalsParams,
+        contextUser?: UserInfo,
+    ): Promise<SendV2Result> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.Send(
+            params,
+            contextUser ?? this.ContextUser,
+            (name) => this.GetProvider(name),
+        );
+    }
 
     // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
     public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.base.BaseMessageTypes; }

@@ -1,29 +1,39 @@
+import crypto from "node:crypto";
+import dns from "node:dns/promises";
 import {
     BaseCommunicationProvider,
     BaseMessageResult,
+    CreateDomainAuthParams,
+    CreateDomainAuthResult,
     CreateDraftParams,
     CreateDraftResult,
     CreateSubscriptionParams,
+    DeleteDomainAuthParams,
     DeleteSubscriptionParams,
+    DomainDNSRecord,
     ForwardMessageParams,
     ForwardMessageResult,
     GetMessageMessage,
     GetMessagesParams,
     GetMessagesResult,
     MessageResult,
+    NormalizedActivityEvent,
+    NormalizedActivityEventType,
     NormalizedNotification,
     ParseEmailAddressList,
     ParseNotificationResult,
     ProcessedMessage,
     ProviderCredentialsBase,
+    ProviderOperation,
     ReplyToMessageParams,
     ReplyToMessageResult,
     resolveCredentialValue,
     SubscriptionCapabilities,
     SubscriptionResult,
     validateRequiredCredentials,
-    WebhookNotificationInput,
-    ProviderOperation
+    VerifyDomainAuthParams,
+    VerifyDomainAuthResult,
+    WebhookNotificationInput
 } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
@@ -54,6 +64,11 @@ export interface SendGridCredentials extends ProviderCredentialsBase {
      * If not provided, falls back to COMMUNICATION_VENDOR_API_KEY__SENDGRID environment variable.
      */
     apiKey?: string;
+    /**
+     * SendGrid Event Webhook ECDSA public verification key (PEM or base64 SPKI DER).
+     * Used by {@link ParseNotification} to verify `X-Twilio-Email-Event-Webhook-Signature`.
+     */
+    webhookVerificationKey?: string;
 }
 
 /**
@@ -113,7 +128,11 @@ export class SendGridProvider extends BaseCommunicationProvider {
             // parse the inline multipart/form-data POST SendGrid delivers.
             'CreateSubscription',
             'DeleteSubscription',
-            'ParseNotification'
+            'ParseNotification',
+            // Sending Domain Authentication (SPF / DKIM / Return-Path)
+            'CreateDomainAuthentication',
+            'VerifyDomainAuthentication',
+            'DeleteDomainAuthentication'
             // Note: no GetMessages/ForwardMessage/ReplyToMessage/CreateDraft (no inbox).
             // No RenewSubscription — Inbound Parse settings never expire.
         ];
@@ -144,36 +163,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
         // Set API key for this request
         sgMail.setApiKey(apiKey!);
 
-        const msg: MailDataRequired = {
-            to: message.To,
-            from: {
-                email: from,
-                name: message.FromName
-            },
-            cc: message.CCRecipients,
-            bcc: message.BCCRecipients,
-            subject: message.ProcessedSubject,
-            text: message.ProcessedBody,
-            html: message.ProcessedHTMLBody,
-            trackingSettings: {
-                subscriptionTracking: {
-                    enable: false
-                }
-            }
-        };
-
-        /*
-        * Should be ready to go - but needs SG testing.
-        if(message.Headers){
-            msg.headers = Object.fromEntries(Object.entries(message.Headers).map(([key, value]) => [`X-${key}`, value])) as Record<string, string>;
-        }
-        */
-
-        if (message.SendAt) {
-            const time = message.SendAt.getTime();
-            const unitTime = Math.floor(time / 1000);
-            msg.sendAt = unitTime;
-        }
+        const msg = this.buildSendGridMessage(message, from);
 
         // DRY RUN: full pipeline ran (credential resolution/validation + complete SendGrid
         // payload construction above) — stop at the transport boundary, never calling SendGrid.
@@ -190,11 +180,13 @@ export class SendGridProvider extends BaseCommunicationProvider {
         try {
             const result = await sgMail.send(msg);
             if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
+                const providerMessageId = extractHeaderCaseInsensitive(result[0].headers, 'x-message-id');
                 LogStatus(`Email sent to ${msg.to}: ${result[0].statusCode}`);
                 return {
                     Message: message,
                     Success: true,
-                    Error: ''
+                    Error: '',
+                    ...(providerMessageId ? { ProviderMessageID: providerMessageId } : {})
                 };
             }
             else {
@@ -280,6 +272,71 @@ export class SendGridProvider extends BaseCommunicationProvider {
             Success: false,
             ErrorMessage: 'SendGrid does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
         };
+    }
+
+    /**
+     * Builds the `@sendgrid/mail` payload from a {@link ProcessedMessage}.
+     * Passes `message.Headers` verbatim (never prefixing `X-`), disables SendGrid
+     * open/click tracking when MJ first-party tracking is active, and injects only
+     * `customArgs: { mj_log_id }` (never PII `CorrelationData`).
+     */
+    private buildSendGridMessage(message: ProcessedMessage, from: string): MailDataRequired {
+        const ctx = (message.ContextData ?? {}) as Record<string, unknown>;
+        const msg: MailDataRequired = {
+            to: message.To,
+            from: {
+                email: from,
+                name: message.FromName
+            },
+            cc: message.CCRecipients,
+            bcc: message.BCCRecipients,
+            subject: message.ProcessedSubject,
+            text: message.ProcessedBody,
+            html: message.ProcessedHTMLBody,
+            trackingSettings: this.buildTrackingSettings(ctx)
+        };
+
+        if (message.Headers && Object.keys(message.Headers).length > 0) {
+            msg.headers = { ...message.Headers };
+        }
+
+        const logId = ctx['mj_log_id'] ?? ctx['CommunicationLogID'];
+        if (typeof logId === 'string' && logId.trim().length > 0) {
+            msg.customArgs = { mj_log_id: logId };
+        }
+
+        if (message.SendAt) {
+            msg.sendAt = Math.floor(message.SendAt.getTime() / 1000);
+        }
+
+        return msg;
+    }
+
+    /**
+     * Builds `trackingSettings` for SendGrid. Subscription tracking is always disabled;
+     * `openTracking` and `clickTracking` are disabled when MJ first-party tracking is active.
+     */
+    private buildTrackingSettings(ctx: Record<string, unknown>): NonNullable<MailDataRequired['trackingSettings']> {
+        const firstPartyActive = Boolean(
+            ctx['mjFirstPartyTracking'] ||
+            ctx['disableProviderTracking'] ||
+            ctx['DisableProviderTracking'] ||
+            ctx['TrackingToken'] ||
+            ctx['trackingToken']
+        );
+        const disableOpen = firstPartyActive || ctx['TrackOpens'] === false || ctx['trackOpens'] === false;
+        const disableClick = firstPartyActive || ctx['TrackClicks'] === false || ctx['trackClicks'] === false;
+
+        const settings: NonNullable<MailDataRequired['trackingSettings']> = {
+            subscriptionTracking: { enable: false }
+        };
+        if (disableOpen) {
+            settings.openTracking = { enable: false };
+        }
+        if (disableClick) {
+            settings.clickTracking = { enable: false };
+        }
+        return settings;
     }
 
     // ========================================================================
@@ -435,8 +492,104 @@ export class SendGridProvider extends BaseCommunicationProvider {
      */
     public override async ParseNotification(
         input: WebhookNotificationInput,
-        _credentials?: SendGridCredentials
+        credentials?: SendGridCredentials
     ): Promise<ParseNotificationResult> {
+        const contentType = extractHeaderCaseInsensitive(input?.Headers, 'content-type') ?? '';
+        if (contentType.toLowerCase().includes('application/json')) {
+            return this.parseEventWebhook(input, credentials);
+        }
+        if (!contentType.toLowerCase().includes('multipart/form-data')) {
+            return {
+                Success: false,
+                ErrorMessage: 'Expected multipart/form-data or application/json content-type for SendGrid webhook',
+                Notifications: [],
+                SuggestedResponseStatus: 400
+            };
+        }
+        return this.parseInboundParseNotification(input);
+    }
+
+    /**
+     * Parses a SendGrid Event Webhook JSON batch (`application/json`).
+     * Verifies the ECDSA signature and 10-minute replay window against `RawBody` when
+     * `credentials.webhookVerificationKey` is provided, then normalizes every event into
+     * a {@link NormalizedNotification} (`Kind: 'activity'`).
+     */
+    private parseEventWebhook(
+        input: WebhookNotificationInput,
+        credentials?: SendGridCredentials
+    ): ParseNotificationResult {
+        const fail = (msg: string, status = 400, signatureValid?: boolean): ParseNotificationResult => ({
+            Success: false,
+            ErrorMessage: msg,
+            SignatureValid: signatureValid,
+            Notifications: [],
+            SuggestedResponseStatus: status
+        });
+
+        const rawBody = input?.RawBody;
+        if (!rawBody || rawBody.trim().length === 0) {
+            return fail('Empty notification body');
+        }
+
+        let signatureValid: boolean | undefined;
+        const verificationKey = credentials?.webhookVerificationKey;
+        if (verificationKey) {
+            const sig = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-signature');
+            const ts = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-timestamp');
+            if (!sig || !ts) {
+                return fail('Missing SendGrid Event Webhook signature or timestamp header', 401, false);
+            }
+            const verification = VerifySendGridWebhookSignature(verificationKey, rawBody, sig, ts);
+            if (!verification.Valid) {
+                return fail(verification.Reason ?? 'Invalid SendGrid Event Webhook signature', 401, false);
+            }
+            signatureValid = true;
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(rawBody);
+        } catch (ex) {
+            return fail(`Invalid JSON in SendGrid Event Webhook: ${ex instanceof Error ? ex.message : String(ex)}`, 400, signatureValid);
+        }
+
+        if (!Array.isArray(parsed)) {
+            return fail('Expected JSON array for SendGrid Event Webhook payload', 400, signatureValid);
+        }
+
+        const activityEvents: NormalizedActivityEvent[] = [];
+        const messageIds = new Set<string>();
+        for (const item of parsed) {
+            const mapped = mapSendGridEventToActivity(item);
+            if (mapped) {
+                activityEvents.push(mapped);
+                if (mapped.ProviderMessageID) {
+                    messageIds.add(mapped.ProviderMessageID);
+                }
+            }
+        }
+
+        const notification: NormalizedNotification = {
+            Kind: 'activity',
+            MessageIDs: [...messageIds],
+            ActivityEvents: activityEvents,
+            RawData: parsed
+        };
+
+        return {
+            Success: true,
+            SignatureValid: signatureValid,
+            Notifications: [notification],
+            SuggestedResponseStatus: 200
+        };
+    }
+
+    /**
+     * Parses a SendGrid Inbound Parse `multipart/form-data` POST into a single inline-message
+     * {@link NormalizedNotification}.
+     */
+    private parseInboundParseNotification(input: WebhookNotificationInput): ParseNotificationResult {
         const fail = (msg: string): ParseNotificationResult => ({
             Success: false,
             ErrorMessage: msg,
@@ -444,11 +597,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
             SuggestedResponseStatus: 400
         });
 
-        const contentType = input?.Headers?.['content-type'] ?? '';
-        if (!contentType.toLowerCase().includes('multipart/form-data')) {
-            return fail('Expected multipart/form-data content-type for SendGrid Inbound Parse');
-        }
-
+        const contentType = extractHeaderCaseInsensitive(input?.Headers, 'content-type') ?? '';
         const boundary = this.extractBoundary(contentType);
         if (!boundary) {
             return fail('Missing multipart boundary in content-type header');
@@ -634,6 +783,201 @@ export class SendGridProvider extends BaseCommunicationProvider {
             return undefined;
         }
     }
+
+    // ========================================================================
+    // SENDING DOMAIN AUTHENTICATION & SUPPRESSION SYNC
+    // ========================================================================
+
+    private static readonly WHITELABEL_DOMAINS_URL = 'https://api.sendgrid.com/v3/whitelabel/domains';
+    private static readonly SUPPRESSION_BASE_URL = 'https://api.sendgrid.com/v3/suppression';
+    private static readonly GLOBAL_UNSUB_URL = 'https://api.sendgrid.com/v3/asm/suppressions/global';
+
+    /**
+     * Registers a sending domain with SendGrid (`/v3/whitelabel/domains`) and returns
+     * the required CNAME/TXT DNS records for DKIM, SPF, and Return-Path.
+     */
+    public override async CreateDomainAuthentication(
+        params: CreateDomainAuthParams,
+        credentials?: SendGridCredentials
+    ): Promise<CreateDomainAuthResult> {
+        if (!params.Domain) {
+            return { Success: false, ErrorMessage: 'CreateDomainAuthentication requires Domain', DNSRecords: [] };
+        }
+        try {
+            const apiKey = this.resolveApiKey(credentials);
+            const payload: Record<string, unknown> = {
+                domain: params.Domain,
+                automatic_security: true
+            };
+            if (params.Subdomain) {
+                payload['subdomain'] = params.Subdomain;
+            }
+            const resp = await fetch(SendGridProvider.WHITELABEL_DOMAINS_URL, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const text = await resp.text();
+            if (!resp.ok) {
+                return { Success: false, ErrorMessage: `SendGrid domain create failed: ${resp.status} ${text}`, DNSRecords: [] };
+            }
+            const data = this.safeParseJsonObject(text) as SendGridDomainCreateResponse | undefined;
+            return {
+                Success: true,
+                ProviderDomainID: data?.id !== undefined ? String(data.id) : undefined,
+                DNSRecords: mapSendGridDnsRecords(data?.dns)
+            };
+        } catch (ex) {
+            return {
+                Success: false,
+                ErrorMessage: `Error creating domain authentication: ${ex instanceof Error ? ex.message : String(ex)}`,
+                DNSRecords: []
+            };
+        }
+    }
+
+    /**
+     * Validates a previously registered SendGrid domain (`/v3/whitelabel/domains/:id/validate`)
+     * and performs a `_dmarc.<domain>` TXT DNS lookup to verify DMARC policy presence.
+     */
+    public override async VerifyDomainAuthentication(
+        params: VerifyDomainAuthParams,
+        credentials?: SendGridCredentials
+    ): Promise<VerifyDomainAuthResult> {
+        if (!params.ProviderDomainID || !params.Domain) {
+            return { Success: false, ErrorMessage: 'VerifyDomainAuthentication requires ProviderDomainID and Domain', Verified: false, DNSRecords: [] };
+        }
+        try {
+            const apiKey = this.resolveApiKey(credentials);
+            const url = `${SendGridProvider.WHITELABEL_DOMAINS_URL}/${encodeURIComponent(params.ProviderDomainID)}/validate`;
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+            });
+            const text = await resp.text();
+            if (!resp.ok) {
+                return { Success: false, ErrorMessage: `SendGrid domain validate failed: ${resp.status} ${text}`, Verified: false, DNSRecords: [] };
+            }
+            const data = this.safeParseJsonObject(text) as SendGridDomainValidateResponse | undefined;
+            const records = mapSendGridValidationResults(data?.validation_results);
+            const dmarcRecord = await checkDmarcTxtRecord(params.Domain);
+            records.push(dmarcRecord);
+            const verified = Boolean(data?.valid) && dmarcRecord.Validated;
+            return { Success: true, Verified: verified, DNSRecords: records };
+        } catch (ex) {
+            return {
+                Success: false,
+                ErrorMessage: `Error verifying domain authentication: ${ex instanceof Error ? ex.message : String(ex)}`,
+                Verified: false,
+                DNSRecords: []
+            };
+        }
+    }
+
+    /**
+     * Deletes a sending domain authentication registration from SendGrid.
+     * Idempotent: treats 404 (already deleted) as success.
+     */
+    public override async DeleteDomainAuthentication(
+        params: DeleteDomainAuthParams,
+        credentials?: SendGridCredentials
+    ): Promise<BaseMessageResult> {
+        if (!params.ProviderDomainID) {
+            return { Success: false, ErrorMessage: 'DeleteDomainAuthentication requires ProviderDomainID' };
+        }
+        try {
+            const apiKey = this.resolveApiKey(credentials);
+            const url = `${SendGridProvider.WHITELABEL_DOMAINS_URL}/${encodeURIComponent(params.ProviderDomainID)}`;
+            const resp = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+            if (resp.ok || resp.status === 404) {
+                await DrainResponseBody(resp);
+                return { Success: true };
+            }
+            const text = await resp.text();
+            return { Success: false, ErrorMessage: `SendGrid domain delete failed: ${resp.status} ${text}` };
+        } catch (ex) {
+            return { Success: false, ErrorMessage: `Error deleting domain authentication: ${ex instanceof Error ? ex.message : String(ex)}` };
+        }
+    }
+
+    /**
+     * Clears a SendGrid suppression entry for `email` when MJ revokes a block.
+     * When `suppressionType` is omitted, clears across bounces, blocks, invalid_emails,
+     * spam_reports, and global unsubscribes. Idempotent on 404.
+     */
+    public async RemoveSuppression(
+        email: string,
+        suppressionType?: SendGridSuppressionType,
+        credentials?: SendGridCredentials
+    ): Promise<BaseMessageResult> {
+        const normalized = email.trim().toLowerCase();
+        if (!normalized) {
+            return { Success: false, ErrorMessage: 'RemoveSuppression requires a non-empty email address' };
+        }
+        try {
+            const apiKey = this.resolveApiKey(credentials);
+            const types: SendGridSuppressionType[] = suppressionType
+                ? [suppressionType]
+                : ['bounces', 'blocks', 'invalid_emails', 'spam_reports', 'unsubscribes'];
+
+            for (const type of types) {
+                const url = buildSuppressionDeleteUrl(type, normalized);
+                const resp = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (resp.ok || resp.status === 404) {
+                    await DrainResponseBody(resp);
+                    continue;
+                }
+                const text = await resp.text();
+                return { Success: false, ErrorMessage: `SendGrid suppression delete (${type}) failed: ${resp.status} ${text}` };
+            }
+            return { Success: true };
+        } catch (ex) {
+            return { Success: false, ErrorMessage: `Error removing suppression: ${ex instanceof Error ? ex.message : String(ex)}` };
+        }
+    }
+}
+
+export type SendGridSuppressionType = 'bounces' | 'blocks' | 'spam_reports' | 'invalid_emails' | 'unsubscribes';
+
+const REPLAY_WINDOW_SECONDS = 600; // 10 minutes
+
+/**
+ * Verifies a SendGrid Event Webhook ECDSA P-256 signature and 10-minute replay window
+ * over the exact raw request body (`timestamp + rawBody`).
+ */
+export function VerifySendGridWebhookSignature(
+    publicKey: string,
+    rawBody: string | Buffer,
+    signatureBase64: string,
+    timestampHeader: string,
+    nowSeconds: number = Math.floor(Date.now() / 1000)
+): { Valid: boolean; Reason?: string } {
+    const parsedTs = Number(timestampHeader);
+    if (!Number.isFinite(parsedTs) || timestampHeader.trim().length === 0) {
+        return { Valid: false, Reason: 'Invalid webhook timestamp header' };
+    }
+    if (Math.abs(nowSeconds - parsedTs) > REPLAY_WINDOW_SECONDS) {
+        return { Valid: false, Reason: 'Webhook timestamp outside 10-minute replay window' };
+    }
+    try {
+        const keyInput = publicKey.includes('-----BEGIN')
+            ? publicKey
+            : crypto.createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' });
+        const verifier = crypto.createVerify('SHA256');
+        verifier.update(timestampHeader);
+        verifier.update(rawBody);
+        verifier.end();
+        const valid = verifier.verify(keyInput, signatureBase64, 'base64');
+        return valid ? { Valid: true } : { Valid: false, Reason: 'ECDSA signature mismatch' };
+    } catch (ex) {
+        return { Valid: false, Reason: `Signature verification error: ${ex instanceof Error ? ex.message : String(ex)}` };
+    }
 }
 
 /**
@@ -677,5 +1021,250 @@ function safeStringify(value: unknown): string {
         return JSON.stringify(value);
     } catch {
         return String(value);
+    }
+}
+
+function extractHeaderCaseInsensitive(
+    headers: Record<string, string | string[] | undefined> | undefined,
+    target: string
+): string | undefined {
+    if (!headers) return undefined;
+    const lowerTarget = target.toLowerCase();
+    for (const [key, val] of Object.entries(headers)) {
+        if (key.toLowerCase() === lowerTarget) {
+            if (typeof val === 'string') return val;
+            if (Array.isArray(val) && val.length > 0) return val[0];
+        }
+    }
+    return undefined;
+}
+
+function buildSuppressionDeleteUrl(type: SendGridSuppressionType, normalizedEmail: string): string {
+    const encoded = encodeURIComponent(normalizedEmail);
+    if (type === 'unsubscribes') {
+        return `https://api.sendgrid.com/v3/asm/suppressions/global/${encoded}`;
+    }
+    return `https://api.sendgrid.com/v3/suppression/${type}/${encoded}`;
+}
+
+interface SendGridWebhookEventPayload {
+    email?: string;
+    timestamp?: number;
+    event?: string;
+    sg_event_id?: string;
+    sg_message_id?: string;
+    mj_log_id?: string;
+    sg_machine_open?: boolean;
+    url?: string;
+    ip?: string;
+    useragent?: string;
+    reason?: string;
+    status?: string;
+    type?: string;
+    bounce_classification?: string;
+}
+
+function mapSendGridEventToActivity(raw: unknown): NormalizedActivityEvent | undefined {
+    if (!raw || typeof raw !== 'object') return undefined;
+    const ev = raw as SendGridWebhookEventPayload;
+    const eventType = mapSendGridEventType(ev);
+    if (!eventType) return undefined;
+
+    const activity: NormalizedActivityEvent = {
+        CommunicationProviderID: '',
+        NormalizedAddress: typeof ev.email === 'string' ? ev.email.trim().toLowerCase() : '',
+        EventType: eventType,
+        OccurredAt: typeof ev.timestamp === 'number' ? new Date(ev.timestamp * 1000) : new Date(),
+        IsMachineEvent: ev.event === 'open' ? Boolean(ev.sg_machine_open) : false,
+        RawPayload: raw as Record<string, unknown>
+    };
+
+    if (typeof ev.mj_log_id === 'string' && ev.mj_log_id.length > 0) activity.CommunicationLogID = ev.mj_log_id;
+    if (typeof ev.sg_event_id === 'string') activity.ProviderEventID = ev.sg_event_id;
+    if (typeof ev.sg_message_id === 'string') activity.ProviderMessageID = ev.sg_message_id;
+    if (typeof ev.url === 'string') activity.TargetURL = ev.url;
+    if (typeof ev.ip === 'string') activity.IPAddress = ev.ip;
+    if (typeof ev.useragent === 'string') activity.UserAgent = ev.useragent;
+    if (typeof ev.status === 'string') activity.BounceCode = ev.status;
+    if (typeof ev.reason === 'string') activity.BounceReason = ev.reason;
+    if (ev.event === 'dropped') activity.DropReason = mapSendGridDropReason(ev.reason);
+
+    return activity;
+}
+
+function mapSendGridEventType(ev: SendGridWebhookEventPayload): NormalizedActivityEventType | undefined {
+    switch (ev.event) {
+        case 'processed':
+            return 'Queued';
+        case 'delivered':
+            return 'Delivered';
+        case 'deferred':
+            return 'Deferred';
+        case 'bounce':
+            return mapSendGridBounceType(ev);
+        case 'dropped':
+            return 'Dropped';
+        case 'open':
+            return 'Opened';
+        case 'click':
+            return 'Clicked';
+        case 'spamreport':
+            return 'Spam Complaint';
+        case 'unsubscribe':
+        case 'group_unsubscribe':
+            return 'Unsubscribed';
+        default:
+            return undefined;
+    }
+}
+
+const SOFT_BOUNCE_CLASSIFICATIONS = new Set([
+    'technical failure',
+    'content',
+    'reputation',
+    'frequency or volume too high',
+    'mailbox unavailable',
+    'soft'
+]);
+
+function mapSendGridBounceType(ev: SendGridWebhookEventPayload): 'Hard Bounce' | 'Soft Bounce' {
+    const classification = ev.bounce_classification?.trim().toLowerCase();
+    if (classification === 'invalid address' || classification === 'hard') {
+        return 'Hard Bounce';
+    }
+    if (classification && SOFT_BOUNCE_CLASSIFICATIONS.has(classification)) {
+        return 'Soft Bounce';
+    }
+    const bounceType = ev.type?.trim().toLowerCase();
+    if (bounceType === 'blocked' || bounceType === 'soft') {
+        return 'Soft Bounce';
+    }
+    if (bounceType === 'bounce' || bounceType === 'hard') {
+        return 'Hard Bounce';
+    }
+    if (typeof ev.status === 'string' && ev.status.startsWith('4')) {
+        return 'Soft Bounce';
+    }
+    return 'Hard Bounce';
+}
+
+function mapSendGridDropReason(reason: string | undefined): string | undefined {
+    if (!reason) return undefined;
+    const lower = reason.trim().toLowerCase();
+    if (lower.includes('invalid')) return 'Invalid';
+    if (lower.includes('bounced')) return 'Bounced Address';
+    if (lower.includes('unsubscribed')) return 'Unsubscribed Address';
+    if (lower.includes('spam')) return 'Spam Reporting Address';
+    return reason;
+}
+
+interface SendGridDnsEntry {
+    host?: string;
+    type?: string;
+    data?: string;
+    valid?: boolean;
+}
+
+interface SendGridDomainCreateResponse {
+    id?: number | string;
+    dns?: {
+        mail_cname?: SendGridDnsEntry;
+        dkim1?: SendGridDnsEntry;
+        dkim2?: SendGridDnsEntry;
+        spf?: SendGridDnsEntry;
+    };
+}
+
+interface SendGridValidationEntry {
+    valid?: boolean;
+    reason?: string | null;
+}
+
+interface SendGridDomainValidateResponse {
+    valid?: boolean;
+    validation_results?: {
+        mail_cname?: SendGridValidationEntry;
+        dkim1?: SendGridValidationEntry;
+        dkim2?: SendGridValidationEntry;
+        spf?: SendGridValidationEntry;
+    };
+}
+
+function mapSendGridDnsRecords(dnsMap: SendGridDomainCreateResponse['dns']): DomainDNSRecord[] {
+    if (!dnsMap) return [];
+    const entries: Array<[SendGridDnsEntry | undefined, DomainDNSRecord['Purpose']]> = [
+        [dnsMap.mail_cname, 'ReturnPath'],
+        [dnsMap.dkim1, 'DKIM'],
+        [dnsMap.dkim2, 'DKIM'],
+        [dnsMap.spf, 'SPF']
+    ];
+    const records: DomainDNSRecord[] = [];
+    for (const [entry, purpose] of entries) {
+        if (!entry?.host || !entry?.data) continue;
+        const upperType = entry.type?.toUpperCase();
+        const recordType: DomainDNSRecord['Type'] =
+            upperType === 'TXT' || upperType === 'MX' ? upperType : 'CNAME';
+        records.push({
+            Type: recordType,
+            Purpose: purpose,
+            Host: entry.host,
+            Value: entry.data,
+            Validated: Boolean(entry.valid)
+        });
+    }
+    return records;
+}
+
+function mapSendGridValidationResults(
+    results: SendGridDomainValidateResponse['validation_results']
+): DomainDNSRecord[] {
+    if (!results) return [];
+    const entries: Array<[string, SendGridValidationEntry | undefined, DomainDNSRecord['Purpose'], DomainDNSRecord['Type']]> = [
+        ['mail_cname', results.mail_cname, 'ReturnPath', 'CNAME'],
+        ['dkim1', results.dkim1, 'DKIM', 'CNAME'],
+        ['dkim2', results.dkim2, 'DKIM', 'CNAME'],
+        ['spf', results.spf, 'SPF', 'TXT']
+    ];
+    const records: DomainDNSRecord[] = [];
+    for (const [hostKey, entry, purpose, type] of entries) {
+        if (!entry) continue;
+        records.push({
+            Type: type,
+            Purpose: purpose,
+            Host: hostKey,
+            Value: '',
+            Validated: Boolean(entry.valid),
+            ...(entry.reason ? { LastError: entry.reason } : {})
+        });
+    }
+    return records;
+}
+
+async function checkDmarcTxtRecord(domain: string): Promise<DomainDNSRecord> {
+    const host = `_dmarc.${domain}`;
+    try {
+        const txtRecords = await dns.resolveTxt(host);
+        const flattened = txtRecords.map((chunks) => chunks.join(''));
+        const dmarc = flattened.find((val) => val.trim().toLowerCase().startsWith('v=dmarc1'));
+        if (dmarc) {
+            return { Type: 'TXT', Purpose: 'DMARC', Host: host, Value: dmarc, Validated: true };
+        }
+        return {
+            Type: 'TXT',
+            Purpose: 'DMARC',
+            Host: host,
+            Value: '',
+            Validated: false,
+            LastError: 'No valid v=DMARC1 TXT record found'
+        };
+    } catch (ex) {
+        return {
+            Type: 'TXT',
+            Purpose: 'DMARC',
+            Host: host,
+            Value: '',
+            Validated: false,
+            LastError: ex instanceof Error ? ex.message : String(ex)
+        };
     }
 }

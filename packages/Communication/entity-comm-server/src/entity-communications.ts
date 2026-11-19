@@ -1,9 +1,10 @@
-import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
+import { CommunicationEngine, ProcessedMessageServer } from "@memberjunction/communication-engine";
+import { MJCommunicationProviderEntityExtended, Message, MessageRecipient, RenderAndSendParams, SendingEnvelope } from "@memberjunction/communication-types";
 import { EntityInfo, IMetadataProvider, IRunViewProvider, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationResultItem, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { TemplatedCommunicationService } from "./TemplatedCommunicationService";
 
  
 /** One row of a recipient or related-entity view, as RunView returns it with `ResultType: 'simple'`. */
@@ -64,6 +65,12 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             await CommunicationEngine.Instance.Config(false, contextUser);
             const entityMessageType = this.ResolveEntityMessageType(params);
             const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser, provider);
+
+            const v2Engine = CommunicationEngine.Instance as Partial<CommunicationEngine>;
+            if (typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
+                return await this.runEntityCommunicationV2(params, entityInfo, entityMessageType, records, contextUser, provider);
+            }
+
             const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser, provider);
             return await this.SendToRecipients(params, recipients, contextUser);
         }
@@ -379,5 +386,165 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         }
         // if we get here, we are good, otherwise we will have thrown an exception
         return true;
+    }
+
+    /**
+     * Routes V1 `RunEntityCommunication()` through V2 `EvaluateEligibility()` + `TemplatedCommunicationService`
+     * with V1 defaults (`IsDefault = 1` sender, `"General updates"` preference, `MessageClass = 'Marketing'`,
+     * and `AutoAppendComplianceFooter = true`), preserving V1's `EntityCommunicationResult` shape.
+     */
+    private async runEntityCommunicationV2(
+        params: EntityCommunicationParams,
+        entityInfo: EntityInfo,
+        entityMessageType: MJEntityCommunicationMessageTypeEntityExtended,
+        records: EntityCommunicationRecord[],
+        contextUser: UserInfo,
+        provider?: RequestProvider,
+    ): Promise<EntityCommunicationResult> {
+        const recordLevelPref = (entityInfo.PreferredCommunicationField?.length ?? 0) > 0;
+        const entityLevelPrefField = [...entityMessageType.CommunicationFields].sort((a, b) => a.Priority - b.Priority)[0];
+        const deniedRead = entityInfo.FieldLevelSecurityApplies ? entityInfo.GetDeniedReadFields(contextUser) : new Set<string>();
+        const pkFieldName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: recipient key is single-column PK
+
+        const skippedUnreadable: EntityCommunicationResultItem[] = [];
+        const readableRecipients: RenderAndSendParams['Recipients'] = [];
+
+        for (const r of records) {
+            const addressField = !recordLevelPref
+                ? entityLevelPrefField?.FieldName
+                : (r[entityInfo.PreferredCommunicationField] as string | undefined);
+            if (!this.IsAddressFieldReadable(entityInfo, addressField, deniedRead, recordLevelPref)) {
+                skippedUnreadable.push({
+                    RecipientData: { To: undefined, ContextData: {} },
+                    Message: undefined,
+                    Skipped: true,
+                    SkipReason: RECIPIENT_ADDRESS_UNREADABLE_MESSAGE,
+                });
+                continue;
+            }
+            const rawAddress = addressField ? r[addressField] : undefined;
+            readableRecipients.push({
+                Principal: {
+                    EntityID: params.EntityID,
+                    RecordID: String(r[pkFieldName] ?? ''),
+                    RecordData: r,
+                },
+                Endpoint: rawAddress ? { Address: String(rawAddress) } : undefined,
+                ContextData: params.Message.ContextData,
+            });
+        }
+
+        if (readableRecipients.length === 0) {
+            return {
+                Success: false,
+                ErrorMessage: `${RECIPIENT_ADDRESS_UNREADABLE_MESSAGE} (${skippedUnreadable.length} recipient${skippedUnreadable.length === 1 ? '' : 's'})`,
+                Results: skippedUnreadable,
+            };
+        }
+
+        const providerEntity = CommunicationEngine.Instance.Providers.find(
+            (p) => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase(),
+        );
+        const defaultPreferenceID = await this.resolveDefaultPreferenceID(contextUser, provider);
+
+        const envelope: SendingEnvelope = {
+            SenderID: undefined, // V2SendService defaults to IsDefault = 1
+            PreferenceID: defaultPreferenceID,
+            MessageClass: 'Marketing',
+            ChannelID: entityMessageType.BaseMessageTypeID,
+            ProviderID: providerEntity?.ID,
+            ScheduledAt: params.Message.SendAt,
+        };
+
+        const renderParams: RenderAndSendParams = {
+            Envelope: envelope,
+            EntityID: params.EntityID,
+            Recipients: readableRecipients,
+            Templates: {
+                SubjectTemplateID: params.Message.SubjectTemplate?.ID,
+                BodyTemplateID: params.Message.BodyTemplate?.ID,
+                HTMLBodyTemplateID: params.Message.HTMLBodyTemplate?.ID,
+                SharedContextData: params.Message.ContextData,
+            },
+            AutoAppendComplianceFooter: true,
+            RenderMode: params.PreviewOnly || params.IncludeProcessedMessages ? 'Inline' : 'WorkQueue',
+        };
+
+        if (params.PreviewOnly) {
+            const preview = await TemplatedCommunicationService.Instance.RenderAndPreview(
+                renderParams,
+                contextUser,
+                provider,
+            );
+            const previewItems: EntityCommunicationResultItem[] = [
+                ...skippedUnreadable,
+                ...preview.Blocked.map((b) => ({
+                    RecipientData: { To: b.Endpoint?.RawValue, ContextData: {} },
+                    Message: undefined,
+                    Skipped: true,
+                    SkipReason: b.Reason,
+                })),
+                ...preview.Rendered.map((r) => {
+                    const msg = new ProcessedMessageServer(params.Message);
+                    msg.To = r.Recipient.Endpoint.RawValue;
+                    msg.ProcessedSubject = r.Subject ?? params.Message.Subject ?? '';
+                    msg.ProcessedBody = r.Body ?? params.Message.Body ?? '';
+                    msg.ProcessedHTMLBody = r.HTMLBody ?? params.Message.HTMLBody ?? '';
+                    return {
+                        RecipientData: { To: r.Recipient.Endpoint.RawValue, ContextData: r.Recipient.ContextData ?? {} },
+                        Message: msg,
+                    };
+                }),
+            ];
+            return {
+                Success: preview.Rendered.length > 0,
+                ErrorMessage: previewItems.filter((i) => i.Skipped).map((i) => i.SkipReason).join('; '),
+                Results: previewItems,
+            };
+        }
+
+        const sendResult = await TemplatedCommunicationService.Instance.RenderAndSend(
+            renderParams,
+            contextUser,
+            provider,
+        );
+
+        const outcomeItems: EntityCommunicationResultItem[] = [
+            ...skippedUnreadable,
+            ...(sendResult.Outcomes ?? []).map((o) => {
+                const msg = new ProcessedMessageServer(params.Message);
+                msg.To = o.Endpoint?.RawValue ?? '';
+                const isSkipped = o.Status === 'Blocked';
+                return {
+                    RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
+                    Message: isSkipped ? undefined : msg,
+                    Skipped: isSkipped ? true : undefined,
+                    SkipReason: isSkipped ? o.Reason : undefined,
+                };
+            }),
+        ];
+
+        const hasDeliverable = sendResult.QueuedCount > 0 || sendResult.DeferredCount > 0;
+        return {
+            Success: sendResult.Success && hasDeliverable,
+            ErrorMessage: sendResult.ErrorMessage ?? '',
+            Results: outcomeItems,
+        };
+    }
+
+    private async resolveDefaultPreferenceID(
+        contextUser: UserInfo,
+        provider?: RequestProvider,
+    ): Promise<string | undefined> {
+        const res = await this.RunViewFor(provider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Communication Preferences',
+                ExtraFilter: "Name='General updates'",
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        return res.Success && res.Results.length > 0 ? res.Results[0].ID : undefined;
     }
 }

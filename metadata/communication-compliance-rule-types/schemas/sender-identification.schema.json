@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["requirePostalAddress", "requireSenderName"],
+  "properties": {
+    "requirePostalAddress": {
+      "type": "boolean",
+      "description": "Require sender physical postal address in the message."
+    },
+    "requireSenderName": {
+      "type": "boolean",
+      "description": "Require clear sender identification/name in the message."
+    }
+  },
+  "additionalProperties": false
+}

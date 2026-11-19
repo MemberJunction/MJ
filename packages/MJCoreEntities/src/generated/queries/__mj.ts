@@ -117,7 +117,7 @@ export const TagAggregatesRowSchema = z.object({
 export const TagAggregates = DefineTypedQuery<TagAggregatesParams, TagAggregatesRow>({
     QueryID: "A95E20FE-E0E9-4BDD-A61F-24447252C4E2",
     Path: "MJ/Tags/Tag Aggregates",
-    Signature: "sha256:cd67a4519a83e1cf5513b185cbf6f3d6981e3af67c496272b575871349c24b42",
+    Signature: "sha256:1d308d16f3158787b78a5920ea914d9efe9abcaf3f863e1e26bd55dc8a86b6c4",
     RowSchema: TagAggregatesRowSchema,
 });
 

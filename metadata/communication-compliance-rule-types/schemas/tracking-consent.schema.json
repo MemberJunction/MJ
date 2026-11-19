@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["requireConsentForOpenPixel", "requireConsentForClickTracking"],
+  "properties": {
+    "requireConsentForOpenPixel": {
+      "type": "boolean",
+      "description": "When true, open-tracking pixel injection requires explicit consent."
+    },
+    "requireConsentForClickTracking": {
+      "type": "boolean",
+      "description": "When true, click/link rewriting requires explicit consent."
+    }
+  },
+  "additionalProperties": false
+}

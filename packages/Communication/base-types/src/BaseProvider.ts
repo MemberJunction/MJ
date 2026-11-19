@@ -3,6 +3,14 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
 import type {
+    CreateDomainAuthParams,
+    CreateDomainAuthResult,
+    DeleteDomainAuthParams,
+    NormalizedActivityEvent,
+    VerifyDomainAuthParams,
+    VerifyDomainAuthResult,
+} from "./V2Types";
+import type {
     CalendarEventResult,
     CalendarTarget,
     CancelEventParams,
@@ -172,6 +180,11 @@ export class MessageResult {
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
+    /**
+     * Provider-assigned message identifier (for example SendGrid X-Message-Id),
+     * persisted to CommunicationLog.ProviderMessageID for webhook correlation.
+     */
+    public ProviderMessageID?: string;
     /**
      * True when this result was produced by a dry-run send (`Message.DryRun` was true): the
      * provider ran its full preflight + payload construction and reported success WITHOUT
@@ -1253,9 +1266,10 @@ export type WebhookNotificationInput = {
 export type NormalizedNotification = {
     /**
      * `'message'` for a content-change notification, `'lifecycle'` for a subscription
-     * lifecycle event (see {@link NormalizedNotification.LifecycleEvent}).
+     * lifecycle event (see {@link NormalizedNotification.LifecycleEvent}), or `'activity'`
+     * for normalized delivery/engagement webhook events.
      */
-    Kind: 'message' | 'lifecycle';
+    Kind: 'message' | 'lifecycle' | 'activity';
     /**
      * The remote subscription ID this notification concerns, when the service includes
      * it (Graph does).
@@ -1295,6 +1309,10 @@ export type NormalizedNotification = {
      * For `Kind: 'lifecycle'`: which lifecycle event occurred.
      */
     LifecycleEvent?: 'subscriptionRemoved' | 'missed' | 'reauthorizationRequired';
+    /**
+     * For `Kind: 'activity'`: normalized delivery and engagement events extracted from the webhook payload.
+     */
+    ActivityEvents?: NormalizedActivityEvent[];
     /**
      * The raw provider payload for this item, for consumer needs beyond the normalized
      * fields above.
@@ -1372,7 +1390,10 @@ export type ProviderOperation =
     | 'UpdateCalendarEvent'
     | 'RespondToCalendarEvent'
     | 'CancelCalendarEvent'
-    | 'VerifyMailboxAccess';
+    | 'VerifyMailboxAccess'
+    | 'CreateDomainAuthentication'
+    | 'VerifyDomainAuthentication'
+    | 'DeleteDomainAuthentication';
 
 
 /**
@@ -1978,6 +1999,48 @@ export abstract class BaseCommunicationProvider {
      */
     public GetSubscriptionCapabilities(): SubscriptionCapabilities | undefined {
         return undefined;
+    }
+
+    /**
+     * Registers a sending domain with the provider and returns required SPF/DKIM DNS records.
+     */
+    public async CreateDomainAuthentication(
+        params: CreateDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<CreateDomainAuthResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support CreateDomainAuthentication (Domain: ${params.Domain}, credentials provided: ${!!credentials})`,
+            DNSRecords: [],
+        };
+    }
+
+    /**
+     * Validates DNS propagation for a previously registered sending domain.
+     */
+    public async VerifyDomainAuthentication(
+        params: VerifyDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<VerifyDomainAuthResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support VerifyDomainAuthentication (Domain: ${params.Domain}, credentials provided: ${!!credentials})`,
+            Verified: false,
+            DNSRecords: [],
+        };
+    }
+
+    /**
+     * Removes a sending domain authentication registration from the provider.
+     */
+    public async DeleteDomainAuthentication(
+        params: DeleteDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<BaseMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support DeleteDomainAuthentication (ProviderDomainID: ${params.ProviderDomainID}, credentials provided: ${!!credentials})`,
+        };
     }
 
 }

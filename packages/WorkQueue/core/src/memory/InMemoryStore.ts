@@ -229,6 +229,18 @@ export class InMemoryStore {
         return settled(delivery);
     }
 
+    public Defer(handle: DeliveryHandle, delaySeconds: number): SettleResult {
+        const delivery = this.held(handle);
+        if (delivery === null) {
+            return lost(handle);
+        }
+        clearLease(delivery);
+        delivery.Status = 'Pending';
+        delivery.AttemptCount = Math.max(0, delivery.AttemptCount - 1);
+        delivery.VisibleAtMs = this.now() + Math.max(0, delaySeconds) * 1000;
+        return settled(delivery);
+    }
+
     /** The one holder write that succeeds after a cancel: token-fenced, InFlight, cancel requested → Discarded now. */
     public AcknowledgeCancel(handle: DeliveryHandle): SettleResult {
         const delivery = this.heldButCancelled(handle);
@@ -365,6 +377,8 @@ export class InMemoryStore {
 
     private createDelivery(policy: SubscriptionPolicy, messageKey: string, stored: StoredMessage): void {
         const now = this.now();
+        const scheduledMs = stored.Message.ScheduledAt !== undefined ? Date.parse(stored.Message.ScheduledAt) : Number.NaN;
+        const visibleAtMs = Number.isFinite(scheduledMs) && scheduledMs > now ? scheduledMs : now;
         const delivery: StoredDelivery = {
             ID: this.newId(),
             MessageKey: messageKey,
@@ -375,7 +389,7 @@ export class InMemoryStore {
             AttemptCount: 0,
             IsReplay: false,
             CreatedAtMs: now,
-            VisibleAtMs: now,
+            VisibleAtMs: visibleAtMs,
             LeaseToken: null,
             LeaseExpiresAtMs: null,
             LastHeartbeatAtMs: null,
