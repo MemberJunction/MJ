@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { GetDialect } from '@memberjunction/sql-dialect';
+import { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS } from '../DDLGenerator.js';
 import { SchemaBuilder } from '../SchemaBuilder.js';
 import type { SchemaBuilderInput, SourceSchemaInfo, TargetTableConfig } from '../interfaces.js';
 import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
@@ -292,6 +294,50 @@ describe('SchemaBuilder (integration)', () => {
             expect(migration.Content).toContain('"__mj_integration_SyncStatus" VARCHAR(50) NOT NULL');
             expect(migration.Content).toContain('CREATE INDEX IF NOT EXISTS "IX_hubspot_Contact_PK" ON hubspot."Contact"("ContactID")');
             expect(migration.Content).toContain('CREATE INDEX IF NOT EXISTS "IX_hubspot_Deal_FK_ContactID" ON hubspot."Deal"("ContactID")');
+            for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
+                expect(migration.Content).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."${colName}" IS`);
+            }
+        });
+
+        it('should emit normalized descriptions, strip whitespace-only ones, cap SQL Server length, and keep SplitStatements intact via BuildSchema', () => {
+            const longDesc = 'Z'.repeat(4500);
+            const semiNewlineDesc = 'Line 1;\nLine 2;\r\nLine 3';
+            const configs = MakeTargetConfigs();
+            configs[0].Description = semiNewlineDesc;
+            configs[0].Columns[0].Description = '   \t  '; // whitespace-only — must be omitted
+            configs[0].Columns[1].Description = longDesc;
+            configs[1].Description = '   '; // whitespace-only table description — must be omitted
+
+            const ssOut = builder.BuildSchema(MakeInput({ Platform: 'sqlserver', TargetConfigs: structuredClone(configs) }));
+            expect(ssOut.Errors).toHaveLength(0);
+            const ssSql = ssOut.MigrationFiles[0].Content;
+            // Whitespace-only ContactID and Deal table descriptions omitted
+            expect(ssSql).not.toContain("@level2name = 'ContactID'");
+            expect(ssSql).not.toContain("@level1type = N'TABLE', @level1name = N'Deal'");
+            // Semicolon-newline collapsed so SplitStatements does not split inside string literal
+            expect(ssSql).toContain('Line 1; Line 2; Line 3');
+            // Email description capped at MAX_SQLSERVER_DESCRIPTION_CHARS
+            const emailExecMatch = ssSql.match(/@value = N'(Z+\.\.\.)'[\s\S]*?@level2name = 'Email'/);
+            expect(emailExecMatch).not.toBeNull();
+            expect(emailExecMatch![1].length).toBe(DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS);
+            // Every standard column description emitted on SQL Server
+            for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
+                expect(ssSql).toContain(`@level2name = '${colName}'`);
+            }
+
+            const pgOut = builder.BuildSchema(MakeInput({ Platform: 'postgresql', TargetConfigs: structuredClone(configs) }));
+            expect(pgOut.Errors).toHaveLength(0);
+            const pgSql = pgOut.MigrationFiles[0].Content;
+            expect(pgSql).not.toContain(`COMMENT ON COLUMN "hubspot"."Contact"."ContactID"`);
+            expect(pgSql).not.toContain(`COMMENT ON TABLE hubspot."Deal"`);
+            expect(pgSql).toContain(`COMMENT ON TABLE hubspot."Contact" IS 'Line 1; Line 2; Line 3';`);
+            // PostgreSQL keeps full >3,700-char description uncapped
+            expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS '${longDesc}';`);
+            // SplitStatements produces no unclosed single-quoted fragments
+            for (const stmt of GetDialect('postgresql').SplitStatements(pgSql)) {
+                const quoteCount = (stmt.match(/'/g) ?? []).length;
+                expect(quoteCount % 2).toBe(0);
+            }
         });
     });
 

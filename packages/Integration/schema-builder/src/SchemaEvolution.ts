@@ -13,7 +13,12 @@ import type {
     TargetColumnConfig,
     TargetTableConfig,
 } from './interfaces.js';
-import { DDLGenerator, ValidateIdentifier } from './DDLGenerator.js';
+import {
+    DDLGenerator,
+    STANDARD_COLUMN_DESCRIPTIONS,
+    ValidateIdentifier,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 import { TypeMapper } from './TypeMapper.js';
 
 /**
@@ -210,7 +215,7 @@ export class SchemaEvolution {
     private ensureStandardColumns(existing: ExistingTableInfo, platform: DatabasePlatform): TargetColumnConfig[] {
         const have = new Set(existing.Columns.map(c => c.Name.toLowerCase()));
         const isSql = platform === 'sqlserver';
-        const std: TargetColumnConfig[] = [
+        const std: Array<TargetColumnConfig & { TargetColumnName: StandardIntegrationColumnName }> = [
             { SourceFieldName: '__mj_integration_SyncStatus', TargetColumnName: '__mj_integration_SyncStatus', TargetSqlType: isSql ? 'NVARCHAR(50)' : 'VARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: "'Active'" },
             { SourceFieldName: '__mj_integration_LastSyncedAt', TargetColumnName: '__mj_integration_LastSyncedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
             { SourceFieldName: '__mj_integration_LastSyncedSnapshot', TargetColumnName: '__mj_integration_LastSyncedSnapshot', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
@@ -225,7 +230,9 @@ export class SchemaEvolution {
             { SourceFieldName: '__mj_integration_IsTombstoned', TargetColumnName: '__mj_integration_IsTombstoned', TargetSqlType: isSql ? 'BIT' : 'BOOLEAN', IsNullable: false, MaxLength: null, Precision: null, Scale: null, DefaultValue: isSql ? '0' : 'FALSE' },
             { SourceFieldName: '__mj_integration_DeletedDetectedAt', TargetColumnName: '__mj_integration_DeletedDetectedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
         ];
-        return std.filter(c => !have.has(c.TargetColumnName.toLowerCase()));
+        return std
+            .map(c => ({ ...c, Description: STANDARD_COLUMN_DESCRIPTIONS[c.TargetColumnName] }))
+            .filter(c => !have.has(c.TargetColumnName.toLowerCase()));
     }
 
     /**
