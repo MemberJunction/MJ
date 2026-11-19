@@ -47903,7 +47903,7 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
      * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
      * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
-     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `BroaderThan`, `Contradicts`, etc.).
      */
     GraphOverlay?: MJContentSourceEntity_IContentSourceGraphOverlayConfig;
     /**
