@@ -163,6 +163,24 @@ export class PublishRecords {
   }
 
   /**
+   * The model the newest applied `publish` row of `modelId` (any purpose) replaced, its `ReplacesModelID`; null when
+   * the model has no applied record or its newest one replaced none (D4-17's predecessor).
+   *
+   * @throws Error when the read fails
+   */
+  public static async FindLatestReplaced(modelId: string, ctx: RegistryContext): Promise<string | null> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'ReplacesModelID'>>(
+      {
+        EntityName: ENTITY, ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND Kind='publish'`,
+        OrderBy: 'RecordedAt DESC', Fields: ['ID', 'ReplacesModelID'], MaxRows: 1, ResultType: 'simple',
+      },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the publish records of ML Model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    return r.Results[0]?.ReplacesModelID || null;
+  }
+
+  /**
    * The run-level outcome row of a training run (`Purpose = 'evaluate'`, `UX_MLModelPublishRecord_OneRunOutcome`), with
    * its stored refusal read through the generated `RefusalObject` accessor; null when the run has none.
    *

@@ -22,8 +22,11 @@ import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard'
 import { SnapshotFiles } from '../snapshot/snapshot-serialization';
 import type { ScoringAssembled } from './scoring-seams';
 
-/** How a model is admitted to score: as the pipeline's Published model, kept serving while Unevaluated, or a named challenger. */
-export type ScoringAdmission = 'published' | 'serving-while-unevaluated' | 'challenger';
+/**
+ * How a model is admitted to score: as the pipeline's Published model, kept serving while Unevaluated, a named
+ * challenger, or (monitoring's rollback check only, D4-17) the predecessor the Published model replaced.
+ */
+export type ScoringAdmission = 'published' | 'serving-while-unevaluated' | 'challenger' | 'predecessor';
 
 /** The model columns check 1 reads. */
 export type CheckedModelColumns = Pick<MJMLModelEntity, 'ID' | 'Status' | 'ServingWhileUnevaluated' | 'FeatureImportance'>;
@@ -36,6 +39,8 @@ export class ScoringChecks {
    * `DetectSingleFeatureDominance` raises no flag at the pipeline's `LeakageGuard.SingleFeatureDominanceThreshold`
    * (`DOMINANCE_THRESHOLD_DEFAULT` when the guard names none); a null or empty importance is `leakage-unknown` (D4-61).
    * A `challenger` (reachable only from a run of a binding whose challenger names it) needs `Validated` or `Published`.
+   * A `predecessor` (reachable only from the monitoring path, for the model the Published model's `publish` record
+   * replaced) needs `Archived`.
    * A dominance flag is refused `model-flagged` naming the dominant feature, its share and the threshold (`dominance`);
    * `flags` stays empty because dominance is not one of the trainer's `LeakageFlag` kinds.
    */
@@ -45,6 +50,8 @@ export class ScoringChecks {
         return model.Status === 'Published' ? null : { kind: 'model-not-published', status: model.Status };
       case 'challenger':
         return model.Status === 'Validated' || model.Status === 'Published' ? null : { kind: 'model-not-published', status: model.Status };
+      case 'predecessor':
+        return model.Status === 'Archived' ? null : { kind: 'model-not-published', status: model.Status };
       case 'serving-while-unevaluated':
         return ScoringChecks.servingWhileUnevaluated(model, pipelineLeakageGuard);
     }

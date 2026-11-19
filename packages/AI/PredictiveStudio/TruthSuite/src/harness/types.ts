@@ -3,7 +3,7 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import type { UUIDMap } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
-  PredictiveStudioTrainAsOf, PredictiveStudioModelTransition, PredictiveStudioTransitionRefusal } from '@memberjunction/core-entities';
+  PredictiveStudioTrainAsOf, PredictiveStudioModelTransition, PredictiveStudioTransitionRefusal, PredictiveStudioMonitoredPeriod } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import type { ProvenanceCheck } from '../fixtures/provenance-resolver';
@@ -118,6 +118,15 @@ export interface BuilderRunOptions {
   readonly AutoPublishKeepBaseline?: boolean;
 }
 
+/** What `RunMonitoring` reports: the monitored periods as `PredictiveStudio.RunModelMonitoring` returned them, or why it failed. */
+export interface MonitoringAttempt {
+  readonly Ok: boolean;
+  readonly ErrorMessage: string | null;
+  /** Why nothing was monitored (the model is no longer Published); null when the period ran. */
+  readonly Skipped: string | null;
+  readonly Periods: readonly PredictiveStudioMonitoredPeriod[];
+}
+
 /** What `Promote` reports: whether the lifecycle gate applied the transition, the model's status after it, and the gate's refusal (null when applied). */
 export interface PromoteAttempt { Applied: boolean; Status: MJMLModelEntity['Status']; Refusal: PredictiveStudioTransitionRefusal | null }
 
@@ -139,6 +148,8 @@ export interface TruthHarness {
   /** Applies one lifecycle transition through `PredictiveStudio.PromoteModel`; a refusal is returned, an operation error thrown. */
   Promote(modelId: string, transition: PredictiveStudioModelTransition, reason: string): Promise<PromoteAttempt>;
   Score(modelId: string, req: ScoreRequest): Promise<ScoreAttempt>;
+  /** One period of a Published model's monitoring through `PredictiveStudio.RunModelMonitoring` (its `MJ: ML Monitoring Results` row). */
+  RunMonitoring(modelId: string, periodStart: Date): Promise<MonitoringAttempt>;
   ScoreViaRecordProcess(modelId: string, dataset: LoadedDataset, extraFilter: string): Promise<RecordProcessScoring>;
   CountNonNull(dataset: LoadedDataset, column: 'TruthScore'): Promise<number>;
   ResetColumn(dataset: LoadedDataset, column: 'TruthScore'): Promise<void>;

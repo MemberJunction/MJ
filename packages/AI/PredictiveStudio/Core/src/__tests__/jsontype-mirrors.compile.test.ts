@@ -23,6 +23,7 @@ const MODELS_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONTyp
 const PUBLISH_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts');
 const PROMOTE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-promote-model.output.ts');
 const SCORING_RUN_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts');
+const MONITORING_RESULT_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLMonitoringResultJsonTypes.ts');
 const EVIDENCE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-get-model-evidence.output.ts');
 
 /** The package's compiler options with emit off; `rootDir` is dropped because the mirrors live outside `src`. */
@@ -62,7 +63,7 @@ function failingMirrors(output: string): string[] {
 }
 
 describe('JSONType mirrors equal their Core types', () => {
-  it('compiles with no diagnostics (all eighteen mirrors equal Core)', () => {
+  it('compiles with no diagnostics (all twenty-six mirrors equal Core)', () => {
     expect(compile()).toBe('');
   }, 120_000);
 
@@ -107,5 +108,11 @@ describe('JSONType mirrors equal their Core types', () => {
     const drifted = text.replace("readonly kind: 'view'; readonly entity: string; readonly userViewId: string", "readonly kind: 'view'; readonly entity: string; readonly viewId: string");
     expect(drifted).not.toBe(text);
     expect(failingMirrors(compile(new Map([[SCORING_RUN_MIRROR, drifted]])))).toEqual(['MirrorScoringScope']);
+  }, 120_000);
+  it('fails on exactly the drifted mirror (ML Monitoring Results: a rollback check kind renamed)', () => {
+    const text = readFileSync(MONITORING_RESULT_MIRROR, 'utf8');
+    const drifted = text.replace("readonly kind: 'checked' | 'rolled-back' | 'rollback-withheld';", "readonly kind: 'checked' | 'rolled-back' | 'rollback-refused';");
+    expect(drifted).not.toBe(text);
+    expect(failingMirrors(compile(new Map([[MONITORING_RESULT_MIRROR, drifted]])))).toEqual(['MirrorMonitoringRollbackCheck']);
   }, 120_000);
 });

@@ -8,6 +8,7 @@ import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
 import { HarnessTraining } from './train';
 import { HarnessScoring } from './score';
+import { HarnessMonitoring } from './monitoring';
 import { HarnessModels } from './promote';
 import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
@@ -246,6 +247,7 @@ export class RunFixtures {
       ModelsForPipelineNamePrefix: (prefix) => HarnessModels.ModelsForPipelineNamePrefix(ctx, prefix),
       Promote: (modelId, transition, reason) => HarnessModels.Promote(ctx, modelId, transition, reason),
       Score: (modelId, req) => HarnessScoring.Score(ctx, modelId, req),
+      RunMonitoring: (modelId, periodStart) => HarnessMonitoring.RunMonitoring(ctx, modelId, periodStart),
       ScoreViaRecordProcess: (modelId, dataset, extraFilter) =>
         HarnessScoring.ScoreViaRecordProcess(ctx, modelId, dataset, extraFilter),
       CountNonNull: (dataset, column) => HarnessDatasets.CountNonNull(ctx, dataset, column),

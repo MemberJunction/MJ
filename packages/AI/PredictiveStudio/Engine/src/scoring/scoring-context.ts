@@ -23,6 +23,12 @@ export interface ScoringContext extends RegistryContext {
   readonly ProcessRunID: string | null;
   /** The `MJ: Scheduled Job Runs` row of the scheduled job that called, when one did. */
   readonly ScheduledJobRunID: string | null;
+  /**
+   * On the `monitoring` path only (D4-17): the Published model whose latest applied `publish` record replaced the model
+   * being scored. `Predict` then admits that predecessor (an `Archived` model) so the rollback check can score it on the
+   * current model's rows; on every other path, or for any other model, it is ignored.
+   */
+  readonly MonitoredSuccessorID?: string | null;
   /** Replacements for the service's production collaborators; each one left out is the production default. */
   readonly Seams?: Partial<ScoringServiceSeams>;
 }
