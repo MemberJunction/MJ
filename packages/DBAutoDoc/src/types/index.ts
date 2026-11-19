@@ -6,4 +6,5 @@ export * from './state.js';
 export * from './config.js';
 export * from './analysis.js';
 export * from './prompts.js';
+export * from './data-quality.js';
 export { AutoDocIndex, AUTODOC_EXPRESSION_KEY_PART } from './driver.js';

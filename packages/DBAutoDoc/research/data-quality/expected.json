@@ -1,0 +1,23 @@
+[
+  { "Kind": "UntrustedForeignKey", "SchemaName": "Sales", "TableName": "SalesOrderHeader", "ColumnName": "BillToAddressID" },
+  { "Kind": "OrphanedForeignKey", "SchemaName": "Sales", "TableName": "SalesOrderHeader", "ColumnName": "BillToAddressID", "Severity": "error" },
+  { "Kind": "UntrustedForeignKey", "SchemaName": "Sales", "TableName": "SalesOrderDetail", "ColumnName": "SpecialOfferID" },
+  { "Kind": "OrphanedForeignKey", "SchemaName": "Sales", "TableName": "SalesOrderDetail", "ColumnName": "SpecialOfferID", "Severity": "error" },
+  { "Kind": "CaseWhitespaceVariants", "SchemaName": "Person", "TableName": "Person", "ColumnName": "PersonType" },
+  { "Kind": "UntrimmedString", "SchemaName": "Production", "TableName": "Product", "ColumnName": "Color" },
+  { "Kind": "CaseWhitespaceVariants", "SchemaName": "Production", "TableName": "Product", "ColumnName": "Color" },
+  { "Kind": "BlankString", "SchemaName": "Person", "TableName": "Person", "ColumnName": "Suffix" },
+  { "Kind": "BlankString", "SchemaName": "Sales", "TableName": "SalesOrderHeader", "ColumnName": "Comment" },
+  { "Kind": "SentinelDate", "SchemaName": "Sales", "TableName": "SalesOrderHeader", "ColumnName": "ShipDate" },
+  { "Kind": "SentinelDate", "SchemaName": "Production", "TableName": "Product", "ColumnName": "SellStartDate" },
+  { "Kind": "FutureDate", "SchemaName": "Person", "TableName": "Person", "ColumnName": "ModifiedDate" },
+  { "Kind": "NearUnique", "SchemaName": "Person", "TableName": "EmailAddress", "ColumnName": "EmailAddress" },
+  { "Kind": "NegativeValue", "SchemaName": "Production", "TableName": "ProductInventory", "ColumnName": "Quantity" },
+  { "Kind": "NumericStoredAsText", "SchemaName": "dbo", "TableName": "QualityBench", "ColumnName": "AmountText" },
+  { "Kind": "DateStoredAsText", "SchemaName": "dbo", "TableName": "QualityBench", "ColumnName": "WhenText" },
+  { "Kind": "AlwaysNull", "SchemaName": "dbo", "TableName": "QualityBench", "ColumnName": "UnusedCol" },
+  { "Kind": "ConstantValue", "SchemaName": "dbo", "TableName": "QualityBench", "ColumnName": "ConstantCol" },
+  { "Kind": "LengthAtCapacity", "SchemaName": "dbo", "TableName": "QualityBench", "ColumnName": "Clipped" },
+  { "Kind": "NoPrimaryKey", "SchemaName": "dbo", "TableName": "QualityBenchNoPK" },
+  { "Kind": "ExactDuplicateRows", "SchemaName": "dbo", "TableName": "QualityBenchNoPK" }
+]

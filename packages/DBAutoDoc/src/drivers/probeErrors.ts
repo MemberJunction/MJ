@@ -13,6 +13,30 @@
  * kept. {@link SanitizeErrorText} is the belt to the classifier's braces.
  */
 
+export const PROBE_TIMEOUT_REASON = 'probe exceeded its timeout';
+
+const TIMEOUT_TEXT_PATTERN =
+    /statement timeout|canceling statement|query was cancelled|query execution was interrupted|maximum statement execution time exceeded|query timeout|execution timeout|timeout expired|lock timeout|lock request time ?out|time ?out period exceeded|ETIMEDOUT|ETIMEOUT/i;
+
+const TIMEOUT_SQL_CODES = new Set([
+    '57014', // PostgreSQL query_canceled / statement_timeout
+    '55P03', // PostgreSQL lock_not_available / lock_timeout
+    '3024',  // MySQL ER_QUERY_TIMEOUT (MAX_EXECUTION_TIME exceeded)
+    '1317',  // MySQL ER_QUERY_INTERRUPTED
+    'ER_QUERY_TIMEOUT',
+    'ER_QUERY_INTERRUPTED',
+    '1222',  // SQL Server lock request time out period exceeded
+    'ETIMEOUT',
+    'ETIMEDOUT',
+]);
+
+/** True when a probe failure reason or driver code represents a statement or lock timeout. */
+export function IsProbeTimeout(reason: string, code?: string): boolean {
+    if (reason === PROBE_TIMEOUT_REASON) return true;
+    if (code !== undefined && TIMEOUT_SQL_CODES.has(code)) return true;
+    return TIMEOUT_TEXT_PATTERN.test(reason);
+}
+
 /** Fixed causes a probe can fail for. The persisted reason is always one of these. */
 const PROBE_FAILURE_PATTERNS: ReadonlyArray<{ test: RegExp; reason: string }> = [
     // Type incompatibility — the shape that matters most, because a silent 0 here is
@@ -20,8 +44,8 @@ const PROBE_FAILURE_PATTERNS: ReadonlyArray<{ test: RegExp; reason: string }> = 
     { test: /operator does not exist|no operator matches|cannot be compared|operand type clash|invalid input syntax|conversion failed|data type .* is invalid|incompatible types|could not identify an equality operator/i,
       reason: 'columns are not comparable (type mismatch)' },
     // Cancellation / timeout.
-    { test: /statement timeout|canceling statement|query was cancelled|query timeout|execution timeout|timeout expired|lock timeout|ETIMEDOUT/i,
-      reason: 'probe exceeded its timeout' },
+    { test: TIMEOUT_TEXT_PATTERN,
+      reason: PROBE_TIMEOUT_REASON },
     // Authorization.
     { test: /permission denied|access is denied|insufficient privilege|not authorized|the SELECT permission was denied|must be owner/i,
       reason: 'no permission to read one of the columns' },
@@ -62,6 +86,8 @@ export function SanitizeErrorText(text: string): string {
  */
 export function DescribeProbeFailure(error: unknown): string {
     const raw = errorMessage(error);
+    const code = ExtractSqlState(error);
+    if (code !== undefined && TIMEOUT_SQL_CODES.has(code)) return PROBE_TIMEOUT_REASON;
     for (const { test, reason } of PROBE_FAILURE_PATTERNS) {
         if (test.test(raw)) return reason;
     }

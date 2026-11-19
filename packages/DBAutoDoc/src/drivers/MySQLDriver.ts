@@ -8,6 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import { MYSQL_INDEX_QUERY, MySQLIndexRow, MapMySQLIndexRows } from './IndexCatalog.js';
+import type { BoundedQueryOutcome } from '../types/data-quality.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -636,15 +637,16 @@ export class MySQLDriver extends BaseAutoDocDriver {
 
     if (result.success && result.data && result.data.length > 0) {
       const row = result.data[0];
-      const totalCount = Number(row.total_count) || 1;
-      const distinctCount = Number(row.distinct_count);
-      const nullCount = Number(row.null_count);
+      // An empty table has 0 rows, not 1: the old `|| 1` made every empty table look like a one-row table.
+      const totalCount = Number(row.total_count) || 0;
+      const distinctCount = Number(row.distinct_count) || 0;
+      const nullCount = Number(row.null_count) || 0;
 
       return {
         distinctCount,
-        uniquenessRatio: distinctCount / totalCount,
+        uniquenessRatio: totalCount > 0 ? distinctCount / totalCount : 0,
         nullCount,
-        nullPercentage: (nullCount / totalCount) * 100,
+        nullPercentage: totalCount > 0 ? (nullCount / totalCount) * 100 : 0,
         totalCount
       };
     }
@@ -924,6 +926,39 @@ export class MySQLDriver extends BaseAutoDocDriver {
       };
     } catch (error) {
       return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    }
+  }
+
+  /**
+   * Run one read-only statement for the data quality probes on a dedicated connection with the
+   * session's `max_execution_time` set, which MySQL enforces server-side for `SELECT`, then reset
+   * it before the connection goes back to the pool.
+   */
+  public override async ExecuteBounded<T extends Record<string, unknown>>(sqlText: string, timeoutMs: number): Promise<BoundedQueryOutcome<T>> {
+    let connection: mysql.PoolConnection | null = null;
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no MySQL connection pool available' };
+      }
+      connection = await this.pool.getConnection();
+      await connection.query(`SET SESSION max_execution_time = ${Math.max(1, Math.floor(timeoutMs))}`);
+      const [rows] = await connection.query(sqlText);
+      const list = Array.isArray(rows) ? (rows as T[]) : [];
+      return { Ok: true, Rows: list };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    } finally {
+      if (connection) {
+        try {
+          await connection.query('SET SESSION max_execution_time = 0');
+        } catch {
+          // The result is already decided; a failed reset must not mask it.
+        }
+        connection.release();
+      }
     }
   }
 

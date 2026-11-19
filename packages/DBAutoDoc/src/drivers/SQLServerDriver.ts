@@ -8,6 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import { BuildSQLServerIndexQuery, SQLServerIndexRow, MapSQLServerIndexRows } from './IndexCatalog.js';
+import type { BoundedQueryOutcome } from '../types/data-quality.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -552,7 +553,9 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         rs.name as referenced_schema,
         rt.name as referenced_table,
         rc.name as referenced_column,
-        fkc.name as constraint_name
+        fkc.name as constraint_name,
+        fkc.is_not_trusted,
+        fkc.is_disabled
       FROM sys.foreign_key_columns fk
       INNER JOIN sys.foreign_keys fkc ON fk.constraint_object_id = fkc.object_id
       INNER JOIN sys.tables t ON fk.parent_object_id = t.object_id
@@ -562,6 +565,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       INNER JOIN sys.schemas rs ON rt.schema_id = rs.schema_id
       INNER JOIN sys.columns rc ON fk.referenced_object_id = rc.object_id AND fk.referenced_column_id = rc.column_id
       WHERE s.name = '${schemaName}' AND t.name = '${tableName}'
+      ORDER BY fkc.name, fk.constraint_column_id
     `;
 
     const result = await this.executeQuery<{
@@ -570,18 +574,23 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       referenced_table: string;
       referenced_column: string;
       constraint_name: string;
+      is_not_trusted: boolean;
+      is_disabled: boolean;
     }>(query);
 
     if (!result.success || !result.data) {
       return [];
     }
 
+    // A constraint created or re-enabled WITH NOCHECK is "not trusted": rows that existed then were never checked.
     return result.data.map(row => ({
       columnName: row.column_name,
       referencedSchema: row.referenced_schema,
       referencedTable: row.referenced_table,
       referencedColumn: row.referenced_column,
-      constraintName: row.constraint_name
+      constraintName: row.constraint_name,
+      isTrusted: !row.is_not_trusted && !row.is_disabled,
+      isDisabled: row.is_disabled === true
     }));
   }
 
@@ -649,12 +658,15 @@ export class SQLServerDriver extends BaseAutoDocDriver {
 
     if (result.success && result.data && result.data.length > 0) {
       const row = result.data[0];
-      const totalCount = row.total_count || 1;
+      // An empty table has 0 rows, not 1: the old `|| 1` made every empty table look like a one-row table.
+      const totalCount = Number(row.total_count) || 0;
+      const distinctCount = Number(row.distinct_count) || 0;
+      const nullCount = Number(row.null_count) || 0;
       return {
-        distinctCount: row.distinct_count,
-        uniquenessRatio: row.distinct_count / totalCount,
-        nullCount: row.null_count,
-        nullPercentage: (row.null_count / totalCount) * 100,
+        distinctCount,
+        uniquenessRatio: totalCount > 0 ? distinctCount / totalCount : 0,
+        nullCount,
+        nullPercentage: totalCount > 0 ? (nullCount / totalCount) * 100 : 0,
         totalCount
       };
     }
@@ -948,6 +960,33 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         SampledValues: Number(row.sampled_values),
         MatchedValues: Number(row.matched_values)
       };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    }
+  }
+
+  /**
+   * Run one read-only statement for the data quality probes.
+   *
+   * `SET LOCK_TIMEOUT` stops the statement waiting on another session's lock; the client-side
+   * deadline bounds the wait for everything else. As in {@link ProbeJoinContainment}, `mssql` has
+   * no per-request timeout, so a statement that overruns the deadline keeps running on the server
+   * until it finishes; the probe statements carry `OPTION (MAXDOP 1)` to keep that cost small.
+   */
+  public override async ExecuteBounded<T extends Record<string, unknown>>(sqlText: string, timeoutMs: number): Promise<BoundedQueryOutcome<T>> {
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no SQL Server connection pool available' };
+      }
+      const bound = Math.max(1, Math.floor(timeoutMs));
+      const result = await withDeadline(this.pool.request().query<T>(`SET LOCK_TIMEOUT ${bound};\n${sqlText}`), bound);
+      if (result === TIMED_OUT) {
+        return { Ok: false, Reason: 'probe exceeded its timeout' };
+      }
+      return { Ok: true, Rows: result.recordset ?? [] };
     } catch (error) {
       return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
     }
