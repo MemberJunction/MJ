@@ -1,5 +1,7 @@
 # @memberjunction/ng-ui-components
 
+## 6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

@@ -183,16 +183,17 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   }
 
   /**
-   * Load queries the current user can run, from the provider's QueryEngine (loaded here if it
-   * has not loaded yet). A query is runnable when the user holds its run permission and, for a
-   * query without explicit permission rows, can read every entity it references.
-   * These are the candidates surfaced for #query mentions.
+   * Load Approved queries the current user can run, from the provider's QueryEngine (loaded here
+   * if it has not loaded yet). A query is runnable when the user holds its run permission and, for
+   * a query without explicit permission rows, can read every entity it references. Pending queries
+   * are drafts (for example one saved from a conversation so a list can refresh from it) and are
+   * not offered. These are the candidates surfaced for #query mentions.
    */
   private async loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): Promise<MJQueryEntityExtended[]> {
     try {
       const engine = this.queryEngineFor(provider);
       await engine.Config(false, user, provider);
-      return engine.Queries.filter(query => this.userCanRunQuery(query, user));
+      return engine.Queries.filter(query => query.Status === 'Approved' && this.userCanRunQuery(query, user));
     } catch (error) {
       console.error('Failed to load queries for mention autocomplete:', error);
       return [];

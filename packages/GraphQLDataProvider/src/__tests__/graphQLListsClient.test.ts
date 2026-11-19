@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Kind, parse, type FragmentDefinitionNode } from 'graphql';
 
 import { GraphQLListsClient } from '../graphQLListsClient';
 
@@ -355,3 +356,45 @@ function makeMinimalDelta() {
     DeltaToken: 'tok',
   };
 }
+
+describe('GraphQLListsClient.CreateListFromQuery', () => {
+  const reply = {
+    CreateListFromQuery: {
+      Success: true,
+      ResultCode: 'SUCCESS',
+      Message: 'Materialized list with 2 member(s)',
+      CreatedListId: 'list-1',
+      AddedCount: 2,
+      RemovedCount: 0,
+      FailedCount: 0,
+      Errors: [],
+      SourceQueryID: 'q-1',
+      SourceQueryName: 'Active members',
+      SavedNewQuery: true,
+      Refreshes: true,
+      StaticReason: null,
+    },
+  };
+
+  it('spreads only fragments declared on CreateListFromQueryResult, its own GraphQL type', async () => {
+    const { provider, calls } = makeProvider(reply);
+    await new GraphQLListsClient(provider as never).CreateListFromQuery({ ListName: 'L', SQL: 'SELECT 1', RefreshMode: 'Additive' });
+
+    const fragments = parse(calls[0].query).definitions.filter((d): d is FragmentDefinitionNode => d.kind === Kind.FRAGMENT_DEFINITION);
+    const resultFragment = fragments.find((f) => f.name.value === 'CreateListFromQueryResultFields');
+    expect(resultFragment?.typeCondition.name.value).toBe('CreateListFromQueryResult');
+    expect(fragments.map((f) => f.typeCondition.name.value)).not.toContain('ApplyListResultType');
+  });
+
+  it('sends Parameters as JSON and reads the query it linked', async () => {
+    const { provider, calls } = makeProvider(reply);
+
+    const result = await new GraphQLListsClient(provider as never).CreateListFromQuery({
+      ListName: 'L', QueryID: 'q-1', Parameters: { Year: 2026 }, RefreshMode: 'Sync', AutoRefresh: true,
+    });
+
+    expect(calls[0].variables.input).toMatchObject({ ListName: 'L', QueryID: 'q-1', ParametersJSON: '{"Year":2026}', RefreshMode: 'Sync', AutoRefresh: true });
+    expect(result).toMatchObject({ Success: true, CreatedListId: 'list-1', SourceQueryID: 'q-1', SavedNewQuery: true, Refreshes: true });
+    expect(result.StaticReason).toBeUndefined();
+  });
+});

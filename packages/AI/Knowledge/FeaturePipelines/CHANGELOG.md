@@ -1,5 +1,78 @@
 # @memberjunction/feature-pipelines
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 13a71da: Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
+  - Business Central posts to the connection's `ExternalSystemID` only, reads its Credential through `CredentialEngine`, and takes `AuthorityHost` from the Credential within an Entra ID allow list. A connection that kept its company only on the Credential must now set `ExternalSystemID`. QuickBooks `GetGLEntries` filters by `DocumentNumber`.
+  - Dropbox `ListObjects` returns every page and `SearchFiles` pages with a real cursor (`FileSearchOptions.pageToken`); Apollo retries a 429 with `Retry-After` up to 120 s.
+  - MS Graph `ForwardMessage` reads the mailbox from `ContextData.Email`; received messages carry `Direction` and `BCCRecipients`.
+  - Notification email/SMS go through `NOTIFICATION_EMAIL_PROVIDER` / `NOTIFICATION_SMS_PROVIDER` or `notifications.emailProvider` / `smsProvider` in `mj.config.cjs`; malformed `SecondaryScopes` rows are skipped and refused at save; uncached recipients get their roles read.
+  - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
+  - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
+  - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+  - Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
+
+### Patch Changes
+
+- 236ecf3: Agent payload artifact versions carry their artifact type's concrete ContentType as MimeType (null for wildcard types), so preview plugins can match on content type (#4597). The Recent/All note path injects Provisional notes again, matching the semantic path, and the dead SQL note-scoping builders are removed (#1934). Feature value cache entries clamp KeyDisplay to the column's length so long keys are cached instead of failing to save (#4917).
+- 116cb9a: Tests: raise tight wall-clock bounds on pathological-input checks (TextToolLibrary ReDoS, template, RouteScrubber, FeaturePipelines numeric coercion) to 500–2000 ms, and the conversations pre-discovery "returns without waiting" checks from 5/15 ms to 45 ms (still below the fake worker's 50 ms delay). They guard against catastrophic backtracking or waiting, not machine speed; v6.3.0-edge.0's publish gate failed a 200 ms bound at 211 ms on a CI runner.
+- Updated dependencies [d4350c0]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/record-set-processor-base@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes
