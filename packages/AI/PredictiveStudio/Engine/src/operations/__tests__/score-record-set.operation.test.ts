@@ -82,13 +82,13 @@ describe('PredictiveStudioScoreRecordSetServerOperation — a completed run', ()
     expect(ctx.Progress.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('with a binding passes bindingId, asOfDate and entityMapping, and returns no predictions when it wrote', async () => {
+  it('with a binding passes bindingId and asOfDate (no entity mapping exists: FM-15), and returns no predictions when it wrote', async () => {
     const runner = new MockRunner(completed(3));
     const result = await new TestableScoreOp(runner).ExecuteServer(
-      { modelId: 'm1', bindingId: 'b1', asOfDate: '2026-03-01', entityMapping: { entity: 'Memberships', id: 'x1' }, scope: { viewId: 'v1' } },
+      { modelId: 'm1', bindingId: 'b1', asOfDate: '2026-03-01', scope: { viewId: 'v1' } },
       new CapturingContext(),
     );
-    expect([runner.LastRequest?.bindingId, runner.LastRequest?.asOfDate, runner.LastRequest?.entityMapping]).toEqual(['b1', '2026-03-01', { entity: 'Memberships', id: 'x1' }]);
+    expect([runner.LastRequest?.bindingId, runner.LastRequest?.asOfDate, runner.LastRequest ? Object.keys(runner.LastRequest).includes('entityMapping') : null]).toEqual(['b1', '2026-03-01', false]);
     expect(result.Output?.written).toBe(3);
     expect(result.Output?.predictions).toBeUndefined();
   });

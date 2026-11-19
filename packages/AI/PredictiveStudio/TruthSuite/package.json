@@ -17,6 +17,7 @@
     "truth:loom": "node scripts/fetch-loom.mjs",
     "truth:data": "tsx src/data/cli.ts",
     "truth:provision": "node scripts/provision.mjs",
+    "truth:load-c1": "tsx scripts/load-c1-corpus.ts",
     "truth:sidecar": "tsx scripts/sidecar.mts",
     "setup:python": "node scripts/setup-python.mjs"
   },

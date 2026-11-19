@@ -3,7 +3,7 @@
  * MJAPI. Run after `truth:provision`, with MJAPI running and the repo env file sourced; restart MJAPI afterwards so it
  * reads the changed field metadata.
  *
- *   tsx scripts/load-c1-corpus.ts
+ *   pnpm run truth:load-c1   (tsx scripts/load-c1-corpus.ts)
  */
 import { ScriptRunner } from './script-runner';
 import { TruthConnection } from '../src/db/connection';

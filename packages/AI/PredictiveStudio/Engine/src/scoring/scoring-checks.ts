@@ -74,14 +74,15 @@ export class ScoringChecks {
   }
 
   /**
-   * Check 3, the scope entity: it is the model's entity (its unit's row entity, else its target entity) and the
-   * binding's target entity, or the request carries a persisted `EntityMapping`. Names compare trimmed and
-   * case-insensitively, as metadata names do. Pure.
+   * Check 3, the scope entity: it is the model's entity (its unit's row entity, else its target entity) and, on the
+   * binding path, the binding's target entity; nothing else admits a scope (FM-15: a scope over another entity would
+   * be assembled from the model's own rows by key). Names compare trimmed and case-insensitively, as metadata names
+   * do. Pure.
    */
-  public static ScopeEntity(scopeEntity: string, modelEntity: string, bindingEntity: string | null, hasEntityMapping: boolean): ScoringRefusal | null {
+  public static ScopeEntity(scopeEntity: string, modelEntity: string, bindingEntity: string | null): ScoringRefusal | null {
     const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
     if (bindingEntity !== null && !same(scopeEntity, bindingEntity)) return { kind: 'scope-entity-mismatch', modelEntity: bindingEntity, scopeEntity };
-    if (hasEntityMapping || same(scopeEntity, modelEntity)) return null;
+    if (same(scopeEntity, modelEntity)) return null;
     return { kind: 'scope-entity-mismatch', modelEntity, scopeEntity };
   }
 

@@ -63,7 +63,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
 
     const outcome = await ScoreRecordSetViaRunner(
       {
-        modelId: input.modelId, bindingId: input.bindingId, scope, asOfDate: input.asOfDate, entityMapping: input.entityMapping,
+        modelId: input.modelId, bindingId: input.bindingId, scope, asOfDate: input.asOfDate,
         dryRun: input.dryRun === true, contextUser: user, provider,
       },
       this.runner(),

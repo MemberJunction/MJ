@@ -107,6 +107,18 @@ describe('ScoringService.Score — refusals', () => {
     expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'scope-entity-mismatch' } });
   });
 
+  it('refuses a model-path call on a unit model whose scope is not its row entity, whatever the request names as a mapping (FM-15)', async () => {
+    const other = { kind: 'record-ids' as const, entity: 'MJ: Authorizations', ids: ['x'] };
+    const service = new ScoringService({ ...ctx(), Path: 'predict' });
+    const mapped = await service.Predict({ ...world.RequestFor(published.ID, other), EntityMapping: { entity: 'MJ: Authorizations', id: 'map-1' } });
+    const unmapped = await service.Predict(world.RequestFor(published.ID, other));
+    expect([mapped.Result, unmapped.Result]).toMatchObject([
+      { Status: 'refused', Reason: { kind: 'scope-entity-mismatch', scopeEntity: 'MJ: Authorizations' } },
+      { Status: 'refused', Reason: { kind: 'scope-entity-mismatch', scopeEntity: 'MJ: Authorizations' } },
+    ]);
+    expect([mapped.Rows.length, runs.Last()]).toMatchObject([0, { Status: 'refused', EntityMapping: null }]);
+  });
+
   it('refuses an artifact whose bytes changed and records the model\'s ArtifactStatus', async () => {
     world.Artifacts.Set(`file-${published.ID}`, new TextEncoder().encode('tampered'));
     expect(await new ScoringService(ctx()).Score(binding, scope, asOf, false)).toMatchObject({ Status: 'refused', Reason: { kind: 'artifact-hash-mismatch' } });

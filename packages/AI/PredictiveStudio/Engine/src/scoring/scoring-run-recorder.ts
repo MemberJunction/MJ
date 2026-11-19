@@ -9,7 +9,7 @@
  */
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLScoringRunEntity } from '@memberjunction/core-entities';
 import { IsValidUUID } from '@memberjunction/global';
-import type { Actor, EntityRef, ReadPolicy, ScoringResult, ScoringScope } from '@memberjunction/predictive-studio-core';
+import type { Actor, ReadPolicy, ScoringResult, ScoringScope } from '@memberjunction/predictive-studio-core';
 
 import type { ScoringContext } from './scoring-context';
 
@@ -17,7 +17,6 @@ import type { ScoringContext } from './scoring-context';
 export interface ScoringRunRequestFields {
   /** The run row's ID, when the caller chose it. */
   readonly ID?: string;
-  readonly EntityMapping?: EntityRef | null;
   readonly ReadPolicy?: ReadPolicy;
   readonly RequestedBy?: Actor;
 }
@@ -100,7 +99,7 @@ export class ScoringRunRecorder {
     run.ScopeKind = scope.kind;
     run.ScopeEntityID = scopeEntity.ID;
     run.Scope = JSON.stringify(scope);
-    run.EntityMapping = request.EntityMapping ? JSON.stringify(request.EntityMapping) : null;
+    run.EntityMapping = null; // no scope is mapped onto another entity (FM-15); the column is kept for older rows
     run.AsOfDate = asOf;
     run.ReadPolicy = JSON.stringify(request.ReadPolicy || { mode: 'complete' });
     run.DryRun = dryRun;

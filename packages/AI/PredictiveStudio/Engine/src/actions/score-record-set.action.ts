@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import type { PredictiveStudioScoredPrediction } from '@memberjunction/core-entities';
-import type { EntityRef, ScoringResult } from '@memberjunction/predictive-studio-core';
+import type { ScoringResult } from '@memberjunction/predictive-studio-core';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { BuildScoreRecordSetRunner } from '../operations/delegation';
@@ -54,8 +54,6 @@ export interface ScoreRecordSetRequest {
   scope: ScoreRecordSetScope;
   /** ISO date the scope is scored as of; the run date when omitted. */
   asOfDate?: string;
-  /** The stored row mapping the scope's entity onto the model's entity, when they differ. */
-  entityMapping?: EntityRef;
   /** Score and record the run, but write no Feature Value and no column. */
   dryRun?: boolean;
   contextUser?: UserInfo;

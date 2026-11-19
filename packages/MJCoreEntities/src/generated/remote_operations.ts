@@ -724,18 +724,8 @@ export interface PredictiveStudioScoreRecordSetInput {
     scope: PredictiveStudioScoringScope;
     /** The date the scope is scored as of (ISO); the run date when omitted. Only a model trained on a Prediction Unit scores an earlier date. */
     asOfDate?: string;
-    /** The stored row that maps the scope's entity onto the model's entity, when they differ. */
-    entityMapping?: PredictiveStudioEntityRef;
     /** Score and record the run, but write no Feature Value and no column. */
     dryRun?: boolean;
-}
-
-/** A reference to a stored row: its entity name and ID. */
-export interface PredictiveStudioEntityRef {
-    /** The entity's name. */
-    entity: string;
-    /** The row's ID. */
-    id: string;
 }
 
 /** One record's prediction, returned when nothing was written (no binding, or a dry run). */
@@ -2538,7 +2528,7 @@ export class PredictiveStudioScoreRecordSetOperation extends BaseRemotableOperat
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_ff9fc192aaad50ac";
+    public readonly ContractFingerprint = "ro_fp_34bc7e11dc9d8b9f";
 }
 
 // ============================================================

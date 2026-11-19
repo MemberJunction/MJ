@@ -4,7 +4,8 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, rmSync } from 'node:fs';
-import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import { MLSidecar, SidecarError } from '@memberjunction/predictive-studio-sidecar';
+import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { MJSidecarTrainer, type ITrainerEvaluator } from '@memberjunction/predictive-studio';
 import { TruthSuite } from '../truth-suite';
 import { SuiteSidecarFiles } from './sidecar-files';
@@ -50,6 +51,11 @@ export interface SidecarRestartDeps {
   IsHealthy(url: string): Promise<boolean>;
 }
 
+/** One `/predict` call made straight to the suite sidecar: its answer, or the status and body it refused with. */
+export type SuitePredictOutcome =
+  | { readonly Status: 200; readonly Response: PredictResponse; readonly Body: null }
+  | { readonly Status: number; readonly Response: null; readonly Body: string };
+
 /** `TruthHarness.UseSuiteSidecar`, the gate fixture's default, the suite sidecar's trainer and its restart. */
 export class HarnessSidecar {
   /** Where the truth sidecar writes its URL when it starts (`pnpm run truth:sidecar`). */
@@ -89,6 +95,24 @@ export class HarnessSidecar {
     const url = HarnessSidecar.suiteUrl();
     if (url !== null) process.env[SIDECAR_URL_VARIABLE] = url;
     return url;
+  }
+
+  /**
+   * POSTs `req` to the suite sidecar's `/predict` (remote mode: no child process is started), bypassing every product
+   * layer: a gate compares what the product shows with what the artifact itself answers, or sends a request the
+   * product would never build. A non-2xx answer is returned with its status and body, never thrown.
+   *
+   * @throws when the sidecar's URL file is missing, or the call fails without an HTTP answer
+   */
+  public static async SuitePredict(req: PredictRequest): Promise<SuitePredictOutcome> {
+    const sidecar = new MLSidecar({ url: HarnessSidecar.UseSuiteSidecar() });
+    await sidecar.Start();
+    try {
+      return { Status: 200, Response: await sidecar.Predict(req), Body: null };
+    } catch (e) {
+      if (e instanceof SidecarError) return { Status: e.Status, Response: null, Body: e.Body };
+      throw e;
+    }
   }
 
   /** A trainer on the sidecar at `url` (remote mode: no child process is started). */

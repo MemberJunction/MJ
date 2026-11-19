@@ -1497,11 +1497,11 @@ texts are unchanged.
 | G3.9 | `W9 → S9.5` | W9 | S9.5 | on W9-multiclass s42, the probability displayed for the named class equals the artifact's `predict_proba` column for that class on 20 of 20 sampled rows | — | — | M5 |
 | G3.10 | `C3 → S9.5` | C3 | S9.5 | `SemanticsCheck` passes for 3 of 3 classes (UI label, At-Risk sort and class list match the artifact's class order and polarity), and a binding that swaps the adverse class is refused, 1 of 1 | — | — | M4 |
 | G3.11 | `W1 → C1.2` | W1 | C1.2 | an agent tool call that writes a gate threshold, a margin, a leakage flag or the holdout policy is refused, 4 of 4 | — | — | M3 |
-| G5.1 | `R1 → S7.3` | R1 | S7.3 | scoring the R1 model on a copy table with `DistanceZ` renamed is refused with an error naming the column and writes 0 rows, 1 of 1 (FM-15; today the value is read from the training table) | the value is read from the training table | — | M5 |
+| G5.1 | `R1 → S7.3` | R1 | S7.3 | scoring the R1 model on a copy table with `DistanceZ` renamed is refused with an error naming the scope entity and writes 0 rows, 1 of 1 (FM-15; today the value is read from the training table; D4-164) | the value is read from the training table | — | M5 |
 | G5.2 | `W1 → S7.3 #2` | W1 | S7.3 | `/predict` with a renamed feature for a W1-signal s42 model returns 400 naming the feature, and a model with no stored schema is refused, 2 of 2 (T16(b)) | — | — | M5 |
 | G5.3 | `R1 → S7.4` | R1 | S7.4 | over 20 scoring calls on the R1 model, 20 of 20 create an `MJ: ML Scoring Runs` row, and 100% of written scores carry model ID, artifact hash, scoring-run ID and as-of date (FM-16; ProcessRun stays 25 → 25 today) | nothing is recorded | — | M5 |
 | G5.4 | `C1 → S7.4` | C1 | S7.4 | every score row from a scenario C1 scoring run carries the four lineage fields and each resolves to an existing record, 100% | — | — | M5 |
-| G5.5 | `W1 → S7.5 #3` | W1 | S7.5 | with an all-null feature column injected into W1-signal s42 scoring input, the run ends Failed with a failure count and message, 1 of 1, and writes 0 scores | — | — | M5 |
+| G5.5 | `W1 → S7.5 #3` | W1 | S7.5 | with an all-null feature column injected into W1-signal s42 scoring input (in-process `ScoringService.Predict`, the model runtime wrapped), the run is refused `nan-or-empty-feature-column` naming the column, with its message, 1 of 1, and writes 0 scores (D4-162) | — | — | M5 |
 | G5.6 | `C1 → S7.4 #2` | C1 | S7.4 | on scenario C1, publishing the renewal model and creating its scoring binding (`FeatureName`, `ViewAuthorizationID`, no `TargetColumn`) changes 0 rows of `sys.columns` and runs no migration or CodeGen; one scoring run writes an `MJ: Feature Values` row (`Source = 'Model'`) carrying `MLModelScoringBindingID`, `MLModelID`, `MLScoringRunID` and `EffectiveAsOf` for 100% of scored records; after the refresh `MJ: Latest Feature Values` holds each of them; the generic record panel on a scored Person shows the prediction with its lineage to a user holding the binding's view authorization, 1 of 1, and shows nothing to a user without it, 1 of 1 (added, D-058, D-060; not a P11 gate) | a score reaches a record only through a column added by migration and CodeGen (D-058 audit) | — | M5b |
 | G6.1 | `D1c → S8.1` | D1c | S8.1 | after D1c's later periods load, every prediction whose label window has closed has a joined outcome row, 100% | — | — | M6 |
 | G6.2 | `D1r → S8.2` | D1r | S8.2 | a per-period row with RMSE and its 95% bounds exists for 100% of labelled periods, and every post-shift period's RMSE lies above the pre-shift period's upper bound | — | — | M6 |
@@ -1577,14 +1577,14 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G3.6:** skip `WritePublishRecord` when the approver is `automated-gate` → `ps-gate-c1-s9-1` finds a `Published` model with no publish record (below 100%). As run at M4 (D4-125): on M4's tree every publish the suite can make is interactive, so the `automated-gate` skip stays green until M4b's `AutomatedPublisher` exists; M4's §11 records the same skip for the `user` approver (red, 0 of 1), and the `automated-gate` variant is run at M4b, where G3.6 is re-checked.
 **Mutation check G3.7:** restore `score × 0.98` as the story's cross-validation figure → `ps-gate-c1-s9-2` finds a sampled number that does not recompute from its stored row.
 **Mutation check G3.8:** re-add the canned "Trained with honest holdout evaluation" line to the agent report → `ps-gate-w1-s9-2` counts 1 fixed sentence (expected 0).
-**Mutation check G3.9:** index the probability vector by sorted class name instead of the artifact's `classOrder` → `ps-gate-w9-s9-5` matches fewer than 20 of 20 sampled rows.
+**Mutation check G3.9:** index the probability vector by the class names in reverse sorted order instead of the artifact's `classOrder` (the sorted order equals W9's artifact order, so a plain sort is a no-op there; D4-162) → `ps-gate-w9-s9-5` matches fewer than 20 of 20 sampled rows (measured 2 of 20).
 **Mutation check G3.10:** remove the adverse-class comparison from Core's `SemanticsRules.CheckRow` (`semantics-rules.ts:147`, the label/adverse-class check; amended at M4's exit per the M4.2 review's finding 3 — `SemanticsChecker.Run` holds no such comparison) → `ps-gate-c3-s9-5` fails "swapped binding refused, 1 of 1".
 **Mutation check G3.11:** drop the agent-actor refusal for the protocol's `margin` field → `ps-gate-w1-c1-2` counts 3 of 4 refused.
-**Mutation check G5.1:** remove the input-schema check (C6 check 2) from `ScoringService` → `ps-gate-r1-s7-3` sees rows written and no error naming `DistanceZ`.
+**Mutation check G5.1:** skip check 3's `scope-entity-mismatch` refusal in `ScoringService.RunChecksBeforeAssembly` → `ps-gate-r1-s7-3` sees the copy scored (25 written, run completed) and no refusal (D4-164).
 **Mutation check G5.2:** restore the `/predict` fallback to `output_columns` when `feature_schema` is absent → `ps-gate-w1-s7-3-2` gets 200 instead of 400, 1 of 2.
 **Mutation check G5.3:** write `MLScoringRun.ArtifactSha256` as null on the Score Record Set path → `ps-gate-r1-s7-4`'s lineage join finds 0% of rows with the run's hash equal to the model's.
 **Mutation check G5.4:** write `EffectiveAsOf` as the write time instead of the run's normalised as-of instant → `ps-gate-c1-s7-4` finds `MLScoringRun.AsOfDate` ≠ `EffectiveAsOf` on every row.
-**Mutation check G5.5:** remove the empty-column refusal (C6 check 6) → `ps-gate-w1-s7-5-3` sees the run `completed` with scores written.
+**Mutation check G5.5:** remove the empty-column refusal (C6 check 6) → `ps-gate-w1-s7-5-3` sees the run `completed` with 200 predictions.
 **Mutation check G5.6:** remove the view-gate filter from one role's read permission on `MJ: Latest Feature Values` → `ps-gate-c1-s7-4-2` fails "shows nothing to a user without it, 1 of 1".
 **Mutation check G6.1:** join outcomes to the latest `Model` row per record instead of the row as of each period → `ps-gate-d1c-s8-1` finds closed-window predictions without a joined outcome (below 100%).
 **Mutation check G6.2:** store the point RMSE with `PrimaryLower`/`PrimaryUpper` null → `ps-gate-d1r-s8-2` fails "a row with RMSE and its 95% bounds for 100% of labelled periods".
@@ -6738,7 +6738,7 @@ passes `BindingID`; `HarnessScoring.Binding(h, modelId, featureName)` creates a 
 **Interfaces:** §4.1a rows G5.1–G5.5 and G3.9 (row, `mutation` · `client`, suite Scoring, check file, breaking scenario,
 mutation check), shipped in one commit (D-064); G5.3/G5.4 assert §4.1's single-join lineage read
 
-- [ ] Step 1: Write the checks. G5.1 — the R1 model scored on a copy table with `DistanceZ` renamed is refused naming
+- [x] Step 1: Write the checks. G5.1 — the R1 model scored on a copy table with `DistanceZ` renamed is refused naming
   the column with 0 rows written, 1 of 1; G5.2 — `/predict` with a renamed feature for a W1-signal s42 model returns 400
   naming it, and a model with no stored schema is refused, 2 of 2; G5.3 — 20 Score Record Set calls with a `BindingID`
   on the R1 model leave 20 run rows and 100% of their `Model` rows complete by `ScoringLineage.Complete`; G5.4 — every
@@ -6762,15 +6762,15 @@ mutation check), shipped in one commit (D-064); G5.3/G5.4 assert §4.1's single-
     });
   },
   ```
-- [ ] Step 2: Run each with its §4.1a mutation applied (`**Mutation check G5.1:**` … `**Mutation check G3.9:**`):
+- [x] Step 2: Run each with its §4.1a mutation applied (`**Mutation check G5.1:**` … `**Mutation check G3.9:**`):
   `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → each fails as
   its breaking scenario says; paste each failing assertion into §11 as `**Mutation output G5.1:**` …
   `**Mutation output G3.9:**`.
-- [ ] Step 3: Restore.
-- [ ] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Scoring"`
+- [x] Step 3: Restore.
+- [x] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Scoring"`
   → 6 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed (total measured
   at M5).
-- [ ] Step 5: The bundles' teardown deletes their `PSTruth:` models (`RunFixtures.CleanupRun`, which deletes their
+- [x] Step 5: The bundles' teardown deletes their `PSTruth:` models (`RunFixtures.CleanupRun`, which deletes their
   bindings and `Model` rows by pipeline after Task M5.4), so the evidence is the logged measurement: G5.3's line shows
   `"runRows":20` and `"complete"` equal to `"rows"`, G3.9's `20` of `20`; the lines are pasted into §11.
 
@@ -10286,6 +10286,38 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Step 3 runs `mj codegen --skipdb` after the push to emit the accessors. Step 4's grep counts 5, because the array
   field emits `JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>`; with the array form the six typed accessors are
   all present. Step 5: 6 rows.
+- **D4-162 · M5.10 as built** (M5.10 report and rulings round). G5.2 runs straight `/predict` calls on the truth sidecar
+  (`HarnessSidecar.SuitePredict`): the renamed half on the published W1-signal s42 v2 artifact (`EventsAttended` renamed
+  → 400 naming it; unrenamed control 200), the no-schema half on a legacy v1 envelope built as
+  `truthsuite.judges.legacy_envelope` builds it (no request schema → 400 "no stored feature schema"; with its schema
+  200); nothing is stored. G5.3 scores 20 disjoint 25-row slices serially through a test binding
+  (`HarnessScoring.Binding` → `ScoringBindings.Upsert`, target the unit's row entity). G5.4 trains C1 on the reference
+  assembly and protocol (the PeriodIndex-only renewal pipeline trains no model) and scores `PS Truth: C1DuesPeriod`.
+  `ScoringLineage.Read` is one `RunViews` (Feature Values, runs, and models through a subquery on the runs' `ModelID`)
+  joined by `IndexByUUID`; `Complete` also requires the run to be the row's model's. G5.5 injects the all-null `IncomeK`
+  column through a wrapped model runtime on an in-process `ScoringService.Predict` (the binding path's batch write needs
+  a server transaction); the service refuses `nan-or-empty-feature-column` (check 6), it does not end `failed`. G3.9's
+  displayed probability is Score Record Set's `score` for its `class`, compared with the artifact's own `/predict`
+  vector at the class's position in its `classOrder`; the plan's sorted-name mutation is a no-op on W9, so the
+  reversed-order variant proves the gate. The gates' setup is `truth:provision` then `truth:load-c1` (the C1 corpus and
+  the immutable-field declarations), both named in the Scoring and Registry-and-Gate suite descriptions (M5.10 review
+  I1).
+- **D4-163 · FM-15 closed by removing `entityMapping`** (owner ruling 2026-11-19). Score Record Set no longer takes
+  `entityMapping`: it is gone from the op input (with `PredictiveStudioEntityRef`), the Action request, the runner and
+  the op. Check 3 (`ScoringChecks.ScopeEntity`) admits only the model's entity (its unit's row entity, else its target
+  entity) and, on the binding path, the binding's target. Before, a non-null mapping admitted any scope and a unit model
+  then assembled the scope's keys from its own row entity — a copy table scored from the training table, with nothing
+  reading the mapping. Core's `ScoringRequest.EntityMapping` stays in the frozen contract (D-028) with every caller
+  passing null; `MJ: ML Scoring Runs.EntityMapping` stays and is always null. Proved by `scoring-service.test.ts ›
+  refuses a model-path call on a unit model whose scope is not its row entity… (FM-15)` (red before) and by G5.1.
+- **D4-164 · G5.1 on a provisioned copy table** (owner ruling 2026-11-19). `pstruth.Scn_R1Copy` (R1's columns,
+  `DistanceZ` → `DistanceZRenamed`) ships as `TruthSuite/migrations/V202611190100__pstruth_r1_copy.sql` with its
+  direct-SQL opt-ins (`.pstruth-copy-entities.json`), provisioned by `truth:provision` on both databases (the review
+  database's one provisioning step overrides its rows-only rule). The gate fills the copy
+  (`TruthHarness.FillRenamedCopy`), binds the published R1 unit model on it (`HarnessScoring.Binding(…, { EntityName
+  })`) and scores 25 records: check 3 refuses `scope-entity-mismatch` naming the copy entity, the run `refused`, 0 rows
+  and 0 Feature Values. The copy's rows persist between runs, like every pstruth dataset, refilled each run (entities
+  509 → 510).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -12211,6 +12243,26 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   the batch's own provider, M4, M5) re-reviewed Spec ✅ / Quality Approved (`task-M5.6-11-rereview.md`). Minor R1 (M2's
   test does not build four batches on one shared provider) and the parked Minors go to the M5 exit batch. The challenger
   run's timing (866 s on a loaded host) is re-measured at the M5 exit.
+
+### 2026-11-19 — Task M5.10 (scoring gates G5.1–G5.5, G3.9; FM-15 closed) — Claude (Opus 5.5)
+
+- Six gates in `Predictive Studio Gates — Scoring` (D4-162); `entityMapping` removed from Score Record Set (D4-163,
+  owner ruling); G5.1 on the provisioned `pstruth.Scn_R1Copy` (D4-164, owner ruling). Suite 6 passed / 0 failed on
+  `MJ_PS_PR4_claude` (implementer) and on `MJ_PS_PR4_review` (controller, after `truth:load-c1` there — M5.10 review I1:
+  the C1 corpus and immutable-field step was not named in the suite setup; now `pnpm run truth:load-c1`, in both suite
+  descriptions). Measurements: G5.1 `{"refused":1,"of":1,"refusalCode":"SCOPE_ENTITY_MISMATCH","storedWritten":0}`;
+  G5.3 `{"calls":20,"ok":20,"runRows":20,"rows":500,"complete":500}`; G5.4 `{"rows":6673,"complete":6673}`; G5.5
+  `{"status":"refused","emptyColumnNames":"IncomeK","storedWritten":0}`; G3.9 `{"matched":20,"of":20}`.
+- FM-15 test red before (`m510/r-red.log`), green after. Engine 1757, Core 533, integration-test-suite 1085, TruthSuite
+  161, root build 351/351 + 322/322, IT166 2/0/0, `check:guards`/`check:naming` clean. Review: Spec ✅ / Quality
+  Approved (`task-M5.10-review.md`); the reviewer's check-3 mutation and G5.5 mutation both red. Minor dead code
+  (`ScoringLineage.Rows`, `BindingOptions.Factory`) removed by the controller.
+**Mutation output G5.1:** (`RunChecksBeforeAssembly` returns the check-3 refusal only when it is not `scope-entity-mismatch`; Engine rebuilt, MJAPI restarted; m510/m51.log) `✗ ps-gate-r1-s7-3.G5.1: refused naming the scope entity, 0 of 1: 25 records of PS Truth: Scn_R1Copy (6000 R1 rows, DistanceZ renamed) through a binding of the R1 model scored 25, wrote 25; run row completed, 25 Feature Values` — FM-15 itself.
+**Mutation output G5.2:** (`main.py`: `feature_cols = … if req.feature_schema else list(fitted.get("output_columns") or [])`, sidecar restarted; m510/m52.log) `✗ ps-gate-w1-s7-3-2.G5.2: refused 1 of 2: renamed EventsAttended → 400 {"detail":"rows lack the model's feature columns: ['EventsAttended']; row columns the model's feature schema does not name: ['EventsAttendedRenamed']"} (unrenamed control 200 (5 predictions)); legacy model without a stored schema → 200 (3 predictions) (with its schema 200 (3 predictions))`
+**Mutation output G5.3:** (`ScoringRunRecorder.Close`: `run.ArtifactSha256 = run.Path === 'score-record-set' ? null : result.ArtifactSha256`; Engine rebuilt, MJAPI restarted; m510/m53.log) `✗ ps-gate-r1-s7-4.G5.3: 20 of 20 calls left an ML Scoring Runs row; 0 of 500 written scores (calls report 500) join to their run and model with the artifact hash and as-of date` — `firstGap: run hash null ≠ model hash 69b39219…4e6e`
+**Mutation output G5.4:** (`valuesParams`: `EffectiveAsOf: new Date()`; m510/m54.log) `✗ ps-gate-c1-s7-4.G5.4: 0 of 6673 score rows of the C1 run (6673 written of 6673 on PS Truth: C1DuesPeriod) carry the four lineage fields and resolve` — `firstGap: EffectiveAsOf … 19:22:39 ≠ AsOfDate … 19:00:00 (EST)`
+**Mutation output G5.5:** (`RunChecksAfterAssembly` returns `ScoringChecks.FeatureSchema(model, assembled)` only; m510/m55.log) `✗ ps-gate-w1-s7-5-3.G5.5: an all-null IncomeK column injected into the scoring input of 200 W1 rows: the run ended completed (), its stored row completed with Written 0, 0 Feature Values, 200 predictions: 0 of 1`
+**Mutation output G3.9:** the plan's mutation (`ModelValueRows.output`: `classOrder = [...c.ClassOrder].sort()`, m510/m39a.log) stays **green** `✓ … 20 of 20` — W9's artifact class order `Attended, Cancelled, NoShow` is already name-sorted, so indexing by sorted name is the same index. Variant run (`[...c.ClassOrder].sort().reverse()`, "class order not the artifact's", m510/m39b.log): `✗ ps-gate-w9-s9-5.G3.9: 2 of 20 sampled W9 rows show the artifact's predict_proba column for the named class (artifact class order Attended, Cancelled, NoShow)` — `firstMiss: c4a8ca6a-… NoShow: shown 0.685348414557037 vs artifact 0.1928157946874542`.
 
 ## 12. Refresh log (append-only)
 

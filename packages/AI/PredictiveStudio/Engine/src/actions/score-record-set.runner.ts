@@ -62,7 +62,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       return ProductionScoreRecordSetRunner.completed(result, request.dryRun === true ? service.ScoredRows() : []);
     }
     const predicted = await service.Predict({
-      ScoringRunID: '', ModelID: model.ID, Scope: scope, EntityMapping: request.entityMapping || null, AsOfDate: asOf.toISOString(),
+      ScoringRunID: '', ModelID: model.ID, Scope: scope, EntityMapping: null, AsOfDate: asOf.toISOString(),
       Read: { mode: 'complete' }, DryRun: request.dryRun === true, RequestedBy: ScoringRunRecorder.RequestedBy(ctx),
     });
     return ProductionScoreRecordSetRunner.completed(predicted.Result, predicted.Rows);

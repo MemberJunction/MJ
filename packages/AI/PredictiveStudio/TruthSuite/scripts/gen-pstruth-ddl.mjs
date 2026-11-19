@@ -63,6 +63,8 @@ emit('GO');
 // The C1 corpus tables: their DDL is the hand-written migrations/V202610201300__pstruth_c1_corpus.sql, so they are not
 // printed above, but their entities take the same direct-SQL opt-in in their own metadata file.
 const C1_TABLES = ['C1Person', 'C1OrderHeader', 'C1DuesPeriod', 'C1NonduesLine', 'C1EventAttendance', 'C1CourseCompletion', 'C1Certification', 'C1CommitteeMembership'];
+// The copy tables: hand-written migrations/V202611190100__pstruth_r1_copy.sql (G5.1's R1 copy with DistanceZ renamed).
+const COPY_TABLES = ['Scn_R1Copy'];
 
 if (process.argv.includes('--metadata')) {
   const entitiesDir = path.join(root, 'metadata', 'entities');
@@ -83,7 +85,7 @@ if (process.argv.includes('--metadata')) {
       AllowDirectSQLDelete: true,
     },
   });
-  for (const [file, names] of [['.pstruth-entities.json', tables], ['.pstruth-c1-entities.json', C1_TABLES]]) {
+  for (const [file, names] of [['.pstruth-entities.json', tables], ['.pstruth-c1-entities.json', C1_TABLES], ['.pstruth-copy-entities.json', COPY_TABLES]]) {
     const records = names.map(entityRecord);
     writeFileSync(path.join(entitiesDir, file), `${JSON.stringify(records, null, 2)}\n`);
     console.log(`wrote ${records.length} entity records to metadata/entities/${file}`);

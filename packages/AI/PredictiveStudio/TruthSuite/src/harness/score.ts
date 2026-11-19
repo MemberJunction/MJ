@@ -1,5 +1,7 @@
-import { RunView, type RemoteOpResult } from '@memberjunction/core';
+import { RunView, type EntityInfo, type RemoteOpResult } from '@memberjunction/core';
 import {
+  type MJMLModelEntity,
+  type MJMLTrainingPipelineEntity,
   type MJProcessRunDetailEntity,
   type MJProcessRunEntity,
   PredictiveStudioCreateScoringProcessOperation,
@@ -9,12 +11,22 @@ import {
   type RecordProcessRunNowOutput,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
+import { MetadataEntityFactory, ScoringBindings, UnitModelLineageParser, type ScoringBindingInput } from '@memberjunction/predictive-studio';
 import { PredictiveStudioRefusalCodes } from '@memberjunction/predictive-studio-core';
 import type { RunContext } from './run-fixtures';
-import type { LoadedDataset, RecordProcessScoring, ScoreAttempt, ScoreRequest } from './types';
+import type { LoadedDataset, RecordProcessScoring, ScoreAttempt, ScoreRequest, TruthHarness } from './types';
 
 type PrdRow = Pick<MJProcessRunDetailEntity, 'RecordID' | 'Status' | 'ResultPayload' | 'ErrorMessage'>;
 type ProcessRunRow = Pick<MJProcessRunEntity, 'ID' | 'Status'>;
+/** The model columns a test binding is built from. */
+export type BindingModelRow = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Lineage'>;
+/** How {@link HarnessScoring.Binding} builds a test binding beyond its model and feature name. */
+export interface BindingOptions {
+  /** The binding's target entity; omitted: the entity the model's records are read from. */
+  readonly EntityName?: string;
+}
+/** The pipeline column a test binding falls back to for a model whose lineage names no unit. */
+type BindingPipelineRow = Pick<MJMLTrainingPipelineEntity, 'ID' | 'TargetEntity'>;
 const TERMINAL_RUN_STATUSES: ReadonlySet<MJProcessRunEntity['Status']> = new Set(['Completed', 'Failed', 'Cancelled']);
 /** The result codes GraphQLDataProvider.RouteOperation returns when the call itself failed, not the operation. */
 const TRANSPORT_DROP_CODES: ReadonlySet<string> = new Set(['TRANSPORT_ERROR', 'NO_RESPONSE']);
@@ -63,6 +75,70 @@ export class HarnessScoring {
       Status: runId === null ? null : refusalCode === 'SCORING_RUN_FAILED' ? 'failed' : 'refused',
       Total: counts ? Number(counts[2]) : 0, Written: 0, Failed: counts ? Number(counts[1]) : 0, Predictions: [], DurationMs: durationMs,
     };
+  }
+
+  /**
+   * Creates a test scoring binding of `modelId`'s pipeline through `ScoringBindings.Upsert` (the binding editor's
+   * writer): feature `featureName`, the seeded default view authorization (`ScoringBindings.ResolveViewAuthorizationID`,
+   * which the harness user holds, D4-153), no Record Process, no column, `OnDemand`. Its target entity is
+   * `options.EntityName` when given (G5.1 binds a copy entity the model was not trained on), else the entity a Score
+   * Record Set call of the model reads its records from ({@link BindingEntityName}). The binding is deleted with its
+   * pipeline by `RunFixtures.CleanupRun`. Returns the binding's ID.
+   *
+   * @throws when the model or its pipeline cannot be read, the entity is not in the provider's metadata, or the save fails
+   */
+  public static async Binding(h: Pick<TruthHarness, 'Provider' | 'User'>, modelId: string, featureName: string, options: BindingOptions = {}): Promise<string> {
+    const factory = new MetadataEntityFactory(h.Provider);
+    const model = await HarnessScoring.readBindingModel(h, modelId);
+    const entityName = options.EntityName || HarnessScoring.BindingEntityName(model, await HarnessScoring.pipelineTargetEntity(h, model));
+    const entity = h.Provider.EntityByName(entityName);
+    if (!entity) throw new Error(`HarnessScoring.Binding: the entity '${entityName}' of ML Model ${modelId} is not in the provider's metadata`);
+    const input = HarnessScoring.BindingInput(model, entity, featureName, ScoringBindings.ResolveViewAuthorizationID(null, h.Provider));
+    return (await ScoringBindings.Upsert(input, factory, h.User)).ID;
+  }
+
+  /**
+   * The entity a binding of the model scores: its Prediction Unit's row entity when its lineage names a unit (the
+   * entity Score Record Set reads a unit model's records from), else `pipelineTargetEntity`. Pure.
+   *
+   * @throws when the lineage names a unit but cannot be read, or the model has neither entity
+   */
+  public static BindingEntityName(model: BindingModelRow, pipelineTargetEntity: string | null): string {
+    if (UnitModelLineageParser.NamesUnit(model.Lineage)) {
+      const lineage = UnitModelLineageParser.ParseUnitModelLineage(model.Lineage);
+      if (lineage.Ok === false) throw new Error(`HarnessScoring.Binding: ML Model ${model.ID} names a Prediction Unit but its lineage cannot be read: ${lineage.Errors.join('; ')}`);
+      return lineage.Value.unitRowEntity;
+    }
+    if (!pipelineTargetEntity) throw new Error(`HarnessScoring.Binding: ML Model ${model.ID} names no unit and its pipeline ${model.PipelineID} no target entity`);
+    return pipelineTargetEntity;
+  }
+
+  /** The create input of a test binding of `model`'s pipeline on `entity`. Pure. */
+  public static BindingInput(model: BindingModelRow, entity: Pick<EntityInfo, 'ID'>, featureName: string, viewAuthorizationId: string): ScoringBindingInput {
+    return {
+      mlTrainingPipelineId: model.PipelineID, featureName, viewAuthorizationId, targetEntityId: entity.ID,
+      recordProcessId: null, targetColumn: null, targetColumnSource: null, mode: 'OnDemand',
+    };
+  }
+
+  /** The model row a binding is built from; throws when it is missing. */
+  private static async readBindingModel(h: Pick<TruthHarness, 'Provider' | 'User'>, modelId: string): Promise<BindingModelRow> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<BindingModelRow>({
+      EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['ID', 'PipelineID', 'Lineage'], ResultType: 'simple', BypassCache: true,
+    }, h.User);
+    const row = r.Success ? r.Results[0] : undefined;
+    if (row === undefined) throw new Error(`HarnessScoring.Binding: reading ML Model ${modelId} failed: ${r.ErrorMessage || 'no row'}`);
+    return row;
+  }
+
+  /** The model's pipeline's target entity name (null when it names none); throws when the pipeline cannot be read. */
+  private static async pipelineTargetEntity(h: Pick<TruthHarness, 'Provider' | 'User'>, model: BindingModelRow): Promise<string | null> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<BindingPipelineRow>({
+      EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID='${EscapeSQLString(model.PipelineID)}'`, Fields: ['ID', 'TargetEntity'], ResultType: 'simple', BypassCache: true,
+    }, h.User);
+    const row = r.Success ? r.Results[0] : undefined;
+    if (row === undefined) throw new Error(`HarnessScoring.Binding: reading ML Training Pipeline ${model.PipelineID} failed: ${r.ErrorMessage || 'no row'}`);
+    return row.TargetEntity;
   }
 
   /** The scoring run a refusal's message names (`… (scoring run <id>…`). */

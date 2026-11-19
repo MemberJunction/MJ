@@ -162,7 +162,7 @@ export class ScoringService {
     if (early !== null) return this.refuseWithoutModel(binding, scope, day, dryRun, early);
     const resolved = await this.ResolvePublishedModel(binding);
     if ('kind' in resolved) return this.refuseWithoutModel(binding, scope, day, dryRun, resolved);
-    const ready = await this.RunChecksBeforeAssembly(resolved, binding.TargetEntity, scope, day, false);
+    const ready = await this.RunChecksBeforeAssembly(resolved, binding.TargetEntity, scope, day);
     if (!('kind' in ready)) return null;
     const run = await this.OpenRun(resolved.Model, binding, scope, day, dryRun);
     return this.CloseRun(run, ScoringService.refused(run, resolved.Model.ID, ready));
@@ -179,7 +179,7 @@ export class ScoringService {
     if (model === null) throw new ModelNeedsTrainingError(`ScoringService.Predict: ML Model '${request.ModelID}' not found`);
     const resolved: ResolvedModel = { Model: model, Admission: model.Status === 'Unevaluated' && model.ServingWhileUnevaluated ? 'serving-while-unevaluated' : 'published' };
     const day = ScoringService.Normalize(new Date(request.AsOfDate));
-    const fields: ScoringRunRequestFields = { ID: request.ScoringRunID, EntityMapping: request.EntityMapping, ReadPolicy: request.Read, RequestedBy: request.RequestedBy };
+    const fields: ScoringRunRequestFields = { ID: request.ScoringRunID, ReadPolicy: request.Read, RequestedBy: request.RequestedBy };
     const run = await ScoringRunRecorder.Open(model, null, request.Scope, day, request.DryRun, this.ctx, fields);
     try {
       return await this.predictModel(resolved, run, request, day);
@@ -238,7 +238,7 @@ export class ScoringService {
    *
    * @throws ModelNeedsTrainingError when the model has no artifact file (it was never trained)
    */
-  protected async RunChecksBeforeAssembly(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, asOf: Date, hasMapping: boolean): Promise<ReadyModel | ScoringRefusal> {
+  protected async RunChecksBeforeAssembly(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, asOf: Date): Promise<ReadyModel | ScoringRefusal> {
     const model = resolved.Model;
     const status = ScoringChecks.StatusAndFlags(model, resolved.Admission, resolved.Admission === 'serving-while-unevaluated' ? await this.pipelineLeakageGuard(model.PipelineID) : null);
     if (status !== null) return status;
@@ -253,7 +253,7 @@ export class ScoringService {
     const unit = prepared.Loaded.unit;
     const asOfRefusal = ScoringChecks.AsOfSupported(model.ID, unit !== null, asOf, ScoringService.Normalize(this.seams.Clock.Now()));
     if (asOfRefusal !== null) return asOfRefusal;
-    const scopeRefusal = ScoringChecks.ScopeEntity(scope.entity, unit !== null ? unit.RowEntity : prepared.Loaded.targetEntityName, bindingEntity, hasMapping);
+    const scopeRefusal = ScoringChecks.ScopeEntity(scope.entity, unit !== null ? unit.RowEntity : prepared.Loaded.targetEntityName, bindingEntity);
     if (scopeRefusal !== null) return scopeRefusal;
     return { ...resolved, Sha256: load.Sha256, Prepared: prepared, Task: ScoringService.taskOf(model) };
   }
@@ -344,15 +344,15 @@ export class ScoringService {
 
   /** Checks, assembly, the challenger and the batches of a binding run whose run row is open. */
   private async scoreBinding(binding: MJMLModelScoringBindingEntity, resolved: ResolvedModel, run: MJMLScoringRunEntity, scope: ScoringScope, day: Date, dryRun: boolean): Promise<ScoringResult> {
-    const scoped = await this.assembleScope(resolved, binding.TargetEntity, scope, day, false);
+    const scoped = await this.assembleScope(resolved, binding.TargetEntity, scope, day);
     if ('kind' in scoped) return this.CloseRun(run, ScoringService.refused(run, resolved.Model.ID, scoped));
     const challenger = dryRun || scoped.Assembled === null ? null : await this.openChallenger(binding, scope, day, scoped.Assembled, scoped.RecordIDs);
     return this.scoreBatches(binding, scoped, run, challenger, day, dryRun);
   }
 
   /** Checks 1–3, the scope read, the assembly and checks 4–6; an empty scope assembles nothing. */
-  private async assembleScope(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, day: Date, hasMapping: boolean): Promise<AssembledScope | ScoringRefusal> {
-    const ready = await this.RunChecksBeforeAssembly(resolved, bindingEntity, scope, day, hasMapping);
+  private async assembleScope(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, day: Date): Promise<AssembledScope | ScoringRefusal> {
+    const ready = await this.RunChecksBeforeAssembly(resolved, bindingEntity, scope, day);
     if ('kind' in ready) return ready;
     const read = await this.ReadScope(scope);
     if ('kind' in read) return read;
@@ -428,7 +428,7 @@ export class ScoringService {
     const model = await this.loadModel(selection.ModelID);
     if (model === null) return null;
     const run = await this.OpenRun(model, binding, scope, day, false);
-    const ready = await this.RunChecksBeforeAssembly({ Model: model, Admission: 'challenger' }, binding.TargetEntity, scope, day, false);
+    const ready = await this.RunChecksBeforeAssembly({ Model: model, Admission: 'challenger' }, binding.TargetEntity, scope, day);
     if ('kind' in ready) return this.refuseChallenger(run, model, ready);
     const after = this.RunChecksAfterAssembly(model, assembled);
     if (after !== null) return this.refuseChallenger(run, model, after);
@@ -519,7 +519,7 @@ export class ScoringService {
 
   /** Checks, assembly and the predicted batches of a model-path call whose run row is open; nothing is written. */
   private async predictModel(resolved: ResolvedModel, run: MJMLScoringRunEntity, request: ScoringRequest, day: Date): Promise<ScoringPrediction> {
-    const scoped = await this.assembleScope(resolved, null, request.Scope, day, request.EntityMapping !== null);
+    const scoped = await this.assembleScope(resolved, null, request.Scope, day);
     if ('kind' in scoped) return { Result: await this.CloseRun(run, ScoringService.refused(run, resolved.Model.ID, scoped)), Rows: [] };
     const rows: ScoredRow[] = [];
     for (const batch of this.batches(scoped)) {

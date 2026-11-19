@@ -50,6 +50,18 @@ export class ArtifactObjects {
     writeFileSync(to.Path, readFileSync(from.Path));
   }
 
+  /**
+   * The model's stored artifact object as base64 text (the form `/predict` receives), read from the storage root: the
+   * bytes a gate sends straight to the sidecar, beside the product's own scoring of the same model.
+   *
+   * @throws when `STORAGE_LOCAL_ROOT` is unset, the model has no artifact file, its key is unsafe or the object is absent
+   */
+  public static async ReadStoredObjectBase64(h: TruthHarness, modelId: string): Promise<string> {
+    const stored = await ArtifactObjects.locate(h, modelId);
+    ArtifactObjects.assertPresent(stored, modelId);
+    return readFileSync(stored.Path).toString('base64');
+  }
+
   /** The model's artifact file row and the object's path under the storage root. */
   private static async locate(h: TruthHarness, modelId: string): Promise<StoredObject> {
     const root = ArtifactObjects.storageRoot();

@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Scoring",
+      "Description": "The PR 4 scoring gates: G5.1 (the R1 model scored on a copy table with DistanceZ renamed is refused naming the scope entity, 0 rows), G5.2 (/predict refuses a renamed feature naming it and a legacy model with no stored schema), G5.3 (20 bound Score Record Set calls on the R1 model leave 20 scoring-run rows and every written score's lineage joins to its run and model), G5.4 (every Model row of a C1 scoring run carries and resolves its four lineage fields), G5.5 (an all-null feature column in the W1 s42 scoring input is refused naming the column, 0 scores) and G3.9 (the W9 multiclass probability shown for the named class equals the artifact's predict_proba column, 20 of 20). Needs MJAPI (STORAGE_LOCAL_ROOT set, PREDICTIVE_STUDIO_SIDECAR_URL at the truth sidecar), the truth sidecar running (pnpm run truth:sidecar, which writes .run/sidecar.url and .run/sidecar.pid) and `pnpm run truth:provision` then `pnpm run truth:load-c1` done (the second with MJAPI running: it loads the C1 corpus and declares the truth suite's immutable fields; restart MJAPI after it); the mj test process needs STORAGE_LOCAL_ROOT too. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Scoring\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R1 -> S7.3",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F73EADC2-7B63-4989-9C8B-85CC693D4884"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S7.3 #2",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DDD930B8-C2BB-4B8C-8C61-00B19DD5F1E8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R1 -> S7.4",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AAC7663A-0FE6-4B1E-BB84-D965F6D45CEF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S7.4",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9191E2B3-9E2D-4AA3-B890-460F9B926582"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S7.5 #3",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0EA3618F-30A0-4525-A333-AEEF9B3A6B3F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W9 -> S9.5",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "41774E59-83B3-4CF1-9E99-4929FF662398"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "084AC64C-B31F-4E47-A739-4BC76FD0D874"
+    }
+  }
+]

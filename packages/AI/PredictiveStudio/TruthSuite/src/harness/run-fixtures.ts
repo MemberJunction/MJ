@@ -250,6 +250,7 @@ export class RunFixtures {
         HarnessScoring.ScoreViaRecordProcess(ctx, modelId, dataset, extraFilter),
       CountNonNull: (dataset, column) => HarnessDatasets.CountNonNull(ctx, dataset, column),
       ResetColumn: (dataset, column) => HarnessDatasets.ResetColumn(ctx, dataset, column),
+      FillRenamedCopy: (dataset, copyTable, renames) => HarnessDatasets.FillRenamedCopy(ctx, dataset, copyTable, renames),
       GenerateStory: (modelId) => HarnessAgent.GenerateStory(ctx, modelId),
       Judge: (module, args) => JudgeBridge.Judge(module, args),
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),

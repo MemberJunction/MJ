@@ -20,6 +20,9 @@ export type AlgorithmKey = 'logistic_regression' | 'xgboost' | 'lightgbm' | 'ran
 // The result shapes are new and mirror no shipped camelCase shape, so their members are PascalCase.
 export interface LoadedDataset { Ref: DatasetRef; Dir: string; Entity: EntityInfo; RowCount: number; RowsSha256: string }
 
+/** A `pstruth` copy table filled from a dataset (`TruthHarness.FillRenamedCopy`): its entity and its row count. */
+export interface RenamedCopy { readonly Entity: EntityInfo; readonly Rows: number }
+
 export interface PipelineSpec {
   Name: string;                       // always prefixed "PSTruth:" (marks suite fixtures)
   Dataset: LoadedDataset;
@@ -139,6 +142,8 @@ export interface TruthHarness {
   ScoreViaRecordProcess(modelId: string, dataset: LoadedDataset, extraFilter: string): Promise<RecordProcessScoring>;
   CountNonNull(dataset: LoadedDataset, column: 'TruthScore'): Promise<number>;
   ResetColumn(dataset: LoadedDataset, column: 'TruthScore'): Promise<void>;
+  /** Fill the `pstruth` copy table `copyTable` with the dataset's rows, the columns of `renames` renamed (G5.1). */
+  FillRenamedCopy(dataset: LoadedDataset, copyTable: string, renames: Readonly<Record<string, string>>): Promise<RenamedCopy>;
   /** The Model Development Agent's user-facing report for one model (live AI model; G0.6's stories); null if none. */
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
