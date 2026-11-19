@@ -3,6 +3,7 @@
  * Ported from Python classify_batch() function.
  */
 import type { StatementType } from './types.js';
+import { StripComments } from './ExpressionHelpers.js';
 
 /** Session SET commands that are SQL Server-specific and should be skipped */
 const SESSION_SETTINGS = [
@@ -17,6 +18,19 @@ const SQLSERVER_PROC_PATTERNS = [
   'SYS.COLUMNS', 'SYS.OBJECTS', 'SYS.SCHEMAS', 'SYS.VIEWS',
   'SP_REFRESHVIEW', 'QUOTENAME',
 ];
+
+/** `EXEC sp_refreshview '<view>'` (optionally `sys.`, `@viewname =`, `N'…'`); group 1 is the view. */
+export const SP_REFRESHVIEW_CALL = /\bEXEC(?:UTE)?\s+(?:\[?sys\]?\.)?\[?sp_refreshview\]?\s+(?:@viewname\s*=\s*)?N?'([^']+)'/gi;
+
+/**
+ * The warning for one `sp_refreshview` (issue #5649, decision pg.5). CodeGen writes the call after
+ * every column change to a view's table. PostgreSQL has no equivalent (a view keeps the column list
+ * it was created with), so the view must be rebuilt by hand, or `spDeleteUnneededEntityFields`
+ * later deletes the new fields' EntityField rows. Before, the call was skipped without a trace.
+ */
+export function DescribeRefreshView(view: string): string {
+  return `sp_refreshview '${view}' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns`;
+}
 
 /**
  * Classify a SQL batch into a statement type.
@@ -47,9 +61,11 @@ export function ClassifyBatch(batch: string): StatementType {
     return 'SKIP_ERROR';
   }
 
-  // IF OBJECT_ID ... DROP PROCEDURE/FUNCTION → skip (CREATE OR REPLACE handles it)
+  // IF OBJECT_ID ... DROP PROCEDURE/FUNCTION → skip (CREATE OR REPLACE handles it).
+  // A guarded grant (`IF OBJECT_ID('…vwX', 'V') IS NOT NULL EXEC sp_executesql N'GRANT …'`,
+  // which CodeGen writes for layered base views) goes to GrantRule instead (issue #5567).
   if (/^IF\s+OBJECT_ID\s*\(/i.test(upper)) {
-    return 'SKIP_SQLSERVER';
+    return grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
   }
 
   // IF DATABASE_PRINCIPAL_ID(N'x') IS NULL ... EXEC('CREATE ROLE ...') → the SQL Server
@@ -73,6 +89,14 @@ export function ClassifyBatch(batch: string): StatementType {
     if (/\bDROP\s+CONSTRAINT\b/i.test(upper)) {
       return 'CONDITIONAL_DDL';
     }
+    // ...and a guarded index drop (`IF EXISTS (SELECT … FROM sys.indexes …) DROP INDEX`), which
+    // becomes DROP INDEX IF EXISTS. Skipping it lost the drop without a trace (issue #3166).
+    if (/\bDROP\s+INDEX\b/i.test(upper)) {
+      return 'CONDITIONAL_DDL';
+    }
+    // ...and a guarded grant (`IF EXISTS (… sys.database_principals …) EXEC sp_executesql
+    // N'GRANT …'`). Skipped, the grant was lost without a gap (issue #5567).
+    if (grantsInside(batch)) return 'GRANT';
     return 'SKIP_SQLSERVER';
   }
 
@@ -93,14 +117,15 @@ export function ClassifyBatch(batch: string): StatementType {
     // Skip IF NOT EXISTS blocks that use SQL Server system features
     if (upper.includes('SERVERPROPERTY') || upper.includes('CREATE LOGIN') ||
         upper.includes('SYS.SERVER_PRINCIPAL') || upper.includes('SYS.DATABASE_PRINCIPAL')) {
-      return 'SKIP_SQLSERVER';
+      return !upper.includes('CREATE LOGIN') && grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
     }
     return 'CONDITIONAL_DDL';
   }
 
   // User/role creation blocks (SQL Server-specific)
   if (upper.includes('SERVERPROPERTY') || upper.replace(/\s/g, '').includes('SP_EXECUTESQL')) {
-    return 'SKIP_SQLSERVER';
+    // A grant run through sp_executesql is converted (or reported as a gap) by GrantRule.
+    return !upper.includes('SERVERPROPERTY') && grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
   }
   if (/^DECLARE\s+@/i.test(upper)) {
     // DECLARE blocks with EXEC calls to schema procedures → convert as EXEC_BLOCK
@@ -174,6 +199,12 @@ export function ClassifyBatch(batch: string): StatementType {
     return 'CREATE_INDEX';
   }
 
+  // DROP INDEX — T-SQL's `DROP INDEX name ON table` is not PostgreSQL; CreateIndexRule rewrites
+  // it. Unclassified, it passed through unchanged (issue #5955).
+  if (/^DROP\s+INDEX\b/i.test(upper)) {
+    return 'DROP_INDEX';
+  }
+
   // ;WITH CTE ... DML — T-SQL idiom where ;WITH is used to safely terminate the prior statement
   // Classify based on the DML statement that follows the CTE definition
   if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upper)) {
@@ -229,6 +260,9 @@ export function ClassifyBatch(batch: string): StatementType {
     return 'EXEC_BLOCK';
   }
 
+  // sp_refreshview → a named warning, not a silent skip (issue #5649)
+  if (/^EXEC(?:UTE)?\s+(?:\[?SYS\]?\.)?\[?SP_REFRESHVIEW\]?\s/i.test(upper)) return 'REFRESH_VIEW';
+
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';
 
@@ -271,6 +305,16 @@ export function ClassifyBatch(batch: string): StatementType {
 /** @deprecated Use {@link ClassifyBatch}. */
 export function classifyBatch(batch: string): StatementType {
   return ClassifyBatch(batch);
+}
+
+/**
+ * Whether a batch the classifier would otherwise skip as SQL Server-only carries a GRANT, REVOKE
+ * or DENY, in code or in the string handed to `sp_executesql`. Such a batch goes to GrantRule,
+ * which converts the guarded forms it reads and reports the rest as a gap, so a grant is never
+ * dropped silently. Comments are ignored.
+ */
+function grantsInside(batch: string): boolean {
+  return /\b(?:GRANT|REVOKE|DENY)\s/i.test(StripComments(batch));
 }
 
 /** Classify a CREATE PROCEDURE batch — may be skipped if it uses SQL Server system features */
