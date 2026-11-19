@@ -15,6 +15,7 @@ import { SlideDeckArtifactViewerComponent } from './slide-deck-artifact-viewer.c
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
 import { type NavigationRequest } from '../base-artifact-viewer.component';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactCommandPaletteComponent } from './artifact-command-palette.component';
 import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 
@@ -62,6 +63,7 @@ function makeDeckFixture(options: { readonly?: boolean; customDeck?: SlideDeckSp
       FormsModule,
       SlidePluginViewerStubComponent,
       ArtifactAgentPresenceBarComponent,
+      ArtifactCommandPaletteComponent,
       ArtifactAgentRegionIndicatorComponent,
     ],
     declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
@@ -125,6 +127,7 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
         FormsModule,
         SlidePluginViewerStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
@@ -890,6 +893,7 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
         FormsModule,
         SlidePluginViewerStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
@@ -925,6 +929,7 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
         FormsModule,
         SlidePluginViewerStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [SlideDeckArtifactViewerComponent, MjContextMenuComponent],
@@ -961,5 +966,34 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     expect(f.componentInstance.ActiveSlide.Regions.find((r) => r.RegionID === bodyRegion.RegionID)?.MarkdownContent).toBe(
       'Keep bullet A\nbullet B revised\nKeep bullet C',
     );
+  });
+
+  it('renders the Option A floating slide design pill, layout/theme popover, and Cmd+K palette in DOM', () => {
+    const f = makeDeckFixture({ readonly: false });
+    f.componentInstance.ResolvedPermissions = {
+      ArtifactID: 'art-slide-dom-1',
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: true,
+      CanShare: false,
+      Source: 'Owner',
+      Reason: 'Owner access',
+    };
+    f.detectChanges();
+
+    expect(query(f, '[data-testid="slides-floating-design-pill"]')).not.toBeNull();
+    expect(query(f, '[data-testid="slides-design-popover"]')).toBeNull();
+
+    (query(f, '[data-testid="slides-floating-layout-btn"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(query(f, '[data-testid="slides-design-popover"]')).not.toBeNull();
+
+    (query(f, '[data-testid="slide-layout-opt-KpiStrip"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.ActiveSlide.Layout).toBe('KpiStrip');
+
+    (query(f, '[data-testid="slides-cmdk-btn"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(query(f, '[data-testid="artifact-cmdk-dialog"]')).not.toBeNull();
   });
 });

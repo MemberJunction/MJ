@@ -20,6 +20,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&Name=FailoverStrategy"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:12.014Z",
+            "checksum": "ae3c5fb79a3195a64cd2068c3ac94f1281c9c09c4af05dcc7853593e4704a1b0"
           }
         }
       ]

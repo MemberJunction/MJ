@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
+import { ActionEngineServer } from '@memberjunction/actions';
 import type { ChatMessage } from '@memberjunction/ai';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, GovernedArtifactService } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
@@ -19,12 +20,15 @@ import {
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJConversationDetailEntity,
+    MJScheduledJobEntity,
     ParseArtifactVersionConfiguration,
+    ResolvedArtifactPermissions,
     ResolveArtifactTypeThumbnailPolicy,
     ValidateArtifactContentMutationAgainstLocks,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
+import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 
 const MAX_FROZEN_SPEC_JSON_CHARS = 512 * 1024;
 const MAX_RESTORE_VERSION_CONFLICT_RETRIES = 3;
@@ -36,6 +40,17 @@ import {
     COLLAB_SECRET_UNCONFIGURED_CODE,
     CollaborationSecretUnconfiguredError
 } from '../collaboration/ArtifactCollaborationServer.js';
+import {
+    ACTION_SCHEDULED_JOB_TYPE_ID,
+    BuildLivingReportJobConfiguration,
+    LIVING_REPORT_ACTION_DRIVER_CLASS,
+    LIVING_REPORT_DEFAULT_ACTION_ID,
+    LIVING_REPORT_FALLBACK_PARAM_IDS,
+    LivingReportParamIds,
+    MAX_LIVING_REPORT_NAME_LENGTH,
+    ParseLivingReportJobConfiguration,
+    ValidateLivingReportScheduleInput,
+} from '../collaboration/LivingReportScheduleHelpers.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { WriteArtifactComplianceAudit } from '../operations/ArtifactComplianceAuditHelper.js';
@@ -1865,6 +1880,648 @@ export class DocumentCollaborationResolver extends ResolverBase {
             VersionNumber: nextVersionNumber
         };
     }
+
+    private async authorizeLivingReportArtifact(
+        artifactId: string,
+        mode: 'read' | 'edit',
+        context: AppContext | undefined,
+    ): Promise<{
+        User?: UserInfo;
+        Provider?: IMetadataProvider;
+        ArtifactID: string;
+        Perms?: ResolvedArtifactPermissions;
+        ErrorMessage?: string;
+    }> {
+        const user = this.GetUserFromPayload(context?.userPayload);
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                ArtifactID: artifactId,
+                ErrorMessage: user
+                    ? 'Magic Link sessions cannot manage Living Reports.'
+                    : 'Authentication required.',
+            };
+        }
+        const normalizedId = (artifactId ?? '').trim();
+        if (!normalizedId || !IsValidUUID(normalizedId)) {
+            return {
+                ArtifactID: normalizedId,
+                ErrorMessage: 'A valid artifactId UUID is required.',
+            };
+        }
+        const requiredScope = mode === 'edit' ? 'artifact:edit' : 'artifact:read';
+        await this.CheckAPIKeyScopeAuthorization(requiredScope, normalizedId, context?.userPayload);
+
+        const provider = this.resolveProvider(context ?? ({} as AppContext));
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, normalizedId, user);
+        const allowed = mode === 'edit' ? perms.CanEdit : perms.CanRead;
+        if (!allowed) {
+            return {
+                ArtifactID: normalizedId,
+                ErrorMessage:
+                    mode === 'edit'
+                        ? 'Permission denied: edit access is required to manage Living Reports on this artifact.'
+                        : 'Access denied.',
+            };
+        }
+        return {
+            User: user,
+            Provider: provider,
+            ArtifactID: normalizedId,
+            Perms: perms,
+        };
+    }
+
+    private async resolveLivingReportActionContext(systemActor: UserInfo): Promise<{
+        JobTypeID: string;
+        ActionID: string;
+        AllowedActionIDs: ReadonlyArray<string>;
+        ParamIDs: LivingReportParamIds;
+        ArtifactParamIDSet: ReadonlySet<string>;
+        ForceSaveParamIDSet: ReadonlySet<string>;
+    }> {
+        await Promise.all([
+            ActionEngineServer.Instance.Config(false, systemActor),
+            SchedulingEngineBase.Instance.Config(false, systemActor),
+        ]);
+        const jobTypeId =
+            SchedulingEngineBase.Instance.GetJobTypeByDriverClass('ActionScheduledJobDriver')?.ID ??
+            ACTION_SCHEDULED_JOB_TYPE_ID;
+
+        const actions = ActionEngineServer.Instance.Actions ?? [];
+        const matchedAction = actions.find(
+            (a) =>
+                (a.DriverClass ?? '').trim() === LIVING_REPORT_ACTION_DRIVER_CLASS ||
+                UUIDsEqual(a.ID, LIVING_REPORT_DEFAULT_ACTION_ID),
+        );
+        const actionId = matchedAction?.ID ?? LIVING_REPORT_DEFAULT_ACTION_ID;
+        const allowedActionIds = Array.from(
+            new Set([actionId, LIVING_REPORT_DEFAULT_ACTION_ID].map((id) => id.toLowerCase())),
+        );
+
+        const params = (ActionEngineServer.Instance.ActionParams ?? []).filter((p) =>
+            UUIDsEqual(p.ActionID, actionId),
+        );
+        const findParamId = (name: string, fallback?: string): string | undefined =>
+            params.find((p) => (p.Name ?? '').trim().toLowerCase() === name.toLowerCase())?.ID ?? fallback;
+
+        const artifactParamId = findParamId('ArtifactID', LIVING_REPORT_FALLBACK_PARAM_IDS.ArtifactID)!;
+        const freezeParamId = findParamId(
+            'FreezeRefreshedBlocks',
+            LIVING_REPORT_FALLBACK_PARAM_IDS.FreezeRefreshedBlocks,
+        );
+        const forceRefreshFrozenParamId = findParamId(
+            'ForceRefreshFrozen',
+            LIVING_REPORT_FALLBACK_PARAM_IDS.ForceRefreshFrozen,
+        );
+        const forceSaveParamId = findParamId(
+            'ForceSaveIfUnchanged',
+            LIVING_REPORT_FALLBACK_PARAM_IDS.ForceSaveIfUnchanged,
+        );
+
+        const artifactParamIdSet = new Set(
+            [artifactParamId, LIVING_REPORT_FALLBACK_PARAM_IDS.ArtifactID].map((id) => id.toLowerCase()),
+        );
+        const forceSaveParamIdSet = new Set(
+            [forceSaveParamId, LIVING_REPORT_FALLBACK_PARAM_IDS.ForceSaveIfUnchanged]
+                .filter((id): id is string => Boolean(id))
+                .map((id) => id.toLowerCase()),
+        );
+
+        return {
+            JobTypeID: jobTypeId,
+            ActionID: actionId,
+            AllowedActionIDs: allowedActionIds,
+            ParamIDs: {
+                ArtifactID: artifactParamId,
+                FreezeRefreshedBlocks: freezeParamId,
+                ForceRefreshFrozen: forceRefreshFrozenParamId,
+                ForceSaveIfUnchanged: forceSaveParamId,
+            },
+            ArtifactParamIDSet: artifactParamIdSet,
+            ForceSaveParamIDSet: forceSaveParamIdSet,
+        };
+    }
+
+    private async findLivingReportJobsForArtifact(
+        provider: IMetadataProvider,
+        systemActor: UserInfo,
+        artifactId: string,
+        actionCtx: Awaited<ReturnType<DocumentCollaborationResolver['resolveLivingReportActionContext']>>,
+    ): Promise<Array<{
+        ID: string;
+        Name: string;
+        CronExpression: string;
+        Timezone: string;
+        Status: MJScheduledJobEntity['Status'];
+        OwnerUserID: string | null;
+        LastRunAt: Date | string | null;
+        NextRunAt: Date | string | null;
+        RunCount: number;
+        SuccessCount: number;
+        FailureCount: number;
+        ForceSaveIfUnchanged: boolean;
+    }>> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const jobsRes = await rv.RunView<{
+            ID: string;
+            Name: string;
+            CronExpression: string;
+            Timezone: string;
+            Status: MJScheduledJobEntity['Status'];
+            Configuration: string | null;
+            OwnerUserID: string | null;
+            LastRunAt: Date | string | null;
+            NextRunAt: Date | string | null;
+            RunCount: number;
+            SuccessCount: number;
+            FailureCount: number;
+        }>(
+            {
+                EntityName: 'MJ: Scheduled Jobs',
+                ExtraFilter: `JobTypeID='${EscapeSQLString(actionCtx.JobTypeID)}' AND Status IN ('Active', 'Disabled', 'Paused') AND Configuration LIKE '%${EscapeSQLString(artifactId)}%'`,
+                Fields: [
+                    'ID',
+                    'Name',
+                    'CronExpression',
+                    'Timezone',
+                    'Status',
+                    'Configuration',
+                    'OwnerUserID',
+                    'LastRunAt',
+                    'NextRunAt',
+                    'RunCount',
+                    'SuccessCount',
+                    'FailureCount',
+                ],
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+            },
+            systemActor,
+        );
+        if (!jobsRes.Success || !jobsRes.Results) {
+            return [];
+        }
+
+        const matched: Array<{
+            ID: string;
+            Name: string;
+            CronExpression: string;
+            Timezone: string;
+            Status: MJScheduledJobEntity['Status'];
+            OwnerUserID: string | null;
+            LastRunAt: Date | string | null;
+            NextRunAt: Date | string | null;
+            RunCount: number;
+            SuccessCount: number;
+            FailureCount: number;
+            ForceSaveIfUnchanged: boolean;
+        }> = [];
+        for (const row of jobsRes.Results) {
+            const parsed = ParseLivingReportJobConfiguration(
+                row.Configuration,
+                actionCtx.ArtifactParamIDSet,
+                actionCtx.AllowedActionIDs,
+                actionCtx.ForceSaveParamIDSet,
+            );
+            if (!parsed || parsed.HasNonStaticParams || !UUIDsEqual(parsed.ArtifactID, artifactId)) {
+                continue;
+            }
+            matched.push({
+                ID: row.ID,
+                Name: row.Name,
+                CronExpression: row.CronExpression,
+                Timezone: row.Timezone,
+                Status: row.Status,
+                OwnerUserID: row.OwnerUserID ?? null,
+                LastRunAt: row.LastRunAt ?? null,
+                NextRunAt: row.NextRunAt ?? null,
+                RunCount: Number(row.RunCount ?? 0),
+                SuccessCount: Number(row.SuccessCount ?? 0),
+                FailureCount: Number(row.FailureCount ?? 0),
+                ForceSaveIfUnchanged: parsed.ForceSaveIfUnchanged,
+            });
+        }
+        return matched;
+    }
+
+    private toIsoTimestamp(value: Date | string | null | undefined): string | undefined {
+        if (!value) {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+    }
+
+    private formatLivingReportScheduleItem(row: {
+        ID: string;
+        Name: string;
+        CronExpression: string;
+        Timezone: string;
+        Status: MJScheduledJobEntity['Status'];
+        ForceSaveIfUnchanged: boolean;
+        LastRunAt: Date | string | null;
+        NextRunAt: Date | string | null;
+        RunCount: number;
+        SuccessCount: number;
+        FailureCount: number;
+        IsCallerScheduleOwner: boolean;
+        CanDelete: boolean;
+    }): LivingReportScheduleItem {
+        return {
+            ScheduleID: row.ID,
+            Name: row.Name,
+            CronExpression: row.CronExpression,
+            Timezone: row.Timezone,
+            Status: row.Status,
+            Enabled: row.Status === 'Active',
+            ForceSaveIfUnchanged: row.ForceSaveIfUnchanged,
+            LastRunAt: this.toIsoTimestamp(row.LastRunAt),
+            NextRunAt: this.toIsoTimestamp(row.NextRunAt),
+            RunCount: row.RunCount,
+            SuccessCount: row.SuccessCount,
+            FailureCount: row.FailureCount,
+            IsCallerScheduleOwner: row.IsCallerScheduleOwner,
+            CanDelete: row.CanDelete,
+        };
+    }
+
+    /**
+     * Re-evaluates all live data blocks, tables, and formulas inside an editable Document, Slide Deck, or
+     * Spreadsheet under the caller's permissions and saves a new version checkpoint when changes are detected.
+     * Enforces `FreezeRefreshedBlocks: false` unconditionally to preserve the interactive human freeze gate.
+     */
+    @Mutation(() => RefreshLivingArtifactOutput)
+    async RefreshLivingArtifact(
+        @Arg('artifactId') artifactId: string,
+        @Arg('versionComments', { nullable: true }) versionComments?: string,
+        @Arg('forceSaveIfUnchanged', { nullable: true }) forceSaveIfUnchanged?: boolean,
+        @Ctx() context?: AppContext,
+    ): Promise<RefreshLivingArtifactOutput> {
+        const auth = await this.authorizeLivingReportArtifact(artifactId, 'edit', context);
+        if (auth.ErrorMessage || !auth.User || !auth.Provider || !auth.Perms) {
+            return {
+                Success: false,
+                Changed: false,
+                SavedNewVersion: false,
+                ErrorMessage: auth.ErrorMessage || 'Authorization failed.',
+            };
+        }
+
+        const sanitizedComments =
+            typeof versionComments === 'string' && versionComments.trim().length > 0
+                ? versionComments.trim().slice(0, 500)
+                : 'Manual Living Report refresh';
+
+        const outcome = await GovernedArtifactService.Instance.RefreshAndSnapshotArtifact({
+            provider: auth.Provider,
+            contextUser: auth.User,
+            artifactId: auth.ArtifactID,
+            freezeRefreshedBlocks: false,
+            forceRefreshFrozen: false,
+            forceSaveIfUnchanged: Boolean(forceSaveIfUnchanged),
+            versionComments: sanitizedComments,
+        });
+
+        if (!outcome.success) {
+            return {
+                Success: false,
+                Changed: false,
+                SavedNewVersion: false,
+                ErrorMessage: outcome.errorMessage || outcome.message,
+            };
+        }
+
+        const savedNewVersion = outcome.resultCode === 'SUCCESS' && Boolean(outcome.newVersionId);
+        return {
+            Success: true,
+            Changed: outcome.changed,
+            SavedNewVersion: savedNewVersion,
+            ArtifactVersionID: outcome.newVersionId ?? outcome.versionId,
+            VersionNumber: outcome.newVersionNumber ?? outcome.versionNumber,
+            DiffSummary: outcome.diffSummary ?? outcome.message,
+            HighlightLines: outcome.highlightLines ?? [],
+        };
+    }
+
+    /**
+     * Returns the caller's (or artifact owner's, when caller has share privileges) Living Report schedule
+     * configured via `ActionScheduledJobDriver` + `__RefreshAndSnapshotArtifact`.
+     */
+    @Query(() => LivingReportScheduleResult)
+    async GetArtifactLivingReportSchedule(
+        @Arg('artifactId') artifactId: string,
+        @Ctx() context?: AppContext,
+    ): Promise<LivingReportScheduleResult> {
+        const auth = await this.authorizeLivingReportArtifact(artifactId, 'read', context);
+        if (auth.ErrorMessage || !auth.User || !auth.Provider || !auth.Perms) {
+            return { Success: false, ErrorMessage: auth.ErrorMessage || 'Authorization failed.' };
+        }
+        const systemActor = UserCache.Instance.GetSystemUser();
+        if (!systemActor) {
+            return { Success: false, ErrorMessage: 'System user is unavailable to inspect schedules.' };
+        }
+        const actionCtx = await this.resolveLivingReportActionContext(systemActor);
+        const matches = await this.findLivingReportJobsForArtifact(
+            auth.Provider,
+            systemActor,
+            auth.ArtifactID,
+            actionCtx,
+        );
+        const ownMatch = matches.find((m) => m.OwnerUserID && UUIDsEqual(m.OwnerUserID, auth.User.ID));
+        const isArtifactOwner = auth.Perms.Source === 'Owner';
+        const visibleMatch = ownMatch ?? (isArtifactOwner ? matches[0] : undefined);
+        const isCallerScheduleOwner = Boolean(
+            visibleMatch?.OwnerUserID && UUIDsEqual(visibleMatch.OwnerUserID, auth.User.ID),
+        );
+        return {
+            Success: true,
+            Schedule: visibleMatch
+                ? this.formatLivingReportScheduleItem({
+                      ...visibleMatch,
+                      IsCallerScheduleOwner: isCallerScheduleOwner,
+                      CanDelete: isCallerScheduleOwner || isArtifactOwner,
+                  })
+                : undefined,
+        };
+    }
+
+    /**
+     * Creates or updates a user-owned `MJ: Scheduled Jobs` Living Report schedule for an editable artifact,
+     * forcing `ValueType: 'Static'`, `FreezeRefreshedBlocks: 'false'`, and >= 5-minute cron cadence.
+     */
+    @Mutation(() => LivingReportScheduleResult)
+    async UpsertArtifactLivingReportSchedule(
+        @Arg('artifactId') artifactId: string,
+        @Arg('cronExpression') cronExpression: string,
+        @Arg('timezone', { nullable: true }) timezone?: string,
+        @Arg('name', { nullable: true }) name?: string,
+        @Arg('enabled', { nullable: true }) enabled?: boolean,
+        @Arg('forceSaveIfUnchanged', { nullable: true }) forceSaveIfUnchanged?: boolean,
+        @Arg('scheduleId', { nullable: true }) scheduleId?: string,
+        @Ctx() context?: AppContext,
+    ): Promise<LivingReportScheduleResult> {
+        const auth = await this.authorizeLivingReportArtifact(artifactId, 'edit', context);
+        if (auth.ErrorMessage || !auth.User || !auth.Provider || !auth.Perms) {
+            return { Success: false, ErrorMessage: auth.ErrorMessage || 'Authorization failed.' };
+        }
+
+        const validation = ValidateLivingReportScheduleInput(cronExpression ?? '', timezone ?? 'UTC');
+        if (!validation.Valid) {
+            return { Success: false, ErrorMessage: validation.ErrorMessage || 'Invalid schedule configuration.' };
+        }
+
+        const systemActor = UserCache.Instance.GetSystemUser();
+        if (!systemActor) {
+            return { Success: false, ErrorMessage: 'System user is unavailable to persist schedules.' };
+        }
+
+        const trimmedScheduleId = (scheduleId ?? '').trim();
+        if (trimmedScheduleId && !IsValidUUID(trimmedScheduleId)) {
+            return { Success: false, ErrorMessage: 'scheduleId must be a valid UUID.' };
+        }
+
+        const actionCtx = await this.resolveLivingReportActionContext(systemActor);
+        const existingMatches = await this.findLivingReportJobsForArtifact(
+            auth.Provider,
+            systemActor,
+            auth.ArtifactID,
+            actionCtx,
+        );
+
+        let targetMatch = trimmedScheduleId
+            ? existingMatches.find((m) => UUIDsEqual(m.ID, trimmedScheduleId))
+            : existingMatches.find((m) => m.OwnerUserID && UUIDsEqual(m.OwnerUserID, auth.User.ID));
+
+        if (trimmedScheduleId && !targetMatch) {
+            return {
+                Success: false,
+                ErrorMessage: 'Target Living Report schedule was not found for this artifact.',
+            };
+        }
+        if (targetMatch && (!targetMatch.OwnerUserID || !UUIDsEqual(targetMatch.OwnerUserID, auth.User.ID))) {
+            return {
+                Success: false,
+                ErrorMessage: 'Permission denied: only the schedule owner may modify this Living Report schedule.',
+            };
+        }
+
+        const job = await auth.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', systemActor);
+        if (targetMatch) {
+            const loaded = await job.Load(targetMatch.ID);
+            if (!loaded) {
+                return { Success: false, ErrorMessage: 'Failed to load Living Report schedule.' };
+            }
+        } else {
+            job.NewRecord();
+            job.OwnerUserID = auth.User.ID;
+            job.JobTypeID = actionCtx.JobTypeID;
+        }
+
+        const rawName = (name ?? '').trim();
+        const fallbackName = `Living Report: ${auth.ArtifactID.slice(0, 8)}`;
+        job.Name = (rawName || targetMatch?.Name || fallbackName).slice(0, MAX_LIVING_REPORT_NAME_LENGTH);
+        job.Description = 'Automated Living Report refresh via Refresh and Snapshot Artifact action.';
+        job.CronExpression = validation.NormalizedCron;
+        job.Timezone = validation.NormalizedTimezone;
+        const isEnabled = enabled ?? true;
+        job.Status = isEnabled ? 'Active' : 'Disabled';
+        job.NextRunAt = isEnabled ? validation.NextRunAt ?? null : null;
+        job.Configuration = BuildLivingReportJobConfiguration({
+            actionId: actionCtx.ActionID,
+            artifactId: auth.ArtifactID,
+            paramIds: actionCtx.ParamIDs,
+            forceSaveIfUnchanged: Boolean(forceSaveIfUnchanged),
+        });
+
+        const saved = await job.Save();
+        if (!saved) {
+            return {
+                Success: false,
+                ErrorMessage: job.LatestResult?.CompleteMessage || 'Failed to save Living Report schedule.',
+            };
+        }
+
+        return {
+            Success: true,
+            Schedule: this.formatLivingReportScheduleItem({
+                ID: job.ID,
+                Name: job.Name,
+                CronExpression: job.CronExpression,
+                Timezone: job.Timezone,
+                Status: job.Status,
+                ForceSaveIfUnchanged: Boolean(forceSaveIfUnchanged),
+                LastRunAt: job.LastRunAt ?? null,
+                NextRunAt: job.NextRunAt ?? null,
+                RunCount: Number(job.RunCount ?? 0),
+                SuccessCount: Number(job.SuccessCount ?? 0),
+                FailureCount: Number(job.FailureCount ?? 0),
+                IsCallerScheduleOwner: true,
+                CanDelete: true,
+            }),
+        };
+    }
+
+    /**
+     * Deletes a Living Report schedule bound to `artifactId` when requested by the schedule owner or artifact owner.
+     */
+    @Mutation(() => DeleteLivingReportScheduleResult)
+    async DeleteArtifactLivingReportSchedule(
+        @Arg('artifactId') artifactId: string,
+        @Arg('scheduleId') scheduleId: string,
+        @Ctx() context?: AppContext,
+    ): Promise<DeleteLivingReportScheduleResult> {
+        const auth = await this.authorizeLivingReportArtifact(artifactId, 'edit', context);
+        if (auth.ErrorMessage || !auth.User || !auth.Provider || !auth.Perms) {
+            return { Success: false, Deleted: false, ErrorMessage: auth.ErrorMessage || 'Authorization failed.' };
+        }
+        const trimmedScheduleId = (scheduleId ?? '').trim();
+        if (!trimmedScheduleId || !IsValidUUID(trimmedScheduleId)) {
+            return { Success: false, Deleted: false, ErrorMessage: 'A valid scheduleId UUID is required.' };
+        }
+        const systemActor = UserCache.Instance.GetSystemUser();
+        if (!systemActor) {
+            return { Success: false, Deleted: false, ErrorMessage: 'System user is unavailable to delete schedules.' };
+        }
+
+        const actionCtx = await this.resolveLivingReportActionContext(systemActor);
+        const matches = await this.findLivingReportJobsForArtifact(
+            auth.Provider,
+            systemActor,
+            auth.ArtifactID,
+            actionCtx,
+        );
+        const match = matches.find((m) => UUIDsEqual(m.ID, trimmedScheduleId));
+        if (!match) {
+            return {
+                Success: false,
+                Deleted: false,
+                ErrorMessage: 'Living Report schedule not found for this artifact.',
+            };
+        }
+        const isScheduleOwner = Boolean(match.OwnerUserID && UUIDsEqual(match.OwnerUserID, auth.User.ID));
+        const isArtifactOwner = auth.Perms.Source === 'Owner';
+        if (!isScheduleOwner && !isArtifactOwner) {
+            return {
+                Success: false,
+                Deleted: false,
+                ErrorMessage: 'Permission denied: only the schedule owner or artifact owner may delete this schedule.',
+            };
+        }
+
+        const job = await auth.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', systemActor);
+        const loaded = await job.Load(match.ID);
+        if (!loaded) {
+            return { Success: false, Deleted: false, ErrorMessage: 'Failed to load schedule record.' };
+        }
+        const deleted = await job.Delete();
+        if (!deleted) {
+            return {
+                Success: false,
+                Deleted: false,
+                ErrorMessage: job.LatestResult?.CompleteMessage || 'Failed to delete schedule.',
+            };
+        }
+        return { Success: true, Deleted: true };
+    }
+}
+
+@ObjectType()
+export class RefreshLivingArtifactOutput {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => Boolean)
+    public Changed!: boolean;
+
+    @Field(() => Boolean)
+    public SavedNewVersion!: boolean;
+
+    @Field(() => String, { nullable: true })
+    public ArtifactVersionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    public VersionNumber?: number;
+
+    @Field(() => String, { nullable: true })
+    public DiffSummary?: string;
+
+    @Field(() => [String], { nullable: true })
+    public HighlightLines?: string[];
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
+}
+
+@ObjectType()
+export class LivingReportScheduleItem {
+    @Field(() => String)
+    public ScheduleID!: string;
+
+    @Field(() => String)
+    public Name!: string;
+
+    @Field(() => String)
+    public CronExpression!: string;
+
+    @Field(() => String)
+    public Timezone!: string;
+
+    @Field(() => String)
+    public Status!: string;
+
+    @Field(() => Boolean)
+    public Enabled!: boolean;
+
+    @Field(() => Boolean)
+    public ForceSaveIfUnchanged!: boolean;
+
+    @Field(() => String, { nullable: true })
+    public LastRunAt?: string;
+
+    @Field(() => String, { nullable: true })
+    public NextRunAt?: string;
+
+    @Field(() => Int)
+    public RunCount!: number;
+
+    @Field(() => Int)
+    public SuccessCount!: number;
+
+    @Field(() => Int)
+    public FailureCount!: number;
+
+    @Field(() => Boolean)
+    public IsCallerScheduleOwner!: boolean;
+
+    @Field(() => Boolean)
+    public CanDelete!: boolean;
+}
+
+@ObjectType()
+export class LivingReportScheduleResult {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => LivingReportScheduleItem, { nullable: true })
+    public Schedule?: LivingReportScheduleItem;
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
+}
+
+@ObjectType()
+export class DeleteLivingReportScheduleResult {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => Boolean)
+    public Deleted!: boolean;
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
 }
 
 @ObjectType()

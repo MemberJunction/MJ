@@ -202,7 +202,7 @@ model → MJAPI**:
     AI response row; the client polls/reloads when the push WebSocket is absent).
   - `artifacts.ts` — loads `MJ: Conversation Artifact Versions` content and
     **classifies** it (json-table / json / chart / html / code / markdown / text).
-  - `explorer.ts` — `Metadata.Entities` / `Metadata.Queries` for pickers,
+  - `explorer.ts` — `Metadata.Entities` and `QueryEngine` for pickers,
     `RunView` (simple + narrowed `Fields`) for records, `GetEntityObject` +
     `InnerLoad` for a record, `RunQuery` for saved queries, and a
     `UIConfigDetails` parser for dashboards.
