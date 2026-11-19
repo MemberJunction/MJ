@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import type { FileStorageBase } from '@memberjunction/storage';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
@@ -8,6 +8,7 @@ import {
     RestoreRecordContext,
     RestoreRecordResult,
     ArchiveDocument,
+    ArchiveFieldConfiguration,
     IsPurgeStorageMode,
 } from './types';
 
@@ -26,12 +27,14 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
 
     /**
      * Determines whether the record should be archived by checking if at least
-     * one of the configured fields (or SkipIfAllNullFields) has a non-null value.
+     * one of the configured fields (or SkipIfAllNullFields) holds a value. A field holds
+     * no value when it is null, or when it is a NOT NULL column holding an empty string,
+     * which is what StripFields writes to such a column.
      * If no specific fields are configured but ArchiveFullRecord is true,
      * always archives — the intent is a full record snapshot, not field stripping.
      */
     public ShouldArchiveRecord(context: ArchiveRecordContext): boolean {
-        const fieldsToCheck = this.getFieldsToCheck(context);
+        const fieldsToCheck = this.getFieldsToCheck(context.FieldConfig);
 
         // If no specific fields are configured but ArchiveFullRecord is true,
         // always archive — the intent is a full record snapshot, not field stripping
@@ -39,10 +42,30 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
             return context.FieldConfig.ArchiveFullRecord === true;
         }
 
-        return fieldsToCheck.some(fieldName => {
-            const value = context.Record.Get(fieldName);
-            return value != null;
-        });
+        return fieldsToCheck.some(fieldName => this.fieldHoldsValue(context.Record, fieldName));
+    }
+
+    /**
+     * Returns the SQL form of {@link ShouldArchiveRecord}: an OR over the checked fields of
+     * `<field> IS NOT NULL` for nullable columns and `<field> <> ''` for NOT NULL string
+     * columns. Returns null when there are no checked fields, or when a checked field is
+     * missing from the entity or is a NOT NULL column of another type, because then the
+     * rule cannot be written in SQL.
+     */
+    public override BuildEligibilityFilter(fieldConfig: ArchiveFieldConfiguration, entityInfo: EntityInfo): string | null {
+        const fieldsToCheck = this.getFieldsToCheck(fieldConfig);
+        if (fieldsToCheck.length === 0) {
+            return null;
+        }
+        const conditions: string[] = [];
+        for (const fieldName of fieldsToCheck) {
+            const condition = this.holdsValueCondition(entityInfo.FieldByName(fieldName));
+            if (!condition) {
+                return null;
+            }
+            conditions.push(condition);
+        }
+        return conditions.join(' OR ');
     }
 
     /**
@@ -150,13 +173,43 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Determines which fields to check for the "should archive" decision.
      * Uses SkipIfAllNullFields if configured, otherwise all active field names.
      */
-    private getFieldsToCheck(context: ArchiveRecordContext): string[] {
-        if (context.FieldConfig.SkipIfAllNullFields && context.FieldConfig.SkipIfAllNullFields.length > 0) {
-            return context.FieldConfig.SkipIfAllNullFields;
+    private getFieldsToCheck(fieldConfig: ArchiveFieldConfiguration): string[] {
+        if (fieldConfig.SkipIfAllNullFields && fieldConfig.SkipIfAllNullFields.length > 0) {
+            return fieldConfig.SkipIfAllNullFields;
         }
-        return context.FieldConfig.Fields
+        return fieldConfig.Fields
             .filter(f => f.IsActive !== false)
             .map(f => f.FieldName);
+    }
+
+    /**
+     * True when the field holds a value: not null, and not the empty string that
+     * StripFields writes to a NOT NULL column.
+     */
+    private fieldHoldsValue(record: BaseEntity, fieldName: string): boolean {
+        const value = record.Get(fieldName);
+        if (value == null) {
+            return false;
+        }
+        const fieldInfo = record.EntityInfo.FieldByName(fieldName);
+        return !(fieldInfo && !fieldInfo.AllowsNull && value === '');
+    }
+
+    /**
+     * The SQL condition for "this field holds a value", or null when it cannot be written.
+     * Uses the metadata field name, never the configured string.
+     */
+    private holdsValueCondition(fieldInfo: EntityFieldInfo | undefined): string | null {
+        if (!fieldInfo) {
+            return null;
+        }
+        if (fieldInfo.AllowsNull) {
+            return `${fieldInfo.Name} IS NOT NULL`;
+        }
+        if (fieldInfo.TSType === EntityFieldTSType.String) {
+            return `${fieldInfo.Name} <> ''`;
+        }
+        return null;
     }
 
     // ========================================
