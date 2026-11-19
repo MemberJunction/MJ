@@ -292,7 +292,7 @@ You don't need to understand the composition syntax — the Strategist handles a
 ## Data Sources Available
 
 - **ALL_ENTITIES**: All entity names, descriptions, schemas, base tables, and base views
-- **ALL_QUERIES**: Existing queries with their names, descriptions, and statuses
+- **ALL_QUERIES**: Approved queries with their names, descriptions and categories (no SQL; Pending drafts are left out)
 - **QUERY_CATEGORIES**: Available categories for organizing queries
 
 ## Actions Available

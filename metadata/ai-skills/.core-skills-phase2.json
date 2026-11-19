@@ -579,7 +579,7 @@
   {
     "fields": {
       "Name": "Lists & Audiences",
-      "Description": "Build record lists from views, compose and maintain segments, share lists, and resolve audiences",
+      "Description": "Save records from a view, a query or this conversation as a list that keeps itself up to date; compose and maintain segments, share lists, and resolve audiences",
       "Instructions": "@file:templates/lists-audiences.skill.md",
       "Status": "Active",
       "ActivationMode": "Auto",
@@ -601,6 +601,15 @@
           "sync": {
             "lastModified": "2026-07-07T15:18:39.521Z",
             "checksum": "f3fb67189a23306c9ebdcbcf88241a1fbfef60cfb2997e6931decb69bb1d4525"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create List From Query"
+          },
+          "primaryKey": {
+            "ID": "F557589D-E5F2-43F6-983E-3C4DAC4E5B29"
           }
         },
         {
