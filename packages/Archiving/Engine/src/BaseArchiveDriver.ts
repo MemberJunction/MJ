@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, Metadata } from '@memberjunction/core';
 import {
     ArchiveRecordContext,
     ArchiveRecordResult,
@@ -6,7 +6,7 @@ import {
     RestoreRecordResult,
     ArchiveDocument,
     ArchivePrimaryKeyField,
-    ArchiveFieldConfiguration,
+    EligibilityFilterContext,
 } from './types';
 
 /**
@@ -48,14 +48,14 @@ export abstract class BaseArchiveDriver {
      * Returns a SQL WHERE fragment that matches only the records {@link ShouldArchiveRecord}
      * would accept, so the engine never loads records the driver would skip (for example,
      * records a previous StripFields run already cleared). The engine ANDs it with the
-     * retention cutoff and the configured FilterExpression. Returns null when the driver
-     * cannot express its rule in SQL; every record in the cutoff is then loaded and
+     * retention cutoff and the configured FilterExpression. Column names must be written in
+     * square brackets, which every provider accepts in a view filter. Returns null when the
+     * driver cannot express its rule in SQL; every record in the cutoff is then loaded and
      * {@link ShouldArchiveRecord} decides. A subclass that overrides
      * {@link ShouldArchiveRecord} should override this to match, or return null.
-     * @param _fieldConfig - The entity's parsed field configuration
-     * @param _entityInfo - Metadata for the entity being archived
+     * @param _context - The field configuration, entity metadata and configuration records
      */
-    public BuildEligibilityFilter(_fieldConfig: ArchiveFieldConfiguration, _entityInfo: EntityInfo): string | null {
+    public BuildEligibilityFilter(_context: EligibilityFilterContext): string | null {
         return null;
     }
 

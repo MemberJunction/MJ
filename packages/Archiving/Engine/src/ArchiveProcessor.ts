@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, ResolvePlatformKey, UserInfo } from '@memberjunction/core';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
 import { ResolveArchiveDriver } from './ArchiveDriverResolver';
 import { ArchiveStorageManager } from './ArchiveStorageManager';
@@ -40,7 +40,7 @@ export class ArchiveProcessor {
     /**
      * Processes all eligible records for a single entity configuration in one call. Records
      * are loaded one page of the batch size at a time, ordered by primary key, until a page
-     * comes back short, so memory holds at most one batch however many records are eligible.
+     * comes back empty, so memory holds at most one batch however many records are eligible.
      * Throws before any record is read when the configured DriverClass is not registered.
      *
      * @param configEntity - The ArchiveConfigurationEntity record defining which entity/fields to archive
@@ -68,50 +68,32 @@ export class ArchiveProcessor {
         }
         const fieldConfig = this.parseFieldConfiguration(configEntity);
         const entityInfo = this.requireEntityInfo(entityName);
-        const eligibilityFilter = driver.BuildEligibilityFilter(fieldConfig, entityInfo);
-        const filter = this.buildRecordFilter(configEntity, config, eligibilityFilter);
-        const pager = new ArchiveRecordPager(entityInfo, filter, batchSize, contextUser);
+        const eligibilityFilter = driver.BuildEligibilityFilter({ FieldConfig: fieldConfig, EntityInfo: entityInfo, ConfigEntity: configEntity, Config: config });
+        const filter = this.buildRecordFilter(configEntity, config, entityInfo, eligibilityFilter);
+        const pager = new ArchiveRecordPager(entityInfo, filter, batchSize, ResolvePlatformKey(this.Provider), contextUser);
         const job: EntityJob = {
             Driver: driver, FieldConfig: fieldConfig, ConfigEntity: configEntity, Config: config,
             ArchiveRun: archiveRun, StorageManager: storageManager, BasePath: config.RootPath ?? '', ContextUser: contextUser,
         };
 
-        const totals = await this.processPages(pager, job, this.archivedRecordsLeaveFilter(configEntity, config, eligibilityFilter));
+        const totals = await this.processPages(pager, job);
         LogStatus(`ArchiveProcessor: Processed ${totals.Archived + totals.Failed + totals.Skipped} eligible records for "${entityName}"`);
         return totals;
     }
 
     /**
-     * Loads and processes pages until the pager reports a short page.
-     * @param archivedLeaveFilter - Whether a successfully archived record stops matching the filter
+     * Loads and processes pages until the pager returns an empty page.
      */
-    private async processPages(pager: ArchiveRecordPager, job: EntityJob, archivedLeaveFilter: boolean): Promise<EntityProcessingResult> {
+    private async processPages(pager: ArchiveRecordPager, job: EntityJob): Promise<EntityProcessingResult> {
         const totals: EntityProcessingResult = { Archived: 0, Failed: 0, Skipped: 0, Bytes: 0 };
-        while (!pager.Done) {
-            const page = await pager.NextPage();
+        for (let page = await pager.NextPage(); page.length > 0; page = await pager.NextPage()) {
             const pageResult = await this.processSingleBatch(page, job);
             totals.Archived += pageResult.Archived;
             totals.Failed += pageResult.Failed;
             totals.Skipped += pageResult.Skipped;
             totals.Bytes += pageResult.Bytes;
-            pager.Advance(page, archivedLeaveFilter ? pageResult.Archived : 0);
         }
         return totals;
-    }
-
-    /**
-     * Whether a record the driver archived successfully stops matching the record filter:
-     * true for HardDelete (the record is gone) and for StripFields when the driver supplied
-     * an eligibility filter (the cleared record no longer passes it). ArchiveOnly changes
-     * nothing, so its records keep matching.
-     */
-    private archivedRecordsLeaveFilter(
-        configEntity: MJArchiveConfigurationEntityEntity,
-        config: MJArchiveConfigurationEntity,
-        eligibilityFilter: string | null
-    ): boolean {
-        const mode = configEntity.Mode ?? config.DefaultMode;
-        return mode === 'HardDelete' || (mode === 'StripFields' && eligibilityFilter != null);
     }
 
     /**
@@ -177,17 +159,16 @@ export class ArchiveProcessor {
      * Builds the SQL filter expression for querying eligible records: the retention cutoff
      * (the entity's RetentionDays, else the configuration's DefaultRetentionDays), the
      * driver's eligibility filter when it supplies one, and any custom filter expression,
-     * all ANDed. Throws when the resolved retention period is negative.
+     * all ANDed. Throws when the DateField is missing or is not a field of the entity, or
+     * when the resolved retention period is negative.
      */
     private buildRecordFilter(
         configEntity: MJArchiveConfigurationEntityEntity,
         config: MJArchiveConfigurationEntity,
+        entityInfo: EntityInfo,
         eligibilityFilter: string | null
     ): string {
-        const dateField = configEntity.DateField;
-        if (!dateField) {
-            throw new Error(`ArchiveConfigurationEntity ${configEntity.ID} has no DateField, so no retention cutoff can be applied`);
-        }
+        const dateField = this.requireDateField(configEntity, entityInfo);
 
         const retentionDays = configEntity.RetentionDays ?? config.DefaultRetentionDays;
         if (retentionDays < 0) {
@@ -196,7 +177,7 @@ export class ArchiveProcessor {
         // Dialect-neutral retention cutoff: compute in JS and inject an ISO-8601
         // literal rather than DATEADD/GETUTCDATE, which don't exist on PostgreSQL.
         const cutoffIso = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
-        const filterParts = [`${dateField} < '${cutoffIso}'`];
+        const filterParts = [`[${dateField}] < '${cutoffIso}'`];
 
         if (eligibilityFilter) {
             filterParts.push(`(${eligibilityFilter})`);
@@ -206,6 +187,21 @@ export class ArchiveProcessor {
         }
 
         return filterParts.join(' AND ');
+    }
+
+    /**
+     * Returns the metadata name of the configured DateField, or throws when it is missing
+     * or is not a field of the entity.
+     */
+    private requireDateField(configEntity: MJArchiveConfigurationEntityEntity, entityInfo: EntityInfo): string {
+        if (!configEntity.DateField) {
+            throw new Error(`ArchiveConfigurationEntity ${configEntity.ID} has no DateField, so no retention cutoff can be applied`);
+        }
+        const field = entityInfo.FieldByName(configEntity.DateField);
+        if (!field || /[[\]]/.test(field.Name)) {
+            throw new Error(`DateField "${configEntity.DateField}" is not a field of entity "${entityInfo.Name}"`);
+        }
+        return field.Name;
     }
 
     // ========================================
