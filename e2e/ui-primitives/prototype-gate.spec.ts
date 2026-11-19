@@ -42,6 +42,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await page.keyboard.press('ArrowDown');
     await expect(listboxOptions.nth(1)).toBeFocused();
     await expect(listboxOptions.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(listboxOptions.nth(1)).toHaveClass(/\bis-selected\b/);
     await expect(listboxOptions.nth(1)).toHaveAttribute('tabindex', '0');
     await expect(listboxOptions.nth(0)).toHaveAttribute('tabindex', '-1');
 
@@ -58,17 +59,25 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     expect(baseSmShadow).not.toBe('none');
     expect(baseSmShadow).not.toContain('rgba(0, 0, 0, 0) 0px 0px');
 
-    // Custom Element removeAttribute reactivity (standard HTML boolean attribute removal)
+    // Custom Element removeAttribute reactivity + .is-selected state class (no data-* visual state)
     const thirdOption = listboxOptions.nth(2);
     await thirdOption.evaluate((el) => el.setAttribute('selected', ''));
-    await expect(thirdOption).toHaveAttribute('data-selected', 'true');
+    await expect(thirdOption).toHaveClass(/\bis-selected\b/);
     await thirdOption.evaluate((el) => el.removeAttribute('selected'));
-    await expect(thirdOption).toHaveAttribute('data-selected', 'false');
+    await expect(thirdOption).not.toHaveClass(/\bis-selected\b/);
 
     // Unlayered host rule wins without !important
     const overrideSurface = page.locator('.host-override-surface');
     await expect(overrideSurface).toHaveCSS('border-top-style', 'dashed');
     await expect(overrideSurface).toHaveCSS('border-top-width', '2px');
+
+    // Tier 3 --mj-surface-bg override on an outer surface must not bleed into a nested <mj-surface>
+    const sunkenSurface = overrideSurface.locator('mj-surface[level="sunken"]');
+    const defaultSunkenBg = await sunkenSurface.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await overrideSurface.evaluate((el) => el.style.setProperty('--mj-surface-bg', 'rgb(254, 242, 242)'));
+    await expect(overrideSurface).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+    await expect(sunkenSurface).toHaveCSS('background-color', defaultSunkenBg);
+    await overrideSurface.evaluate((el) => el.style.removeProperty('--mj-surface-bg'));
 
     // Part reorder: footer rendered before body in second surface
     const reorderedChildren = await overrideSurface.locator('> div').evaluateAll((els) =>
@@ -76,7 +85,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     );
     expect(reorderedChildren).toEqual(['mj-surface-footer', 'mj-surface-body']);
 
-    // Open-axis custom tone (plum) & role (nav-item) from :root tokens only
+    // Open-axis custom tone (plum) & visual-role (nav-item) from :root tokens only
     const plumRow = page.locator('mj-row[tone="plum"]');
     await expect(plumRow).toHaveCSS('color', 'rgb(112, 26, 117)');
     await expect(plumRow).toHaveCSS('padding-left', '16px');
@@ -95,12 +104,11 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(plumRow).toHaveCSS('color', 'rgb(140, 59, 31)');
 
     // Sunken well in right card must be warm oatmeal (#efe6d5 -> rgb(239, 230, 213)), not cool MJ slate (#f1f5f9)
-    const sunkenSurface = overrideSurface.locator('mj-surface[level="sunken"]');
     await expect(sunkenSurface).toHaveCSS('background-color', 'rgb(239, 230, 213)');
 
     const selectedRow = page.locator('mj-row[selected="true"]').first();
     const lxpSelectedBg = await selectedRow.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(lxpSelectedBg).not.toBe('rgb(230, 243, 249)');
+    expect(lxpSelectedBg).not.toBe('rgb(235, 244, 250)');
 
     await expect(page).toHaveScreenshot(`gate-lxp-light-${testInfo.project.name}.png`, {
       fullPage: false,
@@ -196,7 +204,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(overlays).toHaveCount(0);
     await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
 
-    // Menu popover: aria-expanded syncs, focus enters checked menuitemradio, ArrowDown + Enter selects LXP and returns focus
+    // Menu popover: defaults to non-modal (no aria-modal), aria-expanded syncs, focus enters checked menuitemradio, ArrowDown + Enter selects LXP and returns focus
     const openPopoverBtn = page.locator('#open-popover');
     await expect(openPopoverBtn).toHaveAttribute('aria-expanded', 'false');
     await openPopoverBtn.click();
@@ -204,6 +212,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
 
     const menu = page.locator('.cdk-overlay-container [role="menu"]');
     await expect(menu).toBeVisible();
+    await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
 
     const mjItem = menu.locator('[role="menuitemradio"][data-popover-action="mj"]');
     const lxpItem = menu.locator('[role="menuitemradio"][data-popover-action="lxp"]');

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,10 +23,16 @@ const server = createServer((req, res) => {
     rel.startsWith('dist/') || rel.startsWith('sample/') ? rel : join('sample', rel)
   );
 
-  if (
-    !target.startsWith(packageRoot + sep) ||
-    !statSync(target, { throwIfNoEntry: false })?.isFile()
-  ) {
+  if (!target.startsWith(packageRoot + sep)) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
+
+  let rawBuffer;
+  try {
+    rawBuffer = readFileSync(target);
+  } catch {
     res.writeHead(404);
     res.end('Not found');
     return;
@@ -35,7 +41,7 @@ const server = createServer((req, res) => {
   const ext = extname(target);
   if (ext === '.html') {
     const nonce = randomBytes(16).toString('base64');
-    const html = readFileSync(target, 'utf8').replaceAll('__CSP_NONCE__', nonce);
+    const html = rawBuffer.toString('utf8').replaceAll('__CSP_NONCE__', () => nonce);
     res.writeHead(200, {
       'Content-Type': MIME['.html'],
       'Content-Security-Policy':
@@ -46,7 +52,7 @@ const server = createServer((req, res) => {
   }
 
   res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-  res.end(readFileSync(target));
+  res.end(rawBuffer);
 });
 
 server.listen(port, '127.0.0.1', () => {

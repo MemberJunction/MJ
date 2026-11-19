@@ -290,7 +290,7 @@ body {
 :root {
   --mj-tone-plum-text: #701a75;
   --mj-tone-plum-bg-selected: #fae8ff;
-  --mj-role-nav-item-padding-inline: var(--mj-space-4);
+  --mj-visual-role-nav-item-padding-inline: var(--mj-space-4);
 }
 
 [data-theme='dark'] {

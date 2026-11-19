@@ -6,7 +6,7 @@ import {
   computed,
   input,
 } from '@angular/core';
-import { sanitizeAxisSlug } from '../types/events';
+import { SanitizeAxisSlug } from '../types/events';
 
 @Directive({
   selector: '[mjSurfaceHeader]',
@@ -32,6 +32,7 @@ export class MJSurfaceFooterDirective {}
 /**
  * Wave 0 surface primitive. Uses standard MJ PascalCase inputs (`[Level]`, `[Tone]`, `[VisualRole]`);
  * the Angular Elements entry maps kebab-case HTML attributes onto these properties automatically.
+ * State styling uses `.is-selected` and `.is-hover` compounded with `.mj-surface` (never `data-*`).
  */
 @Component({
   selector: 'mj-surface',
@@ -40,20 +41,18 @@ export class MJSurfaceFooterDirective {}
   template: `<ng-content />`,
   host: {
     '[class]': 'hostClasses()',
-    '[attr.data-level]': 'safeLevel()',
-    '[attr.data-elevation]': 'Elevation()',
-    '[attr.data-interactive]': 'Interactive()',
-    '[attr.data-selected]': 'Selected()',
-    '[attr.data-padding]': 'Padding()',
-    '[attr.data-tone]': 'safeTone()',
-    '[attr.data-role]': 'safeRole()',
+    '[class.mj-surface-interactive]': 'Interactive() && safeLevel() !== "sunken"',
+    '[class.is-selected]': 'Selected() && safeLevel() !== "sunken"',
+    '[style.--_mj-surface-elevation-shadow]': 'elevationShadowVar()',
+    '[style.--_mj-surface-explicit-padding]': 'explicitPaddingVar()',
+    '[style.--_mj-surface-explicit-radius]': 'explicitRadiusVar()',
     '[style.--_mj-tone-text]': 'toneTextVar()',
     '[style.--_mj-tone-border]': 'toneBorderVar()',
     '[style.--_mj-tone-bg]': 'toneBgVar()',
-    '[style.--_mj-role-bg]': 'roleBgVar()',
-    '[style.--_mj-role-border]': 'roleBorderVar()',
-    '[style.--_mj-role-radius]': 'roleRadiusVar()',
-    '[style.--_mj-role-padding]': 'rolePaddingVar()',
+    '[style.--_mj-visual-role-bg]': 'visualRoleBgVar()',
+    '[style.--_mj-visual-role-border]': 'visualRoleBorderVar()',
+    '[style.--_mj-visual-role-radius]': 'visualRoleRadiusVar()',
+    '[style.--_mj-visual-role-padding]': 'visualRolePaddingVar()',
   },
 })
 export class MJSurfaceComponent {
@@ -62,16 +61,50 @@ export class MJSurfaceComponent {
   public readonly Interactive = input(false, { transform: booleanAttribute });
   public readonly Selected = input(false, { transform: booleanAttribute });
   public readonly Padding = input<string>('md');
+  public readonly Radius = input<string>('surface');
   public readonly Tone = input<string>('neutral');
   public readonly VisualRole = input<string>('surface');
 
-  protected readonly safeLevel = computed(() => sanitizeAxisSlug(this.Level(), 'base'));
-  protected readonly safeTone = computed(() => sanitizeAxisSlug(this.Tone(), 'neutral'));
-  protected readonly safeRole = computed(() => sanitizeAxisSlug(this.VisualRole(), 'surface'));
+  protected readonly safeLevel = computed(() => SanitizeAxisSlug(this.Level(), 'base'));
+  protected readonly safeTone = computed(() => SanitizeAxisSlug(this.Tone(), 'neutral'));
+  protected readonly safeRole = computed(() => SanitizeAxisSlug(this.VisualRole(), 'surface'));
 
   protected readonly hostClasses = computed(
     () => `mj-surface mj-surface-${this.safeLevel()}`
   );
+
+  protected readonly elevationShadowVar = computed(() => {
+    const elevation = SanitizeAxisSlug(this.Elevation(), 'none');
+    if (elevation === 'none') {
+      return null;
+    }
+    return `var(--mj-shadow-${elevation})`;
+  });
+
+  protected readonly explicitPaddingVar = computed(() => {
+    const padding = SanitizeAxisSlug(this.Padding(), 'md');
+    if (padding === 'md') {
+      return null;
+    }
+    if (padding === 'none') {
+      return 'var(--mj-space-0)';
+    }
+    if (padding === 'sm') {
+      return 'var(--mj-space-3)';
+    }
+    if (padding === 'lg') {
+      return 'var(--mj-space-6)';
+    }
+    return `var(--mj-space-${padding})`;
+  });
+
+  protected readonly explicitRadiusVar = computed(() => {
+    const radius = SanitizeAxisSlug(this.Radius(), 'surface');
+    if (radius === 'surface') {
+      return null;
+    }
+    return `var(--mj-radius-${radius})`;
+  });
 
   protected readonly toneTextVar = computed(() =>
     this.safeTone() === 'neutral'
@@ -89,24 +122,24 @@ export class MJSurfaceComponent {
       : `var(--mj-tone-${this.safeTone()}-bg, var(--mj-surface-bg, var(--_mj-surface-level-bg, var(--mj-bg-surface))))`
   );
 
-  protected readonly roleBgVar = computed(() =>
+  protected readonly visualRoleBgVar = computed(() =>
     this.safeRole() === 'surface'
       ? null
-      : `var(--mj-role-${this.safeRole()}-bg, var(--_mj-tone-bg, var(--mj-surface-bg, var(--_mj-surface-level-bg, var(--mj-bg-surface)))))`
+      : `var(--mj-visual-role-${this.safeRole()}-bg, var(--_mj-tone-bg, var(--mj-surface-bg, var(--_mj-surface-level-bg, var(--mj-bg-surface)))))`
   );
-  protected readonly roleBorderVar = computed(() =>
+  protected readonly visualRoleBorderVar = computed(() =>
     this.safeRole() === 'surface'
       ? null
-      : `var(--mj-role-${this.safeRole()}-border, var(--_mj-tone-border, var(--mj-surface-border, var(--_mj-surface-level-border, var(--mj-border-default)))))`
+      : `var(--mj-visual-role-${this.safeRole()}-border, var(--_mj-tone-border, var(--mj-surface-border, var(--_mj-surface-level-border, var(--mj-border-default)))))`
   );
-  protected readonly roleRadiusVar = computed(() =>
+  protected readonly visualRoleRadiusVar = computed(() =>
     this.safeRole() === 'surface'
       ? null
-      : `var(--mj-role-${this.safeRole()}-radius, var(--mj-surface-radius, var(--mj-radius-surface)))`
+      : `var(--mj-visual-role-${this.safeRole()}-radius, var(--_mj-surface-explicit-radius, var(--mj-surface-radius, var(--mj-radius-surface))))`
   );
-  protected readonly rolePaddingVar = computed(() =>
+  protected readonly visualRolePaddingVar = computed(() =>
     this.safeRole() === 'surface'
       ? null
-      : `var(--mj-role-${this.safeRole()}-padding, var(--mj-surface-padding, var(--mj-space-5)))`
+      : `var(--mj-visual-role-${this.safeRole()}-padding, var(--_mj-surface-explicit-padding, var(--mj-surface-padding, var(--mj-space-5))))`
   );
 }

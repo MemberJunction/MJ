@@ -18,7 +18,7 @@ const cdkPkgDir = dirname(require.resolve('@angular/cdk/package.json'));
 const cdkOverlayCss = readFileSync(join(cdkPkgDir, 'overlay-prebuilt.css'), 'utf8');
 const cdkA11yCss = readFileSync(join(cdkPkgDir, 'a11y-prebuilt.css'), 'utf8');
 
-// 3. Wave 0 foundation additions (WS6b radius roles, control heights, surface levels, open tone defaults).
+// 3. Wave 0 foundation additions (WS6b radius roles, control heights, surface levels, split border tokens, open tone defaults).
 const wave0FoundationCss = `
 :root {
   --mj-control-height-sm: 32px;
@@ -30,7 +30,8 @@ const wave0FoundationCss = `
   --mj-radius-overlay: var(--mj-radius-lg);
   --mj-radius-pill: var(--mj-radius-full);
 
-  --mj-z-overlay: 1200;
+  --mj-surface-border-width: 1px;
+  --mj-surface-border-style: solid;
 
   --mj-surface-sunken-bg: var(--mj-bg-surface-sunken);
   --mj-surface-sunken-border: var(--mj-border-subtle);
@@ -38,21 +39,23 @@ const wave0FoundationCss = `
 
   --mj-surface-base-bg: var(--mj-bg-surface);
   --mj-surface-base-bg-hover: var(--mj-bg-surface-hover);
-  --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   --mj-surface-base-border: var(--mj-border-default);
   --mj-surface-base-border-selected: var(--mj-brand-primary);
   --mj-surface-base-shadow: 0 0 transparent;
 
   --mj-surface-elevated-bg: var(--mj-bg-surface-elevated);
   --mj-surface-elevated-bg-hover: var(--mj-bg-surface-hover);
-  --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface-elevated));
+  --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
   --mj-surface-elevated-border: var(--mj-border-default);
   --mj-surface-elevated-border-selected: var(--mj-brand-primary);
   --mj-surface-elevated-shadow: var(--mj-shadow-md);
 
   --mj-surface-overlay-bg: var(--mj-bg-surface-elevated);
   --mj-surface-overlay-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
   --mj-surface-overlay-border: var(--mj-border-default);
+  --mj-surface-overlay-border-selected: var(--mj-brand-primary);
   --mj-surface-overlay-shadow: var(--mj-shadow-xl);
 
   --mj-tone-success-text: var(--mj-status-success-text);
@@ -66,6 +69,10 @@ const wave0FoundationCss = `
   --mj-tone-error-text: var(--mj-status-error-text);
   --mj-tone-error-border: var(--mj-status-error-border);
   --mj-tone-error-bg: var(--mj-status-error-bg);
+
+  --mj-tone-info-text: var(--mj-status-info-text);
+  --mj-tone-info-border: var(--mj-status-info-border);
+  --mj-tone-info-bg: var(--mj-status-info-bg);
 }
 
 @media (pointer: coarse) {
@@ -78,6 +85,7 @@ const wave0FoundationCss = `
 [data-theme='dark'] {
   --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
   --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface-elevated));
+  --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface-elevated));
   --mj-surface-elevated-text-secondary: var(--mj-color-neutral-200);
   --mj-surface-elevated-text-muted: var(--mj-color-neutral-300);
   --mj-surface-overlay-text-secondary: var(--mj-color-neutral-200);
@@ -87,6 +95,8 @@ const wave0FoundationCss = `
 .mj-surface-sunken {
   --_mj-surface-level-bg: var(--mj-surface-sunken-bg);
   --_mj-surface-level-border: var(--mj-surface-sunken-border);
+  --_mj-surface-level-border-width: var(--mj-surface-sunken-border-width, var(--mj-surface-border-width));
+  --_mj-surface-level-border-style: var(--mj-surface-sunken-border-style, var(--mj-surface-border-style));
   --_mj-surface-level-shadow: var(--mj-surface-sunken-shadow);
 }
 
@@ -96,6 +106,8 @@ const wave0FoundationCss = `
   --_mj-surface-level-bg-selected: var(--mj-surface-base-bg-selected);
   --_mj-surface-level-border: var(--mj-surface-base-border);
   --_mj-surface-level-border-selected: var(--mj-surface-base-border-selected);
+  --_mj-surface-level-border-width: var(--mj-surface-base-border-width, var(--mj-surface-border-width));
+  --_mj-surface-level-border-style: var(--mj-surface-base-border-style, var(--mj-surface-border-style));
   --_mj-surface-level-shadow: var(--mj-surface-base-shadow);
 }
 
@@ -105,6 +117,8 @@ const wave0FoundationCss = `
   --_mj-surface-level-bg-selected: var(--mj-surface-elevated-bg-selected);
   --_mj-surface-level-border: var(--mj-surface-elevated-border);
   --_mj-surface-level-border-selected: var(--mj-surface-elevated-border-selected);
+  --_mj-surface-level-border-width: var(--mj-surface-elevated-border-width, var(--mj-surface-border-width));
+  --_mj-surface-level-border-style: var(--mj-surface-elevated-border-style, var(--mj-surface-border-style));
   --_mj-surface-level-shadow: var(--mj-surface-elevated-shadow);
   --mj-text-secondary: var(--mj-surface-elevated-text-secondary, var(--mj-text-secondary));
   --mj-text-muted: var(--mj-surface-elevated-text-muted, var(--mj-text-muted));
@@ -113,7 +127,11 @@ const wave0FoundationCss = `
 .mj-surface-overlay {
   --_mj-surface-level-bg: var(--mj-surface-overlay-bg);
   --_mj-surface-level-bg-hover: var(--mj-surface-overlay-bg-hover);
+  --_mj-surface-level-bg-selected: var(--mj-surface-overlay-bg-selected);
   --_mj-surface-level-border: var(--mj-surface-overlay-border);
+  --_mj-surface-level-border-selected: var(--mj-surface-overlay-border-selected);
+  --_mj-surface-level-border-width: var(--mj-surface-overlay-border-width, var(--mj-surface-border-width));
+  --_mj-surface-level-border-style: var(--mj-surface-overlay-border-style, var(--mj-surface-border-style));
   --_mj-surface-level-shadow: var(--mj-surface-overlay-shadow);
   --mj-text-secondary: var(--mj-surface-overlay-text-secondary, var(--mj-text-secondary));
   --mj-text-muted: var(--mj-surface-overlay-text-muted, var(--mj-text-muted));

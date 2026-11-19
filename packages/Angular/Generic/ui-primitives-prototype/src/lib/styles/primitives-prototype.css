@@ -1,4 +1,8 @@
 @layer primitives {
+  .cdk-overlay-container {
+    z-index: var(--mj-layer-z, var(--mj-z-dialog, 1200));
+  }
+
   .mj-layer-backdrop {
     background: var(--mj-layer-backdrop-bg, var(--mj-bg-overlay));
     backdrop-filter: blur(3px);
@@ -7,6 +11,12 @@
   /* ========================================
      mj-surface
      ======================================== */
+  .mj-surface .mj-surface {
+    --mj-surface-bg: initial;
+    --mj-surface-border: initial;
+    --mj-surface-shadow: initial;
+  }
+
   mj-surface,
   .mj-surface {
     --_mj-surface-resolved-shadow: var(
@@ -19,53 +29,38 @@
     font-family: var(--mj-font-family);
     color: var(--_mj-tone-text, var(--mj-text-primary));
     background: var(
-      --_mj-role-bg,
+      --_mj-visual-role-bg,
       var(--_mj-tone-bg, var(--mj-surface-bg, var(--_mj-surface-level-bg, var(--mj-bg-surface))))
     );
-    border: 1px solid
+    border-width: var(--_mj-surface-level-border-width, var(--mj-surface-border-width, 1px));
+    border-style: var(--_mj-surface-level-border-style, var(--mj-surface-border-style, solid));
+    border-color: var(
+      --_mj-visual-role-border,
       var(
-        --_mj-role-border,
-        var(
-          --_mj-tone-border,
-          var(--mj-surface-border, var(--_mj-surface-level-border, var(--mj-border-default)))
-        )
-      );
-    border-radius: var(--_mj-role-radius, var(--mj-surface-radius, var(--mj-radius-surface)));
-    padding: var(--_mj-role-padding, var(--mj-surface-padding, var(--mj-space-5)));
+        --_mj-tone-border,
+        var(--mj-surface-border, var(--_mj-surface-level-border, var(--mj-border-default)))
+      )
+    );
+    border-radius: var(
+      --_mj-visual-role-radius,
+      var(--_mj-surface-explicit-radius, var(--mj-surface-radius, var(--mj-radius-surface)))
+    );
+    padding: var(
+      --_mj-visual-role-padding,
+      var(--_mj-surface-explicit-padding, var(--mj-surface-padding, var(--mj-space-5)))
+    );
     box-shadow: var(--_mj-surface-resolved-shadow);
     gap: var(--mj-surface-gap, var(--mj-space-4));
     transition: background-color var(--mj-transition-fast), border-color var(--mj-transition-fast), box-shadow var(--mj-transition-fast);
   }
 
-  .mj-surface[data-padding='none'] {
-    --mj-surface-padding: var(--mj-space-0);
-  }
-
-  .mj-surface[data-padding='sm'] {
-    --mj-surface-padding: var(--mj-space-3);
-  }
-
-  .mj-surface[data-padding='lg'] {
-    --mj-surface-padding: var(--mj-space-6);
-  }
-
-  .mj-surface[data-elevation='sm'] {
-    --_mj-surface-elevation-shadow: var(--mj-shadow-sm);
-  }
-
-  .mj-surface[data-elevation='md'] {
-    --_mj-surface-elevation-shadow: var(--mj-shadow-md);
-  }
-
-  .mj-surface[data-elevation='lg'] {
-    --_mj-surface-elevation-shadow: var(--mj-shadow-lg);
-  }
-
-  .mj-surface[data-interactive='true']:not(.mj-surface-sunken):hover {
+  .mj-surface.mj-surface-interactive:not(.mj-surface-sunken):hover,
+  .mj-surface.mj-surface-interactive:not(.mj-surface-sunken).is-hover,
+  .mj-surface:not(.mj-surface-sunken).is-hover {
     background: var(--mj-surface-bg-hover, var(--_mj-surface-level-bg-hover, var(--mj-bg-surface-hover)));
   }
 
-  .mj-surface[data-selected='true']:not(.mj-surface-sunken) {
+  .mj-surface.is-selected:not(.mj-surface-sunken) {
     background: var(--mj-surface-bg-selected, var(--_mj-surface-level-bg-selected, var(--mj-surface-base-bg-selected)));
     border-color: var(--mj-surface-border-selected, var(--_mj-surface-level-border-selected, var(--mj-brand-primary)));
   }
@@ -115,42 +110,38 @@
     box-sizing: border-box;
     font-family: var(--mj-font-family);
     color: var(--_mj-tone-text, var(--mj-row-text, var(--mj-text-primary)));
-    background: var(--_mj-role-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)));
-    min-height: var(--mj-row-min-height, var(--mj-control-height-md));
-    padding: var(--_mj-role-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))
-      var(--_mj-role-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)));
+    background: var(--_mj-visual-role-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)));
+    min-height: var(--_mj-row-explicit-min-height, var(--mj-row-min-height, var(--mj-control-height-md)));
+    padding: var(
+        --_mj-visual-role-padding-block,
+        var(--_mj-row-explicit-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))
+      )
+      var(
+        --_mj-visual-role-padding-inline,
+        var(--_mj-row-explicit-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))
+      );
     gap: var(--mj-row-gap, var(--mj-space-3));
-    border-radius: var(--_mj-role-radius, var(--mj-row-radius, var(--mj-radius-control)));
-    border: 1px solid var(--_mj-role-border, var(--_mj-tone-border, var(--mj-row-border, transparent)));
+    border-radius: var(--_mj-visual-role-radius, var(--mj-row-radius, var(--mj-radius-control)));
+    border: 1px solid var(--_mj-visual-role-border, var(--_mj-tone-border, var(--mj-row-border, transparent)));
     transition: background-color var(--mj-transition-fast), border-color var(--mj-transition-fast);
   }
 
-  .mj-row[data-density='sm'] {
-    --mj-row-min-height: var(--mj-control-height-sm);
-    --mj-row-padding-block: var(--mj-space-1-5);
-    --mj-row-padding-inline: var(--mj-space-2-5);
-  }
-
-  .mj-row[data-density='lg'] {
-    --mj-row-min-height: var(--mj-control-height-lg);
-    --mj-row-padding-block: var(--mj-space-3);
-    --mj-row-padding-inline: var(--mj-space-4);
-  }
-
-  .mj-row[data-interactive='true'] {
+  .mj-row.mj-row-interactive {
     cursor: pointer;
   }
 
-  .mj-row[data-interactive='true']:not([data-disabled='true']):hover {
+  .mj-row.mj-row-interactive:not(.mj-row-disabled):hover,
+  .mj-row.mj-row-interactive:not(.mj-row-disabled).is-hover,
+  .mj-row:not(.mj-row-disabled).is-hover {
     background: var(--mj-row-bg-hover, var(--mj-bg-surface-hover));
   }
 
-  .mj-row[data-selected='true'] {
+  .mj-row.is-selected {
     background: var(--_mj-tone-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)));
     border-color: var(--_mj-tone-border, var(--mj-row-border-selected, var(--mj-brand-primary)));
   }
 
-  .mj-row[data-disabled='true'] {
+  .mj-row.mj-row-disabled {
     opacity: 0.55;
     cursor: not-allowed;
     color: var(--mj-text-disabled);
@@ -203,7 +194,9 @@
     font-family: var(--mj-font-family);
     color: var(--mj-text-primary);
     background: var(--mj-layer-bg, var(--mj-surface-overlay-bg));
-    border: 1px solid var(--mj-layer-border, var(--mj-surface-overlay-border));
+    border-width: var(--_mj-surface-level-border-width, var(--mj-surface-border-width, 1px));
+    border-style: var(--_mj-surface-level-border-style, var(--mj-surface-border-style, solid));
+    border-color: var(--mj-layer-border, var(--mj-surface-overlay-border));
     border-radius: var(--mj-layer-radius, var(--mj-radius-overlay));
     box-shadow: var(--mj-layer-shadow, var(--mj-surface-overlay-shadow));
     padding: var(--mj-layer-padding, var(--mj-space-6));
@@ -265,15 +258,15 @@
     box-shadow: var(--mj-layer-shadow, var(--mj-surface-overlay-shadow)), var(--mj-focus-ring);
   }
 
-  .mj-layer-panel[data-size='sm'] {
+  .mj-layer-panel.mj-layer-size-sm {
     --mj-layer-max-width: 380px;
   }
 
-  .mj-layer-panel[data-size='lg'] {
+  .mj-layer-panel.mj-layer-size-lg {
     --mj-layer-max-width: 720px;
   }
 
-  .mj-layer-panel[data-kind='sheet'] {
+  .mj-layer-panel.mj-layer-kind-sheet {
     border-radius: 0;
     border-top: none;
     border-bottom: none;
@@ -284,8 +277,8 @@
     animation: mj-sheet-in-end 220ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .mj-layer-panel[data-kind='popover'],
-  .mj-layer-panel[data-kind='menu'] {
+  .mj-layer-panel.mj-layer-kind-popover,
+  .mj-layer-panel.mj-layer-kind-menu {
     --mj-layer-max-width: 280px;
     --mj-layer-padding: var(--mj-space-2-5);
     gap: var(--mj-space-1-5);
@@ -293,7 +286,7 @@
     animation: mj-popover-in 120ms ease-out;
   }
 
-  .mj-layer-panel[data-kind='sheet'][data-placement='bottom'] {
+  .mj-layer-panel.mj-layer-kind-sheet.mj-layer-placement-bottom {
     width: 100vw;
     height: auto;
     max-height: 85vh;
@@ -307,7 +300,7 @@
       width: 100% !important;
     }
 
-    .mj-layer-panel[data-kind='dialog'][data-allow-phone-sheet='true'] {
+    .mj-layer-panel.mj-layer-kind-dialog.mj-layer-phone-sheet {
       width: 100%;
       max-width: 100%;
       max-height: 85vh;

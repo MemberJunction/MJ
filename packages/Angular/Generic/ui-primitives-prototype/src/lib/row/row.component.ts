@@ -12,10 +12,10 @@ import {
   signal,
 } from '@angular/core';
 import {
+  DispatchMJElementEvent,
   MJAfterEvent,
   MJBeforeEvent,
-  dispatchMJElementEvent,
-  sanitizeAxisSlug,
+  SanitizeAxisSlug,
 } from '../types/events';
 
 export type MJRowItemRole = 'button' | 'option' | 'menuitem' | 'menuitemradio';
@@ -54,6 +54,7 @@ export class MJRowTrailingDirective {}
  * - Interactive (`Interactive = true`): defaults `ItemRole` to `'button'` so standalone rows are valid ARIA
  *   without a listbox parent. When `ItemRole === 'option'` inside `[role="listbox"]`, uses roving `tabindex`
  *   (one Tab stop per listbox) and ArrowDown/ArrowUp/Home/End navigation.
+ * - State styling uses `.is-selected` and `.is-hover` compounded with `.mj-row` (never `data-*`).
  */
 @Component({
   selector: 'mj-row',
@@ -62,21 +63,21 @@ export class MJRowTrailingDirective {}
   template: `<ng-content />`,
   host: {
     class: 'mj-row',
-    '[attr.data-density]': 'Density()',
-    '[attr.data-interactive]': 'Interactive()',
-    '[attr.data-selected]': 'isHighlighted()',
-    '[attr.data-disabled]': 'Disabled()',
-    '[attr.data-tone]': 'safeTone()',
-    '[attr.data-role]': 'safeRole()',
+    '[class.mj-row-interactive]': 'Interactive()',
+    '[class.mj-row-disabled]': 'Disabled()',
+    '[class.is-selected]': 'isHighlighted()',
+    '[style.--_mj-row-explicit-min-height]': 'densityMinHeightVar()',
+    '[style.--_mj-row-explicit-padding-block]': 'densityPaddingBlockVar()',
+    '[style.--_mj-row-explicit-padding-inline]': 'densityPaddingInlineVar()',
     '[style.--_mj-tone-text]': 'toneTextVar()',
     '[style.--_mj-tone-border]': 'toneBorderVar()',
     '[style.--_mj-tone-bg]': 'toneBgVar()',
     '[style.--_mj-tone-bg-selected]': 'toneBgSelectedVar()',
-    '[style.--_mj-role-bg]': 'roleBgVar()',
-    '[style.--_mj-role-border]': 'roleBorderVar()',
-    '[style.--_mj-role-radius]': 'roleRadiusVar()',
-    '[style.--_mj-role-padding-block]': 'rolePaddingBlockVar()',
-    '[style.--_mj-role-padding-inline]': 'rolePaddingInlineVar()',
+    '[style.--_mj-visual-role-bg]': 'visualRoleBgVar()',
+    '[style.--_mj-visual-role-border]': 'visualRoleBorderVar()',
+    '[style.--_mj-visual-role-radius]': 'visualRoleRadiusVar()',
+    '[style.--_mj-visual-role-padding-block]': 'visualRolePaddingBlockVar()',
+    '[style.--_mj-visual-role-padding-inline]': 'visualRolePaddingInlineVar()',
     '[attr.role]': 'ariaRole()',
     '[attr.tabindex]': 'rovingTabIndex()',
     '[attr.aria-selected]': 'ariaSelected()',
@@ -106,11 +107,42 @@ export class MJRowComponent {
   public readonly BeforeSelect = output<MJBeforeEvent<'user'>>();
   public readonly AfterSelect = output<MJAfterEvent<'user'>>();
 
-  protected readonly safeTone = computed(() => sanitizeAxisSlug(this.Tone(), 'neutral'));
-  protected readonly safeRole = computed(() => sanitizeAxisSlug(this.VisualRole(), 'row'));
+  protected readonly safeDensity = computed(() => SanitizeAxisSlug(this.Density(), 'md'));
+  protected readonly safeTone = computed(() => SanitizeAxisSlug(this.Tone(), 'neutral'));
+  protected readonly safeRole = computed(() => SanitizeAxisSlug(this.VisualRole(), 'row'));
   protected readonly isHighlighted = computed(
     () => this.Selected() || this.Pressed() === true
   );
+
+  protected readonly densityMinHeightVar = computed(() => {
+    const density = this.safeDensity();
+    if (density === 'md') {
+      return null;
+    }
+    return `var(--mj-control-height-${density})`;
+  });
+
+  protected readonly densityPaddingBlockVar = computed(() => {
+    const density = this.safeDensity();
+    if (density === 'sm') {
+      return 'var(--mj-space-1-5)';
+    }
+    if (density === 'lg') {
+      return 'var(--mj-space-3)';
+    }
+    return null;
+  });
+
+  protected readonly densityPaddingInlineVar = computed(() => {
+    const density = this.safeDensity();
+    if (density === 'sm') {
+      return 'var(--mj-space-2-5)';
+    }
+    if (density === 'lg') {
+      return 'var(--mj-space-4)';
+    }
+    return null;
+  });
 
   protected readonly ariaRole = computed(() =>
     this.Interactive() ? this.ItemRole() : null
@@ -164,30 +196,30 @@ export class MJRowComponent {
       : `var(--mj-tone-${this.safeTone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
   );
 
-  protected readonly roleBgVar = computed(() =>
+  protected readonly visualRoleBgVar = computed(() =>
     this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.safeRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
+      : `var(--mj-visual-role-${this.safeRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
   );
-  protected readonly roleBorderVar = computed(() =>
+  protected readonly visualRoleBorderVar = computed(() =>
     this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.safeRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
+      : `var(--mj-visual-role-${this.safeRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
   );
-  protected readonly roleRadiusVar = computed(() =>
+  protected readonly visualRoleRadiusVar = computed(() =>
     this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.safeRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
+      : `var(--mj-visual-role-${this.safeRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
   );
-  protected readonly rolePaddingBlockVar = computed(() =>
+  protected readonly visualRolePaddingBlockVar = computed(() =>
     this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.safeRole()}-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))`
+      : `var(--mj-visual-role-${this.safeRole()}-padding-block, var(--_mj-row-explicit-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5))))`
   );
-  protected readonly rolePaddingInlineVar = computed(() =>
+  protected readonly visualRolePaddingInlineVar = computed(() =>
     this.safeRole() === 'row'
       ? null
-      : `var(--mj-role-${this.safeRole()}-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))`
+      : `var(--mj-visual-role-${this.safeRole()}-padding-inline, var(--_mj-row-explicit-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3))))`
   );
 
   constructor() {
@@ -209,7 +241,7 @@ export class MJRowComponent {
           console.error(
             '[mj-row] WCAG 4.1.2 violation: ItemRole="option" requires an ancestor [role="listbox"].'
           );
-        } else if (!listbox.querySelector('[role="option"][data-selected="true"]')) {
+        } else if (!listbox.querySelector('[role="option"].is-selected, [role="option"][aria-selected="true"]')) {
           const firstOption = listbox.querySelector<HTMLElement>(
             '[role="option"]:not([aria-disabled="true"])'
           );
@@ -219,7 +251,7 @@ export class MJRowComponent {
         }
       } else if (role === 'menuitem' || role === 'menuitemradio') {
         const menu = el.closest<HTMLElement>('[role="menu"], [role="menubar"]');
-        if (menu && !menu.querySelector('[data-selected="true"]')) {
+        if (menu && !menu.querySelector('.mj-row.is-selected, [aria-checked="true"]')) {
           const firstItem = menu.querySelector<HTMLElement>(
             '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
           );
@@ -237,7 +269,9 @@ export class MJRowComponent {
     }
     const el = this.hostEl.nativeElement;
     const container = el.closest<HTMLElement>('[role="listbox"], [role="menu"], [role="menubar"]');
-    const selectedSibling = container?.querySelector<HTMLElement>('[data-selected="true"]');
+    const selectedSibling = container?.querySelector<HTMLElement>(
+      '.mj-row.is-selected, [aria-selected="true"], [aria-checked="true"]'
+    );
     if (selectedSibling && selectedSibling !== el) {
       this.fallbackTabStop.set(false);
     }
@@ -294,13 +328,13 @@ export class MJRowComponent {
 
     const before: MJBeforeEvent<'user'> = { Cancel: false, Reason: 'user' };
     this.BeforeSelect.emit(before);
-    dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-select', before);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-select', before);
     if (before.Cancel) {
       return;
     }
 
     const after: MJAfterEvent<'user'> = { Reason: 'user' };
     this.AfterSelect.emit(after);
-    dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-select', after);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-select', after);
   }
 }

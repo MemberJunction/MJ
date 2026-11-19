@@ -18,10 +18,22 @@ import {
 } from '@angular/core';
 import { MJLayerService } from '../services/layer.service';
 import { MJAnnouncerService } from '../services/announcer.service';
-import { MJAfterEvent, MJBeforeEvent, dispatchMJElementEvent } from '../types/events';
+import {
+  DispatchMJElementEvent,
+  MJAfterEvent,
+  MJBeforeEvent,
+  SanitizeAxisSlug,
+} from '../types/events';
 
 let nextLayerId = 0;
 let nextLayerTitleId = 0;
+
+function optionalModalBoolean(value: unknown): boolean | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  return booleanAttribute(value);
+}
 
 @Directive({
   selector: '[mjLayerHeader]',
@@ -71,16 +83,12 @@ export class MJLayerFooterDirective {}
     <div class="mj-layer-staging" aria-hidden="true">
       <div
         #layerPanel
-        class="mj-layer-panel mj-surface-overlay"
+        [class]="panelClasses()"
         tabindex="-1"
         [attr.role]="ariaRole()"
         [attr.aria-modal]="ariaModal()"
         [attr.aria-label]="Label() || null"
         [attr.aria-labelledby]="ariaLabelledBy()"
-        [attr.data-kind]="Kind()"
-        [attr.data-placement]="Placement()"
-        [attr.data-size]="Size()"
-        [attr.data-allow-phone-sheet]="AllowPhoneSheet()"
       >
         <ng-content />
       </div>
@@ -99,7 +107,9 @@ export class MJLayerComponent implements OnDestroy {
 
   public readonly Kind = input<string>('dialog');
   public readonly Placement = input<string>('center');
-  public readonly Modal = input(true, { transform: booleanAttribute });
+  public readonly Modal = input<boolean | undefined, unknown>(undefined, {
+    transform: optionalModalBoolean,
+  });
   public readonly Closeable = input(true, { transform: booleanAttribute });
   public readonly Size = input<string>('md');
   public readonly Open = input(false, { transform: booleanAttribute });
@@ -115,8 +125,35 @@ export class MJLayerComponent implements OnDestroy {
   private readonly isOpenState = signal(false);
   private isCurrentlyOpen = false;
 
+  protected readonly safeKind = computed(() => SanitizeAxisSlug(this.Kind(), 'dialog'));
+  protected readonly safePlacement = computed(() => SanitizeAxisSlug(this.Placement(), 'center'));
+  protected readonly safeSize = computed(() => SanitizeAxisSlug(this.Size(), 'md'));
+
+  protected readonly effectiveModal = computed(() => {
+    const explicit = this.Modal();
+    if (explicit !== undefined) {
+      return explicit;
+    }
+    const kind = this.safeKind();
+    return kind !== 'popover' && kind !== 'menu' && kind !== 'tooltip' && kind !== 'toast';
+  });
+
+  protected readonly panelClasses = computed(() => {
+    const classes = [
+      'mj-layer-panel',
+      'mj-surface-overlay',
+      `mj-layer-kind-${this.safeKind()}`,
+      `mj-layer-placement-${this.safePlacement()}`,
+      `mj-layer-size-${this.safeSize()}`,
+    ];
+    if (this.AllowPhoneSheet()) {
+      classes.push('mj-layer-phone-sheet');
+    }
+    return classes.join(' ');
+  });
+
   protected readonly ariaRole = computed(() => {
-    const kind = this.Kind();
+    const kind = this.safeKind();
     if (kind === 'menu') {
       return 'menu';
     }
@@ -130,10 +167,11 @@ export class MJLayerComponent implements OnDestroy {
   });
 
   protected readonly ariaModal = computed(() => {
-    if (this.Kind() === 'menu' || this.Kind() === 'toast' || this.Kind() === 'tooltip') {
+    const kind = this.safeKind();
+    if (kind === 'menu' || kind === 'toast' || kind === 'tooltip') {
       return null;
     }
-    return this.Modal() ? 'true' : null;
+    return this.effectiveModal() ? 'true' : null;
   });
 
   protected readonly ariaLabelledBy = computed(() => {
@@ -166,9 +204,9 @@ export class MJLayerComponent implements OnDestroy {
           this.layerService.Open({
             Id: this.layerId,
             PanelElement: panelEl,
-            Kind: this.Kind(),
-            Placement: this.Placement(),
-            Modal: this.Modal(),
+            Kind: this.safeKind(),
+            Placement: this.safePlacement(),
+            Modal: this.effectiveModal(),
             Closeable: this.Closeable(),
             AllowPhoneSheet: this.AllowPhoneSheet(),
             Anchor: this.Anchor(),
@@ -180,7 +218,7 @@ export class MJLayerComponent implements OnDestroy {
           }
           const after: MJAfterEvent<'open'> = { Reason: 'open' };
           this.AfterOpen.emit(after);
-          dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
+          DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
         });
       } else if (!shouldBeOpen && this.isCurrentlyOpen) {
         this.isCurrentlyOpen = false;
@@ -196,7 +234,7 @@ export class MJLayerComponent implements OnDestroy {
       Reason: reason,
     };
     this.BeforeClose.emit(before);
-    dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-close', before);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-close', before);
     if (before.Cancel) {
       return;
     }
@@ -207,7 +245,7 @@ export class MJLayerComponent implements OnDestroy {
 
     const after: MJAfterEvent<'escape' | 'backdrop' | 'programmatic'> = { Reason: reason };
     this.AfterClose.emit(after);
-    dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-close', after);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-close', after);
   }
 
   ngOnDestroy(): void {
