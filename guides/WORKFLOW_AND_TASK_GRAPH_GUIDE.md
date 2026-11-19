@@ -489,7 +489,7 @@ it:
 |---|---|---|
 | `Wait` | the dispatcher, once `DueAt` has passed (judged on the **database** clock) | its `until` cannot be resolved |
 | `External` | `TaskGraph.CompleteWaitingStep` — by task ID, or by correlation key | `expiresInHours` passes with no signal |
-| `Human` with `provider` | the provider, through the same completion call | `expiresInHours` passes; the provider is not registered; the provider refuses to raise it |
+| `Human` with `provider` | the provider, calling `TaskGraphWaitingSteps.CompleteWaitingStep` in process — never the remote operation, which refuses these steps | `expiresInHours` passes; the provider is not registered; the provider refuses to raise it |
 
 ### What a waiting step hands on
 
@@ -585,6 +585,10 @@ export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
 - The provider receives the step's instructions, its `providerConfiguration` untouched, the assigned
   and owning users, the deadline, and the payload the step was reached with.
 - `WithdrawTask` is called when the step expires. The default does nothing.
+- Only the provider completes the step, by calling `TaskGraphWaitingSteps.CompleteWaitingStep` in
+  process when the person decides. The `TaskGraph.CompleteWaitingStep` remote operation refuses
+  provider-raised Human steps: through it the run's owner, often the person asking for the approval,
+  could approve their own request.
 - An unregistered provider is **refused at submit**, by name; the dispatcher re-checks when it
   reaches the step, so a host that differs fails the step with the name rather than waiting forever.
 - Omitted, or `'AgentRequest'`, is the built-in inbox, unchanged.
