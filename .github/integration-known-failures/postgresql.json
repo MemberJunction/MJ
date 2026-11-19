@@ -6,7 +6,6 @@
         "codegen-determinism.CD3": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
         "codegen-determinism.CD5": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
         "codegen-determinism.CD6": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
-        "docs-slides-sheets-library-client.DSLC14": "A grantee's count_only read of MJ: Artifact Versions hits PostgreSQL's statement timeout; the row-level filter's count query needs a PostgreSQL index or plan fix.",
         "docs-slides-sheets-library-client.DSLC5": "PG metadata gap: no EntityField rows for MJ: Artifact Guest Share Links.Artifact, ArtifactVersion and CreatedByUser.",
         "docs-slides-sheets-library-client.DSLC6": "PG metadata gap: no EntityField rows for MJ: Artifact Guest Share Links.Artifact, ArtifactVersion and CreatedByUser.",
         "fls-closeout-client.CW1": "PG metadata gap: no EntityField row for MJ: Entities.EnableFieldLevelSecurity, so enabling field security over GraphQL never persists and the wire fixture cannot be provisioned.",
@@ -53,6 +52,7 @@
         "work-bus-core.fixtures": "PG metadata gap: the v5.46 PG baseline has no EntityField row for MJ: Entities.ExternalDataSourceID (the T-SQL baseline does), so the fixture fails with \"Field ExternalDataSourceID does not exist on MJ: Entities\"."
     },
     "Flaky": {
+        "docs-slides-sheets-library-client.DSLC14": "A grantee's count_only read of MJ: Artifact Versions runs close to PostgreSQL's statement timeout: it failed on one CI run and passed on the next. The row-level filter's count query needs a PostgreSQL index or plan fix.",
         "open-app-local-source.OLS10": "Open App refresh on a migrations-only PG database runs the old spUpdateExistingEntityFieldsFromSchema (about 2 minutes per call; the emitter's version with materialized catalog views takes about 85 ms, but no PG migration ships it). Whether each check fits the bundle's time budget depends on runner speed.",
         "open-app-local-source.OLS2": "Open App refresh on a migrations-only PG database runs the old spUpdateExistingEntityFieldsFromSchema (about 2 minutes per call; the emitter's version with materialized catalog views takes about 85 ms, but no PG migration ships it). Whether each check fits the bundle's time budget depends on runner speed.",
         "open-app-local-source.OLS3": "Open App refresh on a migrations-only PG database runs the old spUpdateExistingEntityFieldsFromSchema (about 2 minutes per call; the emitter's version with materialized catalog views takes about 85 ms, but no PG migration ships it). Whether each check fits the bundle's time budget depends on runner speed.",
