@@ -1,4 +1,5 @@
 import {
+    AuthorizationInfo,
     BaseEngine,
     BaseEnginePropertyConfig,
     BaseEntityEvent,
@@ -14,6 +15,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, MJGlobal, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EvaluateAuthorizationChecks } from '../custom/operations/EvaluateAuthorizationChecks';
 import {
     MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
@@ -53,12 +55,21 @@ export const GRAPH_MAX_NODES = 200;
 export const GRAPH_MAX_STORED_EDGES_PER_STEP = 1000;
 
 /**
+ * Named `MJ: Authorizations` grant required for every approval, rejection/deprecation, edit-of-approved,
+ * or delete-of-approved decision on `MJ: Graph Edges` and `MJ: Graph Concepts`.
+ */
+export const GRAPH_APPROVE_EDGES_AUTHORIZATION = 'Graph: Approve Edges';
+
+/**
  * Server operation key (`ServerOperationScopeManager`) under which the Content Pipeline `Graph` stage
- * saves the `Inferred` edges its content source's `GraphOverlay` policy approves (every
- * `ConceptTaxonomyMode` except `propose-only`). `MJGraphEdgeEntityServer` lets a new `Inferred` edge
- * start `Approved` without `Graph: Approve Edges` only inside this scope. Client CRUD entry points
- * (GraphQL, REST, transaction groups) run inside a client CRUD boundary that masks every outer scope,
- * so an API caller cannot enter it; only server code that names this key can.
+ * saves the newly synthesized `Approved` `MJ: Graph Concepts` and `Inferred` + `Approved`
+ * `MJ: Graph Edges` that its content source's `GraphOverlay` policy approves (every
+ * `ConceptTaxonomyMode` except `propose-only`). `MJGraphEdgeEntityServer` and
+ * `MJGraphConceptEntityServer` let a newly created policy-approved row start `Approved` without
+ * `Graph: Approve Edges` only inside this scope (never edits, deprecations, or status transitions on
+ * existing concepts). Client CRUD entry points (GraphQL, REST, transaction groups) run inside a client
+ * CRUD boundary that masks every outer scope, so an API caller cannot enter it; only server code
+ * that names this key can.
  */
 export const GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION = 'ContentPipeline.GraphStage.ApproveInferredEdges';
 /** Per-hop decay applied to best-first path scores, so near nodes outrank far ones. */
@@ -1492,6 +1503,22 @@ export function CanUserReadEntity(entity: EntityInfo | undefined, user: UserInfo
         return false;
     }
     return entity.GetUserPermisions(user)?.CanRead === true;
+}
+
+/**
+ * True only when `user` holds the `Graph: Approve Edges` authorization (directly or via an
+ * ancestor authorization) in `authorizations`. Fails closed when `user`, `authorizations`, or the
+ * seeded `Graph: Approve Edges` authorization is missing.
+ */
+export function CanUserApproveGraph(
+    user: UserInfo | null | undefined,
+    authorizations: AuthorizationInfo[] | null | undefined,
+): boolean {
+    if (!user || !Array.isArray(authorizations) || authorizations.length === 0) {
+        return false;
+    }
+    const [check] = EvaluateAuthorizationChecks([GRAPH_APPROVE_EDGES_AUTHORIZATION], user, authorizations);
+    return check != null && !check.Unknown && check.Allowed === true;
 }
 
 /** Clamp a requested traversal depth to `1..4` (default `2`). */
