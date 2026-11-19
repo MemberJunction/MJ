@@ -10,7 +10,8 @@
 // Task M5b.10's adversarial harness follows (`describe('M5b.10 harness')`): one `it` per cell of M5b's coverage table
 // that Tasks M5b.1–M5b.7 did not write, plus a role created by SQL with an unfiltered read grant and a user holding a
 // filtered and an unfiltered role — the RLS exemption (`EntityInfo.UserExemptFromRowLevelSecurity`), the documented
-// residual M6's R7 (i) remediates. Predictions are written by the production `ScoringService` (its sidecar and model
+// residual M6's R7 (i) remediates — and the daily maintenance's production store (Task M5b.5: the binding backfill and the
+// retention sweep against SQL Server, which its unit test's in-memory store cannot prove). Predictions are written by the production `ScoringService` (its sidecar and model
 // runtime replaced by doubles: no model is trained here) and the production `FeatureValueCacheService`; a row no entity
 // save can shape (a Pipeline row naming an existing Record Process) and the adversary's writes (a model archived, a
 // role granted read by SQL) are SQL, labelled where they happen. Teardown deletes every row the file created by tag.
@@ -26,7 +27,7 @@ import type {
 import { FeatureValueCacheService, type ModelValueRow } from '@memberjunction/feature-pipelines';
 import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
-  BindingNotAuthorizedError, InMemoryArtifactLoader, ScoringBindings, ScoringService,
+  BindingNotAuthorizedError, InMemoryArtifactLoader, PredictionRetention, ScoringBindings, ScoringService,
   type IScoringModelRuntime, type IScoringPreparedModel, type ISidecarPredictor, type LoadedModel, type ScoringContext,
 } from '@memberjunction/predictive-studio';
 import {
@@ -433,6 +434,38 @@ describe('M5b.10 harness', () => {
       const rows = await ReadAs(f.UIOnly, entity, onRecord('r2'));
       expect(rows.map((r) => [r.Source, UUIDsEqual(r.ID, human.ID)])).toEqual([['Human', true]]);
     }
+  }, CASE_TIMEOUT_MS);
+
+  it('binding backfill and retention sweep through the production store: only a binding without a view authorization is assigned, once; only expired Model rows go', async () => {
+    const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User });
+    const seeded = PredictionRetention.SeededAuthorizationID(server.Provider);
+    if (seeded === null) throw new Error('the seeded view authorization is not in metadata: run mj sync push');
+    // Adversary: a binding saved before the view authorization existed (the server entity now refuses a null one).
+    const legacy = await newBinding('legacy', seeded, null);
+    await pool.request().input('ID', sql.UniqueIdentifier, legacy.ID).query(`UPDATE ${tableOf(server.Provider, 'MJ: ML Model Scoring Bindings')} SET ViewAuthorizationID = NULL WHERE ID = @ID`);
+    const first = await PredictionRetention.Backfill(ctx);
+    const second = await PredictionRetention.Backfill(ctx);
+    const auths = await pool.request().input('Legacy', sql.UniqueIdentifier, legacy.ID).input('Custom', sql.UniqueIdentifier, f.CustomBinding.ID)
+      .query<{ ID: string; ViewAuthorizationID: string | null }>(`SELECT CAST(ID AS NVARCHAR(36)) AS ID, CAST(ViewAuthorizationID AS NVARCHAR(36)) AS ViewAuthorizationID FROM ${tableOf(server.Provider, 'MJ: ML Model Scoring Bindings')} WHERE ID IN (@Legacy, @Custom)`);
+    const authOf = (id: string): string | null => auths.recordset.find((r) => UUIDsEqual(r.ID, id))?.ViewAuthorizationID || null;
+    expect([first.Updated, first.Failures, second.Updated]).toEqual([1, [], 0]);
+    expect(UUIDsEqual(authOf(legacy.ID), seeded)).toBe(true);
+    expect(UUIDsEqual(authOf(f.CustomBinding.ID), f.CustomAuthorizationID)).toBe(true);
+
+    // The sweep: rows dated DAY1 and DAY3, 30 days kept on 2026-11-01 (cutoff 2026-10-02): DAY1 goes, DAY3 and the Pipeline row stay.
+    const kept = await newBinding('retained', seeded, null);
+    const run = await createRow<MJMLScoringRunEntity>('MJ: ML Scoring Runs', (r) => {
+      r.ModelID = f.ModelID; r.ModelVersion = 1; r.MLModelScoringBindingID = kept.ID; r.Path = 'score-record-set'; r.ScopeKind = 'record-ids'; r.ScopeEntityID = f.TargetEntityID;
+      r.Scope = JSON.stringify({ recordIds: [f.Records.r1] }); r.AsOfDate = DAY1; r.ReadPolicy = '{}'; r.RequestedBy = JSON.stringify({ kind: 'system', component: 'view-gate-test' }); r.Status = 'completed';
+    });
+    await writeModelRows(kept, run.ID, DAY1, [f.Records.r1], 0.2);
+    await writeModelRows(kept, run.ID, DAY3, [f.Records.r1], 0.3);
+    const pipelineBefore = (await ReadAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length;
+    const swept = await PredictionRetention.SweepBinding({ ID: kept.ID, FeatureName: kept.FeatureName, Status: 'Active', RetentionDays: 30 }, new Date('2026-11-01T02:00:00Z'), ctx);
+    expect([swept?.Cutoff, swept?.Deleted, swept?.Failures]).toEqual(['2026-10-02T00:00:00.000Z', 1, []]);
+    const left = await ReadAs(server.User, 'MJ: Feature Values', `MLModelScoringBindingID = '${EscapeSQLString(kept.ID)}'`);
+    expect(left.map((r) => r.EffectiveAsOf?.toISOString())).toEqual([DAY3.toISOString()]);
+    expect((await ReadAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length).toBe(pipelineBefore);
   }, CASE_TIMEOUT_MS);
 
   it('concurrent publish: a read during a same-key write returns one latest row per key', async () => {
