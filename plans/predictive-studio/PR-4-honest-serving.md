@@ -8789,19 +8789,19 @@ milestone; counts, cells and claims go to §11.
 
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/serving-end-to-end.adversarial.db.test.ts`
 
-- [ ] Step 1: On `MJ_PS_PR4_<agent>` at the final head, cells that cross milestones: a binding whose model monitoring
+- [x] Step 1: On `MJ_PS_PR4_<agent>` at the final head, cells that cross milestones: a binding whose model monitoring
   rolls back (M5 × M6); an entity deleted after it holds publish records, scoring runs, monitoring results, output
   bindings, `Model`, `Human` and `Pipeline` rows (M1 × M5 × M6); a publish, a rival publish and an automatic rollback of
   one pipeline from three `Promise.all` scopes (M3 × M6); a withdrawn binding through scoring, the panel's read and the
   retention sweep (M5 × M5b); a person's value in a binding's column through a scoring run and the withdrawal, and one on
   a pipeline target (M5 × PR 1).
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-end-to-end'`
+- [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-end-to-end'`
   → every case as its cell says; counts measured at M8.
-- [ ] Step 3: The reviewer re-runs, on the final head, one mutation per milestone chosen by the reviewer from the earlier
+- [x] Step 3: The reviewer re-runs, on the final head, one mutation per milestone chosen by the reviewer from the earlier
   harnesses' lists (M1 … M7) → the case named for it fails each time; outputs in §11.
 - [ ] Step 4: A broken claim is fixed at the invariant in the milestone that owns it, Task M8.3 run again, and the harness
   re-run → 0 broken.
-- [ ] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
+- [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
 
 **Exit tests:** Task M8.3 in full on the final head (the UI walk 7 passed; the five owned gate suites 9 + 7 + 10 + 3 + 12
 passed; the keep-list and `Integration Tests — Deterministic` 0 failed; §7's unit counts and database checks in §11);
@@ -10840,6 +10840,22 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   mismatch, a missing candidate and an empty run). Artifact SHA-256 was chosen over predictions on a fixed row set: it
   needs no scoring of non-delivered candidates and is the stricter test. The row's description and summary follow; the
   publish/score/archive steps are gone (204 s per run at load 19–22, against 216–242 s before).
+- **D4-259 · Scoring judges a binding's withdrawal on its stored row** (M8.5 Step 2, finish pass). The M5 × M5b cell
+  showed `ScoringService.Score` refusing `binding-withdrawn` only when the caller's `MJMLModelScoringBindingEntity` said
+  `Withdrawn`; a caller holding a binding loaded before `ScoringBindings.Withdraw` (a scheduled run in flight, a request
+  racing the withdrawal) scored and wrote after the withdrawal cleared the binding's copies. `refusalBeforeModel` now
+  reads the binding's stored `Status` past the cache (a failed read or a vanished row throws), after the authorization
+  and Feature-Value-write checks as before. Engine test "refuses a binding withdrawn after the caller loaded it" (red
+  first). The binding's other fields still come from the caller's object; only withdrawal is a status a concurrent
+  writer flips.
+- **D4-260 · M8.5's harness runs with each racing caller on its own provider; its Step 2 command runs the whole DB lane**
+  (finish pass). (a) The M3 × M6 cell raced three callers on one `server.Provider`, which joins a second caller's
+  transaction to the first as a savepoint, so the publish locks serialized nothing and the cell hit
+  `UX_MLModel_OnePublishedPerPipeline`; production gives each request and job run its own provider, so the cell now uses
+  `CreateIndependentInstance()` per caller, as `lifecycle-gate.adversarial.db.test.ts` does — a fixture fix, the claim
+  unchanged. (b) `pnpm run test:db -- serving-end-to-end` passes the filter after `--`, which vitest ignores, so the
+  command runs every DB-lane file; it is kept as the plan's Step 2 command (it re-runs every DB harness on the head) and
+  the single file runs as `pnpm exec vitest run --config vitest.db.config.ts serving-end-to-end`.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -13232,6 +13248,50 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   3.2056 to be less than 3`, load 30–35, timing only) → that command re-run alone: 63 files / 2175 passed, exit 0.
   (A first M5b run failed the same command on the goldens, fixed by D4-257 before these runs.)
 - **Rulings:** D4-240…D4-257. **Flags:** OF4-53, OF4-54; OF4-36 addendum.
+
+### 2026-11-20 — Claude (Opus 5.5) — M8 merge, G0.10 (OF4-53), M8.5 Steps 2–5, anchors
+
+- **Head:** `ps/pr-4-honest-serving` after the M8 merge `7206ea149f` (M8.1 guide + M8.5 Step 1 harness, no conflict) and
+  this pass's commits. Guide's D4-237 claims checked on the merged code (`year` in `CK_MLMonitoringResult_Grain` and the
+  spec's `period` enum; `insufficient-rows` in `CK_MLMonitoringResult_State` and `recordInsufficientRows`;
+  `minScoredRowsPerPeriod` default 10). TruthSuite test-inclusive tsc: the harness 0 errors; one TruthSuite test's
+  `RunView` spy typed through `IRunViewProvider`.
+- **G0.10 (D4-258, OF4-53 resolved):** unit test `ps-gate-reproduction.test.ts` 9 tests (red, then green); on the DB ✓
+  `4 of 4 algorithms reproduce every candidate (artifact SHA-256, inner score within 1e-9)` (4 candidates each, 204 s);
+  mutation (random forest `random_state=None`) → **Mutation output G0.10:** `[IntegrationTestDriver] ✗ ps-gate-w1-s5-4.G0.10: 3 of 4 algorithms reproduce every candidate (artifact SHA-256, inner score within 1e-9)`
+  (`random_forest 2a8cdc5e70ec ≠ 5c979fcc17b8; inner random_forest 0.46196399774295405 ≠ 0.4651785652968531`);
+  restored `cmp` identical, ✓ again; census equal.
+- **M8.5 Step 2** (MJAPI stopped, truth sidecar up): the plan's command ran the whole DB lane (D4-260 (b)) →
+  `Test Files 1 failed | 13 passed (14)`, `Tests 2 failed | 155 passed (157)`: the 13 earlier DB-harness files 152/152 on
+  this head; `serving-end-to-end` 3/5 — ✗ M3 × M6 (fixture: one shared provider, D4-260 (a)), ✗ M5 × M5b (production:
+  `['completed', null]` for a withdrawn binding, fixed at the invariant, D4-259). After both: **5/5, stderr 0, census
+  equal** (twice). Two runs between failed their setup scoring on SQL `Timeout: Request failed to complete in 15000ms`
+  with no blocked request on the database (a read-only DMV sampler) while the host was swapping (8.0 of 9.2 GB swap,
+  load 18–30, vitest import 489 s vs 18 s) — environment, not code.
+- **Cells and claims (5/5):** M5 × M6 — after monitoring rolls the pipeline back, the unchanged binding scores with the
+  rolled-back-to model and the earlier predictions keep the model that wrote them (the single-period, margin-0 rollback
+  fires on D1c) · M3 × M6 — a publish, a rival publish and an automatic rollback from three providers leave exactly one
+  Published model, each applied publish replacing the one before it, no attempt unrecorded · M5 × M5b — a withdrawn
+  binding refuses scoring with nothing written, leaves the panel's bindings, keeps its values and is still swept by
+  retention · M5 × PR 1 — the column copy never overwrites a person's value (typed or PR 1's Human row), withdrawal
+  clears only the binding's copies · M1 × M5 × M6 — the entity delete removes its pipelines' publish records, scoring
+  runs, monitoring results, output bindings and Model/Human/Pipeline rows, nothing of another entity.
+- **M8.5 Step 3** (Registry Check paused, each restored `cmp` identical + `git diff` empty + package rebuilt):
+  - **M5b** — the panel's binding read without `Status='Active'` (`PredictionPanelQueries.For`) → **Mutation output M8.5 M5b:**
+    `× a withdrawn binding refuses scoring with nothing written, leaves the panel's bindings, … — AssertionError: expected true to be false` (`serving-end-to-end.adversarial.db.test.ts:555`, the withdrawn binding among the panel's bindings); 4 other cells ✓.
+  - **M6** — the rollback's paired difference with its sides swapped (`RollbackStep.ComparePeriod`) → **Mutation output M8.5 M6:**
+    `× after monitoring rolls the pipeline back, … — AssertionError: expected { Kind: 'checked', …(1) } to deeply equal { Kind: 'rolled-back', Text: null }`
+    (and M3 × M6, whose setup rollback then finds the model `already-published`).
+  - **M7** — section 13's demotion without `AND m.[Delivery] IS NULL` → **Mutation output M8.5 M7:**
+    `× leaves Archived rows Archived and gate-produced rows untouched — expected [ 'Archived', 'Unevaluated' ] to deeply equal [ 'Archived', 'Published' ]`,
+    `× refuses a second Published model of one pipeline after the migration — promise resolved "undefined" instead of rejecting`
+    (`pre-change-migration.adversarial.db.test.ts`, 15/17 otherwise).
+  - Registry Check `Active` after; census equal.
+- **Step 4 (open):** the one broken claim (D4-259) is fixed at the invariant and the harness re-run → 0 broken; Task M8.3's
+  re-run belongs to the M8 exit pass.
+- **Anchors:** `check-anchors … HEAD` `ok 24 · moved 46 · changed 51 · missing 19` → `ok 140 · moved 0 · changed 0 ·
+  missing 0` (§12).
+- **Rulings:** D4-258…D4-260. **Flags:** OF4-53 resolved.
 
 ## 12. Refresh log (append-only)
 
