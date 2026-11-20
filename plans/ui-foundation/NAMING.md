@@ -169,6 +169,8 @@ Property vocabulary. Fixed list; a new word needs a reason and goes in the index
 | `font-size` | font-size | `--mj-chart-font-size` is the one existing precedent |
 | `font-weight` | font-weight |  |
 | `icon-size` | icon width/height |  |
+| `opacity` | opacity | disabled controls (`--mj-button-opacity-disabled`) and state attenuation where a color swap does not apply |
+| `transform` | transform | micro-interaction motion such as hover lift and press (`--mj-button-transform-hover`, `--mj-button-transform-active`), gated by `prefers-reduced-motion: no-preference` |
 
 Worked examples, with the default chain each one ships with:
 
