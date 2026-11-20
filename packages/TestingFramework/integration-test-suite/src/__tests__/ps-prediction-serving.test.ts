@@ -3,7 +3,9 @@
  * columns, migrations or entity metadata exactly when the stored query's values moved.
  */
 import { describe, it, expect } from 'vitest';
-import { PsPredictionServing, type SchemaFingerprint } from '../checks/ps-prediction-serving.checks';
+import type { IMetadataProvider, RunViewResult } from '@memberjunction/core';
+import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { PsPredictionServing, type SchemaFingerprint, type ServingIdentities } from '../checks/ps-prediction-serving.checks';
 
 const BEFORE: SchemaFingerprint = { ColumnCount: 9000, ColumnChecksum: 123456, MigrationCount: 410, EntityMetadataUpdatedAt: '2026-11-19T10:00:00.000Z' };
 
@@ -48,5 +50,39 @@ describe('PsPredictionServing.TeardownSql (D4-230)', () => {
 
   it('escapes the tag', () => {
     expect(PsPredictionServing.TeardownSql("IT182 o'clock", table)).toContain(`'IT182 o''clock%'`);
+  });
+});
+
+describe('PsPredictionServing.ReleaseIdentities (audit M5b-4)', () => {
+  /** A provider whose role read answers `roles` and whose entity creation throws (no user row can be loaded). */
+  function contextWith(roles: { Success: boolean; ErrorMessage?: string }): IntegrationCheckContext {
+    const metadata: Pick<IMetadataProvider, 'GetEntityObject'> = {
+      GetEntityObject: async (): Promise<never> => { throw new Error('no entity object in this double'); },
+    };
+    const provider = Object.assign(metadata as IMetadataProvider, {
+      RunView: async (): Promise<RunViewResult> => ({ Success: roles.Success, ErrorMessage: roles.ErrorMessage || '', Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, UserViewRunID: '' }),
+    });
+    // ReleaseIdentities reads only the provider (and passes ctx.User, unused by this double)
+    const ctx: Pick<IntegrationCheckContext, 'Provider'> = { Provider: provider };
+    return ctx as IntegrationCheckContext;
+  }
+  const identities = (userIds: string[]): ServingIdentities => ({
+    Restricted: { UserID: userIds[0], Email: 'r@x', Provider: {} as IMetadataProvider },
+    Authorized: { UserID: userIds[1], Email: 'a@x', Provider: {} as IMetadataProvider },
+    Keys: { CreatedKeyIds: [], CreatedScopeRuleIds: [] },
+    UserIDs: userIds,
+  });
+
+  it('reports a failed role read instead of treating it as no roles, and still releases the next user', async () => {
+    const warnings = await PsPredictionServing.ReleaseIdentities(contextWith({ Success: false, ErrorMessage: 'role read refused' }), identities(['U1', 'U2']));
+    expect(warnings).toEqual([
+      "reading user U1's role rows failed: role read refused; the user and its roles are left",
+      "reading user U2's role rows failed: role read refused; the user and its roles are left",
+    ]);
+  });
+
+  it('turns a throwing step into a warning: teardown never throws', async () => {
+    const warnings = await PsPredictionServing.ReleaseIdentities(contextWith({ Success: true }), identities(['U1', 'U2']));
+    expect(warnings).toEqual(['releasing user U1 failed: no entity object in this double', 'releasing user U2 failed: no entity object in this double']);
   });
 });
