@@ -11,7 +11,7 @@ import { HarnessScoring } from '../score';
 const RUN_ID = '8983F416-CF3E-4DC5-A6CD-8867C5383B50';
 
 function failed(message: string): RemoteOpResult<PredictiveStudioScoreRecordSetOutput> {
-  return { Success: false, ResultCode: 'SCORING_RUN_FAILED', ErrorMessage: message } as RemoteOpResult<PredictiveStudioScoreRecordSetOutput>;
+  return { Success: false, ResultCode: 'SCORING_RUN_FAILED', ErrorMessage: message };
 }
 
 describe('HarnessScoring.AttemptOf', () => {

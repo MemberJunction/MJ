@@ -10874,6 +10874,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   PR #6517). `HarnessScoring.FAILED_COUNTS` is linear now (each count at most ten digits after a non-digit); every
   message the scoring service writes (`N of M records failed`, counts far below ten digits) parses as before, so per
   D4-87/D-084 the gate chain already running on the final head is not restarted; the DB lane and the harness run after.
+- **D4-265 · M8's self-audit fixes are type-only and re-run only their package** (M8 final pass, D4-87/D-084). The two
+  findings change no emitted code (a removed cast, a narrowed return type in a test file), so the self-audit's "a fix
+  re-runs this list" is met by TruthSuite's unit tier and its type-check; the DB lane and the harness run after them.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -13412,6 +13415,13 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   (`HarnessScoring.FAILED_COUNTS`, `/(\d+) of (\d+) records failed/` over a server message). Test first
   (`harness/__tests__/score-attempt.test.ts`: a 200 000-digit message took 23 610 ms, red) → the counts are
   `(?<!\d)(\d{1,10})` → 3/3 green in 3 ms; TruthSuite 28/190 (D4-264).
+- **M8 self-audit** of every line M8's own commits add or change (`git log --first-parent --no-merges a66c220cf4..HEAD`:
+  `ScoringService.storedBindingStatus`, `TrainingReproduction`, G0.10's check, the harness and its tests, the monitoring
+  doc line, the IT183 rename, the counts pattern) against `reference/coding-standards.md` §1–§13: provider-scoped reads
+  (`StoredRowReads` with the service's context), `UUIDsEqual`, PascalCase public / camelCase private, TSDoc, `Save`
+  results checked, no `any`. Two findings, both fixed (D4-265): `score-attempt.test.ts` cast its fixture
+  `as RemoteOpResult<…>` (every member is optional; the cast is dropped) and the end-to-end harness's `statusOf` widened
+  `MJ: ML Models.Status` to `string` (now `MJMLModelEntity['Status']`). TruthSuite 28/190; the harness type-checks.
 
 ## 12. Refresh log (append-only)
 

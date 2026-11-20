@@ -214,8 +214,8 @@ async function rows<T>(entityName: string, filter: string, fields: string[], ord
   return r.Results;
 }
 
-async function statusOf(modelId: string): Promise<string | null> {
-  const [m] = await rows<{ Status: string }>('MJ: ML Models', `ID='${EscapeSQLString(modelId)}'`, ['Status']); // pk-filter-ok: MJ core entity keyed by ID
+async function statusOf(modelId: string): Promise<MJMLModelEntity['Status'] | null> {
+  const [m] = await rows<Pick<MJMLModelEntity, 'Status'>>('MJ: ML Models', `ID='${EscapeSQLString(modelId)}'`, ['Status']); // pk-filter-ok: MJ core entity keyed by ID
   return m ? m.Status : null;
 }
 
