@@ -27,6 +27,7 @@ import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { LocalArtifactPath } from '../../training/artifact-store';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { PreChangeArtifacts } from '../pre-change-artifacts';
 import { PreGateMigrationContexts, PreGateModelMigration, type PreGateMigrationContext } from '../pre-gate-model-migration';
 
 const log: string[] = [];
@@ -390,6 +391,51 @@ describe('step 3: legacy artifacts', () => {
     const r = await new ScoringService(scoringWorld.Ctx()).Score(binding, Records('r1', 'r2'), new Date('2026-03-04T00:00:00Z'), false);
     expect([r.Status, scoringWorld.ModelRow(legacyServing)?.['Status']]).toEqual(['completed', 'Unevaluated']);
     expect(scoringWorld.ModelRow(legacyServing)).toMatchObject({ ServingWhileUnevaluated: true, ArtifactStatus: 'verified', ArtifactSha256: SnapshotHash.Sha256Hex(bytes) });
+  });
+
+  /** A pre-change model kept serving while Unevaluated, its artifact in storage and still `unverified`. */
+  async function LegacyServingWorld(): Promise<{ readonly World: ScoringServiceWorld; readonly Model: WorldModel; readonly Bytes: Uint8Array; readonly Binding: Awaited<ReturnType<ScoringServiceWorld['Binding']>> }> {
+    const scoringWorld = new ScoringServiceWorld();
+    const legacyServing = scoringWorld.Model({ Status: 'Unevaluated', ServingWhileUnevaluated: true });
+    const fileId = id();
+    const bytes = new TextEncoder().encode(`legacy serving artifact ${legacyServing.ID}`);
+    scoringWorld.Artifacts.Set(fileId, bytes);
+    scoringWorld.Store.Insert('MJ: Files', { ID: fileId, ProviderID: GateWorld.StorageProviderID, ProviderKey: `legacy/${fileId}` });
+    Object.assign(scoringWorld.ModelRow(legacyServing) || {}, { ArtifactFileID: fileId, ArtifactSha256: null, ArtifactStatus: 'unverified' });
+    return { World: scoringWorld, Model: legacyServing, Bytes: bytes, Binding: await scoringWorld.Binding(legacyServing) };
+  }
+
+  it('a serving model whose artifact is already checked is served without checking it again (M7-26)', async () => {
+    const w = await LegacyServingWorld();
+    Object.assign(w.World.ModelRow(w.Model) || {}, { ArtifactSha256: SnapshotHash.Sha256Hex(w.Bytes), ArtifactStatus: 'verified' });
+    const migrate = vi.spyOn(PreChangeArtifacts, 'Migrate');
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect([r.Status, migrate.mock.calls.length]).toEqual(['completed', 0]);
+  });
+
+  it('a serving model whose artifact check fails is refused on its stored, unverified row, never on the unsaved check (M7-26)', async () => {
+    const w = await LegacyServingWorld();
+    vi.spyOn(PreChangeArtifacts, 'Migrate').mockImplementation(async (model) => {
+      model.ArtifactStatus = 'verified';
+      model.ArtifactSha256 = SnapshotHash.Sha256Hex(w.Bytes);
+      throw new Error('the save of the artifact check failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect([r.Status, w.World.ModelRow(w.Model)?.['ArtifactStatus']]).toEqual(['refused', 'unverified']);
+  });
+
+  it('a serving model whose row is gone when its artifact check fails is refused, never served from the unsaved object (M7-6)', async () => {
+    const w = await LegacyServingWorld();
+    vi.spyOn(PreChangeArtifacts, 'Migrate').mockImplementation(async (model) => {
+      model.ArtifactStatus = 'verified';
+      model.ArtifactSha256 = SnapshotHash.Sha256Hex(w.Bytes);
+      w.World.Store.Tables['MJ: ML Models'] = (w.World.Store.Tables['MJ: ML Models'] || []).filter((m) => m['ID'] !== model.ID);
+      throw new Error('the model row is gone');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'no-published-model' } });
   });
 
   it('a non-serving Unevaluated model is refused: its pipeline has no published model', async () => {
