@@ -47,7 +47,8 @@ export class ArchiveRecordPager {
         private readonly contextUser: UserInfo
     ) {
         this.keyFields = entityInfo.PrimaryKeys;
-        this.useAfterKey = this.keyFields.length === 1 && IsKeysetPaginationOrderableType(this.keyFields[0].Type);
+        const firstKey = entityInfo.FirstPrimaryKey; // first-pk-ok: AfterKey is used only when the key has exactly one column
+        this.useAfterKey = this.keyFields.length === 1 && IsKeysetPaginationOrderableType(firstKey?.Type);
         if (!this.useAfterKey) {
             this.requireSeekableKey();
         }
@@ -90,7 +91,7 @@ export class ArchiveRecordPager {
             ResultType: 'entity_object',
         };
         if (this.useAfterKey) {
-            params.OrderBy = this.keyFields[0].Name;
+            params.OrderBy = this.entityInfo.FirstPrimaryKey.Name; // first-pk-ok: single-column key (useAfterKey)
             params.AfterKey = this.lastKey;
         } else {
             params.OrderBy = this.keyFields.map(f => `[${f.Name}]`).join(', ');
