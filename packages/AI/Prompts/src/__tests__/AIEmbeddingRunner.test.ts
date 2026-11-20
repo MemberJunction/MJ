@@ -1186,5 +1186,160 @@ describe('AIEmbeddingRunner', () => {
       expect(result.Vectors).toHaveLength(2);
       expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(2);
     });
+
+    it('aborts in-flight sibling calls and stops claiming new entries when a Contents call throws before failover', async () => {
+      addSecondVendorToModel1();
+      const vendor1Signals: Array<AbortSignal | undefined> = [];
+      let vendor2SawAllVendor1Aborted = false;
+
+      scriptFor(DRIVER_1).ContentAnswer = (params) => {
+        const callIndex = vendor1Signals.length;
+        vendor1Signals.push(params.CancellationToken);
+        if (callIndex === 0) {
+          return Promise.reject(Object.assign(new Error('503 Service Unavailable'), { status: 503 }));
+        }
+        return new Promise((_resolve, reject) => {
+          params.CancellationToken?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+      };
+
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => {
+        if (!vendor2SawAllVendor1Aborted) {
+          vendor2SawAllVendor1Aborted = vendor1Signals.length > 0 && vendor1Signals.every(s => s?.aborted === true);
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(5, 0),
+          vector: [0.3, 0.4, 0.5],
+        };
+      };
+
+      const items = Array.from({ length: 12 }, (_, i) => [{ type: 'image_url' as const, content: `IMG_${i}`, mimeType: 'image/png' }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(12);
+      expect(scriptFor(DRIVER_1).ContentCalls.length).toBeLessThanOrEqual(4);
+      expect(vendor2SawAllVendor1Aborted).toBe(true);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(12);
+    });
+
+    it('preserves input order when Contents calls resolve out of order', async () => {
+      const delays = [30, 10, 0];
+      const markers = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        const blocks = Array.isArray(params.content) ? params.content : [];
+        const text = blocks.find(b => b.type === 'text')?.content ?? '0';
+        const idx = Number(text);
+        await new Promise(resolve => setTimeout(resolve, delays[idx]));
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(1, 0),
+          vector: markers[idx],
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'text', content: '0' }],
+          [{ type: 'text', content: '1' }],
+          [{ type: 'text', content: '2' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+    });
+
+    it('applies the model catalog InputType prefix to the leading text block without altering media blocks', async () => {
+      h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model, texts) => ({
+        texts: texts.map(t => `doc-prefix: ${t}`),
+        maxInputTokens: undefined,
+      }));
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(4, 0),
+        vector: [0.2, 0.3],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [
+            { type: 'image_url', content: 'AAAA', mimeType: 'image/png' },
+            { type: 'text', content: 'diagram caption' },
+          ],
+        ],
+        InputType: 'document',
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(scriptFor(DRIVER_1).ContentCalls[0].content).toEqual([
+        { type: 'image_url', content: 'AAAA', mimeType: 'image/png' },
+        { type: 'text', content: 'doc-prefix: diagram caption' },
+      ]);
+      expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(
+        expect.anything(),
+        ['diagram caption'],
+        'document',
+        expect.anything()
+      );
+    });
+
+    it('stops claiming new Contents entries and skips failover when caller cancels mid-batch', async () => {
+      addSecondVendorToModel1();
+      const controller = new AbortController();
+      scriptFor(DRIVER_1).ContentAnswer = async (params) => {
+        if (!controller.signal.aborted) {
+          controller.abort('user pressed stop');
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(1, 0),
+          vector: [0.1, 0.2],
+        };
+      };
+
+      const items = Array.from({ length: 10 }, (_, i) => [{ type: 'text' as const, content: `entry ${i}` }]);
+      const result = await runner.RunEmbedding({
+        Contents: items,
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        CancellationToken: controller.signal,
+      });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(false);
+      expect(scriptFor(DRIVER_1).ContentCalls.length).toBeLessThan(10);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(0);
+      expect(lastRun()?.Status).toBe('Cancelled');
+    });
+
+    it('marks unsupported media content errors as Fatal VendorValidationError on EmbeddingRunResult.ErrorInfo', async () => {
+      scriptFor(DRIVER_1).ContentAnswer = async () => {
+        throw new Error("OpenAIEmbedding cannot embed content of type 'video/mp4'. Supported: text only.");
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [[{ type: 'video_url', content: 'AAAA', mimeType: 'video/mp4' }]],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorInfo?.severity).toBe('Fatal');
+      expect(result.ErrorInfo?.errorType).toBe('VendorValidationError');
+    });
   });
 });

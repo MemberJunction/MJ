@@ -1,6 +1,6 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { ModelInfo } from '@memberjunction/ai-core-plus';
-import type { ChatMessageContent, ChatMessageContentBlock, EmbeddingInputType } from '@memberjunction/ai';
+import type { AIErrorInfo, ChatMessageContent, ChatMessageContentBlock, EmbeddingInputType } from '@memberjunction/ai';
 
 export type { ChatMessageContent as EmbeddingContent, ChatMessageContentBlock as EmbeddingContentBlock };
 
@@ -20,6 +20,8 @@ export interface EmbeddingRunResult {
   Cost: number;
   /** Error message if failed */
   ErrorMessage: string | null;
+  /** Structured error classification when failed (e.g., Fatal vs Retriable, VendorValidationError). */
+  ErrorInfo?: AIErrorInfo;
   /** Execution time in milliseconds */
   ExecutionTimeMs: number;
   /** Model information for the model that answered */

@@ -68,14 +68,12 @@ describe('EmbedStage — the per-record step is light', () => {
         expect(outcome.Status).toBe('Skipped');
     });
 
-    it('SKIPS a non-text record with no text, rather than embedding an empty string', async () => {
-        // Embedding is text-in: every image would get the vector of '' and be equally "similar" to
-        // every query.
+    it('SKIPS a non-text record with neither text nor media input, rather than embedding an empty string', async () => {
         const record = chunk('c1', null);
         record.Propose('Modality', 'image', 5, 'Extract');
         const outcome = await new EmbedStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Skipped');
-        expect(outcome.Message).toContain('text-only');
+        expect(outcome.Message).toContain('no text or media input');
     });
 
     it('embeds a non-text record that DOES carry text, such as a caption', async () => {
@@ -306,5 +304,166 @@ describe('multimodal EmbedStage hooks and mixed-batch routing', () => {
         ]);
         expect(upsertSpy).toHaveBeenCalledTimes(1);
         expect(upsertSpy.mock.calls[0][0]).toHaveLength(3);
+    });
+
+    it('retries without upserting when either text or multimodal RunEmbedding returns fewer vectors than records', async () => {
+        const makeRoute = (): VectorRoute => ({
+            GroupKey: 'M1::idx',
+            Item: {
+                ID: 'I1', ContentSourceID: 'S1', ContentSourceTypeID: 'T1', ContentTypeID: 'CT1',
+                Name: 'Item', Description: null, URL: 'https://example.test/doc',
+                GetAll: () => ({ ID: 'I1', Name: 'Item' }),
+            } as never,
+            Infrastructure: {
+                embeddingModelID: 'M1', dimensions: 2, indexName: 'idx',
+                vectorDB: { IsReadOnly: false } as never, providerConfig: {} as never,
+            } as never,
+        });
+        const ctx = { ...contextWith(), Provider: { EntityByName: () => undefined } as never };
+        const upsertSpy = vi.spyOn(contentAutotagging, 'UpsertVectorRecords').mockResolvedValue({ success: true } as never);
+
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockResolvedValue({
+            Success: true,
+            Vectors: [[0.1, 0.2]], // 1 vector for 2 records
+            PromptRunID: null, TokensUsed: 5, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 1, ModelID: 'M1',
+        });
+
+        const stage = new EmbedStage();
+        const embedAndStore = (stage as unknown as {
+            embedAndStore(
+                group: Array<{ Record: WorkingRecord; Route: VectorRoute }>,
+                tags: ReadonlyMap<string, string[]>,
+                context: StageContext,
+            ): Promise<Array<{ Key: string; Outcome: { Status: string } }>>;
+        }).embedAndStore.bind(stage);
+
+        const textResults = await embedAndStore(
+            [
+                { Record: chunk('t1', 'one'), Route: makeRoute() },
+                { Record: chunk('t2', 'two'), Route: makeRoute() },
+            ],
+            new Map(),
+            ctx,
+        );
+        expect(textResults.map((r) => r.Outcome.Status)).toEqual(['Retry', 'Retry']);
+
+        const mm1 = chunk('m1', null);
+        mm1.SetExtension('Pipeline', 'embedContent', [{ type: 'image_url', content: 'AA', mimeType: 'image/png' }]);
+        const mm2 = chunk('m2', null);
+        mm2.SetExtension('Pipeline', 'embedContent', [{ type: 'image_url', content: 'BB', mimeType: 'image/png' }]);
+        const mmResults = await embedAndStore(
+            [
+                { Record: mm1, Route: makeRoute() },
+                { Record: mm2, Route: makeRoute() },
+            ],
+            new Map(),
+            ctx,
+        );
+        expect(mmResults.map((r) => r.Outcome.Status)).toEqual(['Retry', 'Retry']);
+        expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('stamps per-record EmbeddingModelID, isolates text failures from multimodal upserts, marks unsupported media Fatal, and retries ResolveEmbedContent errors', async () => {
+        const makeRoute = (): VectorRoute => ({
+            GroupKey: 'M1::idx',
+            Item: {
+                ID: 'I1', ContentSourceID: 'S1', ContentSourceTypeID: 'T1', ContentTypeID: 'CT1',
+                Name: 'Item', Description: null, URL: 'https://example.test/doc',
+                GetAll: () => ({ ID: 'I1', Name: 'Item' }),
+            } as never,
+            Infrastructure: {
+                embeddingModelID: 'M1', dimensions: 2, indexName: 'idx',
+                vectorDB: { IsReadOnly: false } as never, providerConfig: {} as never,
+            } as never,
+        });
+        const ctx = { ...contextWith(), Provider: { EntityByName: () => undefined } as never };
+        const upsertSpy = vi.spyOn(contentAutotagging, 'UpsertVectorRecords').mockResolvedValue({ success: true } as never);
+
+        // 1. Per-record ModelID across text and multimodal calls
+        const txt = chunk('txt-1', 'Plain text');
+        const mm = chunk('mm-1', null);
+        mm.SetExtension('Pipeline', 'embedContent', [{ type: 'image_url', content: 'AA', mimeType: 'image/png' }]);
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockImplementation(async (params) => ({
+            Success: true,
+            Vectors: (params.Texts ?? params.Contents ?? []).map(() => [0.5, 0.6]),
+            PromptRunID: null, TokensUsed: 1, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 1,
+            ModelID: params.Texts ? 'MODEL-TEXT' : 'MODEL-MM',
+        }));
+
+        const stage = new EmbedStage();
+        const invoke = (s: EmbedStage, g: Array<{ Record: WorkingRecord; Route: VectorRoute }>) =>
+            (s as unknown as {
+                embedAndStore(
+                    group: Array<{ Record: WorkingRecord; Route: VectorRoute }>,
+                    tags: ReadonlyMap<string, string[]>,
+                    context: StageContext,
+                ): Promise<Array<{ Key: string; Outcome: { Status: string } }>>;
+            }).embedAndStore(g, new Map(), ctx);
+
+        const mixedRes = await invoke(stage, [
+            { Record: txt, Route: makeRoute() },
+            { Record: mm, Route: makeRoute() },
+        ]);
+        expect(mixedRes.every((r) => r.Outcome.Status === 'Complete')).toBe(true);
+        expect(txt.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.EmbeddingModelID).toBe('MODEL-TEXT');
+        expect(mm.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.EmbeddingModelID).toBe('MODEL-MM');
+
+        // 2. Text failure does not block multimodal upsert
+        upsertSpy.mockClear();
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockImplementation(async (params) => {
+            if (params.Texts) {
+                return { Success: false, Vectors: [], PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: 'text 503', ExecutionTimeMs: 1 };
+            }
+            return { Success: true, Vectors: [[0.9, 0.1]], PromptRunID: null, TokensUsed: 1, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 1, ModelID: 'MODEL-MM' };
+        });
+        const txt2 = chunk('txt-2', 'Failing text');
+        const mm2 = chunk('mm-2', null);
+        mm2.SetExtension('Pipeline', 'embedContent', [{ type: 'image_url', content: 'BB', mimeType: 'image/png' }]);
+        const partialRes = await invoke(stage, [
+            { Record: txt2, Route: makeRoute() },
+            { Record: mm2, Route: makeRoute() },
+        ]);
+        expect(partialRes.find((r) => r.Key === 'txt-2')?.Outcome.Status).toBe('Retry');
+        expect(partialRes.find((r) => r.Key === 'mm-2')?.Outcome.Status).toBe('Complete');
+        expect(upsertSpy).toHaveBeenCalledTimes(1);
+        expect(upsertSpy.mock.calls[0][0]).toHaveLength(1);
+
+        // 3. Unsupported media error maps to Outcome.Fatal (Status = 'Failed'), not infinite Retry
+        upsertSpy.mockClear();
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockResolvedValue({
+            Success: false,
+            Vectors: [],
+            PromptRunID: null,
+            TokensUsed: 0,
+            Cost: 0,
+            ErrorMessage: "OpenAIEmbedding cannot embed content of type 'video/mp4'. Supported: text only.",
+            ErrorInfo: { errorType: 'VendorValidationError', severity: 'Fatal', canFailover: true },
+            ExecutionTimeMs: 1,
+        });
+        const mmFatal = chunk('mm-fatal', null);
+        mmFatal.SetExtension('Pipeline', 'embedContent', [{ type: 'video_url', content: 'CC', mimeType: 'video/mp4' }]);
+        const fatalRes = await invoke(stage, [{ Record: mmFatal, Route: makeRoute() }]);
+        expect(fatalRes[0].Outcome.Status).toBe('Failed');
+
+        // 4. Throwing ResolveEmbedContent fails that record with Retry without aborting sibling text records
+        upsertSpy.mockClear();
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockResolvedValue({
+            Success: true, Vectors: [[0.2, 0.3]], PromptRunID: null, TokensUsed: 1, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 1, ModelID: 'M1',
+        });
+        class ThrowingMediaEmbedStage extends EmbedStage {
+            protected override async ResolveEmbedContent(record: WorkingRecord): Promise<EmbeddingContent | null> {
+                if (record.Identity.Key === 'bad-media') {
+                    throw new Error('blob timeout');
+                }
+                return null;
+            }
+        }
+        const errRes = await invoke(new ThrowingMediaEmbedStage(), [
+            { Record: chunk('bad-media', 'ignored'), Route: makeRoute() },
+            { Record: chunk('good-text', 'still embeds'), Route: makeRoute() },
+        ]);
+        expect(errRes.find((r) => r.Key === 'bad-media')?.Outcome.Status).toBe('Retry');
+        expect(errRes.find((r) => r.Key === 'good-text')?.Outcome.Status).toBe('Complete');
+        expect(upsertSpy).toHaveBeenCalledTimes(1);
     });
 });

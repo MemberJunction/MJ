@@ -80,7 +80,7 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
             // "similar" to every query.
             return Outcome.Skipped(
                 this.isNonTextModality(record)
-                    ? `'${String(record.Get('Modality'))}' content has no text, and embedding is text-only`
+                    ? `'${String(record.Get('Modality'))}' content has no text or media input to embed`
                     : 'no text to embed',
             );
         }
@@ -150,6 +150,14 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
      * Resolves multimodal content blocks for a record (e.g., `video_url` / `image_url` / `audio_url`
      * fused with optional text). Returns `null` when the record should take the standard batched
      * text-only embedding path. Subclasses override this to load linked media files or sliced clips.
+     *
+     * Implementation notes for producers:
+     * - Invoked once per record before the group's `AIEmbeddingRunner.RunEmbedding` call, so
+     *   resolved inline media payloads remain in memory until that group finishes. Keep inline
+     *   payloads bounded (respecting provider caps such as Gemini's inline request limit) or pass
+     *   provider-accessible URIs where supported.
+     * - Resulting vectors are written to the record's routed vector index — intended for shared
+     *   multimodal vector spaces such as `gemini-embedding-2` where text and media share one index.
      */
     protected async ResolveEmbedContent(
         record: WorkingRecord,
@@ -249,10 +257,15 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                 const reason = !embedding.Success
                     ? (embedding.ErrorMessage ?? 'multimodal embedding failed')
                     : `embedding model returned ${embedding.Vectors.length} vector(s) for ${multimodal.length} multimodal record(s)`;
+                const isFatal =
+                    !embedding.Success &&
+                    (embedding.ErrorInfo?.severity === 'Fatal' ||
+                        embedding.ErrorInfo?.errorType === 'VendorValidationError' ||
+                        /cannot embed content of type/i.test(reason));
                 outcomes.push(
                     ...multimodal.map((m) => ({
                         Key: m.Routed.Record.Identity.Key,
-                        Outcome: Outcome.Retry(reason),
+                        Outcome: isFatal ? Outcome.Fatal(reason) : Outcome.Retry(reason),
                     })),
                 );
             } else {
