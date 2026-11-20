@@ -126,11 +126,13 @@ Left-navigation tabs:
 - **Pipeline**: Real-time pipeline monitor — stage counts, KPI cards, live feed, and run controls with GraphQL progress subscription
 - **Sources**: CRUD for content sources, source-detail panel, schedule dialog, full classifier config (taxonomy mode, thresholds, budgets) inline, and a dry-run disposition preview
 - **Content Types**: Content type definitions with default embedding model / vector index
-- **Tag Library**: Browse the tag taxonomy with weight visualization and word cloud
-- **Taxonomy**: Tag governance — tree, duplicates, orphans, treemap, audit, plus per-tag **Governance / Synonyms / Scope** editors
-- **Suggestions Inbox**: Human-in-the-loop review queue for ambiguous classifications (approve / merge / reject)
-- **Tag Health**: Automated taxonomy-quality signals (merge candidates, low-usage, wide-node) with triage actions
 - **Run History**: Historical process-run logs with per-source detail
+
+Tag curation lives on the separate **Tags** surface (driver class `Tags`, `src/AI/components/tags/tags-resource.component.ts`), not in Classify:
+- **Overview**: The unique tags across all content sources
+- **Taxonomy**: Tag governance — tree, duplicates, orphans, treemap, audit, plus per-tag **Governance / Synonyms / Scope** editors
+- **Suggestions**: Human-in-the-loop review queue for ambiguous classifications (create as new / merge / reject, with bulk approve / reject)
+- **Health**: Summary cards for the last health run's signals (merge candidates, low usage, wide nodes); each opens Suggestions filtered to that reason
 
 Architecture: the former 5,147-line monolith was decomposed into 6 tab components (`tabs/`) + 4 dialog components (`dialogs/`) + a shared pure layer (`shared/`: types, formatters, dry-run disposition logic). Cacheable metadata is read from existing engines (`KnowledgeHubMetadataEngine`, `TagEngineBase`, `AIEngineBase`); high-volume rows use `RunView` (never cached).
 

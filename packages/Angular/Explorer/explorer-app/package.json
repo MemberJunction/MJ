@@ -4,6 +4,18 @@
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap.d.ts",
+      "default": "./dist/bootstrap.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "ngc && npm run copy-assets",
     "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat && cpy 'node_modules/@memberjunction/ng-conversations/dist/assets/edge-ai.worker.js' dist/assets --flat",
@@ -37,6 +49,7 @@
     "@memberjunction/ng-explorer-service-worker": "6.3.0-edge.1",
     "@memberjunction/ng-feedback": "6.3.0-edge.1",
     "@memberjunction/ng-notifications": "6.3.0-edge.1",
+    "@memberjunction/ng-public-host": "6.3.0-edge.1",
     "@memberjunction/ng-realtime-channels": "6.3.0-edge.1",
     "@memberjunction/ng-shared": "6.3.0-edge.1",
     "@memberjunction/ng-workspace-initializer": "6.3.0-edge.1",
@@ -45,6 +58,7 @@
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
     "@angular/router": "^21.2.22",
     "rxjs": "^7.8.2"
   },

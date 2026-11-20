@@ -18,6 +18,7 @@ export class MJAIAgentRequestFormComponent extends BaseFormComponent {
             { sectionKey: 'requestSummary', sectionName: 'Request Summary', isExpanded: true },
             { sectionKey: 'responseSummary', sectionName: 'Response Summary', isExpanded: true },
             { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

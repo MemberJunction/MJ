@@ -20,7 +20,7 @@ import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunctio
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
-import { ResolveHumanTaskProvider, type HumanTaskRaiseResult } from './HumanTaskProvider';
+import { ResolveHumanTaskProvider, type HumanTaskRaiseResult } from '@memberjunction/ai-core-plus';
 import {
     ComposeWaitingStepOutput,
     ParseStepConfiguration,
@@ -189,8 +189,7 @@ export class WaitingStepRunner {
     ): Promise<HumanTaskRaiseResult> {
         try {
             return await humanProvider.RaiseTask({
-                TaskID: task.ID,
-                ParentTaskID: task.ParentID ?? '',
+                Subject: { Kind: 'WorkflowStep', TaskID: task.ID, ParentTaskID: task.ParentID ?? '' },
                 Name: task.Name,
                 Instructions: config.human?.instructions ?? task.Description ?? null,
                 AssignedUserID: task.UserID,
@@ -261,7 +260,13 @@ export class WaitingStepRunner {
         const humanProvider = ResolveHumanTaskProvider(key);
         if (!humanProvider) return;
         try {
-            await humanProvider.WithdrawTask({ TaskID: task.ID, Reason: 'expired', ContextUser: this.contextUser(), Provider: provider });
+            await humanProvider.WithdrawTask({
+                Subject: { Kind: 'WorkflowStep', TaskID: task.ID, ParentTaskID: task.ParentID ?? '' },
+                Reason: 'expired',
+                ExternalReference: null,
+                ContextUser: this.contextUser(),
+                Provider: provider,
+            });
         } catch (e) {
             // Best-effort by contract: the step has already failed, and a stale ask in the provider's
             // own system is visible there. Logged so it is not lost.

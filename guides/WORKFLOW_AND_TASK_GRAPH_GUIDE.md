@@ -556,19 +556,27 @@ const result = await TaskGraphWaitingSteps.CompleteWaitingStep(
 
 ### Human-step providers
 
-A Human step uses MJ's built-in inbox (an `MJ: AI Agent Requests` row) unless it names a provider.
-Any package can supply one — an approval system, a ticketing integration — without core knowing it
-exists:
+A Human step uses MJ's built-in inbox (an `MJ: AI Agent Requests` row) unless a provider takes it.
+Any package can supply one (an approval system, a ticketing integration) without core knowing it
+exists. The contract lives in `@memberjunction/ai-core-plus`, so agents can use the same providers
+(see [The install's default provider](#the-installs-default-provider)):
 
 ```typescript
-import { RegisterClass } from '@memberjunction/global';
-import { BaseHumanTaskProvider, type HumanTaskRaiseContext, type HumanTaskRaiseResult } from '@memberjunction/task-graph';
+import { RegisterClassEx } from '@memberjunction/global';
+import {
+    BaseHumanTaskProvider, HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT,
+    type HumanTaskRaiseContext, type HumanTaskRaiseResult,
+} from '@memberjunction/ai-core-plus';
 
-@RegisterClass(BaseHumanTaskProvider, 'BizAppsTasks')
+@RegisterClassEx(BaseHumanTaskProvider, {
+    key: 'BizAppsTasks',
+    metadata: { [HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT]: true },   // optional: may be the install's default
+})
 export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
     public async RaiseTask(ctx: HumanTaskRaiseContext): Promise<HumanTaskRaiseResult> {
-        // Create the app's own task. Remember ctx.TaskID: when that task is decided, call
-        // TaskGraphWaitingSteps.CompleteWaitingStep({ TaskID: ctx.TaskID, Payload: { decision } }, ...)
+        // Create the app's own task and remember ctx.Subject. When the task is decided:
+        //  - Subject.Kind 'WorkflowStep': TaskGraphWaitingSteps.CompleteWaitingStep({ TaskID: ctx.Subject.TaskID, ... })
+        //  - Subject.Kind 'AgentRequest': AnswerAgentRequestFromProvider({ AgentRequestID: ctx.Subject.AgentRequestID, ... })
         return { Outcome: 'raised', ExternalReference: appTask.ID };
     }
 }
@@ -584,14 +592,47 @@ export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
   `TaskGraph.RetryTask` raises it again.
 - The provider receives the step's instructions, its `providerConfiguration` untouched, the assigned
   and owning users, the deadline, and the payload the step was reached with.
-- `WithdrawTask` is called when the step expires. The default does nothing.
+- `WithdrawTask` is called when the step expires (reason `'expired'`). The default does nothing.
 - Only the provider completes the step, by calling `TaskGraphWaitingSteps.CompleteWaitingStep` in
   process when the person decides. The `TaskGraph.CompleteWaitingStep` remote operation refuses
   provider-raised Human steps: through it the run's owner, often the person asking for the approval,
   could approve their own request.
 - An unregistered provider is **refused at submit**, by name; the dispatcher re-checks when it
   reaches the step, so a host that differs fails the step with the name rather than waiting forever.
-- Omitted, or `'AgentRequest'`, is the built-in inbox, unchanged.
+- `'AgentRequest'` is the built-in inbox, always. Omitted means the install's default provider, which
+  is the inbox unless the install chose one.
+
+#### The install's default provider
+
+Installing a provider never reroutes anyone's approvals. A provider takes asks that do not name it
+only when **both** of these hold:
+
+1. **The provider declares it can.** Its registration carries `CanBeDefault: true` (the
+   `HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT` metadata key above). The app that writes the provider knows
+   whether it can take any ask, not only the ones built for it.
+2. **The install chooses it.** `humanTasks.defaultProvider` in `mj.config.cjs` (env
+   `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`), applied at MJAPI startup through
+   `HumanTaskProviderDefaults.Instance.Configure()`.
+
+A configured provider that is not registered, or does not declare `CanBeDefault`, is ignored with an
+error at startup, and asks stay in the inbox. It is checked each time it is read, so a provider whose
+package loads later takes effect then.
+
+With a default in effect:
+
+- **Workflow Human steps that name no provider** go to it. The choice is made at submit and written
+  into the step's configuration, so the step records where it went and changing the setting later
+  does not reroute running workflows. A step naming `'AgentRequest'` stays in the inbox.
+- **Agents' questions (Chat steps)** are raised through it as well as kept in the inbox. The
+  `MJ: AI Agent Requests` row stays the source of truth, because answering it is what resumes the
+  agent. The row records the provider and its reference (`HumanTaskProvider`,
+  `HumanTaskExternalReference`). The provider answers with `AnswerAgentRequestFromProvider`
+  (`@memberjunction/ai-agents`): only the provider the request was raised through, only while it is
+  open, saved as the request's owner so the resumed run has that user's permissions. An answer given
+  in the inbox or the conversation instead calls `WithdrawTask` with `'completed-elsewhere'`. If
+  raising fails, the provider is cleared from the row and the inbox alone holds the request.
+- **Plan approvals** (an agent's Plan step) stay in the inbox: the reviewer edits the plan, and that
+  reply has no place in the provider contract yet.
 
 Drawn workflows (`AIAgentStep`) accept `External` and `Wait` step types, and a Human step's
 `provider` / `providerConfiguration` ride in its `Configuration`, exactly as they do on a graph node.
@@ -663,7 +704,7 @@ detached for a moment.
 
 | `type` | Fires | What saving creates or updates |
 |---|---|---|
-| `OnDemand` | Only when something asks: **Run** in the Workflows app, an agent, the `TaskGraph.Submit` operation | Nothing |
+| `OnDemand` | Only when something asks: **Run** on the workflow's agent form (opened from the Workflows app), an agent, the `TaskGraph.Submit` operation | Nothing |
 | `Schedule` | On `cron`, in `timezone` (an IANA zone; absent means the job's own default) | One `MJ: Scheduled Jobs` row of the existing `Agent` job type, pointing at the workflow's agent |
 | `EntityEvent` | After a record of `entityName` is created, updated or deleted, when `filter` allows | An `MJ: Entity Actions` binding on that entity dispatching to the existing `Execute Agent` action: an `MJ: Entity Action Invocations` row for the event, `MJ: Entity Action Params` carrying the agent and the changed record, and, when `filter` is set, an `MJ: Action Filters` row bound through `MJ: Entity Action Filters` |
 
@@ -715,6 +756,11 @@ A trigger follows the workflow's status. A schedule's job, and a record-change t
 `MJ: Entity Actions` binding, are `Active` only while the spec is `Active`; a `Draft` or `Paused`
 workflow keeps them, `Disabled`, without running on them.
 
+The workflow's Flow agent follows the status too: a `Draft` or `Paused` spec is saved as an
+`MJ: AI Agents` row with `Status = 'Disabled'`
+(`packages/AI/AgentManager/core/src/workflow-agent-writer.ts`), and the agent form's **Run** button is
+disabled unless the agent is `Active`. A draft cannot be run on demand until it is saved `Active`.
+
 Removing a trigger from the spec **disables** what it owned: the Scheduled Job, or the binding.
 Re-adding it reactivates the same row, with its history.
 
@@ -727,9 +773,9 @@ or split them into two workflows.
 
 | Surface | What it does with triggers |
 |---|---|
-| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow **on demand**. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
+| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow through `Workflow.Save` as a `Draft` with no triggers (its Flow agent is `Disabled`) and opens it on the AI Agents form. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
 | **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
-| A conversation's plan card → **Save as workflow** | Saves an agent's plan as an on-demand workflow |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as a `Draft` on-demand workflow (`status: 'Draft'`, no triggers) |
 | **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
 | `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
 
