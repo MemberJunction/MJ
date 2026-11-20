@@ -8660,16 +8660,16 @@ design §4).
 **Interfaces:** the sections of **Interfaces consumed**; the anchors `d058-guide-*` re-pointed to the new headings in
 §12's refresh entry of this milestone
 
-- [ ] Step 1: The failing check:
+- [x] Step 1: The failing check:
   `git grep -n "built, not wired\|MaterializedResultID\|SP5 — Materialized prediction columns\|Materialized'\|four storage paths" -- guides/PREDICTIVE_STUDIO_GUIDE.md`.
-- [ ] Step 2: Run it → hits at `:15`, `:20`, `:453`, `:571`, `:587`, `:1267` (and the others the milestones' changes
+- [x] Step 2: Run it → hits at `:15`, `:20`, `:453`, `:571`, `:587`, `:1267` (and the others the milestones' changes
   made stale).
-- [ ] Step 3: Rewrite the sections the **Outcome** names, from the shipped code and metadata (each table's columns from
+- [x] Step 3: Rewrite the sections the **Outcome** names, from the shipped code and metadata (each table's columns from
   `__mj.ts`, each operation from `.remote-operations.json`, each refusal from M1's `TransitionRefusal` and
   `ScoringRefusal` unions); §14 becomes "Monitoring — outcome joins, triggers, rollback and the registry job"; no
   plan vocabulary (D4-23).
-- [ ] Step 4: Step 1's command → 0 hits; `npm run check:claude-md` and `npm run check:standards` → exit 0.
-- [ ] Step 5: `node $PLANS/tools/check-anchors.mjs plans/predictive-studio/PR-4-honest-serving.md "$MJ" HEAD` → the
+- [x] Step 4: Step 1's command → 0 hits; `npm run check:claude-md` and `npm run check:standards` → exit 0.
+- [x] Step 5: `node $PLANS/tools/check-anchors.mjs plans/predictive-studio/PR-4-honest-serving.md "$MJ" HEAD` → the
   `d058-guide-*` anchors `ok` at their new headings (re-anchored in this commit, §12).
 
 #### Task M8.2: The changeset text and the final PR description
@@ -13291,6 +13291,15 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   re-run belongs to the M8 exit pass.
 - **Anchors:** `check-anchors … HEAD` `ok 24 · moved 46 · changed 51 · missing 19` → `ok 140 · moved 0 · changed 0 ·
   missing 0` (§12).
+- **Re-run of what this pass touched** (head `b0103548c0`): root `pnpm run build` → 351/351 + 322/322 · Core 45/593 ·
+  Engine 124/1876 (stderr 0 after `monitoring-store.test.ts` seeds the Records resource type and asserts
+  `ResourceTypeID`; the post-audit run's 3 stderr lines came from it) + test-inclusive tsc 0 · TruthSuite 27/187 ·
+  integration-test-suite 78/1121 + rigs tsc 0 (its 11 stderr lines come from four `next` test files this PR does not
+  touch: `fls-closeout-skips`, `run-with-compliance`, `video-studio-fakes`, `anchored-record-comments`) · **Containment
+  12/12** (`RUN_MUTATION_TESTS=1`, G0.10 ✓ under the new measure; census equal) · `check:guards`, `check:standards`,
+  `check:ui`, `check:changeset`, `check:codegen-tail`, `check:claude-md`, `check-migration-entityfield-sequence.mjs` →
+  exit 0 each. M8.1 Steps 1–5 ticked (done on the M8 branch; re-verified here: the stale-term grep 0 hits, the four
+  `d058-guide-*` anchors `ok`).
 - **Rulings:** D4-258…D4-260. **Flags:** OF4-53 resolved.
 
 ## 12. Refresh log (append-only)
