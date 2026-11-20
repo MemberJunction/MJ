@@ -35,6 +35,8 @@ import {
     type IScoringPreparedModel,
     type ISidecarPredictor,
     type LoadedModel,
+    type MonitoredBinding,
+    type MonitoredModel,
     type MonitoredUnit,
     type MonitoringPeriod,
     type OutcomeJoinResult,
@@ -43,6 +45,7 @@ import {
 } from '@memberjunction/predictive-studio';
 import {
     JsonParse,
+    UtcDay,
     resolveOutcomeConfig,
     type FeatureSchemaEntry,
     type MonitoringJobReadSpec,
@@ -189,15 +192,18 @@ async function createPsd1Fixtures(ctx: IntegrationCheckContext, provider: Databa
     return { Tag: tag, Pipeline: pipeline, Champion: champion, Challenger: challenger, RecordProcess: recordProcess, Binding: binding, RecordIDs: recordIds, Artifacts: artifacts };
 }
 
-/** Deletes every row PSD1 created, children first, by SQL (the binding refuses an entity delete before withdrawal). */
-async function deletePsd1Fixtures(provider: DatabaseProviderBase, tag: string): Promise<void> {
+/**
+ * Deletes every row PSD1 created, children first: PSD2's `MJ: ML Monitoring Results` rows through `BaseEntity.Delete`
+ * (nothing guards them), then the rest by SQL (the binding refuses an entity delete before withdrawal).
+ */
+async function deletePsd1Fixtures(provider: DatabaseProviderBase, user: UserInfo, tag: string): Promise<void> {
+    await deletePsd2PeriodRows(provider, user, tag);
     const t = (entityName: string): string => tableOf(provider, entityName);
     const name = `'${EscapeSQLString(tag)}'`;
     const like = `'${EscapeSQLString(tag)}%'`;
     const bindings = `SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name}`;
     const pipelines = `SELECT ID FROM ${t('MJ: ML Training Pipelines')} WHERE Name = ${name}`;
     await provider.ExecuteSQL(`
-        DELETE FROM ${t('MJ: ML Monitoring Results')} WHERE ModelID IN (SELECT ID FROM ${t('MJ: ML Models')} WHERE PipelineID IN (${pipelines}));
         DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelScoringBindingID IN (${bindings});
         DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (${bindings});
         DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName = ${name};
@@ -206,6 +212,25 @@ async function deletePsd1Fixtures(provider: DatabaseProviderBase, tag: string): 
         DELETE FROM ${t('MJ: ML Training Pipelines')} WHERE Name = ${name};
         DELETE FROM ${t('MJ: Files')} WHERE Name LIKE ${like};
         DELETE FROM ${t(PSD1_TARGET)} WHERE Name LIKE ${like};`, undefined, { isMutation: true, description: 'PSD1: delete its fixtures' }, undefined);
+}
+
+/** PSD2's period rows of the tag's models, each deleted through `BaseEntity.Delete`. @throws naming a read or delete that failed */
+async function deletePsd2PeriodRows(provider: DatabaseProviderBase, user: UserInfo, tag: string): Promise<void> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const pipelines = await rv.RunView<Pick<MJMLTrainingPipelineEntity, 'ID'>>({ EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `Name = '${EscapeSQLString(tag)}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
+    if (!pipelines.Success) throw new Error(`PSD teardown: reading the ${tag} pipelines failed: ${pipelines.ErrorMessage}`);
+    if (pipelines.Results.length === 0) return;
+    const pipelineIds = pipelines.Results.map((p) => `'${EscapeSQLString(p.ID)}'`).join(',');
+    const models = await rv.RunView<Pick<MJMLModelEntity, 'ID'>>({ EntityName: 'MJ: ML Models', ExtraFilter: `PipelineID IN (${pipelineIds})`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
+    if (!models.Success) throw new Error(`PSD teardown: reading the ${tag} models failed: ${models.ErrorMessage}`);
+    if (models.Results.length === 0) return;
+    const rows = await rv.RunView<MJMLMonitoringResultEntity>({
+        EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID IN (${models.Results.map((m) => `'${EscapeSQLString(m.ID)}'`).join(',')})`, ResultType: 'entity_object', BypassCache: true,
+    }, user);
+    if (!rows.Success) throw new Error(`PSD teardown: reading the ${tag} period rows failed: ${rows.ErrorMessage}`);
+    for (const row of rows.Results) {
+        if (!(await row.Delete())) throw new Error(`PSD teardown: deleting period row ${row.ID} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
+    }
 }
 
 /** The scoring context of the check's user: the sidecar, model runtime and artifact loader are doubles; the challenger source is production's. */
@@ -254,25 +279,32 @@ async function assertPsd1Rows(ctx: IntegrationCheckContext, f: Psd1Fixtures): Pr
     assertPsd1Role('Challenger', f.Challenger, PSD1_SCORES.Challenger, rows, runsByModel);
 }
 
-/** The monitoring driver with its divergence and period-row steps exposed (PSD2 runs them on the fixture binding). */
-class Psd2MirrorDriver extends PredictiveStudioModelMonitoringJobDriver {
-    /** The binding's mirror over `period`, measured by the driver's own step and stored on the champion's period row. */
-    public async MeasureAndStore(ctx: IntegrationCheckContext, f: Psd1Fixtures, period: MonitoringPeriod): Promise<MonitoringMirror> {
+/**
+ * The monitoring driver with its divergence and period-row steps exposed (PSD2 runs them on the fixture binding; the
+ * unit test runs them over an in-memory store through the constructor's seams).
+ */
+export class Psd2MirrorDriver extends PredictiveStudioModelMonitoringJobDriver {
+    /**
+     * The binding's mirror over `period`, measured by the driver's own step and stored on the champion's period row.
+     *
+     * @throws Error when the binding names no live challenger (the period then has no mirror)
+     */
+    public async MeasureAndStore(ctx: IntegrationCheckContext, champion: MonitoredModel, binding: MonitoredBinding, period: MonitoringPeriod): Promise<MonitoringMirror> {
         const monitoring = this.ContextFor(ctx.User, ctx.Provider, null);
-        const unit: MonitoredUnit = { ID: '', Spec: PSD2_UNIT, LabelWindowDays: 365, LabelGapDays: 0, RowEntity: PSD1_TARGET };
+        const unit: MonitoredUnit = { ID: PSD2_UNIT.id, Spec: PSD2_UNIT, LabelWindowDays: 365, LabelGapDays: 0, RowEntity: PSD1_TARGET };
         const plan: PeriodPlan = {
-            Model: f.Champion, Unit: unit, Task: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 }, Spec: PSD2_SPEC(f.Champion.ID),
+            Model: champion, Unit: unit, Task: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 }, Spec: psd2Spec(champion.ID),
             Initiator: { kind: 'human', userId: ctx.User.ID },
         };
-        const join: OutcomeJoinResult = { Path: 'binding', Binding: f.Binding, ShadowScoringRunID: null, ScoredRows: 0, ExcludedInTrainingRows: 0, Rows: [] };
+        const join: OutcomeJoinResult = { Path: 'binding', Binding: binding, ShadowScoringRunID: null, ScoredRows: 0, ExcludedInTrainingRows: 0, Rows: [] };
         const mirror = await this.MeasureDivergence(plan, join, period, monitoring);
-        Assert(mirror !== null, 'the binding names a live challenger, so the period has a mirror');
+        if (mirror === null) throw new Error('PSD2: the binding names no live challenger, so the period has no mirror');
         await this.WritePeriod({
-            ModelID: f.Champion.ID, ScheduledJobRunID: null, Period: period, State: 'window-open', ScoredRows: PSD1_RECORDS, JoinedRows: 0, ExcludedInTrainingRows: 0,
+            ModelID: champion.ID, ScheduledJobRunID: null, Period: period, State: 'window-open', ScoredRows: PSD1_RECORDS, JoinedRows: 0, ExcludedInTrainingRows: 0,
             Primary: null, Tracked: null, Calibration: null, DriftLook: null, DriftAlarms: [], Parity: null, TriggersFired: [], ChallengerRunID: null,
             Challenger: { outcome: 'none', trainingRunId: null, recordId: null, reason: null, mirror }, Rollback: null, ErrorMessage: null,
         }, monitoring);
-        return mirror!;
+        return mirror;
     }
 }
 
@@ -286,7 +318,7 @@ const PSD2_UNIT: PredictionUnitSpec = {
 };
 
 /** The monitoring spec PSD2's plan carries (the divergence step reads none of it). */
-function PSD2_SPEC(modelId: string): MonitoringJobReadSpec {
+function psd2Spec(modelId: string): MonitoringJobReadSpec {
     return {
         modelId, evaluationProtocolId: 'psd2', schedule: { cronExpression: '0 3 1 * *', timezone: 'UTC' },
         outcomeJoin: { predictionUnitId: 'psd2', runWhen: 'label-window-closed', joinOn: 'entity-and-as-of-date', excludeInTrainingRows: true },
@@ -300,7 +332,7 @@ function PSD2_SPEC(modelId: string): MonitoringJobReadSpec {
 /** Asserts the champion's period row stores the measured mirror in `ChallengerResult` (camelCase JSON). */
 async function assertPsd2Row(ctx: IntegrationCheckContext, champion: MJMLModelEntity, period: MonitoringPeriod, mirror: MonitoringMirror): Promise<void> {
     const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLMonitoringResultEntity, 'ID' | 'State' | 'ChallengerResult'>>({
-        EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID = '${EscapeSQLString(champion.ID)}' AND PeriodGrain = 'month' AND Period = '${period.Start.toISOString().slice(0, 10)}'`,
+        EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID = '${EscapeSQLString(champion.ID)}' AND PeriodGrain = 'month' AND Period = '${UtcDay.UtcDayIso(period.Start)}'`,
         Fields: ['ID', 'State', 'ChallengerResult'], ResultType: 'simple', BypassCache: true,
     }, ctx.User);
     Assert(rows.Success && rows.Results.length === 1, `one period row of the champion (got ${rows.Results.length}: ${rows.ErrorMessage})`);
@@ -329,7 +361,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 AssertEqual(result.Status, 'completed', `the binding run completed (${JSON.stringify(result)})`);
                 await assertPsd1Rows(ctx, fixtures);
             } finally {
-                if (tagOf() !== '') await deletePsd1Fixtures(provider, tagOf());
+                if (tagOf() !== '') await deletePsd1Fixtures(provider, ctx.User, tagOf());
             }
         },
     },
@@ -349,14 +381,14 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 );
                 AssertEqual(scored.Status, 'completed', `the binding run completed (${JSON.stringify(scored)})`);
                 const period = MonitoringPeriods.Containing(asOf, 'month');
-                const mirror = await new Psd2MirrorDriver().MeasureAndStore(ctx, fixtures, period);
+                const mirror = await new Psd2MirrorDriver().MeasureAndStore(ctx, fixtures.Champion, fixtures.Binding, period);
                 AssertEqual(mirror.paired, PSD1_RECORDS, 'every champion record is paired with its challenger row');
                 AssertEqual(mirror.failures, 0, 'no champion record is missing its challenger row');
                 AssertEqual(mirror.agreement, 0, `the champion (${PSD1_SCORES.Champion}) and the challenger (${PSD1_SCORES.Challenger}) fall on opposite sides of 0.5`);
                 Assert(Math.abs(mirror.meanScoreDelta - (PSD1_SCORES.Challenger - PSD1_SCORES.Champion)) < 1e-9, `the mean score delta is challenger minus champion (got ${mirror.meanScoreDelta})`);
                 await assertPsd2Row(ctx, fixtures.Champion, period, mirror);
             } finally {
-                if (tagOf() !== '') await deletePsd1Fixtures(provider, tagOf());
+                if (tagOf() !== '') await deletePsd1Fixtures(provider, ctx.User, tagOf());
             }
         },
     },

@@ -6,6 +6,7 @@
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import type { TaskType } from '@memberjunction/predictive-studio-core';
 import { RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { ConfidenceInterval, UnitFixtures } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { MonitoringFixture, type PeriodCalendar } from './ps-gates/ps-gate-monitoring';
@@ -21,12 +22,14 @@ export const PsGateD1cS82Checks: NamedCheck[] = [
       const d1c = await h.EnsureLoaded({ Kind: 'scenario', ID: 'D1c', Seed: UnitFixtures.ScenarioBaseSeed('D1c') });
       const model = await MonitoringFixture.PublishOnPeriods(h, d1c, [0, 1, 2], { Scenario: 'D1c', Task: BINARY, Calendar: YEARS });
       const [period3] = await MonitoringFixture.RunPeriods(h, model, [3]);
-      const labels = await RunView.FromMetadataProvider(h.Provider).RunView<{ T: string; Target: number }>({ EntityName: d1c.Entity.Name, ExtraFilter: "T < '2022-01-01'", Fields: ['T', 'Target'], ResultType: 'simple', IgnoreMaxRows: true }, h.User);
+      const shiftStart = MonitoringFixture.PeriodStart(YEARS, 3);
+      const labels = await RunView.FromMetadataProvider(h.Provider).RunView<{ T: string; Target: number }>({ EntityName: d1c.Entity.Name, ExtraFilter: `T < '${EscapeSQLString(shiftStart)}'`, Fields: ['T', 'Target'], ResultType: 'simple', IgnoreMaxRows: true }, h.User);
+      if (!labels.Success) throw new Error(`reading the D1c labels before ${shiftStart} failed: ${labels.ErrorMessage}`);
       const positives = labels.Results.filter((r) => Number(r.Target) === 1).length;
       const preUpper = labels.Results.length === 0 ? null : ConfidenceInterval.Wilson(positives, labels.Results.length).Upper;
       const rate = period3.PositiveRate;
       PsGate.Assert({
-        Passed: labels.Success && rate !== null && preUpper !== null && rate.Value > preUpper,
+        Passed: rate !== null && preUpper !== null && rate.Value > preUpper,
         Measured: { period3Rate: rate ? rate.Value : null, period3Lower: rate ? rate.Lower : null, period3Upper: rate ? rate.Upper : null, prePeriodsUpper: preUpper, preRows: labels.Results.length },
         Detail: `period-3 positive rate ${rate ? rate.Value : 'none'} against the periods 0–2 upper bound ${preUpper}`,
       });

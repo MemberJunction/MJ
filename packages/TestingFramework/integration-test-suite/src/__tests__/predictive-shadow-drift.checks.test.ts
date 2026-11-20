@@ -5,7 +5,48 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
+import type { ChallengerSelection, IMonitoringStore, ModelPrediction, MonitoredBinding, MonitoredModel, PeriodRowWrite } from '@memberjunction/predictive-studio';
+import { PredictiveShadowDriftChecks, Psd2MirrorDriver } from '../checks/predictive-shadow-drift.checks';
+
+const CHALLENGER_ID = 'D2000000-0000-4000-8000-0000000000C2';
+const CHAMPION: MonitoredModel = {
+    ID: 'D2000000-0000-4000-8000-0000000000C1', PipelineID: 'D2000000-0000-4000-8000-0000000000A1', Version: 1, Status: 'Published', PredictionUnitID: null,
+    OutputSemantics: null, ArtifactFileID: null, ArtifactSha256: null, TrainingSnapshotID: null,
+};
+const MIRROR_BINDING: MonitoredBinding = { ID: 'D2000000-0000-4000-8000-0000000000B1', MLTrainingPipelineID: CHAMPION.PipelineID };
+
+/** The monitoring store PSD2's steps read and write, in memory: three records scored 0.3 by the champion and 0.8 by the challenger. */
+class MirrorStore implements IMonitoringStore {
+    public Selection: ChallengerSelection | null = { ModelID: CHALLENGER_ID, Sampled: () => true };
+    public readonly Challengers: { readonly BindingID: string; readonly AsOf: Date }[] = [];
+    public readonly Written: PeriodRowWrite[] = [];
+    private static rows(score: number): ModelPrediction[] {
+        return ['r1', 'r2', 'r3'].map((RecordID) => ({ RecordID, EffectiveAsOf: new Date('2026-06-10T00:00:00.000Z'), InTraining: false, Score: score, Probabilities: null }));
+    }
+    public async Challenger(binding: MonitoredBinding, asOf: Date): Promise<ChallengerSelection | null> {
+        this.Challengers.push({ BindingID: binding.ID, AsOf: asOf });
+        return this.Selection;
+    }
+    public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger'): Promise<ModelPrediction[]> {
+        return role === 'Champion' && modelId === CHAMPION.ID ? MirrorStore.rows(0.3) : role === 'Challenger' && modelId === CHALLENGER_ID ? MirrorStore.rows(0.8) : [];
+    }
+    public async WritePeriod(write: PeriodRowWrite): Promise<string> {
+        this.Written.push(write);
+        return 'period-row-1';
+    }
+    public async LoadModel(): Promise<null> { throw new Error('PSD2 reads no model'); }
+    public TaskOf(): never { throw new Error('PSD2 reads no task'); }
+    public async LoadUnit(): Promise<never> { throw new Error('PSD2 reads no unit'); }
+    public async BindingOf(): Promise<null> { throw new Error('PSD2 resolves no binding'); }
+    public async HoldsBindingView(): Promise<boolean> { throw new Error('PSD2 checks no view'); }
+    public async UnitRowsInPeriod(): Promise<never[]> { throw new Error('PSD2 reads no unit rows'); }
+    public async Outcomes(): Promise<never[]> { throw new Error('PSD2 reads no outcomes'); }
+    public async ReferenceScore(): Promise<null> { throw new Error('PSD2 reads no reference'); }
+    public async EarlierPeriods(): Promise<never[]> { throw new Error('PSD2 reads no history'); }
+    public async Predecessor(): Promise<null> { throw new Error('PSD2 reads no predecessor'); }
+    public async ArtifactVerified(): Promise<never> { throw new Error('PSD2 verifies no artifact'); }
+    public async DriftInputs(): Promise<never[]> { throw new Error('PSD2 reads no drift inputs'); }
+}
 
 function repoRoot(): string {
     let dir = process.cwd();
@@ -253,14 +294,27 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD1 needs a database provider: its fixtures place model status by SQL' });
     });
 
-    it("PSD2 measures the binding's mirror with the monitoring driver's own step and reads it back from the champion's MJ: ML Monitoring Results row; it skips, naming why, on a provider that cannot place model status by SQL (M6.8)", async () => {
-        const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
-        const psd2Source = source.slice(source.indexOf("Id: 'predictive-shadow-drift.PSD2'"));
-        expect(source).not.toMatch(/EvaluateFeatureAndPrediction|EVALUATE_DRIFT|PSIDrift/);
-        expect(source).toContain('this.MeasureDivergence(plan, join, period, monitoring)');
-        expect(source).toContain("EntityName: 'MJ: ML Monitoring Results'");
-        expect(psd2Source).toContain('new Psd2MirrorDriver().MeasureAndStore(');
+    it("PSD2 measures the binding's mirror with the monitoring driver's own step and stores it on the champion's period row (M6.8)", async () => {
+        const store = new MirrorStore();
+        const { ctx } = buildInMemoryHarness();
+        const period = { Start: new Date('2026-06-01T00:00:00.000Z'), End: new Date('2026-07-01T00:00:00.000Z'), Grain: 'month' as const };
+        const mirror = await new Psd2MirrorDriver({ Store: store }).MeasureAndStore(ctx, CHAMPION, MIRROR_BINDING, period);
+        expect(mirror).toEqual({ challengerModelId: CHALLENGER_ID, paired: 3, agreement: 0, meanScoreDelta: expect.closeTo(0.5, 9), failures: 0 });
+        expect(store.Challengers).toEqual([{ BindingID: MIRROR_BINDING.ID, AsOf: period.Start }]);
+        expect(store.Written).toHaveLength(1);
+        expect(store.Written[0]).toMatchObject({ ModelID: CHAMPION.ID, Period: period, Challenger: { outcome: 'none', mirror } });
+    });
 
+    it('PSD2 refuses a binding that names no live challenger, writing no period row', async () => {
+        const store = new MirrorStore();
+        store.Selection = null;
+        const { ctx } = buildInMemoryHarness();
+        const period = { Start: new Date('2026-06-01T00:00:00.000Z'), End: new Date('2026-07-01T00:00:00.000Z'), Grain: 'month' as const };
+        await expect(new Psd2MirrorDriver({ Store: store }).MeasureAndStore(ctx, CHAMPION, MIRROR_BINDING, period)).rejects.toThrow('names no live challenger');
+        expect(store.Written).toEqual([]);
+    });
+
+    it('PSD2 skips, naming why, on a provider that cannot place model status by SQL', async () => {
         const { ctx } = buildInMemoryHarness();
         const psd2 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD2');
         expect(psd2).toBeDefined();

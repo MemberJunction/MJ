@@ -5,7 +5,6 @@
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import type { TaskType } from '@memberjunction/predictive-studio-core';
-import { StoredRuns } from '@memberjunction/predictive-studio';
 import { UnitFixtures } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { MonitoringFixture, type PeriodCalendar } from './ps-gates/ps-gate-monitoring';
@@ -23,12 +22,7 @@ export const PsGateT4S85Checks: NamedCheck[] = [
       const dataset = await h.EnsureLoaded({ Kind: 'scenario', ID: 'T4', Seed: UnitFixtures.ScenarioBaseSeed('T4') });
       const model = await MonitoringFixture.PublishOnPeriods(h, dataset, PUBLISH_PERIODS, { Scenario: 'T4', Task: TASK, Calendar: CALENDAR, Challenger: true });
       const periods = await MonitoringFixture.RunPeriods(h, model, MONITOR_PERIODS);
-      const started = periods.find((p) => p.ChallengerRunID !== null);
-      const run = started && started.ChallengerRunID ? await StoredRuns.Read(started.ChallengerRunID, { ContextUser: h.User, Provider: h.Provider }) : null;
-      const diff = run === null || run.Gate === null ? null : run.Gate.incumbentDiff;
-      const sameRows = diff !== null && diff.incumbentModelId.toLowerCase() === model.ModelID.toLowerCase();
-      const challenger = started && started.ChallengerRunID ? await MonitoringFixture.ChallengerModel(h, started.ChallengerRunID) : null;
-      const replaced = challenger !== null && challenger.Status === 'Published' && (await MonitoringFixture.StatusOf(h, model.ModelID)) === 'Archived';
+      const { Started: started, SameRows: sameRows, Challenger: challenger, Replaced: replaced } = await MonitoringFixture.ChallengerOutcome(h, model, periods);
       PsGate.Assert({
         Passed: !replaced && periods.every((p) => p.State === 'evaluated'),
         Measured: { challengerRunId: started ? started.ChallengerRunID : null, pairedOnIncumbentRows: sameRows, challengerStatus: challenger ? challenger.Status : null, replaced, outcome: started ? started.ChallengerOutcome : null },
