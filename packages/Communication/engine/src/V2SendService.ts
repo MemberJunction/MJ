@@ -617,6 +617,8 @@ export class V2SendService {
     msg.ContextData = {
       mj_log_id: log.ID,
       CommunicationLogID: log.ID,
+      mjFirstPartyTracking: true,
+      TrackingToken: trackingToken,
     };
 
     const processed = new ProcessedMessageServer(msg);

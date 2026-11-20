@@ -97,8 +97,16 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      */
     protected async SendToRecipients(params: EntityCommunicationParams, recipients: EntityCommunicationRecipient[], contextUser: UserInfo): Promise<EntityCommunicationResult> {
         const sendable = recipients.filter(r => !r.SkipReason).map(r => r.Recipient);
+        const gatedMessage: Message = params.Message.ContextData?.['MessageClass']
+            ? params.Message
+            : Object.assign(Object.create(Object.getPrototypeOf(params.Message) as object), params.Message, {
+                ContextData: {
+                    ...(params.Message.ContextData ?? {}),
+                    MessageClass: 'Operational',
+                },
+            });
         const sendResult = sendable.length === 0 ? [] :
-            await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, sendable, params.PreviewOnly, undefined, contextUser);
+            await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, gatedMessage, sendable, params.PreviewOnly, undefined, contextUser);
         if (!sendResult || sendResult.length !== sendable.length) {
             return {
                 Success: false,

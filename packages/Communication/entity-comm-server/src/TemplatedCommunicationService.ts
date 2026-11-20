@@ -343,6 +343,7 @@ export class TemplatedCommunicationService
     );
 
     const sendParams: SendToPrincipalsParams = {
+      CommunicationRunID: payload.CommunicationRunID,
       Envelope: payload.Envelope,
       Recipients: rendered.map((item) => ({
         Principal: item.Recipient.Principal,

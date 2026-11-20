@@ -588,7 +588,7 @@ export class CommsActivityWorker {
           CommunicationSenderID: null,
           BaseMessageTypeID: endpoint?.BaseMessageTypeID ?? null,
           Reason: 'Hard Bounce',
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
           Notes: event.BounceReason ?? null,
@@ -622,7 +622,7 @@ export class CommsActivityWorker {
             : event.CommunicationSenderID ?? null,
           BaseMessageTypeID: endpoint?.BaseMessageTypeID ?? null,
           Reason: mapped.Reason,
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
           Notes: event.DropReason ?? null,
@@ -674,7 +674,7 @@ export class CommsActivityWorker {
           CommunicationSenderID: event.CommunicationSenderID ?? null,
           BaseMessageTypeID: endpoint?.BaseMessageTypeID ?? null,
           Reason: 'Spam Complaint',
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
         },
@@ -709,7 +709,7 @@ export class CommsActivityWorker {
           CommunicationPreferenceID: preferenceID,
           BaseMessageTypeID: endpoint?.BaseMessageTypeID ?? null,
           Reason: 'User Unsubscribe',
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
           IPAddress: event.IPAddress ?? null,
@@ -744,7 +744,7 @@ export class CommsActivityWorker {
           CommunicationPreferenceID: null,
           BaseMessageTypeID: endpoint?.BaseMessageTypeID ?? null,
           Reason: 'User Unsubscribe',
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
           IPAddress: event.IPAddress ?? null,
@@ -779,7 +779,7 @@ export class CommsActivityWorker {
           CommunicationPreferenceID: preferenceID,
           BaseMessageTypeID: endpoint.BaseMessageTypeID,
           Reason: 'User Unsubscribe',
-          Source: 'Provider Webhook',
+          Source: event.Source ?? 'Provider Webhook',
           EffectiveAt: event.OccurredAt,
           CommunicationLogID: event.CommunicationLogID ?? null,
           IPAddress: event.IPAddress ?? null,
@@ -845,7 +845,7 @@ export class CommsActivityWorker {
     }
 
     pref.State = 'Opted Out';
-    pref.ConsentSource = 'Provider Webhook';
+    pref.ConsentSource = event.Source ?? 'Provider Webhook';
     pref.ConsentAt = event.OccurredAt;
     pref.CommunicationLogID = event.CommunicationLogID ?? null;
     pref.IPAddress = event.IPAddress ?? null;
@@ -895,7 +895,7 @@ export class CommsActivityWorker {
     audit.Action = params.Action;
     audit.PreviousValue = params.PreviousValue;
     audit.NewValue = params.NewValue;
-    audit.Source = 'Provider Webhook';
+    audit.Source = params.event.Source ?? 'Provider Webhook';
     audit.CommunicationLogID = params.event.CommunicationLogID ?? null;
     audit.IPAddress = params.event.IPAddress ?? null;
     audit.UserAgent = params.event.UserAgent ?? null;

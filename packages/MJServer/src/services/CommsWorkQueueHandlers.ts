@@ -77,6 +77,9 @@ export function ConfigureCommsV2WorkQueue(
         BaseTrackingURL: baseTrackingUrl,
         TrackingHMACSecret: resolvedSecret,
         EnqueueWork: async (taskType, payload) => {
+            if (!WorkQueueEngine.Instance.Loaded) {
+                await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
+            }
             const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
             const rejected = results.find((r) => r.Status === 'Rejected');
             if (rejected) {
@@ -87,6 +90,9 @@ export function ConfigureCommsV2WorkQueue(
 
     TemplatedCommunicationService.Instance.Configure({
         EnqueueWork: async (taskType, payload) => {
+            if (!WorkQueueEngine.Instance.Loaded) {
+                await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
+            }
             const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
             const rejected = results.find((r) => r.Status === 'Rejected');
             if (rejected) {
@@ -135,7 +141,10 @@ export class CommsRenderWorkHandler extends BaseWorkHandler<RenderBatchPayload &
             return Outcome.DeadLetter('Invalid comms.render payload: missing Envelope or Recipients');
         }
         await CommunicationEngine.Instance.Config(false, this.ContextUser);
-        await TemplatedCommunicationService.Instance.HandleRenderBatch(payload, this.ContextUser);
+        const result = await TemplatedCommunicationService.Instance.HandleRenderBatch(payload, this.ContextUser);
+        if (!result.Success) {
+            return Outcome.Retry(result.ErrorMessage ?? 'comms.render batch failed');
+        }
         return Outcome.Complete();
     }
 }
@@ -154,7 +163,10 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
         const worker = new CommsActivityWorker();
         const events = await this.normalizePayloadEvents(payload);
         if (events.length > 0) {
-            await worker.ProcessActivityBatch(events, this.ContextUser);
+            const batchResult = await worker.ProcessActivityBatch(events, this.ContextUser);
+            if (batchResult.ErrorCount > 0) {
+                return Outcome.Retry(`${batchResult.ErrorCount} activity event(s) failed`);
+            }
         }
         return Outcome.Complete();
     }
@@ -210,6 +222,7 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
                 NormalizedAddress: '',
                 EventType: payload.EventType,
                 OccurredAt: payload.OccurredAt ? new Date(payload.OccurredAt) : new Date(),
+                Source: payload.Source === 'unsubscribe' ? 'One-Click Header' : 'Provider Webhook',
                 TrackingToken: payload.TrackingToken,
                 UnsubscribeToken: payload.UnsubscribeToken,
                 TargetURL: payload.TargetURL,

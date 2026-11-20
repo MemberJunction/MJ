@@ -561,6 +561,12 @@ async function defaultResolveWebhookKey(credentialId?: string): Promise<string |
 }
 
 async function defaultPublishActivity(payload: CommsActivityWorkPayload): Promise<void> {
+    if (!WorkQueueEngine.Instance.Loaded) {
+        const systemUser = getSystemUser();
+        if (systemUser) {
+            await WorkQueueEngine.Instance.Config(false, systemUser);
+        }
+    }
     const results = await WorkQueueEngine.Instance.Publish(COMMS_ACTIVITY_TOPIC, [{ Payload: payload }]);
     const rejected = results.find((r) => r.Status === 'Rejected');
     if (rejected) {
@@ -1095,6 +1101,20 @@ async function defaultSavePreferenceCenterChoices(
         if (!(await supp.Save())) {
             return { Found: true, Success: false, UnsubscribedAll: false, Preferences: data.Preferences };
         }
+
+        const suppAudit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
+            'MJ: Communication Consent Audit Logs',
+            systemUser,
+        );
+        suppAudit.CommunicationSuppressionID = supp.ID;
+        suppAudit.CommunicationLogID = found.log.ID;
+        suppAudit.Action = 'Created';
+        suppAudit.PreviousValue = null;
+        suppAudit.NewValue = JSON.stringify({ Reason: 'User Unsubscribe', UnsubscribeAll: true });
+        suppAudit.Source = 'Preference Center';
+        suppAudit.IPAddress = input.IPAddress ?? null;
+        suppAudit.UserAgent = input.UserAgent ?? null;
+        await suppAudit.Save();
 
         if (principal) {
             for (const pref of data.Preferences) {

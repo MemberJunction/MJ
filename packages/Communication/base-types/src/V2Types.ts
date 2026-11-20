@@ -215,6 +215,7 @@ export interface NormalizedActivityEvent {
   Principal?: PrincipalRecordRef;
   EventType: NormalizedActivityEventType;
   OccurredAt: Date;
+  Source?: 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Preference Center' | 'Provider Webhook';
   ProviderEventID?: string;
   ProviderMessageID?: string;
   UnsubscribeToken?: string;
