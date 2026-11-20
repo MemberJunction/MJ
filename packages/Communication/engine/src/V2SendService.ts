@@ -131,7 +131,7 @@ export function InjectOpenPixel(
 ): string {
   const pixel = `<img src="${buildCommsRouteUrl(baseUrl, `/open/${trackingToken}.gif`)}" width="1" height="1" alt="" style="display:none;" />`;
   if (/<\/body>/i.test(html)) {
-    return html.replace(/<\/body>/i, `${pixel}</body>`);
+    return html.replace(/<\/body>/i, () => `${pixel}</body>`);
   }
   return `${html}${pixel}`;
 }
