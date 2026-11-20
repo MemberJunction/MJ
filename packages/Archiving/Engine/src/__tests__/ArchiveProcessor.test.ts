@@ -103,6 +103,7 @@ vi.mock('@memberjunction/core', () => ({
             EntityByName: vi.fn((name: string) => ({
                 Name: name,
                 PrimaryKeys: mockPrimaryKeys,
+                FirstPrimaryKey: mockPrimaryKeys[0],
                 // Every field exists except NotAField; FieldByName is case-insensitive like the real one.
                 FieldByName: (field: string) => (field && field.toLowerCase() !== 'notafield' ? { Name: field } : undefined),
             })),
@@ -932,6 +933,31 @@ describe('ArchiveProcessor', () => {
             });
 
             await expect(runEntity({ records: createRecords(250), batchSize: 100 })).rejects.toThrow('connection lost');
+        });
+
+        it('should add each page to the run totals as it completes, so a later failed page keeps them', async () => {
+            let handed = 0;
+            mockArchiveRecord.mockImplementation(() => {
+                handed++;
+                if (handed === 200) {
+                    mockRunViewResults.Success = false;
+                    mockRunViewResults.ErrorMessage = 'connection lost';
+                }
+                return Promise.resolve({ Success: true, StoragePath: null, BytesArchived: 0 });
+            });
+            const runTotals = { Archived: 5, Failed: 1, Skipped: 0, Bytes: 0 };
+            mockRunViewResults.Results = createRecords(250);
+
+            await expect(processor.ProcessEntity(
+                createMockConfigEntity(validFieldConfigJson, { Entity: 'Test Entity', BatchSize: 100, Mode: 'StripFields' }) as unknown as MJArchiveConfigurationEntityEntity,
+                createMockConfig({ StorageMode: 'Purge' }) as unknown as MJArchiveConfigurationEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as MJArchiveRunEntity,
+                null,
+                { ID: 'user-1' } as unknown as UserInfo,
+                runTotals
+            )).rejects.toThrow('connection lost');
+
+            expect(runTotals).toEqual({ Archived: 205, Failed: 1, Skipped: 0, Bytes: 0 });
         });
 
         it('should quote the DateField and refuse one that is not a field of the entity', async () => {

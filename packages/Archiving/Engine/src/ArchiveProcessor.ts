@@ -43,11 +43,18 @@ export class ArchiveProcessor {
      * comes back empty, so memory holds at most one batch however many records are eligible.
      * Throws before any record is read when the configured DriverClass is not registered.
      *
+     * Each page's counts are added to `runTotals` as soon as the page is processed, so when a
+     * later page fails to load and this method throws, `runTotals` still holds every record
+     * already archived, stripped or deleted. That matters on a Purge run, where the archive run
+     * row is the only record of what was removed.
+     *
      * @param configEntity - The ArchiveConfigurationEntity record defining which entity/fields to archive
      * @param config - The parent ArchiveConfiguration record
      * @param archiveRun - The current ArchiveRun record for logging
      * @param storageManager - Initialized storage manager for writing documents; null when StorageMode is 'Purge'
      * @param contextUser - User context for all database operations
+     * @param runTotals - Optional running totals for the whole archive run; each page's counts are
+     *        added to it as the page completes
      * @returns Aggregated counts and bytes for this entity
      */
     public async ProcessEntity(
@@ -55,7 +62,8 @@ export class ArchiveProcessor {
         config: MJArchiveConfigurationEntity,
         archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        runTotals?: EntityProcessingResult
     ): Promise<EntityProcessingResult> {
         const entityName = configEntity.Entity;
         const batchSize = this.getBatchSize(configEntity, config);
@@ -76,24 +84,32 @@ export class ArchiveProcessor {
             ArchiveRun: archiveRun, StorageManager: storageManager, BasePath: config.RootPath ?? '', ContextUser: contextUser,
         };
 
-        const totals = await this.processPages(pager, job);
+        const totals = await this.processPages(pager, job, runTotals);
         LogStatus(`ArchiveProcessor: Processed ${totals.Archived + totals.Failed + totals.Skipped} eligible records for "${entityName}"`);
         return totals;
     }
 
     /**
-     * Loads and processes pages until the pager returns an empty page.
+     * Loads and processes pages until the pager returns an empty page, adding each page's
+     * counts to the entity's totals and, when given, to the run's totals.
      */
-    private async processPages(pager: ArchiveRecordPager, job: EntityJob): Promise<EntityProcessingResult> {
+    private async processPages(pager: ArchiveRecordPager, job: EntityJob, runTotals?: EntityProcessingResult): Promise<EntityProcessingResult> {
         const totals: EntityProcessingResult = { Archived: 0, Failed: 0, Skipped: 0, Bytes: 0 };
         for (let page = await pager.NextPage(); page.length > 0; page = await pager.NextPage()) {
             const pageResult = await this.processSingleBatch(page, job);
-            totals.Archived += pageResult.Archived;
-            totals.Failed += pageResult.Failed;
-            totals.Skipped += pageResult.Skipped;
-            totals.Bytes += pageResult.Bytes;
+            this.addCounts(totals, pageResult);
+            if (runTotals) {
+                this.addCounts(runTotals, pageResult);
+            }
         }
         return totals;
+    }
+
+    private addCounts(into: EntityProcessingResult, counts: EntityProcessingResult): void {
+        into.Archived += counts.Archived;
+        into.Failed += counts.Failed;
+        into.Skipped += counts.Skipped;
+        into.Bytes += counts.Bytes;
     }
 
     /**
