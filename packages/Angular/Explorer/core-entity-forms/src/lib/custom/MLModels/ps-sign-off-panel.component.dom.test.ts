@@ -182,6 +182,13 @@ describe('PSSignOffPanelComponent (DOM)', () => {
     expect(Button(f, 'ps-sign-off-approve').disabled).toBe(true);
   });
 
+  it('a rejection needs a reason (M7.8: the reason requirement): Reject stays disabled until one is typed', async () => {
+    const f = await RenderSignOff({ model: held, protocol: { requiresHumanSignOff: true, signOffExpiryDays: 30 }, withheldAt: DAY0 });
+    expect(Button(f, 'ps-sign-off-reject').disabled).toBe(true);
+    await Type(f, 'ps-sign-off-reason', 'the holdout window misses the renewal season');
+    expect(Button(f, 'ps-sign-off-reject').disabled).toBe(false);
+  });
+
   it('an approval with a reason records the overrides and then the publish consumes the sign-off', async () => {
     const f = await RenderSignOff({ model: flagged, flags: ['single-feature-auc'] });
     Check(f, 'ps-override-single-feature-auc');
