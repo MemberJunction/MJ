@@ -113,7 +113,7 @@ npx expo start --dev-client --clear
 
 ## 3. Auth + MJAPI (required for real data)
 
-The app talks to **MJAPI on `http://localhost:4001/graphql`** (configured in `src/config/env.ts`). Make sure MJAPI is running and reachable. iOS Simulator can hit `localhost` directly.
+The app talks to **MJAPI on `http://localhost:4000/graphql`** (configured in `src/config/env.ts`). Make sure MJAPI is running and reachable. iOS Simulator can hit `localhost` directly.
 
 Sign in via **one** of:
 
