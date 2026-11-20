@@ -281,6 +281,60 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
     expect([latestRead?.ExtraFilter, latestRead?.BypassCache]).toEqual(["EntityID='E-MEMBERS' AND FeatureName='Churn risk' AND Source='Model'", true]);
   });
 
+  /** Two entities a pipeline's bindings can target. */
+  const entities = [{ ID: 'E-MEMBERS', Name: 'Members' }, { ID: 'E-OTHERS', Name: 'Others' }];
+  type BindingFields = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'FeatureName' | 'TargetEntityID' | 'Status'>;
+  const zeta: BindingFields = { ID: 'SB-Z', MLTrainingPipelineID: 'P1', FeatureName: 'Zeta risk', TargetEntityID: 'E-OTHERS', Status: 'Active' };
+  const alpha: BindingFields = { ID: 'SB-A', MLTrainingPipelineID: 'P1', FeatureName: 'Alpha risk', TargetEntityID: 'E-MEMBERS', Status: 'Active' };
+
+  /** Renders the churn model's grid over `bindings` (in that cache order), opened for `entityName`; returns the grid and its reads. */
+  async function RenderBindings(bindings: BindingFields[], entityName: string | null): Promise<{ grid: PSPredictionsGridComponent; reads: RunViewParams[] }> {
+    // the engine's cached bindings: the doubles carry only the members the grid reads
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue(bindings as unknown as MJMLModelScoringBindingEntity[]);
+    vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [], Capped: false });
+    const reads: RunViewParams[] = [];
+    const provider = createFakeProvider<ModelRow | LatestPredictionRow>({
+      runViewResults: (p: RunViewParams) => {
+        reads.push(p);
+        if (p.EntityName === 'MJ: ML Models') return [churn];
+        if (p.EntityName === 'MJ: Latest Feature Values') return [Latest('r1', 0.9)];
+        return [];
+      },
+      entities,
+      // the entity doubles carry only the members the grid reads
+      entityByName: (name: string) => entities.find((e) => e.Name === name) as unknown as EntityInfo | undefined,
+    });
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: churn.ID, Provider: provider, EntityName: entityName },
+      providers: [{ provide: NavigationService, useValue: {} }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    return { grid: fixture.componentInstance, reads };
+  }
+
+  const latestFilter = (reads: RunViewParams[]): string | undefined => {
+    const filter = reads.find((r) => r.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter;
+    return typeof filter === 'string' ? filter : undefined;
+  };
+
+  it('with no entity named, shows the first Active binding by feature name whatever the cache order, on that binding\'s entity', async () => {
+    const { grid, reads } = await RenderBindings([zeta, alpha], null);
+    expect(latestFilter(reads)).toBe("EntityID='E-MEMBERS' AND FeatureName='Alpha risk' AND Source='Model'");
+    expect(grid.ResolvedEntityName).toBe('Members');
+  });
+
+  it('opened for an entity, shows the Active binding on that entity', async () => {
+    const { grid, reads } = await RenderBindings([alpha, zeta], 'Others');
+    expect(latestFilter(reads)).toBe("EntityID='E-OTHERS' AND FeatureName='Zeta risk' AND Source='Model'");
+    expect(grid.ResolvedEntityName).toBe('Others');
+  });
+
+  it('opened for an entity no Active binding targets, reads the latest run instead of another entity\'s binding', async () => {
+    const { reads } = await RenderBindings([zeta], 'Members');
+    expect(latestFilter(reads)).toBeUndefined();
+  });
+
   it('takes the drivers and the scored date from the stored value', async () => {
     const grid = await RenderLatest([Latest('r1', 0.9)], []);
     expect(grid.AllRows[0].drivers.map((d) => [d.Label, d.Up])).toEqual([['Days Since Login', true]]);

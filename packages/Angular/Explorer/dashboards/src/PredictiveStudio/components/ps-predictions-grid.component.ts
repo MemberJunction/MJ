@@ -659,7 +659,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private async loadScoredRows(model: PredictionGridModelFields | null, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
     const binding = this.RunId ? null : this.activeScoringBinding(model);
     if (binding) {
-      await this.resolveTargetEntity(model);
+      this.resolveBindingEntity(binding);
       const latest = await this.LoadLatestValues(binding);
       return { Rows: latest.Rows.map((r) => LatestPredictionRows.ToRunDetail(r)).filter((r): r is PSRunDetailRow => r !== null), Capped: latest.Capped };
     }
@@ -670,10 +670,26 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return PredictiveStudioEngine.Instance.LoadRunDetails(runId, provider, user);
   }
 
-  /** The model pipeline's `Active` scoring binding with a target entity (one per pipeline and entity), from the engine's cache. */
+  /**
+   * The model pipeline's `Active` scoring binding (with a target entity) the grid shows, from the engine's cache, chosen
+   * the same way on every read: when the host opened the grid for an entity (`EntityName`), the Active binding on that
+   * entity, or none; otherwise any Active binding. Several candidates (a pipeline's bindings are unique per entity and
+   * feature, not per pipeline) are ordered by feature name, then ID, and the first is shown.
+   */
   private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
     if (!model?.PipelineID) return null;
-    return PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID).find((b) => b.Status === 'Active' && !!b.TargetEntityID) || null;
+    const opened = this.EntityName ? this.ProviderToUse.EntityByName(this.EntityName) : undefined;
+    const candidates = PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID)
+      .filter((b) => b.Status === 'Active' && !!b.TargetEntityID && (!opened || UUIDsEqual(b.TargetEntityID, opened.ID)))
+      .sort((a, b) => a.FeatureName.localeCompare(b.FeatureName) || NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID)));
+    return candidates[0] || null;
+  }
+
+  /** Resolves the scored entity to the binding's target entity, whose records its values name. */
+  private resolveBindingEntity(binding: MJMLModelScoringBindingEntity): void {
+    const entity = binding.TargetEntityID ? this.ProviderToUse.EntityByID(binding.TargetEntityID) : undefined;
+    this.ResolvedEntityId = entity ? entity.ID : binding.TargetEntityID;
+    this.ResolvedEntityName = entity ? entity.Name : null;
   }
 
   /**
