@@ -1607,7 +1607,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G5.3:** write `MLScoringRun.ArtifactSha256` as null on the Score Record Set path → `ps-gate-r1-s7-4`'s lineage join finds 0% of rows with the run's hash equal to the model's.
 **Mutation check G5.4:** write `EffectiveAsOf` as the write time instead of the run's normalised as-of instant → `ps-gate-c1-s7-4` finds `MLScoringRun.AsOfDate` ≠ `EffectiveAsOf` on every row.
 **Mutation check G5.5:** remove the empty-column refusal (C6 check 6) → `ps-gate-w1-s7-5-3` sees the run `completed` with 200 predictions.
-**Mutation check G0.10:** train random forest without its estimator seed in the sidecar (`random_state=None` for `RandomForestClassifier`) → `ps-gate-w1-s5-4` finds random forest's two trainings' predictions apart (3 of 4 algorithms reproduce, expected 4). The row changed only its `MaxExecutionTimeMS` (D4-256); PR 4 records the mutation because it touched the row.
+**Mutation check G0.10:** train random forest without its estimator seed in the sidecar (`random_state=None` for `RandomForestClassifier`) → `ps-gate-w1-s5-4` finds random forest's finalist artifact (SHA-256) and inner score apart between its two trainings (3 of 4 algorithms reproduce every candidate, expected 4). The row changed its `MaxExecutionTimeMS` (D4-256) and its measure: every candidate of the run, not the delivered model (D4-258, OF4-53).
 **Mutation check G5.6:** remove the view-gate filter from one role's read permission on `MJ: Latest Feature Values` → `ps-gate-c1-s7-4-2` fails "shows nothing to a user without it, 1 of 1".
 **Mutation check G6.1:** join outcomes to the latest `Model` row per record instead of the row as of each period → `ps-gate-d1c-s8-1` finds closed-window predictions without a joined outcome (below 100%), or a period scoring rows other than its own (the check also asserts `scoredForPeriod` equals each period's own rows: phase 1's check passed the mutation, 36000 of 36000).
 **Mutation check G6.2:** store the point RMSE with `PrimaryLower`/`PrimaryUpper` null → `ps-gate-d1r-s8-2` fails "a row with RMSE and its 95% bounds for 100% of labelled periods".
@@ -10829,6 +10829,17 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   (found by `milestone-exit`'s `cmd:test packages/SQLParser`). The goldens were rewritten with `vitest run -u` on
   `src/__tests__/legacy-goldens/` only: 11 files, one line each, every changed line that entry's (b0a85a7847's
   precedent); SQLParser 63 files / 2175 passed.
+- **D4-258 · G0.10 compares every candidate a run trains with its re-training** (OF4-53, finish pass). The check scored
+  the one delivered model; when the gate ships a simple baseline every algorithm's run delivers the same baseline, so an
+  unseeded estimator went unseen. `ps-gate-w1-s5-4` now trains each pipeline twice without publishing (no incumbent,
+  so both requests are equal), reads each run by its `TrainingRunID`, requires the same `TrainingSnapshotID` (one
+  snapshot per `ContentHash`) and the same `codeVersion` (incl. seed and threads), and compares every returned artifact
+  (the finalist and each fitted simple baseline) by SHA-256 — the v2 envelope is canonical JSON over the fitted
+  predictor — and every inner-CV candidate by its inner score within 1e-9 (`ps-gate-reproduction.ts`
+  `TrainingReproduction`, unit-tested over two differing candidates, the delivered-baseline hole, inner drift, input
+  mismatch, a missing candidate and an empty run). Artifact SHA-256 was chosen over predictions on a fixed row set: it
+  needs no scoring of non-delivered candidates and is the stricter test. The row's description and summary follow; the
+  publish/score/archive steps are gone (204 s per run at load 19–22, against 216–242 s before).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10931,7 +10942,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Fifty flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification); OF4-30 is closed and OF4-48…OF4-51 are resolved, so forty-five remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-four remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -11163,7 +11174,8 @@ default implemented:
   `random_state=None` in the sidecar, which moves an unseeded forest's probabilities by up to 0.16 on a toy set) does
   not bite: `4 of 4`, `random_forestMaxDiff 0`. G0.10 is PR 2's gate; a real test needs the finalist delivered (a
   protocol whose only simple baseline is the dummy, as D4-238 did for G6.11) or the finalists' predictions compared
-  directly. **Default:** recorded for the controller; the row's budget change (D4-256) stays.
+  directly. **Resolved** by D4-258: the check compares every candidate of each run with its re-training; its mutation
+  bites (§11).
 - **OF4-54 · next's ABV3 races a metadata reload requested by the bundle before it** (post-audit Deterministic run).
   `work-bus-core` writes a metadata member entity ("no item timestamp moved"), which requests a full metadata reload;
   the reload landed between ABV3's second and third RunView, replaced the `EntityInfo` objects and dropped the synthetic
@@ -13210,8 +13222,8 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
 - **`Integration Tests — Deterministic`** (PR lane): `130/160 passed, 28 SKIPPED`, Skip gate PASSED, IT182 ✓; ✗ PB18
   (OF4-36, addendum) and ABV3 (OF4-54; `IT132` alone 6/6).
 - **Mutations re-run on the merged audit** (every G6 gate, G5.6 and Z6; outputs replace the M5b and M6 entries' lines):
-  all bite. **Mutation output G0.10:** `✓ ps-gate-w1-s5-4.G0.10` — **does not bite** (`4 of 4`, `random_forestMaxDiff 0`
-  with random forest unseeded; every algorithm delivers the same artifact): OF4-53.
+  all bite. **Mutation output G0.10:** `[IntegrationTestDriver] ✗ ps-gate-w1-s5-4.G0.10: 3 of 4 algorithms reproduce every candidate (artifact SHA-256, inner score within 1e-9)` (`random_forestDiffering: artifact random_forest, inner random_forest` — `random_forest 2a8cdc5e70ec ≠ 5c979fcc17b8; inner random_forest 0.46196399774295405 ≠ 0.4651785652968531`; the other three `4 of 4 candidates reproduce`) — after D4-258 (the post-audit run's
+  non-biting line, `4 of 4` with `random_forestMaxDiff 0`, measured only the delivered model: OF4-53, now resolved).
 - **Repo gates:** `check:guards`, `check:standards`, `check:ui`, `check:changeset`, `check:codegen-tail`,
   `check:claude-md`, `check-migration-entityfield-sequence.mjs` → EXIT=0 each.
 - **SQLParser:** 7 shipped-corpus goldens failed on the audit's SQL edit; rewritten for that entry only (D4-257), 2175 passed.
