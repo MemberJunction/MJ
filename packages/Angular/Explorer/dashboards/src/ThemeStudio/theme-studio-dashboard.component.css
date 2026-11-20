@@ -116,7 +116,7 @@ select { cursor: pointer; min-width: 120px; }
 .mx-ph { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 11px 14px 0; }
 .mx-ph-top { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
 .mx-ph-ico { width: 30px; height: 30px; border-radius: var(--mj-radius-sm, 6px); background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); display: grid; place-items: center; flex-shrink: 0; }
-.mx-ph-title { font-size: .95em; font-weight: 700; }
+.mx-ph-title { font-family: var(--mj-font-family-display, var(--mj-font-family)); font-size: .95em; font-weight: 700; }
 .mx-ph-sub { font-size: .72em; color: var(--mj-text-muted); }
 .mx-ph-actions { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .mx-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 0 10px; border-top: 1px solid var(--mj-border-default); }
@@ -179,7 +179,7 @@ select { cursor: pointer; min-width: 120px; }
 .mx-alert { display: flex; align-items: center; gap: 8px; font-size: .72em; font-weight: 600; border-radius: var(--mj-radius-sm, 6px); padding: 8px 10px; border: 1px solid var(--mj-status-info-border); background: var(--mj-status-info-bg); color: var(--mj-status-info-text); }
 .mx-alert i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .mx-dlg { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md, 8px); overflow: hidden; }
-.mx-dlg-t { padding: 8px 11px; background: var(--mj-bg-surface-sunken); font-size: .76em; font-weight: 700; color: var(--mj-text-primary); }
+.mx-dlg-t { font-family: var(--mj-font-family-display, var(--mj-font-family)); padding: 8px 11px; background: var(--mj-bg-surface-sunken); font-size: .76em; font-weight: 700; color: var(--mj-text-primary); }
 .mx-dlg-b { padding: 10px 11px; }
 .mx-dlg-a { display: flex; gap: 7px; padding: 9px 11px; border-top: 1px solid var(--mj-border-default); }
 
@@ -189,7 +189,7 @@ select { cursor: pointer; min-width: 120px; }
 .report { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg, 12px); overflow: hidden; box-shadow: var(--mj-shadow-brand-md); }
 .rhead { background: linear-gradient(105deg, var(--mj-brand-primary), color-mix(in srgb, var(--mj-brand-primary) 62%, black)); color: var(--mj-brand-on-primary); padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
 .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--mj-brand-on-primary); flex-shrink: 0; background-image: var(--mj-logo-mark); background-repeat: no-repeat; background-position: center; background-size: 70%; }
-.rhead .ti { font-size: 1.15em; font-weight: 700; line-height: 1.1; }
+.rhead .ti { font-family: var(--mj-font-family-display, var(--mj-font-family)); font-size: 1.15em; font-weight: 700; line-height: 1.1; }
 .rhead .su { font-size: .82em; opacity: .85; margin-top: 1px; }
 .rhead .rt { margin-left: auto; font-size: .72em; font-weight: 600; opacity: .9; text-align: right; }
 .rbody { padding: var(--ts-space, 16px); display: flex; flex-direction: column; gap: var(--ts-space, 16px); }
@@ -199,7 +199,7 @@ select { cursor: pointer; min-width: 120px; }
 .kpi .l { font-size: .76em; color: var(--mj-text-muted); margin-top: 4px; }
 .kpi .d { font-size: .72em; font-weight: 700; margin-top: 5px; display: inline-flex; gap: 3px; }
 .kpi .d.up { color: var(--mj-status-success); } .kpi .d.dn { color: var(--mj-status-error); }
-.chart .ct { font-size: .86em; font-weight: 700; margin-bottom: 2px; }
+.chart .ct { font-family: var(--mj-font-family-display, var(--mj-font-family)); font-size: .86em; font-weight: 700; margin-bottom: 2px; }
 .chart .cs { font-size: .74em; color: var(--mj-text-muted); margin-bottom: 12px; }
 .bars { display: flex; align-items: flex-end; gap: 10px; height: 120px; border-bottom: 1.5px solid var(--mj-border-default); }
 .bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 5px; }

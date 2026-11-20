@@ -219,9 +219,12 @@ export function Derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
     '--mj-radius-overlay': 'var(--mj-radius-lg)',
     '--mj-radius-pill': 'var(--mj-radius-full)',
   };
+  // Omit --mj-font-family-display when seeds.fontFamilyDisplay is unset ("Match body font")
+  // so html[data-theme-overlay] does not shadow container-scoped --mj-font-family overrides;
+  // headings fall back to --mj-font-family via _typography.scss.
   const typeVars: Record<string, string> = {
     '--mj-font-family': s.fontFamily,
-    '--mj-font-family-display': s.fontFamilyDisplay,
+    ...(seeds.fontFamilyDisplay?.trim() ? { '--mj-font-family-display': s.fontFamilyDisplay } : {}),
     '--mj-font-family-mono': s.fontFamilyMono,
   };
 

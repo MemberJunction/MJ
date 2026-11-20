@@ -793,7 +793,18 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     const el = this.previewCanvas?.nativeElement;
     if (!el) return;
     // Advanced token overrides win, layered last — mirrors emitOverlayCss's merge order.
-    const vars = { ...this.Derived.overlayVars, ...this.Derived.tokens[this.PreviewMode], ...this.TokenOverrides };
+    // Explicitly stamp --mj-font-family-display on the canvas even when Derive() omits it
+    // ("Match body font"), so the preview does not inherit a live org theme's heading font from <html>.
+    const resolvedDisplayFont =
+      this.Derived.overlayVars['--mj-font-family-display'] ??
+      this.TokenOverrides['--mj-font-family'] ??
+      this.Derived.seeds.fontFamilyDisplay;
+    const vars: Record<string, string> = {
+      ...this.Derived.overlayVars,
+      '--mj-font-family-display': resolvedDisplayFont,
+      ...this.Derived.tokens[this.PreviewMode],
+      ...this.TokenOverrides,
+    };
     for (const k of this.appliedVarKeys) {
       if (!(k in vars)) el.style.removeProperty(k);
     }
@@ -833,7 +844,11 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   /** Token names in the derived contract (completion, insert picker, validation). */
   public get OverridableTokens(): string[] {
-    const names = new Set([...Object.keys(this.Derived.overlayVars), ...Object.keys(this.Derived.tokens.light)]);
+    const names = new Set([
+      ...Object.keys(this.Derived.overlayVars),
+      ...Object.keys(this.Derived.tokens.light),
+      '--mj-font-family-display',
+    ]);
     return Array.from(names).sort();
   }
 
@@ -891,13 +906,17 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     const names = new Set([
       ...Object.keys(this.Derived.overlayVars),
       ...Object.keys(this.Derived.tokens.light),
+      '--mj-font-family-display',
       ...Object.keys(this.TokenOverrides),
     ]);
     const groups: TokenGroup[] = TOKEN_CATEGORIES.map((c) => ({ key: c.Key, label: c.Label, rows: [], modified: 0 }));
     const other: TokenGroup = { key: 'other', label: 'Other', rows: [], modified: 0 };
     for (const name of Array.from(names).sort()) {
       if (q && !name.toLowerCase().includes(q)) continue;
-      const derivedVal = this.Derived.tokens[this.PreviewMode][name] ?? this.Derived.overlayVars[name] ?? '';
+      const derivedVal =
+        this.Derived.tokens[this.PreviewMode][name] ??
+        this.Derived.overlayVars[name] ??
+        (name === '--mj-font-family-display' ? this.Derived.seeds.fontFamilyDisplay : '');
       const overridden = name in this.TokenOverrides;
       const value = overridden ? this.TokenOverrides[name] : derivedVal;
       const hex = /^#[0-9a-fA-F]{6}$/.test(value.trim());

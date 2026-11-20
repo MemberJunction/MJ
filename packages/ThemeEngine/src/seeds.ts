@@ -59,10 +59,11 @@ const MJ_FONT_MONO = "'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', 
 export const MJ_LEGACY_INTER_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
 function normalizeDefaultFont(fontStack: string | undefined): string | undefined {
-  if (!fontStack) {
-    return fontStack;
+  const trimmed = fontStack?.trim();
+  if (!trimmed) {
+    return undefined;
   }
-  if (fontStack === MJ_LEGACY_INTER_FONT || fontStack.replace(/"/g, "'").trim() === MJ_LEGACY_INTER_FONT) {
+  if (trimmed === MJ_LEGACY_INTER_FONT || trimmed.replace(/"/g, "'") === MJ_LEGACY_INTER_FONT) {
     return MJ_FONT;
   }
   return fontStack;
