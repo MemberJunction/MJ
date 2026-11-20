@@ -2,6 +2,11 @@
  * Gate G6.8 "D2 → S8.3" (statistical): `EngagementZ` (whose mean moves +0.1 SD from period 3) is flagged within 1 period
  * of the shift in at least 372 of 400 D2 seeds, and the mean false-discovery proportion over the 3 looks is at most
  * 0.05: periods 0–2 are the reference, periods 3–5 the looks, BH across the three inputs at q(3) = 0.0171.
+ *
+ * Mutation (§4.1a, D4-182): BH's step-up minimum taken in the wrong direction in the sidecar's `bh_adjust`
+ * (`np.minimum.accumulate(scaled)`), so `EngagementZ`'s p (≈ 1/2001 at every look) carries both null inputs: all three
+ * are flagged at every look where it is, FDP 2/3 per look, mean ≈ 0.67 > 0.05. Plain "no BH" (raw p ≤ q(3)) cannot
+ * bite here: with one shifted and two null inputs it measured mean FDP 0.0114.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { SeedRule } from '@memberjunction/predictive-studio-truth-suite';
