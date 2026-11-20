@@ -21,7 +21,7 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeFilterSQLCompiler, CompositeKey, LogError, RunView, type CompositeFilterDescriptor, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity, type MJUserViewEntity } from '@memberjunction/core-entities';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
@@ -1703,9 +1703,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       view.EntityID = entity.ID;
       view.UserID = user.ID;
       view.IsShared = false;
-      // A plain view (not CustomWhereClause, which MJ allows only an Owner): the clause set before the first save is
-      // kept, and the provider screens it when the view runs.
-      view.WhereClause = BuildRecordIdFilter(entity, this.FilteredRows.map((r) => r.recordId));
+      // A plain view (not CustomWhereClause, which MJ allows only an Owner), the provider screens its clause when the
+      // view runs. The selection is also its FilterState: a later save of the view recompiles WhereClause from
+      // FilterState, and this one compiles to the same records, so the lineage-linked List's refresh keeps them.
+      const recordIds = this.FilteredRows.map((r) => r.recordId);
+      view.WhereClause = BuildRecordIdFilter(entity, recordIds);
+      view.FilterState = JSON.stringify(PSPredictionsGridComponent.SelectionFilterState(entity, recordIds));
       if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
       const actionId = await this.materializeActionID();
       const result = await this.RunListAction(actionId, [
@@ -1726,6 +1729,28 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.SavingList = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * The User View FilterState naming exactly `recordIds` (compact key segments) of `entity`: for a single-column key,
+   * `in` rules of at most {@link CompositeFilterSQLCompiler.DefaultMaxInValues} IDs (the compiler's limit) ORed
+   * together; for a composite key, one AND of `eq` rules per record, ORed together.
+   */
+  public static SelectionFilterState(entity: EntityInfo, recordIds: readonly string[]): CompositeFilterDescriptor {
+    if (entity.PrimaryKeys.length === 1) {
+      const field = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by PrimaryKeys.length === 1
+      const chunk = CompositeFilterSQLCompiler.DefaultMaxInValues;
+      const filters: CompositeFilterDescriptor['filters'] = [];
+      for (let i = 0; i < recordIds.length; i += chunk) filters.push({ field, operator: 'in', value: recordIds.slice(i, i + chunk) });
+      return { logic: 'or', filters };
+    }
+    return {
+      logic: 'or',
+      filters: recordIds.map((id) => ({
+        logic: 'and',
+        filters: CompositeKey.FromURLSegment(entity, id).KeyValuePairs.map((kv) => ({ field: kv.FieldName, operator: 'eq', value: kv.Value })),
+      })),
+    };
   }
 
   /**

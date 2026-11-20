@@ -367,6 +367,12 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
     expect(view.Deletes).toBe(0);
   });
 
+  it('stores the selection as the view\'s FilterState too, so a later recompile of the saved view keeps the same records', async () => {
+    const view = new ViewDouble();
+    await SaveHighTier(view, created);
+    expect(JSON.parse(view.FilterState || 'null')).toEqual({ logic: 'or', filters: [{ field: 'ID', operator: 'in', value: ['r1', 'r2'] }] });
+  });
+
   it.each([
     ['the action is refused', { Success: false, Message: 'refused', Params: [] }, 'refused'],
     ['the action creates no list', { Success: true, Message: '', Params: [] }, 'the action created no list'],
@@ -389,5 +395,26 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
     const grid = await SaveHighTier(view, created);
     expect(view.Deletes).toBe(0);
     expect(grid.ListMessage).toContain('the selection\'s view was not saved');
+  });
+});
+
+describe('PSPredictionsGridComponent.SelectionFilterState', () => {
+  const single = { PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } } as unknown as EntityInfo;
+
+  it('puts at most 500 IDs in one `in` rule (the filter compiler\'s limit) and ORs the chunks', () => {
+    const ids = Array.from({ length: 1201 }, (_v, i) => `id-${i}`);
+    const state = PSPredictionsGridComponent.SelectionFilterState(single, ids);
+    expect(state.logic).toBe('or');
+    expect(state.filters.map((f) => ('value' in f && Array.isArray(f.value) ? f.value.length : -1))).toEqual([500, 500, 201]);
+  });
+
+  it('expands a composite key to an AND of `eq` rules per record', () => {
+    const composite = {
+      PrimaryKeys: [{ Name: 'A' }, { Name: 'B' }],
+      FirstPrimaryKey: { Name: 'A' },
+      Fields: [{ Name: 'A' }, { Name: 'B' }],
+    } as unknown as EntityInfo;
+    const state = PSPredictionsGridComponent.SelectionFilterState(composite, ['A|1||B|x']);
+    expect(state).toEqual({ logic: 'or', filters: [{ logic: 'and', filters: [{ field: 'A', operator: 'eq', value: '1' }, { field: 'B', operator: 'eq', value: 'x' }] }] });
   });
 });
