@@ -28,7 +28,7 @@ import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixed
 import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { CheckWorkspacePackages } from './workspace-packages.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, AddPublicPages, CheckPublicPageSlugConflicts, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
@@ -269,6 +269,12 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
     }
 
+    // Before any database or file change: another installed app may own one of this app's public page slugs.
+    const slugCheck = CheckPublicPageSlugConflicts(context.RepoRoot, manifest, context.ServerPackagePath);
+    if (!slugCheck.Success) {
+      return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, slugCheck.ErrorMessage ?? 'Public page slug conflict');
+    }
+
     // Steps 4-5: Resolve the full transitive dependency graph and install members
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
@@ -467,7 +473,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
     if (finalStatus !== 'Active') {
-      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      // Array-agnostic by AppName — sweeps the server, client and publicPages arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
     await SetAppStep(context.ContextUser, createdAppId!, 'Finalized');
@@ -918,6 +924,11 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
     }
 
+    const slugCheck = CheckPublicPageSlugConflicts(context.RepoRoot, manifest, context.ServerPackagePath);
+    if (!slugCheck.Success) {
+      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, slugCheck.ErrorMessage ?? 'Public page slug conflict');
+    }
+
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
       const depResult = await ResolveDependencyChain(manifest, context, appSource);
@@ -1143,7 +1154,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       ...(manifest.schema ? { SchemaName: manifest.schema.name } : {}),
     });
     if (upgradeFinalStatus !== 'Active') {
-      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      // Array-agnostic by AppName — sweeps the server, client and publicPages arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
 
@@ -2657,6 +2668,14 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
     return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
   warnSkipped(clientResult);
+
+  // Record the app's public pages in publicPages. `mj codegen manifest --open-app-client-bootstrap`
+  // (run by MJExplorer's prebuild) writes them to the host's page list.
+  const publicPagesResult = AddPublicPages(context.RepoRoot, manifest, context.ServerPackagePath);
+  if (!publicPagesResult.Success) {
+    return { Success: false, ErrorMessage: publicPagesResult.ErrorMessage };
+  }
+  warnSkipped(publicPagesResult);
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
   const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);
