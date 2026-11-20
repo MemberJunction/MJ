@@ -9,6 +9,7 @@ import { IEntityDataProvider, Metadata, type IMetadataProvider } from '@memberju
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJReactModule } from '@memberjunction/ng-react';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import {
   EvaluateComponentPermissions,
@@ -20,13 +21,14 @@ import {
   type ComponentSpecVisualDiffResult,
 } from '../../services/artifact-version-diff.service';
 import { GitDiffLinesViewComponent } from './git-diff-lines-view.component';
+import { ArtifactVersionAuthorName, IsArtifactVersionWrittenByUser } from '../../utils/component-run-consent.util';
 
 export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
 
 @Component({
   selector: 'mj-component-version-diff',
   standalone: true,
-  imports: [MJReactModule, GitDiffLinesViewComponent],
+  imports: [MJReactModule, GitDiffLinesViewComponent, MJButtonDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mj-comp-vdiff" data-testid="component-visual-version-diff">
@@ -256,6 +258,15 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                         <div class="mj-comp-vdiff__muted">Missing query access: {{ BasePermissionResult!.missingQueries.join(', ') }}</div>
                       }
                     </div>
+                  } @else if (DiffResult.BaseSpec && (DiffResult.BaseSpec.code || DiffResult.BaseSpec.namespace) && NeedsBaseRunConsent) {
+                    <div class="mj-comp-vdiff__perm-blocked" data-testid="comp-diff-base-run-consent">
+                      <i class="fa-solid fa-code"></i>
+                      <strong>Run v{{ BaseVersion.VersionNumber }}?</strong>
+                      <div class="mj-comp-vdiff__muted">Written by {{ BaseAuthorName }}. Its code runs in your session with your access.</div>
+                      <button type="button" mjButton variant="primary" size="sm" (click)="ApproveBaseRun()">
+                        <i class="fa-solid fa-play"></i> Run component
+                      </button>
+                    </div>
                   } @else if (DiffResult.BaseSpec && (DiffResult.BaseSpec.code || DiffResult.BaseSpec.namespace)) {
                     <mj-react-component [component]="DiffResult.BaseSpec"></mj-react-component>
                   } @else {
@@ -279,6 +290,15 @@ export type ComponentDiffTabKind = 'overview' | 'code' | 'preview' | 'specs';
                       @if ((TargetPermissionResult?.missingQueries?.length ?? 0) > 0) {
                         <div class="mj-comp-vdiff__muted">Missing query access: {{ TargetPermissionResult!.missingQueries.join(', ') }}</div>
                       }
+                    </div>
+                  } @else if (DiffResult.TargetSpec && (DiffResult.TargetSpec.code || DiffResult.TargetSpec.namespace) && NeedsTargetRunConsent) {
+                    <div class="mj-comp-vdiff__perm-blocked" data-testid="comp-diff-target-run-consent">
+                      <i class="fa-solid fa-code"></i>
+                      <strong>Run v{{ TargetVersion.VersionNumber }}?</strong>
+                      <div class="mj-comp-vdiff__muted">Written by {{ TargetAuthorName }}. Its code runs in your session with your access.</div>
+                      <button type="button" mjButton variant="primary" size="sm" (click)="ApproveTargetRun()">
+                        <i class="fa-solid fa-play"></i> Run component
+                      </button>
                     </div>
                   } @else if (DiffResult.TargetSpec && (DiffResult.TargetSpec.code || DiffResult.TargetSpec.namespace)) {
                     <mj-react-component [component]="DiffResult.TargetSpec"></mj-react-component>
@@ -709,10 +729,45 @@ export class ComponentVersionDiffComponent implements IArtifactVersionDiffViewer
   public ActiveTab: ComponentDiffTabKind = 'overview';
   public SelectedCodeUnit: ComponentCodeUnitDiff | null = null;
 
+  /** True after the viewer agreed to run the base version's code. Resets when the versions change. */
+  public BaseRunApproved = false;
+  /** True after the viewer agreed to run the target version's code. Resets when the versions change. */
+  public TargetRunApproved = false;
+
+  /** True when the base version was written by a different (or unknown) user and the viewer has not agreed. */
+  public get NeedsBaseRunConsent(): boolean {
+    return !this.BaseRunApproved && !IsArtifactVersionWrittenByUser(this.baseVersion, this.resolveProvider()?.CurrentUser);
+  }
+
+  /** True when the target version was written by a different (or unknown) user and the viewer has not agreed. */
+  public get NeedsTargetRunConsent(): boolean {
+    return !this.TargetRunApproved && !IsArtifactVersionWrittenByUser(this.targetVersion, this.resolveProvider()?.CurrentUser);
+  }
+
+  public get BaseAuthorName(): string {
+    return ArtifactVersionAuthorName(this.baseVersion);
+  }
+
+  public get TargetAuthorName(): string {
+    return ArtifactVersionAuthorName(this.targetVersion);
+  }
+
+  public ApproveBaseRun(): void {
+    this.BaseRunApproved = true;
+    this.cdr.markForCheck();
+  }
+
+  public ApproveTargetRun(): void {
+    this.TargetRunApproved = true;
+    this.cdr.markForCheck();
+  }
+
   private recomputeDiff(): void {
     if (!this.baseVersion || !this.targetVersion) {
       return;
     }
+    this.BaseRunApproved = false;
+    this.TargetRunApproved = false;
     this.DiffResult = this.diffService.ComputeComponentSpecDiff(
       this.baseVersion.Content,
       this.targetVersion.Content,
@@ -730,12 +785,16 @@ export class ComponentVersionDiffComponent implements IArtifactVersionDiffViewer
     return Boolean(provider && 'EntityByName' in provider && typeof provider.EntityByName === 'function');
   }
 
-  private evaluateSpecPermissions(spec: ComponentSpec | null): PermissionEvaluationResult | null {
-    if (!spec) return null;
+  private resolveProvider(): IMetadataProvider | undefined {
     const candidateProvider = this.provider ?? this.baseVersion?.ProviderToUse ?? this.targetVersion?.ProviderToUse;
-    const provider: IMetadataProvider | undefined = this.isMetadataProvider(candidateProvider)
+    return this.isMetadataProvider(candidateProvider)
       ? candidateProvider
       : Metadata.Provider; // global-provider-ok: fallback only when neither Input provider nor version ProviderToUse supplies an IMetadataProvider
+  }
+
+  private evaluateSpecPermissions(spec: ComponentSpec | null): PermissionEvaluationResult | null {
+    if (!spec) return null;
+    const provider = this.resolveProvider();
     const currentUser = provider?.CurrentUser;
     if (!currentUser) {
       // Fail closed when user context is unavailable so unverified previews never mount.

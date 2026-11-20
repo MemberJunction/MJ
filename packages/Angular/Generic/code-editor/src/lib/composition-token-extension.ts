@@ -368,9 +368,20 @@ const compositionTokenTheme = EditorView.baseTheme({
 });
 
 /**
- * Builds the hover tooltip DOM for a resolved query.
+ * Appends a Font Awesome icon and a text label to an element. The label is a text node.
  */
-function buildTooltipDOM(
+function appendIconAndText(target: HTMLElement, iconClass: string, label: string, iconFontSize?: string): void {
+    const icon = document.createElement('i');
+    icon.className = iconClass;
+    if (iconFontSize) icon.style.fontSize = iconFontSize;
+    target.append(icon, document.createTextNode(' ' + label));
+}
+
+/**
+ * Builds the hover tooltip DOM for a resolved query.
+ * @internal Exported for tests only. Not part of the supported public API.
+ */
+export function BuildCompositionTooltipDOM(
     info: CompositionTokenInfo | null,
     fullPath: string,
     onNavigate?: () => void
@@ -425,7 +436,7 @@ function buildTooltipDOM(
     if (info.Category) {
         const badge = document.createElement('span');
         badge.className = 'cm-composition-tooltip-badge';
-        badge.innerHTML = '<i class="fa-solid fa-folder" style="font-size:10px"></i> ' + info.Category;
+        appendIconAndText(badge, 'fa-solid fa-folder', info.Category, '10px');
         meta.appendChild(badge);
     }
 
@@ -439,7 +450,7 @@ function buildTooltipDOM(
     if (info.HasParameters) {
         const badge = document.createElement('span');
         badge.className = 'cm-composition-tooltip-badge params';
-        badge.innerHTML = '<i class="fa-solid fa-sliders" style="font-size:10px"></i> Parameterized';
+        appendIconAndText(badge, 'fa-solid fa-sliders', 'Parameterized', '10px');
         meta.appendChild(badge);
     }
 
@@ -456,7 +467,7 @@ function buildTooltipDOM(
 
         const btn = document.createElement('button');
         btn.className = 'cm-composition-tooltip-navigate-btn';
-        btn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> Open Query';
+        appendIconAndText(btn, 'fa-solid fa-arrow-up-right-from-square', 'Open Query');
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -561,7 +572,7 @@ export function CompositionTokenExtension(config: CompositionTokenConfig | ((eve
                 create(): { dom: HTMLElement } {
                     const dom = document.createElement('div');
                     dom.className = 'cm-tooltip cm-composition-tooltip';
-                    dom.appendChild(buildTooltipDOM(info, token.parsed.fullPath, onNavigate));
+                    dom.appendChild(BuildCompositionTooltipDOM(info, token.parsed.fullPath, onNavigate));
                     return { dom };
                 }
             };

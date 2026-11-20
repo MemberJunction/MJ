@@ -233,15 +233,9 @@ export class HighlightUtil {
   }
 
   /**
-   * Escape HTML special characters to prevent XSS
+   * Escapes &, <, >, " and ' so the result is safe as HTML text and inside a quoted attribute.
    */
   static EscapeHtml(text: string): string {
-    if (typeof document !== 'undefined') {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-    // Fallback for SSR
     return text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')

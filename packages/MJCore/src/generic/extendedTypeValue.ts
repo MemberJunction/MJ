@@ -38,13 +38,22 @@ export function CoerceRawImageBase64ToDataUri(value: string): string | null {
 }
 
 /**
- * Normalize a stored Image-field value into something safe to put in `img src`.
+ * Removes the characters a browser URL parser removes before it reads the scheme:
+ * tab, line feed and carriage return anywhere, and leading C0 control characters and spaces.
+ */
+function stripUrlIgnoredChars(value: string): string {
+    return value.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+/, '').trim();
+}
+
+/**
+ * Normalize a stored Image-field value into something safe to put in `img src` or `a href`.
  * Accepts data URIs, raw image base64, http(s) URLs, and relative paths.
- * Rejects javascript:/vbscript:/file: and non-image data: URIs.
+ * Rejects javascript:/vbscript:/file: and non-image data: URIs, as the browser reads them.
+ * Returns the value without the characters a browser URL parser removes.
  */
 export function CoerceImageSrc(value: string): string | null {
     if (value == null) return null;
-    const v = value.trim();
+    const v = stripUrlIgnoredChars(value);
     if (!v) return null;
     if (IsInlineImageDataUri(v)) return v;
     if (v.toLowerCase().startsWith('data:')) return null;

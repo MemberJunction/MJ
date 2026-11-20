@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { type IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, type BaseEntity, type IMetadataProvider } from '@memberjunction/core';
 import { AngularAdapterService } from '@memberjunction/ng-react';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -37,7 +37,10 @@ class FeedbackPanelStub {
   @Output() public Closed = new EventEmitter<void>();
 }
 
-function makeComponentArtifactVersion(content: string): MJArtifactVersionEntity {
+function makeComponentArtifactVersion(
+  content: string,
+  author: { UserID: string | null; User: string | null } = { UserID: null, User: null },
+): MJArtifactVersionEntity {
   const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
   Object.defineProperties(ver, {
     ID: { value: 'ver-comp-1', configurable: true, enumerable: true },
@@ -45,9 +48,101 @@ function makeComponentArtifactVersion(content: string): MJArtifactVersionEntity 
     VersionNumber: { value: 1, configurable: true, enumerable: true },
     Content: { value: content, configurable: true, enumerable: true },
     Configuration: { value: '{}', configurable: true, enumerable: true },
+    UserID: { value: author.UserID, configurable: true, enumerable: true },
+    User: { value: author.User, configurable: true, enumerable: true },
   });
   return ver;
 }
+
+const VIEWER_DECLARATIONS = [
+  ComponentArtifactViewerComponent,
+  ReactComponentStub,
+  InteractiveFormStub,
+  LoadingStub,
+  FeedbackPanelStub,
+];
+
+const CURRENT_USER_ID = 'B1A2C3D4-0000-0000-0000-000000000001';
+const OTHER_USER_ID = 'B1A2C3D4-0000-0000-0000-000000000002';
+
+function renderViewerForAuthor(author: { UserID: string | null; User: string | null }) {
+  const mockAdapter = { initialize: vi.fn(async () => undefined), isInitialized: vi.fn(() => false) };
+  const spec = JSON.stringify({ name: 'SharedWidget', code: 'function SharedWidget() { return null; }' });
+  const provider = { CurrentUser: { ID: CURRENT_USER_ID, Name: 'Viewer', Email: 'viewer@example.com' } } as IMetadataProvider;
+  const fixture = renderComponentFixture(ComponentArtifactViewerComponent, {
+    imports: [CommonModule, FormsModule],
+    declarations: VIEWER_DECLARATIONS,
+    providers: [{ provide: AngularAdapterService, useValue: mockAdapter }],
+    inputs: { Provider: provider, artifactVersion: makeComponentArtifactVersion(spec, author) },
+  });
+  fixture.detectChanges();
+  return fixture;
+}
+
+describe('ComponentArtifactViewerComponent code written by a different user', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    TestBed.resetTestingModule();
+  });
+
+  it('does not run the code until the viewer agrees, and names the author', () => {
+    const fixture = renderViewerForAuthor({ UserID: OTHER_USER_ID, User: 'Alice Author' });
+
+    expect(query(fixture, '.stub-react-component')).toBeNull();
+    expect(text(fixture, '.run-consent')).toContain('Alice Author');
+
+    (query(fixture, '.run-consent button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(query(fixture, '.stub-react-component')).not.toBeNull();
+  });
+
+  it('does not run the code when the author is not known', () => {
+    const fixture = renderViewerForAuthor({ UserID: null, User: null });
+
+    expect(query(fixture, '.stub-react-component')).toBeNull();
+    expect(query(fixture, '.run-consent')).not.toBeNull();
+  });
+  it('does not mount a form spec without top-level code until the viewer agrees', async () => {
+    const entity = new EntityInfo({
+      ID: 'E0000009-0000-0000-0000-0000000000F1',
+      Name: 'MJ: Test Forms',
+      Status: 'Active',
+      BaseTable: 'TestForm',
+      BaseView: 'vwTestForms',
+      Fields: [{ ID: 'FF1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true }],
+    });
+    const fixtureRecord = { NewRecord: () => true } as unknown as BaseEntity;
+    const provider = {
+      CurrentUser: { ID: CURRENT_USER_ID, Name: 'Viewer', Email: 'viewer@example.com' },
+      EntityByName: () => entity,
+      RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0 }),
+      GetEntityObject: async () => fixtureRecord,
+    } as unknown as IMetadataProvider;
+    const spec = JSON.stringify({
+      name: 'SharedForm',
+      componentRole: 'form',
+      entityName: 'MJ: Test Forms',
+      location: 'registry',
+      dependencies: [{ name: 'SharedFormPart', location: 'embedded', code: 'function SharedFormPart() { return null; }' }],
+    });
+    const fixture = renderComponentFixture(ComponentArtifactViewerComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: VIEWER_DECLARATIONS,
+      providers: [{ provide: AngularAdapterService, useValue: { initialize: vi.fn(async () => undefined), isInitialized: vi.fn(() => false) } }],
+      inputs: {
+        Provider: provider,
+        artifactVersion: makeComponentArtifactVersion(spec, { UserID: OTHER_USER_ID, User: 'Alice Author' }),
+      },
+    });
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    expect(query(fixture, '.stub-interactive-form')).toBeNull();
+    expect(text(fixture, '.run-consent')).toContain('Alice Author');
+  });
+});
 
 describe('ComponentArtifactViewerComponent guest snapshot fail-closed security', () => {
   afterEach(() => {
@@ -118,7 +213,7 @@ describe('ComponentArtifactViewerComponent guest snapshot fail-closed security',
       inputs: {
         GuestSnapshotMode: false,
         Provider: mockProvider,
-        artifactVersion: makeComponentArtifactVersion(executableSpec),
+        artifactVersion: makeComponentArtifactVersion(executableSpec, { UserID: 'user-1', User: 'Test User' }),
       },
     });
     fixture.detectChanges();

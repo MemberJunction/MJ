@@ -34,6 +34,7 @@ export * from './lib/snapshot-helpers';
 export { ComputeLineDiff, type LineDiffLine, type LineDiffResult } from './lib/utils/line-diff';
 export * from './lib/utils/artifact-suggestion-normalizer.util';
 export * from './lib/utils/frozen-snapshot-verification.util';
+export * from './lib/utils/component-run-consent.util';
 export {
   CaptureRenderedElementThumbnail,
   CaptureThumbnailForDriverIfAllowed,

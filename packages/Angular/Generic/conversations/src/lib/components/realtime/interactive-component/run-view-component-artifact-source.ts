@@ -12,6 +12,7 @@
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { IsArtifactVersionWrittenByUser } from '@memberjunction/ng-artifacts';
 import { ArtifactPermissionService } from '../../../services/artifact-permission.service';
 import { CollectionPermissionService } from '../../../services/collection-permission.service';
 import { ParseComponentSpecContent } from './component-spec-content';
@@ -88,8 +89,17 @@ export class RunViewComponentArtifactSource implements IComponentArtifactSource 
         return result.Results[0];
     }
 
-    /** Checks access and type, then parses the content. */
+    /**
+     * Checks the author, access and type, then parses the content. The channel mounts a loaded
+     * version with no question to the user, so only a version the user wrote is loaded.
+     */
     private async resolve(version: MJArtifactVersionEntity): Promise<ResolvedComponentArtifact> {
+        if (!IsArtifactVersionWrittenByUser(version, this.user)) {
+            throw new ComponentArtifactError(
+                'access_denied',
+                'That component version was written by a different user, so it is not shown here. The user can open it in the artifact viewer.'
+            );
+        }
         const artifactId = version.ArtifactID;
         const canRead = await this.permissions.CheckPermission(artifactId, this.user.ID, 'read', this.user);
         if (!canRead) {
