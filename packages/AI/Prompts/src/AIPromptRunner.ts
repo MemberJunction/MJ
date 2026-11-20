@@ -2489,12 +2489,9 @@ export class AIPromptRunner extends BaseModelRunner {
       if (effectiveResponseFormat) {
         chatParams.responseFormat = effectiveResponseFormat as typeof prompt.ResponseFormat;
 
-        if (prompt.ModelSpecificResponseFormat) {
-          try {
-            chatParams.modelSpecificResponseFormat = JSON.parse(prompt.ModelSpecificResponseFormat);
-          } catch (e) {
-            console.warn(`AIPromptRunner: failed to parse ModelSpecificResponseFormat on prompt ${prompt.Name}; ignoring`, e);
-          }
+        const effectiveModelSpecificFormat = this.resolveModelSpecificResponseFormat(prompt, params.modelSelectionPrompt);
+        if (effectiveModelSpecificFormat !== undefined) {
+          chatParams.modelSpecificResponseFormat = effectiveModelSpecificFormat;
         }
       } else {
         // if response format is not set or set to Any (prompt or override), stay silent
@@ -3057,6 +3054,30 @@ export class AIPromptRunner extends BaseModelRunner {
     const override = additionalParameters?.responseFormat as string | undefined;
     const effective = override ?? promptResponseFormat ?? undefined;
     return effective && effective !== 'Any' ? effective : undefined;
+  }
+
+  /**
+   * Parses `ModelSpecificResponseFormat` from the executing prompt, falling back to
+   * `modelSelectionPrompt.ModelSpecificResponseFormat` when the main prompt leaves it unset.
+   * This preserves provider-specific parameters (e.g. Gemini `thinkingConfig`) authored on
+   * an agent's own prompt when `BaseAgent` executes a shared system loop prompt with
+   * `modelSelectionPrompt`.
+   */
+  private resolveModelSpecificResponseFormat(
+    prompt: MJAIPromptEntityExtended,
+    modelSelectionPrompt?: MJAIPromptEntityExtended
+  ): unknown {
+    const rawFormat = prompt.ModelSpecificResponseFormat || modelSelectionPrompt?.ModelSpecificResponseFormat;
+    if (!rawFormat) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(rawFormat);
+    } catch (e) {
+      const sourceName = prompt.ModelSpecificResponseFormat ? prompt.Name : (modelSelectionPrompt?.Name ?? prompt.Name);
+      console.warn(`AIPromptRunner: failed to parse ModelSpecificResponseFormat on prompt ${sourceName}; ignoring`, e);
+      return undefined;
+    }
   }
 
   /**

@@ -9,13 +9,13 @@
  * @module @memberjunction/search-engine
  */
 
-import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEmbeddingRunner, EmbeddingCarrierPrompts } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
-import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJEventType, MJGlobal, NormalizeUUID, RegisterClass, UserScopedCacheKey, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
@@ -29,6 +29,12 @@ import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 interface EmbeddingCacheEntry {
     vector: number[];
     timestamp: number;
+}
+
+/** Shape of a short-TTL metadata cache entry */
+interface TimedMetadataCacheEntry<T> {
+    data: T;
+    expiresAt: number;
 }
 
 /** A match as a vector database's `QueryIndex` returns it. */
@@ -65,6 +71,48 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private static embeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    /**
+     * Short-TTL user-scoped caches for vector index and database metadata, plus a pool of
+     * non-colocated VectorDBBase driver instances keyed by `(ClassKey, apiKey)`.
+     */
+    private static readonly METADATA_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+    private static vectorIndexCache = new Map<string, TimedMetadataCacheEntry<MJVectorIndexEntity[]>>();
+    private static vectorDatabaseCache = new Map<string, TimedMetadataCacheEntry<MJVectorDatabaseEntity | null>>();
+    private static vectorClientPool = new Map<string, VectorDBBase>();
+    private static invalidationListenerRegistered = false;
+    private static readonly invalidatingEntities: ReadonlySet<string> = new Set([
+        'mj: vector indexes',
+        'mj: vector databases',
+    ]);
+
+    /** Clear cached vector index/database metadata and pooled vector DB clients. */
+    public static ClearCaches(): void {
+        VectorSearchProvider.vectorIndexCache.clear();
+        VectorSearchProvider.vectorDatabaseCache.clear();
+        VectorSearchProvider.vectorClientPool.clear();
+    }
+
+    /** Subscribe once to MJ entity mutation events so metadata changes invalidate immediately. */
+    private static ensureInvalidationListener(): void {
+        if (VectorSearchProvider.invalidationListenerRegistered) return;
+        VectorSearchProvider.invalidationListenerRegistered = true;
+        try {
+            MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+                if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+                    const entityEvent = event.args as BaseEntityEvent;
+                    if (entityEvent?.type === 'save' || entityEvent?.type === 'delete' || entityEvent?.type === 'remote-invalidate') {
+                        const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.toLowerCase().trim();
+                        if (entityName && VectorSearchProvider.invalidatingEntities.has(entityName)) {
+                            VectorSearchProvider.ClearCaches();
+                        }
+                    }
+                }
+            });
+        } catch {
+            // Non-fatal: TTL still bounds staleness if event bus is unavailable
+        }
+    }
 
     /**
      * Check and cache availability. Requires at least one vector index to be
@@ -119,18 +167,13 @@ export class VectorSearchProvider extends BaseSearchProvider {
             // Honor per-provider query transform
             const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
-            const rv = new RunView();
-            const indexResult = await rv.RunView<MJVectorIndexEntity>({
-                EntityName: 'MJ: Vector Indexes',
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            if (!indexResult.Success || indexResult.Results.length === 0) {
+            const indexes = await this.loadVectorIndexes(contextUser);
+            if (!indexes || indexes.length === 0) {
                 LogStatus('VectorSearchProvider: No vector indexes configured');
                 return [];
             }
 
-            let activeIndexes = indexResult.Results;
+            let activeIndexes = indexes;
             if (scopedVectorRows !== undefined) {
                 const allowedIDs = new Set(scopedVectorRows.map(r => r.VectorIndexID!.toLowerCase()));
                 activeIndexes = activeIndexes.filter(idx => allowedIDs.has(idx.ID.toLowerCase()));
@@ -334,6 +377,95 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * @param unmerged - The parts `filter` was merged from. Used only when the provider is keyed by
      *   Entity Document, since such a provider ignores `filter`.
      */
+    private async loadVectorIndexes(contextUser: UserInfo): Promise<MJVectorIndexEntity[] | null> {
+        VectorSearchProvider.ensureInvalidationListener();
+        const cacheKey = UserScopedCacheKey(contextUser?.ID, 'vector-indexes');
+        const now = Date.now();
+        if (cacheKey !== null) {
+            const cached = VectorSearchProvider.vectorIndexCache.get(cacheKey);
+            if (cached && cached.expiresAt > now) {
+                return cached.data;
+            }
+            if (cached) {
+                VectorSearchProvider.vectorIndexCache.delete(cacheKey);
+            }
+        }
+
+        const rv = new RunView();
+        const indexResult = await rv.RunView<MJVectorIndexEntity>({
+            EntityName: 'MJ: Vector Indexes',
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!indexResult.Success) {
+            return null;
+        }
+        if (cacheKey !== null) {
+            VectorSearchProvider.vectorIndexCache.set(cacheKey, {
+                data: indexResult.Results,
+                expiresAt: now + VectorSearchProvider.METADATA_CACHE_TTL_MS,
+            });
+        }
+        return indexResult.Results;
+    }
+
+    private async loadVectorDatabase(vectorDatabaseID: string, contextUser: UserInfo): Promise<MJVectorDatabaseEntity | null> {
+        VectorSearchProvider.ensureInvalidationListener();
+        const cacheKey = UserScopedCacheKey(contextUser?.ID, 'vector-db', NormalizeUUID(vectorDatabaseID));
+        const now = Date.now();
+        if (cacheKey !== null) {
+            const cached = VectorSearchProvider.vectorDatabaseCache.get(cacheKey);
+            if (cached && cached.expiresAt > now) {
+                return cached.data;
+            }
+            if (cached) {
+                VectorSearchProvider.vectorDatabaseCache.delete(cacheKey);
+            }
+        }
+
+        const rv = new RunView();
+        const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
+            EntityName: 'MJ: Vector Databases',
+            ExtraFilter: `ID='${EscapeSQLString(vectorDatabaseID)}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!dbResult.Success) {
+            return null;
+        }
+        const vectorDB = dbResult.Results[0] ?? null;
+        if (cacheKey !== null) {
+            VectorSearchProvider.vectorDatabaseCache.set(cacheKey, {
+                data: vectorDB,
+                expiresAt: now + VectorSearchProvider.METADATA_CACHE_TTL_MS,
+            });
+        }
+        return vectorDB;
+    }
+
+    private getOrCreateVectorDBClient(vectorDB: MJVectorDatabaseEntity, apiKey: string | undefined): VectorDBBase | null {
+        const poolKey = `${vectorDB.ClassKey}::${apiKey ?? ''}`;
+        const pooled = VectorSearchProvider.vectorClientPool.get(poolKey);
+        if (pooled) {
+            return pooled;
+        }
+
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
+            VectorDBBase, vectorDB.ClassKey, apiKey
+        );
+        if (!instance) {
+            return null;
+        }
+
+        // Colocated drivers bind per-request metadata/data provider connections via
+        // TryWireColocatedHost, so only external (non-colocated) drivers are safe to pool.
+        instance.TryWireColocatedHost(this.Provider);
+        if (!instance.SupportsColocatedQuery) {
+            VectorSearchProvider.vectorClientPool.set(poolKey, instance);
+        }
+        return instance;
+    }
+
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
         queryVector: number[],
@@ -344,23 +476,14 @@ export class VectorSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         unmerged: UnmergedFilters
     ): Promise<SearchResultItem[]> {
-        const rv = new RunView();
-        const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
-            EntityName: 'MJ: Vector Databases',
-            ExtraFilter: `ID='${vectorIndex.VectorDatabaseID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!dbResult.Success || dbResult.Results.length === 0) {
+        const vectorDB = await this.loadVectorDatabase(vectorIndex.VectorDatabaseID, contextUser);
+        if (!vectorDB) {
             LogError(`VectorSearchProvider: VectorDatabase not found for index "${vectorIndex.Name}"`);
             return [];
         }
 
-        const vectorDB = dbResult.Results[0];
         const apiKey = GetAIAPIKey(vectorDB.ClassKey);
-        const vectorDBInstance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
-            VectorDBBase, vectorDB.ClassKey, apiKey
-        );
+        const vectorDBInstance = this.getOrCreateVectorDBClient(vectorDB, apiKey);
 
         if (!vectorDBInstance) {
             LogError(`VectorSearchProvider: Failed to create VectorDB instance for "${vectorDB.ClassKey}"`);
@@ -368,15 +491,14 @@ export class VectorSearchProvider extends BaseSearchProvider {
         }
 
         // Colocated path: wire in the active data-provider connection and run the query in the
-        // same database as the entity rows. TryWireColocatedHost is a no-op for non-colocated
-        // providers, so this is safe to attempt unconditionally.
+        // same database as the entity rows. TryWireColocatedHost is called inside
+        // getOrCreateVectorDBClient for freshly created instances; colocated drivers are never pooled.
         //
         // VECTOR-ONLY on purpose. This is the semantic lane: MJ's own keyword and full-text lanes do
         // the text matching, and MJ's RRF fuses every lane. Asking the store for its own
         // vector+keyword RRF here would count text matches twice (in this lane and in MJ's
         // keyword lane), and its score would be an RRF value (<= 2/61) where MinScore's semantic
         // floor expects a similarity. Vector-only returns a true similarity, like SQL Server's.
-        vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
                 indexName: AIEngine.Instance.GetProviderIndexName(vectorIndex),

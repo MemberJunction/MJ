@@ -83,6 +83,12 @@ export interface SearchParams {
     /** Search mode: 'full' applies enrichment, 'preview' skips it for speed */
     Mode?: SearchMode;
     /**
+     * When true, enrichment attaches entity icons and display names from in-memory metadata
+     * but skips the batched `GetEntityRecordNames` database lookup. Useful for callers
+     * (such as retrieval pipelines) that only consume IDs/snippets or hydrate records separately.
+     */
+    SkipNameEnrichment?: boolean;
+    /**
      * Optional array of `MJ: Search Scopes` record IDs. When provided, the engine resolves
      * each scope's metadata (providers, external indexes, entities, storage accounts) and
      * runs only those constrained providers. Results from multiple scopes are combined via

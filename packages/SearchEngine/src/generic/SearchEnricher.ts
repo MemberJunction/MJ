@@ -38,17 +38,25 @@ export class SearchEnricher {
     }
 
     /**
-     * Apply full enrichment to search results: entity icons, record names, and tags.
+     * Apply enrichment to search results: entity icons, entity display names, and
+     * (unless `options.SkipNameEnrichment` is true) batched record name resolution.
      *
      * @param results - The search results to enrich (mutated in place)
      * @param contextUser - The user performing the search
+     * @param options - Optional enrichment flags
      */
-    public async Enrich(results: SearchResultItem[], contextUser: UserInfo): Promise<void> {
+    public async Enrich(
+        results: SearchResultItem[],
+        contextUser: UserInfo,
+        options?: { SkipNameEnrichment?: boolean }
+    ): Promise<void> {
         if (results.length === 0) return;
 
         const md = this.Provider;
         this.addEntityMetadata(results, md);
-        await this.resolveRecordNames(results, md, contextUser);
+        if (!options?.SkipNameEnrichment) {
+            await this.resolveRecordNames(results, md, contextUser);
+        }
     }
 
     /**
@@ -111,8 +119,10 @@ export class SearchEnricher {
         const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
         if (contentItemResults.length === 0) return results;
 
+        let khEngineLoaded = false;
         try {
             await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+            khEngineLoaded = true;
         } catch {
             // Non-fatal if KnowledgeHubMetadataEngine fails to load
         }
@@ -124,13 +134,22 @@ export class SearchEnricher {
                 .filter(cs => entitySourceType && UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
                 .map(cs => cs.ID.toLowerCase())
         );
+        const knownNonEntitySourceIDs = new Set(
+            (engine.ContentSources ?? [])
+                .filter(cs => !entitySourceType || !UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
+                .map(cs => cs.ID.toLowerCase())
+        );
+        // Fail closed when the metadata engine did not load or was permission-constrained.
+        // Only skip DB lookups when we know for certain that no Entity-type ContentSource exists.
+        const engineComplete = khEngineLoaded && !engine.IsPermissionConstrained;
+        const hasAnyEntitySource = !engineComplete || entitySourceIDs.size > 0;
 
         // Map of ContentItemID -> { EntityName: string; RecordID: string }
         const resolvedEntityRecords = new Map<string, { EntityName: string; RecordID: string }>();
         const unpromotableItemIDs = new Set<string>();
 
         // Step 1: Check if RawMetadata on vector results already specifies Entity and RecordID,
-        // or identifies an entity source
+        // or identifies a known entity or non-entity content source
         const itemsNeedingDbLookup: string[] = [];
 
         for (const r of contentItemResults) {
@@ -144,15 +163,21 @@ export class SearchEnricher {
                             RecordID: meta.RecordID
                         });
                         handled = true;
-                    } else if (meta.ContentSourceID && entitySourceIDs.has(meta.ContentSourceID.toLowerCase())) {
-                        itemsNeedingDbLookup.push(r.RecordID);
-                        handled = true;
+                    } else if (meta.ContentSourceID) {
+                        const sourceIdLower = meta.ContentSourceID.toLowerCase();
+                        if (entitySourceIDs.has(sourceIdLower)) {
+                            itemsNeedingDbLookup.push(r.RecordID);
+                            handled = true;
+                        } else if (engineComplete && knownNonEntitySourceIDs.has(sourceIdLower)) {
+                            // Known non-entity content source (e.g. Website/PDF); no DB lookup required.
+                            handled = true;
+                        }
                     }
                 } catch {
                     // Ignore parse errors
                 }
             }
-            if (!handled && r.RecordID) {
+            if (!handled && r.RecordID && hasAnyEntitySource) {
                 itemsNeedingDbLookup.push(r.RecordID);
             }
         }
