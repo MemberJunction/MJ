@@ -4,8 +4,8 @@ export interface PredictiveStudioMonitoredPeriod {
     period: string;
     /** Id of the period's `MJ: ML Monitoring Results` row (a re-run updates it). */
     monitoringResultId: string;
-    /** `window-open` (outcomes not yet known), `evaluated` or `failed`. */
-    state: 'window-open' | 'evaluated' | 'failed';
+    /** `window-open` (outcomes not yet known), `evaluated`, `insufficient-rows` (fewer scored rows than the job's minimum: recorded, not judged) or `failed`. */
+    state: 'window-open' | 'evaluated' | 'insufficient-rows' | 'failed';
     /** Predictions joined to a realised outcome. */
     joinedRows: number;
     /** The primary score's value and its 95% bounds; absent unless evaluated. */

@@ -223,6 +223,10 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
       return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: reason }, ctx);
     }
     const counted = { ...base, ScoredRows: join.ScoredRows, JoinedRows: join.Rows.filter((r) => r.Outcome !== null).length, ExcludedInTrainingRows: join.ExcludedInTrainingRows };
+    const minRows = plan.Spec.performance.minScoredRowsPerPeriod;
+    if (!MonitoringRules.EnoughScoredRows(join.ScoredRows, minRows)) {
+      return this.recordInsufficientRows(plan, period, join, counted, minRows, ctx);
+    }
     if (!join.Rows.some((r) => r.Outcome !== null)) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `no realised outcome among the period's ${join.Rows.length} joined prediction(s)` }, ctx);
     }
@@ -233,6 +237,22 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: e instanceof Error ? e.message : String(e) }, ctx);
     }
     return this.WritePeriod(write, ctx);
+  }
+
+  /**
+   * A period with fewer scored rows than the job's minimum (D4-237): recorded `insufficient-rows` with the reason naming
+   * both counts, not scored against the reference and never a trigger input (so it starts no challenger and no
+   * rollback). Its drift look is still taken, as one of the procedure's looks. A drift step error fails the period.
+   */
+  private async recordInsufficientRows(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, minRows: number, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
+    const reason = MonitoringRules.InsufficientRowsReason(join.ScoredRows, minRows);
+    try {
+      const history = await PredictiveStudioModelMonitoringJobDriver.step('the period history read', () => ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx));
+      const drift = await PredictiveStudioModelMonitoringJobDriver.step('the drift look', () => this.LookForDrift(plan, join, period, history, ctx));
+      return this.WritePeriod({ ...counted, State: 'insufficient-rows', DriftLook: drift.Look, DriftAlarms: drift.Alarms, ErrorMessage: reason }, ctx);
+    } catch (e) {
+      return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `${reason}; ${e instanceof Error ? e.message : String(e)}` }, ctx);
+    }
   }
 
   /** Steps 2–8 of a joined period, each named in the error that stops it; the period's row to write. */
@@ -285,7 +305,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
       .map((i) => ({ name: i.Name, kind: PredictiveStudioModelMonitoringJobDriver.inputKind(i.Reference, i.Current, plan.Unit.Spec.temporal !== null), reference: [...i.Reference], current: [...i.Current] }))
       .filter((i): i is typeof i & { kind: MonitorInputKind } => i.kind !== null);
     if (inputs.length === 0) return { Look: null, Alarms: [] };
-    const look = Math.min(PredictiveStudioModelMonitoringJobDriver.MAX_LOOK, history.filter((h) => h.State === 'evaluated').length + 1);
+    const look = Math.min(PredictiveStudioModelMonitoringJobDriver.MAX_LOOK, history.filter((h) => h.State === 'evaluated' || h.State === 'insufficient-rows').length + 1);
     const response = await ctx.Seams.Drift.MonitorDrift({
       inputs, look, q: plan.Spec.drift.fdr.q, replays: PredictiveStudioModelMonitoringJobDriver.DRIFT_LOOK_REPLAYS,
       seed: PredictiveStudioModelMonitoringJobDriver.SeedOf(plan.Model.ID, period, 'drift'),

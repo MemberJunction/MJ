@@ -290,7 +290,7 @@ function PSD2_SPEC(modelId: string): MonitoringJobReadSpec {
     return {
         modelId, evaluationProtocolId: 'psd2', schedule: { cronExpression: '0 3 1 * *', timezone: 'UTC' },
         outcomeJoin: { predictionUnitId: 'psd2', runWhen: 'label-window-closed', joinOn: 'entity-and-as-of-date', excludeInTrainingRows: true },
-        performance: { primaryScore: { family: 'binary', metric: 'log-loss' }, period: 'month', interval: { level: 0.95, method: 'bootstrap', resamples: 100, pairedTest: 'paired-bootstrap' }, calibration: true },
+        performance: { primaryScore: { family: 'binary', metric: 'log-loss' }, period: 'month', interval: { level: 0.95, method: 'bootstrap', resamples: 100, pairedTest: 'paired-bootstrap' }, calibration: true, minScoredRowsPerPeriod: 10 },
         drift: { features: 'all-model-features', statistic: 'z-mean', fdr: { method: 'benjamini-hochberg', q: 0.0095 }, nullCalibration: { kind: 'empirical-replay', looks: 12, inputs: 1, replays: 4_000_000, q: 0.0095 }, documentedFalseAlarmRate: 0.05, action: 'alert' },
         challenger: { comparison: 'same-row-ids', score: { family: 'binary', metric: 'log-loss' }, onPass: 'publish-through-gate' },
         retrainTriggers: [], rollback: null, parity: { sampleRows: 100, tolerance: 1e-9 },

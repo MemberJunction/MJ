@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { RunView } from '@memberjunction/core';
-import type { MJMLModelPublishRecordEntity, MJMLMonitoringResultEntity, MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelPublishRecordEntity, MJMLMonitoringResultEntity, MJMLModelEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
   DatasetCatalog,
@@ -27,6 +27,7 @@ import {
   MonitoringJobSpecs,
   MonitoringResultSchemas,
   type MonitorDriftInput,
+  type MonitoringJobSpec,
   type RetrainTrigger,
   type TaskType,
 } from '@memberjunction/predictive-studio-core';
@@ -185,6 +186,28 @@ export class MonitoringFixture {
     }, h.User);
     const evidence = r.Success && r.Results[0] ? r.Results[0].EvidenceObject : null;
     return evidence === null ? null : evidence.holdoutPrimary.interval.upper;
+  }
+
+  /**
+   * Sets the period grain of the model's open monitoring job (its stored `MonitoringJobSpec.performance.period`), saved
+   * through the entity layer; the job's other members stay as the publish wrote them. A `year` grain pools a monthly
+   * series into windows that meet the job's minimum scored rows (D4-237).
+   *
+   * @throws Error when the model has no monitoring job, its spec does not validate, or the save fails
+   */
+  public static async SetMonitoringPeriod(h: Pick<TruthHarness, 'Provider' | 'User'>, modelId: string, period: MonitoringJobSpec['performance']['period']): Promise<void> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJScheduledJobEntity>({
+      EntityName: 'MJ: Scheduled Jobs', ExtraFilter: `Name LIKE 'Predictive Studio model monitoring:%' AND Configuration LIKE '%${EscapeSQLString(modelId)}%'`, ResultType: 'entity_object', BypassCache: true,
+    }, h.User);
+    if (!r.Success || r.Results.length !== 1) throw new Error(`monitoring fixture: ML Model ${modelId} has ${r.Results.length} monitoring job(s): ${r.ErrorMessage || ''}`);
+    const job = r.Results[0];
+    const json = JsonParse.ParseJsonText(job.Configuration, 'Configuration');
+    if (!json.Ok || !JsonParse.IsJsonObject(json.Value) || !JsonParse.IsJsonObject(json.Value['performance'])) throw new Error(`monitoring fixture: job ${job.ID}'s Configuration is not a monitoring spec`);
+    const updated = { ...json.Value, performance: { ...json.Value['performance'], period } };
+    const check = MonitoringResultSchemas.ParseJobSpec(JSON.stringify(updated));
+    if (!check.Ok) throw new Error(`monitoring fixture: the updated spec does not validate: ${check.Errors.join('; ')}`);
+    job.Configuration = JSON.stringify(updated);
+    if (!(await job.Save())) throw new Error(`monitoring fixture: saving job ${job.ID} failed: ${job.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 
   /** The pipeline's model a challenger run trained, with its status; null when the run shipped none. */

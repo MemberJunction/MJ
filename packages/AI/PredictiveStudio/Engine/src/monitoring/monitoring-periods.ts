@@ -2,7 +2,8 @@
  * @module monitoring/monitoring-periods
  *
  * `MonitoringPeriods` — the calendar of a monitoring job (UTC): the period containing a day (weeks start on Monday,
- * months on the 1st, quarters on January, April, July and October 1st), the last complete period before a day, and a
+ * months on the 1st, quarters on January, April, July and October 1st, years on January 1st — the pooled window of a
+ * series with one row per month, D4-237), the last complete period before a day, and a
  * period's closing day for the label-window rule. Pure.
  */
 import { UtcDay } from '@memberjunction/predictive-studio-core';
@@ -21,8 +22,8 @@ export class MonitoringPeriods {
       const start = UtcDay.AddUtcDays(d, -back);
       return { Start: start, End: UtcDay.AddUtcDays(start, 7), Grain: grain };
     }
-    const months = grain === 'month' ? 1 : 3;
-    const firstMonth = grain === 'month' ? d.getUTCMonth() : Math.floor(d.getUTCMonth() / 3) * 3;
+    const months = grain === 'month' ? 1 : grain === 'quarter' ? 3 : 12;
+    const firstMonth = grain === 'month' ? d.getUTCMonth() : grain === 'quarter' ? Math.floor(d.getUTCMonth() / 3) * 3 : 0;
     const start = new Date(Date.UTC(d.getUTCFullYear(), firstMonth, 1));
     return { Start: start, End: new Date(Date.UTC(d.getUTCFullYear(), firstMonth + months, 1)), Grain: grain };
   }

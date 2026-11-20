@@ -73579,11 +73579,11 @@ export class MJMLMonitoringResult_ {
     @Field({nullable: true, description: "The first day of the period."}) 
     Period?: Date;
         
-    @Field({nullable: true, description: "week, month or quarter."}) 
+    @Field({nullable: true, description: "week, month, quarter or year."}) 
     @MaxLength(10)
     PeriodGrain?: string;
         
-    @Field({nullable: true, description: "window-open (outcomes not yet known), evaluated or failed."}) 
+    @Field({nullable: true, description: "window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job's minimum, so the period is recorded and not judged) or failed."}) 
     @MaxLength(20)
     State?: string;
         

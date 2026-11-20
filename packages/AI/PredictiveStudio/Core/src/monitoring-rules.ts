@@ -56,6 +56,20 @@ export class MonitoringRules {
   private static readonly MS_PER_DAY = 86_400_000;
 
   /**
+   * Whether a period holds enough scored rows for its performance to be judged (D4-237): at least `minScoredRows`. A
+   * period below it is recorded `insufficient-rows`, never scored against the reference band and never a trigger input
+   * (one row's error is not a period's performance: its interval has no width).
+   */
+  public static EnoughScoredRows(scoredRows: number, minScoredRows: number): boolean {
+    return scoredRows >= minScoredRows;
+  }
+
+  /** The reason an `insufficient-rows` period carries, naming both counts. */
+  public static InsufficientRowsReason(scoredRows: number, minScoredRows: number): string {
+    return `insufficient-rows: the period scored ${scoredRows} row(s), fewer than the ${minScoredRows} the performance trigger needs to judge a period; recorded, not judged`;
+  }
+
+  /**
    * Whether the label window of a prediction made on `decisionDate` has closed at `now`: the unit's gap and then its
    * window have both passed (closed from `decisionDate + LabelGapDays + LabelWindowDays` on, inclusive).
    */

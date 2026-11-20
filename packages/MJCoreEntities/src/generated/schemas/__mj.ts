@@ -29254,7 +29254,7 @@ export const MJMLMonitoringResultSchema = z.object({
         * * Display Name: Period
         * * SQL Data Type: date
         * * Description: The first day of the period.`),
-    PeriodGrain: z.union([z.literal('month'), z.literal('quarter'), z.literal('week')]).describe(`
+    PeriodGrain: z.union([z.literal('month'), z.literal('quarter'), z.literal('week'), z.literal('year')]).describe(`
         * * Field Name: PeriodGrain
         * * Display Name: Period Grain
         * * SQL Data Type: nvarchar(10)
@@ -29263,8 +29263,9 @@ export const MJMLMonitoringResultSchema = z.object({
     *   * month
     *   * quarter
     *   * week
-        * * Description: week, month or quarter.`),
-    State: z.union([z.literal('evaluated'), z.literal('failed'), z.literal('window-open')]).describe(`
+    *   * year
+        * * Description: week, month, quarter or year.`),
+    State: z.union([z.literal('evaluated'), z.literal('failed'), z.literal('insufficient-rows'), z.literal('window-open')]).describe(`
         * * Field Name: State
         * * Display Name: State
         * * SQL Data Type: nvarchar(20)
@@ -29272,8 +29273,9 @@ export const MJMLMonitoringResultSchema = z.object({
     * * Possible Values 
     *   * evaluated
     *   * failed
+    *   * insufficient-rows
     *   * window-open
-        * * Description: window-open (outcomes not yet known), evaluated or failed.`),
+        * * Description: window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job's minimum, so the period is recorded and not judged) or failed.`),
     ScoredRows: z.number().describe(`
         * * Field Name: ScoredRows
         * * Display Name: Scored Rows

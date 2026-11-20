@@ -27,6 +27,16 @@ const P = (lower: number | null, slope: number | null = null): MonitoringPeriodR
 const Ok = (): MonitoringPeriodResult => P(-0.01);
 const Below = (lower: number): MonitoringPeriodResult => P(lower);
 
+describe('MonitoringRules.EnoughScoredRows (D4-237)', () => {
+  it('judges a period only when it holds at least the minimum scored rows', () => {
+    expect([MonitoringRules.EnoughScoredRows(9, 10), MonitoringRules.EnoughScoredRows(10, 10), MonitoringRules.EnoughScoredRows(1, 1), MonitoringRules.EnoughScoredRows(0, 1)])
+      .toEqual([false, true, true, false]);
+  });
+  it('names the counts when a period is not judged', () => {
+    expect(MonitoringRules.InsufficientRowsReason(1, 10)).toBe('insufficient-rows: the period scored 1 row(s), fewer than the 10 the performance trigger needs to judge a period; recorded, not judged');
+  });
+});
+
 describe('MonitoringRules.TriggerFires', () => {
   it('the outcome-degradation trigger fires after N consecutive periods below the reference band, not after N-1', () => {
     const t: RetrainTrigger = { kind: 'outcome-degradation', margin: nn(0.02), consecutivePeriods: 2 };

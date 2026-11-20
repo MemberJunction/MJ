@@ -59,6 +59,10 @@ describe('MonitoringJobSpecs.FromProtocol', () => {
       nullCalibration: { kind: 'empirical-replay', looks: 12, inputs: 7, replays: 4_000_000, q: 0.0095 }, documentedFalseAlarmRate: 0.05, action: 'alert',
     });
   });
+  it('sets the performance trigger\'s minimum scored rows per period to the documented default 10 (D4-237)', () => {
+    expect(MonitoringJobSpecs.FromProtocol(Protocol(), MODEL).performance.minScoredRowsPerPeriod).toBe(10);
+    expect(MonitoringJobSpecs.DEFAULT_MIN_SCORED_ROWS_PER_PERIOD).toBe(10);
+  });
   it('keeps an explicit null rollback (automated rollback off for that protocol version)', () => {
     const protocol = Protocol();
     const off = { ...protocol, promotion: { ...protocol.promotion, rollbackOn: null } };
@@ -91,6 +95,17 @@ describe('MonitoringResultSchemas (M6.3: the job reads its stored spec and earli
     expect(read.Value.rollback).toEqual(spec.rollback);
     expect(read.Value.drift.fdr.q).toBe(0.0095);
     expect('rule' in read.Value.challenger).toBe(false);
+  });
+
+  it('reads a spec stored before the minimum existed as the default 10, and keeps a stored minimum (D4-237)', () => {
+    const spec = MonitoringJobSpecs.FromProtocol(Protocol(), MODEL);
+    const { minScoredRowsPerPeriod: _dropped, ...olderPerformance } = spec.performance;
+    const older = MonitoringResultSchemas.ParseJobSpec(JSON.stringify({ ...spec, performance: olderPerformance }));
+    expect(older.Ok && older.Value.performance.minScoredRowsPerPeriod).toBe(10);
+    const stored = MonitoringResultSchemas.ParseJobSpec(JSON.stringify({ ...spec, performance: { ...spec.performance, minScoredRowsPerPeriod: 3 } }));
+    expect(stored.Ok && stored.Value.performance.minScoredRowsPerPeriod).toBe(3);
+    const zero = MonitoringResultSchemas.ParseJobSpec(JSON.stringify({ ...spec, performance: { ...spec.performance, minScoredRowsPerPeriod: 0 } }));
+    expect(zero.Ok === false && zero.Errors.some((e) => e.startsWith('performance.minScoredRowsPerPeriod'))).toBe(true);
   });
 
   it('refuses a stored spec with an unknown key, naming it', () => {

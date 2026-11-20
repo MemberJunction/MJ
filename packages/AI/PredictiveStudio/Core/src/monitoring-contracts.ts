@@ -50,9 +50,16 @@ export interface MonitoringJobSpec {
   };
   readonly performance: {  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
     readonly primaryScore: ProperScore;  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
-    readonly period: 'week' | 'month' | 'quarter';  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
+    /** The period each look covers; `year` pools a series with one row per month into windows that meet {@link minScoredRowsPerPeriod} (D4-237). */
+    readonly period: 'week' | 'month' | 'quarter' | 'year';  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
     readonly interval: IntervalSpec;  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
     readonly calibration: true;  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
+    /**
+     * The fewest scored rows a period needs before its performance is judged (D4-237): a period below it is recorded
+     * `insufficient-rows` and is neither scored against the reference nor a trigger input. A spec stored before this
+     * member existed reads as {@link MonitoringJobSpecs.DEFAULT_MIN_SCORED_ROWS_PER_PERIOD}.
+     */
+    readonly minScoredRowsPerPeriod: number;  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
   };
   readonly drift: DriftSpec;  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key
   readonly challenger: {  // case-violation-ok-legacy-back-compat: stored MonitoringJobSpec JSON key

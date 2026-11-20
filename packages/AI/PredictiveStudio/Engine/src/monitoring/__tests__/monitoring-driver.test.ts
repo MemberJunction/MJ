@@ -186,6 +186,43 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Store.Models.get(CURRENT.toLowerCase())?.Status).toBe('Published');
   });
 
+  it('a period with fewer scored rows than the minimum is recorded insufficient-rows, named, and judged by no trigger (D4-237)', async () => {
+    PeriodRows(JUNE, 9, 0.1, 9);
+    const r = await driver.Execute(await Context(D('2026-07-31')));
+    expect(r.Success).toBe(true);
+    const row = world.Store.Last();
+    expect(row).toMatchObject({ State: 'insufficient-rows', ScoredRows: 9, TriggersFired: [], ChallengerRunID: null });
+    expect(row.Primary).toBeNull();
+    expect(row.ErrorMessage).toBe('insufficient-rows: the period scored 9 row(s), fewer than the 10 the performance trigger needs to judge a period; recorded, not judged');
+    expect([world.Publisher.Trained.length, world.Publisher.Published.length]).toEqual([0, 0]);
+  });
+
+  it('the same badly scored period with the minimum met fires the trigger, and the job\'s stored minimum is what is read (D4-237)', async () => {
+    PeriodRows(JUNE, 10, 0.1, 10);
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Store.Last()).toMatchObject({ State: 'evaluated', ScoredRows: 10, TriggersFired: [expect.objectContaining({ kind: 'outcome-degradation' })] });
+    world = new MonitoringWorld();
+    world.Store.Binding = MonitoringWorld.BINDING;
+    driver = new PredictiveStudioModelMonitoringJobDriver(world.Seams());
+    PeriodRows(JUNE, 10, 0.1, 10);
+    await driver.Execute(await Context(D('2026-07-31'), { ...SPEC, performance: { ...SPEC.performance, minScoredRowsPerPeriod: 11 } }));
+    expect(world.Store.Last()).toMatchObject({ State: 'insufficient-rows', TriggersFired: [] });
+  });
+
+  it('a period with no prediction at all is insufficient-rows, not a failed run (D4-237, OF4-51)', async () => {
+    const r = await driver.Execute(await Context(D('2026-07-31')));
+    expect(r.Success).toBe(true);
+    expect(world.Store.Last()).toMatchObject({ State: 'insufficient-rows', ScoredRows: 0 });
+  });
+
+  it('an insufficient-rows period still takes its drift look, counted as a look (D4-237)', async () => {
+    PeriodRows(JUNE, 1, 0.3, 1);
+    world.Store.Inputs = [{ Name: 'TenureZ', Reference: [0, 1, 2, 3, 4], Current: [2.5] }];
+    await driver.Execute(await Context(NOW));
+    expect(world.Store.Last().State).toBe('insufficient-rows');
+    expect(world.Drift.Requests).toEqual([expect.objectContaining({ look: 1 })]);
+  });
+
   it('a trigger that stays fired the next period waits instead of starting a second challenger', async () => {
     PeriodRows(JUNE, 300, 0.1, 150);
     PeriodRows(D('2026-07-10'), 300, 0.1, 150, 'j');

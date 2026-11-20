@@ -79,7 +79,10 @@ const monitoringJobSpec = z.object({
     joinOn: z.literal('entity-and-as-of-date'),
     excludeInTrainingRows: z.literal(true),
   }).strict(),
-  performance: z.object({ primaryScore: properScore, period: z.enum(['week', 'month', 'quarter']), interval: intervalSpec, calibration: z.literal(true) }).strict(),
+  performance: z.object({
+    primaryScore: properScore, period: z.enum(['week', 'month', 'quarter', 'year']), interval: intervalSpec, calibration: z.literal(true),
+    minScoredRowsPerPeriod: positiveInt.optional(),
+  }).strict(),
   drift: z.object({
     features: z.literal('all-model-features'),
     statistic: z.enum(['psi', 'ks', 'chi-square', 'z-mean']),
@@ -108,6 +111,8 @@ export class MonitoringJobSpecs {
   public static readonly DEFAULT_NULL_REPLAYS = 4_000_000;
   /** The documented probability of any alarm over the looks under no drift. */
   public static readonly DOCUMENTED_FALSE_ALARM_RATE = 0.05;
+  /** The fewest scored rows a period needs before the performance trigger judges it (D4-237). */
+  public static readonly DEFAULT_MIN_SCORED_ROWS_PER_PERIOD = 10;
   /** Scored rows each period's parity check recomputes. */
   public static readonly DEFAULT_PARITY_SAMPLE_ROWS = 100;
 
@@ -123,7 +128,10 @@ export class MonitoringJobSpecs {
       evaluationProtocolId: protocol.id,
       schedule: MonitoringJobSpecs.DEFAULT_SCHEDULE,
       outcomeJoin: { predictionUnitId: model.PredictionUnitID, runWhen: 'label-window-closed', joinOn: 'entity-and-as-of-date', excludeInTrainingRows: true },
-      performance: { primaryScore: protocol.primaryScore, period: MonitoringJobSpecs.DEFAULT_PERIOD, interval: protocol.intervals, calibration: true },
+      performance: {
+        primaryScore: protocol.primaryScore, period: MonitoringJobSpecs.DEFAULT_PERIOD, interval: protocol.intervals, calibration: true,
+        minScoredRowsPerPeriod: MonitoringJobSpecs.DEFAULT_MIN_SCORED_ROWS_PER_PERIOD,
+      },
       drift: {
         features: 'all-model-features',
         statistic: 'z-mean',
@@ -167,7 +175,7 @@ export class MonitoringJobSpecs {
       evaluationProtocolId: d.evaluationProtocolId,
       schedule: d.schedule,
       outcomeJoin: d.outcomeJoin,
-      performance: d.performance,
+      performance: { ...d.performance, minScoredRowsPerPeriod: d.performance.minScoredRowsPerPeriod ?? MonitoringJobSpecs.DEFAULT_MIN_SCORED_ROWS_PER_PERIOD },
       drift: d.drift,
       challenger: { comparison: d.challenger.comparison, score: d.challenger.score, onPass: d.challenger.onPass },
       retrainTriggers: d.retrainTriggers.map((t) => (t.kind === 'outcome-degradation' ? { ...t, margin: nn(t.margin) } : t)),

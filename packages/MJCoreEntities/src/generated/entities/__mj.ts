@@ -84086,12 +84086,13 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     *   * month
     *   * quarter
     *   * week
-    * * Description: week, month or quarter.
+    *   * year
+    * * Description: week, month, quarter or year.
     */
-    get PeriodGrain(): 'month' | 'quarter' | 'week' {
+    get PeriodGrain(): 'month' | 'quarter' | 'week' | 'year' {
         return this.Get('PeriodGrain');
     }
-    set PeriodGrain(value: 'month' | 'quarter' | 'week') {
+    set PeriodGrain(value: 'month' | 'quarter' | 'week' | 'year') {
         this.Set('PeriodGrain', value);
     }
 
@@ -84103,13 +84104,14 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     * * Possible Values 
     *   * evaluated
     *   * failed
+    *   * insufficient-rows
     *   * window-open
-    * * Description: window-open (outcomes not yet known), evaluated or failed.
+    * * Description: window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job's minimum, so the period is recorded and not judged) or failed.
     */
-    get State(): 'evaluated' | 'failed' | 'window-open' {
+    get State(): 'evaluated' | 'failed' | 'insufficient-rows' | 'window-open' {
         return this.Get('State');
     }
-    set State(value: 'evaluated' | 'failed' | 'window-open') {
+    set State(value: 'evaluated' | 'failed' | 'insufficient-rows' | 'window-open') {
         this.Set('State', value);
     }
 

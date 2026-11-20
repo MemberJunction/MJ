@@ -224,8 +224,8 @@ CREATE TABLE [${flyway:defaultSchema}].[MLMonitoringResult] (
     CONSTRAINT [FK_MLMonitoringResult_Model]      FOREIGN KEY ([ModelID]) REFERENCES [${flyway:defaultSchema}].[MLModel] ([ID]),
     CONSTRAINT [FK_MLMonitoringResult_JobRun]     FOREIGN KEY ([ScheduledJobRunID]) REFERENCES [${flyway:defaultSchema}].[ScheduledJobRun] ([ID]),
     CONSTRAINT [FK_MLMonitoringResult_Challenger] FOREIGN KEY ([ChallengerRunID]) REFERENCES [${flyway:defaultSchema}].[MLTrainingRun] ([ID]),
-    CONSTRAINT [CK_MLMonitoringResult_Grain] CHECK ([PeriodGrain] IN ('week', 'month', 'quarter')),
-    CONSTRAINT [CK_MLMonitoringResult_State] CHECK ([State] IN ('window-open', 'evaluated', 'failed')),
+    CONSTRAINT [CK_MLMonitoringResult_Grain] CHECK ([PeriodGrain] IN ('week', 'month', 'quarter', 'year')),
+    CONSTRAINT [CK_MLMonitoringResult_State] CHECK ([State] IN ('window-open', 'evaluated', 'insufficient-rows', 'failed')),
     CONSTRAINT [UQ_MLMonitoringResult_ModelPeriod] UNIQUE ([ModelID], [PeriodGrain], [Period])
 );
 GO
@@ -233,8 +233,8 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'One row per Pu
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The model monitored.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'ModelID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The monitoring job run that wrote the row; NULL for a run started from the UI or a test.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'ScheduledJobRunID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The first day of the period.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'Period';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'week, month or quarter.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'PeriodGrain';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'window-open (outcomes not yet known), evaluated or failed.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'State';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'week, month, quarter or year.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'PeriodGrain';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job''s minimum, so the period is recorded and not judged) or failed.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'State';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Predictions the model stored for the period.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'ScoredRows';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Predictions joined to a known outcome.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'JoinedRows';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Joined predictions left out because the record was in the model''s training snapshot.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLMonitoringResult', @level2type = N'COLUMN', @level2name = N'ExcludedInTrainingRows';
@@ -7795,7 +7795,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '18359693-D8DF-4E8F-B5E1-D2C17B742834'),
             'PeriodGrain',
             'Period Grain',
-            'week, month or quarter.',
+            'week, month, quarter or year.',
             'nvarchar',
             20,
             0,
@@ -7858,7 +7858,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '18359693-D8DF-4E8F-B5E1-D2C17B742834'),
             'State',
             'State',
-            'window-open (outcomes not yet known), evaluated or failed.',
+            'window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job''s minimum, so the period is recorded and not judged) or failed.',
             'nvarchar',
             40,
             0,
@@ -9721,7 +9721,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
 /* SQL text to update ValueListType for entity field ID D1B99310-9E0D-4A03-8A4E-F1F96A8EC370 */
 UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D1B99310-9E0D-4A03-8A4E-F1F96A8EC370';
 
-/* SQL text to sync 3 entity field value row(s) for entity field ID 98F67019-F93F-4DD6-BBA1-70B848353726 */
+/* SQL text to sync 4 entity field value row(s) for entity field ID 98F67019-F93F-4DD6-BBA1-70B848353726 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
@@ -9734,11 +9734,15 @@ INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
                                        ('ee67f9fc-dbf6-408a-ab76-bfdc464e44de', '98F67019-F93F-4DD6-BBA1-70B848353726', 3, 'week', 'week', 'Check', GETUTCDATE(), GETUTCDATE());
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('d4bb98c2-ec0b-43c6-b2df-029dee8f9223', '98F67019-F93F-4DD6-BBA1-70B848353726', 4, 'year', 'year', 'Check', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update ValueListType for entity field ID 98F67019-F93F-4DD6-BBA1-70B848353726 */
 UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='98F67019-F93F-4DD6-BBA1-70B848353726';
 
-/* SQL text to sync 3 entity field value row(s) for entity field ID 1AAF359F-C0A4-4CF0-8365-92803287FB66 */
+/* SQL text to sync 4 entity field value row(s) for entity field ID 1AAF359F-C0A4-4CF0-8365-92803287FB66 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
@@ -9750,7 +9754,11 @@ INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a763b8e5-079d-428d-aac0-2b7a23b14c9f', '1AAF359F-C0A4-4CF0-8365-92803287FB66', 3, 'window-open', 'window-open', 'Check', GETUTCDATE(), GETUTCDATE());
+                                       ('c610cf5a-3175-4aae-b92c-1d912fd8b34a', '1AAF359F-C0A4-4CF0-8365-92803287FB66', 3, 'insufficient-rows', 'insufficient-rows', 'Check', GETUTCDATE(), GETUTCDATE());
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('a763b8e5-079d-428d-aac0-2b7a23b14c9f', '1AAF359F-C0A4-4CF0-8365-92803287FB66', 4, 'window-open', 'window-open', 'Check', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update ValueListType for entity field ID 1AAF359F-C0A4-4CF0-8365-92803287FB66 */
 UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1AAF359F-C0A4-4CF0-8365-92803287FB66';
