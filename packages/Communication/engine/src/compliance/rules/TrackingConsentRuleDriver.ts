@@ -23,12 +23,18 @@ function readTrackingPolicy(
   params: Record<string, unknown>,
   stringKeys: string[],
   boolKeys: string[],
+  requireConsentKeys: string[] = [],
 ): TrackingPolicy | undefined {
   for (const key of stringKeys) {
     const val = ReadStringParam(params, key)?.toLowerCase();
     if (val === 'allowed' || val === 'consent-required' || val === 'prohibited') {
       return val;
     }
+  }
+  for (const key of requireConsentKeys) {
+    const reqConsent = ReadBooleanParam(params, key);
+    if (reqConsent === true) return 'consent-required';
+    if (reqConsent === false) return 'allowed';
   }
   for (const key of boolKeys) {
     const boolVal = ReadBooleanParam(params, key);
@@ -56,6 +62,7 @@ export class TrackingConsentRuleDriver extends BaseComplianceRule<TrackingConsen
         params,
         ['openPixel', 'OpenPixel'],
         ['allowOpenPixel', 'AllowOpenPixel'],
+        ['requireConsentForOpenPixel', 'RequireConsentForOpenPixel'],
       );
       if (open && POLICY_RANK[open] > POLICY_RANK[openPixel]) {
         openPixel = open;
@@ -65,6 +72,7 @@ export class TrackingConsentRuleDriver extends BaseComplianceRule<TrackingConsen
         params,
         ['clickTracking', 'ClickTracking'],
         ['allowClickTracking', 'AllowClickTracking'],
+        ['requireConsentForClickTracking', 'RequireConsentForClickTracking'],
       );
       if (click && POLICY_RANK[click] > POLICY_RANK[clickTracking]) {
         clickTracking = click;

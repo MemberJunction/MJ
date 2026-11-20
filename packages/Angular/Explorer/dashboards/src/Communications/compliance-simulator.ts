@@ -260,16 +260,19 @@ function buildObligations(
   sender: MJCommunicationSenderEntity,
   mergedRules: Record<string, Record<string, unknown>>,
 ): ComplianceObligations {
-  const unsubRule = mergedRules['Unsubscribe'] ?? {};
+  const unsubRule = mergedRules['UnsubscribeMechanism'] ?? mergedRules['Unsubscribe'] ?? {};
   const idRule = mergedRules['SenderIdentification'] ?? {};
+  const trackingRule = mergedRules['TrackingConsent'] ?? {};
+  const requireOpenConsent = Boolean(trackingRule.requireConsentForOpenPixel ?? false);
+  const requireClickConsent = Boolean(trackingRule.requireConsentForClickTracking ?? false);
   return {
-    RequireOneClickHeader: Boolean(unsubRule.RequireOneClickHeader ?? true),
-    RequireFooterUnsubscribe: Boolean(unsubRule.RequireFooterUnsubscribe ?? true),
-    RequireSenderPostalAddress: Boolean(idRule.RequirePostalAddress ?? false),
+    RequireOneClickHeader: Boolean(unsubRule.requireOneClickHeader ?? unsubRule.RequireOneClickHeader ?? true),
+    RequireFooterUnsubscribe: Boolean(unsubRule.requireFooterUnsubscribe ?? unsubRule.RequireFooterUnsubscribe ?? true),
+    RequireSenderPostalAddress: Boolean(idRule.requirePhysicalAddress ?? idRule.RequirePostalAddress ?? false),
     SenderPostalAddress: sender.PostalAddress ?? undefined,
     SenderName: sender.FromName ?? sender.Name,
-    AllowOpenPixel: true,
-    AllowClickTracking: true,
+    AllowOpenPixel: !requireOpenConsent,
+    AllowClickTracking: !requireClickConsent,
     PreferenceCenterURL: sender.PreferenceCenterURL ?? undefined,
   };
 }

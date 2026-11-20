@@ -541,11 +541,13 @@ export class CommsActivityWorker {
     if (policy?.Parameters) {
       try {
         const parsed = JSON.parse(policy.Parameters) as Record<string, unknown>;
-        if (typeof parsed.Threshold === 'number' && parsed.Threshold > 0) {
-          threshold = parsed.Threshold;
+        const thresholdCandidate = parsed.threshold ?? parsed.Threshold;
+        if (typeof thresholdCandidate === 'number' && thresholdCandidate > 0) {
+          threshold = thresholdCandidate;
         }
-        if (typeof parsed.ExpiryDays === 'number' && parsed.ExpiryDays > 0) {
-          expiryDays = parsed.ExpiryDays;
+        const expiryCandidate = parsed.cooldownDays ?? parsed.ExpiryDays;
+        if (typeof expiryCandidate === 'number' && expiryCandidate > 0) {
+          expiryDays = expiryCandidate;
         }
       } catch {
         // Use defaults if Parameters JSON is malformed

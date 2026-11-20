@@ -104,7 +104,9 @@
     "communication-preferences",
     "communication-compliance-rule-types",
     "communication-compliance-regimes",
-    "communication-suppression-policies"
+    "communication-suppression-policies",
+    "work-queue-topics",
+    "work-queue-subscriptions"
   ],
   "sqlLogging": {
     "enabled": true,

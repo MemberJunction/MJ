@@ -445,16 +445,60 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         const providerEntity = CommunicationEngine.Instance.Providers.find(
             (p) => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase(),
         );
-        const defaultPreferenceID = await this.resolveDefaultPreferenceID(contextUser, provider);
 
         const envelope: SendingEnvelope = {
             SenderID: undefined, // V2SendService defaults to IsDefault = 1
-            PreferenceID: defaultPreferenceID,
-            MessageClass: 'Marketing',
+            MessageClass: 'Operational',
             ChannelID: entityMessageType.BaseMessageTypeID,
             ProviderID: providerEntity?.ID,
             ScheduledAt: params.Message.SendAt,
+            DryRun: params.Message.DryRun,
         };
+
+        const hasTemplates = Boolean(
+            params.Message.SubjectTemplate ||
+            params.Message.BodyTemplate ||
+            params.Message.HTMLBodyTemplate,
+        );
+
+        if (!hasTemplates && !params.PreviewOnly) {
+            const sendResult = await CommunicationEngine.Instance.Send(
+                {
+                    Envelope: envelope,
+                    Payload: {
+                        Subject: params.Message.Subject,
+                        Body: params.Message.Body,
+                        HTMLBody: params.Message.HTMLBody,
+                        Headers: params.Message.Headers,
+                    },
+                    Recipients: readableRecipients.map((r) => ({
+                        Principal: r.Principal,
+                        Endpoint: r.Endpoint,
+                    })),
+                },
+                contextUser,
+            );
+            const outcomeItems: EntityCommunicationResultItem[] = [
+                ...skippedUnreadable,
+                ...(sendResult.Outcomes ?? []).map((o) => {
+                    const msg = new ProcessedMessageServer(params.Message);
+                    msg.To = o.Endpoint?.RawValue ?? '';
+                    const isSkipped = o.Status === 'Blocked';
+                    return {
+                        RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
+                        Message: isSkipped ? undefined : msg,
+                        Skipped: isSkipped ? true : undefined,
+                        SkipReason: isSkipped ? o.Reason : undefined,
+                    };
+                }),
+            ];
+            const hasDeliverable = sendResult.QueuedCount > 0 || sendResult.DeferredCount > 0;
+            return {
+                Success: sendResult.Success && hasDeliverable,
+                ErrorMessage: sendResult.ErrorMessage ?? '',
+                Results: outcomeItems,
+            };
+        }
 
         const renderParams: RenderAndSendParams = {
             Envelope: envelope,

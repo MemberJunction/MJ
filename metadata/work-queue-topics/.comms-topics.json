@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "comms.dispatch",
+      "Description": "Chunked outbound communication dispatch work items for V2SendService.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": false,
+      "MaxPayloadBytes": 1048576,
+      "DefaultDeduplicationTTLSeconds": 3600,
+      "RetentionDays": 14,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0D819429-D436-4DF5-B8D4-BD4986192962"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.render",
+      "Description": "Batched template rendering and V2 send work items for TemplatedCommunicationService.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": false,
+      "MaxPayloadBytes": 1048576,
+      "DefaultDeduplicationTTLSeconds": 3600,
+      "RetentionDays": 14,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6F46A97E-2E08-417F-AB11-D73DC3F47B2A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.activity",
+      "Description": "Inbound webhook, open-pixel, click-redirect, and one-click unsubscribe activity events.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": false,
+      "MaxPayloadBytes": 1048576,
+      "DefaultDeduplicationTTLSeconds": 3600,
+      "RetentionDays": 14,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7B4C94A2-1686-46E8-8069-8772982BEF2F"
+    }
+  }
+]

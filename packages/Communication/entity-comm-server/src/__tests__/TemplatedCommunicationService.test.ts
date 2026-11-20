@@ -518,7 +518,7 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
     };
   });
 
-  it('routes V1 RunEntityCommunication through EvaluateEligibility + TemplatedCommunicationService with Marketing/General updates/footer defaults', async () => {
+  it('routes V1 RunEntityCommunication through EvaluateEligibility + TemplatedCommunicationService with Operational/footer defaults', async () => {
     const engine = new EntityCommunicationsEngine();
     const v1Params = {
       EntityID: 'ent-customers',
@@ -543,9 +543,39 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
 
     const envelope = capturedSendCalls[0].Envelope;
     expect(envelope.SenderID).toBeUndefined(); // V2SendService defaults to IsDefault = 1
-    expect(envelope.PreferenceID).toBe('pref-general-updates');
-    expect(envelope.MessageClass).toBe('Marketing');
+    expect(envelope.PreferenceID).toBeUndefined();
+    expect(envelope.MessageClass).toBe('Operational');
     expect(capturedSendCalls[0].Recipients[0].PayloadOverride?.HTMLBody).toContain('data-mj-compliance-footer="true"');
+  });
+
+  it('forwards literal Subject/Body/HTMLBody and DryRun for non-templated V1 RunEntityCommunication calls', async () => {
+    const engine = new EntityCommunicationsEngine();
+    const v1Params = {
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: {
+        Subject: 'Literal V1 Subject',
+        Body: 'Literal V1 Body',
+        HTMLBody: '<p>Literal V1 HTML</p>',
+        DryRun: true,
+        ContextData: {},
+      },
+      PreviewOnly: false,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams;
+
+    const result = await engine.RunEntityCommunication(v1Params);
+    expect(result.Success).toBe(true);
+    expect(capturedSendCalls).toHaveLength(1);
+    expect(capturedSendCalls[0].Envelope.MessageClass).toBe('Operational');
+    expect(capturedSendCalls[0].Envelope.DryRun).toBe(true);
+    expect(capturedSendCalls[0].Payload).toMatchObject({
+      Subject: 'Literal V1 Subject',
+      Body: 'Literal V1 Body',
+      HTMLBody: '<p>Literal V1 HTML</p>',
+    });
   });
 
   it('supports V1 PreviewOnly without calling CommunicationEngine.Send and returns ProcessedMessage', async () => {

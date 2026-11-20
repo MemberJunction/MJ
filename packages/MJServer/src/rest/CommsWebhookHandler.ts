@@ -786,12 +786,13 @@ async function resolvePrincipalFromLog(
         {
             EntityName: 'MJ: Communication Endpoint Principals',
             ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(log.CommunicationEndpointID)}'`,
-            MaxRows: 1,
+            MaxRows: 2,
             ResultType: 'entity_object',
         },
         systemUser,
     );
-    if (!res.Success || res.Results.length === 0) return null;
+    // Only attribute principal-level consent when the endpoint maps unambiguously to a single principal.
+    if (!res.Success || res.Results.length !== 1) return null;
     return { EntityID: res.Results[0].EntityID, RecordID: res.Results[0].RecordID };
 }
 

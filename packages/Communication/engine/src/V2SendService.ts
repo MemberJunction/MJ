@@ -211,7 +211,7 @@ export class V2SendService {
     const endpointIds = this.collectEndpointIds(resolvedMap, params.Recipients);
     const suppressions = await this.loadSuppressions(endpointIds, principalRefs, contextUser);
     const prefMap = preference
-      ? await this.loadPrincipalPreferences(principalRefs, preference.ID, contextUser)
+      ? await this.loadPrincipalPreferences(principalRefs, preference.ID, sender.ID, contextUser)
       : new Map<string, MJCommunicationPrincipalPreferenceEntity>();
 
     const gate = new ComplianceGate(new JurisdictionResolver());
@@ -967,6 +967,7 @@ export class V2SendService {
   private async loadPrincipalPreferences(
     principals: PrincipalRecordRef[],
     preferenceID: string,
+    senderID: string,
     contextUser: UserInfo,
   ): Promise<Map<string, MJCommunicationPrincipalPreferenceEntity>> {
     const out = new Map<string, MJCommunicationPrincipalPreferenceEntity>();
@@ -977,14 +978,19 @@ export class V2SendService {
     const res = await rv.RunView<MJCommunicationPrincipalPreferenceEntity>(
       {
         EntityName: 'MJ: Communication Principal Preferences',
-        ExtraFilter: `CommunicationPreferenceID='${EscapeSQLString(preferenceID)}' AND RecordID IN (${quoted})`,
+        ExtraFilter: `CommunicationPreferenceID='${EscapeSQLString(preferenceID)}' AND RecordID IN (${quoted}) AND (CommunicationSenderID='${EscapeSQLString(senderID)}' OR CommunicationSenderID IS NULL)`,
         ResultType: 'entity_object',
       },
       contextUser,
     );
     if (res.Success && res.Results) {
       for (const pp of res.Results) {
-        out.set(`${pp.EntityID.toLowerCase()}:${pp.RecordID}`, pp);
+        const key = `${pp.EntityID.toLowerCase()}:${pp.RecordID}`;
+        const existing = out.get(key);
+        // Prefer sender-specific row over global (CommunicationSenderID === null) row
+        if (!existing || pp.CommunicationSenderID !== null) {
+          out.set(key, pp);
+        }
       }
     }
     return out;
