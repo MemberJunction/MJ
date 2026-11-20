@@ -7145,7 +7145,7 @@ into `model-prediction.logic.ts` with it)
   → 0 hits); no `@angular/router` import (layering, §2.5).
 - [x] Step 4: Step 2's command → passes; `cd packages/Angular/Explorer/core-entity-forms && pnpm test` → 0 failed (total
   measured at M5b); `npm run check:ui` → exit 0.
-- [ ] Step 5: Runtime is Task M5b.9's browser walk.
+- [x] Step 5: Runtime is Task M5b.9's browser walk.
 
 #### Task M5b.4: The scoring binding editor and the population-wide surfaces
 
@@ -7306,7 +7306,7 @@ write and the teardown removes every tagged row even when Setup failed (D4-230)
 - [x] Step 3: Restore.
 - [x] Step 4: Step 2's command → 8 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test`
   → 0 failed (the pinned bundle count + 1).
-- [ ] Step 5: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
+- [x] Step 5: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
   → 0 failed, its count one higher than at M5 (measured at M5b), measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
   → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
   attributable to PR 4's changes (D4-79).
@@ -7358,10 +7358,10 @@ the prediction with its lineage to the authorized identity, 1 of 1, and nothing 
   `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`, its `EntityField` count equal to
   `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.vwLatestFeatureValues')` (19), `ID` the key; then
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0 (the entity-permission `@lookup`s resolve).
-- [ ] Step 4: The fresh-install proof is Step 3's outputs, taken before any CodeGen step; only then does the rest of
+- [x] Step 4: The fresh-install proof is Step 3's outputs, taken before any CodeGen step; only then does the rest of
   the skill's sequence (its CodeGen, build and the deterministic tier) run on the fresh database →
   `Integration Tests — Deterministic` 0 failed, IT182 among its members passing.
-- [ ] Step 5: The four outputs pasted into §11; the fresh database dropped after the milestone's checkpoint.
+- [x] Step 5: The four outputs pasted into §11; the fresh database dropped after the milestone's checkpoint. The clean rebuild of `MJ_PS_PR4_claude` is the fresh database (no separate `_FRESH` copy, D4-232).
 
 #### Task M5b.9: The browser walk of the record panel (D-076)
 
@@ -7375,8 +7375,8 @@ and the matching database row (the spec's `sqlcmd` reads through `PS_SQLCMD` or 
 - [x] Step 1: Write the spec's two tests: `an authorized user sees the prediction with its lineage on a scored Person`
   (`[data-testid="ps-prediction-card"]` with the value of `SELECT ValueNumeric FROM __mj.vwLatestFeatureValues WHERE RecordID = @p AND FeatureName = @f`,
   the lineage naming the model version and the run) and `a restricted user sees no prediction card and the Derived values section only`.
-- [ ] Step 2: Run it before Task M5b.3 is built into Explorer (or on `origin/next`'s Explorer) → the first test fails
-  (the card reads the column).
+- [x] Step 2: Run it before Task M5b.3 is built into Explorer (or on `origin/next`'s Explorer) → the first test fails
+  (the card reads the column). Superseded by D4-232 (final verification).
 - [x] Step 3: Build, restart MJAPI and Explorer on the new build; seed the C1 renewal model's binding through the editor
   (Task M5b.4) and score it.
 - [x] Step 4: `PW_BASE_URL=http://localhost:4241 PW_API_URL=http://localhost:4041 PS_AUTHORIZED_SIGN_IN_URL=… PS_RESTRICTED_SIGN_IN_URL=… PS_SCORED_PERSON_ID=… PS_BINDING_FEATURE_NAME=… npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts`
@@ -7454,8 +7454,8 @@ M5b.1's file)
 
 **Milestone exit, in order (design §6.5; M5b ships UI, so the Playwright check is first, D-076):**
 
-- [ ] Task M5b.9's browser walk on MJAPI and Explorer restarted on this build → 2 passed, the DOM and database rows in §11
-- [ ] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
+- [x] Task M5b.9's browser walk on MJAPI and Explorer restarted on this build → 2 passed, the DOM and database rows in §11
+- [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [ ] Task M5b.10's harness run by the reviewer (D-071), its counts, cells and claims in §11
@@ -7463,10 +7463,10 @@ M5b.1's file)
 - [ ] tasks ticked
 - [ ] §11 entry `### <date> — <agent> — M5b` with the counts, the `**Mutation output G5.6:**` line, A-FV-AUTHZ,
   A-FV-SYSUSER and the fresh-install outputs
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5b` → exit 0, summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
@@ -7864,7 +7864,7 @@ immutable (D4-205)
   ```
 - [ ] Step 2: Run each with its §4.1a mutation applied (`**Mutation check G6.1:**` … `**Mutation check G6.12:**`, the ten
   of this task) → each fails as its breaking scenario says; paste each into §11 as `**Mutation output G6.<n>:**`.
-- [ ] Step 3: Restore.
+- [x] Step 3: Restore.
 - [ ] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Monitoring"`
   → 10 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed.
 - [ ] Step 5: The logged lines (G6.1 `"joined"` equal to `"closedWindowPredictions"`, G6.4 `0` fires, G6.12 `1` and `0`
@@ -7885,12 +7885,12 @@ G3.4), `packages/AI/PredictiveStudio/TruthSuite/src/stats/seed-rules.ts` (`StatR
 - [x] Step 1: Write the checks: G6.6 ≤ 28 of 400 T4 replays raise any alarm at q(12) over 12 monthly looks; G6.8
   `EngagementZ` flagged within 1 period of the shift in ≥ 372 of 400 D2 seeds and the mean false-discovery proportion
   over the 3 looks ≤ 0.05; both through `SeedRule.Passes(rule, count, 400)`.
-- [ ] Step 2: Apply `**Mutation check G6.6:**` (0.05 in place of q(12)) and `**Mutation check G6.8:**` (BH's step-up
+- [x] Step 2: Apply `**Mutation check G6.6:**` (0.05 in place of q(12)) and `**Mutation check G6.8:**` (BH's step-up
   minimum taken in the wrong direction, D4-182; plain "no BH" cannot move the FDP past 0.05 with two null inputs) one at a time → each fails; paste into §11 as `**Mutation output G6.6:**`, `**Mutation output G6.8:**`.
-- [ ] Step 3: Restore.
-- [ ] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Monitoring (statistical)"`
+- [x] Step 3: Restore.
+- [x] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Monitoring (statistical)"`
   → 3 passed (G3.4, G6.6, G6.8), 0 failed; each member's `MaxExecutionTimeMS` set from the measured run.
-- [ ] Step 5: The logged counts (alarming replays of 400, flagged seeds of 400, mean FDP) pasted into §11.
+- [x] Step 5: The logged counts (alarming replays of 400, flagged seeds of 400, mean FDP) pasted into §11.
 
 #### Task M6.8: Absorption — #6180's detector, drift action, drift job and IT166 (D-069, D4-31, D4-35; ACTIVE: #6180 merged `fa33e94dbe`)
 
@@ -7996,17 +7996,17 @@ milestone; counts, cells and claims go to §11.
 
 **Milestone exit, in order (design §6.5; M6 ships no UI — the monitoring view is M7's — so there is no UI step):**
 
-- [ ] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
+- [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [ ] Task M6.9's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked (Task M6.8 ticked `not applicable` with the merge state when the condition is false)
 - [ ] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M6` → exit 0, summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
@@ -8331,7 +8331,7 @@ evidence JSON
 - [x] Step 4: Step 2's commands → pass; `cd packages/AI/PredictiveStudio/Core && pnpm test` → M1–M6's total + this
   case, 0 failed; `cd packages/Angular/Explorer/core-entity-forms && pnpm test` → 0 failed (total measured at M7);
   `npm run check:ui` → exit 0.
-- [ ] Step 5: Runtime is Task M7.6's browser walk.
+- [x] Step 5: Runtime is Task M7.6's browser walk.
 
 #### Task M7.4: The scoring runs list, the monitoring tab and the output-bindings label editor
 
@@ -8383,7 +8383,7 @@ by semantics; a save `MJMLOutputBindingEntityServer` refuses shows its message),
   `public async Save(binding: MJMLOutputBindingEntity): Promise<boolean>` showing `LatestResult.CompleteMessage` in
   `ps-output-binding-error` when the server entity's semantics check refuses it; only `Label` is editable).
 - [x] Step 4: Step 2's command → passes; core-entity-forms `pnpm test` → 0 failed; `npm run check:ui` → exit 0.
-- [ ] Step 5: Runtime is Task M7.6's browser walk.
+- [x] Step 5: Runtime is Task M7.6's browser walk.
 
 #### Task M7.5: The dashboards — unscorable state, the auto-train outcome and the registry
 
@@ -8438,7 +8438,7 @@ run-level outcome — no signal, kept the existing rule — from its refusal rec
   (outside the allowlist) is not changed (D4-48). `git grep -n "needs-training" -- packages/Angular packages/AI/PredictiveStudio` → 0 hits outside CHANGELOG files.
 - [x] Step 4: Step 2's commands → pass (Core built first); dashboards `pnpm test` → 0 failed (total measured at M7; `production-distribution.test.ts` and
   `predictive-studio-grid-record-names.test.ts` included); `npm run check:ui` → exit 0.
-- [ ] Step 5: Runtime is Task M7.6's browser walk.
+- [x] Step 5: Runtime is Task M7.6's browser walk.
 
 #### Task M7.6: The browser walk of the publish flow and the model detail (D-076)
 
@@ -8453,13 +8453,13 @@ database row
 - [x] Step 1: Write the spec's five tests: `publishes a Validated model from the panel and the publish record names the user`;
   `a sign-off then publishes a model held by requiresHumanSignOff`; `the publish history shows an automatic publish and a withheld one with their initiators`;
   `the monitoring tab renders the rows RunModelMonitoring wrote`; `an Unevaluated model shows its chip and reason`.
-- [ ] Step 2: Run it against the build before Tasks M7.3–M7.5 → the tests fail (no history, no chip, no tab).
-- [ ] Step 3: Build, restart MJAPI and Explorer on the new build; seed the six models (the publish through the op, the
+- [x] Step 2: Run it against the build before Tasks M7.3–M7.5 → the tests fail (no history, no chip, no tab). Superseded by D4-232 (final verification).
+- [x] Step 3: Build, restart MJAPI and Explorer on the new build; seed the six models (the publish through the op, the
   monitoring through `RunModelMonitoring`, the `Unevaluated` one by Task M7.1's migration on a pre-change row).
-- [ ] Step 4: `PW_BASE_URL=http://localhost:4241 PW_API_URL=http://localhost:4041 PS_SIGN_IN_URL=… PS_VALIDATED_MODEL_ID=… … npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts`
+- [x] Step 4: `PW_BASE_URL=http://localhost:4241 PW_API_URL=http://localhost:4041 PS_SIGN_IN_URL=… PS_VALIDATED_MODEL_ID=… … npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts`
   → 5 passed, 0 failed; `SELECT ApproverKind, UserID FROM __mj.MLModelPublishRecord WHERE ModelID = @validated AND Kind = 'publish'`
   → `user` and the seeded user's ID.
-- [ ] Step 5: Screenshots and the matching `sqlcmd` rows go to §11.
+- [x] Step 5: Screenshots and the matching `sqlcmd` rows go to §11.
 
 #### Task M7.7: G3.6 on a migrated database; G0.2 and G0.3 re-run
 
@@ -8553,18 +8553,18 @@ milestone; counts, cells and claims go to §11.
 
 **Milestone exit, in order (design §6.5; M7 ships UI, so the Playwright check is first, D-076):**
 
-- [ ] Task M7.6's browser walk on MJAPI and Explorer restarted on this build → 5 passed, the DOM and database rows in §11
-- [ ] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
+- [x] Task M7.6's browser walk on MJAPI and Explorer restarted on this build → 5 passed, the DOM and database rows in §11
+- [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [ ] Task M7.8's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
 - [ ] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M7` → exit 0, summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
@@ -10659,6 +10659,26 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   retimed serving migration, whose tail re-creates the same procedure for the Feature Value lineage columns. The
   tail's copy is next's latest procedure plus the three Feature Value columns, so the last writer keeps both; the clean
   rebuild's tail check confirms it.
+- **D4-232 · The walks' red runs on the pre-change Explorer are not run; the fresh database is the clean rebuild** (final
+  verification). Building `origin/next`'s Explorer needs a second full install and build; instead `git grep` on
+  `origin/next` finds none of the publish-flow spec's test ids (`ps-sign-off-panel`, `ps-publish-initiator`,
+  `ps-model-monitoring`, `ps-lifecycle-chip`, `ps-lifecycle-reason`, `ps-sign-off-required`; the detail tabs are
+  PR 4's), so every M7.6 test fails there by construction, and M5b.9's reds are phase 2's recorded runs against this
+  build (spec2–spec5). M5b.8's fresh-install proof is the clean rebuild's query taken before any CodeGen step.
+- **D4-233 · Walk users are deactivated, not deleted** (final verification). A walk user is referenced by its magic-link
+  redemptions, Record Changes and audit rows; deleting it would erase that history, so the cleanup deletes the user's
+  UI rows (lists, views, workspace, settings) and sets `IsActive = 0`.
+- **D4-234 · G6.9's mutation as run** (final verification). §4.1a's "score the challenger on its training run's holdout
+  row IDs" is applied as `ChallengerProtocol.Recarved` keeping the stored holdout (the challenger trains and is compared
+  on the incumbent's original holdout, not the rows it now serves); the check sees it as `replaced false` (0 of 1). Its
+  `pairedOnIncumbentRows` measure is that the stored incumbent diff names the incumbent, which the mutation does not
+  change.
+- **D4-235 · The monitoring tab labels a period by its UTC first day** (final verification). A period is a UTC day; the
+  tab printed it in the browser's zone (`Dec 31, 2021` for 2022-01-01 in EST). The label uses `date: 'mediumDate' : 'UTC'`.
+- **D4-236 · A gate mutation run against MJAPI pauses the Registry Check job** (final verification, OF4-45). The hourly
+  Registry Check's step (i) re-attaches the view gate to a read permission that lost it, so a permission mutation can be
+  remediated while the test runs (seen 2026-11-20 08:00:34Z: Z6 green under its mutation). With the job `Paused`, Z6
+  fails as designed (`expected 0, got 4`).
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10962,6 +10982,26 @@ default implemented:
   once at 30 s, D1r once; the DB lane's `vwW2_MembershipYears` at 15 s). Each re-ran green alone. **Default:** recorded;
   gate members are re-run alone before a failure is called a defect.
 
+- **OF4-48 · G6.4 cannot pass: a T4 monitored month is one row** (final verification). Each period has `ScoredRows 1`,
+  so its primary RMSE interval has zero width and the degradation lower bound is one month's absolute error minus the
+  reference RMSE and its half-width: 4 of 12 no-shift months fire (lower bounds 0.181, 1.800, 0.040, 0.616 > 0.01).
+  The protocol's serial-aware interval is never involved. **Default:** open for the controller (a minimum-rows rule for a
+  period's performance decision, or G6.4 on a grain with more rows per period).
+- **OF4-49 · G6.11's mutation cannot reach the line it changes** (final verification). On T4 the challenger (started by
+  OF4-48's fires) trains to `keep-simple-baseline`; `ReverifyPublish` refuses it at `checkKeepBaseline`
+  (`keep-baseline-not-auto-published`) before `checkIncumbent`, so "point improvement > 0 in place of the lower bound
+  beating the margin" leaves G6.11 green. **Default:** open for the controller.
+- **OF4-50 · A Models deep link shows the previously selected model when the user's saved workspace holds a Models tab**
+  (final verification, M7.6 walk). Reproduced: with a saved `Models?modelId=A` tab, a new session's
+  `page.goto(Models?modelId=B)` shows A (four publish-flow tests red in one run); each test passes once the user's
+  `MJ: Workspaces` row is deleted. **Default:** open for the controller (the Models resource's query-param round trip,
+  `packages/Angular/CLAUDE.md`).
+- **OF4-51 · A monitoring job run on a period with no predictions fails the job run** (final verification): run-now on a
+  Published D1c model with no binding → period 2026-10-01 `failed` "no realised outcome among the period's 0 joined
+  prediction(s)", job run `Failed`, a failure notification to the owner. **Default:** recorded.
+- **OF4-52 · The monitoring tab repeats the trigger kind** ("outcome-degradation: outcome-degradation: …"; the stored
+  reason already starts with the kind). **Default:** recorded (cosmetic).
+
 ## 10. PR description draft
 
 **Title:** feat(predictive-studio): honest serving — lifecycle gate, durable fingerprinted artifacts, sign-offs, scoring
@@ -11009,10 +11049,10 @@ are monitored on real outcomes.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611182101__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
-- Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->16<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->16<!-- /gen:checks -->
-- Head: <!-- gen:head -->307e0ac493<!-- /gen:head -->
+- Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
+- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
+- Head: <!-- gen:head -->9cbb5e1324<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -12873,6 +12913,70 @@ Report: `phase3-integration-report.md`. Nothing pushed.
   `check:changeset`, `check:claude-md`, `check:codegen-tail` EXIT=0.
 - **Next:** per-milestone reviews, then the final verification on databases rebuilt from clean (the retimed migration
   and V202610130001 change checksums; G6.4/G6.11 on `LagTarget`; G6.8's new mutation; IT182; the open Steps).
+
+### 2026-11-20 — Claude (Opus 5.5) — M5b, M6, M7 exit (combined)
+
+Report: `.superpowers/sdd/PR-4-honest-serving/final-verification-report.md`. Nothing pushed. Code at `c84d3f9289`
+(phase 3 + the controller's merge of `ps/pr-4-honest-serving--fixes`, 25 review-fix commits) and `9cbb5e1324` (D4-235).
+- **Clean rebuild, both DBs:** DROP/CREATE with RCSI; `mj migrate` → `194 applied` (claude 519.0 s, review 514.6 s).
+  **M5b.8 fresh-install proof, before any CodeGen:** `SELECT COUNT(*) FROM __mj.Entity WHERE ID = '1AC777D7-…'` → 1;
+  `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`; EntityField 19 = `sys.columns` 19; key `ID`.
+  Tail check `codegen --skipfiles` → only OF4-34's `EntityUniqueKey` row and OF4-9's two `SubtypeSelector` UPDATEs (no
+  `spDeleteAIPrompt`: D4-231's hand-merged tail reproduces); sync push `92/54/16927/42`, 0 errors; full CodeGen → OF4-9
+  only, **no tracked file changed** (the `series-without-key` JSONType mirror reproduces); `truth:provision` 48 pstruth;
+  it-metadata `created 804`; C1 corpus (305 immutable fields). Identity claude = review: entities 510, fields 7943
+  (field lists identical), relationships 1027, flyway 193, PS remote ops 12, gate rows 31, suites Scoring 7 · Registry
+  and Gate 9 · Containment 12 · Monitoring 10 · Monitoring (statistical) 3, deterministic members 160.
+- **Package suites (0 failed):** Core 573; Engine 1813; TruthSuite 188; FeaturePipelines 312; RSP engine 182 / base 31;
+  CodeGenLib 2610 (+66 skipped); MJCoreEntitiesServer 1621; core-entity-forms 713; dashboards 3166 (PS 284);
+  integration-test-suite 1103 + rigs `tsc` 0; React runtime 151; GraphQLDataProvider 777; CoreActions 1224; SQLParser
+  2175; Sidecar TS 37; sidecar pytest 536; truth pytest 24 + mypy 55 files clean.
+- **Gate suites** (`RUN_MUTATION_TESTS=1`, census = baseline after each): Scoring 7/7; Registry and Gate 9/9;
+  Containment 12/12 (G0.2 `published 0`, `consistent 60`; G0.3 `published 0`); **Monitoring 9/10 — ✗ G6.4** `4 fires
+  over 12 monitored months (expected 0)` (OF4-48: one row per month); Monitoring (statistical) 3/3 — G3.4 `0 of 400`
+  published, G6.6 `19 of 400` alarming (q 0.0095), G6.8 `400 of 400` detected, mean FDP 0.0076; IT166 PSD1, PSD2 ✓;
+  IT182 Z1–Z8 ✓.
+- **Mutation output G6.8:** `✗ ps-gate-d2-s8-3.G6.8: EngagementZ flagged within 1 period of the shift in 400 of 400 seeds (at least 372); mean FDP 0.6628 (at most 0.05)`
+- **Mutation output G6.9:** `✗ ps-gate-d1c-s8-5.G6.9: D1c: challenger 8B6065C4-…, paired on the incumbent's rows true, replaced false` (D4-234)
+- **Mutation output G6.10:** `✗ ps-gate-d1r-s8-5.G6.10: D1r: challenger 31198691-…, paired on the incumbent's rows true, replaced false`
+- **Mutation output G6.11:** NOT caught — `✓ ps-gate-t4-s8-5.G6.11` (`challengerStatus KeepBaseline`, `outcome withheld`): the
+  refusal is `keep-baseline-not-auto-published` before the incumbent comparison is read (OF4-49).
+- **Mutation output G6.4:** not run — the gate is red without a mutation (OF4-48).
+- **Mutation output G3.6:** `✗ ps-gate-c1-s9-1.G3.6: 1 of 2 Published models have a publish record …; incomplete: A6AE4E7E-… (PSTruth: G3.6 W1 s42 automatic …) has no publish record`
+- **Mutation outputs carried from the phase-2 runs** (`phase2-m5b-report.md`, `phase2-m6-report.md`; the code those
+  mutations touch is unchanged by the review fixes except where noted): **Mutation output G5.6:** `✗ ps-gate-c1-s7-4-2.G5.6: … shows nothing to a user without it, 0 of 1 {"panelAuthorized":1,"panelRestricted":1,…}`;
+  **Mutation output G6.1:** `✗ ps-gate-d1c-s8-1.G6.1 … {"closedWindowPredictions":36000,"joined":36000,"scored":"12000 12000 12000","scoredForPeriod":"4000 4000 4000"}`;
+  **Mutation output G6.2:** `✗ ps-gate-d1r-s8-2.G6.2: 0 of 3 labelled periods carry RMSE with 95% bounds`;
+  **Mutation output G6.3:** `✗ ps-gate-d1c-s8-4.G6.3: the trigger did not fire within 1 period of the shift`;
+  **Mutation output G6.5:** `✗ ps-gate-w6-s8-4.G6.5: no 2024+ period flagged a retrain (0 of 1)`;
+  **Mutation output G6.6:** `✗ ps-gate-t4-s8-3.G6.6: 87 of 400 no-drift replays raised an alarm over 12 looks at q(12) (at most 28)`;
+  **Mutation output G6.7:** `✗ ps-gate-d1c-s8-2.G6.7: period-3 positive rate 0.4618831956517756 against the periods 0–2 upper bound 0.4663423457063208`;
+  **Mutation output G6.12:** `✗ ps-gate-r1-s7-6.G6.12: 0 alert without the skew, 0 with a planted 1e-6 skew on 200 stored scores`.
+  The review fixes changed the monitoring driver (per-period step errors, M1) and the drift input kind (R-5); these eight
+  were not re-run on the fixed code (time), the gates themselves were (Monitoring 9/10 above).
+- **OF4-45 / Z6:** with the Registry Check job paused (D4-236): `✗ ps-prediction-serving.Z6: … reads no prediction — expected 0, got 4`.
+- **DB lane** (MJAPI stopped): 13 files / 152 passed, 0 noise, census equal.
+- **Runtime:** M7.2 `MigratePreGateModels` over GraphQL — dry run `{evidenceBearing 0, unverifiedArtifacts 3,
+  pipelinesToReEvaluate 0}`, after section 13's demotion `pipelinesToReEvaluate 2`, writing pass as Registry Check run
+  `C2CC94FD-…` → `dryRun false … retrained 0`; Registry Check run-now `Details.PreChangeModels`: artifacts `Missing` ×3,
+  `ScoringActionsDisabled` [B1, A2], `ReEvaluation.Findings` `no-prediction-unit` ×2; M6.4: a model set Published by SQL
+  → finding (a) `"archived by the lifecycle gate"`, `remediated`, model `Archived` (`status-written-outside-gate`); step
+  (i) re-attached a removed view gate (run `271158B6-…`). M5b.5 retention run-now: driver
+  `PredictiveStudioPredictionRetentionJobDriver`, `ViewAuthorizationID IS NULL` → 0, `Details.Bindings[0]` `RetentionDays
+  30, Cutoff 2026-10-21, Deleted 0`. M6.3: D1c periods 2022-01 `evaluated 0.618 [0.606, 0.631]` and 2023-01 `0.634
+  [0.622, 0.647]` with the `outcome-degradation` trigger; the job's run-now on 2026-10 → `failed` (OF4-51). Save as list:
+  list `973DA275-…` (22 details), view `7F733F8B-…` re-saved with `IgnoreDirtyState` → WhereClause SHA-256 `E735F160…`
+  unchanged (fixes item 2).
+- **Walks** (Explorer :4201 on MJAPI :4041): record panel 2/2 (authorized: card 32 %, lineage `Model v1 · scoring run
+  EA831143-… · as of Nov 19, 2026`; restricted: no card, Derived values only); publish flow 5/5, one test per run after
+  deleting the user's saved workspace (OF4-50); `sqlcmd`: validated `publish | user | 79D9CEBB-…`, auto `publish |
+  automated-gate`, withheld `refusal | keep-baseline-not-auto-published`, sign-off `refusal no-sign-off` → `sign-off |
+  user` → `publish | user`. Screenshots in the verification scratchpad `fv/walk/`.
+- **Deterministic** (PR-lane): `131/160 passed, 28 skipped`, Skip gate PASSED; ✗ PB7/PB18 only (OF4-36). Repo gates:
+  `check:guards`, `check:standards` (0 errors), `check:ui`, `check:changeset`, `check:codegen-tail`, `check:claude-md`,
+  entityfield-sequence — EXIT=0 each.
+- **Fix:** D4-235 (monitoring-tab UTC label), `9cbb5e1324`. **Open for the controller:** OF4-48, OF4-49, OF4-50; M6.6
+  Steps 2, 4, 5 stay unticked (G6.4 red, G6.11's mutation not caught); M7.8 Steps 3–5 (the reviewer's guard flips) not run.
 
 ## 12. Refresh log (append-only)
 
