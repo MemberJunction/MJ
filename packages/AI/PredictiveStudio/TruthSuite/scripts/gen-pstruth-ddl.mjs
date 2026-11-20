@@ -2,7 +2,8 @@
 // gen-pstruth-ddl.mjs — the hand-written DDL of migrations/V202610130001__pstruth_tables.sql (print; never edit by hand).
 // Column typing follows the review loader's rules (load_scenarios.py:10-20): ID UNIQUEIDENTIFIER PK, EntityKey
 // NVARCHAR(50), T DATE NULL, Target FLOAT; normal → FLOAT, int/bernoulli → INT; stateFeature → INT; target-proxy and
-// time-shifted-label traps → INT, high-cardinality-id → NVARCHAR(100); a series LagTarget/SamePeriodTarget → FLOAT.
+// time-shifted-label traps → INT, high-cardinality-id → NVARCHAR(100); a series LagTarget/SamePeriodTarget → FLOAT (T4's
+// LagTarget alone, D4-181).
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,7 @@ function scenarioColumns(id) {
     cols.push([s.seriesLeak.lagColumn, 'FLOAT']);
     if (id !== 'T3lag') cols.push([s.seriesLeak.sameColumn, 'FLOAT']);
   }
+  if (s.seriesLag) cols.push([s.seriesLag.lagColumn, 'FLOAT']);
   if (s.traps) {
     cols.push([s.traps.proxy.column, 'INT'], [s.traps.nextPeriod.column, 'INT'], [s.traps.highCardId.column, 'NVARCHAR(100)']);
   }

@@ -69,7 +69,9 @@ export type AssemblyRefusal =
   | { readonly kind: 'incumbent-score-missing'; readonly entity: string; readonly rows: number; readonly firstRowIds: readonly string[] }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
-  | { readonly kind: 'invalid-date-in-history'; readonly entity: string; readonly field: string; readonly value: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'invalid-date-in-history'; readonly entity: string; readonly field: string; readonly value: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A Temporal Spec lag or rolling window asked of a unit whose rows carry no series key (each `grain` row is its own entity), so every series would hold one point and the feature would be empty on every row (D4-181). */
+  | { readonly kind: 'series-without-key'; readonly entity: string; readonly feature: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
 
 /** Why a scoring call wrote nothing, decided before any assembly. */
 export type ScoringRefusal =

@@ -95,6 +95,11 @@ export interface ScenarioTraps {
   highCardId: { column: string };  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
 }
 
+/** T4's legitimate lag column alone (D4-181): the previous period's Target, empty in period 0. */
+export interface ScenarioSeriesLag {
+  lagColumn: string;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
+}
+
 /** T3's lag (legitimate) and same-period (leak) columns. */
 export interface ScenarioSeriesLeak {
   lagColumn: string;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
@@ -152,6 +157,7 @@ export interface ScenarioSpec {
   zeroBetas?: Record<string, number>;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   logSd?: number;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   seriesLeak?: ScenarioSeriesLeak;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
+  seriesLag?: ScenarioSeriesLag;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
 }
 
 /** The spec keys a scenario manifest copies into `planted` when the spec sets them. */

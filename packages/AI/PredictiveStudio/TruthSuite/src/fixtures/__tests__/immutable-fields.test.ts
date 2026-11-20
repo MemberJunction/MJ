@@ -46,6 +46,6 @@ describe('TRUTH_IMMUTABLE_FIELDS scenario tables', () => {
   it('declares every Scn_D1c, Scn_D1r, Scn_D2 and Scn_T4 column except the key (the monitoring gates train on them as of T, M6.6)', () => {
     const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
     for (const table of ['Scn_D1c', 'Scn_D1r', 'Scn_D2']) expect(fieldsOf(table)).toEqual(['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore']);
-    expect(fieldsOf('Scn_T4')).toEqual(['EntityKey', 'T', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T4')).toEqual(['EntityKey', 'T', 'LagTarget', 'Target', 'TruthScore']);
   });
 });

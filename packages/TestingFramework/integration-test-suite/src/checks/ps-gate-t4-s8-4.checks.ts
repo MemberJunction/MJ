@@ -1,7 +1,8 @@
 /**
  * Gate G6.4 "T4 → S8.4": T4's trigger fires 0 times. A model trained on the first 228 months of the no-shift AR(1)
- * series (φ 0.9) is monitored over the 12 months after them; the protocol's serially aware interval keeps the reference
- * band honest, so no period's degradation lower bound clears the margin.
+ * series (φ 0.9), on its one feature `LagTarget` (the previous month's value, D4-181), is monitored over the 12 months
+ * after them; the protocol's serially aware interval keeps the reference band honest, so no period's degradation lower
+ * bound clears the margin.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import type { TaskType } from '@memberjunction/predictive-studio-core';

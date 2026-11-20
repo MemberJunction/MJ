@@ -1,6 +1,7 @@
 /**
  * Gate G6.11 "T4 → S8.5": on the no-shift series no challenger replaces the incumbent (0 of 1): a point improvement
- * without the paired lower bound beating the margin never publishes.
+ * without the paired lower bound beating the margin never publishes. The model trains on `LagTarget`, the previous
+ * month's value (D4-181).
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import type { TaskType } from '@memberjunction/predictive-studio-core';
