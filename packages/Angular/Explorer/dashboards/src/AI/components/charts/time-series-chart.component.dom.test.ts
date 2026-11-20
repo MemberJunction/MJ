@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as d3 from 'd3';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { TimeSeriesChartComponent } from './time-series-chart.component';
@@ -68,5 +69,34 @@ describe('TimeSeriesChartComponent (DOM)', () => {
     (queryAll(fixture, '.legend-item')[0] as HTMLElement).click();
     fixture.detectChanges(false);
     expect(query(fixture, '.legend-item.legend-item--disabled')).not.toBeNull();
+  });
+
+  it('labels the left axis in seconds, not dollars, when Cost is hidden', () => {
+    const fixture = render({ data: [trend({ cost: 0.4, avgTime: 12_000 })] });
+    const chart = fixture.componentInstance as unknown as {
+      createMetricScales(): Record<string, d3.ScaleLinear<number, number>>;
+      drawAxes(g: d3.Selection<SVGGElement, unknown, null, undefined>, x: d3.ScaleTime<number, number>, scales: Record<string, d3.ScaleLinear<number, number>>): void;
+      ToggleMetric(metric: string): void;
+    };
+    const leftTicks = (): string[] => {
+      const g = d3.select(document.createElementNS('http://www.w3.org/2000/svg', 'g'));
+      chart.drawAxes(g, d3.scaleTime().domain([new Date(0), new Date(1)]), chart.createMetricScales());
+      return g.selectAll<SVGTextElement, unknown>('.axis-y-left .tick text').nodes().map(n => n.textContent ?? '');
+    };
+    const leftTitle = (): string => {
+      const g = d3.select(document.createElementNS('http://www.w3.org/2000/svg', 'g'));
+      chart.drawAxes(g, d3.scaleTime().domain([new Date(0), new Date(1)]), chart.createMetricScales());
+      return g.select('.axis-label-left').text();
+    };
+
+    chart.ToggleMetric('cost');
+    const ticks = leftTicks();
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks.every(t => t.endsWith('s') && !t.includes('$'))).toBe(true);
+    expect(leftTitle()).toBe('Avg Time (s)');
+  });
+
+  it('labels the Avg Time legend in seconds, the unit the axis plots', () => {
+    expect(render({}).componentInstance.GetMetricLabel('avgTime')).toBe('Avg Time (s)');
   });
 });

@@ -50,10 +50,12 @@ import {
   MJ_CHROME_SELECTORS,
   ParseOverridesJson,
   PickWorstOnPrimary,
+  PriorOverlayForPreview,
   THEME_RECIPES,
   ThemeRecipe,
   TOKEN_CATEGORIES,
   TOKEN_PREVIEW_TARGETS,
+  WORKSPACE_PREVIEW_ID,
 } from './theme-studio.constants';
 import { BuildThemeStudioAgentContext, ResolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
 
@@ -100,8 +102,6 @@ const PREVIEW_MIN_WIDTH = 640;
 const PANEL_MAX_FRACTION = 0.55;
 /** User-settings key for a manually-dragged panel width. */
 const PANEL_WIDTH_KEY = 'mj.themeStudio.panelWidth.v1';
-/** Brand-overlay id used for the temporary "Preview on my workspace" application. */
-const WORKSPACE_PREVIEW_ID = 'theme-studio-draft-preview';
 
 @RegisterClass(BaseDashboard, 'ThemeStudioDashboard')
 @Component({
@@ -1896,7 +1896,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       await this.endWorkspacePreview();
       return;
     }
-    this.priorOverlayId = this.themeService.BrandOverlayId;
+    this.priorOverlayId = PriorOverlayForPreview(this.themeService.BrandOverlayId, this.priorOverlayId);
     this.registerDraftPreview();
     await this.themeService.ApplyBrandOverlay(WORKSPACE_PREVIEW_ID, { persist: false });
     this.WorkspacePreviewOn = true;

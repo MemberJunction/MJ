@@ -125,6 +125,7 @@ function stubDashboardEngine(library: CategoryLibrary) {
 function fakeNavigation() {
   return {
     QueryParamChanged$: new Subject<never>(),
+    ResourceReattached$: new Subject<never>(),
     ObserveTabQueryParams: () => of({}),
     UpdateTabQueryParams: vi.fn(),
     SwitchToApp: vi.fn(async (_appId: string, _navItemName?: string, _queryParams?: Record<string, string | null>) => undefined),

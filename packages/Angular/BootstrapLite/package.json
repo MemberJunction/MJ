@@ -57,6 +57,7 @@
     "@memberjunction/ng-shared": "6.3.0-edge.1",
     "@memberjunction/ng-shared-generic": "6.3.0-edge.1",
     "@memberjunction/rubrics-base": "6.3.0-edge.1",
+    "@memberjunction/tag-engine-base": "6.3.0-edge.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

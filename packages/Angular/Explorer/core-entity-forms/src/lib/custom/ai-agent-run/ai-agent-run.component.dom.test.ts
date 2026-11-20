@@ -5,6 +5,8 @@ import { EntityInfo } from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJTabNavComponent } from '@memberjunction/ng-ui-components';
+import { QueryAll } from '@memberjunction/ng-test-utils';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 import { MJAIAgentRunFormComponentExtended } from './ai-agent-run.component';
 
@@ -80,5 +82,67 @@ describe('MJAIAgentRunFormComponentExtended Result panel', () => {
         const second = form.FinalPayloadObject;
         expect(first).toEqual({ answer: 42 });
         expect(first).toBe(second);
+    });
+});
+
+describe('MJAIAgentRunFormComponentExtended tab bar', () => {
+    const PROVIDERS = [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => undefined, detectChanges: () => undefined } },
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
+        { provide: NavigationService, useValue: {} },
+        { provide: ApplicationManager, useValue: {} },
+        { provide: AIAgentRunCostService, useValue: {} },
+    ];
+
+    /** Renders `mj-tab-nav` with the form's tabs, wired to `ChangeTab` as the form's template wires it. */
+    function renderTabs(form: MJAIAgentRunFormComponentExtended) {
+        const fixture = TestBed.createComponent(MJTabNavComponent);
+        fixture.componentRef.setInput('Tabs', form.Tabs);
+        fixture.componentRef.setInput('ActiveKey', form.ActiveTab);
+        fixture.componentInstance.TabChange.subscribe((key: string) => {
+            form.ChangeTab(key);
+            fixture.componentRef.setInput('ActiveKey', form.ActiveTab);
+        });
+        fixture.detectChanges(false);
+        return fixture;
+    }
+
+    function clickTab(fixture: ReturnType<typeof renderTabs>, label: string): void {
+        const button = QueryAll(fixture, 'button.mj-tab-nav-btn').find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+        button.click();
+        fixture.detectChanges(false);
+    }
+
+    beforeEach(() => {
+        TestBed.configureTestingModule({ imports: [MJTabNavComponent], providers: PROVIDERS });
+    });
+
+    it('offers Timeline, Visualization, Analytics and Details, with Timeline active', () => {
+        const form = makeForm({});
+        const fixture = renderTabs(form);
+        const buttons = QueryAll(fixture, 'button.mj-tab-nav-btn');
+        expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Timeline', 'Visualization', 'Analytics', 'Details']);
+        expect(buttons[0].getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('sets the lazy-load flags on the first visit to Visualization and Analytics', () => {
+        const form = makeForm({});
+        const fixture = renderTabs(form);
+        expect(form.VisualizationLoaded).toBe(false);
+        expect(form.AnalyticsLoaded).toBe(false);
+
+        clickTab(fixture, 'Visualization');
+        expect(form.ActiveTab).toBe('visualization');
+        expect(form.VisualizationLoaded).toBe(true);
+        expect(form.AnalyticsLoaded).toBe(false);
+
+        clickTab(fixture, 'Analytics');
+        expect(form.ActiveTab).toBe('analytics');
+        expect(form.AnalyticsLoaded).toBe(true);
+
+        clickTab(fixture, 'Details');
+        clickTab(fixture, 'Visualization');
+        expect(form.VisualizationLoaded).toBe(true);
+        expect(QueryAll(fixture, 'button.mj-tab-nav-btn')[1].getAttribute('aria-selected')).toBe('true');
     });
 });

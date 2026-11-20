@@ -412,6 +412,16 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.FormContext?.collapsibleSections !== false;
   }
 
+  /**
+   * True when an inclusion of `None` (Form Chrome Rules) removed this section from the form. The
+   * body is then not rendered at all, so what the panel creates in its own template (the field
+   * panel slots and the contributions they mount) is never instantiated. False while the rules
+   * are pending: `IsSectionExpanded` already holds lazily loaded sections closed until then.
+   */
+  get SuppressedByChrome(): boolean {
+    return this.chrome?.IsSuppressed(this.SectionKey) === true;
+  }
+
   /** Whether the panel is expanded (delegates to form state; always true when not collapsible) */
   get Expanded(): boolean {
     if (!this.Collapsible) return true;

@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, In
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
-import type { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import type { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { TagScopeFilterBuilder, type TagScopeContext } from '@memberjunction/tag-engine-base';
 
 /**
  * Compact tag chips for a single record (mockup 22). Loads tags by
@@ -10,6 +11,12 @@ import type { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entit
  * resolves names from `MJ: Tags` in a single batch. Render-only by
  * default; pass `Editable=true` to surface an inline add field and
  * per-chip remove buttons.
+ *
+ * Tag scope: suggestions only ever offer `Status='Active'` tags. Without a
+ * `ScopeContext` they come from the whole instance. With one, they are
+ * limited to global tags plus tags scoped to the context's records, and a
+ * tag created inline is saved non-global with one `MJ: Tag Scopes` row per
+ * scope entry. Set `AllowCreate=false` when tags are curated elsewhere.
  *
  * Intentionally lightweight — not a tag manager. For richer tag tooling
  * (cloud view, related records, etc.) use `mj-record-tags` from
@@ -23,6 +30,18 @@ interface DisplayTag {
   TagID: string;
   /** Tag display name. */
   Name: string;
+}
+
+/** A tag offered in the add field's suggestion list. */
+export interface TagSuggestion {
+  ID: string;
+  Name: string;
+}
+
+/** A scope entry resolved to the IDs written on a `MJ: Tag Scopes` row. */
+interface ResolvedScope {
+  ScopeEntityID: string;
+  ScopeRecordID: string;
 }
 
 @Component({
@@ -64,6 +83,34 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   /** When true, shows add input + remove buttons on chips. */
   @Input() Editable = false;
 
+  /**
+   * Limits suggestions to global tags plus tags scoped to these records, and
+   * scopes tags created inline to them. Null (the default) means instance-wide:
+   * every active tag is suggested and new tags are global.
+   */
+  @Input()
+  set ScopeContext(value: TagScopeContext | null) {
+    if (this._scopeContext !== value) {
+      this._scopeContext = value;
+      this.clearSuggestions();
+    }
+  }
+  get ScopeContext(): TagScopeContext | null {
+    return this._scopeContext;
+  }
+  private _scopeContext: TagScopeContext | null = null;
+
+  /** When false, the add field only applies existing tags and never offers to create one. */
+  @Input()
+  set AllowCreate(value: boolean) {
+    this._allowCreate = value;
+    if (!value) this.CanCreateNew = false;
+  }
+  get AllowCreate(): boolean {
+    return this._allowCreate;
+  }
+  private _allowCreate = true;
+
   /** Cap visible chips and surface "+N more". Defaults to 6 for cards. */
   @Input() MaxDisplay = 6;
 
@@ -94,14 +141,14 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   public set addInput(value) {
     this.AddInput = value;
   }
-  public Suggestions: MJTagEntity[] = [];
+  public Suggestions: TagSuggestion[] = [];
 
   /** @deprecated Use {@link Suggestions}. */
-  public get suggestions(): MJTagEntity[] {
+  public get suggestions(): TagSuggestion[] {
     return this.Suggestions;
   }
   /** @deprecated Use {@link Suggestions}. */
-  public set suggestions(value: MJTagEntity[]) {
+  public set suggestions(value: TagSuggestion[]) {
     this.Suggestions = value;
   }
   public ShowSuggestions = false;
@@ -180,30 +227,33 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
     this.AddInput = value;
     const term = value.trim();
     if (term.length < 1) {
-      this.Suggestions = [];
-      this.CanCreateNew = false;
-      this.ShowSuggestions = false;
+      this.clearSuggestions();
       this.cdr.markForCheck();
       return;
     }
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const escaped = term.replace(/'/g, "''");
-      const result = await rv.RunView<MJTagEntity>({
+      // Active tags only, limited to the scope context when one is set.
+      const visibility = TagScopeFilterBuilder.Instance.BuildVisibilityFilter(this._scopeContext, this.ProviderToUse);
+      const result = await rv.RunView<TagSuggestion>({
         EntityName: 'MJ: Tags',
-        ExtraFilter: `Name LIKE '%${escaped}%'`,
+        ExtraFilter: `(${visibility}) AND Name LIKE '%${escaped}%'`,
+        Fields: ['ID', 'Name'],
         OrderBy: 'Name',
         MaxRows: 8,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
       });
-      const alreadyApplied = new Set(this.tags.map((t) => t.TagID));
-      this.Suggestions = (result.Results ?? []).filter((t) => !alreadyApplied.has(t.ID));
+      const alreadyApplied = new Set(this.tags.map((t) => t.TagID.toLowerCase()));
+      this.Suggestions = (result.Results ?? [])
+        .map((t) => ({ ID: String(t.ID), Name: String(t.Name) }))
+        .filter((t) => !alreadyApplied.has(t.ID.toLowerCase()));
       // Offer "Create '<term>'" when the typed text doesn't exactly
       // match any existing tag (case-insensitive). Without this, typing
       // a brand-new tag name and hitting Enter does nothing — there's
       // no suggestion to click.
       const lowerTerm = term.toLowerCase();
-      this.CanCreateNew = !this.Suggestions.some(
+      this.CanCreateNew = this._allowCreate && !this.Suggestions.some(
         (s) => s.Name.toLowerCase() === lowerTerm,
       );
       this.ShowSuggestions = true;
@@ -230,12 +280,12 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
       await this.OnAddTag(this.Suggestions[0]);
       return;
     }
-    if (this.CanCreateNew) {
+    if (this.CanCreateNew && this._allowCreate) {
       await this.createAndAddTag(term);
     }
   }
 
-  public async OnAddTag(tag: MJTagEntity): Promise<void> {
+  public async OnAddTag(tag: TagSuggestion): Promise<void> {
     if (!this._entityName || !this._recordId) return;
     await this.applyTagToRecord(tag.ID, tag.Name);
   }
@@ -243,14 +293,17 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   /** Click handler for the "Create '<term>'" affordance. Creates the
    *  `MJ: Tags` row then attaches it via the standard apply path. */
   public async OnCreateNew(): Promise<void> {
+    if (!this._allowCreate) return;
     const term = this.AddInput.trim();
     if (term.length === 0) return;
     await this.createAndAddTag(term);
   }
 
   private async createAndAddTag(name: string): Promise<void> {
-    if (!this._entityName || !this._recordId) return;
+    if (!this._allowCreate || !this._entityName || !this._recordId) return;
     try {
+      const scopes = this.scopesForNewTag();
+      if (scopes == null) return;
       const md = this.metadata();
       const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', this.ProviderToUse.CurrentUser ?? undefined);
       tag.NewRecord();
@@ -259,15 +312,62 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
       // Default DisplayName to the same text the user typed — they can
       // refine it later via the Tags entity editor if needed.
       tag.DisplayName = name;
+      // A scoped tag is saved non-global before its scope rows exist, so a
+      // failed scope write leaves a tag no other tenant can see.
+      if (scopes.length > 0) tag.IsGlobal = false;
       const ok = await tag.Save();
       if (!ok) {
         LogError(`tag-chips: create-tag save failed: ${tag.LatestResult?.CompleteMessage ?? 'unknown'}`);
         return;
       }
+      if (!(await this.saveTagScopes(tag.ID, scopes))) return;
       await this.applyTagToRecord(tag.ID, tag.Name);
     } catch (e) {
       LogError(`tag-chips: create-and-add failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  /**
+   * The scope rows a newly created tag gets: none when there is no scope
+   * context (or it is `globalOnly`), otherwise one per entry. Returns null
+   * when an entry's entity cannot be resolved, so no half-scoped tag is made.
+   */
+  private scopesForNewTag(): ResolvedScope[] | null {
+    const ctx = this._scopeContext;
+    if (!ctx || ctx.globalOnly || ctx.scopes.length === 0) return [];
+    const resolved: ResolvedScope[] = [];
+    for (const entry of ctx.scopes) {
+      const entityId = entry.entityId ?? (entry.entityName ? this.ProviderToUse.EntityByName(entry.entityName)?.ID : undefined);
+      if (!entityId || !entry.recordId) {
+        LogError(`tag-chips: scope entry ${entry.entityName ?? entry.entityId ?? '(no entity)'} could not be resolved; tag not created`);
+        return null;
+      }
+      resolved.push({ ScopeEntityID: entityId, ScopeRecordID: entry.recordId });
+    }
+    return resolved;
+  }
+
+  /** Writes one `MJ: Tag Scopes` row per scope. Returns false on the first failure. */
+  private async saveTagScopes(tagId: string, scopes: ResolvedScope[]): Promise<boolean> {
+    const md = this.metadata();
+    for (const s of scopes) {
+      const scope = await md.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', this.ProviderToUse.CurrentUser ?? undefined);
+      scope.NewRecord();
+      scope.TagID = tagId;
+      scope.ScopeEntityID = s.ScopeEntityID;
+      scope.ScopeRecordID = s.ScopeRecordID;
+      if (!(await scope.Save())) {
+        LogError(`tag-chips: tag scope save failed; tag left unapplied: ${scope.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private clearSuggestions(): void {
+    this.Suggestions = [];
+    this.CanCreateNew = false;
+    this.ShowSuggestions = false;
   }
 
   private async applyTagToRecord(tagId: string, tagName: string): Promise<void> {

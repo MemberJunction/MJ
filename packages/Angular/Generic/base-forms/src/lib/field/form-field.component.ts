@@ -3124,7 +3124,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnValueListInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this._valueListFilter = input.value;
-    this.Value = input.value;
+    this.Value = this.emptyInputToValue(input.value);
     this.updateDropdownPosition(input);
     if (!this._scrollCleanup) this.startScrollListener();
     this.ShowValueListDropdown = true;
@@ -3683,7 +3683,21 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnInputChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.imageUploadError = null;
-    this.Value = input.value;
+    this.Value = this.emptyInputToValue(input.value);
+  }
+
+  /**
+   * Maps the text of a cleared input to the value the field stores. An empty string is a
+   * valid value only for a text column; for a `uniqueidentifier`, date, number or boolean
+   * column the server cannot convert `''`, so the save fails. Those fields get `null`.
+   * A UUID column reports `TSType` String, so it is checked by its SQL type as well.
+   * Non-empty text is returned unchanged.
+   */
+  private emptyInputToValue(text: string): string | null {
+    if (text !== '') return text;
+    const fieldInfo = this.FieldInfo;
+    if (fieldInfo && (fieldInfo.IsUniqueIdentifier || fieldInfo.TSType !== EntityFieldTSType.String)) return null;
+    return text;
   }
 
   OnImageUrlInput(event: Event): void {

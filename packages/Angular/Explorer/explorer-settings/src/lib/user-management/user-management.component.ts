@@ -8,6 +8,8 @@ import { FilterByUUIDs, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 import { EnrolledRow, ServerRefusalReasons } from './transaction-group-refusals';
+import { CanChangeUser, IsOwnerType, OWNER_ONLY_NOTE } from './owner-gate';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   BuildUserManagementAgentContext,
   IsValidUserStatusFilter,
@@ -84,7 +86,29 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     this.SelectedUser = value;
   }
   public isLoading = false;
+  /** Page-level error: only a failed load sets it, because it replaces the list. */
   public error: string | null = null;
+
+  /** Shown above the list for a non-Owner. */
+  public readonly OwnerOnlyNote = OWNER_ONLY_NOTE;
+
+  /**
+   * True when the signed-in user is an Owner. The server refuses a non-Owner's create, delete and
+   * status change of other users, so those controls are disabled for everyone else.
+   */
+  public get CanAdminister(): boolean {
+    return IsOwnerType(this.ProviderToUse.CurrentUser?.Type);
+  }
+
+  /** True when the signed-in user may edit `user`: an Owner, or the user themselves. */
+  public CanEditUser(user: MJUserEntity): boolean {
+    return CanChangeUser(this.ProviderToUse.CurrentUser, user.ID);
+  }
+
+  /** Shows a failed row or bulk action as a toast, leaving the list in place. */
+  protected notifyActionFailure(message: string): void {
+    MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 6000);
+  }
 
   // Selection state for bulk actions
   public SelectedUserIds = new Set<string>();
@@ -736,7 +760,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     } catch (error: unknown) {
       console.error('Error deleting user:', error);
       this.ngZone.run(() => {
-        this.error = error instanceof Error ? error.message : 'Failed to delete user';
+        this.ShowDeleteConfirm = false;
+        this.notifyActionFailure(error instanceof Error ? error.message : 'Failed to delete user');
         this.cdr.markForCheck();
       });
     }
@@ -760,10 +785,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         throw new Error(user.LatestResult?.Message || 'Failed to update user status');
       }
       this.ngZone.run(() => {
-        // Clear any banner left by a PREVIOUS refused toggle. Without this a non-Owner who is
-        // refused on one row, then succeeds on a row they may edit (their own), keeps reading the
-        // stale refusal. `loadInitialData()` is the only other place `error` is reset and this path
-        // does not call it.
+        // A refused toggle reports by toast, not `error`; clearing here keeps any older page-level
+        // banner from outliving a write that succeeded.
         this.error = null;
         this.calculateStats();
         this.cdr.markForCheck();
@@ -772,7 +795,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error updating user status:', error);
       this.ngZone.run(() => {
         user.IsActive = !user.IsActive; // Revert on error
-        this.error = error instanceof Error ? error.message : 'Failed to update user status';
+        this.notifyActionFailure(error instanceof Error ? error.message : 'Failed to update user status');
         this.cdr.markForCheck();
       });
     }
@@ -1191,9 +1214,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     } catch (error: unknown) {
       console.error('Bulk action failed:', error);
       this.ngZone.run(() => {
-        this.error = error instanceof Error ? error.message : 'Bulk action failed';
+        this.ShowBulkActionConfirm = false;
+        this.BulkActionType = null;
+        this.notifyActionFailure(error instanceof Error ? error.message : 'Bulk action failed');
         this.cdr.markForCheck();
       });
+      // Re-read so every row shows what the database holds after the rollback.
+      await this.LoadInitialData();
     } finally {
       this.ngZone.run(() => {
         this.isLoading = false;
@@ -1212,15 +1239,17 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
     const md = this.ProviderToUse;
     const tg = await md.CreateTransactionGroup();
+    // Each user's own prior status: a selection can mix users already in the target state.
+    const priorStatus = new Map(users.map(user => [user, user.IsActive]));
     for (const user of users) {
       user.IsActive = isActive;
       user.TransactionGroup = tg;
       await user.Save();
     }
     if (!await tg.Submit()) {
-      // Server rolled back — restore in-memory flags to their prior state
+      // Server rolled back — restore each user's in-memory flag to its own prior value
       for (const user of users) {
-        user.IsActive = !isActive;
+        user.IsActive = priorStatus.get(user) ?? user.IsActive;
       }
       throw new Error('Failed to update users — all changes have been rolled back');
     }

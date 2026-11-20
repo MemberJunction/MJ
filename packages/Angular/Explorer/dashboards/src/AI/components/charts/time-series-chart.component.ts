@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import * as d3 from 'd3';
-import { AxisTickFormat, CreateTimeScale, IsDailyBucketSeries, TooltipTimeFormat } from './time-series-axis';
+import { AxisTickFormat, CreateTimeScale, IsDailyBucketSeries, LeftAxisLabel, LeftAxisTickFormat, TooltipTimeFormat } from './time-series-axis';
 import { TrendData } from '../../services/ai-instrumentation.service';
 
 export interface TimeSeriesConfig {
@@ -578,18 +578,16 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       const leftAxisMetrics = ['cost', 'avgTime'];
       const rightAxisMetrics = ['executions', 'tokens', 'errors'];
 
-      // Left Y axis (cost, time)
+      // Left Y axis (cost, time): ticks and title carry the unit of the series shown on it.
       const leftScale = scales[leftAxisMetrics[0]];
       if (leftScale) {
+        const shownLeft = leftAxisMetrics.filter(m => !this.hiddenMetrics.has(m));
+        const leftTickFormat = LeftAxisTickFormat(shownLeft);
         g.append('g')
           .attr('class', 'axis axis-y axis-y-left')
           .call(d3.axisLeft(leftScale)
             .ticks(5)
-            .tickFormat((d) => {
-              const value = d as number;
-              // Format based on value range - if > 1, likely cost, else time in seconds
-              return value > 1 ? `$${value.toFixed(2)}` : `${value.toFixed(1)}s`;
-            }));
+            .tickFormat((d) => leftTickFormat(Number(d))));
 
         // Left axis label
         g.append('text')
@@ -600,7 +598,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
           .style('text-anchor', 'middle')
           .style('font-size', '12px')
           .style('fill', 'var(--mj-text-muted)')
-          .text('Cost ($) / Time (s)');
+          .text(LeftAxisLabel(shownLeft));
       }
 
       // Right Y axis (counts)
@@ -856,7 +854,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       executions: 'Executions',
       cost: 'Cost ($)',
       tokens: 'Tokens',
-      avgTime: 'Avg Time (ms)',
+      avgTime: 'Avg Time (s)',
       errors: 'Errors'
     };
     return labels[metric] || metric;

@@ -1142,11 +1142,10 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
             }
         );
 
-        // Auto-expand to show matches — guard against empty results
+        // Auto-expand to show matches — guard against empty results. One batched call with no
+        // change detection of its own: the detectChanges() below is the only pass for this search.
         if (matchedNodes.length > 0 && this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
-            for (const node of matchedNodes) {
-                this.TreeComponent.ExpandToNode(node.ID);
-            }
+            this.TreeComponent.ExpandToNodes(matchedNodes.map(node => node.ID), false);
         }
 
         // Fire after event

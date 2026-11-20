@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentRef } from '@angular/core';
@@ -309,4 +309,54 @@ describe('TreeComponent (DOM)', () => {
       expect(hasClass(fixture, '.tree-container', 'tree-container--loading')).toBe(true);
     });
   });
+
+  describe('ExpandToNode / ExpandToNodes', () => {
+    /** Point the component's node lookup at the given nodes, as a load would. */
+    const withNodeMap = (i: TreeComponent, nodes: TreeNode[]): void => {
+      (i as unknown as { nodeMap: Map<string, TreeNode> }).nodeMap = new Map(nodes.map(n => [n.ID, n]));
+    };
+    const cdrOf = (i: TreeComponent) => (i as unknown as { cdr: { detectChanges(): void } }).cdr;
+
+    it('returns on a parent cycle instead of looping, expanding each ancestor once', () => {
+      const fixture = renderTree();
+      const i = fixture.componentInstance;
+      const a = branch({ ID: 'a', ParentID: 'b' });
+      const b = branch({ ID: 'b', ParentID: 'a' });
+      const c = leaf({ ID: 'c', ParentID: 'a' });
+      withNodeMap(i, [a, b, c]);
+
+      expect(i.ExpandToNode('c')).toBe(c);
+      expect(a.Expanded).toBe(true);
+      expect(b.Expanded).toBe(true);
+    });
+
+    it('expands many matches with one change-detection pass', () => {
+      const fixture = renderTree();
+      const i = fixture.componentInstance;
+      const root = branch({ ID: 'root' });
+      const mid = branch({ ID: 'mid', ParentID: 'root' });
+      const leaves = [1, 2, 3].map(n => leaf({ ID: `l${n}`, ParentID: 'mid' }));
+      withNodeMap(i, [root, mid, ...leaves]);
+      const detect = vi.spyOn(cdrOf(i), 'detectChanges');
+
+      const found = i.ExpandToNodes(['l1', 'l2', 'missing', 'l3']);
+
+      expect(found.map(n => n.ID)).toEqual(['l1', 'l2', 'l3']);
+      expect(root.Expanded && mid.Expanded).toBe(true);
+      expect(detect).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves change detection to the caller when asked', () => {
+      const fixture = renderTree();
+      const i = fixture.componentInstance;
+      withNodeMap(i, [branch({ ID: 'root' }), leaf({ ID: 'x', ParentID: 'root' })]);
+      const detect = vi.spyOn(cdrOf(i), 'detectChanges');
+
+      i.ExpandToNodes(['x'], false);
+      i.ExpandToNode('x', false);
+
+      expect(detect).not.toHaveBeenCalled();
+    });
+  });
 });
+

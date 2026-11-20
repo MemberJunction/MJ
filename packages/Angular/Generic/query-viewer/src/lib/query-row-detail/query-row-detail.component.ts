@@ -16,7 +16,7 @@ import { takeUntil, debounceTime } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { QueryGridColumnConfig } from '../query-data-grid/models/query-grid-types';
+import { QueryGridColumnConfig, EntityLinkRecordKey } from '../query-data-grid/models/query-grid-types';
 
 /**
  * Event emitted when navigating to a linked entity record
@@ -41,6 +41,10 @@ interface DetailField {
     targetEntityName?: string;
     targetEntityIcon?: string;
     sourceEntityName?: string;
+    /** The row field holding the linked record's key, when the field shows something else (a name). */
+    linkKeyField?: string;
+    /** The key of the record the field links to; null when it has no link or no key. */
+    recordKey: string | null;
     isLongText: boolean;
     isExpanded: boolean;
 }
@@ -176,7 +180,7 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
 
         for (const col of this._columns) {
             const value = this._rowData[col.field];
-            const field = this.buildDetailField(col, value);
+            const field = this.buildDetailField(col, value, this._rowData);
 
             if (field.isPrimaryKey) {
                 primaryKeys.push(field);
@@ -193,7 +197,7 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
     }
 
-    private buildDetailField(col: QueryGridColumnConfig, value: unknown): DetailField {
+    private buildDetailField(col: QueryGridColumnConfig, value: unknown, row: Record<string, unknown>): DetailField {
         const formattedValue = this.formatValue(value, col);
         const isLongText = typeof value === 'string' && value.length > 200;
 
@@ -208,6 +212,8 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
             targetEntityName: col.targetEntityName,
             targetEntityIcon: col.targetEntityIcon,
             sourceEntityName: col.sourceEntityName,
+            linkKeyField: col.linkKeyField,
+            recordKey: col.targetEntityName ? EntityLinkRecordKey(col, row, value) : null,
             isLongText,
             isExpanded: false
         };
@@ -305,10 +311,10 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
     }
 
     public OnEntityLinkClick(field: DetailField): void {
-        if (field.targetEntityName && field.value != null) {
+        if (field.targetEntityName && field.recordKey !== null) {
             this.EntityLinkClick.emit({
                 entityName: field.targetEntityName,
-                recordId: String(field.value),
+                recordId: field.recordKey,
                 fieldName: field.name
             });
         }

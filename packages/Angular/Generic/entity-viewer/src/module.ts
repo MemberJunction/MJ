@@ -10,7 +10,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { RecordMergeModule } from '@memberjunction/ng-record-merge';
-import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent, MJViewToggleComponent, MJFilterPopoverComponent, MJAppliedFiltersComponent } from '@memberjunction/ng-ui-components';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
@@ -119,6 +119,8 @@ LoadEntityActionUX();
     MJEmptyStateComponent,
     MJAlertComponent,
     MJViewToggleComponent,
+    MJFilterPopoverComponent,
+    MJAppliedFiltersComponent,
     FilterBuilderModule,
     CodeEditorModule,
     EntityActionUXHostComponent

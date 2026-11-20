@@ -150,7 +150,8 @@ User rail order and More membership via `UserInfoEngine` stay as they are. L4 ca
 No L0 (CodeGen did not emit them). No L2 (not a related-grid pool).
 
 - L1: the package is installed → the contribution **exists** by `contributionKey`
-- L3: admin can **suppress** by key (off for the site)
+- L1: the registration may say **when** it applies: `visibleWhen: 'always' | 'saved' | 'new'` (absent = `'always'`). A `'saved'` contribution is dropped for a new record before bucketing, so a new record shows no rail item for a panel keyed by the parent's ID; the form re-resolves on first save. L1 only for now: relationships and the L3 table do not carry it.
+- L3: admin can **suppress** by key (off for the site). A suppressed (`None`) section does not mount or load: the coordinator reports `IsSuppressed(key)` once the rules have loaded, and `IsSectionExpanded` answers false for it (and for lazily loaded sections while the rules are pending).
 - L4: rearrange among what’s still on
 
 ---
@@ -181,6 +182,9 @@ export class BaseFormPolicy {
 6. Policy `DecorateChrome` (cosmetics only; ignore membership mutations if a policy violates the contract)  
 7. Merge same-related-entity groups; apply `join.any` to the grid ExtraFilter (`BuildRelationshipViewParamsForJoinFields` already exists)  
 8. L4 user membership  
+9. Populated-first related sections, for a form that opts in (`PopulatedRelatedSectionsFirst`, left-nav only): once every related count is known, related groups with no rows gather into one "No records" group after the others. Decided once per record so the rail does not move as counts change; the group the user is on keeps its place.
+
+Contributions whose `visibleWhen` does not match the record state are dropped at step 1.
 
 The admin “why is this here” view is the pathway from step 2–5.
 

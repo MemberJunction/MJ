@@ -47,7 +47,8 @@
     <button mjButton variant="secondary" size="sm" (click)="exportUsers()" aria-label="Export users to file">
       <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
     </button>
-    <button mjButton variant="primary" size="sm" (click)="createNewUser()" aria-label="Add new user">
+    <button mjButton variant="primary" size="sm" (click)="createNewUser()" aria-label="Add new user"
+      [disabled]="!CanAdminister" [title]="CanAdminister ? 'Add a new user' : OwnerOnlyNote">
       <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add User</span>
     </button>
   </div>
@@ -65,11 +66,11 @@
         </button>
       </div>
       <div class="bulk-action-buttons">
-        <button mjButton variant="secondary" size="sm" (click)="confirmBulkAction('enable')" aria-label="Enable selected users">
+        <button mjButton variant="secondary" size="sm" (click)="confirmBulkAction('enable')" aria-label="Enable selected users" [disabled]="!CanAdminister">
           <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
           <span class="btn-text">Enable</span>
         </button>
-        <button mjButton variant="secondary" size="sm" (click)="confirmBulkAction('disable')" aria-label="Disable selected users">
+        <button mjButton variant="secondary" size="sm" (click)="confirmBulkAction('disable')" aria-label="Disable selected users" [disabled]="!CanAdminister">
           <i class="fa-solid fa-toggle-off" aria-hidden="true"></i>
           <span class="btn-text">Disable</span>
         </button>
@@ -77,7 +78,7 @@
           <i class="fa-solid fa-user-tag" aria-hidden="true"></i>
           <span class="btn-text">Assign Role</span>
         </button>
-        <button mjButton variant="danger" size="sm" (click)="confirmBulkAction('delete')" aria-label="Delete selected users">
+        <button mjButton variant="danger" size="sm" (click)="confirmBulkAction('delete')" aria-label="Delete selected users" [disabled]="!CanAdminister">
           <i class="fa-solid fa-trash" aria-hidden="true"></i>
           <span class="btn-text">Delete</span>
         </button>
@@ -110,6 +111,12 @@
 
     <!-- Users List -->
     @if (!isLoading && !error) {
+      @if (!CanAdminister) {
+        <p class="owner-only-note" role="note">
+          <i class="fa-solid fa-lock" aria-hidden="true"></i>
+          {{ OwnerOnlyNote }}
+        </p>
+      }
       <div class="users-list" role="list" aria-label="Users list">
           <!-- List Header with Select All -->
           <div class="list-header">
@@ -177,24 +184,26 @@
                     <button
                       mjButton variant="flat" size="sm"
                       (click)="editUser(user)"
-                      [attr.aria-label]="'Edit ' + user.Name"
-                      title="Edit"
+                      [attr.aria-label]="(CanEditUser(user) ? 'Edit ' : 'View ') + user.Name"
+                      [title]="CanEditUser(user) ? 'Edit' : 'View'"
                     >
-                      <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                      <i [class]="CanEditUser(user) ? 'fa-solid fa-edit' : 'fa-solid fa-eye'" aria-hidden="true"></i>
                     </button>
                     <button
                       mjButton variant="flat" size="sm"
                       (click)="toggleUserStatus(user)"
+                      [disabled]="!CanAdminister"
                       [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
-                      [title]="user.IsActive ? 'Deactivate' : 'Activate'"
+                      [title]="!CanAdminister ? OwnerOnlyNote : user.IsActive ? 'Deactivate' : 'Activate'"
                     >
                       <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" aria-hidden="true"></i>
                     </button>
                     <button
                       mjButton variant="danger" size="sm"
                       (click)="confirmDeleteUser(user)"
+                      [disabled]="!CanAdminister"
                       [attr.aria-label]="'Delete ' + user.Name"
-                      title="Delete"
+                      [title]="CanAdminister ? 'Delete' : OwnerOnlyNote"
                     >
                       <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     </button>
@@ -218,14 +227,15 @@
                       <button
                         mjButton variant="flat" size="sm"
                         (click)="editUser(user)"
-                        [attr.aria-label]="'Edit ' + user.Name"
+                        [attr.aria-label]="(CanEditUser(user) ? 'Edit ' : 'View ') + user.Name"
                       >
-                        <i class="fa-solid fa-edit" aria-hidden="true"></i>
-                        <span class="btn-label">Edit</span>
+                        <i [class]="CanEditUser(user) ? 'fa-solid fa-edit' : 'fa-solid fa-eye'" aria-hidden="true"></i>
+                        <span class="btn-label">{{ CanEditUser(user) ? 'Edit' : 'View' }}</span>
                       </button>
                       <button
                         mjButton variant="flat" size="sm"
                         (click)="toggleUserStatus(user)"
+                        [disabled]="!CanAdminister"
                         [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
                       >
                         <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" aria-hidden="true"></i>
@@ -234,6 +244,7 @@
                       <button
                         mjButton variant="danger" size="sm"
                         (click)="confirmDeleteUser(user)"
+                        [disabled]="!CanAdminister"
                         [attr.aria-label]="'Delete ' + user.Name"
                       >
                         <i class="fa-solid fa-trash" aria-hidden="true"></i>

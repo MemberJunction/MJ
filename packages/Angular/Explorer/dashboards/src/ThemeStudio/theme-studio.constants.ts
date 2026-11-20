@@ -275,3 +275,16 @@ export function BuildCssWarnings(css: string, knownTokens: ReadonlySet<string>):
 export function buildCssWarnings(css: string, knownTokens: ReadonlySet<string>): string[] {
   return BuildCssWarnings(css, knownTokens);
 }
+
+/** Brand-overlay id used for the temporary "Preview on my workspace" application. */
+export const WORKSPACE_PREVIEW_ID = 'theme-studio-draft-preview';
+
+/**
+ * The overlay to go back to when a workspace preview that starts now ends. Never the preview's
+ * own id: if the draft is still painted (an earlier end could not repaint the prior overlay),
+ * the prior already recorded is kept, so ending the preview never persists the unsaved draft
+ * (#6030).
+ */
+export function PriorOverlayForPreview(currentOverlayId: string | null, recordedPrior: string | null): string | null {
+  return currentOverlayId === WORKSPACE_PREVIEW_ID ? recordedPrior : currentOverlayId;
+}

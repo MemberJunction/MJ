@@ -21,6 +21,8 @@ import {
     ContributionDrawsInSection,
     ContributionSectionPosition,
     PlacedInSectionKey,
+    IsVisibleForRecordState,
+    RegistrationsForRecordState,
 } from '../form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -716,5 +718,54 @@ describe('Section claims on registrations', () => {
             { Priority: 0, Metadata: { entity: 'E', slot: 'before-fields', contributionKey: 'k', replacesSectionKeys: ['identity', 'profile'] } },
         ]);
         expect(keys).toEqual(['identity', 'profile']);
+    });
+});
+
+/**
+ * A contribution can apply to one record state only (#4618): `visibleWhen: 'saved'` keeps a panel
+ * keyed by the parent's ID off a new record's rail. Absent `visibleWhen` behaves as before.
+ */
+describe('visibleWhen — record-state inclusion', () => {
+    const always = reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'overview' });
+    const savedOnly = reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'activity', visibleWhen: 'saved' });
+    const newOnly = reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'quick-start', visibleWhen: 'new' });
+
+    it('IsVisibleForRecordState matches each value to the record state', () => {
+        expect(IsVisibleForRecordState(undefined, false)).toBe(true);
+        expect(IsVisibleForRecordState('always', false)).toBe(true);
+        expect(IsVisibleForRecordState('saved', false)).toBe(false);
+        expect(IsVisibleForRecordState('saved', true)).toBe(true);
+        expect(IsVisibleForRecordState('new', false)).toBe(true);
+        expect(IsVisibleForRecordState('new', true)).toBe(false);
+    });
+
+    it('drops saved-only contributions for a new record and keeps them once saved', () => {
+        const regs = [always, savedOnly, newOnly];
+        expect(RegistrationsForRecordState(regs, false).map((r) => r.Metadata.contributionKey)).toEqual(['overview', 'quick-start']);
+        expect(RegistrationsForRecordState(regs, true).map((r) => r.Metadata.contributionKey)).toEqual(['overview', 'activity']);
+    });
+
+    it('returns the same list when nothing is dropped or no record state is given, and a stable list otherwise', () => {
+        const plain = [always];
+        expect(RegistrationsForRecordState(plain, false)).toBe(plain);
+        const regs = [always, savedOnly];
+        expect(RegistrationsForRecordState(regs, undefined)).toBe(regs);
+        expect(RegistrationsForRecordState(regs, false)).toBe(RegistrationsForRecordState(regs, false));
+    });
+
+    it('ResolveFormContributions drops a saved-only winner for a new record when given the record state', () => {
+        const input = {
+            EntityName: PEOPLE,
+            RelatedEntities: [],
+            IsaChildEntityIDs: [],
+            Registrations: [always, savedOnly],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        };
+        const keys = (saved: boolean | undefined) =>
+            ResolveFormContributions({ ...input, RecordIsSaved: saved }).Winners.map((w) => w.ContributionKey).sort();
+        expect(keys(false)).toEqual(['overview']);
+        expect(keys(true)).toEqual(['activity', 'overview']);
+        expect(keys(undefined)).toEqual(['activity', 'overview']);
     });
 });

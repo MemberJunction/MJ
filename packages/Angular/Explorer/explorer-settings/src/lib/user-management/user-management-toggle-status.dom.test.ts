@@ -18,6 +18,9 @@
  * The component is exercised through its prototype with minimal stubs for the two things the
  * method touches (`ngZone`, `cdr`) rather than through TestBed: the behaviour under test is the
  * method's own control flow, and a full Angular harness would add setup without adding coverage.
+ *
+ * Since issue #4281 the refusal is reported through `notifyActionFailure` (a toast) rather than
+ * `this.error`, because the page-level error replaces the whole list.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { UserManagementComponent } from './user-management.component';
@@ -26,6 +29,7 @@ interface ToggleHost {
     toggleUserStatus(user: unknown): Promise<void>;
     error: string | null;
     calculateStats(): void;
+    notifyActionFailure(message: string): void;
 }
 
 function makeComponent(): ToggleHost {
@@ -33,6 +37,7 @@ function makeComponent(): ToggleHost {
     c['ngZone'] = { run: (fn: () => void) => fn() };
     c['cdr'] = { markForCheck: () => undefined };
     c['calculateStats'] = vi.fn();
+    c['notifyActionFailure'] = vi.fn();
     c.error = null;
     return c;
 }
@@ -59,7 +64,8 @@ describe('UserManagementComponent.toggleUserStatus — a refused save must not l
         const c = makeComponent();
         const user = makeUser(false, 'You may only modify your own user record.');
         await c.toggleUserStatus(user);
-        expect(c.error).toBe('You may only modify your own user record.');
+        expect(c.notifyActionFailure).toHaveBeenCalledWith('You may only modify your own user record.');
+        expect(c.error).toBeNull(); // the list stays on screen
     });
 
     it('does NOT recalculate stats for a refused save — the row must not render as toggled', async () => {
@@ -71,7 +77,7 @@ describe('UserManagementComponent.toggleUserStatus — a refused save must not l
     it('falls back to a generic message when the entity carries no LatestResult', async () => {
         const c = makeComponent();
         await c.toggleUserStatus(makeUser(false));
-        expect(c.error).toBeTruthy();
+        expect(c.notifyActionFailure).toHaveBeenCalledWith('Failed to update user status');
     });
 
     it('still succeeds normally when Save() returns true — the Owner path is untouched', async () => {
@@ -82,13 +88,11 @@ describe('UserManagementComponent.toggleUserStatus — a refused save must not l
         expect(c.calculateStats).toHaveBeenCalledOnce();
     });
 
-    // Asserting `error === null` on a freshly built component proves nothing — makeComponent()
-    // starts it null, so such a test stays green even if the success path never clears it. The
-    // banner must be observed going from SET to CLEARED on ONE component instance.
-    it('CLEARS a previous refusal banner on the next successful toggle', async () => {
+    // A refusal no longer sets the page-level banner, but a successful toggle still clears one
+    // left by something else, so the banner must be observed going from SET to CLEARED.
+    it('CLEARS a page-level banner on the next successful toggle', async () => {
         const c = makeComponent();
-        await c.toggleUserStatus(makeUser(false, 'You may only modify your own user record.'));
-        expect(c.error).toBe('You may only modify your own user record.');
+        c.error = 'Failed to load user data. Please try again.';
 
         await c.toggleUserStatus(makeUser(true));
         expect(c.error).toBeNull();

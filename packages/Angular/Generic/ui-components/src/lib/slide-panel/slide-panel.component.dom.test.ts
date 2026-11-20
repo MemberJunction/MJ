@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
+import { Component } from '@angular/core';
+import { renderComponentFixture, query, text, capture, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { MjSlidePanelComponent } from './slide-panel.component';
 
 /**
@@ -91,5 +92,92 @@ describe('MjSlidePanelComponent (DOM)', () => {
     expect(closed.length).toBe(0);
     f.detectChanges(false);
     expect(query(f, '.sp-panel')?.classList.contains('sp-open')).toBe(true);
+  });
+});
+
+/** A page with a trigger button and a panel holding two controls. */
+@Component({
+  standalone: true,
+  imports: [MjSlidePanelComponent],
+  template: `
+    <button type="button" class="opener" (click)="Open = true">Open</button>
+    <mj-slide-panel [Visible]="Open" Title="Details" (Closed)="Open = false">
+      <input class="first" aria-label="Name" />
+      <button type="button" class="last">Save</button>
+    </mj-slide-panel>
+  `,
+})
+class SlidePanelHostComponent {
+  Open = false;
+}
+
+describe('MjSlidePanelComponent — dialog semantics and focus (DOM, #5863)', () => {
+  const press = (el: Element, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    el.dispatchEvent(event);
+    return event;
+  };
+
+  it('is a modal dialog named by its title, with a labelled close button', async () => {
+    const f = await renderOpen({ Title: 'Details' });
+    const panel = query(f, '.sp-panel') as HTMLElement;
+    expect(panel.getAttribute('role')).toBe('dialog');
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    const titleId = panel.getAttribute('aria-labelledby');
+    expect(titleId).toBeTruthy();
+    expect(query(f, `#${titleId}`)?.textContent?.trim()).toBe('Details');
+    expect(query(f, '.sp-close-btn')?.getAttribute('aria-label')).toBe('Close');
+  });
+
+  it('is named by AriaLabel when it has no title, in dialog mode too', async () => {
+    const f = await renderOpen({ Mode: 'dialog', AriaLabel: 'Edit record' });
+    const dialog = query(f, '.sp-dialog') as HTMLElement;
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-label')).toBe('Edit record');
+    expect(dialog.hasAttribute('aria-labelledby')).toBe(false);
+  });
+
+  it('is inert while closed', async () => {
+    const f = await renderOpen({ Visible: false, Title: 'Details' });
+    expect(query(f, '.sp-panel')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('has no axe violations when open', async () => {
+    const f = await renderOpen({ Title: 'Details' });
+    await ExpectNoAxeViolations(f);
+  });
+
+  it('moves focus in on open, wraps Tab at both ends, and returns focus on close', async () => {
+    const f = renderComponentFixture(SlidePanelHostComponent, { imports: [SlidePanelHostComponent] });
+    const opener = query(f, '.opener') as HTMLButtonElement;
+    opener.focus();
+    opener.click();
+    f.detectChanges();
+    await tick();
+    f.detectChanges();
+
+    const first = query(f, '.first') as HTMLInputElement;
+    const last = query(f, '.last') as HTMLButtonElement;
+    const close = query(f, '.sp-close-btn') as HTMLButtonElement;
+    expect(document.activeElement).toBe(first);
+
+    last.focus();
+    expect(press(last, 'Tab').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(close);
+
+    expect(press(close, 'Tab', { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+
+    close.click();
+    f.detectChanges();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('ignores Escape while closed', async () => {
+    const f = await renderOpen({ Visible: false, Title: 'Details' });
+    const closed = capture(f.componentInstance.Closed);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await tick(320);
+    expect(closed.length).toBe(0);
   });
 });
