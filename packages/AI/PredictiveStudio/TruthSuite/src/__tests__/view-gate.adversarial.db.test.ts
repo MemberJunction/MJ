@@ -436,6 +436,23 @@ describe('M5b.10 harness', () => {
     }
   }, CASE_TIMEOUT_MS);
 
+  it('view-gate order: an older Human value under a newer gated Model row is hidden from the latest-value entity for a user without the authorization', async () => {
+    // The view ranks every Champion row of a key before the row-level security filter runs (§5.8.4): the newest row of
+    // r3's binding feature is the DAY3 Model row, so a user who may not see it sees no latest value for the key, not
+    // the older Human row. That Human row stays readable in MJ: Feature Values. Fails closed; leaks nothing.
+    const human = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+      fv.EntityID = f.TargetEntityID; fv.RecordID = f.Records['r3']; fv.FeatureName = f.Binding.FeatureName; fv.Source = 'Human'; fv.Role = 'Champion';
+      fv.ValueNumeric = 0.1; fv.RecordProcessID = null; fv.MLModelScoringBindingID = f.Binding.ID; fv.EffectiveAsOf = new Date('2026-10-02T00:00:00Z');
+    });
+    const feature = `${onRecord('r3')} AND FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`;
+    expect(await ReadAs(f.UIOnly, 'MJ: Latest Feature Values', feature)).toEqual([]);
+    const history = await ReadAs(f.UIOnly, 'MJ: Feature Values', feature);
+    expect(history.map((r) => [r.Source, UUIDsEqual(r.ID, human.ID)])).toEqual([['Human', true]]);
+    // The Developer, who holds the authorization, reads the newer Model row as the latest value.
+    const latest = await ReadAs(f.Developer, 'MJ: Latest Feature Values', feature);
+    expect(latest.map((r) => [r.Source, r.EffectiveAsOf?.toISOString()])).toEqual([['Model', DAY3.toISOString()]]);
+  }, CASE_TIMEOUT_MS);
+
   it('binding backfill and retention sweep through the production store: only a binding without a view authorization is assigned, once; only expired Model rows go', async () => {
     const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User });
     const seeded = PredictionRetention.SeededAuthorizationID(server.Provider);
