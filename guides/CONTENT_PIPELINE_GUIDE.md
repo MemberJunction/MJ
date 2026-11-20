@@ -4,7 +4,7 @@
 
 - **Packages**:
   - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `WorkingRecord`, `BasePipelineStage`, `ConfidenceScale`, `BaseAccessDriver`, `BaseContentExtractor`, `BaseContentClassifier`, `BaseConceptSynthesizer`, `ClusterContentIntoConceptSeeds`, `ResolveGraphOverlayConfig`, byte-signature detection, and `PipelineTuning` (zero database dependencies)
-  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `PipelineProcessor` (`WorkType = 'Pipeline Stage'`), `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ExtractorCascade`, `ManagedPromptClassifier`, `ManagedPromptConceptSynthesizer`, and the built-in stages (`Discover`, `Extract`, `Tag`, `Segment`, `Embed`, `Graph`, `Delete`, `DeleteContentItem`, `NoOp`)
+  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `PipelineProcessor` (`WorkType = 'Pipeline Stage'`), `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ExtractorCascade`, `ManagedPromptClassifier`, `DeterministicConceptSynthesizer` (also registered under the alias `ManagedPromptConceptSynthesizer`), and the built-in stages (`Discover`, `Extract`, `Tag`, `Segment`, `Embed`, `Graph`, `Delete`, `DeleteContentItem`, `NoOp`)
   - [`@memberjunction/content-autotagging`](../packages/ContentAutotagging/README.md) — Source-type drivers (`AutotagBase` subclasses: `AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagRSSFeed`, `AutotagWebsite`, `AutotagEntity`) and shared vector/prompt infrastructure (`ContentVectorInfrastructure`, `ContentVectorMetadata`, `ContentAutotagPrompt`)
   - [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) — Shared PDF, Word (`docx`), and Excel (`xlsx`) text extraction helpers
 - **Companion Guides**:
@@ -509,7 +509,7 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 - **Class**: [`GraphStage`](../packages/ContentPipeline/engine/src/stages/GraphStage.ts) (`@RegisterClass(BasePipelineStage, 'Graph')`)
 - **Entity**: `MJ: Content Items`
-- **Synthesizer Registry**: `BaseConceptSynthesizer` (`@memberjunction/content-pipeline-base`), defaulting to `DeterministicConceptSynthesizer` (`@RegisterClass(BaseConceptSynthesizer, 'Deterministic')`); set `GraphOverlay.SynthesizerKey` to `'ManagedPrompt'` to use [`ManagedPromptConceptSynthesizer`](../packages/ContentPipeline/engine/src/ManagedPromptConceptSynthesizer.ts)
+- **Synthesizer Registry**: `BaseConceptSynthesizer` (`@memberjunction/content-pipeline-base`), defaulting to `DeterministicConceptSynthesizer` (`@RegisterClass(BaseConceptSynthesizer, 'Deterministic')`, in [`ManagedPromptConceptSynthesizer.ts`](../packages/ContentPipeline/engine/src/ManagedPromptConceptSynthesizer.ts)). `'ManagedPrompt'` is a backward-compatible alias: `ManagedPromptConceptSynthesizer` extends `DeterministicConceptSynthesizer` and changes only its `Key`, so both keys behave the same
 
 When a `ContentSource` has `GraphID` set (or `Configuration.GraphOverlay.EnableGraphOverlay = true`), `GraphStage` projects the item's segmented `MJ: Content Item Chunks` and governed `MJ: Content Item Tags` into `MJ: Graph Concepts` and `MJ: Graph Edges`:
 

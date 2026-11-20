@@ -105,7 +105,8 @@ All three use the same kind of condition, so what you learn in one carries to th
    until someone runs it or an administrator gives it a schedule or a record-change trigger.
 
 You can also start from a conversation. When an agent breaks your request into steps, its plan card
-offers **Save as workflow**, so a plan that worked once becomes something anyone can rerun.
+offers **Save as workflow**. It saves the plan as a draft workflow; once it is set to **Active**, a plan
+that worked once becomes something anyone can rerun.
 
 ---
 
@@ -159,7 +160,7 @@ What you can count on once it is set up:
 | It runs too often | The condition describes a state ("is Approved"), not a change ("becomes Approved") | Ask for the condition to be rewritten as a change |
 | It finished but did nothing | Every branch was skipped, usually because an earlier step produced nothing for the decision to read | Open the run and look at the step before the branch |
 | It is stuck | A step is waiting for a person, or a step failed and the steps after it are blocked | Open the run; complete the waiting step or fix the failed one |
-| It won't run, and its **Run** button is off | It is still a draft (or paused). A draft or paused workflow is saved as a disabled agent, and its schedule and record-change triggers are saved switched off | Set the workflow's status to **Active** when it is ready |
+| It won't run, and its **Run** button is off | It is still a draft (or paused). A draft or paused workflow is saved as a disabled agent, and its schedule and record-change triggers are saved switched off | Set the agent's **Status** to **Active** on its form so it can be run on demand. Its schedule and record-change triggers stay off until the workflow is saved again as **Active**; ask your administrator to do that |
 
 ---
 

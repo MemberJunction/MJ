@@ -775,7 +775,7 @@ or split them into two workflows.
 |---|---|
 | **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow through `Workflow.Save` as a `Draft` with no triggers (its Flow agent is `Disabled`) and opens it on the AI Agents form. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
 | **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
-| A conversation's plan card → **Save as workflow** | Saves an agent's plan as an on-demand workflow |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as a `Draft` on-demand workflow (`status: 'Draft'`, no triggers) |
 | **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
 | `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
 

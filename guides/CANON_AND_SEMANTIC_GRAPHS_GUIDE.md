@@ -18,11 +18,11 @@
 
 In MemberJunction, **Canon** is the governed, machine-readable representation of how an organization defines its concepts, computes its metrics, enforces its policies, and executes its recurring processes.
 
-Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon is governed by `MJ: Graph Types` (`IsCanon = 1`)**:
+Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon graph types are marked by `MJ: Graph Types` (`IsCanon = 1`)**. How `GraphStage` treats a source's concepts comes from that source's `GraphOverlay` configuration (see the note below the table):
 
 ### Seeded `MJ: Graph Types` (`/metadata/graph-types/.graph-types.json`)
 
-Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon:
+Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon. The flag classifies the graph type; a content source gets Canon behaviour from its own `GraphOverlay` settings (see the note below):
 
 | `GraphType.Name` | `IsCanon` | `Rank` | Primary Purpose | Default `ConceptTaxonomyMode` | Default `GroundingMode` | Default `AuthorityTier` |
 |---|---|---|---|---|---|---|
@@ -32,7 +32,7 @@ Organizations can add custom graph types via metadata or UI and toggle `IsCanon 
 | `'Custom'` | `false` | `100` | Application-specific semantic graphs (or custom canonical graphs when `IsCanon = true`) | `'auto-grow'` unless overridden per source | `'none'` unless overridden | `'Reference'` unless overridden |
 
 > [!NOTE]
-> `GraphStage` does not read the target graph's `MJ: Graph Types` row. `ResolveGraphOverlayConfig` takes `TargetGraphType` (default `'Knowledge'`) and `IsCanon` from the `GraphOverlay` configuration (Content Source Type → Content Source → run), and `IsCanon` defaults to `true` only when `TargetGraphType` is `'Canon'`. Every non-Canon type therefore gets the Knowledge defaults above (`'auto-grow'`, `'none'`, `'Reference'`). To get propose-only Canon behaviour, set `TargetGraphType: "Canon"` or `IsCanon: true` in the source's `GraphOverlay`, or set `ConceptTaxonomyMode` explicitly.
+> `GraphStage` does not read the target graph's `MJ: Graph Types` row. `ResolveGraphOverlayConfig` takes `TargetGraphType` (default `'Knowledge'`) and `IsCanon` from the `GraphOverlay` configuration (the Content Source's `Configuration`, overridden by the run's), and `IsCanon` defaults to `true` only when `TargetGraphType` is `'Canon'`. Every non-Canon type therefore gets the Knowledge defaults above (`'auto-grow'`, `'none'`, `'Reference'`). To get propose-only Canon behaviour, set `TargetGraphType: "Canon"` or `IsCanon: true` in the source's `GraphOverlay`, or set `ConceptTaxonomyMode` explicitly.
 
 ### Seeded `MJ: Graph Concept Types` (`/metadata/graph-concept-types/.graph-concept-types.json`)
 
@@ -135,7 +135,7 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
      - Governed `TagStage` tags (`MJ: Content Item Tags`).
      - Stemmed lexical + synonym similarity (`ScoreConceptNameSimilarity`) against existing `MJ: Graph Concepts` in the target `GraphID`.
    - Within each `ConceptSeedCluster`, chunks are sorted by **`AuthorityTierPrecedence`** (`Bylaws` [100] > `BoardPolicy` [80] > `ExecutiveSOP` [60] > `DepartmentPractice` [40] > `Reference` [20] > `Inferred` [10]) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in one section vs. `"90 days"` in another, or `"$500"` vs. `"$1,000"`). Pairs of chunks under the same heading are skipped, and because each run clusters a single content item, conflicts between two different documents or sources are not detected. When `GraphStage` reads already-persisted `MJ: Content Item Chunks` (rather than the in-memory chunks from a chained `SegmentStage`), every chunk carries the item's own decorator as its heading, so no conflicts are found.
-3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `ManagedPromptConceptSynthesizer`)**:
+3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `DeterministicConceptSynthesizer`)**:
    - Synthesizes one `SynthesizedGraphConcept` per cluster (preserving existing `Description`/`Specification` when enriching an existing concept, and extracting `ParentConceptName` from multi-level heading breadcrumbs).
    - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`Broader Than` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges between conflicting chunks of the same content item.
 
@@ -158,7 +158,7 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
     "GroundingMode": "full-canon",
     "ConceptMatchThreshold": 0.82,
     "MaxNewConceptsPerRun": 50,
-    "SynthesizerKey": "ManagedPrompt"
+    "SynthesizerKey": "Deterministic"
   }
 }
 ```

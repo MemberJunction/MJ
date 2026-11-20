@@ -60,7 +60,7 @@ Tag Health signals are not a separate data path — the server-side `TagHealthJo
 
 ## Schema dependency (post-CodeGen)
 
-The migration `migrations/v5/V202606010800__v5.39.x__TagSynonym_Status.sql` adds `TagSynonym.Status` (`Active`/`Pending`/`Rejected`, default `Active`). With CodeGen run, the Synonyms panel uses it: manually-added synonyms are `Active` (resolve immediately); machine-proposed synonyms (`Source` = LLM/Imported) arrive as `Pending` and show an Approve/Reject affordance — the dry-run preview's client-side resolver uses only `Active` synonyms. The server-side resolver does not filter on status: `TagEngineBase` indexes every `MJ: Tag Synonyms` row, so `Pending` and `Rejected` synonyms also resolve at Tier 0 of `TagEngine.ResolveTag`.
+The migration `migrations/v5/V202606010800__v5.39.x__TagSynonym_Status.sql` adds `TagSynonym.Status` (`Active`/`Pending`/`Rejected`, default `Active`). Manually-added synonyms are `Active`; machine-proposed synonyms (`Source` = LLM/Imported) arrive as `Pending`. The Approve/Reject affordance for them lives in the Classify taxonomy tab (`taxonomy-tab.component.html`), which is not in Classify's navigation; the reachable synonym editor in **Tags → Taxonomy** shows no synonym status and has no Approve/Reject. The dry-run preview's client-side resolver uses only `Active` synonyms. The server-side resolver does not filter on status: `TagEngineBase` indexes every `MJ: Tag Synonyms` row, so `Pending` and `Rejected` synonyms also resolve at Tier 0 of `TagEngine.ResolveTag`.
 
 ## Tests
 

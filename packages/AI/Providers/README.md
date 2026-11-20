@@ -2,7 +2,7 @@
 
 This directory contains all provider-specific implementations of the MemberJunction AI framework interfaces. Each provider package implements the abstract base classes defined in `@memberjunction/ai` to integrate with a specific AI service, translating MJ's common interfaces into provider-specific API calls.
 
-There are 34 provider packages in this directory, grouped by category below. (The Pinecone vector database provider is listed for convenience but lives in `packages/AI/Vectors/Providers`.)
+There are 34 packages in this directory (33 providers plus the `Bundle` loader), grouped by category below. (The Pinecone vector database provider is listed for convenience but lives in `packages/AI/Vectors/Providers`.)
 
 ## Packages
 

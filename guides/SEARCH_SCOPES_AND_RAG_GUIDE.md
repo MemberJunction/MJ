@@ -598,14 +598,14 @@ by `CK_SearchScopePermission_Principal`) at one of four levels:
 1. **Agent and skill restrictions** — an agent or skill with `SearchScopeAccess = 'None'` is refused (`AgentNone` / `SkillNone`); with `'Assigned'`, a scope not in its assigned list is refused (`AgentAssignedNotListed` / `SkillAssignedNotListed`). `'Assigned'` restricts but never grants. A host-assigned scope (`HostAssigned: true`) skips the agent checks. A supplied skill the caller may not activate is refused (`PrincipalNotActivatable`).
 2. **Direct user grant** — `UserID = caller.ID` rows in `SearchScopePermission`. A direct `'None'` row is an explicit deny that overrides any role grant (`Source: 'DirectGrant'`, `Allowed: false`); otherwise the highest direct level wins.
 3. **Role grants** — rows where `RoleID` matches any role the caller belongs to. The highest non-`'None'` level across roles wins; role-level `'None'` rows are ignored.
-4. **`'All'` fallback** — only when no direct or role grant applies: an agent with `SearchScopeAccess = 'All'` (which the caller may run) grants `'Search'` (`AgentUnscopedAll`), then a skill with `'All'` does the same with its agent confirmed (`SkillUnscopedAll`).
+4. **`'All'` fallback** — only when no direct or role grant applies: an agent with `SearchScopeAccess = 'All'` (which the caller may run) grants `'Search'` (`AgentUnscopedAll`), then a skill with `'All'` does the same (`SkillUnscopedAll`; when an agent is supplied, only once that agent is confirmed).
 5. **No grant** — refused (`NoGrant`).
 
 Only grants in force now (`StartAt` / `EndAt`) are considered, and a grant with a `PrimaryScopeRecordID` applies only to a search for that same tenant.
 
 ### Push-down vs safety-net
 
-`SearchEngine` does not call the resolver itself. The callers that choose
+`SearchEngine.Search()` does not call the resolver (only `ExplainScope()` does). The callers that choose
 scopes (pre-execution RAG, the Scoped Search action, and the GraphQL search
 resolvers) resolve the permission first and refuse a denied scope before the
 engine runs, writing a `Forbidden` log row through `LogForbiddenSearch`. The
@@ -750,7 +750,7 @@ SQL queries.
 | `Status` | `'Success' \| 'Failure' \| 'Forbidden'` |
 | `FailureReason` | Short message when not Success |
 | `ProvidersJSON` | Per-source breakdown — feeds dashboard charts |
-| `ScopeDecisionJSON` | Per-scope decisions captured while the search ran (dimension provenance and per-lane outcomes, the same shape `ExplainScope()` returns). Each decision's `Entitlement` is `null`, because the engine does not evaluate scope permission; only `ExplainScope()` fills it. `Forbidden` rows written by `LogForbiddenSearch` carry only `FailureReason`, with `ScopeDecisionJSON` null |
+| `ScopeDecisionJSON` | Per-scope decisions captured while the search ran (dimension provenance and per-lane outcomes, the same shape `ExplainScope()` returns). Each decision's `Entitlement` is `null`, because the engine does not evaluate scope permission; only `ExplainScope()` fills it. `Forbidden` rows written by `LogForbiddenSearch` have `ScopeDecisionJSON` null; the refusal reason is in `FailureReason` |
 
 ### Write semantics
 

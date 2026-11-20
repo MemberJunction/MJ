@@ -166,7 +166,7 @@ flowchart TD
 
 The **`OnContentItemTagSaved` plugin point** is the seam where everything interesting happens. It is declared at [AutotagBaseEngine.ts:840](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L840), wired up by `InitializeTaxonomyBridge()` at [AutotagBaseEngine.ts:545](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L545), and invoked at [AutotagBaseEngine.ts:889](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L889). For entity sources, `AutotagEntity` installs its own callback, [bridgeContentItemTagToTaxonomy()](../packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts#L208), which reads per-source config and delegates to `TagEngine.ResolveTag()`. The engine's default callback, used for every other source type, delegates to `ContentItemTagBridge` with fixed settings (see the note under [Taxonomy modes](#taxonomy-modes)).
 
-If you want to intercept the bridge — for example to add custom governance, route to a different review surface, or attach domain-specific metadata to a `TaggedItem` — replace the callback. Do not subclass `BridgeContentItemTagToTaxonomy`; the seam is the callback.
+If you want to intercept the bridge — for example to add custom governance, route to a different review surface, or attach domain-specific metadata to a `TaggedItem` — replace the callback. The bridge methods themselves are private, so the seam is the callback.
 
 ---
 
@@ -240,7 +240,7 @@ Lower the band and you trade precision for recall (more auto-applied, fewer revi
 Each `ContentSource` picks one of four modes via `IContentSourceConfiguration.TagTaxonomyMode`. The mode controls *only* what happens at Tier 4 (no match). Tiers 0–3 always run.
 
 > [!NOTE]
-> Only entity sources (`AutotagEntity`) read `TagTaxonomyMode`, `TagRootID`, `TagMatchThreshold` and `SuggestThreshold` from the source. Currently, every other source type (website, cloud storage, local file system, RSS, upload) and the Content Pipeline's `TagStage` ignore these settings: they promote tags through [`ContentItemTagBridge`](../packages/AI/Knowledge/TagEngine/src/ContentItemTagBridge.ts), which always calls `ResolveTag()` in `'auto-grow'` mode across the whole taxonomy (no `TagRootID`) with a fixed match threshold of `0.8`.
+> Only entity sources (`AutotagEntity`) read `TagTaxonomyMode`, `TagRootID`, `TagMatchThreshold` and `SuggestThreshold` from the source. Every other source type (website, cloud storage, local file system, RSS, upload) and the Content Pipeline's `TagStage` ignore these settings: they promote tags through [`ContentItemTagBridge`](../packages/AI/Knowledge/TagEngine/src/ContentItemTagBridge.ts), which always calls `ResolveTag()` in `'auto-grow'` mode across the whole taxonomy (no `TagRootID`) with a fixed match threshold of `0.8` and no suggest threshold, so the near-miss band is the default `0.75`–`0.8`: a best match in that band is queued as a `BelowThreshold` suggestion, and a lower score goes to auto-grow handling.
 
 ```mermaid
 stateDiagram-v2
