@@ -1,6 +1,7 @@
 <!--
   Entity-agnostic model-prediction panel (§5.8.5). Renders NOTHING unless the record has a prediction the user is
-  authorized to see or a pipeline feature value. Driven entirely by Feature Values and binding metadata.
+  authorized to see, a pipeline feature value, or a failed read (shown with its reason). Driven entirely by Feature
+  Values and binding metadata.
 -->
 @if (HasContent) {
   <mj-collapsible-panel
@@ -11,6 +12,13 @@
       [Form]="FormComponent"
       [FormContext]="FormContext"
       [BadgeCount]="Cards.length">
+
+    @if (LoadError) {
+      <div class="mpp-load-error" data-testid="ps-prediction-load-error" role="alert">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <span>{{ LoadError }}</span>
+      </div>
+    }
 
     @if (Cards.length > 0) {
       <div class="mpp-cards">

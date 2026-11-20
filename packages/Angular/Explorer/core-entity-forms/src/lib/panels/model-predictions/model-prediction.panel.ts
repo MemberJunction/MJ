@@ -60,6 +60,9 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     /** True once the reads have completed (success or not). */
     public Loaded = false;
 
+    /** Why the last read failed, shown in place of the cards; null after a successful read. */
+    public LoadError: string | null = null;
+
     public async ngOnInit(): Promise<void> {
         await this.load();
     }
@@ -69,9 +72,9 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         void this.load();
     }
 
-    /** True when there is a card or a derived value to show — gates the whole template. */
+    /** True when there is a card, a derived value or a read failure to show — gates the whole template. */
     public get HasContent(): boolean {
-        return this.Cards.length > 0 || this.DerivedValues.length > 0;
+        return this.Cards.length > 0 || this.DerivedValues.length > 0 || this.LoadError !== null;
     }
 
     /** A derived value's confidence as a percentage, or null. */
@@ -82,7 +85,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     /**
      * Reads the record's predictions: the panel batch (`PredictionPanelQueries.For`, the one G5.6 replays), then — only when an
      * authorized binding has a value — the lineage batch ({@link ModelPredictionLogic.LineageQueries}). A failed read
-     * renders nothing and is logged.
+     * is logged and shown as an error state naming the reason, never as an empty panel.
      */
     private async load(): Promise<void> {
         const provider = this.FormComponent?.ProviderToUse;
@@ -110,8 +113,9 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             const lineage = await this.loadLineage(provider, latest);
             this.finish(this.buildCards(bindings, latest, history, lineage), derived);
         } catch (e) {
-            LogError(`[ModelPredictionPanel] Failed to load predictions: ${e instanceof Error ? e.message : String(e)}`);
-            this.finish([], []);
+            const reason = e instanceof Error ? e.message : String(e);
+            LogError(`[ModelPredictionPanel] Failed to load predictions: ${reason}`);
+            this.finish([], [], `Could not load the predictions: ${reason}`);
         }
     }
 
@@ -164,9 +168,10 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         return cards;
     }
 
-    private finish(cards: PredictionCard[], derived: FeatureValueCard[]): void {
+    private finish(cards: PredictionCard[], derived: FeatureValueCard[], loadError: string | null = null): void {
         this.Cards = cards;
         this.DerivedValues = derived;
+        this.LoadError = loadError;
         this.Loaded = true;
         this.cdr.markForCheck();
     }

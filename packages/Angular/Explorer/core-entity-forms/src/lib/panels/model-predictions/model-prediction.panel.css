@@ -2,6 +2,18 @@
    Design-token-clean: every color is a --mj-* semantic token. A classification's gauge is the adverse-class
    probability, colored by its risk band (the At-Risk list's bands); a regression shows its value without a band. */
 
+/* A failed read: the reason, in place of the cards. */
+.mpp-load-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--mj-status-danger);
+    border-radius: var(--mj-radius-md, 8px);
+    color: var(--mj-status-danger);
+    font-size: 0.85rem;
+}
+
 .mpp-cards {
     display: flex;
     flex-direction: column;

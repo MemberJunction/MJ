@@ -75,6 +75,8 @@ const run: PanelRunRow = { ID: 'RUN1', ModelID: 'M1', ModelVersion: MODEL_VERSIO
 const outputBinding: PanelOutputBindingRow = { ID: 'OB1', ModelID: 'M1', Surface: 'record-panel', SortsBy: 'adverse-probability-desc', DriverDirectionRelativeTo: 'adverse-class', Label: 'Lapse risk' };
 
 interface RenderOptions {
+    /** When set, the read of this entity fails with `failure`. */
+    failing?: { Entity: string; Message: string };
     bindings: PanelBindingRow[];
     latest?: PanelValueRow[];
     history?: PanelValueRow[];
@@ -101,7 +103,11 @@ let reads: RunViewParams[] = [];
 
 async function RenderPanel(o: RenderOptions): Promise<ComponentFixture<ModelPredictionPanel>> {
     reads = [];
-    const provider = CreateFakeProvider<ServedRow>({ runViewResults: (p) => { reads.push(p); return served(p, o); } });
+    const provider = CreateFakeProvider<ServedRow>({ runViewResults: (p) => {
+        reads.push(p);
+        if (o.failing && p.EntityName === o.failing.Entity) throw new Error(o.failing.Message);
+        return served(p, o);
+    } });
     const form: FormDouble = { ProviderToUse: Object.assign(provider, { CurrentUser: o.user, Authorizations: [viewModelPredictions] }) };
     const record: RecordDouble = { IsSaved: true, EntityInfo: { ID: 'E1' }, PrimaryKey: { ToCompactURLSegment: () => 'R1' } };
     TestBed.configureTestingModule({ imports: [CollapsiblePanelStub], declarations: [ModelPredictionPanel] });
@@ -171,5 +177,11 @@ describe('ModelPredictionPanel (DOM) — predictions from Feature Values', () =>
         const f = await RenderPanel({ bindings: [binding], latest: [Latest(0.72, DAY3), other], user: developer });
         expect(Count(f, 'ps-prediction-card')).toBe(1);
         expect(f.nativeElement.textContent).not.toContain('40%');
+    });
+
+    it('a failed read shows an error state with the reason, not an empty panel', async () => {
+        const f = await RenderPanel({ bindings: [binding], latest: [Latest(0.72, DAY3)], user: developer, failing: { Entity: 'MJ: Latest Feature Values', Message: 'the view is unavailable' } });
+        expect(Text(f, 'ps-prediction-load-error')).toBe('Could not load the predictions: the view is unavailable');
+        expect(Count(f, 'ps-prediction-card')).toBe(0);
     });
 });
