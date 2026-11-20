@@ -10,6 +10,11 @@
 .mj-btn {
   /* 44px literal until Wave 1's intentional 44px -> 40px (--mj-control-height-md) shift */
   --_mj-button-height: var(--mj-button-height, 44px);
+  --_mj-button-icon-size: var(--mj-button-icon-size, var(--mj-text-base, 1rem));
+
+  @media (pointer: coarse) {
+    --_mj-button-height: max(var(--mj-control-height-md, 44px), var(--mj-button-height, 44px));
+  }
 
   box-sizing: border-box;
   display: inline-flex;
@@ -80,7 +85,7 @@
   .fa-solid,
   .fa-regular,
   .fa-light {
-    font-size: var(--mj-button-icon-size, var(--mj-text-base, 1rem));
+    font-size: var(--_mj-button-icon-size);
     line-height: 1;
   }
 }
@@ -150,7 +155,7 @@
 
   &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-outline-bg-active, var(--mj-brand-primary-active));
-    color: var(--mj-button-outline-text-active, var(--mj-brand-on-primary));
+    color: var(--mj-button-outline-text-active, var(--mj-button-outline-text-hover, var(--mj-brand-on-primary)));
     border-color: var(--mj-button-outline-border-active, var(--mj-button-outline-border-hover, var(--_mj-button-border)));
   }
 }
@@ -252,29 +257,31 @@
   }
 }
 
-/* ========== Sizes ========== */
+/* ========== Sizes & Touch Targets ========== */
 .mj-btn--sm {
   --_mj-button-height: var(--mj-button-sm-height, var(--mj-control-height-sm, 32px));
+  --_mj-button-icon-size: var(--mj-button-sm-icon-size, var(--mj-button-icon-size, var(--mj-text-base, 1rem)));
   padding: var(--mj-button-sm-padding, 6px 12px);
   font-size: var(--mj-button-sm-font-size, 0.8125rem);
   min-height: var(--_mj-button-height);
   gap: var(--mj-button-sm-gap, 6px);
+
+  @media (pointer: coarse) {
+    --_mj-button-height: max(var(--mj-control-height-sm, 44px), var(--mj-button-sm-height, 44px));
+    padding: var(--mj-button-sm-padding, 10px 12px);
+  }
 }
 
 .mj-btn--lg {
   --_mj-button-height: var(--mj-button-lg-height, var(--mj-control-height-lg, 52px));
+  --_mj-button-icon-size: var(--mj-button-lg-icon-size, var(--mj-button-icon-size, var(--mj-text-base, 1rem)));
   padding: var(--mj-button-lg-padding, 14px 28px);
   font-size: var(--mj-button-lg-font-size, var(--mj-text-base, 1rem));
   min-height: var(--_mj-button-height);
   gap: var(--mj-button-lg-gap, 10px);
-}
 
-/* ========== Touch targets ========== */
-@media (pointer: coarse) {
-  .mj-btn--sm {
-    --_mj-button-height: var(--mj-button-sm-height, var(--mj-control-height-sm, 44px));
-    min-height: var(--_mj-button-height);
-    padding: var(--mj-button-sm-padding, 10px 12px);
+  @media (pointer: coarse) {
+    --_mj-button-height: max(44px, var(--mj-button-lg-height, var(--mj-control-height-lg, 52px)));
   }
 }
 
@@ -304,9 +311,9 @@
   --_mj-button-border: var(--mj-button-border-selected, var(--mj-brand-primary));
 
   &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
-    background: var(--mj-button-primary-bg-hover, var(--mj-brand-primary-hover));
-    color: var(--mj-button-text-selected, var(--mj-brand-on-primary));
-    border-color: var(--mj-button-primary-border-hover, var(--mj-brand-primary-hover));
+    background: var(--mj-button-bg-selected-hover, var(--mj-button-primary-bg-hover, var(--mj-brand-primary-hover)));
+    color: var(--mj-button-text-selected-hover, var(--mj-button-text-selected, var(--mj-brand-on-primary)));
+    border-color: var(--mj-button-border-selected-hover, var(--mj-button-primary-border-hover, var(--mj-brand-primary-hover)));
   }
 }
 

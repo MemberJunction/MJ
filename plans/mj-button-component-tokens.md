@@ -1,6 +1,6 @@
 # Give `mjButton` Component Tokens, Fix Focus/Motion/Link-Disabled Bugs, and Add `[FullWidth]`: Implementation Plan
 
-**Status:** IMPLEMENTED on PR #6791 (2026-11-20), pending Colin's review on the two naming questions below before merge.
+**Status:** IMPLEMENTED on PR #6791 (2026-11-20), naming decisions settled with Colin Brockman and reviewed by Robert Kihm.
 **Related:** [UNIFIED_PLAN.md](ui-foundation/UNIFIED_PLAN.md), [NAMING.md](ui-foundation/NAMING.md), Issue #4845 ([4845-remove-legacy-mj-btn-block.md](4845-remove-legacy-mj-btn-block.md)).
 
 ## Goal
@@ -55,16 +55,16 @@ Only the base `.mj-btn` hover/active lift rules carried `(0,7,0)` specificity an
 
 ---
 
-## Complete Token Surface (`NAMING.md` Verified: 106 Tokens)
+## Complete Token Surface (`NAMING.md` Verified: 111 Tokens)
 
-Grammar: `--mj-button[-<variant>]-<property>[-<state>]`
+Grammar: `--mj-button[-<variant>]-<property>[-<condition>][-<interaction>]`
 All public `--mj-button-*` tokens are **unset** on `:root`.
 
-### Base, Motion, Focus, Disabled, and Selected (21 tokens)
+### Base, Motion, Focus, Disabled, and Selected (24 tokens)
 
 | Token | CSS property | Fallback in `button.scss` | Today's resolved value |
 | --- | --- | --- | --- |
-| `--mj-button-height` | `min-height` (via `--_mj-button-height`) | `44px` | `44px` |
+| `--mj-button-height` | `min-height` (via `--_mj-button-height`, `max(44px, ...)` on coarse) | `44px` | `44px` |
 | `--mj-button-padding` | `padding` | `10px 20px` | `10px 20px` |
 | `--mj-button-gap` | `gap` | `8px` | `8px` |
 | `--mj-button-border-width` | `border-width` | `1px` | `1px` |
@@ -72,7 +72,7 @@ All public `--mj-button-*` tokens are **unset** on `:root`.
 | `--mj-button-radius` | `border-radius` | `var(--mj-radius-control, var(--mj-radius-md))` | `8px` |
 | `--mj-button-font-size` | `font-size` | `var(--mj-text-sm)` | `0.875rem` (`14px`) |
 | `--mj-button-font-weight` | `font-weight` | `var(--mj-font-semibold)` | `600` |
-| `--mj-button-icon-size` | icon `font-size` | `var(--mj-text-base, 1rem)` | `1rem` (`16px`) |
+| `--mj-button-icon-size` | icon `font-size` (via `--_mj-button-icon-size`) | `var(--mj-text-base, 1rem)` | `1rem` (`16px`) |
 | `--mj-button-shadow-focus` | `:focus-visible` `box-shadow` | `var(--mj-focus-ring)` | focus ring |
 | `--mj-button-transform-hover` | lifted `:hover` `transform` (`no-preference`) | `translateY(-2px)` | `translateY(-2px)` |
 | `--mj-button-shadow-hover` | lifted `:hover` `box-shadow` | `0 4px 8px rgba(0, 0, 0, 0.1)` | `0 4px 8px rgba(0, 0, 0, 0.1)` |
@@ -85,19 +85,24 @@ All public `--mj-button-*` tokens are **unset** on `:root`.
 | `--mj-button-bg-selected` | `.mj-btn--selected` `background` | `var(--mj-brand-primary)` | brand-500 |
 | `--mj-button-text-selected` | `.mj-btn--selected` `color` | `var(--mj-brand-on-primary)` | neutral-0 |
 | `--mj-button-border-selected` | `.mj-btn--selected` `border-color` | `var(--mj-brand-primary)` | brand-500 |
+| `--mj-button-bg-selected-hover` | `.mj-btn--selected:hover` `background` | `var(--mj-button-primary-bg-hover, var(--mj-brand-primary-hover))` | brand-600 |
+| `--mj-button-text-selected-hover` | `.mj-btn--selected:hover` `color` | `var(--mj-button-text-selected, var(--mj-brand-on-primary))` | neutral-0 |
+| `--mj-button-border-selected-hover` | `.mj-btn--selected:hover` `border-color` | `var(--mj-button-primary-border-hover, var(--mj-brand-primary-hover))` | brand-600 |
 
-### Size Variants: `sm` and `lg` (8 tokens)
+### Size Variants: `sm` and `lg` (10 tokens)
 
 | Token | CSS property | Fallback in `button.scss` | Today's resolved value |
 | --- | --- | --- | --- |
-| `--mj-button-sm-height` | `min-height` (via `--_mj-button-height`) | `var(--mj-control-height-sm, 32px)` (`44px` on `pointer: coarse`) | `32px` (`44px` touch) |
+| `--mj-button-sm-height` | `min-height` (`max(44px, ...)` on `pointer: coarse`) | `var(--mj-control-height-sm, 32px)` | `32px` (`44px` touch) |
 | `--mj-button-sm-padding` | `padding` | `6px 12px` (`10px 12px` on `pointer: coarse`) | `6px 12px` (`10px 12px` touch) |
 | `--mj-button-sm-font-size` | `font-size` | `0.8125rem` | `0.8125rem` (`13px`) |
 | `--mj-button-sm-gap` | `gap` | `6px` | `6px` |
-| `--mj-button-lg-height` | `min-height` (via `--_mj-button-height`) | `var(--mj-control-height-lg, 52px)` | `52px` |
+| `--mj-button-sm-icon-size` | icon `font-size` | `var(--mj-button-icon-size, var(--mj-text-base, 1rem))` | `1rem` (`16px`) |
+| `--mj-button-lg-height` | `min-height` (`max(44px, ...)` on `pointer: coarse`) | `var(--mj-control-height-lg, 52px)` | `52px` |
 | `--mj-button-lg-padding` | `padding` | `14px 28px` | `14px 28px` |
 | `--mj-button-lg-font-size` | `font-size` | `var(--mj-text-base, 1rem)` | `1rem` (`16px`) |
 | `--mj-button-lg-gap` | `gap` | `10px` | `10px` |
+| `--mj-button-lg-icon-size` | icon `font-size` | `var(--mj-button-icon-size, var(--mj-text-base, 1rem))` | `1rem` (`16px`) |
 
 ### Visual Variants: All 8 Variants (77 tokens)
 
@@ -107,7 +112,7 @@ Every variant exposes the 9-token set `--mj-button-<variant>-{bg,text,border}[-{
 | --- | --- | --- | --- |
 | `primary` | `--mj-brand-primary` / `--mj-brand-on-primary` / `--mj-brand-primary` | `--mj-brand-primary-hover` / rest `text` / `--mj-brand-primary-hover` | `--mj-brand-primary-active` / hover `text` / `--mj-brand-primary-active` |
 | `secondary` | `--mj-bg-surface-sunken` / `--mj-text-primary` / `--mj-border-default` | `--mj-bg-surface-active` / rest `text` / `--mj-border-strong` | `color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface-active))` / hover `text` / hover `border` |
-| `outline` | `transparent` / `--mj-brand-primary` / `--mj-brand-primary` | `--mj-brand-primary` / `--mj-brand-on-primary` / rest `border` | `--mj-brand-primary-active` / `--mj-brand-on-primary` / rest `border` |
+| `outline` | `transparent` / `--mj-brand-primary` / `--mj-brand-primary` | `--mj-brand-primary` / `--mj-brand-on-primary` / rest `border` | `--mj-brand-primary-active` / hover `text` / hover `border` |
 | `flat` | `transparent` / `--mj-text-secondary` / `transparent` (+ `--mj-button-flat-padding`: `8px 12px`) | `--mj-bg-surface-hover` / `--mj-text-primary` / rest `border` | `--mj-bg-surface-active` / hover `text` / hover `border` |
 | `danger` | `--mj-status-error` / `--mj-text-inverse` / `--mj-status-error` | `--mj-status-error-text` / rest `text` / `--mj-status-error-text` | hover `bg` / hover `text` / hover `border` (+ `--mj-button-danger-opacity-active`: `0.9`) |
 | `success` | `--mj-status-success` / `--mj-text-inverse` / `--mj-status-success` | `--mj-status-success-text` / rest `text` / `--mj-status-success-text` | hover `bg` / hover `text` / hover `border` (+ `--mj-button-success-opacity-active`: `0.9`) |
@@ -116,10 +121,11 @@ Every variant exposes the 9-token set `--mj-button-<variant>-{bg,text,border}[-{
 
 *(Note on `warning`: `--mj-button-warning-text` retains today's `--mj-text-inverse` fallback so this PR stays visually zero-diff at rest; Issue `#3372` tracks switching filled status button contrast to `--mj-status-on-warning` separately.)*
 
-### Known Grammar Gaps Flagged for Naming Review (Matt + Colin)
+### Naming Decisions Settled in Review (Matt + Colin, 2026-11-20)
 
-1. **Orthogonal states (`selected` + `hover`):** `NAMING.md` restricts `state` to a single slot (`hover | active | focus | disabled | selected | checked | error`), so `.mj-btn--selected:hover` cannot expose `--mj-button-bg-selected-hover` and currently borrows `--mj-button-primary-bg-hover` / `--mj-button-primary-border-hover` as an internal fallback to preserve stock MJ's exact `#006aa3` hover color. Because this is a fallback rather than a public token name, changing it once `NAMING.md` settles orthogonal states across controls (`selected` + `hover` on buttons, rows, and surfaces; `checked` + `hover` on switches) is non-breaking.
-2. **`icon-size` property vs `icon` variant and `icon` part:** In `NAMING.md`, `icon` appears as a `variant` (`Variant="icon"`), a named `part` (`icon` leading icon), and the prefix of the `icon-size` property. While `--mj-button-icon-size` parses unambiguously because `size` is not a property word, a per-variant or per-part override produces `--mj-button-icon-icon-size` or `--mj-card-icon-icon-size`, which fails the inferability test. Flagged for Matt and Colin to confirm whether `icon-size` stays or renames (for example `glyph-size`) before `--mj-button-icon-size` ships in a release.
+1. **`opacity` and `transform` in `NAMING.md`:** Adopted in the Tier 3 property vocabulary, keeping `transform` gated by `prefers-reduced-motion: no-preference` for micro-interactions only.
+2. **Orthogonal states (`[-<condition>][-<interaction>]`):** Split the Tier 3 state tail into optional `condition` (`selected | checked | error`) followed by optional `interaction` (`hover | active | focus | disabled`). `.mj-btn--selected:hover` now exposes `--mj-button-{bg,text,border}-selected-hover` while keeping the Phase 3 regex deterministic across the kit (`--mj-row-bg-selected-hover`, `--mj-switch-bg-checked-hover`, `--mj-input-border-error-focus`).
+3. **Keep `icon-size` with a no-stacking rule:** Kept `icon-size` for first-guess discoverability (`--mj-button-icon-size`, `--mj-button-sm-icon-size`, `--mj-button-lg-icon-size`, `--mj-row-icon-size`) and added the rule in `NAMING.md` forbidding stacking the `icon` variant or `icon` part with `icon-size` (`--mj-button-icon-icon-size` is disallowed).
 
 ---
 

@@ -103,6 +103,17 @@ class NativeAndDirectiveDisabledHostComponent {
   Selected = false;
 }
 
+/** Bare HTML boolean attributes (FullWidth, Disabled) without ="true" bindings. */
+@Component({
+  standalone: true,
+  imports: [MJButtonDirective],
+  template: `
+    <button id="shorthand-full" type="button" mjButton FullWidth>Continue</button>
+    <a id="shorthand-disabled" mjButton href="#skip" Disabled>Unavailable</a>
+  `,
+})
+class ShorthandBooleanAttributesHostComponent {}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -222,5 +233,15 @@ describe('MJButtonDirective (DOM)', () => {
     nativeBtn.click();
     f.detectChanges();
     expect(f.componentInstance.Selected).toBe(true);
+  });
+
+  it('supports bare boolean attributes FullWidth and Disabled via booleanAttribute transform', () => {
+    const f = renderComponentFixture(ShorthandBooleanAttributesHostComponent);
+    const fullBtn = f.nativeElement.querySelector('#shorthand-full') as HTMLButtonElement;
+    const disabledLink = f.nativeElement.querySelector('#shorthand-disabled') as HTMLAnchorElement;
+
+    expect(fullBtn.classList.contains('mj-btn--full')).toBe(true);
+    expect(disabledLink.getAttribute('aria-disabled')).toBe('true');
+    expect(disabledLink.getAttribute('tabindex')).toBe('-1');
   });
 });

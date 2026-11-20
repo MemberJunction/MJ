@@ -1,4 +1,5 @@
 import {
+  booleanAttribute,
   Directive,
   Input,
   Output,
@@ -120,7 +121,7 @@ export class MJButtonDirective implements AfterContentInit, OnDestroy {
    * Stretches the button to `width: 100%` of its container via `.mj-btn--full`.
    * Opt-in per template instance rather than inferred from parent container selectors.
    */
-  @Input() FullWidth = false;
+  @Input({ transform: booleanAttribute }) FullWidth = false;
 
   /**
    * Disables a `<button mjButton>` or `<a mjButton>`.
@@ -130,7 +131,7 @@ export class MJButtonDirective implements AfterContentInit, OnDestroy {
    * and blocks pointer and keyboard activation. On `<button>`, forwards to native `disabled` only when
    * bound so existing lowercase `[disabled]` bindings on `<button>` are never clobbered.
    */
-  @Input()
+  @Input({ transform: booleanAttribute })
   set Disabled(value: boolean) {
     const next = Boolean(value);
     this._disabled = next;
