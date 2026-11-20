@@ -116,6 +116,11 @@ class FakeEntity {
 
     constructor(private readonly entityName: string, private readonly options: FakeEntityOptions) {}
 
+    /** The entity's name, which a load reads to find the entity's read hooks. */
+    public get EntityInfo(): { Name: string } {
+        return { Name: this.entityName };
+    }
+
     public SetMany(values: Record<string, unknown>): void {
         this.values = { ...this.values, ...values };
     }

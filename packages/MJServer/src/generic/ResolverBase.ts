@@ -2,6 +2,7 @@ import {
   AggregateExpression,
   AssertClientInputWritableForUser,
   BaseEntity,
+  BaseEntityResult,
   BaseEntityEvent,
   CompositeFilterDescriptor,
   CompositeKey,
@@ -2900,6 +2901,35 @@ export class ResolverBase {
     } catch (errorLogError) {
       console.error('Error creating ErrorLog record:', errorLogError);
     }
+  }
+
+  /**
+   * Loads `entity` by `key` through the read hooks of its entity for `user`. Returns 'refused'
+   * when the record exists but the hooks remove it for `user`: the entity is then reset to a new
+   * record, so it holds no stored value, and holds a failed result with the not-found message.
+   * Returns 'loaded' when the record loads and passes, and 'missing' when there is no record.
+   */
+  protected async LoadRecordForWrite(
+    entity: BaseEntity,
+    key: CompositeKey,
+    user: UserInfo,
+    operation: 'update' | 'delete'
+  ): Promise<'loaded' | 'missing' | 'refused'> {
+    if (await LoadRecordPassingReadHooks(entity, key, user)) {
+      return 'loaded';
+    }
+    if (!entity.IsSaved) {
+      return 'missing';
+    }
+    entity.NewRecord();
+    const result = new BaseEntityResult();
+    result.Success = false;
+    result.Type = operation;
+    result.Message = 'Record not found or access denied';
+    result.StartedAt = new Date();
+    result.EndedAt = new Date();
+    entity.RegisterResultHistoryEntry(result);
+    return 'refused';
   }
 
   protected async DeleteRecord(
