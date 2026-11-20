@@ -693,7 +693,7 @@ describe('the registry step (g)', () => {
   });
 
   it('reads its configuration with the defaults of D4-22', () => {
-    expect([PreGateModelMigration.ConfigFrom(null), PreGateModelMigration.ConfigFrom({ batchSize: 10, retrainPerRun: 1 }), PreGateModelMigration.ConfigFrom({ batchSize: -1 })])
+    expect([PreGateModelMigration.ConfigFrom(null), PreGateModelMigration.ConfigFrom({ BatchSize: 10, RetrainPerRun: 1 }), PreGateModelMigration.ConfigFrom({ BatchSize: -1 })])
       .toEqual([{ BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 1 }, { BatchSize: 50, RetrainPerRun: 3 }]);
   });
 

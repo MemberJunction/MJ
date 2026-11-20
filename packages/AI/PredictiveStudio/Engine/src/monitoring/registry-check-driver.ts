@@ -68,7 +68,7 @@ export const VIEW_GATED_ENTITIES = ['MJ: Feature Values', 'MJ: Latest Feature Va
 export interface RegistryCheckConfiguration {
   /** Hours a scoring run may stay `running` before (e) fails it. */
   readonly StaleScoringRunHours: number;
-  /** Step (g)'s limits, from `Configuration.migration` (`{ batchSize, retrainPerRun }`, D4-22). */
+  /** Step (g)'s limits, from `Configuration.Migration` (`{ BatchSize, RetrainPerRun }`, D4-22). */
   readonly Migration: PreChangeMigrationConfig;
   /** `Configuration.ArtifactHealth.Enabled` (default true): false skips step (c). */
   readonly ArtifactHealth: boolean;
@@ -251,7 +251,7 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     };
     return {
       StaleScoringRunHours: hours !== null && hours > 0 ? hours : PredictiveStudioRegistryCheckJobDriver.DEFAULT_STALE_HOURS,
-      Migration: PreGateModelMigration.ConfigFrom(root === null ? null : JsonParse.JsonObjectField(root, 'migration')),
+      Migration: PreGateModelMigration.ConfigFrom(root === null ? null : JsonParse.JsonObjectField(root, 'Migration')),
       ArtifactHealth: enabled('ArtifactHealth'),
       AuditComparison: enabled('AuditComparison'),
     };

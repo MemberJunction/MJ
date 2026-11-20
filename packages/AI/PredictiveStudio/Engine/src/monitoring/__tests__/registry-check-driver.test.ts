@@ -358,7 +358,7 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     it('step (g) runs before (a) and its Details carry the migration\'s record', async () => {
       const legacy = LegacyServing();
       const ordered = new OrderRecordingDriver({ Gate: gate, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now }, Migration: { Gate: gate } });
-      const result = await ordered.Execute(await JobContext(JSON.stringify({ migration: { batchSize: 50, retrainPerRun: 3 } })));
+      const result = await ordered.Execute(await JobContext(JSON.stringify({ Migration: { BatchSize: 50, RetrainPerRun: 3 } })));
       expect(ordered.Order).toEqual(['g', 'a']);
       expect(store.Row('MJ: ML Models', legacy.ID)).toMatchObject({ Status: 'Unevaluated', ServingWhileUnevaluated: true, ArtifactStatus: 'verified', ArtifactSha256: SnapshotHash.Sha256Hex(legacy.Bytes) });
       expect(result.Details?.[PreGateModelMigration.DetailsKey]).toMatchObject({
@@ -374,9 +374,9 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
       expect(result.Details).not.toHaveProperty(PreGateModelMigration.DetailsKey);
     });
 
-    it('reads Configuration.migration with the defaults of D4-22', () => {
+    it('reads Configuration.Migration with the defaults of D4-22', () => {
       const read = (text: string | null): RegistryCheckConfiguration['Migration'] => PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(text).Migration;
-      expect([read(null), read(JSON.stringify({ migration: { batchSize: 10, retrainPerRun: 0 } })), read(JSON.stringify({ migration: { batchSize: -1 } }))]).toEqual([
+      expect([read(null), read(JSON.stringify({ Migration: { BatchSize: 10, RetrainPerRun: 0 } })), read(JSON.stringify({ Migration: { BatchSize: -1 } }))]).toEqual([
         { BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 0 }, { BatchSize: 50, RetrainPerRun: 3 },
       ]);
     });

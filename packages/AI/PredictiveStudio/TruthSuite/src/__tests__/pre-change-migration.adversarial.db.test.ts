@@ -474,7 +474,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
   /** One registry step as the job run; its Details saved on the run, as the job driver records them. */
   async function registryStep(): Promise<PreChangeStepDetails | null> {
     const ctx = PreGateMigrationContexts.ForJobRun({ ContextUser: server.User, Provider: server.Provider }, jobRunId);
-    const config = PreGateModelMigration.ConfigFrom({ batchSize: 50, retrainPerRun: 3 });
+    const config = PreGateModelMigration.ConfigFrom({ BatchSize: 50, RetrainPerRun: 3 });
     const details = await PreGateModelMigration.RunRegistryStep(config, ctx);
     const run = await server.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', server.User);
     if (!(await run.Load(jobRunId))) throw new Error(`Scheduled Job Run ${jobRunId} is gone`);

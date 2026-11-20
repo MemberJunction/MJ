@@ -91,7 +91,7 @@ export interface PreGateMigrationContext extends GateContext {
   readonly Heartbeat?: () => Promise<void>;
 }
 
-/** The job's `Configuration.migration` (camelCase like the job's other configuration keys). */
+/** The job's `Configuration.Migration` (PascalCase like the job's other configuration keys). */
 export interface PreChangeMigrationConfig {
   /** Models visited per step per run (default 50). */
   readonly BatchSize: number;
@@ -487,10 +487,13 @@ export class PreGateModelMigration {
     return status === 'Unevaluated' && (reason === PreGateModelMigration.NotServingReason || reason === PreGateModelMigration.ServingReason);
   }
 
-  /** The job's `Configuration.migration` (`{ batchSize, retrainPerRun }`), each a positive integer, else its default. Pure. */
+  /**
+   * The job's `Configuration.Migration` (`{ BatchSize, RetrainPerRun }`): `BatchSize` a positive integer and
+   * `RetrainPerRun` a non-negative one, each else its default. Pure.
+   */
   public static ConfigFrom(migration: JsonObject | null): PreChangeMigrationConfig {
-    const batch = migration === null ? null : JsonParse.JsonInteger(migration, 'batchSize');
-    const retrain = migration === null ? null : JsonParse.JsonInteger(migration, 'retrainPerRun');
+    const batch = migration === null ? null : JsonParse.JsonInteger(migration, 'BatchSize');
+    const retrain = migration === null ? null : JsonParse.JsonInteger(migration, 'RetrainPerRun');
     return {
       BatchSize: batch !== null && batch > 0 ? batch : PreGateModelMigration.DefaultConfig.BatchSize,
       RetrainPerRun: retrain !== null && retrain >= 0 ? retrain : PreGateModelMigration.DefaultConfig.RetrainPerRun,
