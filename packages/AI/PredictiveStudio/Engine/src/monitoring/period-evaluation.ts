@@ -46,7 +46,8 @@ interface RowStatistic {
 
 /** The period's rows a statistic is computed over, in decision-date order, with their resampling groups. */
 interface ResampleFrame {
-  readonly Groups: readonly string[];
+  /** The row indices of each group, in first-seen order (built once per frame; a cluster draw picks whole groups). */
+  readonly Members: readonly (readonly number[])[];
   readonly Spec: IntervalSpec;
   readonly Seed: number;
 }
@@ -69,7 +70,7 @@ export class PeriodEvaluation {
   public static Score(rows: readonly JoinedRow[], spec: PeriodScoringSpec): PeriodScores {
     const labelled = PeriodEvaluation.ordered(rows.filter((r) => r.Outcome !== null));
     if (labelled.length === 0) throw new Error('PeriodEvaluation.Score: the period has no row with a realised outcome');
-    const frame: ResampleFrame = { Groups: labelled.map((r) => r.GroupKey), Spec: spec.Interval, Seed: spec.Seed };
+    const frame = PeriodEvaluation.frame(labelled.map((r) => r.GroupKey), spec);
     const primary = PeriodEvaluation.metric(spec.PrimaryScore.metric, PeriodEvaluation.lossOf(spec.PrimaryScore.metric, labelled, spec.Task), frame);
     return {
       Primary: primary,
@@ -109,7 +110,7 @@ export class PeriodEvaluation {
     const pre = PeriodEvaluation.lossOf(metric, keep.map((i) => predecessor[i]), spec.Task);
     const value = (idx: readonly number[]): number => cur.Reduce(idx.map((i) => cur.Values[i])) - pre.Reduce(idx.map((i) => pre.Values[i]));
     const all = cur.Values.map((_, i) => i);
-    const frame: ResampleFrame = { Groups: keep.map((i) => current[i].GroupKey), Spec: spec.Interval, Seed: spec.Seed };
+    const frame = PeriodEvaluation.frame(keep.map((i) => current[i].GroupKey), spec);
     const draws = PeriodEvaluation.resampleIndices(all.length, frame).map(value);
     return { metric, value: value(all), interval: PeriodEvaluation.percentile(draws), n: all.length };
   }
@@ -264,19 +265,29 @@ export class PeriodEvaluation {
     const rng = PeriodEvaluation.rng(frame.Seed);
     const out: number[][] = [];
     for (let r = 0; r < frame.Spec.resamples; r++) {
-      if (frame.Spec.method === 'cluster-bootstrap') out.push(PeriodEvaluation.clusterDraw(frame.Groups, rng));
+      if (frame.Spec.method === 'cluster-bootstrap') out.push(PeriodEvaluation.clusterDraw(frame.Members, rng));
       else if (frame.Spec.method === 'block-bootstrap') out.push(PeriodEvaluation.blockDraw(n, rng));
       else out.push(Array.from({ length: n }, () => Math.floor(rng() * n)));
     }
     return out;
   }
 
-  private static clusterDraw(groups: readonly string[], rng: () => number): number[] {
+  /** A resample frame over rows whose groups are `groupKeys`: each group's row indices indexed once. */
+  private static frame(groupKeys: readonly string[], spec: PeriodScoringSpec): ResampleFrame {
     const byGroup = new Map<string, number[]>();
-    groups.forEach((g, i) => byGroup.set(g, [...(byGroup.get(g) || []), i]));
-    const members = [...byGroup.values()];
+    groupKeys.forEach((g, i) => {
+      const members = byGroup.get(g);
+      if (members === undefined) byGroup.set(g, [i]);
+      else members.push(i);
+    });
+    return { Members: [...byGroup.values()], Spec: spec.Interval, Seed: spec.Seed };
+  }
+
+  private static clusterDraw(members: readonly (readonly number[])[], rng: () => number): number[] {
     const out: number[] = [];
-    for (let k = 0; k < members.length; k++) out.push(...members[Math.floor(rng() * members.length)]);
+    for (let k = 0; k < members.length; k++) {
+      for (const i of members[Math.floor(rng() * members.length)]) out.push(i);
+    }
     return out;
   }
 

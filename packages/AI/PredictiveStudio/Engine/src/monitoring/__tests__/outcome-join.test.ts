@@ -27,10 +27,10 @@ const scoreAsOf = (record: string, period: typeof PERIOD_2): number | undefined 
 
 describe('OutcomeJoin', () => {
   it('joins outcomes to the prediction as of each period, never the latest one, and excludes training rows', async () => {
-    const rows = await OutcomeJoin.Rows(world.Current(), PERIOD_2, world.Ctx());
+    const { Rows: rows } = await OutcomeJoin.Join(world.Current(), world.Store.Unit, PERIOD_2, world.Ctx());
     expect(rows.length).toBe(2);
     expect(rows.every((r) => r.EffectiveAsOf >= PERIOD_2.Start && r.EffectiveAsOf < PERIOD_2.End && r.InTraining === false)).toBe(true);
-    expect(rows.map((r) => r.ScoreFromPeriod)).toEqual(rows.map((r) => scoreAsOf(r.RecordID, PERIOD_2)));
+    expect(rows.map((r) => r.Score)).toEqual(rows.map((r) => scoreAsOf(r.RecordID, PERIOD_2)));
     expect(rows.map((r) => r.Outcome)).toEqual(['1', '0']);
   });
 
@@ -49,7 +49,7 @@ describe('OutcomeJoin', () => {
 
   it('a closed-window record with no realised outcome joins with Outcome null', async () => {
     world.Store.OutcomeRows.splice(0, world.Store.OutcomeRows.length);
-    const rows = await OutcomeJoin.Rows(world.Current(), PERIOD_2, world.Ctx());
+    const { Rows: rows } = await OutcomeJoin.Join(world.Current(), world.Store.Unit, PERIOD_2, world.Ctx());
     expect(rows.map((r) => r.Outcome)).toEqual([null, null]);
   });
 

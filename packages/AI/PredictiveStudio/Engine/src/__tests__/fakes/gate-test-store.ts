@@ -21,8 +21,9 @@ import { vi } from 'vitest';
 import {
   EntityInfo, IsPlatformSQL, UserInfo, UserRoleInfo, type EntityTransactionScope, type IMetadataProvider, type RunQueryParams, type RunQueryResult, type RunViewParams,
 } from '@memberjunction/core';
+import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import {
   GateRecords,
   GateRules,
@@ -54,6 +55,8 @@ export type Cell = string | number | boolean | null | Date;
 export type Row = Record<string, Cell>;
 
 /** The members of a fake entity that are not columns. */
+/** Every `MJ: ML Model Publish Records.Purpose`, to read a stored row's purpose as the typed union. */
+const PUBLISH_RECORD_PURPOSES = ['publish', 'rollback', 'adopt', 'evaluate'] as const satisfies readonly MJMLModelPublishRecordEntity['Purpose'][];
 const RECORD_MEMBERS = new Set(['Save', 'Delete', 'Load', 'NewRecord', 'LatestResult', 'IsSaved', 'then']);
 /** The generated `<Column>Object` accessors of JSON-typed columns, answered with the column's parsed JSON (null when unset). */
 const JSON_OBJECT_ACCESSORS = new Set(['RefusalObject', 'EvidenceObject', 'InitiatorObject', 'GateDecisionObject']);
@@ -519,9 +522,12 @@ export class GateTestStore {
         return [{ NextVersion: Math.max(0, ...versions) + 1 }];
       }
       case 'Predictive Studio: Pipelines With More Than One Published Model': {
-        const counts = new Map<string, number>();
-        for (const m of (this.Tables['MJ: ML Models'] || []).filter((r) => r['Status'] === 'Published')) counts.set(String(m['PipelineID']), (counts.get(String(m['PipelineID'])) || 0) + 1);
-        return [...counts.entries()].filter(([, n]) => n > 1).map(([pipelineId, n]) => ({ PipelineID: pipelineId, Published: n }));
+        const counts = new UUIDMap<{ readonly PipelineID: string; readonly Published: number }>();
+        for (const m of (this.Tables['MJ: ML Models'] || []).filter((r) => r['Status'] === 'Published')) {
+          const pipelineId = String(m['PipelineID']);
+          counts.Set(pipelineId, { PipelineID: counts.Get(pipelineId)?.PipelineID || pipelineId, Published: (counts.Get(pipelineId)?.Published || 0) + 1 });
+        }
+        return [...counts.Values()].filter((c) => c.Published > 1);
       }
       case 'Predictive Studio: Published Models Without A Publish Record':
         return (this.Tables['MJ: ML Models'] || [])
@@ -529,9 +535,9 @@ export class GateTestStore {
           .filter((m) => !this.appliedRecords().some((r) => UUIDsEqual(String(r['ModelID']), String(m['ID']))))
           .map((m) => ({ ModelID: m['ID'], PipelineID: m['PipelineID'] }));
       case 'Predictive Studio: Publish Records Without A Status Change': {
-        const newest = new Map<string, Row>();
-        for (const r of this.appliedRecords()) newest.set(String(r['ModelID'] || r['ID']).toLowerCase(), r);   // rows are appended in RecordedAt order
-        return [...newest.values()].flatMap((r) => {
+        const newest = new UUIDMap<Row>();
+        for (const r of this.appliedRecords()) newest.Set(String(r['ModelID'] || r['ID']), r);   // rows are appended in RecordedAt order
+        return [...newest.Values()].flatMap((r) => {
           const model = r['ModelID'] ? this.Row('MJ: ML Models', String(r['ModelID'])) : undefined;
           if (model && (model['Status'] === 'Published' || model['Status'] === 'Archived')) return [];
           return [{ PublishRecordID: r['ID'], ModelID: r['ModelID'] || null, TrainingRunID: r['TrainingRunID'] || null, Purpose: r['Purpose'], ModelStatus: model ? model['Status'] : null, PipelineID: model ? model['PipelineID'] : null }];
@@ -548,7 +554,10 @@ export class GateTestStore {
 
   /** The applied `publish` records (a publish or a rollback), in write order. */
   private appliedRecords(): Row[] {
-    return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => PublishRecords.BacksPublishedModel({ Kind: String(r['Kind']), Purpose: String(r['Purpose']) }));
+    return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => {
+      const purpose = PUBLISH_RECORD_PURPOSES.find((p) => p === r['Purpose']);
+      return r['Kind'] === 'publish' && purpose !== undefined && PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose: purpose });
+    });
   }
 
   /** @internal a new, unsaved record of `entityName` */

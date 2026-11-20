@@ -11,8 +11,6 @@ import type { MonitoringPeriod, PeriodGrain } from './monitoring-seams';
 
 /** The monitoring calendar. */
 export class MonitoringPeriods {
-  private static readonly MS_PER_DAY = 86_400_000;
-
   /** The period of `grain` containing the UTC day of `day`. */
   public static Containing(day: Date, grain: PeriodGrain): MonitoringPeriod {
     const d = MonitoringPeriods.utcDay(day);
@@ -48,7 +46,7 @@ export class MonitoringPeriods {
 
   /** The period's last day (the decision day whose label window closes last). */
   public static LastDay(period: MonitoringPeriod): Date {
-    return new Date(period.End.getTime() - MonitoringPeriods.MS_PER_DAY);
+    return UtcDay.AddUtcDays(period.End, -1);
   }
 
   private static utcDay(day: Date): Date {

@@ -11,7 +11,7 @@
  * load verified, is `not-eligible` and nothing is rolled back (the retrain triggers handle degradation).
  */
 import { IndexByUUID } from '@memberjunction/global';
-import { MonitoringRules, type Actor, type Interval, type MonitoringRollbackCheck, type RollbackTrigger } from '@memberjunction/predictive-studio-core';
+import { MonitoringRules, UtcDay, type Actor, type Interval, type MonitoringRollbackCheck, type RollbackTrigger } from '@memberjunction/predictive-studio-core';
 
 import { OutcomeJoin } from './outcome-join';
 import type { JoinedRow, MonitoredUnit, MonitoringContext, MonitoringPeriod, Predecessor, MonitoredModel } from './monitoring-seams';
@@ -91,7 +91,7 @@ export class RollbackStep {
    */
   protected async ComparePeriod(current: MonitoredModel, predecessor: MonitoredModel, period: MonitoringPeriod, plan: RollbackPlan, ctx: MonitoringContext): Promise<PairedPeriod> {
     const joined = (await OutcomeJoin.Join(current, plan.Unit, period, ctx)).Rows.filter((r) => r.Outcome !== null);
-    const day = period.Start.toISOString().slice(0, 10);
+    const day = UtcDay.UtcDayIso(period.Start);
     if (joined.length === 0) throw new RollbackComparisonError(`period ${day}: no realised row outside the current model's training snapshot`);
     const run = await ctx.Seams.Scorer.Shadow(predecessor, plan.Unit, joined.map((r) => ({ RecordID: r.RecordID, DecisionDate: r.DecisionDate })), current.ID, ctx);
     if (run.Status !== 'completed') throw new RollbackComparisonError(`the predecessor's shadow run ${run.ScoringRunID} ended ${run.Status}: ${run.Reason || 'no reason given'}`);
@@ -103,7 +103,7 @@ export class RollbackStep {
       if (p === undefined) throw new RollbackComparisonError(`the predecessor's shadow run ${run.ScoringRunID} has no prediction for record '${r.RecordID}'`);
       if (p.InTraining) continue;
       currentRows.push(r);
-      predecessorRows.push({ ...r, ScoreFromPeriod: p.Score, Score: p.Score, Probabilities: p.Probabilities });
+      predecessorRows.push({ ...r, Score: p.Score, Probabilities: p.Probabilities });
     }
     if (currentRows.length === 0) throw new RollbackComparisonError(`period ${day}: every realised row is in the predecessor's training snapshot`);
     const diff = PeriodEvaluation.PairedDifference(currentRows, predecessorRows, plan.Scoring);

@@ -67,7 +67,7 @@ describe('PublishRecords.FindPublishForRun and FindRunOutcome', () => {
 describe('PublishRecords.BACKING_PURPOSES (D4-204)', () => {
   it('an applied publish, rollback or adopt record backs a Published model; a refusal or an evaluate record does not', () => {
     expect(PublishRecords.BACKING_PURPOSES).toEqual(['publish', 'rollback', 'adopt']);
-    expect(['publish', 'rollback', 'adopt'].map((Purpose) => PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose }))).toEqual([true, true, true]);
+    expect(PublishRecords.BACKING_PURPOSES.map((Purpose) => PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose }))).toEqual([true, true, true]);
     expect(PublishRecords.BacksPublishedModel({ Kind: 'refusal', Purpose: 'publish' })).toBe(false);
     expect(PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose: 'evaluate' })).toBe(false);
   });

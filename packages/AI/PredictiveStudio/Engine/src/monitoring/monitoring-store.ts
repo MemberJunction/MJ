@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJMLMonitoringResultEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, UUIDMap } from '@memberjunction/global';
 import {
   JsonParse,
   MonitoringResultSchemas,
@@ -26,6 +26,7 @@ import {
   type MetricWithInterval,
   type MonitorDriftRequest,
   type MonitorDriftResponse,
+  type ParseResult,
   type PredictionUnitSpec,
   type ScoredRow,
   type TaskType,
@@ -40,7 +41,8 @@ import { AutomatedPublisher } from '../registry/automated-publisher';
 import type { EvaluateOutcome, PublishOutcome, PublishRequest } from '../registry/gate-context';
 import { GateContexts } from '../registry/gate-seams';
 import { LifecycleGate } from '../registry/lifecycle-gate';
-import { RecordNotificationLinks } from '../registry/record-notification-links';
+import { PublishRecords } from '../registry/publish-records';
+import { RecordNotificationLinks, type RecordResourceConfiguration } from '../registry/record-notification-links';
 import type { RegistryContext } from '../registry/registry-context';
 import { StoredRowReads } from '../registry/stored-row-reads';
 import { ScoringBindings } from '../scoring/scoring-binding';
@@ -141,23 +143,23 @@ export class RunViewMonitoringStore implements IMonitoringStore {
   }
 
   /** @inheritdoc — of several rows of one record in the period, the one with the latest `EffectiveAsOf`. */
-  public async ModelRows(modelId: string, bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod, ctx: RegistryContext): Promise<ModelPrediction[]> {
+  public async ModelRows(modelId: string, bindingId: string, role: MJFeatureValueEntity['Role'], period: MonitoringPeriod, ctx: RegistryContext): Promise<ModelPrediction[]> {
     const r = await StoredRowReads.Run<Pick<MJFeatureValueEntity, 'RecordID' | 'EffectiveAsOf' | 'InTraining' | 'ValueNumeric' | 'ValueJSON'>>({
       EntityName: 'MJ: Feature Values',
-      ExtraFilter: `Source='Model' AND Role='${role}' AND MLModelID='${EscapeSQLString(modelId)}' AND MLModelScoringBindingID='${EscapeSQLString(bindingId)}'`
+      ExtraFilter: `Source='Model' AND Role='${EscapeSQLString(role)}' AND MLModelID='${EscapeSQLString(modelId)}' AND MLModelScoringBindingID='${EscapeSQLString(bindingId)}'`
         + ` AND EffectiveAsOf >= '${UtcDay.UtcDayIso(period.Start)}' AND EffectiveAsOf < '${UtcDay.UtcDayIso(period.End)}'`,
       Fields: ['RecordID', 'EffectiveAsOf', 'InTraining', 'ValueNumeric', 'ValueJSON'], OrderBy: 'EffectiveAsOf ASC', ResultType: 'simple', IgnoreMaxRows: true,
     }, ctx);
     if (!r.Success) throw new Error(`Monitoring: reading the ${role} rows of ML Model ${modelId} failed: ${r.ErrorMessage}`);
-    const latest = new Map<string, ModelPrediction>();
+    const latest = new UUIDMap<ModelPrediction>();
     for (const row of r.Results) {
       if (row.EffectiveAsOf === null || row.ValueNumeric === null) continue;
-      latest.set(row.RecordID.toLowerCase(), {
+      latest.Set(row.RecordID, {
         RecordID: row.RecordID, EffectiveAsOf: new Date(row.EffectiveAsOf), InTraining: row.InTraining === true, Score: row.ValueNumeric,
         Probabilities: RunViewMonitoringStore.probabilitiesOf(row.ValueJSON),
       });
     }
-    return [...latest.values()];
+    return [...latest.Values()];
   }
 
   /** @inheritdoc */
@@ -190,11 +192,11 @@ export class RunViewMonitoringStore implements IMonitoringStore {
     return r.Results.map((row) => RunViewMonitoringStore.storedRow(row));
   }
 
-  /** @inheritdoc */
+  /** @inheritdoc — the replaced model of the newest applied `publish` record ({@link PublishRecords.FindLatestReplaced}). */
   public async Predecessor(modelId: string, ctx: RegistryContext): Promise<Predecessor | null> {
-    const record = await RunViewMonitoringStore.latestPublish(modelId, ctx);
-    if (record === null || !record.ReplacesModelID) return null;
-    return { ModelID: record.ReplacesModelID, Model: await this.LoadModel(record.ReplacesModelID, ctx) };
+    const replaced = await PublishRecords.FindLatestReplaced(modelId, ctx);
+    if (replaced === null) return null;
+    return { ModelID: replaced, Model: await this.LoadModel(replaced, ctx) };
   }
 
   /** @inheritdoc */
@@ -300,7 +302,7 @@ export class RunViewMonitoringStore implements IMonitoringStore {
 
   /** A stored period row as the triggers read it back. @throws when a stored JSON column does not parse */
   private static storedRow(row: MJMLMonitoringResultEntity): StoredPeriodRow {
-    const ok = <T>(r: { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Errors: readonly string[] }): T => {
+    const ok = <T>(r: ParseResult<T>): T => {
       if (r.Ok === false) throw new Error(`Monitoring: the period row ${row.ID} does not parse: ${r.Errors.join('; ')}`);
       return r.Value;
     };
@@ -410,7 +412,9 @@ export class ScoringServiceMonitoringScorer implements IMonitoringScorer {
     const groups = new Map<string, string[]>();
     for (const r of [...rows].sort((a, b) => a.DecisionDate.getTime() - b.DecisionDate.getTime())) {
       const day = `${UtcDay.UtcDayIso(r.DecisionDate)}T00:00:00.000Z`;
-      groups.set(day, [...(groups.get(day) || []), r.RecordID]);
+      const ids = groups.get(day);
+      if (ids === undefined) groups.set(day, [r.RecordID]);
+      else ids.push(r.RecordID);
     }
     return [...groups.entries()];
   }
@@ -479,19 +483,21 @@ export class ParityMonitoringCheck implements IMonitoringParity {
   }
 }
 
-/** One `MJ: User Notifications` row, linked to the model's record. */
+/** One `MJ: User Notifications` row, linked to its subject's record (of the subject's own entity) when it has one. */
 export class UserNotificationMonitoringNotifier implements IMonitoringNotifier {
   /** @inheritdoc */
-  public async Notify(userId: string, title: string, message: string, modelId: string, ctx: RegistryContext): Promise<void> {
+  public async Notify(userId: string, title: string, message: string, subject: RecordResourceConfiguration | null, ctx: RegistryContext): Promise<void> {
     const row = await ctx.Provider.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', ctx.ContextUser);
     row.NewRecord();
     row.UserID = userId;
     row.Title = title;
     row.Message = message;
     row.Unread = true;
-    row.ResourceTypeID = await RecordNotificationLinks.RecordsResourceTypeID(ctx.Provider, ctx.ContextUser, 'Predictive Studio monitoring', 'monitoring notification');
-    row.ResourceRecordID = modelId;
-    row.ResourceConfiguration = JSON.stringify({ Entity: 'MJ: ML Models', RecordID: modelId });
+    if (subject !== null) {
+      row.ResourceTypeID = await RecordNotificationLinks.RecordsResourceTypeID(ctx.Provider, ctx.ContextUser, 'Predictive Studio monitoring', 'monitoring notification');
+      row.ResourceRecordID = subject.RecordID;
+      row.ResourceConfiguration = JSON.stringify(subject);
+    }
     if (!(await row.Save())) throw new Error(`Monitoring: saving the notification to user ${userId} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 }

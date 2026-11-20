@@ -11,7 +11,7 @@
  * outcomes come from PR 3's unit row reader at the unit's label rule; a record the reader has no label for joins with
  * `Outcome` null (G6.1 counts it).
  */
-import { IndexByUUID } from '@memberjunction/global';
+import { IndexByUUID, NormalizeUUID } from '@memberjunction/global';
 
 import type { JoinedRow, ModelPrediction, MonitoredUnit, MonitoringContext, MonitoringPeriod, MonitoredModel, MonitoredBinding } from './monitoring-seams';
 
@@ -44,16 +44,6 @@ export class OutcomeJoinFailedError extends Error {
 /** Joins a period's predictions to their realised outcomes. */
 export class OutcomeJoin {
   /**
-   * The joined rows of the model for the period (training rows excluded); see {@link Join}.
-   *
-   * @throws OutcomeJoinFailedError when the shadow run is refused or fails
-   */
-  public static async Rows(model: MonitoredModel, period: MonitoringPeriod, ctx: MonitoringContext): Promise<readonly JoinedRow[]> {
-    const unit = await ctx.Seams.Store.LoadUnit(OutcomeJoin.UnitIdOf(model), ctx);
-    return (await OutcomeJoin.Join(model, unit, period, ctx)).Rows;
-  }
-
-  /**
    * The period's join: the binding path when the model's pipeline has an `Active` binding, else the shadow path; then
    * the training rows counted and excluded, and each remaining prediction joined to its realised outcome by record key.
    *
@@ -76,20 +66,14 @@ export class OutcomeJoin {
       const o = outcomes.Get(p.RecordID);
       return {
         RecordID: p.RecordID, EffectiveAsOf: p.EffectiveAsOf, DecisionDate: o === undefined ? p.EffectiveAsOf : o.DecisionDate, InTraining: false,
-        ScoreFromPeriod: p.Score, Score: p.Score, Probabilities: p.Probabilities, Outcome: o === undefined ? null : o.Label,
-        GroupKey: o === undefined ? p.RecordID.toLowerCase() : o.GroupKey,
+        Score: p.Score, Probabilities: p.Probabilities, Outcome: o === undefined ? null : o.Label,
+        GroupKey: o === undefined ? NormalizeUUID(p.RecordID) : o.GroupKey,
       };
     });
     return {
       Path: binding !== null ? 'binding' : 'shadow', Binding: binding, ShadowScoringRunID: found.ShadowScoringRunID,
       ScoredRows: found.Predictions.length, ExcludedInTrainingRows: found.Predictions.length - kept.length, Rows: rows,
     };
-  }
-
-  /** The model's Prediction Unit ID. @throws when the model has none (it has no label window to join on) */
-  public static UnitIdOf(model: MonitoredModel): string {
-    if (!model.PredictionUnitID) throw new Error(`ML Model ${model.ID} has no Prediction Unit, so monitoring has no label window to join on`);
-    return model.PredictionUnitID;
   }
 
   /** The shadow path: the period's unit rows scored by the model, dry run, each as of its own decision date. */
