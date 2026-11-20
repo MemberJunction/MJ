@@ -55,7 +55,7 @@
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": "469655722377552fac36858d4dc74d0caacbe7efe18176a24e2be4a2634d7aa4",
   "shipped/SQL/predictive-studio-published-models-without-a-publish-record.sql": "51de289f962a41801b58153a38fce1ac3e2db57576b53d5c3230dca53c1bbdef",
   "shipped/SQL/predictive-studio-running-training-run.sql": "d25b134e1f35ad32fc863e2ac8ab34775fba624653d325f86c9ee4bab4256136",
-  "shipped/SQL/predictive-studio-schema-fingerprint.sql": "cbcaffd26e0b44d4bd638a5920f2bb9d6fd40a106732100d8ceb6d71edc10ab0",
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": "4296f656650e5295b599741378100d9d34f0f20b60f0f422228b0beae8bee594",
   "shipped/SQL/predictive-studio-stale-running-scoring-runs.sql": "889c05e657c1d7a99ca33c07040c4bc1fa915ff140b9ce4b1d1e371011100549",
   "shipped/SQL/rubric-drift-period-means.pg.sql": "2f5a218cf8068deab924e97d3aa8c830d17b06de08f6b2202f475b40a2da4ab7",
   "shipped/SQL/rubric-drift-period-means.sql": "73fa45b8c24d38d5cc42f83d7e16c079edbef41c95f3ec05c9df9696bfd23771",
