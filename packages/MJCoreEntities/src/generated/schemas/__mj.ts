@@ -2112,6 +2112,16 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
         * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
+    HumanTaskProvider: z.string().nullable().describe(`
+        * * Field Name: HumanTaskProvider
+        * * Display Name: Human Task Provider
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The registration key of the human-task provider that also put this request in front of a person, when the install routes agent requests to one (humanTasks.defaultProvider). NULL when only the built-in inbox holds the request. Only that provider may answer the request through the provider path, and an answer given elsewhere asks it to withdraw its own ask.`),
+    HumanTaskExternalReference: z.string().nullable().describe(`
+        * * Field Name: HumanTaskExternalReference
+        * * Display Name: Human Task External Reference
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The reference the human-task provider returned for its own record of this request (for example a task ID in another app), handed back to the provider when it is asked to withdraw. NULL when no provider took the request or it returned none.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
