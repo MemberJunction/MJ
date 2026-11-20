@@ -31,7 +31,9 @@ import type { MJEntityPermissionEntity, MJMLModelEntity, MJMLModelPublishRecordE
 import { EscapeSQLString, RegisterClass, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import type { NotificationContent, ScheduledJobResult } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, type ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
-import { EvaluationProtocol, JsonParse, MS_PER_DAY, PERSISTED_MODEL_STATUSES, type Actor, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import {
+  EvaluationProtocol, JsonParse, MS_PER_DAY, PERSISTED_MODEL_STATUSES, type Actor, type RegistryFindingLetter, type RegistryFindingOutcome, type TransitionRefusal,
+} from '@memberjunction/predictive-studio-core';
 
 import { PreGateMigrationContexts, PreGateModelMigration, type PreChangeMigrationConfig, type PreChangeStepDetails, type PreGateMigrationSeams } from '../migration/pre-gate-model-migration';
 
@@ -80,7 +82,7 @@ export type RegistrySubjectEntity = 'MJ: ML Models' | 'MJ: ML Training Pipelines
 /** One finding and what the job did about it. */
 export interface RegistryFinding {
   /** The R7 finding letter. */
-  readonly Finding: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i';
+  readonly Finding: RegistryFindingLetter;
   /** The model (or the pipeline, scoring run, permission or record) the finding is about; null when it is about none. */
   readonly SubjectID: string | null;
   /** The entity {@link SubjectID} is a row of (the notification links to that record); null exactly when SubjectID is. */
@@ -90,7 +92,7 @@ export interface RegistryFinding {
   /** What the job did about it. */
   readonly Action: string;
   /** `remediated`, `recorded` (nothing to act on), or `retry` (the action did not complete; found again next run). */
-  readonly Outcome: 'remediated' | 'recorded' | 'retry';
+  readonly Outcome: RegistryFindingOutcome;
   /** Present (true) only on the one `retry` finding of a step that threw; such a finding fails the run. */
   readonly StepFailed?: true;
 }

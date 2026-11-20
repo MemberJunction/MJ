@@ -36,6 +36,7 @@ import {
   JsonParse,
   PredictionUnit,
   RegisteredDelivery,
+  RegistryCheckDetails,
   type Actor,
   type JsonObject,
   type TaskType,
@@ -263,8 +264,8 @@ export class PreGateMigrationContexts {
 
 /** The pre-change model migration's steps. */
 export class PreGateModelMigration {
-  /** The key of the job run's `Details` this migration's record sits under. */
-  public static readonly DetailsKey = 'PreChangeModels';
+  /** The key of the job run's `Details` this migration's record sits under (Core's reader reads it back by the same key). */
+  public static readonly DetailsKey = RegistryCheckDetails.PreChangeKey;
   /** The `StatusReason` the data section gives a demoted model that does not serve (D4-13: the migration's mark). */
   public static readonly NotServingReason =
     'Trained before the Predictive Studio lifecycle gate; never evaluated under an Evaluation Protocol; the pipeline is retrained under its protocol automatically.';
