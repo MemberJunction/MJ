@@ -73,7 +73,7 @@ interface MockEntity {
     GetDataObject: ReturnType<typeof vi.fn>;
     Dirty: boolean;
     LatestResult: { Message: string };
-    EntityInfo: { PrimaryKeys: Array<{ Name: string }> };
+    EntityInfo: { Name?: string; PrimaryKeys: Array<{ Name: string }> };
 }
 
 const ENTITY_DATA = { ID: 'row-1', Name: 'Loaded Row' };
@@ -112,7 +112,10 @@ let entity: MockEntity;
 beforeEach(() => {
     vi.clearAllMocks();
     entity = makeEntity();
-    mockGetEntityObject.mockImplementation(async () => entity);
+    mockGetEntityObject.mockImplementation(async (entityName: string) => {
+        entity.EntityInfo.Name = entityName;
+        return entity;
+    });
 });
 
 // ─── createEntity ───────────────────────────────────────────────────────────
@@ -274,6 +277,12 @@ describe('EntityCRUDHandler.getEntity', () => {
     });
 });
 
+/** A read hook that removes every row of the named entity from view reads. */
+function hideAllRowsOf(entityName: string): PostRunViewHook {
+    return async (params: RunViewParams, results: RunViewResult): Promise<RunViewResult> =>
+        params.EntityName === entityName ? { ...results, Results: [], RowCount: 0, TotalRowCount: 0 } : results;
+}
+
 // ─── updateEntity ───────────────────────────────────────────────────────────
 
 describe('EntityCRUDHandler.updateEntity', () => {
@@ -309,6 +318,22 @@ describe('EntityCRUDHandler.updateEntity', () => {
         expect(result.success).toBe(false);
         expect(result.error).toBe('Customers with ID ghost not found');
         expect(entity.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns not-found without saving when the entity\'s read hooks remove the record', async () => {
+        RegisterDataHook('PostRunView', hideAllRowsOf('Hooked Customers'));
+        RegisterPostRunViewProtectedEntity('Hooked Customers');
+        try {
+            const result = await EntityCRUDHandler.updateEntity('Hooked Customers', 'row-1', { Name: 'X' }, makeUser());
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Hooked Customers with ID row-1 not found');
+            expect(result.entity).toBeUndefined();
+            expect(entity.Set).not.toHaveBeenCalled();
+            expect(entity.Save).not.toHaveBeenCalled();
+        } finally {
+            ClearAllDataHooks();
+        }
     });
 
     it('short-circuits a no-op update (not dirty) as success WITHOUT saving', async () => {
@@ -389,6 +414,20 @@ describe('EntityCRUDHandler.deleteEntity', () => {
         expect(result.success).toBe(false);
         expect(result.error).toBe('Customers with ID ghost not found');
         expect(entity.Delete).not.toHaveBeenCalled();
+    });
+
+    it('returns not-found without deleting when the entity\'s read hooks remove the record', async () => {
+        RegisterDataHook('PostRunView', hideAllRowsOf('Hooked Customers'));
+        RegisterPostRunViewProtectedEntity('Hooked Customers');
+        try {
+            const result = await EntityCRUDHandler.deleteEntity('Hooked Customers', 'row-1', new EntityDeleteOptions(), makeUser());
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Hooked Customers with ID row-1 not found');
+            expect(entity.Delete).not.toHaveBeenCalled();
+        } finally {
+            ClearAllDataHooks();
+        }
     });
 
     it('surfaces the entity LatestResult when Delete returns false', async () => {

@@ -16,10 +16,13 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 
 const ENTITY_NAME = 'Hooked Things';
 
-/** Exposes the protected single-record mapper the generated get-by-ID resolvers call. */
+/** Exposes the protected record mappers the generated get-by-ID and list resolvers call. */
 class MappingProbe extends ResolverBase {
     public MapOne(entityName: string, dataObject: unknown, provider: IMetadataProvider, user: UserInfo): Promise<unknown> {
         return this.MapFieldNamesToCodeNames(entityName, dataObject, user, provider);
+    }
+    public MapMany(entityName: string, rows: unknown[], provider: IMetadataProvider, user: UserInfo): Promise<unknown[]> {
+        return this.ArrayMapFieldNamesToCodeNames(entityName, rows, user, provider);
     }
 }
 
@@ -54,5 +57,20 @@ describe('MapFieldNamesToCodeNames on an entity guarded by read hooks', () => {
         const mapped = await new MappingProbe().MapOne(ENTITY_NAME, { ID: 'hidden', Name: 'marker' }, fakeProvider(), viewer);
 
         expect(mapped).toBeNull();
+    });
+
+    it('leaves out of a mapped list each record the read hooks remove', async () => {
+        RegisterDataHook('PostRunView', hideRow);
+        RegisterPostRunViewProtectedEntity(ENTITY_NAME);
+        const viewer = new UserInfo(null, { ID: '11111111-1111-4111-8111-111111111111', Email: 'v@example.com', Name: 'Viewer', IsActive: true });
+
+        const mapped = await new MappingProbe().MapMany(
+            ENTITY_NAME,
+            [{ ID: 'shown', Name: 'a' }, { ID: 'hidden', Name: 'marker' }],
+            fakeProvider(),
+            viewer,
+        );
+
+        expect((mapped as Array<{ ID: string }>).map((r) => r.ID)).toEqual(['shown']);
     });
 });

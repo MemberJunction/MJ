@@ -1,4 +1,5 @@
 import {
+    BaseEntity,
     CompositeFilter,
     CompositeFilterDescriptor,
     EntityInfo,
@@ -29,6 +30,8 @@ const LOCATOR_FIELDS = new Set([
     'id', 'entityid', 'entity', 'recordid', 'userid', 'user', 'type', 'source', 'changedat', 'status',
     'integrationid', 'integration', 'replayrunid', '__mj_createdat', '__mj_updatedat'
 ]);
+
+const USER_VIEWS_ENTITY_NAME = 'MJ: User Views';
 
 const CONTENT_REFUSAL =
     'Reads of MJ: Record Changes that filter, sort or search on change content must be limited to one entity ' +
@@ -70,6 +73,22 @@ async function loadSavedView(params: RunViewParams, user: UserInfo): Promise<MJU
         return ViewInfo.GetViewEntityByName(params.ViewName, user);
     }
     return null;
+}
+
+/**
+ * The read with its stored view fixed: a copy of the view from one lookup, set as the read's
+ * `ViewEntity`. The provider runs that copy, so a later lookup or a change to the cached view
+ * cannot add clauses that the screen did not read. A read that names no stored view is returned as is.
+ */
+async function withFixedSavedView(params: RunViewParams, user: UserInfo, provider: IMetadataProvider): Promise<RunViewParams> {
+    const view = await loadSavedView(params, user);
+    if (!(view instanceof BaseEntity)) {
+        return view ? { ...params, ViewEntity: view } : params;
+    }
+    const data = view.GetAll();
+    const copy = await provider.GetEntityObject<MJUserViewEntityExtended>(USER_VIEWS_ENTITY_NAME, user);
+    await copy.LoadFromData(data);
+    return { ...params, ViewEntity: copy };
 }
 
 function structuredFilterFields(filter: RunViewParams['Filter']): string[] {
@@ -180,7 +199,8 @@ function resolveProvider(user: UserInfo, provider?: IMetadataProvider): IMetadat
  * caller may not see only after the database has filtered, sorted, paged and counted them, so a
  * read by a caller who is not the system user may test change content only when every row it can
  * reach is one the caller may see. Such a read is refused before any SQL runs, as is a filter or
- * sort that cannot be read with certainty or that names the entity's own view or table.
+ * sort that cannot be read with certainty or that names the entity's own view or table. A read
+ * that names a stored view gets a fixed copy of that view, which is the view the provider runs.
  */
 export const RecordChangeFilterScreenHook: PreRunViewHook = async (
     params: RunViewParams,
@@ -191,14 +211,15 @@ export const RecordChangeFilterScreenHook: PreRunViewHook = async (
     if (!contextUser || !md || md.ProviderType !== 'Database' || WellKnownUserSource.Instance.IsSystemUser(contextUser)) {
         return params;
     }
-    const entityName = await ResolveTargetEntityNameAsync(params, md, contextUser);
+    const fixed = await withFixedSavedView(params, contextUser, md);
+    const entityName = await ResolveTargetEntityNameAsync(fixed, md, contextUser);
     const entity = EntityNamesMatch(entityName, RecordChangesEntityName, md) ? md.EntityByName(RecordChangesEntityName) : undefined;
     if (!entity) {
-        return params;
+        return fixed;
     }
-    const clauses = await collectReadClauses(params, contextUser);
+    const clauses = await collectReadClauses(fixed, contextUser);
     if (readUsesContent(clauses, entity) && !(await scopeIsVisible(clauses, md, contextUser))) {
         throw new Error(CONTENT_REFUSAL);
     }
-    return params;
+    return fixed;
 };

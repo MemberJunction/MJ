@@ -26,6 +26,7 @@ import {
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
   RecordPassesReadHooks,
+  RowsPassingReadHooks,
   RunView,
   RunViewParameters,
   RunViewParams,
@@ -672,6 +673,10 @@ export class ResolverBase {
         }
         sourceRows = permitted;
       }
+    }
+    sourceRows = await RowsPassingReadHooks(entityName, sourceRows as Record<string, unknown>[], contextUser, provider);
+    if (sourceRows.length === 0) {
+      return [];
     }
     // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
     // and Record Changes projector ONCE for the whole array rather than per row.

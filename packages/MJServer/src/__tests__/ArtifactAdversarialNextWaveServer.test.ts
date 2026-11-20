@@ -1397,7 +1397,8 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         } as EntityInfo;
         const mappingProvider: IMetadataProvider & IRunViewProvider = {
             Entities: [guestLinkEntityInfo],
-            EntityByName: () => guestLinkEntityInfo,
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifact guest share links' ? guestLinkEntityInfo : undefined,
             RunView: vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 })),
             RunViews: vi.fn(async () => []),
             GetEntityObject: vi.fn(async () => ({})),

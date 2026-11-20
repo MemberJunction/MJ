@@ -9,6 +9,7 @@ import {
     UserInfo,
     WellKnownUserSource,
 } from '@memberjunction/core';
+import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import '../index';
 
@@ -59,8 +60,42 @@ function makeFilteredEntity(): EntityInfo {
     return info;
 }
 
+const SAVED_VIEW_ID = 'DDDDDDDD-0000-4000-8000-000000000002';
+
+/** A stored view double: an entity object whose fields are plain properties. */
+function makeSavedView(whereClause: string): MJUserViewEntityExtended {
+    const view = Object.create(BaseEntity.prototype) as MJUserViewEntityExtended;
+    const fields = {
+        ID: SAVED_VIEW_ID,
+        Name: 'Saved view',
+        Entity: 'MJ: Record Changes',
+        EntityID: RECORD_CHANGES_ENTITY_ID,
+        WhereClause: whereClause,
+        OrderByClause: '',
+    };
+    Object.defineProperties(view, {
+        ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, { value: v, writable: true, configurable: true }])),
+        PropertiesObject: { value: [], configurable: true },
+        GetAll: { value: () => ({ ...fields, WhereClause: view.WhereClause }), configurable: true },
+        LoadFromData: {
+            value: async (data: Record<string, unknown>) => {
+                Object.assign(view, data);
+                return true;
+            },
+            configurable: true,
+        },
+    });
+    return view;
+}
+
+/** The saved view the provider runs after the hooks: the view in the params, else a new lookup, as the provider loads it. */
+async function viewTheProviderRuns(params: RunViewParams, user: UserInfo): Promise<MJUserViewEntityExtended> {
+    return (params.ViewEntity as MJUserViewEntityExtended | undefined) ?? ViewInfo.GetViewEntity(params.ViewID ?? '', user);
+}
+
 function makeProvider(entities: EntityInfo[]): IMetadataProvider {
     return {
+        GetEntityObject: vi.fn(async () => makeSavedView('')),
         ProviderType: 'Database',
         Entities: entities,
         EntityByID: (id: string) => entities.find((e) => UUIDsEqual(e.ID, id)),
@@ -134,5 +169,37 @@ describe('Record Changes filter screen', () => {
     it('refuses a sort on change content when the read names no entity', async () => {
         const params: RunViewParams = { EntityName: 'MJ: Record Changes', OrderBy: 'FullRecordJSON', MaxRows: 1, ResultType: 'simple' };
         await expect(runPreRunViewHooks(params, viewer, provider)).rejects.toThrow(/change content/);
+    });
+    it('refuses a filter that passes every column of a change row to a function', async () => {
+        const params: RunViewParams = {
+            EntityName: 'MJ: Record Changes',
+            ExtraFilter: `EntityID = '${FILTERED_ENTITY_ID}' AND BINARY_CHECKSUM(*) > 0`,
+            ResultType: 'count_only',
+        };
+        await expect(runPreRunViewHooks(params, viewer, provider)).rejects.toThrow(/plain SQL/);
+    });
+
+    it('runs a saved view with the clauses it screened when a later lookup returns other clauses', async () => {
+        vi.spyOn(ViewInfo, 'GetViewEntity')
+            .mockResolvedValueOnce(makeSavedView(`Type = 'Create'`))
+            .mockResolvedValue(makeSavedView(`FullRecordJSON LIKE '%marker%'`));
+        const params: RunViewParams = { EntityName: 'MJ: Record Changes', ViewID: SAVED_VIEW_ID, ResultType: 'simple' };
+
+        const screened = await runPreRunViewHooks(params, viewer, provider);
+        const view = await viewTheProviderRuns(screened, viewer);
+
+        expect(view.WhereClause).toBe(`Type = 'Create'`);
+    });
+
+    it('runs a saved view with the clauses it screened when the cached view changes after the screen', async () => {
+        const cached = makeSavedView(`Type = 'Create'`);
+        vi.spyOn(ViewInfo, 'GetViewEntity').mockResolvedValue(cached);
+        const params: RunViewParams = { EntityName: 'MJ: Record Changes', ViewID: SAVED_VIEW_ID, ResultType: 'simple' };
+
+        const screened = await runPreRunViewHooks(params, viewer, provider);
+        cached.WhereClause = `FullRecordJSON LIKE '%marker%'`;
+        const view = await viewTheProviderRuns(screened, viewer);
+
+        expect(view.WhereClause).toBe(`Type = 'Create'`);
     });
 });

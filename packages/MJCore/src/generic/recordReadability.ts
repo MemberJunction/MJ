@@ -4,6 +4,7 @@ import { IMetadataProvider, RunViewResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 import { GetDataHooks, IsPostRunViewProtectedEntity, PostRunViewHook } from './dataHooks';
 import { RunView, RunViewParams } from '../views/runView';
+import type { BaseEntity } from './baseEntity';
 
 /** Largest number of record keys put into one read of the target entity. */
 const KEYS_PER_READ = 200;
@@ -85,6 +86,36 @@ export async function ReadableRecordKeyTexts(
 }
 
 /**
+ * The rows of `rows` that pass the server read hooks of `entityName`, the same hooks a view read
+ * of that entity runs, in the form the hooks return them. Every row passes for an entity that is
+ * not guarded by read hooks. A hook that fails counts as removing every row.
+ *
+ * @param rows records as the database returned them, keyed by field name
+ */
+export async function RowsPassingReadHooks<T extends object>(
+    entityName: string,
+    rows: T[],
+    user: UserInfo | undefined,
+    provider?: IMetadataProvider
+): Promise<T[]> {
+    if (rows.length === 0 || !IsPostRunViewProtectedEntity(entityName)) {
+        return rows;
+    }
+    const params: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
+    let result: RunViewResult = {
+        Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: ''
+    };
+    try {
+        for (const hook of GetDataHooks<PostRunViewHook>('PostRunView')) {
+            result = await hook(params, result, user, provider);
+        }
+    } catch {
+        return [];
+    }
+    return result?.Success && Array.isArray(result.Results) ? (result.Results as T[]) : [];
+}
+
+/**
  * True when one record read by key passes the server read hooks of its entity, the same hooks a
  * view read of that entity runs. An entity that is not guarded by read hooks always passes. A hook
  * that fails counts as removing the record.
@@ -97,19 +128,26 @@ export async function RecordPassesReadHooks(
     user: UserInfo | undefined,
     provider?: IMetadataProvider
 ): Promise<boolean> {
-    if (!IsPostRunViewProtectedEntity(entityName)) {
-        return true;
-    }
-    const params: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
-    let result: RunViewResult = {
-        Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: ''
-    };
-    try {
-        for (const hook of GetDataHooks<PostRunViewHook>('PostRunView')) {
-            result = await hook(params, result, user, provider);
-        }
-    } catch {
+    return (await RowsPassingReadHooks(entityName, [row], user, provider)).length === 1;
+}
+
+/**
+ * Loads `record` by `key` and returns true only when the record exists and passes the read hooks
+ * of its entity for `user`. When it returns false, the caller answers as for a record that does
+ * not exist and does not use `record`.
+ */
+export async function LoadRecordPassingReadHooks(
+    record: BaseEntity,
+    key: CompositeKey,
+    user: UserInfo | undefined,
+    relatedEntities?: string[]
+): Promise<boolean> {
+    if (!(await record.InnerLoad(key, relatedEntities))) {
         return false;
     }
-    return Boolean(result?.Success) && Array.isArray(result.Results) && result.Results.length === 1;
+    if (!IsPostRunViewProtectedEntity(record.EntityInfo.Name)) {
+        return true;
+    }
+    const row = await record.GetDataObject() as Record<string, unknown>;
+    return RecordPassesReadHooks(record.EntityInfo.Name, row, user);
 }

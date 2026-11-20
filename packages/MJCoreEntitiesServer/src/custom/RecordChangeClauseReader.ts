@@ -26,6 +26,9 @@ const NON_CONJUNCTION_KEYWORDS = new Set(['or', 'between', 'case']);
 
 const WORD_CHARACTER = /[A-Za-z0-9_@#]/;
 
+/** Keywords that cannot sit on either side of a multiplication. */
+const NON_OPERAND_KEYWORDS = new Set(['select', 'distinct', 'all', 'top', 'from']);
+
 function isPlainCharacter(ch: string): boolean {
     const code = ch.charCodeAt(0);
     return (code >= 32 && code <= 126) || ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n';
@@ -80,7 +83,8 @@ function startsRefusedText(text: string, i: number): boolean {
 /**
  * Splits `text` into tokens. Returns null when the text holds a comment, a statement break, a
  * template, a backslash in a literal, a character outside printable ASCII (outside literals),
- * an unclosed literal or identifier, or unbalanced parentheses.
+ * an unclosed literal or identifier, unbalanced parentheses, or a `*` that is not a
+ * multiplication of two operands (a `*` as an expression or a function argument).
  */
 export function ReadClauseTokens(text: string): ClauseToken[] | null {
     const tokens: ClauseToken[] = [];
@@ -131,7 +135,32 @@ export function ReadClauseTokens(text: string): ClauseToken[] | null {
         }
         i++;
     }
-    return depth === 0 ? tokens : null;
+    return depth === 0 && starsAreMultiplications(tokens) ? tokens : null;
+}
+
+function isOperandEnd(token: ClauseToken | undefined): boolean {
+    if (!token) {
+        return false;
+    }
+    if (token.Kind === 'symbol') {
+        return token.Text === ')';
+    }
+    return token.Kind !== 'word' || !NON_OPERAND_KEYWORDS.has(token.Text.toLowerCase());
+}
+
+function isOperandStart(token: ClauseToken | undefined): boolean {
+    if (!token) {
+        return false;
+    }
+    if (token.Kind === 'symbol') {
+        return token.Text === '(' || token.Text === '-' || token.Text === '+';
+    }
+    return token.Kind !== 'word' || !NON_OPERAND_KEYWORDS.has(token.Text.toLowerCase());
+}
+
+/** True when every `*` multiplies two operands, so none stands for a set of columns. */
+function starsAreMultiplications(tokens: ClauseToken[]): boolean {
+    return tokens.every((t, i) => t.Kind !== 'symbol' || t.Text !== '*' || (isOperandEnd(tokens[i - 1]) && isOperandStart(tokens[i + 1])));
 }
 
 /** The lower-case identifiers (words and quoted names) of a clause. Literal text is not included. */

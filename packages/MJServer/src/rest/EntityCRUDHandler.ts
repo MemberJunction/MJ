@@ -1,6 +1,6 @@
 import { 
     AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
-    EntitySaveOptions, LogError, Metadata, RecordPassesReadHooks, ServerOperationScopeManager, UserInfo 
+    EntitySaveOptions, LogError, LoadRecordPassingReadHooks, Metadata, ServerOperationScopeManager, UserInfo 
 } from '@memberjunction/core';
 import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
@@ -112,8 +112,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey, relatedEntities)
-                && await this.passesReadHooks(entityName, entity, user);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user, relatedEntities);
             
             if (!loadSuccess) {
                 return { 
@@ -158,7 +157,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user);
             
             if (!loadSuccess) {
                 return { 
@@ -257,7 +256,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user);
             
             if (!loadSuccess) {
                 return { 
@@ -306,13 +305,6 @@ export class EntityCRUDHandler {
      * object built for a restricted user holds no denied value already; this is the backstop for
      * one that does.
      */
-    /** True when the loaded record passes the read hooks a view read of the entity runs. */
-    private static async passesReadHooks(entityName: string, entity: BaseEntity, user: UserInfo): Promise<boolean> {
-        // fls-guard: the values go only to the server read hooks and are never returned to the caller
-        const row = await entity.GetDataObject() as Record<string, unknown>;
-        return RecordPassesReadHooks(entityName, row, user);
-    }
-
     private static async responseData(entity: BaseEntity, user: UserInfo, md: Metadata): Promise<Record<string, unknown>> {
         // fls-guard: projected by ProjectValuesForCaller
         return ProjectValuesForCaller(entity.EntityInfo, await entity.GetDataObject() as Record<string, unknown>, user, md);
