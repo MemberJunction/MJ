@@ -42,8 +42,8 @@
  *        (claiming to be the owner message's author, or claiming it is an agent reply): MJAPI decides from the stored
  *        row, refuses, and the row does not move.
  *   CA8: the grantee cannot fill a conversation message's field from a transaction variable: a transaction group
- *        whose second item takes a value from the first is refused, nothing is written, and the pin the first item
- *        asked for does not land.
+ *        that creates a conversation and a message whose `ConversationID` takes the new conversation's ID is
+ *        refused by the message's rule, and nothing is written.
  *   CA9: a person's role cannot dodge the rules by its spelling: the grantee posting with `Role='user'` (lower case)
  *        and the owner's UserID is refused as posting as someone else, and no row exists.
  *   CA10: the grantee cannot move the owner's message into a conversation the grantee owns (where the owner's rules
@@ -111,12 +111,6 @@ const REFUSAL = {
     ServerWritesReplies: "Only the server writes an agent's reply.",
     OwnerUnchangeable: "A conversation's owner cannot be changed."
 } as const;
-
-/**
- * The refusal `ExecuteTransactionGroup` returns for CA8's group, verbatim from `TransactionResolver`: a network
- * caller's 'Define' must read the primary key of a record the group creates.
- */
-const CA8_VARIABLE_REFUSAL = 'Transaction variable "SharedConversationID" (Define on item 0, field \'ConversationID\') was refused: a Define must read an item that the group creates.';
 
 /** How long CA12 waits for the server to settle the reply row it created (the run ends fast with no model to call). */
 const REPLY_SETTLED_TIMEOUT_MS = 120_000;
@@ -861,42 +855,52 @@ async function checkCa7ForgedOldValuesCannotClaimAuthorship(ctx: IntegrationChec
 /**
  * CA8 — a person's conversation message cannot take a field's value from a transaction variable. A 'Use' variable
  * sets its field at Submit(), after every write check has passed, so a message could be checked with one author and
- * saved with another. Shape (the simplest the resolver accepts that puts a 'Use' on a conversation message), built
- * the way GraphQLTransactionGroup builds it (`GetDataObjectJSON()` of client entities):
- *   item 0: Update of Setup's owner message, pinning it (`IsPinned`), which the grantee may do; it 'Define's the
- *           variable from its `ConversationID`;
+ * saved with another. Shape (one MJAPI's resolver accepts, so the message's own rule must refuse it), built the way
+ * GraphQLTransactionGroup builds it (`GetDataObjectJSON()` of client entities):
+ *   item 0: Create of a conversation owned by the grantee; it 'Define's the variable from its `ID`;
  *   item 1: Create of the grantee's own message (no UserID), which CA2 shows is otherwise allowed; it 'Use's the
  *           variable on its `ConversationID`.
- * The value the variable would carry is harmless (the same conversation); the point is that the 'Use' is refused.
- * MJAPI refuses this shape before any item is saved: a network caller's 'Define' must read the primary key of a
- * record the same group creates, and item 0 is an update that defines from `ConversationID`. Expect the group to
- * fail with that variable refusal, no row for item 1, and Setup's message unpinned and unchanged (nothing in a
- * refused group is submitted). Depends on Setup's owner message.
+ * Expect the group to fail with the message rule's variable refusal, and nothing written: no conversation, and no
+ * row for item 1 in any conversation (nothing in a refused group is submitted). Uses only Setup's conversation and
+ * grant.
  */
 async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA8');
-    const before = await readOwnerMessage(ctx, fx, 'CA8');
-    Assert(!before.IsPinned, "CA8 precondition: Setup's owner message must start unpinned, or the pin proves nothing");
-
-    const pin = await loadMessage(fx.Grantee, fx.OwnerMessageID);
-    pin.IsPinned = true;
+    const conversationName = `IT115 CA8 conversation ${fx.RunTag} ${MARKER}`;
+    const conversation = await fx.Grantee.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, fx.Grantee.Provider.CurrentUser);
+    conversation.NewRecord();
+    conversation.UserID = fx.Grantee.UserID;
+    conversation.Name = conversationName;
     const text = `${fx.RunTag} CA8: the grantee's message filled from a transaction variable ${MARKER}`;
     const post = await draftMessage(fx.Grantee, fx.ConversationID, text);
     const outcome = await sendTransactionGroup(fx.Grantee, {
         Items: [
-            { EntityName: DETAILS_ENTITY, EntityObjectJSON: await pin.GetDataObjectJSON(), OperationType: 'Update' },
+            { EntityName: CONVERSATIONS_ENTITY, EntityObjectJSON: await conversation.GetDataObjectJSON(), OperationType: 'Create' },
             { EntityName: DETAILS_ENTITY, EntityObjectJSON: await post.GetDataObjectJSON(), OperationType: 'Create' }
         ],
         Variables: [
-            { Name: 'SharedConversationID', ItemIndex: 0, FieldName: 'ConversationID', Type: 'Define' },
-            { Name: 'SharedConversationID', ItemIndex: 1, FieldName: 'ConversationID', Type: 'Use' }
+            { Name: 'NewConversationID', ItemIndex: 0, FieldName: 'ID', Type: 'Define' },
+            { Name: 'NewConversationID', ItemIndex: 1, FieldName: 'ConversationID', Type: 'Use' }
         ]
     });
-    assertRefusedWith(outcome, CA8_VARIABLE_REFUSAL,
+    const createdConversations = await conversationIdsNamed(ctx, conversationName);
+    fx.GranteeConversationIDs.push(...createdConversations);
+    assertRefusedWith(outcome, REFUSAL.TransactionVariable,
         `CA8: ${fx.Grantee.Email} running a transaction group whose message takes its ConversationID from a variable`);
 
-    AssertEqual((await messagesWithText(ctx, fx, text)).length, 0, "CA8: rows carrying the refused group's new message");
-    await assertMessageUnchanged(ctx, before, "CA8: the owner's message after the refused group (its pin must not land)");
+    AssertEqual(createdConversations.length, 0, "CA8: conversations created by the refused group");
+    AssertEqual((await readMessages(ctx, `Message = '${EscapeSQLString(text)}'`)).length, 0,
+        "CA8: rows carrying the refused group's new message, in any conversation");
+}
+
+/** The IDs of the conversations with this exact name, read as the check's own user. */
+async function conversationIdsNamed(ctx: IntegrationCheckContext, name: string): Promise<string[]> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        { EntityName: CONVERSATIONS_ENTITY, ExtraFilter: `Name = '${EscapeSQLString(name)}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+        ctx.User
+    );
+    Assert(res.Success, `reading ${CONVERSATIONS_ENTITY} named '${name}' failed: ${res.ErrorMessage}`);
+    return res.Results.map((r) => r.ID);
 }
 
 /** CA9 — `Role='user'` (lower case) is still a person's message: posting it as the owner is refused. Uses only Setup's conversation and grant. */

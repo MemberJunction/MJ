@@ -9,7 +9,7 @@
  */
 import 'reflect-metadata';
 import { describe, it, expect, vi } from 'vitest';
-import { BaseEntityResult, EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntityResult, EntityInfo, TransactionVariable, UserInfo } from '@memberjunction/core';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -99,10 +99,10 @@ class FakeEntity {
     }
 }
 
-function buildContext(entities: FakeEntity[], user: UserInfo): AppContext {
+function buildContext(entities: FakeEntity[], user: UserInfo, tg: FakeTransactionGroup = new FakeTransactionGroup()): AppContext {
     let next = 0;
     const provider = {
-        CreateTransactionGroup: async () => new FakeTransactionGroup(),
+        CreateTransactionGroup: async () => tg,
         GetEntityObject: async () => entities[next++],
     };
     return {
@@ -165,6 +165,24 @@ describe('ExecuteTransactionGroup: transaction variables from a network caller',
     it('refuses a Use that has no Define', async () => {
         await expectRefused([newProject(), newTask()], [use(1, 'ProjectID')]);
     });
+
+    it.each([
+        ['an Update', TransactionOperationType.Update],
+        ['a Delete', TransactionOperationType.Delete],
+    ])('refuses a Use on %s item, also on a writable key to the Define entity', async (_label, operation) => {
+        const existingTask: ItemSpec = { Entity: new FakeEntity(TasksEntity()), Operation: operation, Values: { ID: 't-1', Notes: 'edited' } };
+        await expectRefused([newTask(), existingTask], [define(0, 'ID'), use(1, 'ParentTaskID')]);
+    });
+
+    it('registers each variable with the entity field name, whatever case and spaces the caller sent', async () => {
+        const items = [newProject(), newTask()];
+        const tg = new FakeTransactionGroup();
+        const context = buildContext(items.map((i) => i.Entity), BuildUser([]), tg);
+
+        await new TransactionResolver().ExecuteTransactionGroup(groupOf(items, [define(0, ' id '), use(1, 'projectid')]), context);
+
+        expect((tg.Variables as TransactionVariable[]).map((v) => v.FieldName)).toEqual(['ID', 'ProjectID']);
+    });
 });
 
 const EDITOR_ROLE_ID = 'B0000000-0000-0000-0000-000000000001';
@@ -213,15 +231,6 @@ describe('ExecuteTransactionGroup: a Use on a foreign key the caller may not wri
             expect(item.Entity.SaveCalls).toBe(0);
         }
     }
-
-    it('refuses a Use on a foreign key the caller may not update', async () => {
-        const existingTask: ItemSpec = {
-            Entity: new FakeEntity(RestrictedTasksEntity('Deny', 'Allow')),
-            Operation: TransactionOperationType.Update,
-            Values: { ID: 't-1', Notes: 'edited' },
-        };
-        await expectRefusedFor(editor(), [newProject(), existingTask], [define(0, 'ID'), use(1, 'ProjectID')]);
-    });
 
     it('refuses a Use on a foreign key the caller may not supply on create', async () => {
         const task: ItemSpec = {

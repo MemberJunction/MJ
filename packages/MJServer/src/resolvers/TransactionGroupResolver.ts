@@ -406,8 +406,9 @@ export class TransactionResolver extends ResolverBase {
      * have run, so every other shape is refused before any item is saved:
      *
      * - each `Define` reads a primary key field of an item the group creates;
-     * - each `Use` has a `Define` of the same name, and writes a foreign key field of a different
-     *   item, and that foreign key relates to the entity of the `Define` item (and to its key field).
+     * - each `Use` writes an item the group creates, has a `Define` of the same name, and writes a
+     *   foreign key field of a different item, and that foreign key relates to the entity of the
+     *   `Define` item (and to its key field).
      */
     protected AssertNetworkVariablesLinkNewRecords(group: TransactionInputType, entityObjects: BaseEntity[]): void {
         const variables = group.Variables ?? [];
@@ -416,6 +417,9 @@ export class TransactionResolver extends ResolverBase {
             this.assertDefineReadsNewPrimaryKey(def, group, entityObjects);
         }
         for (const useVar of variables.filter((v) => v.Type === TransactionVariableType.Use)) {
+            if (group.Items[useVar.ItemIndex]?.OperationType !== TransactionOperationType.Create) {
+                this.refuseVariable(useVar, 'a Use must write an item that the group creates');
+            }
             const matches = defines.filter((d) => this.sameVariableName(d.Name, useVar.Name));
             if (matches.length === 0) {
                 this.refuseVariable(useVar, 'it has no Define');
@@ -427,9 +431,9 @@ export class TransactionResolver extends ResolverBase {
     }
 
     /**
-     * Refuses a `Use` on a field the caller may not write at field level: an update denial when its
-     * item is an update, a create denial when its item is a create. A `Use` value is set after the
-     * save-time field checks, so they do not see it.
+     * Refuses a `Use` on a field the caller may not set when creating a record. A `Use` writes only
+     * an item the group creates, and its value is set after the save-time field checks, so they do
+     * not see it.
      */
     protected AssertNetworkUseFieldsWritable(group: TransactionInputType, entityObjects: BaseEntity[], user: UserInfo): void {
         for (const useVar of (group.Variables ?? []).filter((v) => v.Type === TransactionVariableType.Use)) {
@@ -438,12 +442,8 @@ export class TransactionResolver extends ResolverBase {
             if (!entityInfo || !field) {
                 this.refuseVariable(useVar, 'it names no field of its item');
             }
-            const isCreate = group.Items[useVar.ItemIndex]?.OperationType === TransactionOperationType.Create;
-            const writable = isCreate
-                ? entityInfo.IsFieldCreatableByUser(field.Name, user)
-                : entityInfo.IsFieldUpdatableByUser(field.Name, user);
-            if (!writable) {
-                this.refuseVariable(useVar, `the caller may not ${isCreate ? 'set this field on create' : 'update this field'}`);
+            if (!entityInfo.IsFieldCreatableByUser(field.Name, user)) {
+                this.refuseVariable(useVar, 'the caller may not set this field on create');
             }
         }
     }
@@ -495,13 +495,18 @@ export class TransactionResolver extends ResolverBase {
 
     /**
      * Adds the network payload's variables to the group, mapping each one's item index to the entity
-     * object built for that item.
+     * object built for that item and its field name to the entity's own field name, which the group
+     * uses to read and write the value.
      */
     protected AddNetworkVariables(group: TransactionInputType, entityObjects: BaseEntity[], tg: TransactionGroupBase): void {
         for (const networkVar of group.Variables ?? []) {
             if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
                 const entityObject = entityObjects[networkVar.ItemIndex];
-                tg.AddVariable(new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type));
+                const field = this.findVariableField(entityObject, networkVar);
+                if (!field) {
+                    this.refuseVariable(networkVar, 'it names no field of its item');
+                }
+                tg.AddVariable(new TransactionVariable(networkVar.Name, entityObject, field.Name, networkVar.Type));
             }
             else {
                 throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
