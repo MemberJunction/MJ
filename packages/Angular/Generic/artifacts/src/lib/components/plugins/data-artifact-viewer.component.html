@@ -93,6 +93,12 @@
               <!-- No query actions available on older versions -->
             }
           }
+
+          @if (CanSaveAsList) {
+            <button class="btn-icon btn-save-list" title="Save these records as a list that keeps itself current" (click)="OnShowSaveAsList()">
+              <i class="fa-solid fa-list-check"></i> Save as List
+            </button>
+          }
         </div>
       </div>
 
@@ -223,6 +229,18 @@
       Title="No data to display"
       Size="compact" />
   }
+
+  <!-- Save as List dialog -->
+  <mj-save-as-list-dialog
+    [DefaultName]="spec?.title || ''"
+    [KeyColumns]="ListKeyColumns"
+    [SavedQueryName]="SaveAsListQueryName"
+    [Submitting]="SavingAsList"
+    [ErrorMessage]="SaveAsListError"
+    [Visible]="ShowSaveAsList"
+    (Save)="OnSaveAsList($event)"
+    (Cancel)="ShowSaveAsList = false"
+  />
 
   <!-- Save Query Panel (slide-in) -->
   @if (ShowSaveDialog) {

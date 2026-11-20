@@ -259,6 +259,11 @@ function extractCoreOperatorToken(node: TaskGraphSpecNode): string {
             const cfg = node.configuration as TaskGraphNodeConfigMap['External'];
             return `External:${normalizeIdentifier(cfg.domain)}`;
         }
+        case 'Wait': {
+            // Two waits are the same step when they wait the same way; the exact moment is data.
+            const cfg = node.configuration as TaskGraphNodeConfigMap['Wait'];
+            return `Wait:${cfg.durationSeconds !== undefined ? 'duration' : 'until'}`;
+        }
         case 'Human':
         default:
             return 'Human:approval_or_task';
