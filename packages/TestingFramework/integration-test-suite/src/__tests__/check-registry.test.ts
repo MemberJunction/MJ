@@ -214,7 +214,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 the live challenger's Model rows and its divergence on the monitoring period row (IT166, M6.8)
-        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT180)
+        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT182)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],

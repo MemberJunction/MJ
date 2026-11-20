@@ -11,7 +11,7 @@
  * and scored by one Score Record Set call. "No migration or CodeGen" is measured (review minor m7): the stored query
  * "Predictive Studio: Schema Column Fingerprint" before the publish and after the run — the column checksum, the
  * `flyway_schema_history` row count and the newest `MJ: Entities.__mj_UpdatedAt`. The panel half replays the panel's own
- * batch (`PredictionPanelQueries.For`) on each identity's provider (IT180's two minted identities); the rendering half
+ * batch (`PredictionPanelQueries.For`) on each identity's provider (IT182's two minted identities); the rendering half
  * is Task M5b.9's browser walk of the same two identities (D-076).
  */
 import { RunView } from '@memberjunction/core';

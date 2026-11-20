@@ -1770,7 +1770,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT180 - PS Prediction Serving — Zero Schema Change",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - PS Prediction Serving — Zero Schema Change",
             "Sequence": 49,
             "Status": "Active"
           },
