@@ -561,7 +561,7 @@ async function defaultResolveWebhookKey(credentialId?: string): Promise<string |
 }
 
 async function defaultPublishActivity(payload: CommsActivityWorkPayload): Promise<void> {
-    if (!WorkQueueEngine.Instance.Loaded) {
+    if (WorkQueueEngine.Instance.Topics.length === 0) {
         const systemUser = getSystemUser();
         if (systemUser) {
             await WorkQueueEngine.Instance.Config(false, systemUser);

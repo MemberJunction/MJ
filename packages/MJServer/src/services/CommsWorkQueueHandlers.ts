@@ -77,7 +77,7 @@ export function ConfigureCommsV2WorkQueue(
         BaseTrackingURL: baseTrackingUrl,
         TrackingHMACSecret: resolvedSecret,
         EnqueueWork: async (taskType, payload) => {
-            if (!WorkQueueEngine.Instance.Loaded) {
+            if (WorkQueueEngine.Instance.Topics.length === 0) {
                 await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
             }
             const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
@@ -90,7 +90,7 @@ export function ConfigureCommsV2WorkQueue(
 
     TemplatedCommunicationService.Instance.Configure({
         EnqueueWork: async (taskType, payload) => {
-            if (!WorkQueueEngine.Instance.Loaded) {
+            if (WorkQueueEngine.Instance.Topics.length === 0) {
                 await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
             }
             const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
