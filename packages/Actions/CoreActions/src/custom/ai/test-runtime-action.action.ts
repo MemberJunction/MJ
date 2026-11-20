@@ -16,10 +16,10 @@ import { ActionEngineServer } from '@memberjunction/actions';
  *     that the caller is authorized to run (`CheckActionRunAuthorization`)
  *   - A freshly-generated code payload that hasn't been persisted yet
  *     (Code + RuntimeActionConfiguration passed directly, no DB record
- *     required). This path uses a throwaway in-memory MJActionEntity. It is
- *     Approved only for an Owner-type caller, so the executor refuses it for
- *     anyone else. The `allowAny*` permissions of the supplied configuration
- *     are always turned off.
+ *     required). This path uses a throwaway in-memory MJActionEntity and runs
+ *     only for an Owner-type caller; anyone else gets OWNER_REQUIRED. The
+ *     `allowAny*` permissions of the supplied configuration are always
+ *     turned off.
  *
  * Test cases are evaluated in sequence; expected outputs (if provided) are
  * compared to actual outputs with structural deep equality.
@@ -58,6 +58,9 @@ export class TestRuntimeActionAction extends BaseAction {
                 const refusal = await this.refuseExistingAction(params, actionRecord);
                 if (refusal) return refusal;
             } else if (inlineCode && inlineConfig) {
+                if (!IsOwner(params.ContextUser)) {
+                    return fail('OWNER_REQUIRED', 'Inline code can be tested only by an Owner. Ask an Owner to run this test.');
+                }
                 actionRecord = await this.buildEphemeralAction(
                     params,
                     inlineCode,
@@ -162,8 +165,8 @@ export class TestRuntimeActionAction extends BaseAction {
 
     /**
      * Builds an in-memory MJActionEntity instance pre-populated with the
-     * supplied inline code + config. It is Approved only when the caller is an
-     * Owner-type user, and the config's `allowAny*` permissions are turned off.
+     * supplied inline code + config, Approved, with the config's `allowAny*`
+     * permissions turned off. Call it only for an Owner-type caller.
      * This record is NOT saved — it only exists for the duration of this action.
      */
     private async buildEphemeralAction(
@@ -183,7 +186,7 @@ export class TestRuntimeActionAction extends BaseAction {
         entity.Type = 'Runtime';
         entity.Code = code;
         entity.Status = 'Active';
-        entity.CodeApprovalStatus = IsOwner(params.ContextUser) ? 'Approved' : 'Pending';
+        entity.CodeApprovalStatus = 'Approved';
         // Typed accessor handles JSON serialization.
         entity.RuntimeActionConfigurationObject = withoutAllowAnyPermissions(config) as never;
         return entity;

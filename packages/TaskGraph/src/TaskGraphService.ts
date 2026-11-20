@@ -55,7 +55,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseHumanTaskProvider } from './HumanTaskProvider';
-import { CheckActionRunAuthorization } from '@memberjunction/actions-base';
+import { ActionRunAuthorizer } from './ActionRunAuthorizer';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -92,8 +92,16 @@ export type TaskGraphSubmitContext = {
     ContextUser: UserInfo;
     /** Provider to persist through. */
     Provider: IMetadataProvider;
-    /** The agent run that emitted this graph, for provenance and `reinvoke` routing. */
+    /**
+     * The agent run that emitted this graph, for provenance and `reinvoke` routing. The actions bound
+     * to that run's agent need no authorization of the user. Set only by server code.
+     */
     AgentRunID?: string | null;
+    /**
+     * The `MJ: Entity Actions` binding whose durable dispatch submitted this graph. Its action needs no
+     * authorization of the user. Set only by the server's durable entity-action submitter.
+     */
+    EntityActionID?: string | null;
     /**
      * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
      * run that emitted this graph, persisted on the parent row so dispatched tasks inherit the
@@ -142,6 +150,8 @@ export type TaskGraphParentMetadata = {
      */
     failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
+    /** The durable entity-action binding that submitted the graph, when one did. */
+    submittedByEntityActionID?: string | null;
     /**
      * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
      * submitting run, persisted so dispatched tasks inherit the hierarchy directly without walking
@@ -309,6 +319,7 @@ export function BuildTaskGraphParentInputPayload(args: {
     failurePolicy?: TaskGraphFailurePolicy;
     sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
+    submittedByEntityActionID?: string | null;
     submittedByUserID: string | null;
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
@@ -327,6 +338,7 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.failurePolicy && args.failurePolicy !== 'Halt' ? { failurePolicy: args.failurePolicy } : {}),
         ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
+        ...(args.submittedByEntityActionID ? { submittedByEntityActionID: args.submittedByEntityActionID } : {}),
         submittedByUserID: args.submittedByUserID,
         recordsTaint: true,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
@@ -1851,22 +1863,49 @@ export class TaskGraphService {
     }
 
     /**
-     * Refuses a graph that names an action, by name or as a compensation action, that the submitter
-     * may not run. See `CheckActionRunAuthorization`.
+     * Refuses a graph that names an action the submitter may not run: by name, as a compensation
+     * action of a node, or as the compensation action in an action's metadata. An action bound to the
+     * submitting agent or to the durable entity-action binding passes. See `ActionRunAuthorizer`.
      */
     private async authorizeActions(
         spec: TaskGraphSpec,
         actionIDsByName: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; ErrorMessage?: string }> {
-        const compensationIDs = spec.tasks.map((node) => ConfigOf(node, 'Action')?.compensation?.compensationActionId?.trim() ?? '');
-        const ids = uniqueIDs([...actionIDsByName.values(), ...compensationIDs]);
-        const refusal = await CheckActionRunAuthorization(ids, context.ContextUser, context.Provider);
+        const nodeCompensationIDs = spec.tasks.map((node) => ConfigOf(node, 'Action')?.compensation?.compensationActionId?.trim() ?? '');
+        const namedIDs = uniqueIDs([...actionIDsByName.values(), ...nodeCompensationIDs]);
+        const metadataCompensationIDs = await this.metadataCompensationIDs(namedIDs, context);
+        if (!metadataCompensationIDs) {
+            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its actions could not be read.` };
+        }
+        const authorizer = new ActionRunAuthorizer(
+            { AgentRunID: context.AgentRunID, EntityActionID: context.EntityActionID },
+            context.ContextUser,
+            context.Provider,
+        );
+        const refusal = await authorizer.Refusal(uniqueIDs([...namedIDs, ...metadataCompensationIDs]));
         if (!refusal) return { Success: true };
         return {
             Success: false,
             ErrorMessage: `Task graph "${spec.workflowName}" was not started: you are not authorized to run action ${refusal.ActionID}. ${refusal.Reason}`,
         };
+    }
+
+    /** The `CompensationActionID` of each action, or null when the actions cannot be read. */
+    private async metadataCompensationIDs(actionIDs: readonly string[], context: TaskGraphSubmitContext): Promise<string[] | null> {
+        const valid = actionIDs.filter((id) => IsValidUUID(id));
+        if (valid.length === 0) return [];
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<Pick<MJActionEntity, 'ID' | 'CompensationActionID'>>(
+            {
+                EntityName: 'MJ: Actions',
+                ExtraFilter: `ID IN (${valid.map((id) => `'${id}'`).join(', ')})`,
+                Fields: ['ID', 'CompensationActionID'],
+                ResultType: 'simple',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) return null;
+        return (result.Results ?? []).map((row) => row.CompensationActionID).filter((id): id is string => !!id);
     }
 
     private async resolveActions(
@@ -2030,6 +2069,7 @@ export class TaskGraphService {
             failureSemantics: spec.failureSemantics ?? 'block',
             failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
+            submittedByEntityActionID: context.EntityActionID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
             parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope

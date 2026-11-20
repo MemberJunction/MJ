@@ -95,6 +95,11 @@ function submitContext(
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Submit')
 export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
+    /** Magic Link sessions may not submit a graph: `RunAction` refuses them too. */
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     protected async InternalExecute(
         // Widened locally until CodeGen re-emits the base from the updated metadata row, the
         // RetryTask precedent. Two of the three fields the in-process path carries now ride the

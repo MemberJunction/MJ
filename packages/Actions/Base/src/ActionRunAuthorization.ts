@@ -149,16 +149,18 @@ type ActionAuthorizationRow = { ActionID: string; AuthorizationID: string };
 
 /**
  * Checks that the user may run each action, with {@link EvaluateActionRunAuthorization}. The
- * actions and their `MJ: Action Authorizations` rows are read through `provider` as `user`, and the
- * authorizations and role grants come from the same provider. It fails closed: an ID that is not a
- * UUID, an action that is not found, or a failed read refuses.
+ * actions and their `MJ: Action Authorizations` rows are read through `provider` as `readUser`, and
+ * the authorizations and role grants come from the same provider. It fails closed: an ID that is not
+ * a UUID, an action that is not found, or a failed read refuses.
  *
+ * @param readUser the user the rows are read as: a server user when the caller has one, else `user`
  * @returns the first refusal, or null when the user may run every action
  */
 export async function CheckActionRunAuthorization(
     actionIDs: readonly string[],
     user: UserInfo,
-    provider: IMetadataProvider
+    provider: IMetadataProvider,
+    readUser: UserInfo = user
 ): Promise<ActionRunRefusal | null> {
     if (IsOwner(user) || actionIDs.length === 0) {
         return null;
@@ -167,7 +169,7 @@ export async function CheckActionRunAuthorization(
     if (notUUID !== undefined) {
         return { ActionID: notUUID, Reason: 'The action ID is not a valid UUID.' };
     }
-    const loaded = await loadActionsAndAuthorizations(actionIDs, user, provider);
+    const loaded = await loadActionsAndAuthorizations(actionIDs, readUser, provider);
     if (!loaded) {
         return { ActionID: actionIDs[0], Reason: 'The action authorizations could not be read.' };
     }
@@ -199,7 +201,7 @@ function firstRefusal(
 /** Reads the actions and their `MJ: Action Authorizations` rows in one batch, or null when a read fails. */
 async function loadActionsAndAuthorizations(
     actionIDs: readonly string[],
-    user: UserInfo,
+    readUser: UserInfo,
     provider: IMetadataProvider
 ): Promise<{ Actions: UUIDMap<ActionRow>; Grants: UUIDMap<ActionAuthorizationRow[]> } | null> {
     const idList = actionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
@@ -208,7 +210,7 @@ async function loadActionsAndAuthorizations(
             { EntityName: 'MJ: Actions', ExtraFilter: `ID IN (${idList})`, Fields: ['ID', 'Name', 'Type', 'DriverClass'], ResultType: 'simple' },
             { EntityName: 'MJ: Action Authorizations', ExtraFilter: `ActionID IN (${idList})`, Fields: ['ActionID', 'AuthorizationID'], ResultType: 'simple' },
         ],
-        user
+        readUser
     );
     if (!actions?.Success || !authorizations?.Success) {
         return null;

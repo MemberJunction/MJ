@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { TaskGraphService, type TaskGraphSubmitContext } from '../TaskGraphService';
 
-const NOT_A_UUID = "0' AND 'marker'='marker";
+const NOT_A_UUID = "not-a-uuid'";
 
 function context(): TaskGraphSubmitContext {
     return {
@@ -30,7 +30,7 @@ describe('TaskGraphService.Cancel', () => {
 
         const result = await new TaskGraphService().Cancel(NOT_A_UUID, context());
 
-        expect(filters.filter((f) => f.includes('marker'))).toEqual([]);
+        expect(filters.filter((f) => f.includes('not-a-uuid'))).toEqual([]);
         expect(result.Success).toBe(false);
     });
 });

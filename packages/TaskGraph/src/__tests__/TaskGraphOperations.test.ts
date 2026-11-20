@@ -1,5 +1,6 @@
 /**
  * `TaskGraph.Cancel` and `TaskGraph.GetStatus`: who may act on a workflow run, and which IDs they accept.
+ * `TaskGraph.Submit`: which sessions may call it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
@@ -20,7 +21,7 @@ vi.mock('../TaskGraphService', async (importOriginal) => {
     };
 });
 
-import { TaskGraphCancelServerOperation, TaskGraphGetStatusServerOperation } from '../operations/TaskGraphOperations';
+import { TaskGraphCancelServerOperation, TaskGraphGetStatusServerOperation, TaskGraphSubmitServerOperation } from '../operations/TaskGraphOperations';
 
 const GRAPH_ID = '6F1D2C3B-4A5E-4F60-8172-93A4B5C6D7E8';
 const OWNER_ID = '11111111-2222-4333-8444-555555555555';
@@ -77,7 +78,7 @@ describe('TaskGraph.GetStatus', () => {
 
 describe('parentTaskID must be a UUID', () => {
     const OWNER_TYPE_USER = { ID: OWNER_ID, Type: 'Owner' } as unknown as UserInfo;
-    const NOT_A_UUID = "0' AND 'marker'='marker";
+    const NOT_A_UUID = "not-a-uuid'";
 
     it('GetStatus refuses an ID that is not a UUID and builds no filter from it', async () => {
         const output = await execute(new TaskGraphGetStatusServerOperation(), { parentTaskID: NOT_A_UUID }, OWNER_TYPE_USER);
@@ -91,5 +92,11 @@ describe('parentTaskID must be a UUID', () => {
 
         expect(hoisted.cancel).not.toHaveBeenCalled();
         expect(output).toMatchObject({ success: false });
+    });
+});
+
+describe('TaskGraph.Submit', () => {
+    it('is refused to Magic Link sessions', () => {
+        expect(new TaskGraphSubmitServerOperation().DisallowMagicLinkScope).toBe(true);
     });
 });

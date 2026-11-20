@@ -1,6 +1,6 @@
 /**
- * Test Runtime Action runs only Runtime actions the caller may run, marks inline code Approved only
- * for an Owner-type caller, and never lets caller input turn on the `allowAny*` permissions.
+ * Test Runtime Action runs only Runtime actions the caller may run, runs inline code only for an
+ * Owner-type caller, and never lets caller input turn on the `allowAny*` permissions.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RunView, type RunViewParams } from '@memberjunction/core';
@@ -91,11 +91,12 @@ describe('TestRuntimeActionAction authorization', () => {
         expect(result).toMatchObject({ Success: false, ResultCode: 'NOT_AUTHORIZED' });
     });
 
-    it('does not mark inline code from a caller who is not an Owner as Approved', async () => {
+    it('refuses inline code from a caller who is not an Owner, and runs nothing', async () => {
         const config = { permissions: { allowedActions: [], allowedAgents: [], allowedEntities: [] } };
-        await run({ Params: [param('Code', 'return {};'), param('Configuration', config)], ContextUser: REGULAR_USER });
+        const result = await run({ Params: [param('Code', 'return {};'), param('Configuration', config)], ContextUser: REGULAR_USER });
 
-        expect(actionsPassedToRun().filter((a) => a.CodeApprovalStatus === 'Approved')).toEqual([]);
+        expect(runActionMock).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ Success: false, ResultCode: 'OWNER_REQUIRED' });
     });
 
     it('does not let the supplied configuration turn on the allowAny permissions', async () => {
