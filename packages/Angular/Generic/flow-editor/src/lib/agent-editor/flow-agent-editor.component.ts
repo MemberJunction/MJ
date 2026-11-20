@@ -9,6 +9,7 @@ import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@m
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig, PromptOption } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
+import { DefaultWaitingStepConfiguration, IsWaitingStepType } from './waiting-step-config';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ReadDecisionStepKey } from './decision-step-config';
 import { CheckFlowRun, type FlowRunProblem } from './flow-run-check';
@@ -526,6 +527,10 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       step.PromptID = null;
       const key = GenerateUniqueDecisionKey(this.steps);
       step.Configuration = JSON.stringify({ key, state: 'payload', questions: {} }, null, 2);
+    }
+    if (IsWaitingStepType(step.StepType)) {
+      // Each starts with a shape the runtime accepts, so a just-dropped step is not already red.
+      step.Configuration = DefaultWaitingStepConfiguration(step.StepType);
     }
 
     // Add the unsaved step to the array - it already has a UUID from NewRecord()

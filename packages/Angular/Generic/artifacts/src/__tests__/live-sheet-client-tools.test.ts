@@ -1,6 +1,6 @@
 /**
  * Unit tests for LiveSheetClientToolHelper and ExtractActionOutputParams
- * (`shared/live-sheet-client-tool.helper.ts`).
+ * (`lib/services/live-sheet-client-tool.helper.ts`).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ActionEngineBase, ActionParam, RunActionParams, type MJActionEntityExtended } from '@memberjunction/actions-base';
@@ -33,7 +33,7 @@ import {
   type GovernedActionExecutionRequest,
   type GovernedActionExecutionResult,
   type GovernedArtifactRollback,
-} from '../shared/live-sheet-client-tool.helper';
+} from '../lib/services/live-sheet-client-tool.helper';
 
 describe('live-sheet-client-tool.helper', () => {
   afterEach(() => {

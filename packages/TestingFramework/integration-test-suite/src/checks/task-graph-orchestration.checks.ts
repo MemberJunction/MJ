@@ -660,7 +660,9 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 ctx.User,
             );
             AssertEqual(eaRes.Results?.length ?? 0, 1, 'the EntityAction binding was written exactly once');
-            AssertEqual(eaRes.Results![0].Status, 'Active', 'the EntityAction binding is Active');
+            // The workflow is a Draft, so its binding is written but must not fire: a record change
+            // must not start a workflow nobody has turned on. Activation is asserted below.
+            AssertEqual(eaRes.Results![0].Status, 'Disabled', 'a Draft workflow\'s binding is written Disabled');
             const entityActionID = eaRes.Results![0].ID;
             CREATED_ENTITY_ACTION_IDS.push(entityActionID);
 
@@ -720,7 +722,30 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             );
             AssertEqual(eaAfter.Results?.length ?? 0, 1, 're-saving a workflow must not duplicate its binding');
 
-            console.log('      → entity-change trigger bound: EntityAction + invocation + AgentID/Static + Data/Entity Object Data');
+            // 5. The binding follows the workflow's status: activating the workflow activates the
+            //    SAME binding (no second row), and pausing it disables it again.
+            const statusAfter = async (status: WorkflowSpec['status']): Promise<string | undefined> => {
+                const saved = await new WorkflowSpecSync(new IntegrationAgentWriter(result.AgentID)).Persist({ ...spec, status }, {
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                Assert(saved.Success, `saving the workflow as ${status} failed: ${saved.ErrorMessage}`);
+                const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Status: string }>(
+                    {
+                        EntityName: 'MJ: Entity Actions',
+                        ExtraFilter: `EntityID='${entity!.ID}' AND ActionID='${actionID}' AND ScopeEntityID IS NULL AND ScopeRecordID IS NULL`,
+                        Fields: ['ID', 'Status'],
+                        ResultType: 'simple',
+                    },
+                    ctx.User,
+                );
+                AssertEqual(rows.Results?.length ?? 0, 1, `saving as ${status} must reuse the one binding`);
+                return rows.Results![0].Status;
+            };
+            AssertEqual(await statusAfter('Active'), 'Active', 'activating the workflow activates its binding');
+            AssertEqual(await statusAfter('Paused'), 'Disabled', 'pausing the workflow disables its binding');
+
+            console.log('      → entity-change trigger bound: EntityAction + invocation + AgentID/Static + Data/Entity Object Data; follows Draft/Active/Paused');
         }
     },
 

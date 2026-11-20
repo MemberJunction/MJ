@@ -186,6 +186,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - List From Query",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC5EA8D1-270C-4C0E-8B2B-6693566F18C4"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
@@ -478,6 +489,28 @@
           },
           "primaryKey": {
             "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT180 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT181 - Task Graph Durable Retry",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBEF0C4-628A-4310-AFDF-EE86D80AF6D1"
           }
         },
         {
@@ -1732,6 +1765,17 @@
           },
           "primaryKey": {
             "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
           }
         }
       ]

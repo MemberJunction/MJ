@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, inject, OnInit, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { VideoArtifactPreviewComponent } from '../previews/video-artifact-preview.component';
@@ -173,6 +173,15 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     /** @deprecated Use {@link OnMediaEnded}. */
     public onMediaEnded(): void {
         return this.OnMediaEnded();
+    }
+
+    /** The original file, once it has loaded. */
+    public override GetExportOptions(): ArtifactExportOption[] {
+        return this.VideoUrl ? [this.FileExportOption('Video file', 'fa-solid fa-file-video', 'The original file')] : [];
+    }
+
+    public override async RunExport(key: string): Promise<void> {
+        return key === FILE_EXPORT_KEY ? this.triggerBrowserDownload(this.VideoUrl, this.OriginalFileName('video')) : super.RunExport(key);
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -3,7 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { EscapeSQLString } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { DataSnapshot, RunView } from '@memberjunction/core';
 import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
@@ -499,6 +499,18 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** @deprecated Use {@link OnCopy}. */
   onCopy(): void {
     return this.OnCopy();
+  }
+
+  /** The raw JSON, once loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.JsonContent ? [this.FileExportOption('JSON (.json)', 'fa-solid fa-file-code', 'The raw data')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key !== FILE_EXPORT_KEY) {
+      return super.RunExport(key);
+    }
+    this.DownloadTextFile(this.JsonContent, this.ExportFileName('json'), 'application/json');
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

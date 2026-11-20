@@ -36,9 +36,11 @@
     "ag-grid-community": "^35.0.1"
   },
   "dependencies": {
+    "@memberjunction/actions-base": "6.3.0-edge.1",
     "@memberjunction/ai-diagrams": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
+    "@memberjunction/excel-addin": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/interactive-component-types": "6.3.0-edge.1",
