@@ -169,6 +169,7 @@ export class TransactionResolver extends ResolverBase {
             }
             this.AssertNetworkInputWritable(group, entityObjects, user);
             this.AssertNetworkVariablesLinkNewRecords(group, entityObjects);
+            this.AssertNetworkUseFieldsWritable(group, entityObjects, user);
             this.AddNetworkVariables(group, entityObjects, tg);
 
             for (const [index, item] of group.Items.entries()) {
@@ -421,6 +422,28 @@ export class TransactionResolver extends ResolverBase {
             }
             for (const def of matches) {
                 this.assertUseWritesForeignKeyTo(useVar, def, entityObjects);
+            }
+        }
+    }
+
+    /**
+     * Refuses a `Use` on a field the caller may not write at field level: an update denial when its
+     * item is an update, a create denial when its item is a create. A `Use` value is set after the
+     * save-time field checks, so they do not see it.
+     */
+    protected AssertNetworkUseFieldsWritable(group: TransactionInputType, entityObjects: BaseEntity[], user: UserInfo): void {
+        for (const useVar of (group.Variables ?? []).filter((v) => v.Type === TransactionVariableType.Use)) {
+            const entityInfo = entityObjects[useVar.ItemIndex]?.EntityInfo;
+            const field = this.findVariableField(entityObjects[useVar.ItemIndex], useVar);
+            if (!entityInfo || !field) {
+                this.refuseVariable(useVar, 'it names no field of its item');
+            }
+            const isCreate = group.Items[useVar.ItemIndex]?.OperationType === TransactionOperationType.Create;
+            const writable = isCreate
+                ? entityInfo.IsFieldCreatableByUser(field.Name, user)
+                : entityInfo.IsFieldUpdatableByUser(field.Name, user);
+            if (!writable) {
+                this.refuseVariable(useVar, `the caller may not ${isCreate ? 'set this field on create' : 'update this field'}`);
             }
         }
     }

@@ -166,3 +166,69 @@ describe('ExecuteTransactionGroup: transaction variables from a network caller',
         await expectRefused([newProject(), newTask()], [use(1, 'ProjectID')]);
     });
 });
+
+const EDITOR_ROLE_ID = 'B0000000-0000-0000-0000-000000000001';
+
+/** A field rule for the editor role: read always allowed, update and create as given. */
+function editorRule(fieldId: string, update: string, create: string): Record<string, unknown> {
+    return { ID: `${fieldId}-rule`, EntityFieldID: fieldId, RoleID: EDITOR_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: update, CreateAccess: create };
+}
+
+/** `Tasks` with field-level security: the editor may read `ProjectID` but has the given update and create access on it. */
+function RestrictedTasksEntity(projectUpdate: string, projectCreate: string): EntityInfo {
+    return new EntityInfo({
+        ID: TASKS_ID,
+        Name: 'Tasks',
+        SchemaName: 'dbo',
+        BaseTable: 'Tasks',
+        BaseView: 'vwTasks',
+        IncludeInAPI: true,
+        AllowCreateAPI: true,
+        AllowUpdateAPI: true,
+        AllowDeleteAPI: true,
+        EnableFieldLevelSecurity: true,
+        Permissions: [{ EntityID: TASKS_ID, RoleID: EDITOR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }],
+        Fields: [
+            { ID: 't-id', EntityID: TASKS_ID, Entity: 'Tasks', Sequence: 1, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+            {
+                ID: 't-project', EntityID: TASKS_ID, Entity: 'Tasks', Sequence: 2, Name: 'ProjectID', Type: 'uniqueidentifier',
+                RelatedEntityID: PROJECTS_ID, RelatedEntity: 'Projects', RelatedEntityFieldName: 'ID',
+                EntityFieldPermissions: [editorRule('t-project', projectUpdate, projectCreate)],
+            },
+            {
+                ID: 't-notes', EntityID: TASKS_ID, Entity: 'Tasks', Sequence: 3, Name: 'Notes', Type: 'nvarchar',
+                EntityFieldPermissions: [editorRule('t-notes', 'Allow', 'Allow')],
+            },
+        ],
+    });
+}
+
+describe('ExecuteTransactionGroup: a Use on a foreign key the caller may not write', () => {
+    const editor = (): UserInfo => BuildUser([EDITOR_ROLE_ID], 'editor-1');
+
+    async function expectRefusedFor(user: UserInfo, items: ItemSpec[], variables: TransactionVariableInputType[]): Promise<void> {
+        const run = new TransactionResolver().ExecuteTransactionGroup(groupOf(items, variables), buildContext(items.map((i) => i.Entity), user));
+        await expect(run).rejects.toThrow(/transaction variable "v"/i);
+        for (const item of items) {
+            expect(item.Entity.SaveCalls).toBe(0);
+        }
+    }
+
+    it('refuses a Use on a foreign key the caller may not update', async () => {
+        const existingTask: ItemSpec = {
+            Entity: new FakeEntity(RestrictedTasksEntity('Deny', 'Allow')),
+            Operation: TransactionOperationType.Update,
+            Values: { ID: 't-1', Notes: 'edited' },
+        };
+        await expectRefusedFor(editor(), [newProject(), existingTask], [define(0, 'ID'), use(1, 'ProjectID')]);
+    });
+
+    it('refuses a Use on a foreign key the caller may not supply on create', async () => {
+        const task: ItemSpec = {
+            Entity: new FakeEntity(RestrictedTasksEntity('Allow', 'Deny')),
+            Operation: TransactionOperationType.Create,
+            Values: { Notes: 't' },
+        };
+        await expectRefusedFor(editor(), [newProject(), task], [define(0, 'ID'), use(1, 'ProjectID')]);
+    });
+});

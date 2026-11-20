@@ -112,6 +112,12 @@ const REFUSAL = {
     OwnerUnchangeable: "A conversation's owner cannot be changed."
 } as const;
 
+/**
+ * The refusal `ExecuteTransactionGroup` returns for CA8's group, verbatim from `TransactionResolver`: a network
+ * caller's 'Define' must read the primary key of a record the group creates.
+ */
+const CA8_VARIABLE_REFUSAL = 'Transaction variable "SharedConversationID" (Define on item 0, field \'ConversationID\') was refused: a Define must read an item that the group creates.';
+
 /** How long CA12 waits for the server to settle the reply row it created (the run ends fast with no model to call). */
 const REPLY_SETTLED_TIMEOUT_MS = 120_000;
 const REPLY_SETTLED_POLL_MS = 2_000;
@@ -861,9 +867,11 @@ async function checkCa7ForgedOldValuesCannotClaimAuthorship(ctx: IntegrationChec
  *           variable from its `ConversationID`;
  *   item 1: Create of the grantee's own message (no UserID), which CA2 shows is otherwise allowed; it 'Use's the
  *           variable on its `ConversationID`.
- * The value the variable would carry is harmless (the same conversation); the point is that any 'Use' is refused.
- * Expect the group to fail with the variable refusal, no row for item 1, and Setup's message unpinned and unchanged
- * (nothing in a refused group is submitted). Depends on Setup's owner message.
+ * The value the variable would carry is harmless (the same conversation); the point is that the 'Use' is refused.
+ * MJAPI refuses this shape before any item is saved: a network caller's 'Define' must read the primary key of a
+ * record the same group creates, and item 0 is an update that defines from `ConversationID`. Expect the group to
+ * fail with that variable refusal, no row for item 1, and Setup's message unpinned and unchanged (nothing in a
+ * refused group is submitted). Depends on Setup's owner message.
  */
 async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA8');
@@ -884,7 +892,7 @@ async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationChe
             { Name: 'SharedConversationID', ItemIndex: 1, FieldName: 'ConversationID', Type: 'Use' }
         ]
     });
-    assertRefusedWith(outcome, REFUSAL.TransactionVariable,
+    assertRefusedWith(outcome, CA8_VARIABLE_REFUSAL,
         `CA8: ${fx.Grantee.Email} running a transaction group whose message takes its ConversationID from a variable`);
 
     AssertEqual((await messagesWithText(ctx, fx, text)).length, 0, "CA8: rows carrying the refused group's new message");
