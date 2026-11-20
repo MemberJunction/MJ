@@ -181,6 +181,7 @@ Not started and not to be opened as pull requests. Each becomes a `canon` issue 
 - Wiring workflow promotion discovery and workflow health scoring to a scheduled job.
 - Triggers driven by a Canon metric crossing a threshold.
 - Exposing Canon context to outside assistants over MCP, after the MCP security work lands.
+- Portable Canon bundles ([MJ 6811](https://github.com/MemberJunction/MJ/issues/6811)): export a graph and import it into another instance as `Proposed`, the export half of MJ 6765's taxonomy import. Prompted by the TrustGraph comparison.
 - Authority per concept ([MJ 6757](https://github.com/MemberJunction/MJ/issues/6757)): an `AuthoritativeFor` edge from a content source or item to a concept, with an optional authority tier on the edge. Depends on 5b to 5d. The review should settle which tier wins when a source's tier and an edge's tier disagree, so decision 4 holds.
 
 ## Timeline
@@ -233,3 +234,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-19 | The sponsor opened two plan-only pull requests for the December 3 review: MJ 6765 (Canon unification) and MJ 6769 (Living Canon). Both keep decisions 1 to 7 and are named exceptions to the freeze. |
 | 2026-11-19 | `rkihm-BC` reviewed MJ 6731 and requested one change (regenerate the two server class manifests). He ruled that 5a's pipeline exception keeps existing approved concepts in every graph; narrowing by graph type goes to 5b and 5c. `MS-BC` brought MJ 6667 up to date with `next` and re-approved it. |
 | 2026-11-20 | `cmbrock-BC` reviewed MJ 6762 (ten findings), the fixes landed with tests, and he approved it at `febece7b`. MJ 6797 (Canon guide: `GraphStage` writes no `Contradicts` edges) merged. `jordanfanapour` noted on Skip-Brain 612 that its metadata cache is superseded by Skip-Brain 728, so Skip client 50 and Skip-Brain 677 keep only their Canon parts. |
+| 2026-11-20 | A review of TrustGraph (an open-source RDF/OWL knowledge runtime for agents) fed four additions into MJ 6765, all for the review: proposers validate against the edge-type contract, a visibility audit event, retrieval traces, and taxonomy import. MJ 6769 ties its ingest to the first two. Export bundles filed as MJ 6811 and added to the backlog. |
