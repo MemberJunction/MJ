@@ -626,6 +626,24 @@ describe('PredictiveStudio.MigratePreGateModels (RunPass)', () => {
     expect(store.SaveCount() - saves).toBe(0);
   });
 
+  it('refuses a writing pass naming a finished Registry Check run someone else executed, before any write', async () => {
+    EvidenceBearing('Published');
+    const saves = store.SaveCount();
+    const past = { ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', ExecutedByUserID: null, Details: null };
+    store.Insert('MJ: Scheduled Job Runs', past);
+    await expect(PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: past.ID, Config: PreGateModelMigration.DefaultConfig }, ctx, seams()))
+      .rejects.toThrow(`run ${past.ID} is Completed, not Running, and was not executed by the caller`);
+    expect(store.SaveCount() - saves).toBe(0);
+  });
+
+  it('a writing pass may name a finished Registry Check run the caller executed', async () => {
+    const pr3Good = EvidenceBearing('Published');
+    const own = { ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', ExecutedByUserID: GateWorld.User.ID, Details: null };
+    store.Insert('MJ: Scheduled Job Runs', own);
+    const pass = await PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: own.ID, Config: PreGateModelMigration.DefaultConfig }, ctx, seams());
+    expect(pass.Details?.Reverified.Adopted).toEqual([pr3Good.ID]);
+  });
+
   it('a writing pass as the registry job run runs the step', async () => {
     const pr3Good = EvidenceBearing('Published');
     const pass = await PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: registryRun.ID, Config: PreGateModelMigration.DefaultConfig }, ctx, seams());

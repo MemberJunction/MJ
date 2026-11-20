@@ -382,21 +382,43 @@ export class PreGateModelMigration {
 
   /**
    * One pass on demand (`PredictiveStudio.MigratePreGateModels`): a dry run returns {@link Survey}'s counts and writes
-   * nothing; a writing pass needs the Registry Check job run it belongs to (R9: every lifecycle change is that run's) and
-   * then runs {@link RunRegistryStep} as that run, after the same counts.
+   * nothing; a writing pass needs the Registry Check job run it belongs to (R9: every lifecycle change is that run's),
+   * one that is running now or that the caller executed ({@link WritingRunRefusal}: a finished run of someone else is
+   * never borrowed, so the record names who did the work), and then runs {@link RunRegistryStep} as that run, after the
+   * same counts.
    *
-   * @throws Error naming the run when a writing pass names no run of a Registry Check job
+   * @throws Error naming the run when a writing pass names no run of a Registry Check job, or a finished run the caller
+   *   did not execute
    */
   public static async RunPass(options: PreChangePassOptions, ctx: RegistryContext, seams: Partial<PreGateMigrationSeams> = {}): Promise<PreChangePassResult> {
     const survey = await PreGateModelMigration.Survey(ctx);
     if (options.DryRun) return { DryRun: true, Survey: survey, Details: null };
     const runId = options.ScheduledJobRunID;
-    const why = runId === null ? 'no scheduledJobRunId was given' : await RegistryCheckInitiators.RefusalOf({ kind: 'scheduled-job', scheduledJobRunId: runId }, ctx);
+    const notRegistry = runId === null ? 'no scheduledJobRunId was given' : await RegistryCheckInitiators.RefusalOf({ kind: 'scheduled-job', scheduledJobRunId: runId }, ctx);
+    const why = runId !== null && notRegistry === null ? await PreGateModelMigration.WritingRunRefusal(runId, ctx) : notRegistry;
     if (runId === null || why !== null) {
       throw new Error(`Predictive Studio pre-change migration: a writing pass runs only as a ${RegistryCheckInitiators.JobTypeName} job run (ruling R9); ${why}`);
     }
     const details = await PreGateModelMigration.RunRegistryStep(options.Config, PreGateMigrationContexts.ForJobRun(ctx, runId, seams));
     return { DryRun: false, Survey: survey, Details: details };
+  }
+
+  /**
+   * Why a Registry Check run may not carry a writing pass, or null when it may: it is `Running`, or the caller executed
+   * it (`ExecutedByUserID`). A finished run someone else executed is refused, in words naming its status.
+   *
+   * @throws Error when the read fails
+   */
+  protected static async WritingRunRefusal(runId: string, ctx: RegistryContext): Promise<string | null> {
+    const r = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'Status' | 'ExecutedByUserID'>>(
+      { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', 'Status', 'ExecutedByUserID'], MaxRows: 1, ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading Scheduled Job Run ${runId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const run = r.Results.find((x) => UUIDsEqual(x.ID, runId));
+    if (run === undefined) return `no Scheduled Job Run has the ID '${runId}'`;
+    if (run.Status === 'Running' || UUIDsEqual(run.ExecutedByUserID, ctx.ContextUser.ID)) return null;
+    return `run ${runId} is ${run.Status}, not Running, and was not executed by the caller`;
   }
 
   /**
