@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT180 - PS Prediction Serving — Zero Schema Change",
+    "Name": "IT182 - PS Prediction Serving — Zero Schema Change",
     "Description": "Predictive Studio prediction serving with zero schema change (D-058, D-078; deterministic, no sidecar: the fixture model is placed Published by SQL and scored by the production ScoringService with its sidecar and model runtime replaced by doubles). Z1 the fixture model Published and the schema fingerprint read before it; Z2 a binding with no TargetColumn scored in one completed run; Z3 sys.columns, flyway_schema_history and MJ: Entities unchanged (the stored query Predictive Studio: Schema Column Fingerprint); Z4 every scored record's Model row joins its run and model; Z5 MJ: Latest Feature Values holds each with no refresh call; Z6 a minted UI-only identity reads none of them from either entity and the panel's batch returns none, a minted Developer identity reads all and gets the card; Z7 a same-asOf re-run keeps the row count and updates the values, and a run failed at its second batch keeps its first; Z8 an older-asOf backfill adds history, keeps the latest values and does not overwrite a second binding's column copy.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
