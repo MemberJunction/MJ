@@ -31,3 +31,51 @@ export function UnhealedSQLPassFailures(
     for (const name of healedEntityNames) healed.add(name.trim().toLowerCase());
     return failures.filter((f) => f.EntityName === null || !healed.has(f.EntityName.trim().toLowerCase()));
 }
+
+/**
+ * One failed batch in a SQL file a provider executed, named by the object the batch acts on.
+ * Collected by providers that run a file batch by batch (SQL Server), so the SQL pass can record
+ * the first real failure instead of only "a file failed".
+ */
+export interface SQLObjectFailure {
+    /** The file the batch came from. */
+    File: string;
+    /** The object the batch acts on, e.g. `CREATE VIEW [s].[vwX]`, `GRANT ON [s].[spCreateX]`. */
+    Object: string;
+    /** The database error. */
+    Message: string;
+}
+
+const DESCRIBED_DDL = /^(?:CREATE(?: OR ALTER)?|ALTER|DROP) (?:PROCEDURE|PROC|VIEW|FUNCTION|TRIGGER|TABLE|INDEX) (\S+)$/i;
+const DESCRIBED_PERMISSION = /^(?:GRANT|DENY|REVOKE) ON (\S+)$/i;
+const DESCRIBED_EXEC = /^EXEC \S+ '([^']*)'$/i;
+
+/**
+ * Returns the lowercased `schema.name` of the object a batch description names (the forms
+ * `DescribeSQLBatchObject` produces), with brackets removed, or null when the description names
+ * no schema-qualified object.
+ */
+export function SQLObjectKeyFromDescription(description: string): string | null {
+    const text = description.trim();
+    const name = (DESCRIBED_DDL.exec(text) ?? DESCRIBED_PERMISSION.exec(text) ?? DESCRIBED_EXEC.exec(text))?.[1];
+    if (!name) return null;
+    const parts = name.split('.').map((p) => p.replace(/^\[|\]$/g, '').trim()).filter((p) => p.length > 0);
+    if (parts.length < 2) return null;
+    return `${parts[parts.length - 2]}.${parts[parts.length - 1]}`.toLowerCase();
+}
+
+/** Formats a failure for one-line logs and the run's failure summary. */
+export function DescribeSQLPassFailure(failure: SQLPassFailure): string {
+    return `[${failure.Step}]${failure.EntityName ? ` ${failure.EntityName}:` : ''} ${failure.Message}`;
+}
+
+/**
+ * The run-summary line for a failed SQL pass. It quotes the first recorded failure, which is
+ * usually the cause: later ones (a GRANT on the object that failed to create) follow from it.
+ */
+export function SQLPassFailureSummary(failures: ReadonlyArray<SQLPassFailure>): string {
+    const base = 'SQL generation/execution reported a failure';
+    if (failures.length === 0) return `${base}; see the errors logged above`;
+    const more = failures.length > 1 ? ` (${failures.length - 1} more logged above)` : '';
+    return `${base}. First failure: ${DescribeSQLPassFailure(failures[0])}${more}`;
+}
