@@ -78,6 +78,7 @@ import {
   ArtifactViewerViewMode,
   BaseArtifactViewerPluginComponent,
   IArtifactVersionDiffViewer,
+  type ArtifactExportOption,
   type PreVerifiedFrozenSnapshotEntry,
 } from '../base-artifact-viewer.component';
 import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
@@ -5490,6 +5491,25 @@ export class SpreadsheetArtifactViewerComponent
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
     const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     return CreateJsonSnapshot(serialized, this.Workbook.Title || this.getDisplayTitle());
+  }
+
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [
+      { Key: 'xlsx', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Description: 'Every sheet, with formulas and number formats' },
+      { Key: 'csv', Label: 'CSV (.csv)', Icon: 'fa-solid fa-file-csv', Description: 'The sheet you are on' },
+    ];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key === 'xlsx') {
+      this.ExportWorkbookAsXlsx();
+      return;
+    }
+    if (key === 'csv') {
+      this.ExportActiveSheetAsCsv();
+      return;
+    }
+    return super.RunExport(key);
   }
 
   private sessionInitGeneration = 0;

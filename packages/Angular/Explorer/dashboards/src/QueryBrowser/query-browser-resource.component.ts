@@ -21,7 +21,7 @@ import {
     type LiveSheetJsonObject,
     type LiveSheetJsonValue,
     type LiveSheetToolResult,
-} from '../shared/live-sheet-client-tool.helper';
+} from '@memberjunction/ng-artifacts';
 import {
     DEFAULT_QUERY_MAX_ROWS,
     QUERY_MAX_ROWS_HARD_CAP,
